@@ -14,8 +14,8 @@ import javax.inject.Singleton
 
 /**
  * App-scoped theming state — the native equivalent of ThemeProvider. Holds the
- * selected hue + dark toggle, derives [DynamicColors], and persists choices via
- * DataStore (keys `nb_color_theme` / `nb_dark_mode`).
+ * selected hue, derives [DynamicColors], and persists the choice via DataStore
+ * (key `nb_color_theme`).
  */
 @Singleton
 class ThemeController @Inject constructor(
@@ -26,18 +26,12 @@ class ThemeController @Inject constructor(
     private val _themeId = MutableStateFlow(COLOR_THEMES[0].id)
     val themeId: StateFlow<String> = _themeId.asStateFlow()
 
-    private val _isDark = MutableStateFlow(false)
-    val isDark: StateFlow<Boolean> = _isDark.asStateFlow()
-
-    private val _colors = MutableStateFlow(buildColors(COLOR_THEMES[0], false))
+    private val _colors = MutableStateFlow(buildColors(COLOR_THEMES[0]))
     val colors: StateFlow<DynamicColors> = _colors.asStateFlow()
 
     init {
         scope.launch {
-            val storedTheme = prefs.themeId.first()
-            val storedDark = prefs.isDark.first()
-            _themeId.value = themeById(storedTheme).id
-            _isDark.value = storedDark
+            _themeId.value = themeById(prefs.themeId.first()).id
             recompute()
         }
     }
@@ -52,14 +46,7 @@ class ThemeController @Inject constructor(
         scope.launch { prefs.setThemeId(id) }
     }
 
-    fun toggleDark() {
-        val next = !_isDark.value
-        _isDark.value = next
-        recompute()
-        scope.launch { prefs.setDark(next) }
-    }
-
     private fun recompute() {
-        _colors.value = buildColors(themeById(_themeId.value), _isDark.value)
+        _colors.value = buildColors(themeById(_themeId.value))
     }
 }

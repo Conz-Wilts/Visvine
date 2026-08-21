@@ -1,8 +1,8 @@
 import Foundation
 import Security
 
-/// Secure JWT storage in the Keychain — the native equivalent of expo-secure-store
-/// for the `auth_token` key. Read on every request by `APIClient`.
+/// Secure JWT storage in the Keychain, under the `auth_token` key. Read on every
+/// request by `APIClient`.
 final class KeychainTokenStore {
     static let shared = KeychainTokenStore()
 

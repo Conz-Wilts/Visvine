@@ -1,7 +1,7 @@
 import Foundation
 
-/// Result envelope mirroring the RN ApiService `{ data?, error? }` shape and the
-/// Android `ApiResult`. Network/HTTP failures become `.failure(message)`.
+/// Result envelope mirroring the API's `{ data?, error? }` shape and the Android
+/// `ApiResult`. Network and HTTP failures become `.failure(message)`.
 enum APIResult<T> {
     case success(T)
     case failure(String)

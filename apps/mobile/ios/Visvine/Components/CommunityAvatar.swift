@@ -7,7 +7,7 @@ func avatarInitials(_ name: String) -> String {
         .joined()
 }
 
-/// Port of components/CommunityAvatar.tsx — image with initials fallback.
+/// A community's avatar: its image, or its initials when there is none.
 struct CommunityAvatar: View {
     @Environment(ThemeStore.self) private var theme
     let name: String

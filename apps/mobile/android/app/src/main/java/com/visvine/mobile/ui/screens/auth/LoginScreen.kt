@@ -1,7 +1,6 @@
 package com.visvine.mobile.ui.screens.auth
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,12 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,7 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -38,7 +34,7 @@ import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.AuthViewModel
 
 
-/** Port of screens/Auth/LoginScreen.tsx. */
+/** The signed-out screen: sign in with Google, with the dev bypass behind it. */
 @Composable
 fun LoginScreen(
     onDevLogin: () -> Unit,
@@ -55,18 +51,13 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.bgSecondary)
+            .background(colors.bgPrimary)
             .statusBarsPadding()
             .padding(horizontal = 24.dp),
         contentAlignment = Alignment.Center,
     ) {
         Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier.size(110.dp).clip(CircleShape).background(colors.accentLight),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(AppIcons.Network, contentDescription = null, tint = colors.accent, modifier = Modifier.size(64.dp))
-            }
+            Icon(AppIcons.Network, contentDescription = null, tint = colors.accent, modifier = Modifier.size(64.dp))
             Text("Visvine", color = colors.textPrimary, fontSize = 34.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
             Text("Connect with your space", color = colors.textMuted, fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
 
@@ -77,20 +68,21 @@ fun LoginScreen(
             Button(
                 onClick = { authViewModel.startGoogleSignIn(context) },
                 colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
             ) {
                 Text("Continue with Google", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 6.dp))
             }
 
             if (AppConfig.devAuthEnabled) {
-                OutlinedButton(
+                Button(
                     onClick = onDevLogin,
-                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.bgSecondary),
+                    shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 ) {
-                    Icon(AppIcons.Tool, contentDescription = null, tint = colors.accentDark, modifier = Modifier.size(20.dp))
-                    Text("Dev login (skip Google)", color = colors.accentDark, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp))
+                    Icon(AppIcons.Tool, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
+                    Text("Dev login (skip Google)", color = colors.textSecondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp))
                 }
             }
 

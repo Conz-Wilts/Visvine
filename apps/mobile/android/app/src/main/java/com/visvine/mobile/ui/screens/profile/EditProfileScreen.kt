@@ -43,7 +43,10 @@ import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.EditProfileViewModel
 
 
-/** Port of screens/Profile/EditProfileScreen.tsx. */
+/**
+ * Your own details, as fields on the flat surface — sections opened by a
+ * hairline, no card around the group.
+ */
 @Composable
 fun EditProfileScreen(
     onBack: () -> Unit,
@@ -57,7 +60,7 @@ fun EditProfileScreen(
 
     val onCancel = { if (state.hasChanges) showDiscard = true else onBack() }
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgSecondary).imePadding()) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary).imePadding()) {
         Row(
             modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -71,7 +74,7 @@ fun EditProfileScreen(
         } else {
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
                 SectionLabel("Personal Information")
-                Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.bgPrimary).padding(16.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Field("Name", state.form.name, "Your full name") { v -> viewModel.updateField { it.copy(name = v) } }
                     Field("Title", state.form.title, "Your job title") { v -> viewModel.updateField { it.copy(title = v) } }
                     Field("Company", state.form.company, "Your company") { v -> viewModel.updateField { it.copy(company = v) } }
@@ -79,7 +82,7 @@ fun EditProfileScreen(
                 }
 
                 SectionLabel("Contact Information")
-                Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.bgPrimary).padding(16.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Field("Email", state.form.email, "", enabled = false) {}
                     Text("Email cannot be changed", color = colors.textLight, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
@@ -91,13 +94,13 @@ fun EditProfileScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Box(
-                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(colors.bgTertiary).clickable { onCancel() }.padding(vertical = 14.dp),
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(colors.bgSecondary).clickable { onCancel() }.padding(vertical = 14.dp),
                     contentAlignment = Alignment.Center,
                 ) { Text("Cancel", color = colors.textSecondary, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
 
                 val canSave = state.hasChanges && !state.saving
                 Box(
-                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(if (canSave) colors.accent else colors.accent.copy(alpha = 0.5f)).clickable(enabled = canSave) { viewModel.save() }.padding(vertical = 14.dp),
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (canSave) colors.accent else colors.accent.copy(alpha = 0.5f)).clickable(enabled = canSave) { viewModel.save() }.padding(vertical = 14.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (state.saving) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.padding(2.dp))

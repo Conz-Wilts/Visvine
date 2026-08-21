@@ -46,6 +46,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.visvine.mobile.data.model.DirectoryMember
+import com.visvine.mobile.ui.components.EmptyState
 import com.visvine.mobile.ui.components.ScreenHeader
 import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
@@ -66,7 +67,7 @@ private fun capitalize(s: String) = s.replaceFirstChar { it.uppercase() }
 
 private enum class Dropdown { TYPE, TAG }
 
-/** Port of screens/Directory/DirectoryScreen.tsx. */
+/** Everyone and everything in the space, as the grid of cards NodeCard.tsx draws. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DirectoryScreen(
@@ -89,7 +90,7 @@ fun DirectoryScreen(
 
     LaunchedEffect(Unit) { searchViewModel.setPlaceholder("Search directory") }
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgSecondary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
         ScreenHeader(onProfileClick = onProfileClick)
 
         if (state.loading) {
@@ -110,9 +111,7 @@ fun DirectoryScreen(
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Column {
                             state.error?.let {
-                                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.bgTertiary).padding(16.dp)) {
-                                    Text(it, color = colors.error, fontSize = 14.sp)
-                                }
+                                Text(it, color = colors.error, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
                                 Spacer(Modifier.height(8.dp))
                             }
                             FiltersRow(
@@ -130,7 +129,12 @@ fun DirectoryScreen(
 
                     if (members.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
-                            EmptyState(hasFilters)
+                            EmptyState(
+                                text = if (hasFilters) "No members match filters" else "No members found",
+                                icon = AppIcons.People,
+                                actionLabel = if (hasFilters) "Clear filters" else null,
+                                onAction = if (hasFilters) ({ viewModel.clearFilters() }) else null,
+                            )
                         }
                     } else {
                         items(members, key = { it.id }) { member ->
@@ -193,7 +197,7 @@ fun DirectoryScreen(
                     "Done",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(colors.accent).clickable { openDropdown = null }.padding(horizontal = 20.dp, vertical = 10.dp),
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(colors.accent).clickable { openDropdown = null }.padding(horizontal = 20.dp, vertical = 10.dp),
                 )
             }
         }
@@ -221,11 +225,9 @@ private fun FiltersRow(
         DropdownButton("Tag", selectedTags.size, onOpenTag)
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .background(colors.bgPrimary)
-                .border(1.dp, colors.borderDefault, RoundedCornerShape(999.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .clickable { onToggleSort() }
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -233,7 +235,7 @@ private fun FiltersRow(
                 if (sortOrder == SortOrder.AZ) AppIcons.ArrowDown else AppIcons.ArrowUp,
                 contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(14.dp),
             )
-            Text(if (sortOrder == SortOrder.AZ) "A–Z" else "Z–A", color = colors.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (sortOrder == SortOrder.AZ) "A–Z" else "Z–A", color = colors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
         if (hasFilters) {
             Row(
@@ -248,27 +250,30 @@ private fun FiltersRow(
     }
 }
 
+/**
+ * A filter trigger, drawn the way DirectoryToolbar draws one: no border, nothing
+ * filled — an applied filter simply speaks in the accent's dark shade.
+ */
 @Composable
 private fun DropdownButton(label: String, count: Int, onClick: () -> Unit) {
     val colors = VisvineTheme.colors
     val active = count > 0
+    val tint = if (active) colors.accentDark else colors.textSecondary
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(if (active) colors.accent else colors.bgPrimary)
-            .border(1.dp, if (active) colors.accent else colors.borderDefault, RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(8.dp))
             .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
             label + if (active) " · $count" else "",
-            color = if (active) Color.White else colors.textSecondary,
-            fontSize = 12.sp,
+            color = tint,
+            fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
         )
-        Icon(AppIcons.ChevronDown, contentDescription = null, tint = if (active) Color.White else colors.textSecondary, modifier = Modifier.size(14.dp))
+        Icon(AppIcons.ChevronDown, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
     }
 }
 
@@ -282,13 +287,12 @@ private fun MemberCard(member: DirectoryMember, onOpenProfile: (String, String?)
 
     Column(
         modifier = Modifier
-            .aspectRatio(0.722f)
             .clip(RoundedCornerShape(16.dp))
             .background(colors.bgPrimary)
             .border(4.dp, color, RoundedCornerShape(16.dp))
             .clickable(enabled = isPerson) { onOpenProfile(member.id, member.name) },
     ) {
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
             if (!member.imageUrl.isNullOrEmpty()) {
                 AsyncImage(model = member.imageUrl, contentDescription = member.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else {
@@ -298,32 +302,24 @@ private fun MemberCard(member: DirectoryMember, onOpenProfile: (String, String?)
             }
         }
         Column(
-            modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(member.name, color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (!subtitle.isNullOrEmpty()) {
-                Text(subtitle, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
-            }
-            Spacer(Modifier.weight(1f))
-            Box(modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(color).padding(horizontal = 10.dp, vertical = 4.dp)) {
+            Text(member.name, color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // Two lines are always reserved so the chips sit on one baseline
+            // across the row whether or not an entry has a tagline.
+            Text(
+                subtitle.orEmpty(),
+                color = colors.textSecondary,
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 6.dp).height(35.dp),
+            )
+            Box(modifier = Modifier.padding(top = 14.dp).clip(RoundedCornerShape(6.dp)).background(color).padding(horizontal = 8.dp, vertical = 4.dp)) {
                 Text(capitalize(member.type), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
-    }
-}
-
-@Composable
-private fun EmptyState(hasFilters: Boolean) {
-    val colors = VisvineTheme.colors
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(36.dp)).background(colors.bgTertiary), contentAlignment = Alignment.Center) {
-            Icon(AppIcons.People, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(36.dp))
-        }
-        Text(if (hasFilters) "No members match filters" else "No members found", color = colors.textMuted, fontSize = 16.sp, fontWeight = FontWeight.Medium)
     }
 }

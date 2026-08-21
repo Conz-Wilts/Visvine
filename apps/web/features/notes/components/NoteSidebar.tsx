@@ -868,11 +868,14 @@ function FolderRow(props: {
             // new route feeds back down. That round trip is a navigation long,
             // and the folder sitting shut for it is what read as lag.
             if (!hasIndex) return setOpen()
-            // Pin it open rather than toggling: the row may already LOOK open on
-            // a reveal it is about to lose — selecting the folder's own note
-            // moves the reveal off whatever child chain was holding it — and
-            // only a hand-opened entry survives that. Clicking the name never
-            // folds the folder shut; the glyph is the collapse control.
+            // Clicking the name of the folder whose note is ALREADY open is a
+            // collapse: the note is on screen, so the only thing left to ask
+            // for is to fold the branch away. Selection stays put.
+            if (selected && open) return setOpen()
+            // Otherwise pin it open rather than toggling: the row may already
+            // LOOK open on a reveal it is about to lose — selecting the
+            // folder's own note moves the reveal off whatever child chain was
+            // holding it — and only a hand-opened entry survives that.
             props.onOpenFolder(props.node.path)
             props.onSelect(indexPath)
           }}

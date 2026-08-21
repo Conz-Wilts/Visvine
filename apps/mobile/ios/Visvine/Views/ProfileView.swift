@@ -19,7 +19,8 @@ final class ProfileModel {
     }
 }
 
-/// Port of screens/Profile/ProfileScreen.tsx (presented as a modal flow).
+/// Your own profile, presented as a modal flow: a header, then sections
+/// divided by hairlines on the one flat surface.
 struct ProfileView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(AuthManager.self) private var auth
@@ -37,7 +38,7 @@ struct ProfileView: View {
                 content
             }
         }
-        .background(c.bgSecondary)
+        .background(c.bgPrimary)
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Done") { dismiss() } } }
@@ -68,18 +69,20 @@ struct ProfileView: View {
                         }
                         NavigationLink(value: ProfileRoute.edit) {
                             VisvineIcon(.pencil, size: 14).foregroundStyle(c.accent)
-                                .frame(width: 32, height: 32).background(c.bgPrimary, in: Circle()).shadow(radius: 2)
+                                .frame(width: 32, height: 32)
+                                .background(c.bgPrimary, in: Circle())
+                                .overlay(Circle().stroke(c.borderSubtle, lineWidth: 1))
                         }
                     }
                     Text(displayName).font(.system(size: 24, weight: .bold)).foregroundStyle(c.textPrimary).padding(.top, 16)
                     if let title = profile?.title { Text(title).font(.system(size: 16)).foregroundStyle(c.textMuted) }
                     if let company = profile?.company { Text(company).font(.system(size: 14)).foregroundStyle(c.textMuted) }
                 }
-                .padding(24).frame(maxWidth: .infinity).background(c.bgPrimary)
+                .padding(24).frame(maxWidth: .infinity)
 
                 // Contact
                 if !(auth.user?.email ?? "").isEmpty || !(profile?.location ?? "").isEmpty {
-                    card {
+                    section {
                         sectionTitle("Contact Information")
                         if let email = auth.user?.email, !email.isEmpty { infoRow("Email", email) }
                         if let location = profile?.location { infoRow("Location", location) }
@@ -87,7 +90,7 @@ struct ProfileView: View {
                 }
 
                 // Spaces
-                card {
+                section {
                     sectionTitle("Spaces")
                     ForEach(community.communities) { item in
                         let active = community.current?.id == item.id
@@ -102,7 +105,7 @@ struct ProfileView: View {
                 }
 
                 // Menu
-                card {
+                section {
                     menuRow(.person, "Edit Profile", route: .edit)
                     menuRow(.settings, "Settings", route: .settings)
                     menuStatic(.bell, "Notifications")
@@ -110,7 +113,7 @@ struct ProfileView: View {
                 }
 
                 // Sign out
-                card {
+                section {
                     Button { confirmSignOut = true } label: {
                         HStack {
                             Spacer()
@@ -138,15 +141,23 @@ struct ProfileView: View {
         .frame(width: 100, height: 100)
     }
 
-    private func card(@ViewBuilder _ content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 0) { content() }
-            .padding(.horizontal, 16).padding(.vertical, 8)
-            .background(theme.colors.bgPrimary, in: RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal, 16).padding(.top, 12)
+    /// A block of rows on the flat surface, opened by a hairline. No card, no
+    /// radius — the rule is what separates one group from the next.
+    private func section(@ViewBuilder _ content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle().fill(theme.colors.borderSubtle).frame(height: 1)
+            VStack(alignment: .leading, spacing: 0) { content() }
+                .padding(.horizontal, 16).padding(.vertical, 8)
+        }
+        .padding(.top, 8)
     }
 
     private func sectionTitle(_ text: String) -> some View {
-        Text(text.uppercased()).font(.system(size: 13, weight: .semibold)).foregroundStyle(theme.colors.textMuted).padding(.vertical, 8)
+        Text(text.uppercased())
+            .font(.system(size: 11, weight: .semibold))
+            .kerning(0.9)
+            .foregroundStyle(theme.colors.textMuted)
+            .padding(.top, 12).padding(.bottom, 4)
     }
 
     private func infoRow(_ label: String, _ value: String) -> some View {

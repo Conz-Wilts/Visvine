@@ -7,8 +7,8 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Date/time formatting that mirrors the RN screens' `toLocale*String` output.
- * Inputs are ISO-8601 strings from the backend; rendered in the device zone.
+ * Date/time formatting matching the web app's `toLocale*String` output. Inputs
+ * are ISO-8601 strings from the backend; rendered in the device zone.
  */
 object DateTimeFormat {
     private val zone: ZoneId get() = ZoneId.systemDefault()
@@ -36,6 +36,39 @@ object DateTimeFormat {
 
     /** "5" */
     fun dayOfMonth(iso: String): String = fmt(iso, "d")
+
+    /**
+     * "Fri, Aug 21, 3:00 PM – 4:00 PM" — the events feed's one facts line.
+     * Mirrors EventsFeedView.formatFullDate, including the note-first case where
+     * an event exists before anyone has dated it.
+     */
+    fun fullDate(startAt: String, endAt: String? = null): String {
+        if (startAt.isEmpty()) return "No date yet"
+        val datePart = fmt(startAt, "EEE, MMM d")
+        val startTime = time(startAt)
+        return if (!endAt.isNullOrEmpty()) "$datePart, $startTime – ${time(endAt)}" else "$datePart, $startTime"
+    }
+
+    /** "August 2026" — the month heading upcoming events are filed under. */
+    fun monthKey(iso: String): String = fmt(iso, "MMMM yyyy")
+
+    /**
+     * "Starts in 3 days" / "Starting soon" / null once it has begun. Mirrors
+     * lib/eventUtils.ts#startsInLabel.
+     */
+    fun startsInLabel(iso: String): String? {
+        val instant = parse(iso) ?: return null
+        val diffMs = instant.toEpochMilli() - Instant.now().toEpochMilli()
+        if (diffMs < 0) return null
+        val hours = diffMs / 3_600_000
+        if (hours < 1) return "Starting soon"
+        if (hours < 24) return "Starts in $hours ${if (hours == 1L) "hour" else "hours"}"
+        val days = Math.round(diffMs / 86_400_000.0)
+        if (days == 1L) return "Starts tomorrow"
+        if (days < 30) return "Starts in $days days"
+        val months = Math.round(days / 30.0)
+        return "Starts in $months month${if (months > 1) "s" else ""}"
+    }
 
     fun isUpcoming(iso: String): Boolean {
         val instant = parse(iso) ?: return false

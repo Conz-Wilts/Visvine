@@ -30,7 +30,7 @@ final class DevLoginModel {
     }
 }
 
-/// Port of screens/Auth/DevLoginScreen.tsx.
+/// The dev-only sign-in: pick an anchor user instead of going through Google.
 struct DevLoginView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(AuthManager.self) private var auth
@@ -51,8 +51,9 @@ struct DevLoginView: View {
                 Spacer()
             } else {
                 ScrollView {
-                    VStack(spacing: 8) {
-                        ForEach(model.users) { user in
+                    VStack(spacing: 0) {
+                        ForEach(Array(model.users.enumerated()), id: \.element.id) { index, user in
+                            if index > 0 { Rectangle().fill(c.borderSubtle).frame(height: 1) }
                             Button {
                                 Task { await model.signIn(user, auth: auth) }
                             } label: {
@@ -68,20 +69,18 @@ struct DevLoginView: View {
                                         VisvineIcon(.chevronRight).foregroundStyle(c.textMuted)
                                     }
                                 }
-                                .padding(14)
-                                .background(c.bgPrimary, in: RoundedRectangle(cornerRadius: 10))
-                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(c.borderLight, lineWidth: 1))
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                                .contentShape(Rectangle())
                                 .opacity(model.signingInId == user.id ? 0.5 : 1)
                             }
                             .disabled(model.signingInId != nil)
                         }
                     }
-                    .padding(16)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(c.bgSecondary)
+        .background(c.bgPrimary)
         .navigationTitle("Dev login")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }

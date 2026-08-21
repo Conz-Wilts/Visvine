@@ -19,8 +19,8 @@ import javax.inject.Singleton
 /**
  * One realtime event off `/api/messages/stream`. We only surface the discriminant
  * `type` and the optional `conversationId`; screens re-fetch on relevant events
- * rather than patching state from the payload. Closes the *foreground* realtime
- * gap the RN app never wired up. Background delivery still needs push (follow-on).
+ * rather than patching state from the payload. This is foreground delivery only —
+ * background delivery needs push, which is not wired up yet.
  */
 data class RealtimeEvent(
     val type: String,

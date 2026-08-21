@@ -32,7 +32,6 @@ fun UnauthNavHost() {
 /** Authenticated graph: tab host + detail + modal screens. */
 @Composable
 fun AuthedNavHost(
-    isDark: Boolean,
     pendingRoute: String?,
     onPendingRouteConsumed: () -> Unit,
 ) {
@@ -42,7 +41,6 @@ fun AuthedNavHost(
         composable(Routes.MAIN) {
             MainTabScaffold(
                 rootNav = rootNav,
-                isDark = isDark,
                 pendingRoute = pendingRoute,
                 onPendingRouteConsumed = onPendingRouteConsumed,
             )

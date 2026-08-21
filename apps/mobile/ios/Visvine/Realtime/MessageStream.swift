@@ -8,8 +8,8 @@ struct RealtimeEvent {
 }
 
 /// SSE consumer over `URLSession.bytes` so we can set the `Authorization: Bearer`
-/// header (the browser EventSource API can't). Closes the *foreground* realtime
-/// gap the RN app never wired up; background delivery still needs push (follow-on).
+/// header (the browser EventSource API can't). This is foreground delivery only —
+/// background delivery needs push, which is not wired up yet.
 /// A 401 (expired 30-day JWT) ends the stream; callers refresh the session.
 final class MessageStream {
     static let shared = MessageStream()

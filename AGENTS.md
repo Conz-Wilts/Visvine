@@ -36,7 +36,7 @@ apps/web/features/<domain>/{components,hooks,lib}   domain UI
 apps/web/components/ui/                             the ONLY shared UI
 apps/web/lib/          domain + server logic (the real code lives here)
 apps/web/tests/        node:test + tsx, one file per concern
-apps/web/prisma/       schema.prisma (40 models), seed, migrations
+apps/web/prisma/       schema.prisma (52 models), seed, migrations
 scripts/               repo-level db/env tooling (dump, restore, proxy, guards)
 ```
 
@@ -100,8 +100,8 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
   (`agent`, `ai-enrich`, `maintenance`); human edits still pass.
 - The node-type vocabulary is **closed**. Agents pick an existing type and may
   only suggest a new one in prose.
-- Context-tree UI invariants (2026-08 redesign): shared expansion hook,
-  keep-set prune, no global graphs.
+- Context-tree UI invariants (2026-08 redesign): shared expansion hook, no
+  global graphs.
 
 ## Search
 
@@ -119,9 +119,12 @@ itself is fuzzy/keyword only — the old semantic directory search was removed.
 
 ## MCP surface
 
-Sixteen tools at `/api/mcp` (`app/api/mcp/route.ts`, registered in
-`lib/mcp/tools.ts`), on `mcp-handler` 2 + the official TS SDK v2. FastMCP was
-evaluated and rejected.
+Two endpoints, on `mcp-handler` 2 + the official TS SDK v2 (FastMCP was
+evaluated and rejected). `/api/mcp` is the everyday context server — eighteen
+tools: sixteen from `lib/mcp/tools.ts` plus `list_tools`/`install_tool` from
+`lib/mcp/appTools.ts`. `/api/mcp/creator` is the Tool authoring loop — nine
+tools, `list_spaces` plus the rest of `appTools.ts`. Each has its own OAuth
+protected resource, so a token for one is refused by the other.
 
 The identity clients render — name, title, website, logo — is
 `lib/mcp/config.ts#mcpServerInfo`. The logo is the favicon PNG, but served from

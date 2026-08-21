@@ -8,10 +8,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Secure JWT storage backed by Keystore-encrypted SharedPreferences — the
- * native equivalent of expo-secure-store for the `auth_token` key. Read
- * synchronously by [com.visvine.mobile.data.remote.AuthInterceptor] on each
- * request, matching the old `ApiService.authToken` field.
+ * Secure JWT storage for the `auth_token` key, backed by Keystore-encrypted
+ * SharedPreferences. Read synchronously by
+ * [com.visvine.mobile.data.remote.AuthInterceptor] on each request.
  */
 @Singleton
 class TokenStore @Inject constructor(

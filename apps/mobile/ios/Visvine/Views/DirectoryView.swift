@@ -79,7 +79,7 @@ final class DirectoryModel {
 
 private enum DirectorySheet: Identifiable { case type, tag; var id: Int { hashValue } }
 
-/// Port of screens/Directory/DirectoryScreen.tsx.
+/// Everyone and everything in the space, as a grid of cards.
 struct DirectoryView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(CommunityStore.self) private var community
@@ -101,8 +101,8 @@ struct DirectoryView: View {
                 ScrollView {
                     if let error = model.error {
                         Text(error).foregroundStyle(c.error).font(.system(size: 14))
-                            .padding().frame(maxWidth: .infinity, alignment: .leading)
-                            .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 12)).padding(.horizontal, 16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16).padding(.vertical, 12)
                     }
                     filters
                     let items = model.filtered(query: search.query)
@@ -119,7 +119,7 @@ struct DirectoryView: View {
                 .refreshable { await model.refresh(communityId: community.current?.id) }
             }
         }
-        .background(c.bgSecondary)
+        .background(c.bgPrimary)
         .task(id: community.current?.id) { await model.load(communityId: community.current?.id) }
         .onAppear { search.placeholder = "Search directory" }
         .sheet(item: $sheet) { which in filterSheet(which).environment(theme) }
@@ -134,10 +134,9 @@ struct DirectoryView: View {
             Button { model.sortAscending.toggle() } label: {
                 HStack(spacing: 6) {
                     VisvineIcon(model.sortAscending ? .arrowDown : .arrowUp, size: 12)
-                    Text(model.sortAscending ? "A–Z" : "Z–A").font(.system(size: 12, weight: .semibold))
+                    Text(model.sortAscending ? "A–Z" : "Z–A").font(.system(size: 13, weight: .semibold))
                 }
-                .foregroundStyle(c.textSecondary).padding(.horizontal, 12).padding(.vertical, 6)
-                .background(c.bgPrimary, in: Capsule()).overlay(Capsule().stroke(c.borderDefault, lineWidth: 1))
+                .foregroundStyle(c.textSecondary).padding(.horizontal, 10).padding(.vertical, 8)
             }
             if model.hasFilters {
                 Button { model.clearAll() } label: {
@@ -152,18 +151,19 @@ struct DirectoryView: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
+    /// A filter trigger, drawn the way DirectoryToolbar draws one: no border,
+    /// nothing filled — an applied filter simply speaks in the accent's dark
+    /// shade.
     private func pill(label: String, count: Int, action: @escaping () -> Void) -> some View {
         let c = theme.colors
         let active = count > 0
         return Button(action: action) {
             HStack(spacing: 6) {
-                Text(label + (active ? " · \(count)" : "")).font(.system(size: 12, weight: .semibold))
+                Text(label + (active ? " · \(count)" : "")).font(.system(size: 13, weight: .semibold))
                 VisvineIcon(.chevronDown, size: 12)
             }
-            .foregroundStyle(active ? .white : c.textSecondary)
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .background(active ? c.accent : c.bgPrimary, in: Capsule())
-            .overlay(Capsule().stroke(active ? c.accent : c.borderDefault, lineWidth: 1))
+            .foregroundStyle(active ? c.accentDark : c.textSecondary)
+            .padding(.horizontal, 10).padding(.vertical, 8)
         }
     }
 
@@ -210,6 +210,11 @@ struct DirectoryView: View {
         }
     }
 
+    // The card carries the same four rules NodeCard.tsx holds on the web:
+    // 1:1 identity media, hierarchy by size AND weight AND colour, a tagline
+    // that is never the name's weight, and a type chip that is the smallest
+    // mark on the card. Two lines of tagline are always reserved so the chips
+    // land on one baseline across a row.
     private func cardBody(_ member: DirectoryMember) -> some View {
         let c = theme.colors
         let color = typeColor(member.type)
@@ -225,35 +230,39 @@ struct DirectoryView: View {
                     Text(avatarInitials(member.name)).foregroundStyle(.white).font(.system(size: 24, weight: .bold))
                 }
             }
-            .frame(maxWidth: .infinity).frame(maxHeight: .infinity).clipped()
+            .aspectRatio(1, contentMode: .fill)
+            .frame(maxWidth: .infinity)
+            .clipped()
 
-            VStack(spacing: 4) {
-                Text(member.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(c.textPrimary).lineLimit(1)
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle).font(.system(size: 12, weight: .semibold)).foregroundStyle(c.textPrimary).lineLimit(2).multilineTextAlignment(.center)
-                }
-                Spacer(minLength: 0)
-                Text(capitalizeFirst(member.type)).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
-                    .padding(.horizontal, 10).padding(.vertical, 4).background(color, in: Capsule())
+            VStack(spacing: 0) {
+                Text(member.name)
+                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(c.textPrimary)
+                    .lineLimit(1)
+                Text((subtitle?.isEmpty == false ? subtitle : nil) ?? " ")
+                    .font(.system(size: 13)).foregroundStyle(c.textSecondary)
+                    .lineLimit(2).multilineTextAlignment(.center)
+                    .frame(height: 35, alignment: .top)
+                    .padding(.top, 6)
+                Text(capitalizeFirst(member.type))
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(color, in: RoundedRectangle(cornerRadius: 6))
+                    .padding(.top, 14)
             }
-            .padding(12).frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 16)
         }
-        .aspectRatio(0.722, contentMode: .fit)
         .background(c.bgPrimary)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(color, lineWidth: 4))
     }
 
     private var emptyState: some View {
-        let c = theme.colors
-        return VStack(spacing: 12) {
-            ZStack {
-                Circle().fill(c.bgTertiary).frame(width: 72, height: 72)
-                VisvineIcon(.people, size: 32).foregroundStyle(c.textMuted)
-            }
-            Text(model.hasFilters ? "No members match filters" : "No members found")
-                .font(.system(size: 16, weight: .medium)).foregroundStyle(c.textMuted)
-        }
-        .frame(maxWidth: .infinity).padding(.vertical, 48)
+        EmptyStateView(
+            text: model.hasFilters ? "No members match filters" : "No members found",
+            icon: .people,
+            actionLabel: model.hasFilters ? "Clear filters" : nil,
+            action: model.hasFilters ? { model.clearAll() } : nil
+        )
     }
 }

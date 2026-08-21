@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
-import Dropdown, {
+import {
   DROPDOWN_TRIGGER_CLASS,
-  DROPDOWN_TRIGGER_COMPACT_CLASS,
   DROPDOWN_MENU_CLASS,
   DROPDOWN_TRIGGER_ACTIVE_STYLE,
   DROPDOWN_TRIGGER_IDLE_STYLE,
 } from '@/components/ui/Dropdown';
+import { ArrowDownIcon } from '@/features/shared/icons';
+import Chip from '@/components/ui/Chip';
 
 // ── Multi-select filter dropdown ──────────────────────────────────────────────
 interface SubOption {
@@ -27,11 +28,9 @@ interface FilterDropdownProps {
   onChangeSub?: (selected: Set<string>) => void;
   getColor?: (value: string) => string;
   singleSelect?: boolean;
-  /** Toolbar sizing (h-10, rounded-xl) instead of the standing h-12 pill. */
-  compact?: boolean;
 }
 
-export function FilterDropdown({ label, options, selected, onChange, selectedSub, onChangeSub, getColor, singleSelect, compact }: FilterDropdownProps) {
+export function FilterDropdown({ label, options, selected, onChange, selectedSub, onChangeSub, getColor, singleSelect }: FilterDropdownProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
@@ -81,8 +80,17 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
     });
   }
 
-  const filteredOptions = search.trim()
-    ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+  // Search reaches sub-options too: a term that only matches an alias keeps its
+  // parent in the list, trimmed to the matching aliases and expanded, so nothing
+  // findable is hidden behind a collapsed row.
+  const query = search.trim().toLowerCase();
+  type Filtered = (typeof options)[number] & { forceExpand?: boolean };
+  const filteredOptions: Filtered[] = query
+    ? options.flatMap(o => {
+        if (o.label.toLowerCase().includes(query)) return [o];
+        const subs = (o.subOptions ?? []).filter(s => s.label.toLowerCase().includes(query));
+        return subs.length ? [{ ...o, subOptions: subs, forceExpand: true }] : [];
+      })
     : options;
 
   let triggerLabel: string;
@@ -105,7 +113,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className={compact ? DROPDOWN_TRIGGER_COMPACT_CLASS : DROPDOWN_TRIGGER_CLASS}
+        className={DROPDOWN_TRIGGER_CLASS}
         style={
           isActive && activeColor
             ? { borderColor: activeColor, backgroundColor: `${activeColor}18`, color: activeColor }
@@ -126,7 +134,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
       </button>
 
       {open && (
-        <div className={`${DROPDOWN_MENU_CLASS} min-w-[200px]`}>
+        <div className={`${DROPDOWN_MENU_CLASS} w-[268px]`}>
           <div className="flex items-center gap-2 px-3 py-2">
             <div className="flex flex-1 min-w-0 items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
               <svg className="h-3 w-3 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -168,11 +176,14 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
             const checked = selected.has(opt.value);
             const color = getColor ? getColor(opt.value) : 'var(--color-brand-green)';
             const hasSubs = opt.subOptions && opt.subOptions.length > 0;
-            const subExpanded = expandedSubs.has(opt.value);
+            const subExpanded = opt.forceExpand || expandedSubs.has(opt.value);
 
             return (
               <div key={opt.value}>
                 <div className="flex items-center w-full">
+                  {/* The chevron gutter is reserved on every row, so labels line
+                      up whether or not the type carries aliases. */}
+                  {!hasSubs && <span className="w-8 shrink-0" aria-hidden />}
                   {hasSubs && (
                     <button
                       type="button"
@@ -192,9 +203,15 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
                     type="button"
                     onClick={() => toggle(opt.value)}
                     className="flex-1 flex items-center gap-3 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors"
-                    style={{ paddingLeft: hasSubs ? '0.5rem' : '1rem', paddingRight: '1rem' }}
+                    style={{ paddingLeft: '0.5rem', paddingRight: '1rem' }}
                   >
-                    <span className={`flex-1 text-left ${checked ? 'font-medium text-text-primary' : ''}`}>{opt.label}</span>
+                    {getColor ? (
+                      <span className="flex min-w-0 flex-1 justify-start">
+                        <Chip color={color}>{opt.label}</Chip>
+                      </span>
+                    ) : (
+                      <span className={`flex-1 text-left ${checked ? 'font-medium text-text-primary' : ''}`}>{opt.label}</span>
+                    )}
                     {opt.count !== undefined && (
                       <span className="text-xs text-text-muted tabular-nums">{opt.count}</span>
                     )}
@@ -224,10 +241,15 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
                           key={sub.value}
                           type="button"
                           onClick={() => toggleSub(sub.value)}
-                          className="w-full flex items-center gap-2.5 border-l-2 px-3 py-2 text-xs text-text-secondary hover:bg-surface-2 transition-colors"
-                          style={{ borderColor: subColor }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-text-secondary hover:bg-surface-2 transition-colors"
                         >
-                          <span className={`flex-1 text-left ${subChecked ? 'font-medium text-text-primary' : ''}`}>{sub.label}</span>
+                          {getColor ? (
+                            <span className="flex min-w-0 flex-1 justify-start">
+                              <Chip color={subColor} size="xs">{sub.label}</Chip>
+                            </span>
+                          ) : (
+                            <span className={`flex-1 text-left ${subChecked ? 'font-medium text-text-primary' : ''}`}>{sub.label}</span>
+                          )}
                           {sub.count !== undefined && (
                             <span className="text-xs text-text-muted tabular-nums">{sub.count}</span>
                           )}
@@ -259,27 +281,32 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
   );
 }
 
-// ── Sort dropdown ─────────────────────────────────────────────────────────────
-interface SortDropdownProps {
+// ── Sort toggle ───────────────────────────────────────────────────────────────
+interface SortToggleProps {
   value: 'az' | 'za';
   onChange: (value: 'az' | 'za') => void;
-  compact?: boolean;
 }
 
-const SORT_OPTIONS = [
-  { value: 'az' as const, label: 'A → Z' },
-  { value: 'za' as const, label: 'Z → A' },
-];
-
-export function SortDropdown({ value, onChange, compact }: SortDropdownProps) {
+/**
+ * Two directions is not a menu. One button states the current order and flips
+ * it — the arrow rotates to show which way the flip went.
+ */
+export function SortToggle({ value, onChange }: SortToggleProps) {
+  const az = value === 'az';
   return (
-    <Dropdown
-      label="Sort"
-      value={value}
-      options={SORT_OPTIONS}
-      onChange={onChange}
-      menuWidthClass="min-w-[140px]"
-      compact={compact}
-    />
+    <button
+      type="button"
+      onClick={() => onChange(az ? 'za' : 'az')}
+      className={DROPDOWN_TRIGGER_CLASS}
+      style={DROPDOWN_TRIGGER_IDLE_STYLE}
+      aria-label={`Sort ${az ? 'A to Z' : 'Z to A'}; click to reverse`}
+      title="Reverse sort order"
+    >
+      <ArrowDownIcon
+        className={`h-4 w-4 transition-transform duration-200 ${az ? '' : 'rotate-180'}`}
+        style={{ opacity: 0.5 }}
+      />
+      <span className="tabular-nums">{az ? 'A → Z' : 'Z → A'}</span>
+    </button>
   );
 }

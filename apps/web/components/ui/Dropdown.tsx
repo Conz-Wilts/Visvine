@@ -10,10 +10,8 @@ import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
 // The trigger is a text button — chevron, label, value — with no border and no
 // fill at rest: it reads as a word you can change, not a box on the toolbar.
 // Only the menu floats, and it is the one part that carries a shadow.
-export const DROPDOWN_TRIGGER_CLASS =
-  'flex h-12 lg:h-10 items-center gap-2 rounded-lg px-3 text-sm lg:text-[13px] font-semibold transition-colors hover:bg-surface-3';
 /** Toolbar-sized trigger — sits on one line beside a 40px search field. */
-export const DROPDOWN_TRIGGER_COMPACT_CLASS =
+export const DROPDOWN_TRIGGER_CLASS =
   'flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold transition-colors hover:bg-surface-3';
 export const DROPDOWN_MENU_CLASS =
   'absolute left-0 top-full mt-1.5 z-50 rounded-xl bg-surface-1 shadow-float py-1.5 overflow-hidden';
@@ -43,13 +41,11 @@ interface DropdownProps<T extends string> {
   active?: boolean;
   menuWidthClass?: string;
   className?: string;
-  /** Toolbar sizing (h-10) instead of the standing h-12 trigger. */
-  compact?: boolean;
 }
 
 /**
  * Standard single-select dropdown — one size everywhere
- * (h-12 text trigger, floating rounded-xl menu with px-4 py-2.5 items).
+ * (h-10 text trigger, floating rounded-xl menu with px-4 py-2.5 items).
  */
 export default function Dropdown<T extends string>({
   label,
@@ -59,7 +55,6 @@ export default function Dropdown<T extends string>({
   active = false,
   menuWidthClass = 'min-w-[160px]',
   className,
-  compact = false,
 }: DropdownProps<T>) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -73,7 +68,7 @@ export default function Dropdown<T extends string>({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={compact ? DROPDOWN_TRIGGER_COMPACT_CLASS : DROPDOWN_TRIGGER_CLASS}
+        className={DROPDOWN_TRIGGER_CLASS}
         style={active ? DROPDOWN_TRIGGER_ACTIVE_STYLE : DROPDOWN_TRIGGER_IDLE_STYLE}
       >
         <ChevronDownIcon

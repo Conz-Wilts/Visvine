@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Port of components/SearchOverlay.tsx — a floating bottom search bar.
+/// A floating search bar, raised over the current screen from the bottom.
 struct SearchOverlay: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(SearchStore.self) private var searchStore

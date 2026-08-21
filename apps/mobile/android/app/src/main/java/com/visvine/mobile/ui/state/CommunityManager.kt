@@ -18,7 +18,7 @@ import javax.inject.Singleton
 /**
  * App-scoped community selection — the native equivalent of CommunityProvider.
  * Refreshes when the user becomes authenticated and clears on sign-out; the
- * first community is selected by default, matching the RN behaviour.
+ * first community is selected by default.
  */
 @Singleton
 class CommunityManager @Inject constructor(

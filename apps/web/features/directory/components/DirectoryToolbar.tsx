@@ -12,7 +12,7 @@
 //
 // All state lives in the passed-in useDirectoryBrowse() instance.
 
-import { FilterDropdown, SortDropdown } from '@/features/directory/components/FilterDropdown';
+import { FilterDropdown, SortToggle } from '@/features/directory/components/FilterDropdown';
 import Chip from '@/components/ui/Chip';
 import SearchInput from '@/components/ui/SearchInput';
 import { tagPalette } from '@/lib/tagColors';
@@ -85,7 +85,6 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
         <div className="hidden h-6 w-px shrink-0 bg-border-subtle sm:block" />
 
         <FilterDropdown
-          compact
           label="Type"
           options={presentTypes.map(t => {
             const forType = aliases.filter(a => a.nodeType.toLowerCase() === t.toLowerCase());
@@ -109,7 +108,6 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
         />
 
         <FilterDropdown
-          compact
           label="Tag"
           options={presentTags.map(t => ({
             value: t,
@@ -118,10 +116,11 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
           }))}
           selected={filterTags}
           onChange={setFilterTags}
+          getColor={t => tagPalette(t, tagColors).base}
         />
 
         <div className="ml-auto">
-          <SortDropdown compact value={sortOrder} onChange={setSortOrder} />
+          <SortToggle value={sortOrder} onChange={setSortOrder} />
         </div>
       </div>
 

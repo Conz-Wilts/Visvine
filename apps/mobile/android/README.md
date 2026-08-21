@@ -38,8 +38,8 @@ sdk.dir=/path/to/Android/sdk
 
 ## Configuration
 
-App config replaces the old `EXPO_PUBLIC_*` env values; set via Gradle
-properties (in `gradle.properties`, `~/.gradle/gradle.properties`, or `-P`):
+App config is set via Gradle properties (in `gradle.properties`,
+`~/.gradle/gradle.properties`, or `-P`):
 
 | Property | Default | Purpose |
 |---|---|---|
@@ -65,7 +65,7 @@ app/src/main/java/com/visvine/mobile/
 │   └── repository/  Auth/Community/Directory/Events/Messages/Profile repos
 ├── di/              Hilt NetworkModule
 └── ui/
-    ├── theme/       8 hues + dark toggle (buildColors), Compose theme
+    ├── theme/       8 hues (buildColors), Compose theme
     ├── state/       CommunityManager, SearchController (app-scoped stores)
     ├── viewmodel/   one ViewModel per screen + shared (Auth/Theme/...)
     ├── components/   ScreenHeader, SearchOverlay, CommunityAvatar, Loading

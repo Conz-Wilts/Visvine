@@ -46,7 +46,7 @@ final class ConversationsModel {
     }
 }
 
-/// Port of screens/Messaging/ConversationsListScreen.tsx.
+/// Every conversation you are in, as rows on hairlines.
 struct ConversationsListView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(AuthManager.self) private var auth
@@ -60,19 +60,20 @@ struct ConversationsListView: View {
         VStack(spacing: 0) {
             ScreenHeader(showCommunitySelector: false, onProfile: onProfile)
             if let error = model.error {
-                Text(error).foregroundStyle(c.error).padding().frame(maxWidth: .infinity, alignment: .leading)
-                    .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 8)).padding(.horizontal, 16)
+                Text(error).foregroundStyle(c.error).font(.system(size: 14))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16).padding(.vertical, 12)
             }
             if model.loading {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let items = model.filtered(query: search.query, userId: auth.user?.id)
                 if items.isEmpty {
-                    VStack(spacing: 12) {
-                        VisvineIcon(.message, size: 44).foregroundStyle(c.borderDefault)
-                        Text(search.query.isEmpty ? "No messages yet" : "No conversations found").foregroundStyle(c.textMuted)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    EmptyStateView(
+                        text: search.query.isEmpty ? "No messages yet" : "No conversations found",
+                        icon: .message
+                    )
+                    .frame(maxHeight: .infinity)
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -82,7 +83,7 @@ struct ConversationsListView: View {
                                     row(conversation, name: name)
                                 }
                                 .buttonStyle(.plain)
-                                Divider().overlay(c.borderLight)
+                                Rectangle().fill(c.borderSubtle).frame(height: 1)
                             }
                         }
                     }
@@ -117,7 +118,7 @@ struct ConversationsListView: View {
                     Spacer()
                     if conversation.unreadCount > 0 {
                         Text("\(conversation.unreadCount)").font(.system(size: 12, weight: .semibold)).foregroundStyle(c.bgPrimary)
-                            .padding(.horizontal, 8).padding(.vertical, 2).background(c.accent, in: Capsule())
+                            .padding(.horizontal, 8).padding(.vertical, 2).background(c.accent, in: RoundedRectangle(cornerRadius: 6))
                     }
                 }
             }

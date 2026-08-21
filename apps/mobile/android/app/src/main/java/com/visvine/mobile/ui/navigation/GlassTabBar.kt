@@ -45,20 +45,18 @@ private val TABS = listOf(
 )
 
 /**
- * Port of navigation/TabNavigator.tsx's bespoke glass pill bar (the RN swipe
- * PanResponder is dropped in favour of standard taps per the B2 custom-UI
- * decision). A search circle sits to the right of the pill.
+ * The bespoke glass pill tab bar: one row of tabs, selected by tap, with a
+ * search circle sitting to the right of the pill.
  */
 @Composable
 fun GlassTabBar(
-    isDark: Boolean,
     current: String,
     onSelect: (String) -> Unit,
     onSearch: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = VisvineTheme.colors
-    val neutral = if (isDark) Color.White else Color.Black
+    val neutral = Color.Black
 
     Row(
         modifier = modifier
@@ -72,7 +70,7 @@ fun GlassTabBar(
             modifier = Modifier
                 .weight(1f)
                 .height(64.dp)
-                .glassSurface(isDark, 32.dp)
+                .glassSurface(32.dp)
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -101,7 +99,7 @@ fun GlassTabBar(
         Box(
             modifier = Modifier
                 .size(64.dp)
-                .glassSurface(isDark, 32.dp)
+                .glassSurface(32.dp)
                 .clickable { onSearch() },
             contentAlignment = Alignment.Center,
         ) {

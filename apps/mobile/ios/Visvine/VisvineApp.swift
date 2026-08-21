@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// App entry point. Mirrors the RN provider nesting (Theme → Auth → Community)
-/// as `@StateObject` app-scoped stores injected into the environment, and routes
-/// the visvine:// OAuth deep link into `AuthManager`.
+/// App entry point. The app-wide state the web app holds in nested React contexts
+/// (theme → auth → community) lives here as app-scoped stores injected into the
+/// environment. Also routes the visvine:// OAuth deep link into `AuthManager`.
 @main
 struct VisvineApp: App {
     @State private var theme = ThemeStore()

@@ -1,7 +1,7 @@
 import Foundation
 
-/// Date/time formatting mirroring the RN screens' `toLocale*String` output.
-/// Inputs are ISO-8601 strings; rendered in the device zone/locale.
+/// Date/time formatting matching the web app's `toLocale*String` output. Inputs
+/// are ISO-8601 strings; rendered in the device zone/locale.
 enum DateFormatting {
     private static let isoFractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -34,6 +34,38 @@ enum DateFormatting {
     static func dayOfMonth(_ value: String) -> String {
         guard let date = parse(value) else { return value }
         return String(Calendar.current.component(.day, from: date))
+    }
+
+    /// "Fri, Aug 21, 3:00 PM – 4:00 PM" — the events feed's one facts line.
+    /// Mirrors EventsFeedView.formatFullDate, including the note-first case
+    /// where an event exists before anyone has dated it.
+    static func fullDate(_ startAt: String, endAt: String? = nil) -> String {
+        if startAt.isEmpty { return "No date yet" }
+        let datePart = format(startAt, "EEE MMM d")
+        let startTime = time(startAt)
+        if let endAt, !endAt.isEmpty {
+            return "\(datePart), \(startTime) – \(time(endAt))"
+        }
+        return "\(datePart), \(startTime)"
+    }
+
+    /// "August 2026" — the month heading the upcoming events are filed under.
+    static func monthKey(_ value: String) -> String { format(value, "MMMM yyyy") }
+
+    /// "Starts in 3 days" / "Starting soon" / nil once it has begun. Mirrors
+    /// lib/eventUtils.ts#startsInLabel.
+    static func startsInLabel(_ value: String) -> String? {
+        guard let date = parse(value) else { return nil }
+        let diff = date.timeIntervalSinceNow
+        if diff < 0 { return nil }
+        let hours = Int(diff / 3600)
+        if hours < 1 { return "Starting soon" }
+        if hours < 24 { return "Starts in \(hours) \(hours == 1 ? "hour" : "hours")" }
+        let days = Int((diff / 86400).rounded())
+        if days == 1 { return "Starts tomorrow" }
+        if days < 30 { return "Starts in \(days) days" }
+        let months = Int((Double(days) / 30).rounded())
+        return "Starts in \(months) month\(months > 1 ? "s" : "")"
     }
 
     static func isUpcoming(_ value: String) -> Bool {

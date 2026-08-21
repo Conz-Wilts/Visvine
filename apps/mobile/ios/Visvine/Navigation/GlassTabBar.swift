@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Port of navigation/TabNavigator.tsx's bespoke glass pill bar (the RN swipe
-/// PanResponder is dropped for standard taps per the B2 custom-UI decision).
-/// A search circle sits to the right of the pill.
+/// The bespoke glass pill tab bar: one row of tabs, selected by tap, with a
+/// search circle sitting to the right of the pill.
 struct GlassTabBar: View {
     @Environment(ThemeStore.self) private var theme
     @Binding var selected: MainTab
@@ -20,7 +19,7 @@ struct GlassTabBar: View {
 
     var body: some View {
         let c = theme.colors
-        let neutral: Color = theme.isDark ? .white : .black
+        let neutral: Color = .black
         HStack(spacing: 10) {
             HStack(spacing: 0) {
                 ForEach(items, id: \.tab) { item in

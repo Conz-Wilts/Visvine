@@ -28,7 +28,6 @@ import com.visvine.mobile.ui.viewmodel.SearchViewModel
 @Composable
 fun MainTabScaffold(
     rootNav: NavController,
-    isDark: Boolean,
     pendingRoute: String?,
     onPendingRouteConsumed: () -> Unit,
     searchViewModel: SearchViewModel = hiltViewModel(),
@@ -72,14 +71,13 @@ fun MainTabScaffold(
         }
 
         GlassTabBar(
-            isDark = isDark,
             current = currentTab,
             onSelect = { route -> selectTab(tabNav, route) },
             onSearch = { searchViewModel.open() },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
 
-        SearchOverlay(searchViewModel = searchViewModel, isDark = isDark)
+        SearchOverlay(searchViewModel = searchViewModel)
     }
 }
 

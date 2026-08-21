@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Port of screens/Auth/LoginScreen.tsx.
+/// Sign in — the mark, one line of purpose, and the Google button.
 struct LoginView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(AuthManager.self) private var auth
@@ -11,10 +11,7 @@ struct LoginView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 Spacer()
-                ZStack {
-                    Circle().fill(c.accentLight).frame(width: 110, height: 110)
-                    VisvineIcon(.network, size: 56).foregroundStyle(c.accent)
-                }
+                VisvineIcon(.network, size: 56).foregroundStyle(c.accent)
                 Text("Visvine").font(.system(size: 34, weight: .bold)).foregroundStyle(c.textPrimary).padding(.top, 16)
                 Text("Connect with your space").font(.system(size: 16)).foregroundStyle(c.textMuted).padding(.top, 8)
 
@@ -27,7 +24,7 @@ struct LoginView: View {
                     Text("Continue with Google")
                         .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
                         .frame(maxWidth: .infinity).padding(.vertical, 16)
-                        .background(c.accent, in: RoundedRectangle(cornerRadius: 14))
+                        .background(c.accent, in: RoundedRectangle(cornerRadius: 8))
                 }
                 .padding(.top, 48)
 
@@ -39,9 +36,9 @@ struct LoginView: View {
                             VisvineIcon(.tool)
                             Text("Dev login (skip Google)").font(.system(size: 14, weight: .semibold))
                         }
-                        .foregroundStyle(c.accentDark)
+                        .foregroundStyle(c.textSecondary)
                         .frame(maxWidth: .infinity).padding(.vertical, 14)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(c.accentDark, lineWidth: 1))
+                        .background(c.bgSecondary, in: RoundedRectangle(cornerRadius: 8))
                     }
                     .padding(.top, 12)
                 }
@@ -53,7 +50,7 @@ struct LoginView: View {
             }
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(c.bgSecondary)
+            .background(c.bgPrimary)
         }
     }
 

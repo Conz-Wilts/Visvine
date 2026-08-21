@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The RN BlurView "glass" pill — on iOS this is a real backdrop blur via
-/// `.ultraThinMaterial`, with a hairline border to match the tab bar / search bar.
+/// The "glass" pill under the tab bar and the search bar: a real backdrop blur
+/// via `.ultraThinMaterial`, with a hairline border.
 struct GlassBackground: ViewModifier {
     var cornerRadius: CGFloat = 32
 

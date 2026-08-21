@@ -23,7 +23,7 @@ import kotlin.math.roundToInt
 private fun initialsOf(name: String): String =
     name.trim().split(Regex("\\s+")).take(2).mapNotNull { it.firstOrNull()?.uppercase() }.joinToString("")
 
-/** Port of components/CommunityAvatar.tsx — image with initials fallback. */
+/** A community's avatar: its image, or its initials when there is none. */
 @Composable
 fun CommunityAvatar(
     name: String,

@@ -185,7 +185,7 @@ export default function ThreadPanel({
       {selectedConversation && (
         <>
           {/* Channel header */}
-          <header className="relative flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-2.5">
+          <header className="relative flex items-center justify-between gap-3 border-b border-t border-border-subtle px-4 py-2.5">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               {isMobile && (
                 <button

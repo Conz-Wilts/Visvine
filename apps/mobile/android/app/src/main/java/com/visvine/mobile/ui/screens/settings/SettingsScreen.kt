@@ -19,8 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,7 +36,7 @@ import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.ThemeViewModel
 
 
-/** Port of screens/Settings/SettingsScreen.tsx. */
+/** Appearance settings — the hue picker, and nothing the web app does not have. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
@@ -46,11 +44,10 @@ fun SettingsScreen(
     viewModel: ThemeViewModel = hiltViewModel(),
 ) {
     val colors = VisvineTheme.colors
-    val isDark by viewModel.isDark.collectAsStateWithLifecycle()
     val themeId by viewModel.themeId.collectAsStateWithLifecycle()
     val activeTheme = viewModel.themes.firstOrNull { it.id == themeId } ?: viewModel.themes.first()
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgSecondary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
         Row(
             modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -60,30 +57,8 @@ fun SettingsScreen(
         }
 
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 40.dp)) {
-            Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp).background(colors.bgPrimary).padding(16.dp)) {
-                Text("Appearance", color = colors.textMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
-
-                // Dark mode
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (isDark) AppIcons.DarkMode else AppIcons.LightMode, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp).padding(end = 0.dp))
-                        Text("Dark Mode", color = colors.textPrimary, fontSize = 16.sp, modifier = Modifier.padding(start = 12.dp))
-                    }
-                    Switch(
-                        checked = isDark,
-                        onCheckedChange = { viewModel.toggleDark() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = colors.accent,
-                            uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = colors.borderDefault,
-                        ),
-                    )
-                }
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Text("APPEARANCE", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.9.sp, modifier = Modifier.padding(bottom = 4.dp))
 
                 // Theme colour
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {

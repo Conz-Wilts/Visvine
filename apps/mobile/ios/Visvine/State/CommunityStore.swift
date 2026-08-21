@@ -3,7 +3,7 @@ import Observation
 
 /// App-scoped community selection — the native equivalent of CommunityProvider.
 /// Driven by the view layer on auth change (see MainTabView.task), it refreshes
-/// the list and selects the first community by default, matching the RN behaviour.
+/// the list and selects the first community by default.
 @MainActor
 @Observable
 final class CommunityStore {

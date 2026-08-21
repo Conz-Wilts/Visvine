@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu, net, screen, session, shell, type WebContents
 import path from "node:path";
 import { isDevMode, readSettings, resolveAppUrl } from "./config";
 import { buildMenu } from "./menu";
+import { WINDOW_BACKGROUND } from "./theme";
 import {
   appPathUrl,
   deepLinkToPath,
@@ -160,7 +161,7 @@ function createWindow(): BrowserWindow {
     minWidth: 720,
     minHeight: 480,
     show: false,
-    backgroundColor: "#ffffff",
+    backgroundColor: WINDOW_BACKGROUND,
     autoHideMenuBar: process.platform !== "darwin",
     icon: path.join(__dirname, "..", "assets", "icon.png"),
     webPreferences: {

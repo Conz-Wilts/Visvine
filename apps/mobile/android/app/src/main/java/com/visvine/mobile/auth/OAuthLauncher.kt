@@ -16,12 +16,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Launches Google OAuth in a Chrome Custom Tab — the native equivalent of
- * expo-web-browser. The server-mediated code exchange happens at
- * `/api/auth/callback/google-mobile`, which redirects back to
- * `visvine://auth/callback?token=…`; that deep link is caught by the manifest
- * intent filter and routed through [AuthManager]. No result monitoring is
- * needed here (unlike Expo) because the OS deep link drives the return.
+ * Launches Google OAuth in a Chrome Custom Tab. The server-mediated code
+ * exchange happens at `/api/auth/callback/google-mobile`, which redirects back
+ * to `visvine://auth/callback?token=…`; that deep link is caught by the
+ * manifest intent filter and routed through [AuthManager]. Nothing here watches
+ * the tab for a result — the OS deep link is what drives the return.
  */
 @Singleton
 class OAuthLauncher @Inject constructor(

@@ -26,17 +26,16 @@ import com.visvine.mobile.ui.viewmodel.RootViewModel
 /**
  * Top-level composable. Applies the active theme, then gates the UI on
  * (1) the remote kill-switch, (2) the auth-loading splash, and (3) the
- * authenticated/unauthenticated graph — mirroring AppNavigator's switch.
+ * authenticated/unauthenticated graph.
  */
 @Composable
 fun VisvineRoot(rootViewModel: RootViewModel = hiltViewModel()) {
     val colors by rootViewModel.colors.collectAsStateWithLifecycle()
-    val isDark by rootViewModel.isDark.collectAsStateWithLifecycle()
     val auth by rootViewModel.authState.collectAsStateWithLifecycle()
     val pendingRoute by rootViewModel.pendingRoute.collectAsStateWithLifecycle()
     val killSwitch by rootViewModel.killSwitch.collectAsStateWithLifecycle()
 
-    VisvineTheme(colors = colors, isDark = isDark) {
+    VisvineTheme(colors = colors) {
         Surface(modifier = Modifier.fillMaxSize(), color = colors.bgSecondary) {
             when (val gate = killSwitch) {
                 is KillSwitch.State.Disabled -> BlockingScreen("Visvine is unavailable", gate.message)
@@ -44,7 +43,6 @@ fun VisvineRoot(rootViewModel: RootViewModel = hiltViewModel()) {
                 KillSwitch.State.Operational -> when {
                     auth.isLoading -> Loading(fullScreen = true, message = "Signing you in…")
                     auth.isAuthenticated -> AuthedNavHost(
-                        isDark = isDark,
                         pendingRoute = pendingRoute,
                         onPendingRouteConsumed = rootViewModel::clearPendingRoute,
                     )

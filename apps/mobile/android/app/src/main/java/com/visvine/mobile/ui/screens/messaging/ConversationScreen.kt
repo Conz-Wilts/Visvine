@@ -50,7 +50,7 @@ import com.visvine.mobile.ui.util.DateTimeFormat
 import com.visvine.mobile.ui.viewmodel.ConversationViewModel
 
 
-/** Port of screens/Messaging/ConversationScreen.tsx. */
+/** One conversation: its messages, newest at the bottom, and the composer. */
 @Composable
 fun ConversationScreen(
     conversationName: String?,

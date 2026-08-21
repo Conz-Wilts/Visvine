@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Top-level view. Applies the active color scheme, then gates the UI on
-/// (1) the remote kill-switch, (2) the auth-loading splash, and (3) the
-/// authenticated/unauthenticated graph — mirroring AppNavigator's switch.
+/// Top-level view. Pins the light appearance the web app is built in, then
+/// gates the UI on (1) the remote kill-switch, (2) the auth-loading splash,
+/// and (3) the authenticated/unauthenticated graph.
 struct RootView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(AuthManager.self) private var auth
@@ -11,7 +11,7 @@ struct RootView: View {
     var body: some View {
         let c = theme.colors
         ZStack {
-            c.bgSecondary.ignoresSafeArea()
+            c.bgPrimary.ignoresSafeArea()
 
             switch killSwitch.state {
             case .disabled(let message):
@@ -28,7 +28,7 @@ struct RootView: View {
                 }
             }
         }
-        .preferredColorScheme(theme.isDark ? .dark : .light)
+        .preferredColorScheme(.light)
         .tint(c.accent)
     }
 }

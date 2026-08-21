@@ -45,7 +45,7 @@ final class ConversationModel {
     }
 }
 
-/// Port of screens/Messaging/ConversationScreen.tsx.
+/// One conversation: its messages, newest at the bottom, and the composer.
 struct ConversationView: View {
     @Environment(ThemeStore.self) private var theme
     @State private var model: ConversationModel

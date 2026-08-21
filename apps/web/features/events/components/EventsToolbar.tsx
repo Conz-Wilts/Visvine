@@ -42,7 +42,6 @@ export default function EventsToolbar({
         options={TIME_OPTIONS}
         onChange={onFilterChange}
         active={currentFilter !== 'upcoming'}
-        compact
       />
       {onLocationFilterChange && (
         <Dropdown
@@ -51,7 +50,6 @@ export default function EventsToolbar({
           options={LOCATION_OPTIONS}
           onChange={onLocationFilterChange}
           active={locationFilter !== 'all'}
-          compact
         />
       )}
 

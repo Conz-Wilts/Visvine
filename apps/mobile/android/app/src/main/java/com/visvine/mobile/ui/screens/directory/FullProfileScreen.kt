@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -67,7 +68,10 @@ private fun openUrl(context: Context, url: String) {
         .onFailure { Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show() }
 }
 
-/** Port of screens/Profile/FullProfileScreen.tsx. */
+/**
+ * Someone else's profile: a hero, then About / Skills / Contact as blocks on the
+ * flat surface, divided by hairlines.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FullProfileScreen(
@@ -79,14 +83,14 @@ fun FullProfileScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgSecondary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
         // Top bar
         Row(
             modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(colors.bgPrimary).clickable { onBack() }, contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.size(36.dp).clip(CircleShape).clickable { onBack() }, contentAlignment = Alignment.Center) {
                 Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.textPrimary, modifier = Modifier.size(22.dp))
             }
             Text(
@@ -122,15 +126,15 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 120.dp)) {
         // Hero
         Column(
-            modifier = Modifier.fillMaxWidth().padding(16.dp).clip(RoundedCornerShape(20.dp)).background(colors.bgPrimary).padding(20.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 16.dp, bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(contentAlignment = Alignment.BottomEnd) {
                 if (!profile.imageUrl.isNullOrEmpty()) {
-                    AsyncImage(model = profile.imageUrl, contentDescription = profile.name, contentScale = ContentScale.Crop, modifier = Modifier.size(120.dp).clip(RoundedCornerShape(20.dp)))
+                    AsyncImage(model = profile.imageUrl, contentDescription = profile.name, contentScale = ContentScale.Crop, modifier = Modifier.size(120.dp).clip(RoundedCornerShape(16.dp)))
                 } else {
-                    Box(modifier = Modifier.size(120.dp).clip(RoundedCornerShape(20.dp)).background(colors.accent), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(120.dp).clip(RoundedCornerShape(16.dp)).background(colors.accent), contentAlignment = Alignment.Center) {
                         Text(initials(profile.name), color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -149,11 +153,11 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
 
             if (profile.openToWork) {
                 Row(
-                    modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(colors.accentLight).border(1.dp, colors.accent, RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(colors.bgTertiary).padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Box(Modifier.size(6.dp).clip(CircleShape).background(colors.accent))
-                    Text("Open to work", color = colors.accentDark, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Open to work", color = colors.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -178,23 +182,23 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
             if (!isOwner) {
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(999.dp)).background(colors.accent).clickable {
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(colors.accent).clickable {
                             Toast.makeText(context, "Connect flow coming soon.", Toast.LENGTH_SHORT).show()
-                        }.padding(vertical = 10.dp),
+                        }.padding(vertical = 12.dp),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(AppIcons.PersonAdd, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                         Text("Connect", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
                     }
                     Row(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(999.dp)).border(1.5.dp, colors.accent, RoundedCornerShape(999.dp)).clickable {
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(colors.bgSecondary).clickable {
                             if (!profile.email.isNullOrEmpty()) openUrl(context, "mailto:${profile.email}")
                             else Toast.makeText(context, "This person has not listed an email.", Toast.LENGTH_SHORT).show()
-                        }.padding(vertical = 10.dp),
+                        }.padding(vertical = 12.dp),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(AppIcons.Mail, contentDescription = null, tint = colors.accentDark, modifier = Modifier.size(16.dp))
-                        Text("Message", color = colors.accentDark, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
+                        Icon(AppIcons.Mail, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(16.dp))
+                        Text("Message", color = colors.textSecondary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
                     }
                 }
             }
@@ -214,8 +218,8 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
             Section("Skills", colors) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     profile.tags.forEach { tag ->
-                        Box(modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(colors.accentLight).border(1.dp, colors.accent, RoundedCornerShape(999.dp)).padding(horizontal = 10.dp, vertical = 6.dp)) {
-                            Text(tag, color = colors.accentDark, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(colors.bgTertiary).padding(horizontal = 8.dp, vertical = 5.dp)) {
+                            Text(tag, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -238,7 +242,7 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
 @Composable
 private fun StatChip(icon: Painter, label: String, colors: DynamicColors) {
     Row(
-        modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(colors.bgTertiary).padding(horizontal = 10.dp, vertical = 4.dp),
+        modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(colors.bgTertiary).padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(icon, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(12.dp))
@@ -248,9 +252,14 @@ private fun StatChip(icon: Painter, label: String, colors: DynamicColors) {
 
 @Composable
 private fun Section(title: String, colors: DynamicColors, content: @Composable () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 12.dp).clip(RoundedCornerShape(16.dp)).background(colors.bgPrimary)) {
-        Text(title, color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
-        Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) { content() }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+        Text(
+            title.uppercase(), color = colors.textMuted, fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold, letterSpacing = 0.9.sp,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
+        )
+        Box(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 20.dp)) { content() }
     }
 }
 
@@ -270,14 +279,14 @@ private fun ErrorState(error: String?, onRetry: () -> Unit) {
     val colors = VisvineTheme.colors
     Box(Modifier.fillMaxSize().padding(24.dp), Alignment.Center) {
         Column(
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.bgPrimary).padding(24.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("Profile unavailable", color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
             Text(error ?: "This person may have been removed.", color = colors.textMuted, fontSize = 14.sp, textAlign = TextAlign.Center)
             Text(
-                "Try again", color = Color.White, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(999.dp)).background(colors.accent).clickable { onRetry() }.padding(horizontal = 20.dp, vertical = 10.dp),
+                "Try again", color = colors.accentDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 8.dp).clickable { onRetry() },
             )
         }
     }

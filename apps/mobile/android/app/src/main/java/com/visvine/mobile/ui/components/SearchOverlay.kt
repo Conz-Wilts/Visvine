@@ -36,9 +36,9 @@ import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.SearchViewModel
 
 
-/** Port of components/SearchOverlay.tsx — a floating bottom search bar. */
+/** A floating search bar, raised over the current screen from the bottom. */
 @Composable
-fun SearchOverlay(searchViewModel: SearchViewModel, isDark: Boolean) {
+fun SearchOverlay(searchViewModel: SearchViewModel) {
     val isOpen by searchViewModel.isOpen.collectAsStateWithLifecycle()
     if (!isOpen) return
 
@@ -67,12 +67,12 @@ fun SearchOverlay(searchViewModel: SearchViewModel, isDark: Boolean) {
                 modifier = Modifier
                     .weight(1f)
                     .height(64.dp)
-                    .glassSurface(isDark, 32.dp)
+                    .glassSurface(32.dp)
                     .padding(start = 20.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Icon(AppIcons.Search, contentDescription = null, tint = if (isDark) Color.White else Color.Black)
+                Icon(AppIcons.Search, contentDescription = null, tint = Color.Black)
                 TextField(
                     value = query,
                     onValueChange = searchViewModel::setQuery,
@@ -96,11 +96,11 @@ fun SearchOverlay(searchViewModel: SearchViewModel, isDark: Boolean) {
             Box(
                 modifier = Modifier
                     .size(64.dp)
-                    .glassSurface(isDark, 32.dp)
+                    .glassSurface(32.dp)
                     .clickable { searchViewModel.close() },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(AppIcons.Close, contentDescription = "Close search", tint = if (isDark) Color.White else Color.Black, modifier = Modifier.size(26.dp))
+                Icon(AppIcons.Close, contentDescription = "Close search", tint = Color.Black, modifier = Modifier.size(26.dp))
             }
         }
     }

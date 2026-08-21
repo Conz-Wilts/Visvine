@@ -32,7 +32,7 @@ import {
   noteHref,
   resolveEntityOwner,
 } from '@/lib/notes/entities'
-import { availableNotePath, newNoteContent } from '@/lib/notes/shared/newContext'
+import { newNoteContent } from '@/lib/notes/shared/newContext'
 import { clearContextCache } from '../hooks/useSpaceContextData'
 import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
@@ -161,10 +161,6 @@ export function EntityContextPanel({
   const [nameSaving, setNameSaving] = useState(false)
   const [addingTag, setAddingTag] = useState(false)
   const [tagSaving, setTagSaving] = useState(false)
-  // "+ New note" in the notes strip: the title being typed (null = closed) and
-  // the in-flight create.
-  const [newNoteTitle, setNewNoteTitle] = useState<string | null>(null)
-  const [creatingNote, setCreatingNote] = useState(false)
   // Colours registered this session (before the space config refetches).
   const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const loadSeq = useRef(0)
@@ -403,42 +399,6 @@ export function EntityContextPanel({
       .map((n) => ({ path: n.path, title: n.title || n.path.slice(prefix.length) }))
       .sort((a, b) => a.title.localeCompare(b.title))
   }, [notesIndex, folder, entityPath, indexPath])
-
-  // Create a sub-note. The first one converts the entity note into the folder
-  // (people/<slug>.md → people/<slug>/index.md, server-side) — so every cache
-  // that named the old path is dropped, the profile's node is patched with the
-  // new pointer, and the tab re-points to the new note.
-  const createSubNote = useCallback(
-    async (rawTitle: string) => {
-      const title = rawTitle.trim()
-      if (!title || !spaceId || !folder || !node) return
-      setCreatingNote(true)
-      setError(null)
-      try {
-        const taken = new Set(notesIndex.map((n) => n.path))
-        const target = availableNotePath(folder, title, taken)
-        await notesApi.create(spaceId, target, newNoteContent({ title }))
-        invalidateContextCache(
-          contextKeys.list(spaceId),
-          contextKeys.tree(spaceId),
-          ...(entityPath ? [contextKeys.read(spaceId, entityPath), contextKeys.references(spaceId, entityPath)] : []),
-          ...(indexPath ? [contextKeys.read(spaceId, indexPath), contextKeys.access(spaceId, indexPath)] : []),
-        )
-        if (indexPath && entityPath !== indexPath) {
-          patchCachedNodeProfile(nodeId, { metadata: { ...(node.metadata ?? {}), notePath: indexPath } })
-          setPointerOverride({ nodeId, notePath: indexPath })
-          clearContextCache(spaceId)
-        }
-        setNewNoteTitle(null)
-        router.replace(entityContextHref(nodeId, target.slice(folder.length + 1)), { scroll: false })
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to create the note')
-      } finally {
-        setCreatingNote(false)
-      }
-    },
-    [spaceId, folder, node, nodeId, notesIndex, entityPath, indexPath, router],
-  )
 
   // `[[ ]]` mention picked inside the tab editor: make sure the target entity's
   // note exists before the link lands (same contract as the workspace, minus the
@@ -735,11 +695,10 @@ export function EntityContextPanel({
       />
 
       {/* Notes about this entity. One note is the default; the strip appears
-          once there is (or can be) more than one — the entity's own note reads
-          as "Context", every other note in its folder sits beside it, and
-          "+ New note" files a new one under the entity (which is what turns the
-          note into a folder the first time). */}
-      {(folderNotes.length > 0 || subPath !== null || canEditTags) && (
+          once there is more than one — the entity's own note reads as
+          "Context", every other note in its folder sits beside it. Notes are
+          filed here by MCP, not by hand. */}
+      {(folderNotes.length > 0 || subPath !== null) && (
         <nav aria-label={`Notes about ${displayName}`} className="mt-4 flex flex-wrap items-center gap-1.5">
           <button
             type="button"
@@ -765,31 +724,6 @@ export function EntityContextPanel({
               </button>
             )
           })}
-          {canEditTags && (newNoteTitle !== null ? (
-            <input
-              autoFocus
-              value={newNoteTitle}
-              disabled={creatingNote}
-              placeholder="Note title"
-              aria-label="New note title"
-              onChange={(e) => setNewNoteTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void createSubNote(newNoteTitle)
-                if (e.key === 'Escape') setNewNoteTitle(null)
-              }}
-              onBlur={() => { if (!creatingNote && !newNoteTitle.trim()) setNewNoteTitle(null) }}
-              className="h-8 min-w-[12rem] rounded-full border border-border-default bg-surface-1 px-3 text-sm text-text-primary outline-none focus:ring-1 focus:ring-border-default"
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setNewNoteTitle('')}
-              className={chipClass({ tone: 'dashed', size: 'lg', className: CHIP_ACCENT_HOVER })}
-              style={{ ['--accent' as string]: theme.dark }}
-            >
-              + New note
-            </button>
-          ))}
         </nav>
       )}
 

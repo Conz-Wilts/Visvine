@@ -42,7 +42,7 @@ import com.visvine.mobile.ui.viewmodel.CommunityViewModel
 private fun initials(name: String?): String =
     name?.split(" ")?.mapNotNull { it.firstOrNull() }?.joinToString("")?.take(2)?.uppercase() ?: "?"
 
-/** Port of components/ScreenHeader.tsx — community switcher + profile avatar. */
+/** The header every main screen carries: community switcher, then profile avatar. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScreenHeader(

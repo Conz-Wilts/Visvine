@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Port of components/ScreenHeader.tsx — community switcher + profile avatar.
+/// The header every main screen carries: community switcher, then profile avatar.
 struct ScreenHeader: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(CommunityStore.self) private var community

@@ -1,12 +1,10 @@
 import AuthenticationServices
 import UIKit
 
-/// Launches Google OAuth in an ASWebAuthenticationSession — the native equivalent
-/// of expo-web-browser. The server-mediated code exchange happens at
-/// `/api/auth/callback/google-mobile`, which redirects to
-/// `visvine://auth/callback?token=…`; the session intercepts that and returns it
-/// so the caller can hand it to `AuthManager.handleDeepLink` (mirroring the RN
-/// `openAuthSessionAsync` → manual handle flow).
+/// Launches Google OAuth in an ASWebAuthenticationSession. The server-mediated
+/// code exchange happens at `/api/auth/callback/google-mobile`, which redirects
+/// to `visvine://auth/callback?token=…`; the session intercepts that URL and
+/// returns it, so the caller hands it to `AuthManager.handleDeepLink`.
 final class OAuthService: NSObject, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
 

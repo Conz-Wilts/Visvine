@@ -16,7 +16,6 @@ class RootViewModel @Inject constructor(
     killSwitch: KillSwitch,
 ) : ViewModel() {
     val colors = themeController.colors
-    val isDark: StateFlow<Boolean> = themeController.isDark
     val authState = authManager.state
     val pendingRoute = authManager.pendingRoute
     val killSwitch: StateFlow<KillSwitch.State> = killSwitch.state

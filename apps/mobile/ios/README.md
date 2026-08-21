@@ -32,8 +32,7 @@ Or just build/run from Xcode after `xcodegen generate`.
 
 ## Configuration
 
-App config replaces the old `EXPO_PUBLIC_*` env values; it lives in
-`Visvine/Info.plist` and is read in `Core/AppConfig.swift`:
+App config lives in `Visvine/Info.plist` and is read in `Core/AppConfig.swift`:
 
 | Info.plist key | Default | Purpose |
 |---|---|---|
@@ -56,7 +55,7 @@ Visvine/
 ├── Repositories/    Auth/Community/Directory/Events/Messages/Profile
 ├── Auth/            AuthManager (session+deep link), OAuthService (ASWebAuth…)
 ├── State/           CommunityStore, ThemeStore, SearchStore (@Observable)
-├── Theme/           8 hues + dark toggle (buildColors), DynamicColors
+├── Theme/           8 hues (buildColors), DynamicColors
 ├── Util/            search heuristic, date formatting
 ├── Components/      ScreenHeader, SearchOverlay, CommunityAvatar, glass
 ├── Navigation/      RootView, MainTabView, glass tab bar, route enums

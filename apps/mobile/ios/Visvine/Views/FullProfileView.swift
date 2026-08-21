@@ -37,7 +37,8 @@ private func safeHostname(_ urlString: String) -> String {
     URL(string: urlString)?.host?.replacingOccurrences(of: "www.", with: "") ?? urlString
 }
 
-/// Port of screens/Profile/FullProfileScreen.tsx.
+/// Someone else's profile: a hero, then About / Skills / Contact as blocks on
+/// the flat surface, divided by hairlines.
 struct FullProfileView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(AuthManager.self) private var auth
@@ -56,7 +57,7 @@ struct FullProfileView: View {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let profile = model.profile {
                 ScrollView {
-                    VStack(spacing: 12) {
+                    VStack(spacing: 0) {
                         hero(profile)
                         if let bio = profile.bio, !bio.isEmpty { section("About") { Text(bio).foregroundStyle(c.textSecondary).font(.system(size: 14)) } }
                         if let tags = profile.tags, !tags.isEmpty { section("Skills") { skills(tags) } }
@@ -69,7 +70,7 @@ struct FullProfileView: View {
                 errorState
             }
         }
-        .background(c.bgSecondary)
+        .background(c.bgPrimary)
         .navigationTitle(model.profile?.name ?? initialName ?? "Profile")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load(personId: personId) }
@@ -83,7 +84,7 @@ struct FullProfileView: View {
                     AsyncImage(url: url) { phase in
                         if let img = phase.image { img.resizable().scaledToFill() } else { avatarFallback(profile.name) }
                     }
-                    .frame(width: 120, height: 120).clipShape(RoundedRectangle(cornerRadius: 20))
+                    .frame(width: 120, height: 120).clipShape(RoundedRectangle(cornerRadius: 16))
                 } else {
                     avatarFallback(profile.name)
                 }
@@ -101,16 +102,19 @@ struct FullProfileView: View {
 
             if !isOwner {
                 HStack(spacing: 8) {
+                    // Rounded squares, not pills, and painted rather than
+                    // outlined — the pair Button.tsx draws for brand + neutral.
                     Button { } label: {
-                        Label("Connect", systemImage: "person.badge.plus").font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 10).background(c.accent, in: Capsule())
+                        Text("Connect").font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .background(c.accent, in: RoundedRectangle(cornerRadius: 8))
                     }
                     Button {
                         if let email = profile.email, let url = URL(string: "mailto:\(email)") { openURL(url) }
                     } label: {
-                        Label("Message", systemImage: "envelope").font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(c.accentDark).frame(maxWidth: .infinity).padding(.vertical, 10)
-                            .overlay(Capsule().stroke(c.accent, lineWidth: 1.5))
+                        Text("Message").font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(c.textSecondary).frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .background(c.bgSecondary, in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
             }
@@ -124,8 +128,8 @@ struct FullProfileView: View {
                 }
             }
         }
-        .padding(20).frame(maxWidth: .infinity)
-        .background(c.bgPrimary).clipShape(RoundedRectangle(cornerRadius: 20)).padding(.horizontal, 16).padding(.top, 16)
+        .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 24)
+        .frame(maxWidth: .infinity)
     }
 
     private func avatarFallback(_ name: String) -> some View {
@@ -133,7 +137,7 @@ struct FullProfileView: View {
             theme.colors.accent
             Text(profileInitials(name)).foregroundStyle(.white).font(.system(size: 40, weight: .bold))
         }
-        .frame(width: 120, height: 120).clipShape(RoundedRectangle(cornerRadius: 20))
+        .frame(width: 120, height: 120).clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
     private func chip(icon: VisvineIconName, text: String) -> some View {
@@ -142,15 +146,18 @@ struct FullProfileView: View {
             VisvineIcon(icon, size: 12)
             Text(text).font(.system(size: 12, weight: .medium))
         }
-        .foregroundStyle(c.textSecondary).padding(.horizontal, 10).padding(.vertical, 4).background(c.bgTertiary, in: Capsule())
+        .foregroundStyle(c.textSecondary).padding(.horizontal, 8).padding(.vertical, 4)
+        .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 6))
     }
 
     private func skills(_ tags: [String]) -> some View {
         let c = theme.colors
+        // One shape for every label in the app: a rounded square, painted or
+        // plain, never a tinted wash inside a border of the same hue.
         return FlexWrap(tags) { tag in
-            Text(tag).font(.system(size: 12, weight: .semibold)).foregroundStyle(c.accentDark)
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(c.accentLight, in: Capsule()).overlay(Capsule().stroke(c.accent, lineWidth: 1))
+            Text(tag).font(.system(size: 11, weight: .semibold)).foregroundStyle(c.textSecondary)
+                .padding(.horizontal, 8).padding(.vertical, 5)
+                .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 6))
         }
     }
 
@@ -179,10 +186,13 @@ struct FullProfileView: View {
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         let c = theme.colors
         return VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(.system(size: 14, weight: .bold)).foregroundStyle(c.textPrimary).padding(.horizontal, 16).padding(.vertical, 12)
-            content().padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            Rectangle().fill(c.borderSubtle).frame(height: 1)
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .semibold)).kerning(0.9).foregroundStyle(c.textMuted)
+                .padding(.horizontal, 16).padding(.top, 20).padding(.bottom, 8)
+            content().padding(.horizontal, 16).padding(.bottom, 20)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(c.bgPrimary).clipShape(RoundedRectangle(cornerRadius: 16)).padding(.horizontal, 16)
     }
 
     private func hasContact(_ p: FullProfile) -> Bool {
@@ -195,9 +205,9 @@ struct FullProfileView: View {
             Text("Profile unavailable").font(.system(size: 16, weight: .bold)).foregroundStyle(c.textPrimary)
             Text(model.error ?? "This person may have been removed.").font(.system(size: 14)).foregroundStyle(c.textMuted).multilineTextAlignment(.center)
             Button("Try again") { Task { await model.load(personId: personId) } }
-                .foregroundStyle(.white).padding(.horizontal, 20).padding(.vertical, 10).background(c.accent, in: Capsule()).padding(.top, 8)
+                .font(.system(size: 14, weight: .semibold)).foregroundStyle(c.accentDark).padding(.top, 8)
         }
-        .padding(24).background(c.bgPrimary).clipShape(RoundedRectangle(cornerRadius: 16)).padding(24)
+        .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -39,11 +38,13 @@ import com.visvine.mobile.ui.theme.DynamicColors
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
 import com.visvine.mobile.ui.viewmodel.EventDetailViewModel
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 
-/** Port of screens/Events/EventDetailScreen.tsx. */
+/**
+ * One event, in full: title and description, then the facts, attendance and the
+ * RSVP action as blocks on the flat surface, divided by hairlines.
+ */
 @Composable
 fun EventDetailScreen(
     eventTitle: String?,
@@ -53,7 +54,7 @@ fun EventDetailScreen(
     val colors = VisvineTheme.colors
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgSecondary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
         Row(
             modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -78,21 +79,21 @@ private fun EventBody(event: Event, colors: DynamicColors) {
     val rsvpPct = event.capacity?.let { ((event.analytics.rsvpCount.toDouble() / it) * 100).roundToInt() } ?: 0
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-        // Header
-        Column(modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).padding(20.dp)) {
-            Column(
-                modifier = Modifier.width(56.dp).clip(RoundedCornerShape(12.dp)).background(colors.accentLight).padding(vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(DateTimeFormat.monthShort(event.startAt).uppercase(), color = colors.accentDark, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Text(DateTimeFormat.dayOfMonth(event.startAt), color = colors.textPrimary, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        // Header — the countdown leads the facts, exactly as the feed row this
+        // page opened from renders it.
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 20.dp)) {
+            Text(event.title, color = colors.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            DateTimeFormat.startsInLabel(event.startAt)?.let {
+                Text(it, color = colors.accentDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
             }
-            Text(event.title, color = colors.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
-            event.description?.let { Text(it, color = colors.textMuted, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp)) }
+            event.description?.takeIf { it.isNotEmpty() }?.let {
+                Text(it, color = colors.textSecondary, fontSize = 15.sp, modifier = Modifier.padding(top = 12.dp))
+            }
         }
 
-        // Info
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp).clip(RoundedCornerShape(16.dp)).background(colors.bgPrimary).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Facts
+        Hairline(colors)
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             InfoRow(AppIcons.Calendar, "Date", DateTimeFormat.longDate(event.startAt), colors)
             InfoRow(AppIcons.Clock, "Time", DateTimeFormat.time(event.startAt) + (event.endAt?.let { " - ${DateTimeFormat.time(it)}" } ?: ""), colors)
             event.timezone?.let { InfoRow(AppIcons.Globe, "Timezone", it, colors) }
@@ -100,26 +101,22 @@ private fun EventBody(event: Event, colors: DynamicColors) {
         }
 
         // Attendance
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(16.dp)).background(colors.bgPrimary).padding(20.dp)) {
-            Text("Attendance", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatItem("RSVPs", event.analytics.rsvpCount.toString(), colors.accentDark, colors, Modifier.weight(1f))
-                StatItem("Checked In", event.analytics.checkinCount.toString(), colors.accentDark, colors, Modifier.weight(1f))
-                event.capacity?.let { StatItem("Spots Left", (it - event.analytics.rsvpCount).toString(), colors.success, colors, Modifier.weight(1f)) }
+        Hairline(colors)
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Text("ATTENDANCE", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.9.sp, modifier = Modifier.padding(bottom = 12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                StatItem("RSVPs", event.analytics.rsvpCount.toString(), colors)
+                StatItem("Checked in", event.analytics.checkinCount.toString(), colors)
+                event.capacity?.let { StatItem("Spots left", (it - event.analytics.rsvpCount).toString(), colors) }
             }
             event.capacity?.let {
-                Column(modifier = Modifier.padding(top = 16.dp)) {
-                    Box(modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(colors.bgTertiary)) {
-                        Box(modifier = Modifier.fillMaxWidth(min(rsvpPct, 100) / 100f).height(8.dp).clip(RoundedCornerShape(4.dp)).background(colors.accent))
-                    }
-                    Text("$rsvpPct% capacity", color = colors.textMuted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(top = 8.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                }
+                Text("$rsvpPct% capacity", color = colors.textMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
             }
         }
 
         if (event.visibility != "public") {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).clip(RoundedCornerShape(12.dp)).background(colors.bgTertiary).padding(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(if (event.visibility == "private") AppIcons.Lock else AppIcons.People, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
@@ -127,18 +124,26 @@ private fun EventBody(event: Event, colors: DynamicColors) {
             }
         }
 
-        Box(modifier = Modifier.fillMaxWidth().padding(20.dp).clip(RoundedCornerShape(14.dp)).background(colors.accent).clickable { }.padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
-            Text("RSVP to Event", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Box(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 24.dp)
+                .clip(RoundedCornerShape(8.dp)).background(colors.accent).clickable { }.padding(vertical = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text("RSVP to Event", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         }
     }
+}
+
+/** The rule that opens one block of the page. */
+@Composable
+private fun Hairline(colors: DynamicColors) {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
 }
 
 @Composable
 private fun InfoRow(icon: Painter, label: String, value: String, colors: DynamicColors, subtext: String? = null) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(colors.accentLight), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = colors.accentDark, modifier = Modifier.size(18.dp))
-        }
+        Icon(icon, contentDescription = null, tint = colors.textMuted, modifier = Modifier.padding(top = 2.dp).size(18.dp))
         Column {
             Text(label, color = colors.textMuted, fontSize = 12.sp)
             Text(value, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
@@ -147,13 +152,11 @@ private fun InfoRow(icon: Painter, label: String, value: String, colors: Dynamic
     }
 }
 
+/** A number and what it counts. No tile behind it — the figure is the mark. */
 @Composable
-private fun StatItem(label: String, value: String, valueColor: Color, colors: DynamicColors, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.clip(RoundedCornerShape(12.dp)).background(colors.bgSecondary).padding(vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(value, color = valueColor, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-        Text(label, color = colors.textMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+private fun StatItem(label: String, value: String, colors: DynamicColors) {
+    Column {
+        Text(value, color = colors.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = colors.textMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
     }
 }

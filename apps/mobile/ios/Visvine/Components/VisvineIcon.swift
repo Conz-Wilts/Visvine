@@ -31,10 +31,8 @@ enum VisvineIconName: String {
     case chevronDown = "chevron-down"
     case chevronRight = "chevron-right"
     case clock
-    case darkMode = "moon"
     case globe
     case help = "circle-question-mark"
-    case lightMode = "sun"
     case link = "link-2"
     case location = "map-pin"
     case lock

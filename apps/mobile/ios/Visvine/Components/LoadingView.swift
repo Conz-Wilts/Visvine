@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Port of components/Loading.tsx.
+/// The spinner every screen waits behind — inline, or filling the screen.
 struct LoadingView: View {
     @Environment(ThemeStore.self) private var theme
     var message: String? = nil

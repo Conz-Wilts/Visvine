@@ -10,6 +10,10 @@
     <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>UILaunchScreen</key>
     <dict/>
+    <!-- The web app is light-only; pin system-drawn UI (sheets, keyboard,
+         alerts) to light so a phone in dark mode cannot half-repaint the app. -->
+    <key>UIUserInterfaceStyle</key>
+    <string>Light</string>
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>

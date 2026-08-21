@@ -4,9 +4,9 @@ import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
 
 /**
- * Hilt application entry point. Mirrors the provider nesting the RN app set up in
- * App.tsx (Theme → Auth → Community) — here those become singleton-scoped
- * repositories and Hilt-injected ViewModels instead of React Contexts.
+ * Hilt application entry point. The app-wide state the web app holds in nested
+ * React contexts (theme → auth → community) lives here as singleton-scoped
+ * repositories, injected into ViewModels.
  */
 @HiltAndroidApp
 class VisvineApplication : Application()

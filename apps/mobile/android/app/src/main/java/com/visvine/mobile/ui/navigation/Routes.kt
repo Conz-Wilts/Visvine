@@ -3,9 +3,8 @@ package com.visvine.mobile.ui.navigation
 import android.net.Uri
 
 /**
- * Route table. Mirrors the RN navigator shape: an auth/main switch, a tab host
- * (Directory / Messages / Events), per-tab detail screens, and modal
- * Profile / EditProfile / Settings.
+ * Route table: an auth/main switch, a tab host (Directory / Messages / Events),
+ * per-tab detail screens, and modal Profile / EditProfile / Settings.
  */
 object Routes {
     const val MAIN = "main"

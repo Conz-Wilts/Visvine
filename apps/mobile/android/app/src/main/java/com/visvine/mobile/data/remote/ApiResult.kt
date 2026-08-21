@@ -7,10 +7,9 @@ import retrofit2.HttpException
 import java.io.IOException
 
 /**
- * Result envelope mirroring the RN ApiService `{ data?, error? }` shape. Every
- * repository call funnels through [safeApiCall], so network/HTTP failures become
- * a [Failure] with a human-readable message instead of a thrown exception —
- * exactly how the old `request<T>()` try/catch behaved.
+ * Result envelope mirroring the API's `{ data?, error? }` shape. Every repository
+ * call funnels through [safeApiCall], so network and HTTP failures arrive as a
+ * [Failure] carrying a human-readable message rather than a thrown exception.
  */
 sealed interface ApiResult<out T> {
     data class Success<T>(val data: T) : ApiResult<T>

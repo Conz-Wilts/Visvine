@@ -37,6 +37,29 @@ into Android vector drawables and iOS asset-catalog image sets by each
 platform's `scripts/build-icons.mjs`. Generated output is committed. See
 `docs/icons.md`.
 
+## What the screens look like
+
+The web app is the source of truth for the surface as well as the features, so
+both clients follow the same quiet-surface rules `apps/web` does:
+
+- **No cards.** A group of rows is opened by a 1px `borderSubtle` hairline on the
+  flat `bgPrimary` surface — not wrapped in a rounded, tinted block.
+- **One label shape:** a rounded square (6dp/pt), painted in its own colour or
+  plain on `bgTertiary`. No pills, and no tinted wash inside a border of the same
+  hue.
+- **Buttons are rounded squares** (8dp/pt), painted: accent for the primary,
+  `bgSecondary` for its quiet half. None of them cast a shadow.
+- **Shadows are for things that float** — the glass tab bar and the search
+  overlay, and nothing else.
+- **Empty states** are a line of muted text, optionally a small icon and a text
+  link in the accent. No tile behind the icon.
+- **The app is light-only**, like the web app: `UIUserInterfaceStyle: Light` on
+  iOS, `forceDarkAllowed=false` on Android, one palette in `buildColors`.
+
+The directory card is the one deliberate exception to "no cards": it is the same
+object `NodeCard.tsx` draws on the web, ring and all — square identity media,
+name over tagline over the type chip, two tagline lines always reserved.
+
 ## Pointing a client at a backend
 
 One setting per platform:

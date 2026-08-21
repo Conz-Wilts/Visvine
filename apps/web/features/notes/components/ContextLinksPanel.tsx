@@ -20,9 +20,9 @@
 // word. Clicking a row re-selects it in the browser — the tree reveals it and
 // the content column swaps — so walking a chain of notes never leaves the page.
 
-import { useCallback, useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { ChevronDownIcon, ChevronRightIcon } from '@/features/shared/icons';
-import { folderOfIndexPath, isIndexPath } from '@/lib/notes/shared/indexNote';
+import { isIndexPath } from '@/lib/notes/shared/indexNote';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { findAlias, getNodeTypeConfig } from '@/lib/types';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
@@ -83,14 +83,6 @@ interface ContextLinksPanelProps {
   /** Path → display title, owned by the browser so both panels agree. */
   titleFor: (path: string) => string;
   /**
-   * What survives the toolbar's facets — notes plus every folder on the way
-   * down to them, the same set the tree prunes by. Null when nothing is
-   * filtering. The toolbar spans all three columns, so a connection to a note
-   * the filter excluded is hidden here too; without this the column happily
-   * listed rows the tree had just pruned away.
-   */
-  keep: Set<string> | null;
-  /**
    * The space alias held by the note's directory node, if any — an entity
    * note IS a node seen from the notes side, and the space's name for its
    * type ("Portfolio Company") is what the directory shows everywhere else.
@@ -101,28 +93,15 @@ interface ContextLinksPanelProps {
 }
 
 export default function ContextLinksPanel({
-  item, items, titleFor, keep, aliasOfPath, onSelectPath,
+  item, items, titleFor, aliasOfPath, onSelectPath,
 }: ContextLinksPanelProps) {
   const { currentSpace } = useSpace();
   const nodeTypes = currentSpace?.nodeTypes;
   const aliases = currentSpace?.aliases as SpaceAlias[] | undefined;
-  // Collapsed groups only — a type absent from the set is open, so a note that
-  // gains a new kind of connection shows it without a click.
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-
-  // Does this link's other end survive the toolbar's facets? The keep set holds
-  // folders, not the index notes that stand for them, so an index link is
-  // judged by its folder — which is the same thing (lib/notes/shared/indexNote).
-  // An unresolved link has neither type nor tags, so no facet can ever include
-  // it: while a filter is on, it's noise.
-  const survives = useCallback(
-    (path: string | null) => {
-      if (!keep) return true;
-      if (path === null) return false;
-      return keep.has(isIndexPath(path) ? folderOfIndexPath(path) : path);
-    },
-    [keep],
-  );
+  // Expanded groups only — a type absent from the set is closed. The panel
+  // opens as a stack of bands: a note's connections are a map first, a list
+  // second, and every group open at once buries the map under its own rows.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
   const groups = useMemo<Group[]>(() => {
     if (!item) return [];
@@ -134,7 +113,7 @@ export default function ContextLinksPanel({
 
     const connections: Connection[] = [];
     for (const path of out) {
-      if (path === item.path || !survives(path)) continue;
+      if (path === item.path) continue;
       connections.push({
         key: path,
         path,
@@ -143,13 +122,12 @@ export default function ContextLinksPanel({
       });
     }
     for (const path of incoming) {
-      if (out.has(path) || !survives(path)) continue;
+      if (out.has(path)) continue;
       connections.push({ key: path, path, title: titleFor(path), direction: 'in' });
     }
     // A link with nothing on the other end. Worth keeping: it's the note saying
     // something exists that the context hasn't captured yet.
     for (const name of item.unresolved) {
-      if (!survives(null)) continue;
       connections.push({ key: `unresolved:${name}`, path: null, title: name, direction: 'unresolved' });
     }
 
@@ -212,7 +190,7 @@ export default function ContextLinksPanel({
         if (b.key === UNRESOLVED) return -1;
         return b.connections.length - a.connections.length || a.label.localeCompare(b.label);
       });
-  }, [item, items, titleFor, nodeTypes, aliases, aliasOfPath, survives]);
+  }, [item, items, titleFor, nodeTypes, aliases, aliasOfPath]);
 
   if (!item) {
     return (
@@ -225,15 +203,12 @@ export default function ContextLinksPanel({
   const total = groups.reduce((sum, group) => sum + group.connections.length, 0);
 
   return (
-    // No heading of its own: the only surface that mounts this panel is the
-    // connections rail, whose own header already says "Connections" — a second
-    // label under it was the same word twice.
+    // No heading of its own: the connections rail that mounts this panel is
+    // already labelled, and a second label under it was the same word twice.
     <div className="flex h-full flex-col overflow-y-auto px-4 py-4">
       {total === 0 ? (
         <p className="text-sm text-text-muted">
-          {keep
-            ? 'No connections match the current filters.'
-            : 'Nothing links here yet, and this note links nowhere.'}
+          Nothing links here yet, and this note links nowhere.
         </p>
       ) : (
         // Spacing belongs to the OPEN list below a band, not between the bands:
@@ -242,14 +217,14 @@ export default function ContextLinksPanel({
         // panel behind them so two same-coloured neighbours stay two bars.
         <div className="flex flex-col gap-px">
           {groups.map((group) => {
-            const isCollapsed = collapsed.has(group.key);
+            const isCollapsed = !expanded.has(group.key);
             const Chevron = isCollapsed ? ChevronRightIcon : ChevronDownIcon;
             return (
               <section key={group.key}>
                 <button
                   type="button"
                   onClick={() =>
-                    setCollapsed((prev) => {
+                    setExpanded((prev) => {
                       const next = new Set(prev);
                       if (!next.delete(group.key)) next.add(group.key);
                       return next;

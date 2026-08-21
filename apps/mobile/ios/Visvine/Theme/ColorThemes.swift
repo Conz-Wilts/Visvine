@@ -17,20 +17,19 @@ struct ColorTheme: Identifiable {
     let accent: Color
     let accentDark: Color
     let accentLight: Color
-    let accentLightDark: Color
     let accentBg: Color
 }
 
 /// The 8 hues, in order, from ThemeContext.COLOR_THEMES.
 let COLOR_THEMES: [ColorTheme] = [
-    ColorTheme(id: "green", name: "Green", accent: Color(hex: 0x78D870), accentDark: Color(hex: 0x2F7A3E), accentLight: Color(hex: 0xEAF9EC), accentLightDark: Color(hex: 0x0F2B14), accentBg: Color(hex: 0xF5F7F5)),
-    ColorTheme(id: "blue", name: "Blue", accent: Color(hex: 0x60A5FA), accentDark: Color(hex: 0x1D4ED8), accentLight: Color(hex: 0xEFF6FF), accentLightDark: Color(hex: 0x0F1F3D), accentBg: Color(hex: 0xF5F7FF)),
-    ColorTheme(id: "purple", name: "Purple", accent: Color(hex: 0xA78BFA), accentDark: Color(hex: 0x6D28D9), accentLight: Color(hex: 0xF5F3FF), accentLightDark: Color(hex: 0x1E1040), accentBg: Color(hex: 0xF7F5FF)),
-    ColorTheme(id: "rose", name: "Rose", accent: Color(hex: 0xF87171), accentDark: Color(hex: 0xDC2626), accentLight: Color(hex: 0xFFF1F2), accentLightDark: Color(hex: 0x3D0A0A), accentBg: Color(hex: 0xFFF5F5)),
-    ColorTheme(id: "orange", name: "Orange", accent: Color(hex: 0xFB923C), accentDark: Color(hex: 0xC2410C), accentLight: Color(hex: 0xFFF7ED), accentLightDark: Color(hex: 0x3D1A05), accentBg: Color(hex: 0xFDF8F5)),
-    ColorTheme(id: "teal", name: "Teal", accent: Color(hex: 0x2DD4BF), accentDark: Color(hex: 0x0F766E), accentLight: Color(hex: 0xF0FDFA), accentLightDark: Color(hex: 0x05201E), accentBg: Color(hex: 0xF5FDFB)),
-    ColorTheme(id: "pink", name: "Pink", accent: Color(hex: 0xF472B6), accentDark: Color(hex: 0xBE185D), accentLight: Color(hex: 0xFDF2F8), accentLightDark: Color(hex: 0x3D0A20), accentBg: Color(hex: 0xFEF5FB)),
-    ColorTheme(id: "indigo", name: "Indigo", accent: Color(hex: 0x818CF8), accentDark: Color(hex: 0x3730A3), accentLight: Color(hex: 0xEEF2FF), accentLightDark: Color(hex: 0x12143D), accentBg: Color(hex: 0xF5F5FF)),
+    ColorTheme(id: "green", name: "Green", accent: Color(hex: 0x78D870), accentDark: Color(hex: 0x2F7A3E), accentLight: Color(hex: 0xEAF9EC), accentBg: Color(hex: 0xF5F7F5)),
+    ColorTheme(id: "blue", name: "Blue", accent: Color(hex: 0x60A5FA), accentDark: Color(hex: 0x1D4ED8), accentLight: Color(hex: 0xEFF6FF), accentBg: Color(hex: 0xF5F7FF)),
+    ColorTheme(id: "purple", name: "Purple", accent: Color(hex: 0xA78BFA), accentDark: Color(hex: 0x6D28D9), accentLight: Color(hex: 0xF5F3FF), accentBg: Color(hex: 0xF7F5FF)),
+    ColorTheme(id: "rose", name: "Rose", accent: Color(hex: 0xF87171), accentDark: Color(hex: 0xDC2626), accentLight: Color(hex: 0xFFF1F2), accentBg: Color(hex: 0xFFF5F5)),
+    ColorTheme(id: "orange", name: "Orange", accent: Color(hex: 0xFB923C), accentDark: Color(hex: 0xC2410C), accentLight: Color(hex: 0xFFF7ED), accentBg: Color(hex: 0xFDF8F5)),
+    ColorTheme(id: "teal", name: "Teal", accent: Color(hex: 0x2DD4BF), accentDark: Color(hex: 0x0F766E), accentLight: Color(hex: 0xF0FDFA), accentBg: Color(hex: 0xF5FDFB)),
+    ColorTheme(id: "pink", name: "Pink", accent: Color(hex: 0xF472B6), accentDark: Color(hex: 0xBE185D), accentLight: Color(hex: 0xFDF2F8), accentBg: Color(hex: 0xFEF5FB)),
+    ColorTheme(id: "indigo", name: "Indigo", accent: Color(hex: 0x818CF8), accentDark: Color(hex: 0x3730A3), accentLight: Color(hex: 0xEEF2FF), accentBg: Color(hex: 0xF5F5FF)),
 ]
 
 func themeBy(id: String?) -> ColorTheme {
@@ -58,29 +57,9 @@ struct DynamicColors {
     let warning: Color
 }
 
-/// Faithful port of ThemeContext.buildColors(theme, isDark).
-func buildColors(theme: ColorTheme, isDark: Bool) -> DynamicColors {
-    if isDark {
-        return DynamicColors(
-            accent: theme.accent,
-            accentDark: theme.accentDark,
-            accentLight: theme.accentLightDark,
-            accentBg: Color(hex: 0x252524),
-            bgPrimary: Color(hex: 0x1C1C1A),
-            bgSecondary: Color(hex: 0x252524),
-            bgTertiary: Color(hex: 0x30302E),
-            textPrimary: Color(hex: 0xF1F5F9),
-            textSecondary: Color(hex: 0xCBD5E1),
-            textMuted: Color(hex: 0x94A3B8),
-            textLight: Color(hex: 0x64748B),
-            borderLight: Color(hex: 0x3D3D3A),
-            borderDefault: Color(hex: 0x4A4A47),
-            borderSubtle: Color.white.opacity(0.06),
-            success: Color(hex: 0x4ADE80),
-            error: Color(hex: 0xF87171),
-            warning: Color(hex: 0xFBBF24)
-        )
-    }
+/// The colours every view draws with — the native mirror of ThemeContext's
+/// applyAll(). The web app is light-only, so this is one palette, not two.
+func buildColors(theme: ColorTheme) -> DynamicColors {
     return DynamicColors(
         accent: theme.accent,
         accentDark: theme.accentDark,
@@ -94,8 +73,8 @@ func buildColors(theme: ColorTheme, isDark: Bool) -> DynamicColors {
         textMuted: Color(hex: 0x6B7280),
         textLight: Color(hex: 0x9CA3AF),
         borderLight: Color(hex: 0xF3F4F6),
-        borderDefault: Color(hex: 0xE5E7EB),
-        borderSubtle: Color.black.opacity(0.06),
+        borderDefault: Color(hex: 0xD1D5DB),
+        borderSubtle: Color(hex: 0xE5E7EB),
         success: Color(hex: 0x16A34A),
         error: Color(hex: 0xEF4444),
         warning: Color(hex: 0xF59E0B)

@@ -1,6 +1,7 @@
 package com.visvine.mobile.ui.screens.profile
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,12 +9,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,7 +44,7 @@ import com.visvine.mobile.ui.viewmodel.CommunityViewModel
 import com.visvine.mobile.ui.viewmodel.ProfileViewModel
 
 
-/** Port of screens/Profile/ProfileScreen.tsx. */
+/** Your own profile: a header, then sections divided by hairlines. */
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit,
@@ -59,7 +60,7 @@ fun ProfileScreen(
     val current by communityViewModel.current.collectAsStateWithLifecycle()
     var showSignOut by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgSecondary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
         Row(
             modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -79,7 +80,7 @@ fun ProfileScreen(
 
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
             // Header
-            Column(modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(modifier = Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(contentAlignment = Alignment.BottomEnd) {
                     if (!avatarUrl.isNullOrEmpty()) {
                         AsyncImage(model = avatarUrl, contentDescription = displayName, contentScale = ContentScale.Crop, modifier = Modifier.size(100.dp).clip(CircleShape))
@@ -88,7 +89,7 @@ fun ProfileScreen(
                             Text(initials, color = colors.accentDark, fontSize = 36.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
-                    Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(colors.bgPrimary).clickable { onEditProfile() }, contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(colors.bgPrimary).border(1.dp, colors.borderSubtle, CircleShape).clickable { onEditProfile() }, contentAlignment = Alignment.Center) {
                         Icon(AppIcons.Edit, contentDescription = "Edit", tint = colors.accent, modifier = Modifier.size(16.dp))
                     }
                 }
@@ -99,7 +100,7 @@ fun ProfileScreen(
 
             // Contact
             if (!user?.email.isNullOrEmpty() || !profile?.location.isNullOrEmpty()) {
-                Card(colors.bgPrimary) {
+                Section {
                     SectionTitle("Contact Information")
                     user?.email?.takeIf { it.isNotEmpty() }?.let { InfoRow("Email", it) }
                     profile?.location?.let { InfoRow("Location", it) }
@@ -107,7 +108,7 @@ fun ProfileScreen(
             }
 
             // Communities
-            Card(colors.bgPrimary) {
+            Section {
                 SectionTitle("Spaces")
                 communities.forEach { community ->
                     val active = current?.id == community.id
@@ -124,7 +125,7 @@ fun ProfileScreen(
             }
 
             // Menu
-            Card(colors.bgPrimary) {
+            Section {
                 MenuItem(AppIcons.Person, "Edit Profile", onEditProfile)
                 MenuItem(AppIcons.Settings, "Settings", onSettings)
                 MenuItem(AppIcons.Bell, "Notifications") {}
@@ -132,7 +133,7 @@ fun ProfileScreen(
             }
 
             // Sign out
-            Card(colors.bgPrimary) {
+            Section {
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { showSignOut = true }.padding(vertical = 14.dp),
                     horizontalArrangement = Arrangement.Center,
@@ -159,17 +160,32 @@ fun ProfileScreen(
     }
 }
 
+/**
+ * A block of rows on the flat surface, opened by a hairline. No card, no radius
+ * — the rule is what separates one group from the next.
+ */
 @Composable
-private fun Card(bg: androidx.compose.ui.graphics.Color, content: @Composable () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 12.dp).clip(RoundedCornerShape(16.dp)).background(bg).padding(horizontal = 16.dp, vertical = 8.dp)) {
-        content()
+private fun Section(content: @Composable () -> Unit) {
+    val colors = VisvineTheme.colors
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            content()
+        }
     }
 }
 
 @Composable
 private fun SectionTitle(text: String) {
     val colors = VisvineTheme.colors
-    Text(text.uppercase(), color = colors.textMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 8.dp))
+    Text(
+        text.uppercase(),
+        color = colors.textMuted,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.9.sp,
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+    )
 }
 
 @Composable

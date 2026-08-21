@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Port of screens/Settings/SettingsScreen.tsx.
+/// Appearance settings — the hue picker, and nothing the web app does not have.
 struct SettingsView: View {
     @Environment(ThemeStore.self) private var theme
 
@@ -10,21 +10,10 @@ struct SettingsView: View {
         let c = theme.colors
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Appearance").font(.system(size: 13, weight: .semibold)).foregroundStyle(c.textMuted).padding(.bottom, 4)
-
-                // Dark mode
-                HStack {
-                    VisvineIcon(theme.isDark ? .darkMode : .lightMode).foregroundStyle(c.accent)
-                    Text("Dark Mode").font(.system(size: 16)).foregroundStyle(c.textPrimary)
-                    Spacer()
-                    Toggle("", isOn: Binding(
-                        get: { theme.isDark },
-                        set: { if $0 != theme.isDark { theme.toggleDark() } }
-                    ))
-                    .labelsHidden()
-                    .tint(c.accent)
-                }
-                .padding(.vertical, 14)
+                Text("Appearance")
+                    .font(.system(size: 11, weight: .semibold)).kerning(0.9)
+                    .foregroundStyle(c.textMuted)
+                    .padding(.bottom, 4)
 
                 // Theme colour
                 HStack {
@@ -54,10 +43,8 @@ struct SettingsView: View {
                 .padding(.top, 16)
             }
             .padding(16)
-            .background(c.bgPrimary)
-            .padding(.top, 16)
         }
-        .background(c.bgSecondary)
+        .background(c.bgPrimary)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
     }

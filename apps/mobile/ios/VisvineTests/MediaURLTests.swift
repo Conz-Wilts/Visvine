@@ -1,7 +1,7 @@
 import XCTest
 @testable import Visvine
 
-/// Port of src/services/__tests__/api.test.ts — the resolveMediaUrl contract.
+/// The resolveMediaUrl contract.
 final class MediaURLTests: XCTestCase {
 
     func testReturnsNilForNilAndEmpty() {

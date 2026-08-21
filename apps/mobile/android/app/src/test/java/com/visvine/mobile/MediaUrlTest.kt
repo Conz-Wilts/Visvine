@@ -6,7 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** Port of src/services/__tests__/api.test.ts — the resolveMediaUrl contract. */
+/** The resolveMediaUrl contract. */
 class MediaUrlTest {
 
     @Test

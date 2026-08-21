@@ -12,10 +12,8 @@ class ThemeViewModel @Inject constructor(
     private val themeController: ThemeController,
 ) : ViewModel() {
     val colors = themeController.colors
-    val isDark = themeController.isDark
     val themeId = themeController.themeId
     val themes: List<ColorTheme> = COLOR_THEMES
 
     fun setTheme(id: String) = themeController.setTheme(id)
-    fun toggleDark() = themeController.toggleDark()
 }

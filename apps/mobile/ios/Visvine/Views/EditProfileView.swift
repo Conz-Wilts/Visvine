@@ -37,7 +37,8 @@ final class EditProfileModel {
     }
 }
 
-/// Port of screens/Profile/EditProfileScreen.tsx.
+/// Your own details, as fields on the flat surface — sections opened by a
+/// hairline, no card around the group.
 struct EditProfileView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(AuthManager.self) private var auth
@@ -54,7 +55,7 @@ struct EditProfileView: View {
                 form
             }
         }
-        .background(c.bgSecondary)
+        .background(c.bgPrimary)
         .navigationTitle("Edit Profile")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -90,25 +91,30 @@ struct EditProfileView: View {
                     field("Company", text: $model.form.company, placeholder: "Your company")
                     field("Location", text: $model.form.location, placeholder: "City, Country")
                 }
-                .padding(16).background(c.bgPrimary, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.vertical, 4)
 
                 sectionLabel("Contact Information")
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Email").font(.system(size: 14, weight: .medium)).foregroundStyle(c.textSecondary)
                     TextField("", text: .constant(model.form.email)).disabled(true).foregroundStyle(c.textLight)
                         .padding(.horizontal, 14).padding(.vertical, 12)
-                        .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 12))
+                        .background(c.bgSecondary, in: RoundedRectangle(cornerRadius: 8))
                     Text("Email cannot be changed").font(.system(size: 12)).foregroundStyle(c.textLight)
                 }
-                .padding(16).background(c.bgPrimary, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.vertical, 4)
             }
             .padding(16)
         }
     }
 
     private func sectionLabel(_ text: String) -> some View {
-        Text(text.uppercased()).font(.system(size: 13, weight: .semibold)).foregroundStyle(theme.colors.textMuted)
-            .padding(.top, 20).padding(.bottom, 10)
+        VStack(alignment: .leading, spacing: 0) {
+            Rectangle().fill(theme.colors.borderSubtle).frame(height: 1)
+            Text(text.uppercased())
+                .font(.system(size: 11, weight: .semibold)).kerning(0.9)
+                .foregroundStyle(theme.colors.textMuted)
+                .padding(.top, 20).padding(.bottom, 10)
+        }
     }
 
     private func field(_ label: String, text: Binding<String>, placeholder: String) -> some View {
@@ -119,7 +125,7 @@ struct EditProfileView: View {
                 .onChange(of: text.wrappedValue) { model.hasChanges = true }
                 .padding(.horizontal, 14).padding(.vertical, 12)
                 .foregroundStyle(c.textPrimary)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(c.borderDefault, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(c.borderDefault, lineWidth: 1))
         }
     }
 }

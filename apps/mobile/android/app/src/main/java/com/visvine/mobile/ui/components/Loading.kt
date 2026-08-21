@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.visvine.mobile.ui.theme.VisvineTheme
 
-/** Port of components/Loading.tsx. */
+/** The spinner every screen waits behind — inline, or filling the screen. */
 @Composable
 fun Loading(
     modifier: Modifier = Modifier,
