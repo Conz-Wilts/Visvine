@@ -42,12 +42,12 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visvine
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Reject committed .env files
         run: node scripts/check-no-env-committed.mjs
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
 
@@ -88,9 +88,9 @@ jobs:
   desktop:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
 
@@ -111,9 +111,9 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
 
@@ -123,11 +123,24 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # A GATE, not a report. `continue-on-error` made this advisory-only, which
-      # means a new critical in a production dependency merges green and nobody
-      # reads the log. Known-and-accepted advisories are listed explicitly in
-      # package.json's `pnpm.auditConfig.ignoreCves` with a reason, so the
-      # allowlist is reviewable in a diff and a NEW finding is the only thing
-      # that turns this red. --prod excludes dev-tooling noise.
+      # Two gates, not a report, because they answer different questions.
+      #
+      # What SHIPS is held to `moderate`: the production dependency tree is
+      # clean, so there is no noise floor to tolerate and anything new should
+      # stop the merge.
+      #
+      # The WHOLE tree is held to `high`, and this is the one that is easy to
+      # leave out. `--prod` cannot see a build tool, so a critical sitting in
+      # electron-builder or the Prisma CLI stays invisible to it indefinitely —
+      # and a compromised build tool in a repo that federates into GCP is not a
+      # smaller problem than a compromised runtime dependency. Dev tooling churns
+      # faster, so its floor is one notch higher to stay actionable.
+      #
+      # Accepted advisories live in package.json's `pnpm.auditConfig` and are
+      # justified by name in docs/runbook.md, so the allowlist is reviewable in a
+      # diff and a NEW finding is the only thing that turns this red.
       - name: Audit production dependencies
-        run: pnpm audit --prod --audit-level=high
+        run: pnpm audit --prod --audit-level=moderate
+
+      - name: Audit the whole dependency tree
+        run: pnpm audit --audit-level=high

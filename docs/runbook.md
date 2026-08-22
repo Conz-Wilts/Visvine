@@ -72,34 +72,6 @@ Migrations should be written expand-then-contract so this stays rare.
 
 ---
 
-## After the FIRST deploy of the canary pipeline
-
-Two things are deliberately switched off because they point at
-`/api/health` and `/api/internal/maintenance/nightly`, which do not exist in
-production until that deploy lands. Leaving them armed would just mean a night
-of false alarms.
-
-```bash
-# The uptime alert — the check itself is already running and recording.
-POLICY=$(gcloud alpha monitoring policies list --project=visvine-platform \
-  --filter='displayName="Visvine — site unreachable"' --format='value(name)')
-gcloud alpha monitoring policies update "$POLICY" --project=visvine-platform --enabled
-
-# The nightly maintenance job, created paused.
-gcloud scheduler jobs resume visvine-nightly-maintenance \
-  --location=australia-southeast1 --project=visvine-platform
-
-# Then prove it end to end. Look for notes.nightly.done in the logs.
-gcloud scheduler jobs run visvine-nightly-maintenance \
-  --location=australia-southeast1 --project=visvine-platform
-```
-
-Also worth doing once the pipeline is known good: **split the deploy and runtime
-service accounts** (see Known limits), and run `pnpm ops:restore-drill` now that
-point-in-time recovery is on.
-
----
-
 ## Health and monitoring
 
 | | |
@@ -211,6 +183,29 @@ gcloud sql instances clone visvine-pgdata visvine-pgdata-recovered \
 
 ---
 
+## Identities
+
+Two service accounts, and the split is the point.
+
+| | Used by | Holds |
+|---|---|---|
+| `visvine-deployer@` | GitHub Actions, via workload identity federation | `run.admin`, `artifactregistry.writer`, `cloudsql.client`, `cloudsql.editor`; `iam.serviceAccountUser` scoped to the runtime SA; `secretmanager.secretAccessor` on `DATABASE_URL` alone |
+| `visvine-cloudrun@` | the running service | `cloudsql.client`, `secretmanager.secretAccessor`, `storage.objectAdmin` on the two buckets only, and `iam.serviceAccountTokenCreator` **on itself** |
+| `visvine-agent-tick@` | Cloud Scheduler, to mint OIDC tokens | no project roles at all |
+
+The runtime holds no deploy authority, so a compromise of the app is not a
+compromise of the pipeline. `iam.serviceAccountTokenCreator` on itself is what
+`getSignedUrl` needs: with no key file in the environment, `@google-cloud/storage`
+signs through the IAM SignBlob API, and without that role every resource
+download URL fails at the moment someone opens one.
+
+Storage is granted per bucket (`visvine-media`, `visvine-resources`) rather than
+project-wide, so a new bucket is not automatically readable by the app.
+
+To rotate the deploy identity, point `WIF_SERVICE_ACCOUNT` at a new account that
+holds the table above and has `iam.workloadIdentityUser` for the repo's
+principalSet. Reverting is one `gh secret set`.
+
 ## Secrets
 
 Managed in Secret Manager and injected at deploy time (`--set-secrets`). Nothing
@@ -268,6 +263,7 @@ Applied to `Conz-Wilts/Visvine`, and worth re-checking after any settings change
 | Default workflow token | `read`, cannot approve PRs | Least privilege. Each workflow declares the permissions it actually needs. |
 | WIF attribute condition | `assertion.repository=='Conz-Wilts/Visvine'` | The control that stops any other repository on GitHub from impersonating the service account. Never remove it. |
 | Dependabot alerts + automated fixes | enabled | Complements the `pnpm audit` CI gate, which only sees what is in the lockfile at merge time. |
+| Actions pinned to SHAs | all four | A tag is a pointer its owner can repoint at new code; a SHA is not. |
 | `delete_branch_on_merge` | true | Hygiene. |
 | Deploy keys / collaborators | none / owner only | |
 
@@ -284,69 +280,50 @@ protection rules, and `allow_forking=false` (org-owned private repos only).
   against a database already carrying the shape it assumes fails in the PR.
 - **desktop** — the Electron shell's own typecheck and tests, which no root
   script reaches.
-- **audit** — `pnpm audit --prod --audit-level=high`, as a gate.
+- **audit** — two gates, because they answer different questions. What ships is
+  held to `moderate` (the production tree is clean, so there is no noise floor
+  to tolerate). The whole tree is held to `high`, and that is the one worth
+  having: `--prod` cannot see a build tool, so a critical sitting in
+  electron-builder or the Prisma CLI stays invisible to it indefinitely — and a
+  compromised build tool in a repo that federates into GCP is not a smaller
+  problem than a compromised runtime dependency.
 
-Transitive advisories are fixed with `pnpm.overrides` in the root
-`package.json` wherever a patched version exists. One is allowlisted in
-`pnpm.auditConfig.ignoreCves`, and package.json cannot carry the reason:
-
-- **CVE-2026-40345** (`deepmerge-ts` stack exhaustion on recursive object
-  graphs). Reached only via `@prisma/client → prisma → @prisma/config`, which is
-  CLI tooling — it is not traced into the `output: "standalone"` runtime image
-  and never sees untrusted input. The fix is a major bump inside Prisma's own
-  config loader; remove this entry when Prisma ships it.
-
-Re-check the allowlist whenever it is touched:
+Every action is pinned to a commit SHA with the tag in a trailing comment. A tag
+is a moving pointer the action's owner can repoint; a SHA is not. Re-pin with:
 
 ```bash
-pnpm audit --prod --audit-level=high
+gh api repos/actions/checkout/git/ref/tags/v4 --jq '.object.sha'
 ```
 
----
+### Dependency advisories
+
+Fixed rather than tolerated, in this order of preference: upgrade the direct
+dependency, else pin the transitive one through `pnpm.overrides` in the root
+`package.json`. Both gates pass with nothing above `low` in the tree.
+
+One advisory is allowlisted in `pnpm.auditConfig.ignoreGhsas`, and package.json
+cannot carry the reason:
+
+- **GHSA-w5hq-g745-h8pq** (`uuid`, missing buffer bounds check). Reached only
+  via `@google-cloud/storage → gaxios@6 → uuid@9`. The flaw is in `v3()`,
+  `v5()` and `v6()` when the caller supplies an output buffer; gaxios calls
+  `v4()` and nothing else, on an internally generated multipart boundary, with
+  no buffer argument. It is unreachable rather than merely unlikely. The fix
+  would mean forcing a uuid major into Google's auth stack, which is a worse
+  trade than documenting it. Drop this entry when gaxios 7 reaches
+  `@google-cloud/storage`.
+
+Re-check after touching either list:
+
+```bash
+pnpm audit --prod --audit-level=moderate   # what ships
+pnpm audit --audit-level=high              # everything, build tools included
+```
 
 ## Known limits
 
 Written down because they are decisions, not oversights.
 
-- **Deploy and runtime share one service account.** GitHub Actions impersonates
-  `visvine-cloudrun@` through workload identity federation, and that is also the
-  Cloud Run service's own identity — so the running container holds `run.admin`,
-  `iam.serviceAccountUser` and `artifactregistry.writer` and could redeploy
-  itself. The connector isolate's SSRF guard blocks the metadata server, so this
-  is defence in depth rather than an open hole, but it is more authority than
-  the runtime needs. The split, in an order that cannot lock deploys out:
-
-      # 1. New deployer, alongside the existing binding — nothing breaks yet.
-      gcloud iam service-accounts create visvine-deployer --project=visvine-platform
-      DEP=visvine-deployer@visvine-platform.iam.gserviceaccount.com
-      for r in run.admin artifactregistry.writer cloudsql.client cloudsql.editor; do
-        gcloud projects add-iam-policy-binding visvine-platform \
-          --member="serviceAccount:$DEP" --role="roles/$r" --condition=None
-      done
-      # Act-as, scoped to the runtime SA rather than project-wide.
-      gcloud iam service-accounts add-iam-policy-binding \
-        visvine-cloudrun@visvine-platform.iam.gserviceaccount.com \
-        --member="serviceAccount:$DEP" --role=roles/iam.serviceAccountUser
-      # Read only the one secret the deploy itself opens.
-      gcloud secrets add-iam-policy-binding DATABASE_URL \
-        --member="serviceAccount:$DEP" --role=roles/secretmanager.secretAccessor
-      gcloud iam service-accounts add-iam-policy-binding "$DEP" \
-        --role=roles/iam.workloadIdentityUser \
-        --member='principalSet://iam.googleapis.com/projects/612301752988/locations/global/workloadIdentityPools/github-pool/attribute.repository/Conz-Wilts/Visvine'
-
-      # 2. Point GitHub at it, deploy, confirm green.
-      gh secret set WIF_SERVICE_ACCOUNT --body "$DEP"
-
-      # 3. ONLY THEN strip the deploy powers off the runtime identity.
-      for r in run.admin artifactregistry.writer iam.serviceAccountUser; do
-        gcloud projects remove-iam-policy-binding visvine-platform \
-          --member=serviceAccount:visvine-cloudrun@visvine-platform.iam.gserviceaccount.com \
-          --role="roles/$r"
-      done
-
-  Reverting is one `gh secret set` back to the old account.
-- **`storage.objectAdmin` is project-wide** on the runtime identity rather than
-  scoped to the two buckets it actually uses.
 - **Single region.** `australia-southeast1` only. A regional outage is an outage.
 - **No CDN in front of Cloud Run.** Static assets are served from the container.
   Fine at current traffic; the first thing to change if it is not.

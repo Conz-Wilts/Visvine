@@ -3,6 +3,11 @@ name: Deploy to Cloud Run
 on:
   push:
     branches: [main]
+  # Manual re-run of the exact same pipeline against the current main. The way
+  # to redeploy after changing a secret or an env var — which Cloud Run resolves
+  # at revision-creation time, so a secret rotated in Secret Manager does not
+  # reach production until a new revision is made.
+  workflow_dispatch:
 
 # One deploy at a time. Two pushes in quick succession would otherwise race on
 # the same Cloud SQL schema and the same traffic split, and the loser could
@@ -24,9 +29,11 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Names the target so GitHub can gate it. Required reviewers / wait timers
-    # are configured on the repo's `production` environment; until they are, this
-    # is just a label and the pipeline behaves as before. See docs/runbook.md.
+    # Names the target so the deploy is recorded against it and gets the
+    # environment's secrets and variables. Deployment protection rules (required
+    # reviewers, wait timers) need a paid plan for a private repo and are not
+    # available here — the canary, the smoke test and the rollback below are what
+    # actually stand between a bad commit and users. See docs/runbook.md.
     environment:
       name: Production
       url: https://visvine.com
@@ -35,15 +42,15 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
 
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
@@ -81,10 +88,11 @@ jobs:
           # frame-src that can load the Tool iframe. Empty (the default, until the
           # tools.visvine.com domain mapping exists) degrades to the documented
           # same-origin fallback — see docs/tools.md's Ops runbook.
-          # One --build-arg per argument. Comma-joining two of them makes the
-          # SECOND one part of the FIRST one's value, which for TOOLS_ORIGIN
-          # means shipping a frame-src that names a host that does not exist.
-          # AGENT_TICK_SERVICE_ACCOUNT is read per-request, so it is runtime-only
+          #
+          # One --build-arg per argument: comma-joining two makes the second part
+          # of the first one's value, and a TOOLS_ORIGIN carrying a trailing
+          # ",KEY=value" ships a frame-src naming a host that does not exist.
+          # AGENT_TICK_SERVICE_ACCOUNT is read per request, so it is runtime-only
           # and belongs in --set-env-vars below, not here.
           docker build \
             --build-arg TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }} \
@@ -124,7 +132,7 @@ jobs:
       # ── Production changes start here ────────────────────────────────────────
 
       # An on-demand backup immediately before the schema moves. Cloud SQL's
-      # automated backups and PITR are the real safety net (scripts/verify-backup-config.sh
+      # automated backups and PITR are the real safety net (scripts/backup-config.mjs
       # asserts both are on); this is the labelled restore point a human reaches
       # for when a migration did something a migration should not have. Never
       # allowed to fail the deploy — a full backup queue is not a reason to block

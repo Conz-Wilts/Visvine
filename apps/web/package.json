@@ -61,7 +61,7 @@
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.5",
-    "@google-cloud/storage": "^7.19.0",
+    "@google-cloud/storage": "^8.0.1",
     "@jitl/quickjs-singlefile-cjs-release-sync": "0.32.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "@prisma/adapter-pg": "^7.3.0",
@@ -111,7 +111,7 @@
     "playwright": "^1.62.1",
     "prisma": "7.4.0",
     "tailwindcss": "^4",
-    "tsx": "^4.20.6",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }
