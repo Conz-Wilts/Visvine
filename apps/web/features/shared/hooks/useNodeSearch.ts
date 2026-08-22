@@ -16,6 +16,8 @@ export interface NodeSearchResult {
   space_name: string | null;
   /** All spaces this identity appears in (for the finder badge). */
   spaces?: string[];
+  /** The row is the identity's Visvine record; picking it binds the new card to the record. */
+  global?: boolean;
   metadata: Record<string, unknown> | null;
 }
 
@@ -96,7 +98,8 @@ function deduplicateResults(results: NodeSearchResult[]): NodeSearchResult[] {
     // Rows with no identity yet stay distinct by node id.
     const key = r.identity_id ?? `node:${r.id}`;
     const existing = map.get(key);
-    if (!existing || fieldCount(r) > fieldCount(existing)) {
+    // The Visvine record leads its identity whatever the field count.
+    if (!existing || (r.global && !existing.global) || (!existing.global && fieldCount(r) > fieldCount(existing))) {
       map.set(key, r);
     }
   }

@@ -67,7 +67,6 @@ export interface Space {
   featureConfig?: SpaceFeatureConfig; // Which optional surfaces are enabled
   visibility?: 'public' | 'private'; // 'public' = discoverable & self-joinable; 'private' = invite/admin-add only
   timezone?: string | null; // IANA zone the space's scheduled agents run in (null = UTC)
-  agentConfig?: { customEndpoint?: { baseURL: string } | null }; // admin-only agent settings (lib/agents)
   // The Tools this space runs, enabled ones only. Rides the space DTO because
   // the sidebar rail, the `/t/<slug>` page and the type-page dispatch all need
   // it on every render — see lib/tools/installs.ts#installedToolsForSpaces.

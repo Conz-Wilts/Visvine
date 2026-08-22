@@ -19,6 +19,8 @@ import { SHARED_OWNER_KEY, type Actor, type Context } from './store'
 import { logAudit } from './audit'
 import { parseFrontmatter, splitFrontmatter, joinFrontmatter } from './shared/markdown'
 import { provenanceRef } from './shared/noteLog'
+import { entityNotePath, parseEntityHref } from './entities'
+import { isGlobalSpace } from '@/lib/spaces/globalSpace'
 
 export interface PublicationInfo {
   id: string
@@ -62,17 +64,57 @@ function toInfo(row: {
  * Pure — exported for tests. The replica's revision history starts fresh in
  * the destination (origin 'publish'); the source's trail never crosses.
  */
-export function replicaContent(sourceContent: string, opts: { ref: string; publisher: string }): string {
+export function replicaContent(
+  sourceContent: string,
+  opts: { ref: string; publisher: string; node?: string | null },
+): string {
   const fm = parseFrontmatter(sourceContent)
   const { body } = splitFrontmatter(sourceContent)
-  return joinFrontmatter(
-    {
-      ...fm,
-      author: typeof fm.author === 'string' && fm.author.trim() ? fm.author : opts.publisher,
-      'published-from': opts.ref,
-    },
-    body,
-  )
+  const next: Record<string, unknown> = {
+    ...fm,
+    author: typeof fm.author === 'string' && fm.author.trim() ? fm.author : opts.publisher,
+    'published-from': opts.ref,
+  }
+  // A global record's `node:` names its node in the Visvine space, which means
+  // nothing in the destination. The replica names the follower instead, so
+  // the note and the card it sits behind agree — or carries no `node:` at all
+  // when the destination has no follower for it.
+  if (opts.node !== undefined) {
+    if (opts.node) next.node = opts.node
+    else delete next.node
+  }
+  return joinFrontmatter(next, body)
+}
+
+/**
+ * The `node:` a replica should carry: undefined (leave the source's) for any
+ * ordinary publication, and for a global-record replica the follower node in
+ * the destination space — null when there is none.
+ */
+async function replicaNodeRef(
+  sourceSpaceId: string,
+  sourcePath: string,
+  targetSpaceId: string,
+  targetPath: string,
+): Promise<string | null | undefined> {
+  if (!isGlobalSpace(sourceSpaceId)) return undefined
+  if (!parseEntityHref(sourcePath)) return null
+  const source: Context = { spaceId: sourceSpaceId, ownerKey: SHARED_OWNER_KEY }
+  const sourceId = parseFrontmatter((await store.readNoteOrNull(source, sourcePath)) ?? '').node
+  if (typeof sourceId !== 'string' || !sourceId) return null
+  const global = await prisma.node.findUnique({ where: { id: sourceId }, select: { identityId: true } })
+  if (!global?.identityId) return null
+  const follower = await prisma.node.findFirst({
+    where: { spaceId: targetSpaceId, identityId: global.identityId },
+    select: { id: true, type: true, metadata: true },
+  })
+  if (!follower) return null
+  const path = entityNotePath({
+    id: follower.id,
+    type: follower.type,
+    metadata: (follower.metadata as Record<string, unknown> | null) ?? null,
+  })
+  return path === targetPath ? follower.id : null
 }
 
 function sourceRef(sourceSpaceId: string, sourcePath: string): string {
@@ -97,6 +139,14 @@ export async function publishNote(
   targetSpaceId: string,
   targetPath: string,
   actor: Actor,
+  opts: {
+    /**
+     * Write over an existing note at `targetPath` instead of suffixing. Only
+     * the global-record follow (lib/global/binding.ts) passes this: the target
+     * is the bound node's own entity note, and superseding it IS the point.
+     */
+    replace?: boolean
+  } = {},
 ): Promise<PublishResult> {
   if (sourceSpaceId === targetSpaceId) {
     return { status: 'denied', reason: 'A note cannot be published into its own context' }
@@ -110,7 +160,7 @@ export async function publishNote(
       publication_identity: { sourceSpaceId, sourcePath, targetSpaceId },
     },
   })
-  if (existing?.active) {
+  if (existing?.active && !(opts.replace && existing.targetPath === targetPath)) {
     return {
       status: 'denied',
       reason: `Already published to this space (at ${existing.targetPath}) — unlink it first`,
@@ -121,7 +171,7 @@ export async function publishNote(
   const target: Context = { spaceId: targetSpaceId, ownerKey: SHARED_OWNER_KEY }
   let dest = targetPath
   let n = 1
-  while (await store.readNoteOrNull(target, dest)) {
+  while (!opts.replace && (await store.readNoteOrNull(target, dest))) {
     dest = targetPath.replace(/\.md$/i, '') + `-${n++}.md`
   }
 
@@ -225,6 +275,7 @@ async function writeReplica(
   const content = replicaContent(sourceContent, {
     ref: sourceRef(sourceSpaceId, sourcePath),
     publisher: actor.name,
+    node: await replicaNodeRef(sourceSpaceId, sourcePath, targetSpaceId, targetPath),
   })
   await store.writeNote(target, targetPath, content, actor, 'publish')
   await prisma.contextPublication.update({

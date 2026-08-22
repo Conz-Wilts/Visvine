@@ -1,48 +1,81 @@
 /**
  * Resolving an agent's model to a live ChatConfig: the registry entry (or the
- * Space's admin-only custom endpoint) plus the Space's decrypted
- * MODEL_KEY_<PROVIDER>. The pure registry lives in ./registry.ts so parsers
+ * `base_url:` of the Space's custom model connector) plus the Space's
+ * decrypted MODEL_KEY_<PROVIDER>. The pure registry lives in ./registry.ts so parsers
  * and tests stay prisma-free; this file is the I/O half.
  */
 import prisma from '@/lib/prisma'
 import { decryptSecret } from '@/lib/crypto/secrets'
 import { assertPubliclyRoutable } from '@/lib/net/ssrf'
 import { classifyModelStatus, type ChatConfig } from '@/lib/notes/ai'
+import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { connectorKind, parseModelBaseUrl, parseModelConnector } from '@/lib/connectors/model'
 import { parseModelRef, type ModelRef, type ProviderEntry } from './registry'
 
 export * from './registry'
 
-/** Shape of `Space.agentConfig` (admin-only). */
-interface SpaceAgentConfig {
-  customEndpoint?: { baseURL: string } | null
-}
+const SHARED_OWNER_KEY = 'shared'
 
-function parseSpaceAgentConfig(raw: unknown): SpaceAgentConfig {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
-  const ce = obj.customEndpoint
-  const baseURL =
-    ce && typeof ce === 'object' && typeof (ce as Record<string, unknown>).baseURL === 'string'
-      ? ((ce as Record<string, unknown>).baseURL as string)
-      : null
-  return { customEndpoint: baseURL ? { baseURL } : null }
+type CustomEndpointResult =
+  | { ok: true; baseURL: string; connector: string }
+  | { ok: false; message: string }
+
+/**
+ * The Space's custom model endpoint: the `base_url:` of its `provider: custom`
+ * model connector. Read raw from the shared context (no principal — the run
+ * may act for an author who can't see `connectors/`, and the folder is
+ * admin-written anyway). One endpoint per Space, like one key per provider:
+ * two custom connectors with different URLs is a configuration error an admin
+ * has to resolve, not a choice the brief gets to make. Routability is checked
+ * here, on every resolve, so a DNS change after save can't turn the URL into a
+ * path to the instance's own network.
+ */
+async function findCustomModelEndpoint(spaceId: string): Promise<CustomEndpointResult> {
+  const rows = await prisma.contextNote.findMany({
+    where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { startsWith: 'connectors/', endsWith: '.md' } },
+    select: { path: true, content: true },
+    orderBy: { path: 'asc' },
+  })
+  const found: { name: string; baseURL: string }[] = []
+  for (const row of rows) {
+    const fm = parseFrontmatter(row.content)
+    if (fm.type !== 'connector' || connectorKind(fm) !== 'model') continue
+    if (typeof fm.provider !== 'string' || fm.provider.trim().toLowerCase() !== 'custom') continue
+    const parsed = parseModelConnector(fm)
+    if (!parsed.ok) return { ok: false, message: `The custom model connector ${row.path} is invalid: ${parsed.error}` }
+    found.push({ name: row.path.slice('connectors/'.length, -'.md'.length), baseURL: parsed.config.baseURL })
+  }
+  if (found.length === 0) {
+    return { ok: false, message: 'No custom model connector — an admin must add a connector with `provider: custom` and its `base_url:` under /connectors.' }
+  }
+  const urls = new Set(found.map((f) => f.baseURL))
+  if (urls.size > 1) {
+    return {
+      ok: false,
+      message: `More than one custom model endpoint (${found.map((f) => f.name).join(', ')}) — keep one \`provider: custom\` connector, or give them the same base_url.`,
+    }
+  }
+  const [{ name, baseURL }] = found
+  try {
+    const devHttp = baseURL.startsWith('http:') && process.env.NODE_ENV === 'development'
+    await assertPubliclyRoutable(new URL(baseURL).hostname, { allowPrivate: devHttp })
+  } catch (e) {
+    return { ok: false, message: `The custom model endpoint on ${name} is not reachable from here: ${e instanceof Error ? e.message : String(e)}` }
+  }
+  return { ok: true, baseURL, connector: name }
 }
 
 /**
- * Validate an admin-supplied custom endpoint: https, no query/fragment,
- * publicly routable. Throws with a human message.
+ * Validate an admin-supplied custom endpoint at save time: the pure shape
+ * check plus routability. Throws with a human message.
  */
 export async function validateCustomEndpoint(raw: string): Promise<string> {
-  let url: URL
-  try {
-    url = new URL(raw)
-  } catch {
-    throw new Error('Custom endpoint must be an absolute URL')
-  }
+  const parsed = parseModelBaseUrl(raw)
+  if (!parsed.ok) throw new Error(parsed.error)
+  const url = new URL(parsed.url)
   const devHttp = url.protocol === 'http:' && process.env.NODE_ENV === 'development'
-  if (url.protocol !== 'https:' && !devHttp) throw new Error('Custom endpoint must use https')
-  if (url.search || url.hash) throw new Error('Custom endpoint must not carry a query or fragment')
   await assertPubliclyRoutable(url.hostname, { allowPrivate: devHttp })
-  return url.toString().endsWith('/') ? url.toString() : `${url.toString()}/`
+  return parsed.url
 }
 
 export type ResolveModelResult =
@@ -50,8 +83,8 @@ export type ResolveModelResult =
   | { ok: false; reason: 'no_key' | 'no_endpoint' | 'bad_key' | 'invalid_model'; message: string }
 
 /**
- * Resolve the ChatConfig an agent run uses: registry base URL (or the Space's
- * custom endpoint) + the Space's decrypted MODEL_KEY_<PROVIDER>. The key never
+ * Resolve the ChatConfig an agent run uses: registry base URL (or the custom
+ * model connector's) + the Space's decrypted MODEL_KEY_<PROVIDER>. The key never
  * leaves this process; callers get a config, not a value to show anyone.
  */
 export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown): Promise<ResolveModelResult> {
@@ -61,11 +94,9 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
 
   let baseURL = ref.provider.baseURL
   if (!baseURL) {
-    const space = await prisma.space.findUnique({ where: { id: spaceId }, select: { agentConfig: true } })
-    baseURL = parseSpaceAgentConfig(space?.agentConfig).customEndpoint?.baseURL ?? null
-    if (!baseURL) {
-      return { ok: false, reason: 'no_endpoint', message: 'No custom model endpoint is set for this space (admin setting).' }
-    }
+    const endpoint = await findCustomModelEndpoint(spaceId)
+    if (!endpoint.ok) return { ok: false, reason: 'no_endpoint', message: endpoint.message }
+    baseURL = endpoint.baseURL
   }
 
   const row = await prisma.connectorSecret.findUnique({

@@ -210,7 +210,7 @@ test('a data.js that fails to compile takes the whole build down', async () => {
 })
 
 test('a broken config records configError and refuses to be ok', async () => {
-  const h = harness(sources({ index: '---\ntype: Index\ntitle: Hello\n---\n\nnot a tool\n' }))
+  const h = harness(sources({ index: '---\ntitle: Hello\n---\n\nnot a tool\n' }))
   const row = await rebuildTool(SPACE, NAME, h.deps)
 
   assert.equal(row.ok, false)

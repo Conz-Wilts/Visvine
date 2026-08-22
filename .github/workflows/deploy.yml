@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
 
+# One deploy at a time. Two pushes in quick succession would otherwise race on
+# the same Cloud SQL schema and the same traffic split, and the loser could
+# leave production pointing at a revision built from the older commit. Queued
+# rather than cancelled: a run that has already migrated must be allowed to
+# finish routing traffic to the code that migration was for.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 env:
   PROJECT: visvine-platform
   REGION: australia-southeast1
@@ -15,6 +24,12 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Names the target so GitHub can gate it. Required reviewers / wait timers
+    # are configured on the repo's `production` environment; until they are, this
+    # is just a label and the pipeline behaves as before. See docs/runbook.md.
+    environment:
+      name: Production
+      url: https://visvine.com
     permissions:
       contents: read
       id-token: write
@@ -32,6 +47,96 @@ jobs:
 
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      # A short, stable id for the revision and the image tag, so a revision in
+      # the console can be traced back to a commit without a lookup table.
+      - name: Compute release id
+        id: rel
+        run: echo "sha8=$(echo ${{ github.sha }} | cut -c1-8)" >> "$GITHUB_OUTPUT"
+
+      # Record what is serving RIGHT NOW, before anything changes. This is the
+      # rollback target, and it has to be captured before the deploy because
+      # after it there are two revisions and no record of which was good.
+      - name: Capture current serving revision
+        id: current
+        run: |
+          rev=$(gcloud run services describe "$SERVICE" \
+            --region="$REGION" --project="$PROJECT" --format=json 2>/dev/null \
+            | jq -r '[.status.traffic[]? | select((.percent // 0) > 0) | .revisionName] | first // ""')
+          echo "revision=$rev" >> "$GITHUB_OUTPUT"
+          echo "Currently serving: ${rev:-<none — first deploy>}"
+
+      # ── Build BEFORE touching production ─────────────────────────────────────
+      # The image is built and pushed first on purpose. Every step after this
+      # mutates production — the database schema, then the traffic split — and a
+      # compile error, a failed test fixture or a bad build arg must be caught
+      # while production is still entirely untouched. A build that fails here
+      # costs a red check; a build that failed after the migration would leave
+      # the schema ahead of the code that is still serving.
+      - name: Build image
+        run: |
+          # TOOLS_ORIGIN is a build arg, not just a runtime env var: next.config.ts's
+          # headers() bakes frame-src into .next/routes-manifest.json at `next build`
+          # time (see Dockerfile), so it has to be here for the image to ship a
+          # frame-src that can load the Tool iframe. Empty (the default, until the
+          # tools.visvine.com domain mapping exists) degrades to the documented
+          # same-origin fallback — see docs/tools.md's Ops runbook.
+          # One --build-arg per argument. Comma-joining two of them makes the
+          # SECOND one part of the FIRST one's value, which for TOOLS_ORIGIN
+          # means shipping a frame-src that names a host that does not exist.
+          # AGENT_TICK_SERVICE_ACCOUNT is read per-request, so it is runtime-only
+          # and belongs in --set-env-vars below, not here.
+          docker build \
+            --build-arg TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }} \
+            -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
+
+      - name: Verify TOOLS_ORIGIN survived the build
+        if: ${{ vars.TOOLS_ORIGIN != '' }}
+        env:
+          TOOLS_ORIGIN: ${{ vars.TOOLS_ORIGIN }}
+        run: |
+          cid=$(docker create ${{ env.IMAGE }}:${{ github.sha }})
+          docker cp "$cid:/app/apps/web/.next/routes-manifest.json" ./routes-manifest.json
+          docker rm "$cid" >/dev/null
+          node -e "
+            const fs = require('fs');
+            const manifest = JSON.parse(fs.readFileSync('./routes-manifest.json', 'utf8'));
+            const origin = process.env.TOOLS_ORIGIN;
+            const entry = (manifest.headers || []).find((h) => h.source.startsWith('/:path'));
+            const csp = (entry && entry.headers.find((h) => h.key === 'Content-Security-Policy')) || {};
+            const frameSrc = (csp.value || '').split('; ').find((d) => d.startsWith('frame-src')) || '';
+            // Whole-token match, not a substring: a build arg that picked up a
+            // trailing ',SOMETHING=else' would satisfy includes() and still name
+            // a host no browser can load the Tool frame from.
+            const sources = frameSrc.split(/\s+/).slice(1);
+            if (!sources.includes(origin)) {
+              console.error('frame-src does not name TOOLS_ORIGIN ' + origin + ' in the built image: ' + JSON.stringify(frameSrc));
+              process.exit(1);
+            }
+            console.log('frame-src bakes TOOLS_ORIGIN: ' + frameSrc);
+          "
+
+      - name: Push image
+        run: |
+          docker push ${{ env.IMAGE }}:${{ github.sha }}
+          docker push ${{ env.IMAGE }}:latest
+
+      # ── Production changes start here ────────────────────────────────────────
+
+      # An on-demand backup immediately before the schema moves. Cloud SQL's
+      # automated backups and PITR are the real safety net (scripts/verify-backup-config.sh
+      # asserts both are on); this is the labelled restore point a human reaches
+      # for when a migration did something a migration should not have. Never
+      # allowed to fail the deploy — a full backup queue is not a reason to block
+      # a release when PITR still covers the window.
+      - name: Snapshot the database
+        continue-on-error: true
+        run: |
+          gcloud sql backups create \
+            --instance="$(echo "$SQL_INSTANCE" | cut -d: -f3)" \
+            --project="$PROJECT" \
+            --description="pre-deploy ${{ steps.rel.outputs.sha8 }}" \
+            --async
 
       - name: Sync database schema
         run: |
@@ -69,55 +174,27 @@ jobs:
           DATABASE_URL="$DB_URL" node scripts/apply-sql-functions.mjs
           # No seeding: production data is managed in the app, never by deploys.
 
-      - name: Build image
-        run: |
-          # TOOLS_ORIGIN is a build arg, not just a runtime env var: next.config.ts's
-          # headers() bakes frame-src into .next/routes-manifest.json at `next build`
-          # time (see Dockerfile), so it has to be here for the image to ship a
-          # frame-src that can load the Tool iframe. Empty (the default, until the
-          # tools.visvine.com domain mapping exists) degrades to the documented
-          # same-origin fallback — see docs/tools.md's Ops runbook.
-          docker build \
-            --build-arg TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }},AGENT_TICK_SERVICE_ACCOUNT=${{ vars.AGENT_TICK_SERVICE_ACCOUNT }} \
-            -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
+      # ── Release: candidate first, traffic only after it answers ──────────────
 
-      - name: Verify TOOLS_ORIGIN survived the build
-        if: ${{ vars.TOOLS_ORIGIN != '' }}
-        env:
-          TOOLS_ORIGIN: ${{ vars.TOOLS_ORIGIN }}
-        run: |
-          cid=$(docker create ${{ env.IMAGE }}:${{ github.sha }})
-          docker cp "$cid:/app/apps/web/.next/routes-manifest.json" ./routes-manifest.json
-          docker rm "$cid" >/dev/null
-          node -e "
-            const fs = require('fs');
-            const manifest = JSON.parse(fs.readFileSync('./routes-manifest.json', 'utf8'));
-            const origin = process.env.TOOLS_ORIGIN;
-            const entry = (manifest.headers || []).find((h) => h.source.startsWith('/:path'));
-            const csp = (entry && entry.headers.find((h) => h.key === 'Content-Security-Policy')) || {};
-            const frameSrc = (csp.value || '').split('; ').find((d) => d.startsWith('frame-src')) || '';
-            if (!frameSrc.includes(origin)) {
-              console.error('frame-src is missing TOOLS_ORIGIN ' + origin + ' in the built image: ' + JSON.stringify(frameSrc));
-              process.exit(1);
-            }
-            console.log('frame-src bakes TOOLS_ORIGIN: ' + frameSrc);
-          "
-
-      - name: Push image
-        run: |
-          docker push ${{ env.IMAGE }}:${{ github.sha }}
-          docker push ${{ env.IMAGE }}:latest
-
-      - name: Deploy to Cloud Run
+      # --no-traffic is the whole point. The revision starts, warms, and is
+      # reachable on its own tagged URL while every real user is still being
+      # served by the previous one. Nothing below can break production for a user
+      # until the traffic step, which only runs if the smoke test passed.
+      - name: Deploy candidate revision (no traffic)
         run: |
           gcloud run deploy ${{ env.SERVICE }} \
             --image=${{ env.IMAGE }}:${{ github.sha }} \
+            --revision-suffix=${{ steps.rel.outputs.sha8 }} \
+            --no-traffic \
+            --tag=candidate \
             --region=${{ env.REGION }} \
             --platform=managed \
             --service-account=visvine-cloudrun@${{ env.PROJECT }}.iam.gserviceaccount.com \
             --add-cloudsql-instances=${{ env.SQL_INSTANCE }} \
             --set-secrets=DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,SUPER_ADMIN_EMAILS=SUPER_ADMIN_EMAILS:latest,GCS_MEDIA_BUCKET=GCS_MEDIA_BUCKET:latest,GCS_RESOURCES_BUCKET=GCS_RESOURCES_BUCKET:latest,SECRETS_KEY=SECRETS_KEY:latest \
-            --set-env-vars=NEXT_PUBLIC_APP_URL=https://visvine.com,GCS_CDN_BASE_URL=https://storage.googleapis.com/visvine-media,ENABLE_DEV_AUTH=false,TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }},AGENT_TICK_SERVICE_ACCOUNT=${{ vars.AGENT_TICK_SERVICE_ACCOUNT }} \
+            --set-env-vars=NEXT_PUBLIC_APP_URL=https://visvine.com,GCS_CDN_BASE_URL=https://storage.googleapis.com/visvine-media,ENABLE_DEV_AUTH=false,TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }},AGENT_TICK_SERVICE_ACCOUNT=${{ vars.AGENT_TICK_SERVICE_ACCOUNT }},GOOGLE_CLOUD_PROJECT=${{ env.PROJECT }},GIT_SHA=${{ github.sha }} \
+            --startup-probe=httpGet.path=/api/health,initialDelaySeconds=5,timeoutSeconds=4,periodSeconds=5,failureThreshold=12 \
+            --liveness-probe=httpGet.path=/api/health,timeoutSeconds=4,periodSeconds=30,failureThreshold=3 \
             --min-instances=0 \
             --max-instances=10 \
             --timeout=1800 \
@@ -126,3 +203,56 @@ jobs:
             --port=3080 \
             --allow-unauthenticated \
             --project=${{ env.PROJECT }}
+
+      # The gate. A candidate that cannot reach its own database, or that is
+      # answering from the wrong revision, never gets traffic — the deploy fails
+      # here with production still on the previous revision.
+      - name: Smoke test the candidate
+        run: |
+          url=$(gcloud run services describe "$SERVICE" \
+            --region="$REGION" --project="$PROJECT" --format=json \
+            | jq -r '.status.traffic[] | select(.tag=="candidate") | .url')
+          if [ -z "$url" ] || [ "$url" = "null" ]; then
+            echo "could not resolve the candidate tag URL"; exit 1
+          fi
+          echo "Candidate: $url"
+
+          expected="$SERVICE-${{ steps.rel.outputs.sha8 }}"
+
+          # Deep check: proves the revision can actually reach Cloud SQL through
+          # its own service account and connector, which a shallow 200 does not.
+          # Retried because a cold start plus a first connection is legitimately
+          # slower than a probe interval.
+          for attempt in $(seq 1 10); do
+            body=$(curl -sS --max-time 20 "$url/api/health?deep=1" || true)
+            echo "attempt $attempt: $body"
+            ok=$(echo "$body" | jq -r '.ok // false' 2>/dev/null || echo false)
+            rev=$(echo "$body" | jq -r '.revision // ""' 2>/dev/null || echo "")
+            if [ "$ok" = "true" ] && [ "$rev" = "$expected" ]; then
+              echo "Candidate healthy and is the expected revision ($rev)."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Candidate failed its health check; refusing to route traffic."
+          exit 1
+
+      - name: Route traffic to the candidate
+        run: |
+          gcloud run services update-traffic "$SERVICE" \
+            --region="$REGION" --project="$PROJECT" \
+            --to-revisions="$SERVICE-${{ steps.rel.outputs.sha8 }}=100" \
+            --remove-tags=candidate
+
+      # Belt and braces. --no-traffic means a failure above normally leaves
+      # production untouched, so this exists for the one case that isn't true:
+      # a partially-applied traffic update. It pins traffic back to the revision
+      # captured before the deploy and clears the candidate tag either way.
+      - name: Roll back on failure
+        if: failure() && steps.current.outputs.revision != ''
+        run: |
+          echo "Deploy failed — pinning traffic to ${{ steps.current.outputs.revision }}"
+          gcloud run services update-traffic "$SERVICE" \
+            --region="$REGION" --project="$PROJECT" \
+            --to-revisions="${{ steps.current.outputs.revision }}=100" \
+            --remove-tags=candidate || true

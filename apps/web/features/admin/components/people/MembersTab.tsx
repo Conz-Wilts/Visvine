@@ -135,7 +135,7 @@ function MemberRow({ member, held, busy, onRemove }: {
         ) : (
           <div className="flex flex-wrap gap-1">
             {held.map((a) => (
-              <Chip key={a.name} color={a.color} title={a.owner ? `${a.name} — owns the space` : a.name}>
+              <Chip key={a.name} color={a.color} title={a.admin ? `${a.name} — is admin of the space` : a.name}>
                 {a.name}
               </Chip>
             ))}

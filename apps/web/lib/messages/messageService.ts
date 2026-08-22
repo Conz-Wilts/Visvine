@@ -13,7 +13,7 @@ import {
   serializeConversation,
   serializeMessage,
 } from './core';
-import { takeToken } from './rateLimit';
+import { takeToken } from '@/lib/rateLimit';
 import { attachPreviewsToMessage } from '@/lib/linkPreview';
 
 export async function listMessagesForConversation(
@@ -84,7 +84,7 @@ export async function sendMessage(
 ): Promise<{ message: SerializedMessage; memberIds: string[] }> {
   await ensureConversationMember(conversationId, currentUserId);
 
-  const limit = takeToken(`msg:${currentUserId}`);
+  const limit = await takeToken(`msg:${currentUserId}`);
   if (!limit.ok) {
     throw new MessagingError(429, `Slow down. Try again in ${Math.ceil(limit.retryAfterMs / 1000)}s.`);
   }

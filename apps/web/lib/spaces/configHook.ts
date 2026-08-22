@@ -16,7 +16,7 @@
  * the columns exactly as they were.
  */
 
-import { configNoteKindOf, ownerAliasDenial, parseConfigNote } from './configNote'
+import { configNoteKindOf, adminAliasDenial, parseConfigNote } from './configNote'
 import { readSpaceConfig, updateSpaceConfig, type SpaceConfig, type SpaceConfigPatch } from './spaceConfig'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import { logger } from '@/lib/logger'
@@ -63,7 +63,7 @@ export async function configNoteWritten(
   // The gate refuses this earlier for ordinary writes; repeated here because a
   // write that bypassed the gate must not be able to strand a space with no
   // admin either.
-  const denial = stored ? ownerAliasDenial(patch, stored) : null
+  const denial = stored ? adminAliasDenial(patch, stored) : null
   if (denial) {
     logger.error('configNote.refused', { path, spaceId: context.spaceId, denial })
     return

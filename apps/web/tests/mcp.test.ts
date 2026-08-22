@@ -497,7 +497,7 @@ test('the type catalog covers the whole closed vocabulary with the right creatab
   const entries = catalog({ usageByType: { person: 3, connector: 1 } })
   assert.deepEqual(
     entries.map((e) => e.type),
-    ['person', 'space', 'event', 'resource', 'section', 'channel', 'connector', 'agent', 'tool', 'index'],
+    ['person', 'space', 'event', 'resource', 'section', 'channel', 'connector', 'agent', 'tool'],
   )
   const creatable = entries.filter((e) => e.creatable_via_add_context).map((e) => e.type)
   // Catalog order, not CREATABLE_TYPES order: an event is creatable now (it
@@ -545,7 +545,7 @@ test('switching a feature off disables its node types, with the feature named', 
   }
   // Always-on types are untouched by any config — 'space' (the org type)
   // must never be gated behind channels.
-  for (const type of ['person', 'space', 'event', 'index']) {
+  for (const type of ['person', 'space', 'event']) {
     const e = entries.find((x) => x.type === type)!
     assert.equal(e.enabled, true)
     assert.equal(e.disabled_reason, null)

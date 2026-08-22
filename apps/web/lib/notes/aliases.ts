@@ -4,7 +4,7 @@
 // because a space's Person aliases and its permission vocabulary are the
 // same list. This module owns their whole life: creating, renaming, recolouring
 // and deleting them, who holds each (UserAlias rows), and whether holding one
-// means owning the space (the `owner` flag on the stored alias). All of it
+// means owning the space (the `admin` flag on the stored alias). All of it
 // is driven from Console → Aliases.
 //
 // An alias is referenced by its stable `id` everywhere it matters —
@@ -25,18 +25,18 @@ import {
   personAliases,
   nodeTypeSpellings,
   findAliasByRef,
-  OWNER_ALIAS_NAME,
+  ADMIN_ALIAS_NAME,
   type SpaceAlias,
 } from '@/lib/types/context'
 import { updateSpaceConfig } from '@/lib/spaces/spaceConfig'
 import { newAliasId } from '@/lib/spaces/configMerge'
 import { logAudit } from './audit'
 import {
-  LAST_OWNER_MESSAGE,
+  LAST_ADMIN_MESSAGE,
   SYSTEM_ALIAS_MESSAGE,
   aliasNameError,
   normalizeAliasColor,
-  ownerSurvives,
+  adminSurvives,
   summarize,
   type AliasChange,
   type AliasSummary,
@@ -55,8 +55,8 @@ export interface AliasInfo {
   name: string
   color: string
   /** Whether holding this alias means owning (managing) the space. */
-  owner: boolean
-  /** The built-in Owner alias: fixed, and rendered in gold. */
+  admin: boolean
+  /** The built-in Admin alias: fixed, and rendered in gold. */
   system: boolean
   holders: AliasHolder[]
 }
@@ -66,7 +66,7 @@ interface Actor {
   name: string
 }
 
-/** A space's stored Person aliases, Owner always grafted in. */
+/** A space's stored Person aliases, Admin always grafted in. */
 export async function loadPersonAliases(spaceId: string): Promise<SpaceAlias[]> {
   const space = await prisma.space.findUnique({
     where: { id: spaceId },
@@ -75,7 +75,7 @@ export async function loadPersonAliases(spaceId: string): Promise<SpaceAlias[]> 
   return personAliases((space?.aliases ?? []) as unknown as SpaceAlias[])
 }
 
-/** Just enough of every alias to decide the owner invariant. */
+/** Just enough of every alias to decide the admin invariant. */
 export async function loadAliasSummaries(spaceId: string): Promise<AliasSummary[]> {
   const [aliases, holders] = await Promise.all([
     loadPersonAliases(spaceId),
@@ -85,16 +85,16 @@ export async function loadAliasSummaries(spaceId: string): Promise<AliasSummary[
 }
 
 /** Throw the shared refusal unless somebody would still manage the space. */
-async function assertOwnerSurvives(spaceId: string, change: AliasChange): Promise<void> {
+async function assertAdminSurvives(spaceId: string, change: AliasChange): Promise<void> {
   const aliases = await loadAliasSummaries(spaceId)
-  if (!ownerSurvives(aliases, change)) throw new Error(LAST_OWNER_MESSAGE)
+  if (!adminSurvives(aliases, change)) throw new Error(LAST_ADMIN_MESSAGE)
 }
 
 /** The state a Person-alias write decides from, read under the lock. */
 interface LockedAliasState {
-  /** The space's Person aliases, Owner grafted in. */
+  /** The space's Person aliases, Admin grafted in. */
   aliases: SpaceAlias[]
-  /** The same list with holders attached — what the owner invariant needs. */
+  /** The same list with holders attached — what the admin invariant needs. */
   summaries: AliasSummary[]
 }
 
@@ -102,9 +102,9 @@ interface LockedAliasState {
  * Run a Person-alias write under the space lock.
  *
  * Person aliases ARE the permission model, so every rule they enforce — the
- * owner invariant above all — has to be decided against the vocabulary and the
+ * admin invariant above all — has to be decided against the vocabulary and the
  * holder rows as they really are at the moment of the write. Deciding from a
- * read taken beforehand is how two concurrent "remove the last owner" calls both
+ * read taken beforehand is how two concurrent "remove the last admin" calls both
  * pass. The callback returns the Person list to store (or null for no write) and
  * gets the transaction client, so the cascade over UserAlias, ContextGrant and
  * Node commits with the vocabulary change or not at all.
@@ -132,9 +132,9 @@ async function updatePersonAliases(
   })
 }
 
-/** The owner invariant, checked against state already read under the lock. */
-function assertOwnerSurvivesLocked(state: LockedAliasState, change: AliasChange): void {
-  if (!ownerSurvives(state.summaries, change)) throw new Error(LAST_OWNER_MESSAGE)
+/** The admin invariant, checked against state already read under the lock. */
+function assertAdminSurvivesLocked(state: LockedAliasState, change: AliasChange): void {
+  if (!adminSurvives(state.summaries, change)) throw new Error(LAST_ADMIN_MESSAGE)
 }
 
 /** Every Person alias of a space with its holders (visible to any member). */
@@ -161,7 +161,7 @@ export async function listAliases(spaceId: string): Promise<AliasInfo[]> {
     id: a.id ?? '',
     name: a.name,
     color: a.color,
-    owner: a.owner === true || a.system === true,
+    admin: a.admin === true || a.system === true,
     system: a.system === true,
     holders: (holdersByAlias.get(a.id ?? '') ?? [])
       .map((h) => {
@@ -180,7 +180,7 @@ export async function listAliases(spaceId: string): Promise<AliasInfo[]> {
  * The alias by that name (or id), or a "create it first" refusal.
  *
  * The id is guaranteed: the migration stamped one onto every stored alias, and
- * `personAliases` grafts the built-in Owner's in. An entry without one could
+ * `personAliases` grafts the built-in Admin's in. An entry without one could
  * only come from a database that skipped the migration, and holder and grant
  * rows would have nothing to point at — so it is refused rather than written.
  */
@@ -194,9 +194,9 @@ async function requireAlias(
   return alias as SpaceAlias & { id: string }
 }
 
-/** The alias list without the built-in Owner, which personAliases() re-grafts. */
+/** The alias list without the built-in Admin, which personAliases() re-grafts. */
 function storable(aliases: SpaceAlias[]): SpaceAlias[] {
-  return aliases.filter((a) => a.name !== OWNER_ALIAS_NAME)
+  return aliases.filter((a) => a.name !== ADMIN_ALIAS_NAME)
 }
 
 /** Add a Person alias. It starts with no holders, no grants and no ownership. */
@@ -291,7 +291,7 @@ export async function updateAlias(
 /**
  * Delete a Person alias, taking its holders and grants with it so nothing
  * points at a name that no longer exists. Refused if it would leave the
- * space with nobody owning it, or if it's the built-in Owner alias.
+ * space with nobody administering it, or if it's the built-in Admin alias.
  */
 export async function deleteAlias(
   spaceId: string,
@@ -302,7 +302,7 @@ export async function deleteAlias(
     const alias = state.aliases.find((a) => a.name === name)
     if (!alias) throw new Error(`Unknown alias "${name}" — create it on the Aliases page first`)
     if (alias.system) throw new Error(SYSTEM_ALIAS_MESSAGE)
-    assertOwnerSurvivesLocked(state, { kind: 'removeAlias', name })
+    assertAdminSurvivesLocked(state, { kind: 'removeAlias', name })
 
     // Inside the transaction, so the vocabulary removal and the cleanup of
     // everything pointing at it land together. Doing this before the
@@ -344,10 +344,10 @@ async function cascadeAliasRemoval(
 }
 
 /** Toggle whether holders of this alias manage the space. */
-export async function setAliasOwner(
+export async function setAliasAdmin(
   spaceId: string,
   name: string,
-  owner: boolean,
+  admin: boolean,
   actor: Actor,
 ): Promise<void> {
   let changed = false
@@ -355,10 +355,10 @@ export async function setAliasOwner(
     const alias = state.aliases.find((a) => a.name === name)
     if (!alias) throw new Error(`Unknown alias "${name}" — create it on the Aliases page first`)
     if (alias.system) throw new Error(SYSTEM_ALIAS_MESSAGE)
-    if ((alias.owner === true) === owner) return null
-    if (!owner) assertOwnerSurvivesLocked(state, { kind: 'setOwner', name, owner: false })
+    if ((alias.admin === true) === admin) return null
+    if (!admin) assertAdminSurvivesLocked(state, { kind: 'setAdmin', name, admin: false })
     changed = true
-    return state.aliases.map((a) => (a.name === name ? { ...a, owner } : a))
+    return state.aliases.map((a) => (a.name === name ? { ...a, admin } : a))
   })
   if (!changed) return
 
@@ -367,7 +367,7 @@ export async function setAliasOwner(
     name: actor.name,
     action: 'folder',
     path: '',
-    detail: `alias "${name}" ${owner ? 'now owns' : 'no longer owns'} the space`,
+    detail: `alias "${name}" ${admin ? 'now administers' : 'no longer administers'} the space`,
   })
 }
 
@@ -399,7 +399,7 @@ export async function removeAliasHolder(
   userId: string,
 ): Promise<void> {
   const alias = await requireAlias(spaceId, name)
-  await assertOwnerSurvives(spaceId, { kind: 'removeHolder', name, userId })
+  await assertAdminSurvives(spaceId, { kind: 'removeHolder', name, userId })
   await prisma.userAlias.deleteMany({ where: { spaceId, userId, aliasId: alias.id } })
 }
 
@@ -408,5 +408,5 @@ export async function assertMembersCanLeave(
   spaceId: string,
   userIds: string[],
 ): Promise<void> {
-  await assertOwnerSurvives(spaceId, { kind: 'removeMember', userIds })
+  await assertAdminSurvives(spaceId, { kind: 'removeMember', userIds })
 }

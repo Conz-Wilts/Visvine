@@ -93,16 +93,22 @@ built in layers. `pnpm db:blackbird:full` runs all of them:
 | `db:context-links` | directory links derived from the shared-context entity notes |
 | `db:index-notes:rebuild` | creates any missing folder index and refreshes every index's managed child list |
 | `db:notes:verify` | fails the seed if the context breaks a structural rule |
+| `db:global:rebuild` | rebuilds every Visvine global record from public spaces + profiles (`docs/global-records.md`) |
 
 Other demo content (the NZ startup ecosystem) loads separately via `pnpm db:nz`.
 
-**An index note IS a folder.** Every folder carries an `index.md` typed `Index`
-whose `title` is the folder's display name and whose body is curated prose plus a
+**An index note IS a folder.** Every folder carries an `index.md` whose `title`
+is the folder's display name and whose body is curated prose plus a
 machine-maintained list of the folder's notes and subfolders (between
-`<!-- index:children -->` markers). Nothing else may claim `type: Index` —
-creating one creates a folder, and retyping a note to `Index` turns it into one.
-`db:notes:verify` is what keeps the seeded data honest about that; run it any
-time you hand-edit a seed layer. The rules live in
+`<!-- index:children -->` markers).
+
+Folder-ness is the **path**, never a type. A note's `type:` says what it is
+about, so a person's context folder is `type: Person` and a folder that just
+groups notes carries no type at all; `Index` is not a type and no note may
+declare it. You make a folder by writing a note inside it — add `a/b/c.md` and
+`a/b.md` becomes `a/b/index.md`, still the same note, now also the folder's home
+page. `db:notes:verify` is what keeps the seeded data honest about all of that;
+run it any time you hand-edit a seed layer. The rules live in
 `apps/web/lib/notes/shared/indexNote.ts`.
 
 Anchor users (always present, listed in the dev login pickers). There is no role
@@ -110,7 +116,7 @@ column — what someone can do comes entirely from the aliases they hold:
 
 | email                | aliases          | notes |
 |----------------------|------------------|-------|
-| `admin@local.dev`    | Owner, Partner   | manages the space; also super admin via env |
+| `admin@local.dev`    | Admin, Partner   | manages the space; also super admin via env |
 | `partner@local.dev`  | Partner          | edit on companies/, deals/, data/ |
 | `member@local.dev`   | Founder          | view on companies/ |
 | `lp@local.dev`       | LP               | view on one note — the tightest grant there is |
@@ -161,6 +167,7 @@ this README only names:
 
 | Doc | Covers |
 |---|---|
+| [`docs/runbook.md`](docs/runbook.md) | **Production.** How a release goes out and how to roll one back, what is alerting and where, backups and the restore drill, rotating `SECRETS_KEY`, and the limits that are decisions rather than oversights. |
 | [`docs/data-architecture.md`](docs/data-architecture.md) | **Read this first when adding storage.** When something becomes a context note, a Postgres table, or a GCS blob — and the note-write outbox that keeps derived state honest. |
 | [`docs/agents.md`](docs/agents.md) | Scheduled and event-driven agents: the brief/activation note pair, the trigger mailbox, the tool set, the Cloud Scheduler tick. |
 | [`docs/connectors.md`](docs/connectors.md) | Connector notes: the declared perimeter, the JS isolate, secrets vs identity vs OAuth connections, inbound webhooks. |

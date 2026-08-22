@@ -590,8 +590,8 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
         type: 'alias' as const,
         id: a.id,
         name: a.name,
-        sub: a.owner
-          ? 'Alias · owns the space'
+        sub: a.admin
+          ? 'Alias · admin of the space'
           : `Alias · ${a.holderCount} ${a.holderCount === 1 ? 'person' : 'people'}`,
         image: null as string | null,
       }))

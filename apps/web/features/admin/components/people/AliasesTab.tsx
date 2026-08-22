@@ -53,7 +53,7 @@ function PermissionRow({ name, color, tone, detail, open, onToggle, children }: 
 }
 
 /**
- * Everyone first (the alias nobody can leave), then Owner in gold, then the rest.
+ * Everyone first (the alias nobody can leave), then Admin in gold, then the rest.
  * The shared People snapshot is the source, so a rename or a new holder shows up
  * on the People tab, on Invite and on Types at the same moment.
  */
@@ -66,7 +66,7 @@ export default function AliasesTab() {
       [...(data?.aliases ?? [])].sort(
         (a, b) =>
           Number(b.system) - Number(a.system) ||
-          Number(b.owner) - Number(a.owner) ||
+          Number(b.admin) - Number(a.admin) ||
           a.name.localeCompare(b.name),
       ),
     [data],
@@ -100,7 +100,7 @@ export default function AliasesTab() {
             name={alias.name}
             color={alias.color}
             tone="solid"
-            detail={`${alias.holders.length} ${alias.holders.length === 1 ? 'person' : 'people'}${alias.owner ? ' · owns the space' : ''}`}
+            detail={`${alias.holders.length} ${alias.holders.length === 1 ? 'person' : 'people'}${alias.admin ? ' · is admin of the space' : ''}`}
             open={open === alias.name}
             onToggle={() => toggle(alias.name)}
           >

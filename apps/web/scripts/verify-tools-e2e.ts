@@ -44,7 +44,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import prisma from '../lib/prisma';
-import { OWNER_ALIAS_ID } from '../lib/types/context';
+import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import type { SpaceFeatureConfig } from '../lib/types/space';
 import { toolRailKey } from '../lib/featureAccess';
 import { writeGated } from '../lib/notes/contextService';
@@ -234,7 +234,7 @@ async function main(): Promise<void> {
   // The space owner: the principal every other verify script resolves, and the
   // one an authoring agent would be connected as.
   const holder = await prisma.userAlias.findFirst({
-    where: { spaceId: SPACE, aliasId: OWNER_ALIAS_ID },
+    where: { spaceId: SPACE, aliasId: ADMIN_ALIAS_ID },
     select: { userId: true },
   });
   if (!holder) throw new Error(`nobody manages ${SPACE}`);

@@ -81,11 +81,15 @@ export default function MatchPanel({
                   {email && (
                     <span className="text-[11px] text-text-muted truncate">{email}</span>
                   )}
-                  {r.space_name && (
+                  {r.global ? (
+                    <span className="text-[10px] font-medium text-brand-green bg-surface-2 px-1.5 py-0.5 rounded-full truncate">
+                      Visvine record
+                    </span>
+                  ) : r.space_name ? (
                     <span className="text-[10px] text-text-muted bg-surface-2 px-1.5 py-0.5 rounded-full truncate">
                       {r.space_name}
                     </span>
-                  )}
+                  ) : null}
                   {isLiveSpace && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-white bg-brand-green px-1.5 py-0.5 rounded-md">
                       <span className="w-1.5 h-1.5 rounded-full bg-brand-green" />

@@ -2,7 +2,7 @@
  * Local-dev seed — the base layer of the Blackbird Ventures space.
  *
  * Creates four anchor users for the /dev/login picker:
- *   - admin@local.dev    (Owner + Partner — the one who manages the space)
+ *   - admin@local.dev    (Admin + Partner — the one who manages the space)
  *   - partner@local.dev  (Partner)
  *   - member@local.dev   (Founder)
  *   - lp@local.dev       (LP)
@@ -10,7 +10,7 @@
  * Plus the space itself and its aliases, spread across the permission model
  * so every shape of grant is represented:
  *
- *   Owner      system, owns the space — built in, cannot be changed
+ *   Admin      system, is admin of the space — built in, cannot be changed
  *   Partner    edit on communities/, deals/ and data/ — the working set
  *   Founder    view on communities/
  *   Investor   view on communities/ and sectors/
@@ -33,8 +33,9 @@ import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import { OWNER_ALIAS, OWNER_ALIAS_ID, OWNER_ALIAS_NAME } from "../lib/types/context";
+import { ADMIN_ALIAS, ADMIN_ALIAS_ID, ADMIN_ALIAS_NAME } from "../lib/types/context";
 import { nameKey } from "../lib/identity/normalize";
+import { rebuildGlobalRecords } from "../lib/global/record";
 
 assertLocalTarget();
 
@@ -83,7 +84,7 @@ interface Anchor {
 }
 
 const ANCHORS: Anchor[] = [
-  { id: "user_dev_admin",   name: "Dev Admin",   email: "admin@local.dev",   aliases: [OWNER_ALIAS_NAME, "Partner"], personNodeId: "person:dev_admin" },
+  { id: "user_dev_admin",   name: "Dev Admin",   email: "admin@local.dev",   aliases: [ADMIN_ALIAS_NAME, "Partner"], personNodeId: "person:dev_admin" },
   { id: "user_dev_partner", name: "Dev Partner", email: "partner@local.dev", aliases: ["Partner"],                   personNodeId: "person:dev_partner" },
   { id: "user_dev_member",  name: "Dev Member",  email: "member@local.dev",  aliases: ["Founder"],                   personNodeId: "person:dev_member" },
   { id: "user_dev_lp",      name: "Dev LP",      email: "lp@local.dev",      aliases: ["LP"],                        personNodeId: "person:dev_lp" },
@@ -109,7 +110,6 @@ const NODE_TYPES = [
   { icon: "📅", name: "Event", color: "#ef4444", shape: "rectangle" },
   { icon: "📚", name: "Resource", color: "#0d9488", shape: "circle" },
   { icon: "📝", name: "Note", color: "#8b5cf6", shape: "rectangle" },
-  { icon: "🗂️", name: "Index", color: "#c026d3", shape: "square" },
   { icon: "🧭", name: "Sector", color: "#f97316", shape: "rectangle" },
   { icon: "📓", name: "Journal", color: "#ec4899", shape: "rectangle" },
   { icon: "🤝", name: "Meeting", color: "#14b8a6", shape: "rectangle" },
@@ -119,10 +119,10 @@ const NODE_TYPES = [
  * A seeded alias's stable id. Derived from the name so re-seeding is
  * reproducible — everywhere else ids are random, but a seed that produced a
  * different id each run would make holder and grant rows unfixable by hand.
- * The built-in Owner keeps its reserved id.
+ * The built-in Admin keeps its reserved id.
  */
 function seedAliasId(name: string): string {
-  return name === OWNER_ALIAS_NAME ? OWNER_ALIAS_ID : `al_seed_${name.toLowerCase().replace(/\W+/g, "-")}`;
+  return name === ADMIN_ALIAS_NAME ? ADMIN_ALIAS_ID : `al_seed_${name.toLowerCase().replace(/\W+/g, "-")}`;
 }
 
 interface SeedAlias {
@@ -131,7 +131,7 @@ interface SeedAlias {
   color: string;
   /** The base node type this alias labels. Only Person aliases grant access. */
   nodeType: "Person" | "Space";
-  owner: boolean;
+  admin: boolean;
   system: boolean;
   /** [resourcePath, level] — '' is the context root. */
   grants: Array<[string, number]>;
@@ -145,10 +145,10 @@ interface SeedAlias {
 const ALIASES: SeedAlias[] = [
   {
     // Owners manage the space outright; no grant needed to see everything.
-    name: OWNER_ALIAS_NAME,
-    color: OWNER_ALIAS.color,
+    name: ADMIN_ALIAS_NAME,
+    color: ADMIN_ALIAS.color,
     nodeType: "Person",
-    owner: true,
+    admin: true,
     system: true,
     grants: [],
   },
@@ -156,7 +156,7 @@ const ALIASES: SeedAlias[] = [
     name: "Partner",
     color: "#7c3aed",
     nodeType: "Person",
-    owner: false,
+    admin: false,
     system: false,
     grants: [["communities", EDIT], ["deals", EDIT], ["data", EDIT]],
   },
@@ -164,7 +164,7 @@ const ALIASES: SeedAlias[] = [
     name: "Founder",
     color: "#16a34a",
     nodeType: "Person",
-    owner: false,
+    admin: false,
     system: false,
     grants: [["communities", VIEW]],
   },
@@ -172,7 +172,7 @@ const ALIASES: SeedAlias[] = [
     name: "Investor",
     color: "#0ea5e9",
     nodeType: "Person",
-    owner: false,
+    admin: false,
     system: false,
     grants: [["communities", VIEW], ["sectors", VIEW]],
   },
@@ -180,7 +180,7 @@ const ALIASES: SeedAlias[] = [
     name: "Employee",
     color: "#db2777",
     nodeType: "Person",
-    owner: false,
+    admin: false,
     system: false,
     grants: [["communities", VIEW], ["people", VIEW]],
   },
@@ -188,12 +188,12 @@ const ALIASES: SeedAlias[] = [
     name: "LP",
     color: "#d97706",
     nodeType: "Person",
-    owner: false,
+    admin: false,
     system: false,
     grants: [["data/fund-roll-up.md", VIEW]],
   },
-  { name: "Portfolio Company", color: "#0891b2", nodeType: "Space", owner: false, system: false, grants: [] },
-  { name: "Fund", color: "#0f766e", nodeType: "Space", owner: false, system: false, grants: [] },
+  { name: "Portfolio Company", color: "#0891b2", nodeType: "Space", admin: false, system: false, grants: [] },
+  { name: "Fund", color: "#0f766e", nodeType: "Space", admin: false, system: false, grants: [] },
 ];
 
 /** What every member reaches without holding anything — the "Everyone" card. */
@@ -272,7 +272,7 @@ async function createAliases() {
         name: a.name,
         color: a.color,
         nodeType: a.nodeType,
-        ...(a.owner ? { owner: true } : {}),
+        ...(a.admin ? { admin: true } : {}),
         ...(a.system ? { system: true } : {}),
       })),
     },
@@ -352,7 +352,7 @@ async function createAnchorUsers() {
         type: "person",
         name: a.name,
         spaceId: SPACE_ID,
-        alias: a.aliases.find((n) => n !== OWNER_ALIAS_NAME) ?? null,
+        alias: a.aliases.find((n) => n !== ADMIN_ALIAS_NAME) ?? null,
         metadata: { seeded: true, anchor: true },
         identityId: identity.id,
       },
@@ -383,6 +383,9 @@ async function main() {
   await createAliases();
   await createAnchorUsers();
   await markAccessSeeded();
+  // The Visvine space: one public record per person the seed made public.
+  const global = await rebuildGlobalRecords();
+  console.log(`Visvine: ${global.records} global record(s) from ${global.identities} identit(ies).`);
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`Seed complete in ${elapsed}s.`);
   console.log("Anchor users (sign in via /dev/login):");
@@ -392,7 +395,7 @@ async function main() {
   console.log("\nPerson aliases (Console → Aliases):");
   for (const a of ALIASES.filter((x) => x.nodeType === "Person")) {
     const reach = a.system
-      ? "owns the space"
+      ? "is admin of the space"
       : a.grants.map(([p, l]) => `${p || "everything"} ${l === EDIT ? "edit" : "view"}`).join(", ") || "nothing yet";
     console.log(`  ${a.name.padEnd(14)}  →  ${reach}`);
   }

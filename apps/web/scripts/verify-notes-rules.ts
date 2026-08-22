@@ -1,16 +1,17 @@
 /**
  * Verify the context's structural rules — the ones the seed has to satisfy and the
  * app maintains at runtime. An index note IS a folder (see
- * lib/notes/shared/indexNote.ts), which the checks below make concrete:
+ * lib/notes/shared/indexNote.ts), and folder-ness is the PATH — a note's `type:`
+ * says what it is ABOUT. The checks below make both concrete:
  *
- *   1. a `type: Index` note lives at an `index.md` path — nothing else claims
- *      the type;
+ *   1. no note anywhere declares `type: Index` — that names a shape, and the
+ *      shape is already the path;
  *   2. every folder (note-derived or an explicit folder row) has an index;
- *   3. every `index.md` declares `type: Index` and a title — the title is the
- *      folder's display name everywhere it is shown. The one exception is an
- *      ENTITY FOLDER's index (people/<slug>/index.md — an entity note that has
- *      become a folder, see lib/notes/entities.ts): it must instead declare the
- *      entity's own type and a `node:` naming a real node of this space;
+ *   3. every `index.md` declares a title — the title is the folder's display
+ *      name everywhere it is shown — and an ENTITY FOLDER's index
+ *      (people/<slug>/index.md, an entity note that has become a folder, see
+ *      lib/notes/entities.ts) additionally declares the entity's own type and a
+ *      `node:` naming a real node of this space;
  *   4. an index's managed child block is present and current;
  *   5. a `/…​.md` link in an index body points at a note that exists;
  *   6. a node's `metadata.notePath` pointer and the entity-folder index agree:
@@ -35,7 +36,7 @@ import {
   hasChildrenBlock,
   humanizeFolderName,
   indexPathOf,
-  isIndexContent,
+  declaresIndexType,
   isIndexPath,
   type IndexChild,
 } from '../lib/notes/shared/indexNote';
@@ -133,11 +134,14 @@ async function main() {
       for (const a of ancestorFolders(indexPathOf(f.path))) folders.add(a);
     }
 
-    // 1 + 3: the type and the path agree, and an index carries a display name.
+    // 1 + 3: `Index` is nobody's type, and every folder's index names itself.
     for (const note of notes) {
       checked += 1;
-      if (isIndexContent(note.content) && !isIndexPath(note.path)) {
-        violations.push(`${label} ${note.path}: type Index but not a folder's index.md`);
+      // A folder is a PATH. `type:` says what a note is about, so the word
+      // Index has no business in any note's frontmatter — the contract strips
+      // it on write, and anything that got in another way shows up here.
+      if (declaresIndexType(note.content)) {
+        violations.push(`${label} ${note.path}: declares type Index — a folder is its path, not a type`);
       }
       if (isIndexPath(note.path)) {
         const owner = isEntityFolderIndex(note.path) ? nodeByIndexPath.get(note.path) : undefined;
@@ -154,10 +158,6 @@ async function main() {
           if (fm.node !== owner.id) {
             violations.push(`${label} ${note.path}: node: must name its entity (${owner.id}; found "${fm.node ?? 'nothing'}")`);
           }
-        } else if (!isIndexContent(note.content)) {
-          violations.push(
-            `${label} ${note.path}: an index.md must declare type: Index (found "${parseFrontmatter(note.content).type ?? 'nothing'}")`,
-          );
         }
         if (!titleOf(note.content)) {
           violations.push(`${label} ${note.path}: no title — the title is the folder's display name`);

@@ -3,7 +3,7 @@
 // A space's aliases (`Space.aliases`, lib/types/context.ts#SpaceAlias) are
 // scoped to a node type: "Founder" narrows a Person, "Portfolio" narrows a
 // Space. Person's aliases are also the permission model, so they have their own
-// module (./aliases.ts) with the owner invariant and the three-column rename
+// module (./aliases.ts) with the admin invariant and the three-column rename
 // cascade; every other type's alias is a label on a directory card and nothing
 // more.
 //
@@ -34,7 +34,7 @@ import {
 import { isNodeTypeEnabled } from '@/lib/featureAccess'
 import type { SpaceFeatureConfig } from '@/lib/types'
 import { logAudit } from './audit'
-import { createAlias, deleteAlias, setAliasOwner, updateAlias } from './aliases'
+import { createAlias, deleteAlias, setAliasAdmin, updateAlias } from './aliases'
 import { aliasNameError, normalizeAliasColor } from './shared/aliases'
 
 interface Actor {
@@ -93,7 +93,7 @@ function resolveAliasType(state: SpaceAliasState, nodeType: string): ResolvedTyp
   }
 }
 
-/** This type's aliases, with Owner grafted in for Person. */
+/** This type's aliases, with Admin grafted in for Person. */
 function aliasesOfType(state: SpaceAliasState, type: ResolvedType): SpaceAlias[] {
   return type.isPerson ? personAliases(state.all) : aliasesForType(state.all, type.name)
 }
@@ -157,7 +157,7 @@ export interface TypeAliasInfo {
   color: string
   node_type: string
   /** Person only: holders of this alias manage the space. */
-  owner: boolean
+  admin: boolean
   /** Built in — it can be held and granted, but not renamed, recoloured or removed. */
   system: boolean
 }
@@ -167,7 +167,7 @@ function describe(alias: SpaceAlias, type: ResolvedType): TypeAliasInfo {
     name: alias.name,
     color: alias.color,
     node_type: type.name,
-    owner: type.isPerson && (alias.owner === true || alias.system === true),
+    admin: type.isPerson && (alias.admin === true || alias.system === true),
     system: alias.system === true,
   }
 }
@@ -211,7 +211,7 @@ export async function createTypeAlias(
 
   if (type.isPerson) {
     await createAlias(spaceId, name, hex, actor)
-    return { name: name.trim(), color: hex, node_type: type.name, owner: false, system: false }
+    return { name: name.trim(), color: hex, node_type: type.name, admin: false, system: false }
   }
 
   const created: SpaceAlias = { id: newAliasId(), name: name.trim(), color: hex, nodeType: type.name }
@@ -242,7 +242,7 @@ export async function updateTypeAlias(
   spaceId: string,
   nodeType: string,
   name: string,
-  changes: { newName?: string; color?: string; owner?: boolean },
+  changes: { newName?: string; color?: string; admin?: boolean },
   actor: Actor,
 ): Promise<TypeAliasInfo> {
   const type = resolveAliasType(await loadState(spaceId), nodeType)
@@ -252,14 +252,14 @@ export async function updateTypeAlias(
       await updateAlias(spaceId, name, { newName: changes.newName, color: changes.color }, actor)
     }
     const finalName = changes.newName?.trim() || name
-    if (changes.owner !== undefined) await setAliasOwner(spaceId, finalName, changes.owner, actor)
+    if (changes.admin !== undefined) await setAliasAdmin(spaceId, finalName, changes.admin, actor)
     const after = personAliases((await loadState(spaceId)).all).find((a) => a.name === finalName)
     if (!after) throw new Error(`Unknown alias "${name}" for ${type.name}`)
     return describe(after, type)
   }
 
-  if (changes.owner !== undefined) {
-    throw new Error('Only a Person alias can own the space — owner does not apply here.')
+  if (changes.admin !== undefined) {
+    throw new Error('Only a Person alias can own the space — admin does not apply here.')
   }
 
   let hex: string | null = null
@@ -377,7 +377,7 @@ export async function assignNodeAlias(
 /**
  * Remove an alias from a type's vocabulary, taking the chips with it. The
  * Person path additionally drops its holders and grants, and refuses to leave
- * the space with nobody owning it.
+ * the space with nobody administering it.
  */
 export async function deleteTypeAlias(
   spaceId: string,

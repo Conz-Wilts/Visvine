@@ -27,7 +27,7 @@
 import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
 import prisma from '../lib/prisma';
-import { OWNER_ALIAS_ID } from '../lib/types/context';
+import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { encryptSecret } from '../lib/crypto/secrets';
 import { syncContextLinksBulk } from '../lib/notes/entityLinks';
 
@@ -194,7 +194,6 @@ read-only transaction does not make them any less sensitive.
 // lib/notes/shared/indexNote.ts), so the layer that creates `connectors/` is the
 // layer that names it.
 const CONNECTORS_INDEX_NOTE = `---
-type: Index
 title: Connectors
 tags: []
 ---
@@ -249,7 +248,7 @@ async function main() {
   // Someone who manages the space owns the seeded notes; else any member.
   const owner =
     (await prisma.userAlias.findFirst({
-      where: { spaceId, aliasId: OWNER_ALIAS_ID },
+      where: { spaceId, aliasId: ADMIN_ALIAS_ID },
       select: { userId: true },
     })) ?? (await prisma.spaceMember.findFirst({ where: { spaceId }, select: { userId: true } }));
   if (!owner) throw new Error(`space ${spaceId} has no members to attribute the notes to`);

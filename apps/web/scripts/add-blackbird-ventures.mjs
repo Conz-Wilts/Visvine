@@ -52,15 +52,15 @@ const NODE_TYPES = [
 // Kept in step with prisma/seed.ts, which owns this list when the full stack is
 // seeded — these values only take effect when the space doesn't exist yet
 // (a standalone `pnpm db:blackbird` run), since the upsert below deliberately
-// leaves aliases alone on conflict rather than clobbering who owns what.
-const OWNER_ALIAS_NAME = 'Owner';
-// Mirrors OWNER_ALIAS_ID in lib/types/context.ts — the reserved id of the
+// leaves aliases alone on conflict rather than clobbering who administers what.
+const ADMIN_ALIAS_NAME = 'Admin';
+// Mirrors ADMIN_ALIAS_ID in lib/types/context.ts — the reserved id of the
 // built-in alias, which is what user_aliases rows point at.
-const OWNER_ALIAS_ID = 'owner';
+const ADMIN_ALIAS_ID = 'admin';
 // Ids are spelled out rather than generated so re-running this seed lands on
 // the same aliases the holder rows below already reference.
 const SPACE_ALIASES = [
-  { id: OWNER_ALIAS_ID, name: OWNER_ALIAS_NAME, color: '#b4881b', nodeType: 'Person', owner: true, system: true },
+  { id: ADMIN_ALIAS_ID, name: ADMIN_ALIAS_NAME, color: '#b4881b', nodeType: 'Person', admin: true, system: true },
   { id: 'al_seed_partner', name: 'Partner', color: '#7c3aed', nodeType: 'Person' },
   { id: 'al_seed_founder', name: 'Founder', color: '#16a34a', nodeType: 'Person' },
   { id: 'al_seed_investor', name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
@@ -245,7 +245,7 @@ try {
   //
   // Membership carries no role — what a person can do comes entirely from the
   // aliases they hold (lib/auth.ts#isAdmin), so admin@local.dev also gets a
-  // user_aliases row for Owner. Everyone else is just an active member; the
+  // user_aliases row for Admin. Everyone else is just an active member; the
   // full seed (prisma/seed.ts) is what hands out the rest of the aliases.
   const devUsers = await client.query(`SELECT id, email FROM users WHERE email LIKE '%@local.dev'`);
   for (const u of devUsers.rows) {
@@ -263,12 +263,12 @@ try {
       `INSERT INTO user_aliases (space_id, user_id, alias_id, created_at)
        VALUES ($1, $2, $3, NOW())
        ON CONFLICT (space_id, user_id, alias_id) DO NOTHING`,
-      [COMM, owner.id, OWNER_ALIAS_ID],
+      [COMM, owner.id, ADMIN_ALIAS_ID],
     );
   }
   console.log(
     `  ✓ ${devUsers.rowCount} local dev user(s) joined` +
-      (owner ? `, ${owner.email} holds ${OWNER_ALIAS_NAME}` : ''),
+      (owner ? `, ${owner.email} holds ${ADMIN_ALIAS_NAME}` : ''),
   );
 
   // Clear this space's existing portfolio nodes first so re-runs (and any

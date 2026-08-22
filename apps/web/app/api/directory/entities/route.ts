@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       name: typeof body.name === 'string' ? body.name : '',
       alias: typeof body.alias === 'string' ? body.alias : null,
       identityId: typeof body.identityId === 'string' ? body.identityId : null,
+      followGlobal: body.followGlobal === true,
       spaceRef: typeof body.spaceRef === 'string' ? body.spaceRef : null,
       fields: (body.fields ?? {}) as Record<string, unknown>,
       body: typeof body.body === 'string' ? body.body : '',

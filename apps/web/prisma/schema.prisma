@@ -17,7 +17,7 @@ model Space {
   createdAt       DateTime               @default(now()) @map("created_at")
   imageUrl        String?                @map("image_url")
   nodeTypes       Json?                  @default("[{\"name\": \"Person\", \"color\": \"#2563eb\", \"shape\": \"rectangle\"}, {\"name\": \"Space\", \"color\": \"#78d870\", \"shape\": \"square\"}, {\"name\": \"Event\", \"color\": \"#ef4444\", \"shape\": \"rectangle\"}]") @map("node_types")
-  aliases         Json?                  @default("[{\"name\": \"Owner\", \"color\": \"#b4881b\", \"owner\": true, \"system\": true, \"nodeType\": \"Person\"}]")
+  aliases         Json?                  @default("[{\"name\": \"Admin\", \"color\": \"#b4881b\", \"admin\": true, \"system\": true, \"nodeType\": \"Person\"}]")
   linkTypes       Json?                  @default("[{\"name\": \"Related\", \"color\": \"#94a3b8\", \"directed\": false}, {\"name\": \"Knows\", \"color\": \"#2563eb\", \"directed\": false}, {\"name\": \"Works at\", \"color\": \"#9333ea\", \"directed\": true}, {\"name\": \"Founded\", \"color\": \"#16a34a\", \"directed\": true}, {\"name\": \"Invested in\", \"color\": \"#f59e0b\", \"directed\": true}, {\"name\": \"Member of\", \"color\": \"#0ea5e9\", \"directed\": true}, {\"name\": \"Partner\", \"color\": \"#ec4899\", \"directed\": false}, {\"name\": \"Mentors\", \"color\": \"#14b8a6\", \"directed\": true}, {\"name\": \"Attended\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Hosting\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Introduced\", \"color\": \"#06b6d4\", \"directed\": false, \"system\": true}, {\"name\": \"Mentioned\", \"color\": \"#8b5cf6\", \"directed\": false, \"system\": true}]") @map("link_types")
   country         String?
   designConfig    Json                   @default("{}") @map("design_config")
@@ -35,11 +35,9 @@ model Space {
   // previously shared link. Null until first generated.
   inviteToken     String?                @unique @map("invite_token")
   // IANA zone the space's scheduled agents run in when an agent doesn't name
-  // its own (lib/agents/config.ts). Null = UTC.
+  // its own (lib/agents/config.ts). Null = UTC. The only other agent-wide
+  // setting, the custom model endpoint, is a connector note (lib/connectors/model.ts).
   timezone        String?
-  // Space-wide agent settings that are admin-only by nature and never note
-  // fields: { customEndpoint?: { baseURL } } (lib/agents/providers.ts).
-  agentConfig     Json                   @default("{}") @map("agent_config")
   links           Link[]
   nodes           Node[]
   members         SpaceMember[]
@@ -560,8 +558,8 @@ model AppToolState {
 /// rename is now one write to `Space.aliases` and nothing here moves.
 ///
 /// A person holds any number of them, with no restrictions on which. An alias
-/// marked `owner` there means its holders manage the space; the built-in
-/// Owner alias (id `owner`) always does. Rows are deleted when the user leaves
+/// marked `admin` there means its holders manage the space; the built-in
+/// Admin alias (id `admin`) always does. Rows are deleted when the user leaves
 /// the space (lib/notes/access.ts#removeMemberAccess) — grants stop matching
 /// instantly.
 model UserAlias {
@@ -1446,4 +1444,28 @@ enum ConversationMemberRole {
 enum ChannelViewMode {
   CHAT
   FEED
+}
+
+/// One token bucket for one rate-limit key, shared by every instance.
+///
+/// The state has to be shared because the deployment is not one process. A
+/// per-process Map on a service that scales to --max-instances is not one limit
+/// but N of them, and every cold start hands the caller a fresh allowance —
+/// which for the login and webhook limiters, the ones an attacker is actively
+/// trying to get past, is the difference between a control and a speed bump.
+///
+/// The row IS the bucket: `tokens` is refilled from the elapsed time on read,
+/// inside the same statement that spends one, so concurrent takers serialize on
+/// the row lock rather than racing (lib/rateLimit.ts).
+///
+/// `key` is caller-derived and therefore attacker-influenced on public routes,
+/// so it is stored hashed and fixed-width, and full+idle rows are swept — see
+/// pruneRateLimits, which the nightly maintenance run calls.
+model RateLimitBucket {
+  key       String   @id
+  tokens    Float
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@index([updatedAt])
+  @@map("rate_limit_buckets")
 }

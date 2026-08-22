@@ -4,11 +4,12 @@ import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
 import { slugify } from '@/lib/eventUtils';
 import { handleApiError } from '@/lib/api/route';
-import { OWNER_ALIAS_ID, OWNER_ALIAS_NAME } from '@/lib/types/context';
+import { ADMIN_ALIAS_ID, ADMIN_ALIAS_NAME } from '@/lib/types/context';
 import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
 import { markAccessSeeded } from '@/lib/notes/access';
 import { findPublicNameConflict, publicNameTakenMessage } from '@/lib/spaces/publicName';
 import { ensureMemberNode } from '@/lib/spaces/memberNode';
+import { isReservedSpaceId } from '@/lib/spaces/globalSpace';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
 import { logger } from '@/lib/logger';
 
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
     // Derive a unique id from the name. slugify never yields "me:"-prefixed ids,
     // so this can't collide with a personal-space id.
     const base = slugify(name) || 'space';
-    let id = base;
+    let id = isReservedSpaceId(base) ? `${base}-2` : base;
     for (let n = 2; await prisma.space.findUnique({ where: { id }, select: { id: true } }); n++) {
       id = `${base}-${n}`;
     }
@@ -80,14 +81,14 @@ export async function POST(request: NextRequest) {
       await tx.spaceMember.create({
         data: { userId: session.userId, spaceId: id, status: 'active' },
       });
-      // Every space's Person aliases start with the built-in Owner one
+      // Every space's Person aliases start with the built-in Admin one
       // (the aliases column default). The creator holds it — otherwise
       // nobody could ever manage the space (lib/auth.ts#isAdmin).
       await tx.userAlias.create({
         data: {
           spaceId: id,
           userId: session.userId,
-          aliasId: OWNER_ALIAS_ID,
+          aliasId: ADMIN_ALIAS_ID,
           addedBy: session.userId,
         },
       });
@@ -109,15 +110,15 @@ export async function POST(request: NextRequest) {
     //
     // So the creator's person node is the ONLY node a fresh space starts with —
     // the first member belongs in the directory they just made. It carries the
-    // Owner alias, matching the UserAlias row written above, so the card reads
-    // "Owner" rather than a bare "Person"; and it is connected to their account
+    // Admin alias, matching the UserAlias row written above, so the card reads
+    // "Admin" rather than a bare "Person"; and it is connected to their account
     // through the identity bridge (ensureMemberNode), which is what makes it
     // their profile rather than a loose card with their name on it. It stays
     // node-only: the Context tab stubs a missing profile note locally and the
     // first real save creates it. Best-effort — a member without a node is
     // recoverable (the backfill script fixes it); a failed create is not.
     const actor = { id: session.userId, name: session.name, email: session.email };
-    await ensureMemberNode(id, session.userId, actor, OWNER_ALIAS_NAME);
+    await ensureMemberNode(id, session.userId, actor, ADMIN_ALIAS_NAME);
 
     // Seed the context's root index — the space's home page, which the
     // Directory's Context tab routes to. Best-effort for the same reason as

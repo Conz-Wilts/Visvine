@@ -36,7 +36,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import prisma from '../lib/prisma';
-import { OWNER_ALIAS_ID } from '../lib/types/context';
+import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { mergeNodeType, mergeNodeTypeList, type NodeTypeConfig } from '../lib/types';
 import { updateSpaceConfig } from '../lib/spaces/spaceConfig';
 import { splitFrontmatter } from '../lib/notes/shared/markdown';
@@ -249,7 +249,7 @@ function check(label: string, ok: boolean, detail: string): void {
 
 async function main(): Promise<void> {
   const holder = await prisma.userAlias.findFirst({
-    where: { spaceId: SPACE, aliasId: OWNER_ALIAS_ID },
+    where: { spaceId: SPACE, aliasId: ADMIN_ALIAS_ID },
     select: { userId: true },
   });
   if (!holder) throw new Error(`nobody manages ${SPACE}`);

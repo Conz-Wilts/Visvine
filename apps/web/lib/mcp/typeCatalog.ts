@@ -38,14 +38,14 @@ export interface TypeCatalogEntry {
    * `alias` accepts. Managed with `manage_alias`, which also assigns one to an
    * entity that already exists (action 'assign').
    */
-  aliases: Array<{ name: string; color: string; owner?: boolean }>
+  aliases: Array<{ name: string; color: string; admin?: boolean }>
   /** How this type is meant to be used and created. */
   guidance: string
 }
 
 // How each type is created and what it's for — the load-bearing knowledge an
 // agent needs to avoid the wrong door (connector/event/space are not creatable
-// via add_context, an index note is not a node at all).
+// via add_context).
 const GUIDANCE: Record<string, string> = {
   person: 'A human in the directory. Create with add_context; fill email/companyName/linkedinUrl when known — they match the person to their identity across spaces.',
   space: 'A group, organisation or space recorded in the directory — a card in the space you are working in, never a new workspace. Create with add_context; fill url (website) when known — it drives identity matching.',
@@ -56,7 +56,6 @@ const GUIDANCE: Record<string, string> = {
   connector: 'A gateway to an external API or database, note-first and admin-only: an admin authors connectors/<name>.md (frontmatter declares alias/hosts/limits). Never creatable via add_context; execute one with run_connector. A `kind: model` connector is the LLM provider agents run on (its key is the space\'s) — listed, never runnable.',
   agent: 'A scheduled agent, note-first: a member authors agents/<name>.md (frontmatter: model, connectors, tools; body = the brief) and an admin activates it in agents/live/<name>.md. Never creatable via add_context (agents/ is frozen for AI — a human writes briefs); list with list_agents, trigger with run_agent.',
   tool: 'A Tool — an app a member builds, note-first and folder-only: the member authors tools/<name>/index.md (frontmatter declares its surfaces and the perimeter of context it may touch; body = docs) beside tools/<name>/ui.tsx and tools/<name>/data.js, which hold its source. Never creatable via add_context (tools/ is frozen for AI — a human authors tools); admins install and publish one from the Tools marketplace.',
-  index: 'An index note IS a folder. Write <folder>/index.md with edit_context rather than creating a node.',
 }
 
 export function buildTypeCatalog(opts: {
@@ -71,14 +70,14 @@ export function buildTypeCatalog(opts: {
 }): TypeCatalogEntry[] {
   return DEFAULT_NODE_TYPES.map((config) => {
     const type = canonicalNodeType(config.name)
-    // Person's list is grafted with the built-in Owner alias, which is stored
+    // Person's list is grafted with the built-in Admin alias, which is stored
     // implicitly — omitting it would tell an agent it can create one.
     const aliases = (
       type === 'person' ? personAliases(opts.aliases) : aliasesForType(opts.aliases, config.name)
     ).map((a) => ({
       name: a.name,
       color: a.color,
-      ...(type === 'person' ? { owner: a.owner === true || a.system === true } : {}),
+      ...(type === 'person' ? { admin: a.admin === true || a.system === true } : {}),
     }))
     const feature = nodeTypeFeatureKey(config.name)
     const enabled = isNodeTypeEnabled(opts.featureConfig, config.name)

@@ -41,7 +41,7 @@ export interface PathAccessResponse {
   entries: AccessListEntry[] | null
   subjects: {
     members: Array<{ userId: string; name: string; email: string | null; image: string | null }>
-    aliases: Array<{ id: string; name: string; color: string; owner: boolean; system: boolean; holderCount: number }>
+    aliases: Array<{ id: string; name: string; color: string; admin: boolean; system: boolean; holderCount: number }>
   } | null
 }
 
@@ -109,8 +109,8 @@ export const notesApi = {
 
   read: (c: string, path: string) =>
     getJson<{ content: string }>(`/api/notes/item?${qs(c, { path })}`),
-  // `movedTo` comes back when the write made the note a folder — an index note
-  // IS a folder, so `type: Index` at a/b.md lands at a/b/index.md.
+  // `movedTo` comes back when the write landed somewhere other than the path
+  // asked for — the note has since become its own folder's index.
   create: (c: string, path: string, content?: string) =>
     sendJson<{ note: NoteMeta | null; movedTo?: string }>('/api/notes/item', 'POST', {
       spaceId: c,
@@ -209,7 +209,7 @@ export const notesApi = {
       | { action: 'create'; name: string; color: string }
       | { action: 'update'; name: string; newName?: string; color?: string }
       | { action: 'delete'; name: string }
-      | { action: 'setOwner'; name: string; owner: boolean }
+      | { action: 'setAdmin'; name: string; admin: boolean }
       | { action: 'addHolder'; name: string; userId: string }
       | { action: 'removeHolder'; name: string; userId: string },
   ) => sendJson<{ ok?: boolean }>('/api/aliases', 'POST', { spaceId: c, ...input }),

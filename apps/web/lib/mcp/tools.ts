@@ -148,21 +148,26 @@ const LIFECYCLE_RULE =
  * lives in tool descriptions because that is the only place an agent reads it.
  */
 const INDEX_RULE =
-  'INDEX NOTES: every folder IS its index.md — created automatically the moment a note lands in the ' +
-  "folder, with fixed frontmatter (`type: Index`, `title:` = the folder's display name) and a " +
-  'machine-maintained child list between `<!-- index:children -->` markers. When you add notes to a ' +
-  "folder, ENRICH its existing index (prose ABOVE the markers — a description of what the folder holds " +
-  'is what makes it findable in search) rather than creating or replacing one. Never hand-write the ' +
-  'child list; the markers are refreshed for you on every change in the folder. Writes to an index ' +
-  'path keep `type: Index` and the markers even if your content drops them. ' +
+  'FOLDERS: every folder IS its index.md — created automatically the moment a note lands in the ' +
+  "folder, carrying `title:` (the folder's display name) and a machine-maintained child list between " +
+  '`<!-- index:children -->` markers. A folder is a PATH, never a type: NEVER write `type: Index` on ' +
+  'anything. An index note\'s `type:` says what the folder is ABOUT — `type: Person` on a person\'s ' +
+  'folder, no type at all on a folder that just groups notes. When you add notes to a folder, ENRICH ' +
+  "its existing index (prose ABOVE the markers — a description of what the folder holds is what makes " +
+  'it findable in search) rather than creating or replacing one. Never hand-write the child list; the ' +
+  'markers are refreshed for you on every change in the folder, and a write that drops them is ' +
+  'restored. ' +
   'INDEX LAYOUT (fixed, keep it simple): `# <Title>`, then one or two short paragraphs saying what the ' +
   'folder holds and who it is for, then optional grouped `- [Title](/path.md) — one-line note` bullets. ' +
   'NO tables, no columns, no HTML, no nested headings deeper than `##` — a flat list of links reads best ' +
   'in search and costs models the fewest tokens. Every index in a space must look the same. ' +
-  "ENTITY FOLDERS: an entity's note (people/<slug>.md) becomes a folder the moment a second note about " +
-  'that entity is needed — write the extra note at people/<slug>/<anything>.md and the entity note moves ' +
-  'to people/<slug>/index.md by itself, keeping its entity type (NOT `type: Index`) and `node:`. Both ' +
-  'paths keep resolving to the entity; read_context reports the current one as `note_path` and lists ' +
+  'MAKING A FOLDER: write a note INSIDE it. `a/b.md` becomes `a/b/index.md` — the folder\'s home page — ' +
+  'the moment you add `a/b/<anything>.md`. That is the only gesture; there is no retype and no ' +
+  'separate convert step. ' +
+  "ENTITY FOLDERS: the same move on an entity. An entity's note (people/<slug>.md) becomes a folder the " +
+  'moment a second note about that entity is needed — write the extra note at people/<slug>/<anything>.md ' +
+  'and the entity note moves to people/<slug>/index.md by itself, keeping its entity type and `node:`. ' +
+  'Both paths keep resolving to the entity; read_context reports the current one as `note_path` and lists ' +
   "the folder's other notes as `sub_notes`. A sub-note's mentions count as the entity's mentions. " +
   'Never file a note under an entity namespace (people/, communities/, resources/, events/) unless it is ' +
   'about that entity — the write is refused when no entity of that slug exists.'
@@ -1040,7 +1045,8 @@ export function registerTools(server: McpServer): void {
           // edges it draws are already up to date by the time this returns.
           links_synced: scope === 'shared',
           // Index paths are folders: the store holds them to the index contract
-          // (`type: Index`, managed child markers) whatever the write carried.
+          // (a title, the managed child markers, and an entity's type and
+          // `node:` when the folder is one) whatever the write carried.
           ...(entityOwnerPathOf(result.path)
             ? {
                 sub_note_of: `${entityOwnerPathOf(result.path)}/index.md`,
@@ -1052,8 +1058,9 @@ export function registerTools(server: McpServer): void {
             ? {
                 index_note: true,
                 index_contract:
-                  '`type: Index` and the <!-- index:children --> block are enforced on this path — ' +
-                  'read the note back if you need the exact stored content. Layout is fixed: H1, short ' +
+                  "This path is a FOLDER's home page. A `title:` and the <!-- index:children --> block " +
+                  'are enforced on it — read the note back if you need the exact stored content. Its ' +
+                  '`type:` is what the folder is about (never `Index`). Layout is fixed: H1, short ' +
                   'prose, flat `- [Title](/path.md)` bullets. No tables.',
               }
             : {}),
@@ -1222,10 +1229,10 @@ export function registerTools(server: McpServer): void {
         "(node_id — take the entity's chip off).\n" +
         'Vocabulary edits (create/update/delete) are space-admin only; assign/clear are open to members, like ' +
         'editing tags. All of it works only in a real space (a personal space has no vocabulary). PERSON aliases are ' +
-        'also the permission model — an alias flagged `owner` is what makes its holders admins — so who holds ' +
-        'one, and what it reaches, stay in the app; this tool edits the vocabulary itself. The built-in Owner ' +
+        'also the permission model — an alias flagged `admin` is what makes its holders admins — so who holds ' +
+        'one, and what it reaches, stay in the app; this tool edits the vocabulary itself. The built-in Admin ' +
         "alias cannot be renamed, recoloured or removed, and a change that would leave the space with nobody " +
-        'owning it is refused.',
+        'administering it is refused.',
       inputSchema: {
         space_id: z.string(),
         action: z.enum(['list', 'create', 'update', 'delete', 'assign', 'clear']),
@@ -1242,7 +1249,7 @@ export function registerTools(server: McpServer): void {
           .describe("assign/clear — the entity wearing the chip, e.g. 'space:canva'"),
         new_name: z.string().optional().describe("action:'update' — rename it to this"),
         color: z.string().optional().describe("#rrggbb chip colour, e.g. '#2563eb'"),
-        owner: z
+        admin: z
           .boolean()
           .optional()
           .describe(
@@ -1301,7 +1308,7 @@ export function registerTools(server: McpServer): void {
               args.space_id,
               args.node_type,
               args.name,
-              { newName: args.new_name, color: args.color, owner: args.owner },
+              { newName: args.new_name, color: args.color, admin: args.admin },
               actor,
             )
             return { action: args.action, alias }

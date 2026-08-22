@@ -76,24 +76,24 @@ describe('mergeAliasList', () => {
   test('never lets a payload grant ownership', () => {
     const merged = mergeAliasList(
       [alias({ id: 'al_1', name: 'Founder' })],
-      [alias({ id: 'al_1', name: 'Founder', owner: true })],
+      [alias({ id: 'al_1', name: 'Founder', admin: true })],
     )
-    assert.equal(merged[0].owner, undefined)
+    assert.equal(merged[0].admin, undefined)
   })
 
   test('never lets a payload strip ownership either', () => {
     const merged = mergeAliasList(
-      [alias({ id: 'al_1', name: 'Founder', owner: true, system: true })],
+      [alias({ id: 'al_1', name: 'Founder', admin: true, system: true })],
       [alias({ id: 'al_1', name: 'Founder' })],
     )
-    assert.equal(merged[0].owner, true)
+    assert.equal(merged[0].admin, true)
     assert.equal(merged[0].system, true)
   })
 
   test('a brand-new alias arrives with no authority whatever it claims', () => {
-    const merged = mergeAliasList([], [alias({ id: 'al_9', name: 'Sneaky', owner: true, system: true })])
+    const merged = mergeAliasList([], [alias({ id: 'al_9', name: 'Sneaky', admin: true, system: true })])
     assert.equal(merged.length, 1)
-    assert.equal(merged[0].owner, undefined)
+    assert.equal(merged[0].admin, undefined)
     assert.equal(merged[0].system, undefined)
   })
 

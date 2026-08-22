@@ -10,11 +10,11 @@
 //        'create'        { name, color, nodeType? }
 //        'update'        { name, newName?, color?, nodeType? }
 //        'delete'        { name, nodeType? }
-//        'setOwner'      { name, owner }
+//        'setAdmin'      { name, admin }
 //        'addHolder'     { name, userId }
 //        'removeHolder'  { name, userId }
 // Any change that would leave nobody owning the space is refused with 400,
-// as is any attempt to rename, recolour, delete or un-own the built-in Owner
+// as is any attempt to rename, recolour, delete or un-admin the built-in Admin
 // alias.
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -25,7 +25,7 @@ import {
   deleteAlias,
   listAliases,
   removeAliasHolder,
-  setAliasOwner,
+  setAliasAdmin,
   updateAlias,
 } from '@/lib/notes/aliases'
 import {
@@ -92,8 +92,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    if (action === 'setOwner') {
-      await setAliasOwner(context.spaceId, name, body.owner === true, actor)
+    if (action === 'setAdmin') {
+      await setAliasAdmin(context.spaceId, name, body.admin === true, actor)
       return NextResponse.json({ ok: true })
     }
 

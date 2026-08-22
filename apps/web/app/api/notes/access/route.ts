@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
       })),
       // `id` rides along so the picker can tell an alias already granted from
       // one that isn't — grant rows are keyed by id, not by name.
-      aliases: aliases.map((a) => ({ id: a.id, name: a.name, color: a.color, owner: a.owner, system: a.system, holderCount: a.holders.length })),
+      aliases: aliases.map((a) => ({ id: a.id, name: a.name, color: a.color, admin: a.admin, system: a.system, holderCount: a.holders.length })),
     }
   }
 

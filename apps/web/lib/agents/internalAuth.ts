@@ -33,18 +33,27 @@ function bearer(req: Request): string | null {
   return h.toLowerCase().startsWith('bearer ') ? h.slice(7).trim() : null
 }
 
-/** The public URL the tick is reached at — the OIDC `aud` Scheduler must send. */
-function tickAudience(): string {
+/** The public URL an internal endpoint is reached at — the OIDC `aud` Scheduler must send. */
+function schedulerAudience(path: string): string {
   const base = (process.env.AGENT_INTERNAL_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
-  return `${base}/api/internal/agents/tick`
+  return `${base}${path}`
 }
 
 /**
- * Verify the tick caller. Returns null when accepted, else the reason (also
- * the 401 body). Production accepts ONLY Google OIDC from the configured
+ * Verify a Cloud Scheduler caller. Returns null when accepted, else the reason
+ * (also the 401 body). Production accepts ONLY Google OIDC from the configured
  * service account.
+ *
+ * `path` is the endpoint being protected and must match the OIDC audience the
+ * scheduler job was created with. It is a parameter rather than a constant
+ * because more than one job now targets this app (the agent tick and the
+ * nightly maintenance sweep), and pinning `aud` per-endpoint is what stops a
+ * token minted for one from being replayed against the other.
  */
-export async function verifyTickCaller(req: Request): Promise<string | null> {
+export async function verifyTickCaller(
+  req: Request,
+  path = '/api/internal/agents/tick',
+): Promise<string | null> {
   const token = bearer(req)
   if (!token) return 'missing bearer token'
 
@@ -55,7 +64,7 @@ export async function verifyTickCaller(req: Request): Promise<string | null> {
   if (!expectedEmail) return 'AGENT_TICK_SERVICE_ACCOUNT is not configured'
   try {
     jwks ??= createRemoteJWKSet(new URL(GOOGLE_JWKS_URL))
-    const { payload } = await jwtVerify(token, jwks, { issuer: GOOGLE_ISSUER, audience: tickAudience() })
+    const { payload } = await jwtVerify(token, jwks, { issuer: GOOGLE_ISSUER, audience: schedulerAudience(path) })
     const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : ''
     if (email !== expectedEmail) return 'token is not from the scheduler service account'
     if (payload.email_verified !== true) return 'service account email is not verified'

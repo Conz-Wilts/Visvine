@@ -17,7 +17,7 @@
 import 'dotenv/config';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import prisma from '../lib/prisma';
-import { OWNER_ALIAS_ID } from '../lib/types/context';
+import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { mintAccessToken } from '../lib/mcp/tokens';
 import { MCP_SCOPES } from '../lib/mcp/scopes';
 
@@ -53,7 +53,7 @@ function payload(result: { content?: unknown }): Json {
 async function main() {
   // an access token for a real admin of the space
   const holder = await prisma.userAlias.findFirst({
-    where: { spaceId: SPACE, aliasId: OWNER_ALIAS_ID },
+    where: { spaceId: SPACE, aliasId: ADMIN_ALIAS_ID },
     select: { userId: true },
   });
   if (!holder) throw new Error(`nobody manages ${SPACE}`);

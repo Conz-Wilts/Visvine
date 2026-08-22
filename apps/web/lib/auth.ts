@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { getSession, isSuperAdmin, type SessionPayload } from '@/lib/session';
 import { isForeignPersonalSpace } from '@/lib/spaces/personalSpaceAccess';
+import { isGlobalSpace } from '@/lib/spaces/globalSpace';
 import { canAccessFeature } from '@/lib/featureAccess';
 import { personAliases, type SpaceAlias } from '@/lib/types/context';
 import type { SpaceFeatureConfig } from '@/lib/types';
@@ -14,7 +15,7 @@ import type { SpaceFeatureConfig } from '@/lib/types';
  * meant a rename had to rewrite `user_aliases` in the same breath or everybody
  * holding the alias lost their access in between.
  */
-async function owningAliasIds(spaceIds: string[]): Promise<Map<string, Set<string>>> {
+async function adminAliasIds(spaceIds: string[]): Promise<Map<string, Set<string>>> {
   const spaces = await prisma.space.findMany({
     where: { id: { in: spaceIds } },
     select: { id: true, aliases: true },
@@ -22,7 +23,7 @@ async function owningAliasIds(spaceIds: string[]): Promise<Map<string, Set<strin
   const out = new Map<string, Set<string>>();
   for (const c of spaces) {
     const owning = personAliases((c.aliases ?? []) as unknown as SpaceAlias[])
-      .filter((a) => a.owner === true || a.system === true)
+      .filter((a) => a.admin === true || a.system === true)
       .map((a) => a.id)
       .filter((id): id is string => Boolean(id));
     out.set(c.id, new Set(owning));
@@ -32,7 +33,7 @@ async function owningAliasIds(spaceIds: string[]): Promise<Map<string, Set<strin
 
 /**
  * Whether a user manages a space: they hold at least one of its Person
- * aliases marked `owner` (always including the built-in Owner alias). That is
+ * aliases marked `admin` (always including the built-in Admin alias). That is
  * the only definition of admin in the app — there is no role column.
  * Super-admins (env `SUPER_ADMIN_EMAILS`) bypass the DB lookup.
  */
@@ -43,7 +44,7 @@ export async function isAdmin(
 ): Promise<boolean> {
   if (isSuperAdmin(email)) return true;
   const [owningBySpace, held] = await Promise.all([
-    owningAliasIds([spaceId]),
+    adminAliasIds([spaceId]),
     prisma.userAlias.findMany({ where: { userId, spaceId }, select: { aliasId: true } }),
   ]);
   const owning = owningBySpace.get(spaceId);
@@ -63,7 +64,7 @@ export async function adminSpaceIds(
 ): Promise<Set<string>> {
   if (isSuperAdmin(email)) return new Set(spaceIds);
   if (spaceIds.length === 0) return new Set();
-  const owning = await owningAliasIds(spaceIds);
+  const owning = await adminAliasIds(spaceIds);
   const held = await prisma.userAlias.findMany({
     where: { userId, spaceId: { in: spaceIds } },
     select: { spaceId: true, aliasId: true },
@@ -76,13 +77,13 @@ export async function adminSpaceIds(
 }
 
 /**
- * The inverse of `isAdmin`: every user holding an owner/system alias in the
+ * The inverse of `isAdmin`: every user holding an admin/system alias in the
  * space — i.e. who to tell when something in the space needs an admin
  * (lib/notifications). Super-admins are NOT included: they can act everywhere
  * but are not the people responsible for this space's agents and connections.
  */
 export async function spaceAdminUserIds(spaceId: string): Promise<string[]> {
-  const owning = (await owningAliasIds([spaceId])).get(spaceId);
+  const owning = (await adminAliasIds([spaceId])).get(spaceId);
   if (!owning || owning.size === 0) return [];
   const held = await prisma.userAlias.findMany({
     where: { spaceId, aliasId: { in: [...owning] } },
@@ -143,7 +144,10 @@ export async function spaceMemberForbidden(
     isActiveMember(userId, spaceId),
   ]);
   if (!space) return false;
-  // Personal space: only its owner may read or write it.
+  // The global space has no members: every signed-in user reads it, and what
+  // may be written there is decided per path by lib/notes/contextService.ts.
+  if (isGlobalSpace(spaceId)) return false;
+  // Personal space: only its admin may read or write it.
   if (space.personalOwnerId != null) return space.personalOwnerId !== userId;
   // Normal space: an active member or an admin passes.
   if (activeMember) return false;

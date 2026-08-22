@@ -7,6 +7,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { spaceMemberForbidden } from '@/lib/auth';
+import { isSuperAdmin } from '@/lib/session';
+import { isGlobalSpace } from '@/lib/spaces/globalSpace';
+import { GLOBAL_MODE_KEY, syncGlobalRecordSafe } from '@/lib/global/record';
 import { requireApiSession } from '@/lib/api/route';
 import { logger } from '@/lib/logger';
 import { entityNotePath } from '@/lib/notes/entities';
@@ -239,7 +242,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const node = await prisma.node.findUnique({
     where: { id: nodeId },
-    select: { spaceId: true, metadata: true, type: true },
+    select: { spaceId: true, metadata: true, type: true, identityId: true },
   });
   if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
@@ -251,6 +254,20 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   // Active membership (or admin) of the node's own space is the write gate.
   if (await spaceMemberForbidden(session.userId, spaceId, session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  // A global record's fields are gathered, not typed (lib/global/record.ts);
+  // a follower's are pushed from the record. Neither takes a local edit.
+  if (isGlobalSpace(spaceId) && !isSuperAdmin(session.email)) {
+    return NextResponse.json(
+      { error: 'Visvine records are built from public spaces and profiles. Edit your profile to change yours.' },
+      { status: 403 },
+    );
+  }
+  if (((node.metadata as Record<string, unknown> | null) ?? {})[GLOBAL_MODE_KEY] === 'follow') {
+    return NextResponse.json(
+      { error: 'This context follows its Visvine record — detach it to edit here.' },
+      { status: 409 },
+    );
   }
 
   const data: Record<string, unknown> = {};
@@ -301,6 +318,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     );
   }
 
+  // A public card changed: its record may have too.
+  await syncGlobalRecordSafe(node.identityId);
   revalidateTag('context-data-v2', { expire: 0 });
   return NextResponse.json({ name: name ?? undefined, tags: tags ?? undefined, ok: true });
 }

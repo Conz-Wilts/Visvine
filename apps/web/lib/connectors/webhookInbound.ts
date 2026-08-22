@@ -28,7 +28,7 @@ import prisma from '@/lib/prisma'
 import { SHARED_OWNER_KEY } from '@/lib/notes/store'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { logAudit } from '@/lib/notes/audit'
-import { takeToken } from '@/lib/messages/rateLimit'
+import { takeToken } from '@/lib/rateLimit'
 import { decryptSecret, encryptSecret } from '@/lib/crypto/secrets'
 import { enqueueAgentEvent, webhookRecipients } from '@/lib/agents/events'
 import { parseConnectorPerimeter } from './config'
@@ -210,7 +210,7 @@ export async function handleInboundWebhook(
       status: 429,
       headers: { 'content-type': 'application/json', 'retry-after': String(Math.ceil(retryAfterMs / 1000)) },
     })
-  const pre = takeToken(clientKey(req), HOOK_PREAUTH_RATE)
+  const pre = await takeToken(clientKey(req), HOOK_PREAUTH_RATE)
   if (!pre.ok) return tooMany(pre.retryAfterMs)
 
   const note = await loadWebhookConnector(spaceId, connector)
@@ -220,7 +220,7 @@ export async function handleInboundWebhook(
   const { webhook, path } = note
 
   // Only a caller holding the token can spend this hook's own budget.
-  const bucket = takeToken(`webhook:${spaceId}:${connector}`, HOOK_RATE)
+  const bucket = await takeToken(`webhook:${spaceId}:${connector}`, HOOK_RATE)
   if (!bucket.ok) return tooMany(bucket.retryAfterMs)
 
   const body = await readBodyCapped(req, webhook.maxBytes)

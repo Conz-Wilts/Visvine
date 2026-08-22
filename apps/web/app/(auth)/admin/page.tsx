@@ -7,6 +7,7 @@ import PeopleDataProvider from '@/features/admin/components/people/PeopleDataCon
 import MembersPanel from '@/features/admin/components/people/MembersPanel';
 import InvitePanel from '@/features/admin/components/people/InvitePanel';
 import SpaceSettingsPanel from '@/features/admin/components/SpaceSettingsPanel';
+import AgentSettingsPanel from '@/features/admin/components/AgentSettingsPanel';
 import TypesPanel from '@/features/admin/components/TypesPanel';
 import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
 import ToolReviewPanel, { useToolReviewQueue } from '@/features/admin/components/ToolReviewPanel';
@@ -17,7 +18,8 @@ import { Space } from '@/lib/types';
 
 // Each section owns one job: General is the space's own record, Tools decides
 // which surfaces exist and how the sidebar is ordered, Types describes what kinds
-// of thing the space records, and Members owns every permission — people, aliases
+// of thing the space records, Agents holds the space-wide defaults a brief may
+// not carry, and Members owns every permission — people, aliases
 // and their grants, which tools members can open, and both request queues. Types,
 // Members and Invite share a single data load (PeopleDataProvider; Types still
 // reads it for the read-only Person chips), which is also where the Members badge
@@ -46,6 +48,7 @@ function AdminConsole({ space, onSaved }: {
     { id: 'general', label: 'General', width: 'form' },
     { id: 'tools', label: 'Tools', width: 'form' },
     { id: 'types', label: 'Types', width: 'form' },
+    { id: 'agents', label: 'Agents', width: 'form' },
     // Both queues a person can be waiting in — to join, and for context access —
     // are resolved here, so one badge counts them both.
     { id: 'members', label: 'Members', width: 'wide', badge: pending.members + pending.requests },
@@ -75,6 +78,8 @@ function AdminConsole({ space, onSaved }: {
             // toggle would throw you back to its first sub-tab.
             case 'tools':
               return <SpaceToolsPanel key={configKey} space={space} onSaved={onSaved} />;
+            case 'agents':
+              return <AgentSettingsPanel key={space.id} space={space} onSaved={onSaved} />;
             case 'members':
               return <MembersPanel key={space.id} space={space} onSaved={onSaved} />;
             case 'invite':

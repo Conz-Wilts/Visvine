@@ -13,7 +13,7 @@
  * that never got one.
  *
  * The second principle: **flags that confer authority never come from the
- * payload.** An alias's `owner`, an alias's or link type's `system` — these are
+ * payload.** An alias's `admin`, an alias's or link type's `system` — these are
  * read back out of storage on every merge, so no client snapshot can grant
  * ownership or un-protect a built-in by echoing a stale (or edited) value.
  *
@@ -113,7 +113,7 @@ export function newAliasId(): string {
  * snapshot that could not possibly know about an alias created since it loaded.
  * Deleting an alias is now only ever the explicit delete action.
  *
- * `owner` and `system` are read back out of storage on every entry. The Types
+ * `admin` and `system` are read back out of storage on every entry. The Types
  * page cannot edit them, and neither can a hand-rolled request.
  */
 export function mergeAliasList(
@@ -132,7 +132,7 @@ export function mergeAliasList(
       color: edit.color ?? current.color,
       nodeType: edit.nodeType ?? current.nodeType,
       // Authority flags: storage wins, always.
-      ...(current.owner === true ? { owner: true as const } : {}),
+      ...(current.admin === true ? { admin: true as const } : {}),
       ...(current.system === true ? { system: true as const } : {}),
     };
   });
@@ -143,7 +143,7 @@ export function mergeAliasList(
     if (kept.has(key)) continue;
     kept.add(key);
     // A brand-new alias starts with no authority whatever the payload claims.
-    const { owner: _owner, system: _system, ...rest } = alias;
+    const { admin: _owner, system: _system, ...rest } = alias;
     next.push(rest);
   }
   return next;

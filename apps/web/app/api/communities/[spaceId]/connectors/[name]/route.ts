@@ -10,6 +10,7 @@ import {
 } from '@/lib/notes/shared/markdown';
 import { parseConnectorPerimeter, SANDBOX_LIMITS } from '@/lib/connectors/config';
 import { connectorKind, parseModelConnector } from '@/lib/connectors/model';
+import { validateCustomEndpoint } from '@/lib/agents/providers';
 import { describeConnector, listConnectorCalls } from '@/lib/connectors/service';
 
 /**
@@ -105,6 +106,8 @@ interface PatchBody {
   timeoutMs?: unknown;
   /** Model connectors only: which registry provider this note stands for. */
   provider?: unknown;
+  /** Model connectors with `provider: custom` only: the OpenAI-compatible base URL. */
+  baseUrl?: unknown;
 }
 
 const bad = (error: string) => NextResponse.json({ error }, { status: 400 });
@@ -149,13 +152,30 @@ export async function PATCH(
       if (typeof body.provider !== 'string') return bad('Provider must be a string');
       fm.provider = body.provider.trim().toLowerCase();
     }
+    // The URL is the one thing in a model connector that decides where the
+    // space's context goes, so it gets the same treatment as a perimeter
+    // host: shape-checked by the parser, routability-checked here before it
+    // is written. Switching to a pinned provider drops it.
+    if (body.baseUrl !== undefined) {
+      if (typeof body.baseUrl !== 'string') return bad('Base URL must be a string');
+      if (body.baseUrl.trim()) {
+        try {
+          fm.base_url = await validateCustomEndpoint(body.baseUrl);
+        } catch (err) {
+          return bad(err instanceof Error ? err.message : 'Invalid base URL');
+        }
+      } else {
+        delete fm.base_url;
+      }
+    }
+    if (fm.provider !== 'custom') delete fm.base_url;
     const parsedModel = parseModelConnector(fm);
     if (!parsedModel.ok) return bad(parsedModel.error);
     const written = await writeGated(principal, resolved, path, joinFrontmatter(fm, splitFrontmatter(content).body));
     if (written.status === 'denied') return NextResponse.json({ error: written.reason }, { status: 403 });
     return NextResponse.json({ ok: true });
   }
-  if (body.provider !== undefined) return bad('Only a model connector (kind: model) has a provider');
+  if (body.provider !== undefined || body.baseUrl !== undefined) return bad('Only a model connector (kind: model) has a provider or base URL');
 
   if (body.timeoutMs !== undefined) {
     if (typeof body.timeoutMs !== 'number' || !Number.isFinite(body.timeoutMs)) {

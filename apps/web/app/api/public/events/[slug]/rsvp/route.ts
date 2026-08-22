@@ -9,7 +9,7 @@ import { rsvpSubmissionSchema } from '@/lib/schemas/eventSchemas';
 import { getEventBySlug, submitRsvp, EventFullError } from '@/lib/eventRepo';
 import { isEmailDomainAllowed, missingRequiredAnswers } from '@/lib/eventUtils';
 import { rsvpMessage } from '@/lib/eventCopy';
-import { takeToken } from '@/lib/messages/rateLimit';
+import { takeToken } from '@/lib/rateLimit';
 import { handleApiError } from '@/lib/api/route';
 
 type RouteContext = { params: Promise<{ slug: string }> };
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       request.headers.get('x-real-ip') ||
       'unknown';
-    const rl = takeToken(`rsvp:${ip}`, { capacity: 10, refillPerSec: 0.2 });
+    const rl = await takeToken(`rsvp:${ip}`, { capacity: 10, refillPerSec: 0.2 });
     if (!rl.ok) {
       return NextResponse.json(
         { error: 'Too many requests' },

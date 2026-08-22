@@ -100,7 +100,7 @@ export interface ContextData {
 // A named alias with a display color, scoped to a specific node type within a
 // space. Created on the Types page — and for the Person type they are also
 // the space's PERMISSION model: a member holds any number of their Person
-// aliases (UserAlias rows), `owner` says holders manage the space, and a
+// aliases (UserAlias rows), `admin` says holders manage the space, and a
 // ContextGrant with subjectType 'alias' targets one by name. So "Engineering" is
 // one thing: a chip in the directory and a set of permissions.
 export interface SpaceAlias {
@@ -115,41 +115,41 @@ export interface SpaceAlias {
   nodeType: string; // e.g. "Person", "Space"
   // Person aliases only
   /** Holders manage the space (lib/auth.ts#isAdmin). */
-  owner?: boolean;
-  /** The built-in Owner alias — like the system link types, it can't be removed
-   *  or recoloured, and it always owns the space. */
+  admin?: boolean;
+  /** The built-in Admin alias — like the system link types, it can't be removed
+   *  or recoloured, and it always is admin of the space. */
   system?: boolean;
 }
 
 /** The built-in Person alias every space has. Gold, fixed, always owns. */
-export const OWNER_ALIAS_NAME = 'Owner';
+export const ADMIN_ALIAS_NAME = 'Admin';
 /**
- * Owner's id is a reserved constant rather than a generated one, because most
+ * Admin's id is a reserved constant rather than a generated one, because most
  * spaces never store the alias at all — `personAliases` grafts it in. A
  * generated id would differ per space and per graft, so the one alias every
  * space is guaranteed to have would be the one nothing could point at.
  */
-export const OWNER_ALIAS_ID = 'owner';
-export const OWNER_ALIAS: SpaceAlias = {
-  id: OWNER_ALIAS_ID,
-  name: OWNER_ALIAS_NAME,
+export const ADMIN_ALIAS_ID = 'admin';
+export const ADMIN_ALIAS: SpaceAlias = {
+  id: ADMIN_ALIAS_ID,
+  name: ADMIN_ALIAS_NAME,
   color: '#b4881b',
   nodeType: 'Person',
-  owner: true,
+  admin: true,
   system: true,
 };
 
 /**
- * A space's Person aliases — its permission vocabulary. The built-in Owner
+ * A space's Person aliases — its permission vocabulary. The built-in Admin
  * alias is grafted in first whether or not it is stored, so a space can
  * never present itself as having nothing that owns it.
  */
 export function personAliases(aliases: SpaceAlias[] | undefined): SpaceAlias[] {
-  const stored = aliasesForType(aliases, 'Person').filter((a) => a.name !== OWNER_ALIAS_NAME);
-  const owner = aliasesForType(aliases, 'Person').find((a) => a.name === OWNER_ALIAS_NAME);
-  // Owner's id is fixed even if a stored entry somehow carries another one:
-  // holders and grants recorded against `owner` must never stop resolving.
-  return [{ ...OWNER_ALIAS, ...owner, id: OWNER_ALIAS_ID, owner: true, system: true }, ...stored];
+  const stored = aliasesForType(aliases, 'Person').filter((a) => a.name !== ADMIN_ALIAS_NAME);
+  const admin = aliasesForType(aliases, 'Person').find((a) => a.name === ADMIN_ALIAS_NAME);
+  // Admin's id is fixed even if a stored entry somehow carries another one:
+  // holders and grants recorded against `admin` must never stop resolving.
+  return [{ ...ADMIN_ALIAS, ...admin, id: ADMIN_ALIAS_ID, admin: true, system: true }, ...stored];
 }
 
 /**
@@ -228,13 +228,6 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // because a Tool is a container of its own surfaces, not a document; violet is
   // the one palette hue (lib/profileTheme.ts PALETTES) no other type has taken.
   { name: 'Tool',      color: '#8b5cf6', shape: 'square'    },
-  // An index note IS a folder (lib/notes/shared/indexNote.ts). Listed here so
-  // the Type chip on one resolves to a real configured type in every space,
-  // not just the seeded ones — nothing writes an `index:` node. Fuchsia, not
-  // Resource's amber: two types painting the same colour defeats the point of
-  // colouring by type, and fuchsia is the one hue the seeded vocabulary
-  // (prisma/seed.ts NODE_TYPES) leaves free.
-  { name: 'Index',     color: '#c026d3', shape: 'square'    },
 ];
 
 // Aliases are entirely space-configured — there is no built-in list for any
@@ -257,7 +250,8 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
  *
  * `note`, `file` and `index` are still listed so any row left over from when
  * those types existed stays filtered out of the grid and the graph rather than
- * surfacing as a grey unknown. Nothing writes them any more.
+ * surfacing as a grey unknown. Nothing writes them any more — `index` least of
+ * all: a folder is a path, never a type (lib/notes/shared/indexNote.ts).
  */
 export const STRUCTURAL_NODE_TYPES: readonly string[] = [
   'section',

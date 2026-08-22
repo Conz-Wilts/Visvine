@@ -10,7 +10,7 @@ import {
   CONFIG_NOTE_PATHS,
   configNoteKindOf,
   isSettingsPath,
-  ownerAliasDenial,
+  adminAliasDenial,
   parseConfigNote,
   serializeConfigNote,
 } from '../lib/spaces/configNote'
@@ -27,7 +27,7 @@ const config: SpaceConfig = {
     { name: 'Related', color: '#94a3b8', directed: false },
     { name: 'Mentioned', color: '#8b5cf6', directed: false, system: true },
   ],
-  aliases: [{ id: 'a1', name: 'Owner', color: '#b4881b', nodeType: 'Person', owner: true, system: true }],
+  aliases: [{ id: 'a1', name: 'Admin', color: '#b4881b', nodeType: 'Person', admin: true, system: true }],
   featureConfig: { enabled: { directory: true, notes: true } },
   designConfig: { accent: '#78d870' },
 } as SpaceConfig
@@ -102,9 +102,9 @@ test('an unknown shape is refused rather than coerced', () => {
   assert.match(errors[0], /shape must be one of/)
 })
 
-test('a space with no owner alias parses fine — plenty of real ones have none', () => {
-  // Spaces administered by super admins, or seeded before the Owner alias, have
-  // an empty owner set and must keep round-tripping through their own note.
+test('a space with no admin alias parses fine — plenty of real ones have none', () => {
+  // Spaces administered by super admins, or seeded before the Admin alias, have
+  // an empty admin set and must keep round-tripping through their own note.
   const { patch, errors } = parseConfigNote(
     'types',
     '---\ntitle: Types\naliases:\n  - name: Member\n    color: "#2563eb"\n    nodeType: Person\n---\n\nx\n',
@@ -113,22 +113,22 @@ test('a space with no owner alias parses fine — plenty of real ones have none'
   assert.equal(patch.aliases?.length, 1)
 })
 
-test('ownerAliasDenial refuses removing the LAST owner, and only that', () => {
-  const owner = { name: 'Owner', color: '#b4881b', nodeType: 'Person', owner: true }
+test('adminAliasDenial refuses removing the LAST admin, and only that', () => {
+  const admin = { name: 'Admin', color: '#b4881b', nodeType: 'Person', admin: true }
   const member = { name: 'Member', color: '#2563eb', nodeType: 'Person' }
 
   // some → none: refused. This is the edit that locks everybody out of their
   // own console, with nobody left allowed to undo it.
   assert.match(
-    ownerAliasDenial({ aliases: [member] }, { aliases: [owner, member] }) ?? '',
-    /last alias with `owner: true`/,
+    adminAliasDenial({ aliases: [member] }, { aliases: [admin, member] }) ?? '',
+    /last alias with `admin: true`/,
   )
   // none → none: fine, nothing was lost.
-  assert.equal(ownerAliasDenial({ aliases: [member] }, { aliases: [member] }), null)
+  assert.equal(adminAliasDenial({ aliases: [member] }, { aliases: [member] }), null)
   // some → some: fine.
-  assert.equal(ownerAliasDenial({ aliases: [owner] }, { aliases: [owner, member] }), null)
+  assert.equal(adminAliasDenial({ aliases: [admin] }, { aliases: [admin, member] }), null)
   // a patch that does not mention aliases cannot remove one.
-  assert.equal(ownerAliasDenial({}, { aliases: [owner] }), null)
+  assert.equal(adminAliasDenial({}, { aliases: [admin] }), null)
 })
 
 test('a non-object where a list belongs is an error, not a silent skip', () => {

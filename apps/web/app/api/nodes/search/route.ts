@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { isSuperAdmin } from '@/lib/session';
 import { directoryAccessForbidden } from '@/lib/auth';
 import { handleApiError, requireApiSession } from '@/lib/api/route';
+import { isGlobalSpace } from '@/lib/spaces/globalSpace';
 
 /**
  * Maps a CreateModal node type to the set of (lowercased) DB `type` values that
@@ -166,17 +167,17 @@ export async function GET(req: NextRequest) {
     const privateDirectoryClause = isSuperAdmin(session.email)
       ? Prisma.empty
       : Prisma.sql` AND (c.id IS NULL OR c.feature_config->>'directoryPrivate' IS DISTINCT FROM 'true' OR EXISTS (
-          -- Owns the space = holds a Person alias flagged owner (or the
-          -- built-in "Owner") in spaces.aliases. Joined on the alias ID, which
-          -- is what user_aliases stores — see lib/auth.ts#owningAliasIds, the
+          -- Administers the space = holds a Person alias flagged admin (or the
+          -- built-in "Admin") in spaces.aliases. Joined on the alias ID, which
+          -- is what user_aliases stores — see lib/auth.ts#adminAliasIds, the
           -- non-SQL form of this same question.
           SELECT 1 FROM user_aliases ua
           WHERE ua.space_id = c.id AND ua.user_id = ${session.userId}
-            AND (ua.alias_id = 'owner' OR EXISTS (
+            AND (ua.alias_id = 'admin' OR EXISTS (
               SELECT 1 FROM jsonb_array_elements(c.aliases::jsonb) al
               WHERE al->>'id' = ua.alias_id
                 AND lower(al->>'nodeType') = 'person'
-                AND ((al->>'owner')::boolean IS TRUE OR (al->>'system')::boolean IS TRUE)
+                AND ((al->>'admin')::boolean IS TRUE OR (al->>'system')::boolean IS TRUE)
             ))
         ))`;
     // A PRIVATE space is hidden from everyone who isn't in it — and that has
@@ -229,13 +230,23 @@ export async function GET(req: NextRequest) {
         groups.set(key, { rep: r, spaces });
       } else {
         if (r.space_name) existing.spaces.add(r.space_name);
-        if (fieldScore(r) > fieldScore(existing.rep)) existing.rep = r;
+        // The Visvine record is the canonical row for its identity: it leads
+        // the group whatever the field count, so a pick binds to the record.
+        if (
+          isGlobalSpace(r.space_id) ||
+          (!isGlobalSpace(existing.rep.space_id) && fieldScore(r) > fieldScore(existing.rep))
+        ) {
+          existing.rep = r;
+        }
       }
     }
 
-    const nodeResults = Array.from(groups.values()).map(({ rep, spaces }) => ({
+    const nodeResults = Array.from(groups.values())
+      .sort((a, b) => Number(isGlobalSpace(b.rep.space_id)) - Number(isGlobalSpace(a.rep.space_id)))
+      .map(({ rep, spaces }) => ({
       id: rep.id,
       identity_id: rep.identity_id,
+      global: isGlobalSpace(rep.space_id),
       name: rep.name,
       subtitle: rep.subtitle,
       location: rep.location,

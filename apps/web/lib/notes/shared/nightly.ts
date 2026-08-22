@@ -21,6 +21,33 @@ export function nightlyEnabled(env: Record<string, string | undefined>): boolean
   return env.NODE_ENV === 'production'
 }
 
+/**
+ * WHO fires the nightly run.
+ *
+ * `in-process` is a setTimeout chain inside the server (see nightly.ts). That
+ * works for a long-lived server and is silently wrong on Cloud Run, which
+ * scales to zero: at 3am there is usually no instance alive to hold the timer,
+ * so the sweep simply never happens — no error, no log line, just embeddings
+ * and link reasons quietly going stale. And when an instance IS alive, there
+ * may be up to --max-instances of them, each holding its own timer.
+ *
+ * So a managed runtime hands the job to Cloud Scheduler instead, which POSTs
+ * /api/internal/maintenance/nightly exactly once (see that route). K_SERVICE is
+ * set by Cloud Run itself, so this needs no configuration to be right in prod.
+ *
+ * NIGHTLY_MAINTENANCE_DRIVER forces the choice when the guess is wrong — a
+ * long-lived VM deploy, or a Cloud Run service you have not yet given a
+ * scheduler job.
+ */
+export type NightlyDriver = 'off' | 'in-process' | 'scheduler'
+
+export function nightlyDriver(env: Record<string, string | undefined>): NightlyDriver {
+  if (!nightlyEnabled(env)) return 'off'
+  const forced = (env.NIGHTLY_MAINTENANCE_DRIVER ?? '').trim().toLowerCase()
+  if (forced === 'in-process' || forced === 'scheduler') return forced
+  return env.K_SERVICE ? 'scheduler' : 'in-process'
+}
+
 /** The configured run hour: NIGHTLY_MAINTENANCE_HOUR when a valid 0-23, else 3am. */
 export function nightlyRunHour(env: Record<string, string | undefined>): number {
   const hour = Number.parseInt(env.NIGHTLY_MAINTENANCE_HOUR ?? '', 10)

@@ -11,7 +11,7 @@ import { SHARED_OWNER_KEY, type Context, type Actor } from './store'
 import * as sourceStore from './sourceStore'
 import { ingestSource, reingestSource, type IngestInput } from './sources/ingest'
 import { logAudit } from './audit'
-import { configNoteKindOf, isSettingsPath, ownerAliasDenial, parseConfigNote } from '@/lib/spaces/configNote'
+import { configNoteKindOf, isSettingsPath, adminAliasDenial, parseConfigNote } from '@/lib/spaces/configNote'
 import { readSpaceConfig } from '@/lib/spaces/spaceConfig'
 import { createVectorStage, type SemanticReport } from './vectorStage'
 import { createSourceStage } from './sourceStage'
@@ -30,6 +30,8 @@ import {
 } from './shared/permissions'
 import { isRestrictedPath, isLockedPath } from './shared/authz'
 import { replicaDenial } from './publications'
+import { isGlobalSpace } from '@/lib/spaces/globalSpace'
+import { globalSelfRecordDenial } from '@/lib/global/gate'
 import { appendNoteLogEntry, toDateString } from './shared/noteLog'
 import type { ContextPrincipal, WriteResult } from './shared/contextTypes'
 import type { NoteMeta, NoteRevisionOrigin, RawNote, References } from './shared/types'
@@ -238,6 +240,12 @@ export async function searchContext(
  */
 export function writeDenial(p: ContextPrincipal, context: Context, path: string): string | null {
   if (!isShared(context)) return null
+  // The global space is the platform's: a person edits their OWN record there
+  // (checked with the database in writeDenialFull, which every content write
+  // goes through); creating anything else in it is a super-admin act.
+  if (isGlobalSpace(context.spaceId) && !p.system && !principalIsSuperAdmin(p)) {
+    return 'The Visvine record is maintained by the platform. Edit your own profile to change yours.'
+  }
   // connectors/ holds machine config that executes against external systems
   // (lib/connectors) — folder grants don't apply; only space admins write it.
   if (
@@ -346,6 +354,9 @@ export async function writeDenialFull(
   context: Context,
   path: string,
 ): Promise<string | null> {
+  if (isShared(context) && isGlobalSpace(context.spaceId) && !p.system && !principalIsSuperAdmin(p)) {
+    return globalSelfRecordDenial(p.userId, path)
+  }
   const denial = writeDenial(p, context, path)
   if (denial) return denial
   if (isShared(context)) return replicaDenial(context.spaceId, path)
@@ -391,7 +402,7 @@ async function configNoteDenial(
   // Only reachable for the types note, which is the only one carrying aliases.
   if (patch.aliases) {
     const stored = await readSpaceConfig(context.spaceId)
-    const denial = stored ? ownerAliasDenial(patch, stored) : null
+    const denial = stored ? adminAliasDenial(patch, stored) : null
     if (denial) return denial
   }
   return null

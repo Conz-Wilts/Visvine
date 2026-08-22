@@ -7,7 +7,7 @@
 // named, coloured, handed out, pointed at content and deleted in one place,
 // sitting directly under the Person type it belongs to.
 //
-// Owner is built in the way the system link types are: you choose who holds it
+// Admin is built in the way the system link types are: you choose who holds it
 // and what it reaches, but it cannot be renamed, recoloured, deleted, or stop
 // owning the space — so a space can never lose the thing that owns it.
 // "Everyone" is the alias every member holds implicitly; it has no membership to
@@ -135,7 +135,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run }: SettingsProps
   return (
     <div className="space-y-4">
       {/* Name, colour, standing — the alias itself, before who has it. The
-          built-in Owner shows the same line with nothing to change: it is what
+          built-in Admin shows the same line with nothing to change: it is what
           it is, and saying so beats hiding the row. */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative shrink-0">
@@ -176,11 +176,11 @@ export function AliasSettings({ spaceId, alias, data, busy, run }: SettingsProps
             />
             <label className="flex shrink-0 items-center gap-2 text-xs text-text-secondary">
               <Toggle
-                checked={alias.owner}
+                checked={alias.admin}
                 disabled={busy}
-                onChange={(owner) => act({ action: 'setOwner', name: alias.name, owner })}
+                onChange={(admin) => act({ action: 'setAdmin', name: alias.name, admin })}
               />
-              Owns the space
+              Admin of the space
             </label>
             <button
               type="button"

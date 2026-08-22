@@ -67,15 +67,15 @@ export interface PeopleData {
  * A single alias, on or off. The only control a person's standing needs, shared
  * by the member drawer on People and the invite form on Invite.
  *
- * The built-in Owner alias wears gold whichever way it is flipped, so the one
+ * The built-in Admin alias wears gold whichever way it is flipped, so the one
  * thing that grants the space is never mistaken for an ordinary label.
  */
-export function AliasToggle({ name, color, owner, on, onClick, disabled }: {
+export function AliasToggle({ name, color, admin, on, onClick, disabled }: {
   name: string;
-  /** The alias's own colour — gold for the built-in Owner, which can't be
+  /** The alias's own colour — gold for the built-in Admin, which can't be
    *  recoloured, so it stays gold whichever way this is flipped. */
   color: string;
-  owner: boolean;
+  admin: boolean;
   on: boolean;
   onClick: () => void;
   disabled?: boolean;
@@ -86,7 +86,7 @@ export function AliasToggle({ name, color, owner, on, onClick, disabled }: {
       onClick={onClick}
       disabled={disabled}
       aria-pressed={on}
-      title={owner ? `${name} — owns the space` : name}
+      title={admin ? `${name} — is admin of the space` : name}
       // An alias is painted in its own colour whichever way it is flipped —
       // the colour IS the alias, and draining it out of the unheld state made
       // the row read as six different controls. Held is the same chip with a

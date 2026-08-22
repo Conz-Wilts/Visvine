@@ -157,7 +157,7 @@ function InviteByEmail({ spaceId, aliases, onDone }: {
                 key={alias.name}
                 name={alias.name}
                 color={alias.color}
-                owner={alias.owner}
+                admin={alias.admin}
                 on={chosen.includes(alias.name)}
                 onClick={() => toggle(alias.name)}
               />

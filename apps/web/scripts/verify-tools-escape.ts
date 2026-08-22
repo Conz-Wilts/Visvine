@@ -54,7 +54,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type BrowserContext, type Frame, type Page } from 'playwright';
 import prisma from '../lib/prisma';
-import { OWNER_ALIAS_ID } from '../lib/types/context';
+import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import type { SpaceFeatureConfig } from '../lib/types/space';
 import { toolRailKey } from '../lib/featureAccess';
 import { resolveContext } from '../lib/notes/resolve';
@@ -356,7 +356,7 @@ async function main(): Promise<void> {
   checkBuiltManifestBakesToolsOrigin();
 
   const holder = await prisma.userAlias.findFirst({
-    where: { spaceId: SPACE, aliasId: OWNER_ALIAS_ID },
+    where: { spaceId: SPACE, aliasId: ADMIN_ALIAS_ID },
     select: { userId: true },
   });
   if (!holder) throw new Error(`nobody manages ${SPACE}`);

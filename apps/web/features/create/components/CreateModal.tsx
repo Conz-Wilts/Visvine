@@ -103,6 +103,8 @@ export default function CreateModal() {
   // Canonical identity chosen from the finder ("this is the existing Craig Piggott").
   // Cleared the moment the user edits the form, so an edited entry isn't mis-attached.
   const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null);
+  // The pick was the identity's Visvine record: the new card follows it.
+  const [selectedGlobal, setSelectedGlobal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,7 +115,7 @@ export default function CreateModal() {
   const [channelData, setChannelData] = useState<ChannelFormData>({ name: '', description: '', icon: null, viewMode: 'CHAT', sectionId: '', context: '' });
   const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '', context: '' });
   const [contextData, setContextData] = useState<ContextFormData>({ title: '', folder: '', tags: '', body: '' });
-  const [connectorData, setConnectorData] = useState<ConnectorFormData>({ name: '', description: '', kind: 'http', provider: 'gemini', hosts: '', secretName: '' });
+  const [connectorData, setConnectorData] = useState<ConnectorFormData>({ name: '', description: '', kind: 'http', provider: 'gemini', baseUrl: '', hosts: '', secretName: '' });
   const [agentData, setAgentData] = useState<AgentFormData>({ name: '', folder: '', description: '', model: 'gemini/gemma-4-31b-it', connectors: '', web: false, brief: '' });
   const [toolData, setToolData] = useState<ToolFormData>({ name: '', title: '', description: '', railLabel: '' });
   const [fileData, setFileData] = useState<FileFormData>({ files: [], folder: '' });
@@ -168,12 +170,14 @@ export default function CreateModal() {
     // Attach the new space node to the SAME canonical identity (if resolved),
     // so adding someone another space already has doesn't create a duplicate.
     setSelectedIdentityId(r.identity_id ?? null);
+    setSelectedGlobal(!!r.global && !!r.identity_id);
   };
 
   // Any manual edit detaches from a previously picked identity — the server will
   // then resolve the (now possibly different) person from scratch.
   const handlePersonChange = (next: PersonFormData) => {
     setSelectedIdentityId(null);
+    setSelectedGlobal(false);
     setPersonData(next);
   };
 
@@ -218,7 +222,7 @@ export default function CreateModal() {
     setChannelData({ name: '', description: '', icon: null, viewMode: 'CHAT', sectionId: '', context: '' });
     setSpaceData({ name: '', context: '' });
     setContextData({ title: '', folder: '', tags: '', body: '' });
-    setConnectorData({ name: '', description: '', kind: 'http', provider: 'gemini', hosts: '', secretName: '' });
+    setConnectorData({ name: '', description: '', kind: 'http', provider: 'gemini', baseUrl: '', hosts: '', secretName: '' });
     setToolData({ name: '', title: '', description: '', railLabel: '' });
     setFileData({ files: [], folder: '' });
     setCreatedHref(null);
@@ -426,6 +430,7 @@ export default function CreateModal() {
         ? newModelConnectorNote({
             name,
             provider: connectorData.provider,
+            baseUrl: connectorData.baseUrl.trim(),
             description: connectorData.description.trim(),
           })
         : newConnectorNote({
@@ -600,6 +605,7 @@ export default function CreateModal() {
       // When the user picked an existing person from the finder, tell the server
       // to attach this node to that canonical identity instead of resolving anew.
       identity_id: selectedType === 'person' ? (selectedIdentityId ?? undefined) : undefined,
+      global_follow: selectedType === 'person' && selectedGlobal ? true : undefined,
       node: {
         id,
         type,

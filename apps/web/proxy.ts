@@ -6,6 +6,9 @@ import { toolsHostDecision } from "@/lib/tools/origin";
 const PUBLIC_PATHS = [
   "/signin",
   "/api/auth",
+  // Liveness/readiness probe. Must answer before any session machinery runs —
+  // a health check that needs the auth stack to be healthy cannot report on it.
+  "/api/health",
   "/claim",
   "/api/media",
   // Marketing / pre-auth surfaces (the bare "/" home is already public below).

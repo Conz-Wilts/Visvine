@@ -40,7 +40,7 @@ export async function GET(
     if (!space) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const owning = new Set(
       personAliases((space.aliases ?? []) as unknown as SpaceAlias[])
-        .filter((a) => a.owner === true || a.system === true)
+        .filter((a) => a.admin === true || a.system === true)
         .map((a) => a.id),
     );
     const organizerIds = new Set(

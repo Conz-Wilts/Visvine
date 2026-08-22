@@ -69,7 +69,7 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
   `auth_session`; mobile sends `Authorization: Bearer <jwt>`. One system, two
   transports.
 - **There is no role column.** What someone can do comes from the aliases they
-  hold. "Admin" has exactly one definition: a Person alias flagged `owner`
+  hold. "Admin" has exactly one definition: a Person alias flagged `admin`
   (`lib/auth.ts#isAdmin`); `SUPER_ADMIN_EMAILS` bypasses per-space checks.
 - Context access is grant-based (`lib/notes/access.ts` for DB,
   `lib/notes/shared/authz.ts` for the pure checks). Grants apply to **shared**
@@ -90,14 +90,24 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 - **Links are derived, not authored.** A markdown link to an entity's note,
   inside another shared-context note, is what creates a `mentioned` edge. There is
   no create-link operation anywhere in the system.
-- **An index note IS a folder.** Every folder carries an `index.md` typed
-  `Index`; its `title` is the folder's display name, its body is prose plus a
-  machine-maintained child list between `<!-- index:children -->` markers.
-  Nothing else may claim `type: Index`. Rules live in
+- **An index note IS a folder, and folder-ness is the PATH.** Every folder
+  carries an `index.md`; its `title` is the folder's display name, its body is
+  prose plus a machine-maintained child list between `<!-- index:children -->`
+  markers. Its `type:` says what the folder is ABOUT — `Person` on a person's
+  context folder, nothing at all on a folder that just groups notes. `Index` is
+  not a type and no note may declare it. A folder appears when one is needed:
+  write `a/b/c.md` and `a/b.md` becomes `a/b/index.md` by itself. Rules live in
   `lib/notes/shared/indexNote.ts`; `pnpm --filter @visvine/web db:notes:verify`
   is what keeps seeded data honest — run it after hand-editing any seed layer.
 - Folders marked **"Freeze for AI"** bind the write gate for autonomous origins
   (`agent`, `ai-enrich`, `maintenance`); human edits still pass.
+- **The Visvine space (`visvine`) is the global record.** One person node +
+  `people/<slug>.md` per `Identity` that is public anywhere, gathered from public
+  spaces and claimed profiles (`lib/global/*`, `docs/global-records.md`).
+  Everyone reads it; a person writes only their own record; nothing is created
+  there by hand. Spaces bind person nodes to the record (`metadata.globalMode`
+  `follow` | `fork`) instead of needing a member; private spaces never feed it.
+  `pnpm --filter @visvine/web db:global:rebuild` after hand-editing seeds.
 - The node-type vocabulary is **closed**. Agents pick an existing type and may
   only suggest a new one in prose.
 - Context-tree UI invariants (2026-08 redesign): shared expansion hook, no
@@ -206,6 +216,33 @@ timeout/memory/leak, 25-sequential-calls regression). Live, against `pnpm dev`:
 MCP server. The OAuth suite is the one that matters — token expiry + refresh, 429
 backoff, cursor pagination, i.e. many host calls in one run.
 
+## Production
+
+`docs/runbook.md` is the operational reference — release, rollback, alerting,
+backups, secret rotation. The parts that constrain how you write code:
+
+- **The runtime scales to zero, so nothing may rely on a long-lived process.**
+  An in-process `setInterval`/`setTimeout` schedule on Cloud Run is work that
+  silently never happens. Background work belongs on a Cloud Scheduler job
+  hitting an `/api/internal/*` endpoint that authenticates itself with Google
+  OIDC pinned to its own path (`lib/agents/internalAuth.ts`), the way the agent
+  tick and the nightly sweep do. `lib/notes/shared/nightly.ts#nightlyDriver` is
+  the pattern for detecting which world you are in.
+- **The runtime is also N processes, so no cross-request state may live in a
+  Map.** Rate limits are rows (`lib/rateLimit/`); a per-process limiter on a
+  service with `--max-instances=10` is ten limits, reset on every cold start.
+- **`logger.error()` is the alerting surface.** In production every call is
+  emitted as a Cloud Error Reporting event, grouped by stack signature. Use
+  `error` for a genuine fault and `warn` for the app working as designed — a
+  warn routed to error reporting buries the real failures. Always pass the
+  caught value (`{ err }`) so the record carries a real stack.
+- **`/api/health` must never grow a dependency.** Cloud Run's liveness probe
+  uses it; making it require the database means a database outage kills and
+  restarts every instance into that same outage. Deep checks go behind `?deep=1`.
+- **Ciphertext is under a key ring**, not a key (`lib/crypto/secrets.ts`). Any
+  new column holding an encrypted value must be added to
+  `scripts/rotate-secrets-key.ts`, or the next rotation strands it.
+
 ## Gotchas
 
 - A stale space id in `localStorage` produces "Unknown space" 404s after
@@ -214,3 +251,6 @@ backoff, cursor pagination, i.e. many host calls in one run.
   `db:reset` destroys the docker volume (both guarded by
   `scripts/guard-local-db.mjs`).
 - Never commit `.env` — `pnpm env:check` / `env:check:staged` guard this.
+- CI runs against a real pgvector Postgres, so a test may talk to a database.
+  Guard it the way `tests/agents-tick.test.ts` does — localhost-only, and skip
+  loudly rather than pass silently when there is none.

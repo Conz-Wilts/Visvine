@@ -20,7 +20,7 @@
  *                    markRead clears it
  *
  * The runs themselves are expected to FAIL: the brief names `custom/probe` and
- * the space's custom endpoint points at a closed local port, so the loop's
+ * the space's custom model connector points at a closed local port, so the loop's
  * first model call is refused — which is exactly one failed run (no key
  * rejection, no deactivation), and everything this script asserts about the
  * run row is written at CLAIM time, before the model is ever consulted. What is
@@ -45,7 +45,7 @@ import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
 import { createHmac } from 'node:crypto';
 import prisma from '../lib/prisma';
-import { OWNER_ALIAS_ID } from '../lib/types/context';
+import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { writeGated } from '../lib/notes/contextService';
 import { principalOf, resolveContext } from '../lib/notes/resolve';
 import * as store from '../lib/notes/store';
@@ -55,6 +55,7 @@ import { tick } from '../lib/agents/schedule';
 import { encryptSecret } from '../lib/crypto/secrets';
 import { provisionWebhookToken } from '../lib/connectors/webhookInbound';
 import { webhookPath } from '../lib/connectors/webhook';
+import { newModelConnectorNote } from '../lib/connectors/model';
 import { listNotifications, markRead } from '../lib/notifications/service';
 
 // The tick dispatches inline (the dev default) — stated, so a shell that
@@ -180,16 +181,12 @@ async function setup() {
       id: SPACE,
       name: 'verify agents events',
       timezone: 'UTC',
-      // `custom/…` models resolve against the space's own endpoint. A closed
-      // local port: the run's first model call is refused and the run fails,
-      // which is the outcome this script wants (see the header).
-      agentConfig: { customEndpoint: { baseURL: 'http://127.0.0.1:9/v1/' } },
     },
   });
   await prisma.user.create({ data: { id: ADMIN_ID, email: ADMIN_EMAIL, name: 'Verify Admin' } });
   await prisma.spaceMember.create({ data: { spaceId: SPACE, userId: ADMIN_ID } });
   // Admin = holding the space's owner alias (lib/auth.ts#isAdmin).
-  await prisma.userAlias.create({ data: { spaceId: SPACE, userId: ADMIN_ID, aliasId: OWNER_ALIAS_ID } });
+  await prisma.userAlias.create({ data: { spaceId: SPACE, userId: ADMIN_ID, aliasId: ADMIN_ALIAS_ID } });
   // The model key the resolver insists on before it will even try the endpoint.
   await prisma.connectorSecret.create({
     data: { spaceId: SPACE, name: 'MODEL_KEY_CUSTOM', ciphertext: encryptSecret('not-a-real-key'), createdBy: ADMIN_EMAIL },
@@ -236,6 +233,15 @@ async function main(): Promise<void> {
       const r = await writeGated(principal, context, path, content);
       if (r.status === 'denied') throw new Error(`write ${path} denied: ${r.reason}`);
     };
+
+    // The `custom/…` model resolves against the space's custom model connector.
+    // A closed local port: the run's first model call is refused and the run
+    // fails, which is the outcome this script wants (see the header). http and
+    // a loopback host are only accepted because NODE_ENV is development.
+    await write(
+      'connectors/probe-model.md',
+      newModelConnectorNote({ name: 'probe-model', provider: 'custom', baseUrl: 'http://127.0.0.1:9/v1/' }),
+    );
 
     // ── a. on.context ────────────────────────────────────────────────────────
     step('a1. brief + live note derive an active, event-only state row');

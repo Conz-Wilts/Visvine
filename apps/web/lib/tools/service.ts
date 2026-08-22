@@ -332,8 +332,9 @@ function starterData(): string {
  *
  * The node comes first on purpose. `tools/<name>/index.md` is an entity
  * folder's index, and the store holds those to their entity's contract — with
- * no node behind it the store would rewrite the note to `type: Index` and the
- * config would stop parsing on the very first save.
+ * no node behind it the store would treat the note as an ordinary folder's
+ * home page, strip nothing back in, and the config would stop resolving to a
+ * Tool on the very first save.
  */
 export async function createTool(
   p: ContextPrincipal,

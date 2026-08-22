@@ -309,7 +309,7 @@ grants and agent legibility at no request-time cost.
 Three rules hold it together:
 
 - `settings/` is **admin-only** to write. Editing one of those notes changes the
-  space, including the `owner: true` alias flags that decide who administers it,
+  space, including the `admin: true` alias flags that decide who administers it,
   so a folder grant must not be a way around the console's own gate.
 - `settings/` is **frozen for AI**, like `agents/` and `tools/`. An agent may
   READ a space's settings — that is most of the value of having them as notes —
@@ -323,7 +323,7 @@ Three rules hold it together:
   and being stopped is what keeps the note and the columns from disagreeing.
 
 The one rule that cannot be judged from a note alone is a transition:
-`ownerAliasDenial` refuses an edit that removes the LAST `owner: true` alias.
+`adminAliasDenial` refuses an edit that removes the LAST `admin: true` alias.
 Having none is fine and common — plenty of spaces are administered by super
 admins — so what is refused is going from some to none, which would leave nobody
 allowed to put it back.
@@ -505,7 +505,7 @@ one file remembered each of them. Most of that asymmetry is legitimate and is
 now written down on the `User` model: polymorphic keys (`owner_key`) cannot have
 one, provenance stamps (`uploaded_by`) must *outlive* the person, and the audit
 trail is redacted on purpose. What was left after those exclusions was access
-and credentials — an owner alias or an exchangeable refresh token surviving a
+and credentials — an admin alias or an exchangeable refresh token surviving a
 deleted account — and those are foreign keys now.
 
 The through-line: **every one of these was a rule that held in the case it was

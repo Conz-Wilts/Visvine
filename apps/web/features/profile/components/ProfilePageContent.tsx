@@ -159,10 +159,12 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   if (!connected) {
     return (
       <ProfileConnectPrompt
+        nodeId={nodeId}
         name={nodeData?.node?.name ?? profile.name}
         theme={theme}
         readOnly={isPersonalSpace}
         connection={memberConnection}
+        onBindingChange={() => void reload()}
       />
     );
   }

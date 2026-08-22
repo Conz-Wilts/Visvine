@@ -19,6 +19,7 @@ import { createNote, readNoteOrNull, type WriteStamp } from '@/lib/notes/store'
 import { entityDraftContent, entityIndexPathOf, entityNotePath } from '@/lib/notes/entities'
 import { applyFields } from '@/lib/create/typeFields'
 import { attachIdentity } from '@/lib/identity/attachIdentity'
+import { followGlobalSafe } from '@/lib/global/binding'
 import type { ResolveResult } from '@/lib/identity/resolve'
 import { slugify } from '@/lib/eventUtils'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
@@ -61,6 +62,8 @@ export interface CreateEntityInput {
   name: string
   alias?: string | null
   identityId?: string | null
+  /** Mirror the identity's global record (lib/global/binding.ts) once created. */
+  followGlobal?: boolean
   /**
    * For `space` only: the space row this card refers to, set when the user
    * picked one that already runs here out of the match list. Null for an org
@@ -291,6 +294,8 @@ export async function createEntity(
   let noteError: string | null = null
   try {
     await createNote(context, notePath, content, context.actor, input.stamp)
+    // Picked from a Visvine result: the card mirrors the record from now on.
+    if (input.followGlobal && identityId) await followGlobalSafe(row.id, identityId, context.actor)
   } catch (err) {
     // "already exists" is benign (a concurrent create won). Anything else is
     // reported but NOT fatal — the node is real, and the context tab seeds the

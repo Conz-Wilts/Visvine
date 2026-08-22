@@ -18,11 +18,14 @@ const MAX_NAME = 32;
 /**
  * Names that must never become a type, whatever the synonym table says.
  *
- * `Index` is the dangerous one: the notes API relocates a `type: Index` note
- * into a folder of its own (app/api/notes/item/route.ts), so a space that
- * created an "Index" type would silently move its members' notes. `Note` and
- * `File` are the two things that are content in a context rather than nodes in
- * the graph — the draft menu offers them already and they are not node types.
+ * `Index` names a SHAPE, not a subject: a folder is a path (its `index.md`),
+ * and a note's type says what it is ABOUT — so a folder about Connor is
+ * `type: Person`. A space that created an "Index" type would put the two axes
+ * back into one field, which is the confusion the model exists to remove; the
+ * index contract strips the word on write (lib/notes/shared/indexNote.ts).
+ * `Note` and `File` are the two things that are content in a context rather
+ * than nodes in the graph — the draft menu offers them already and they are not
+ * node types.
  *
  * `Tool` (and its plural, which TYPE_SYNONYMS folds onto it) is reserved because
  * `type: tool` is machine config: it marks the index of an entity folder under
@@ -35,9 +38,9 @@ const RESERVED = ['note', 'file', 'index', 'tool', 'tools'];
 
 /**
  * Is this name one no space may create a type for? Surfaces that OFFER
- * stored types ask this too: a context seeded with a `Note` or `Index` type (see
- * prisma/seed.ts) still has one, and it must not reach a picker that would
- * write it into a note's frontmatter.
+ * stored types ask this too: a space whose stored vocabulary still carries a
+ * `Note` or `Index` row must not offer it to a picker that would write it into
+ * a note's frontmatter.
  */
 export function isReservedTypeName(name: string | null | undefined): boolean {
   return RESERVED.includes((name ?? '').trim().toLowerCase());

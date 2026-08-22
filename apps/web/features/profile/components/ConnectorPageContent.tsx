@@ -49,7 +49,9 @@ interface SecretStatus {
 interface ModelInfo {
   provider: string;
   providerLabel: string;
-  baseURL: string | null;
+  baseURL: string;
+  /** True when the URL is the note's own `base_url:` (provider: custom) rather than pinned. */
+  customEndpoint: boolean;
   keySecret: string;
   models: { id: string; label: string }[];
 }
@@ -497,8 +499,8 @@ function SecretEditor({
 
 /**
  * The whole page for a `kind: model` connector, in place of perimeter, env and
- * console: which provider this note names (base URL pinned by the registry —
- * shown, not editable), the known model ids an agent's `model:` can pick, and
+ * console: which provider this note names (base URL pinned by the registry and
+ * shown, or — for `custom` — the note's own `base_url:`, editable), the known model ids an agent's `model:` can pick, and
  * the one secret behind it, MODEL_KEY_<PROVIDER>. Same write-only SecretEditor
  * as an env secret; there is deliberately no way to run anything here.
  */
@@ -526,6 +528,7 @@ function ModelSection({
   reload: () => Promise<void>;
 }) {
   const [provider, setProvider] = useState(model.provider);
+  const [baseUrl, setBaseUrl] = useState(model.customEndpoint ? model.baseURL : '');
   const [keyOpen, setKeyOpen] = useState(false);
   const key = connector.secrets.find((s) => s.name === model.keySecret) ?? {
     name: model.keySecret,
@@ -537,7 +540,7 @@ function ModelSection({
     <>
       <Section
         title="Provider"
-        meta={model.baseURL ? new URL(model.baseURL).host : 'custom endpoint'}
+        meta={new URL(model.baseURL).host}
         action={editing ? undefined : <EditButton onClick={onEdit} label="Change provider" />}
       >
         {editing ? (
@@ -545,7 +548,7 @@ function ModelSection({
             className="flex flex-col gap-3"
             onSubmit={async (e) => {
               e.preventDefault();
-              if (await save({ provider })) onDone();
+              if (await save(provider === 'custom' ? { provider, baseUrl } : { provider })) onDone();
             }}
           >
             <select value={provider} onChange={(e) => setProvider(e.target.value)} className={FIELD}>
@@ -555,9 +558,21 @@ function ModelSection({
                 </option>
               ))}
             </select>
+            {provider === 'custom' && (
+              <input
+                type="url"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="https://llm.example.com/v1/"
+                className={`${FIELD} font-mono`}
+                required
+              />
+            )}
             <p className="text-xs text-text-muted">
-              Changing the provider changes which key this connector stands for — the endpoint is always the
-              provider&apos;s own.
+              Changing the provider changes which key this connector stands for.{' '}
+              {provider === 'custom'
+                ? 'The base URL is an OpenAI-compatible https endpoint — where this space\u2019s agents send their context, so it is yours to set and only an admin can change it.'
+                : 'The endpoint is the provider\u2019s own, pinned by Visvine.'}
             </p>
             <FormError message={saveError} />
             <EditActions saving={saving} onCancel={onDone} />
@@ -567,7 +582,7 @@ function ModelSection({
             <p className="text-sm text-text-primary">
               {model.providerLabel}
               <span className="ml-2 font-mono text-[12px] text-text-muted">
-                {model.baseURL ?? 'endpoint set in agent settings (admin)'}
+                {model.baseURL}
               </span>
             </p>
             {model.models.length > 0 ? (

@@ -2,20 +2,20 @@
 // a space, and the one invariant the whole model rests on — a space can
 // never be left with nobody able to manage it. The DB side
 // (lib/notes/aliases.ts) is a thin wrapper that loads summaries and calls
-// ownerSurvives before writing.
+// adminSurvives before writing.
 // Run: node --import tsx --test tests/aliases.test.ts
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  ownerHolderIds,
-  ownerSurvives,
+  adminHolderIds,
+  adminSurvives,
   aliasNameError,
   describeAliases,
-  holdsOwner,
+  holdsAdmin,
   normalizeAliasColor,
   MAX_ALIAS_NAME,
-  OWNER_ALIAS_NAME,
+  ADMIN_ALIAS_NAME,
   SYSTEM_ALIAS_MESSAGE,
   summarize,
   type AliasSummary,
@@ -23,142 +23,142 @@ import {
 import {
   findAliasByRef,
   personAliases,
-  OWNER_ALIAS_ID,
+  ADMIN_ALIAS_ID,
   type SpaceAlias,
 } from '../lib/types/context'
 
 const alias = (
   name: string,
-  owner: boolean,
+  admin: boolean,
   holderIds: string[] = [],
   system = false,
-): AliasSummary => ({ name, color: '#000', owner, system, holderIds })
+): AliasSummary => ({ name, color: '#000', admin, system, holderIds })
 
-/** The common shape: one owner alias held by one person, plus a plain alias. */
-const soleOwner = (): AliasSummary[] => [
-  alias('owner', true, ['u-1'], true),
+/** The common shape: one admin alias held by one person, plus a plain alias. */
+const soleAdmin = (): AliasSummary[] => [
+  alias('admin', true, ['u-1'], true),
   alias('eng', false, ['u-1', 'u-2']),
 ]
 
 // who owns
 
-test('holdsOwner is true only for holders of an alias marked owner', () => {
-  const aliases = soleOwner()
-  assert.equal(holdsOwner(aliases, 'u-1'), true)
-  assert.equal(holdsOwner(aliases, 'u-2'), false) // holds eng, which does not own
-  assert.equal(holdsOwner(aliases, 'nobody'), false)
+test('holdsAdmin is true only for holders of an alias marked admin', () => {
+  const aliases = soleAdmin()
+  assert.equal(holdsAdmin(aliases, 'u-1'), true)
+  assert.equal(holdsAdmin(aliases, 'u-2'), false) // holds eng, which does not own
+  assert.equal(holdsAdmin(aliases, 'nobody'), false)
 })
 
 test('holding several aliases is normal — any one of them owning is enough', () => {
   const aliases = [alias('board', true, ['u-2']), alias('eng', false, ['u-2'])]
-  assert.equal(holdsOwner(aliases, 'u-2'), true)
+  assert.equal(holdsAdmin(aliases, 'u-2'), true)
 })
 
-test('ownerHolderIds deduplicates across multiple owner aliases', () => {
+test('adminHolderIds deduplicates across multiple admin aliases', () => {
   const aliases = [
-    alias('owner', true, ['u-1', 'u-2']),
+    alias('admin', true, ['u-1', 'u-2']),
     alias('board', true, ['u-2', 'u-3']),
     alias('eng', false, ['u-9']),
   ]
-  assert.deepEqual(ownerHolderIds(aliases).sort(), ['u-1', 'u-2', 'u-3'])
+  assert.deepEqual(adminHolderIds(aliases).sort(), ['u-1', 'u-2', 'u-3'])
 })
 
-test('an owner alias nobody holds confers nothing', () => {
-  const aliases = [alias('owner', true, [])]
-  assert.deepEqual(ownerHolderIds(aliases), [])
-  assert.equal(holdsOwner(aliases, 'u-1'), false)
+test('an admin alias nobody holds confers nothing', () => {
+  const aliases = [alias('admin', true, [])]
+  assert.deepEqual(adminHolderIds(aliases), [])
+  assert.equal(holdsAdmin(aliases, 'u-1'), false)
 })
 
 // the lockout invariant
 
-test('removing the last holder of the only owner alias is refused', () => {
+test('removing the last holder of the only admin alias is refused', () => {
   assert.equal(
-    ownerSurvives(soleOwner(), { kind: 'removeHolder', name: 'owner', userId: 'u-1' }),
+    adminSurvives(soleAdmin(), { kind: 'removeHolder', name: 'admin', userId: 'u-1' }),
     false,
   )
 })
 
-test('removing a holder is fine while a second owner alias still has one', () => {
-  const aliases = [...soleOwner(), alias('board', true, ['u-2'])]
+test('removing a holder is fine while a second admin alias still has one', () => {
+  const aliases = [...soleAdmin(), alias('board', true, ['u-2'])]
   assert.equal(
-    ownerSurvives(aliases, { kind: 'removeHolder', name: 'owner', userId: 'u-1' }),
+    adminSurvives(aliases, { kind: 'removeHolder', name: 'admin', userId: 'u-1' }),
     true,
   )
 })
 
-test('removing a holder is fine while the same owner alias has another', () => {
-  const aliases = [alias('owner', true, ['u-1', 'u-2'])]
+test('removing a holder is fine while the same admin alias has another', () => {
+  const aliases = [alias('admin', true, ['u-1', 'u-2'])]
   assert.equal(
-    ownerSurvives(aliases, { kind: 'removeHolder', name: 'owner', userId: 'u-1' }),
+    adminSurvives(aliases, { kind: 'removeHolder', name: 'admin', userId: 'u-1' }),
     true,
   )
 })
 
-test('clearing the owner flag on the only owner alias is refused', () => {
+test('clearing the admin flag on the only admin alias is refused', () => {
   assert.equal(
-    ownerSurvives(soleOwner(), { kind: 'setOwner', name: 'owner', owner: false }),
+    adminSurvives(soleAdmin(), { kind: 'setAdmin', name: 'admin', admin: false }),
     false,
   )
 })
 
-test('setting the owner flag ON is never refused', () => {
+test('setting the admin flag ON is never refused', () => {
   assert.equal(
-    ownerSurvives(soleOwner(), { kind: 'setOwner', name: 'eng', owner: true }),
+    adminSurvives(soleAdmin(), { kind: 'setAdmin', name: 'eng', admin: true }),
     true,
   )
-  // Even from a space that has nobody managing it — turning owner on can
+  // Even from a space that has nobody managing it — turning admin on can
   // only ever add managers.
   const stranded = [alias('eng', false, ['u-2'])]
-  assert.equal(ownerSurvives(stranded, { kind: 'setOwner', name: 'eng', owner: true }), true)
+  assert.equal(adminSurvives(stranded, { kind: 'setAdmin', name: 'eng', admin: true }), true)
 })
 
-test('removing the only owner alias is refused; removing a plain one is not', () => {
-  assert.equal(ownerSurvives(soleOwner(), { kind: 'removeAlias', name: 'owner' }), false)
-  assert.equal(ownerSurvives(soleOwner(), { kind: 'removeAlias', name: 'eng' }), true)
+test('removing the only admin alias is refused; removing a plain one is not', () => {
+  assert.equal(adminSurvives(soleAdmin(), { kind: 'removeAlias', name: 'admin' }), false)
+  assert.equal(adminSurvives(soleAdmin(), { kind: 'removeAlias', name: 'eng' }), true)
 })
 
 test('a member leaving is refused when they are the last person managing it', () => {
-  assert.equal(ownerSurvives(soleOwner(), { kind: 'removeMember', userIds: ['u-1'] }), false)
-  assert.equal(ownerSurvives(soleOwner(), { kind: 'removeMember', userIds: ['u-2'] }), true)
+  assert.equal(adminSurvives(soleAdmin(), { kind: 'removeMember', userIds: ['u-1'] }), false)
+  assert.equal(adminSurvives(soleAdmin(), { kind: 'removeMember', userIds: ['u-2'] }), true)
 })
 
 test('a bulk removal is judged on the whole set, not one at a time', () => {
-  const aliases = [alias('owner', true, ['u-1', 'u-2'])]
+  const aliases = [alias('admin', true, ['u-1', 'u-2'])]
   // Either alone is safe...
-  assert.equal(ownerSurvives(aliases, { kind: 'removeMember', userIds: ['u-1'] }), true)
-  assert.equal(ownerSurvives(aliases, { kind: 'removeMember', userIds: ['u-2'] }), true)
+  assert.equal(adminSurvives(aliases, { kind: 'removeMember', userIds: ['u-1'] }), true)
+  assert.equal(adminSurvives(aliases, { kind: 'removeMember', userIds: ['u-2'] }), true)
   // ...but together they strip the space.
-  assert.equal(ownerSurvives(aliases, { kind: 'removeMember', userIds: ['u-1', 'u-2'] }), false)
+  assert.equal(adminSurvives(aliases, { kind: 'removeMember', userIds: ['u-1', 'u-2'] }), false)
 })
 
-test('ownerSurvives does not mutate the aliases it is given', () => {
-  const aliases = soleOwner()
+test('adminSurvives does not mutate the aliases it is given', () => {
+  const aliases = soleAdmin()
   const before = JSON.stringify(aliases)
-  ownerSurvives(aliases, { kind: 'removeHolder', name: 'owner', userId: 'u-1' })
-  ownerSurvives(aliases, { kind: 'removeAlias', name: 'owner' })
-  ownerSurvives(aliases, { kind: 'removeMember', userIds: ['u-1'] })
+  adminSurvives(aliases, { kind: 'removeHolder', name: 'admin', userId: 'u-1' })
+  adminSurvives(aliases, { kind: 'removeAlias', name: 'admin' })
+  adminSurvives(aliases, { kind: 'removeMember', userIds: ['u-1'] })
   assert.equal(JSON.stringify(aliases), before)
 })
 
 test('an unknown alias name leaves the space exactly as it was', () => {
-  assert.equal(ownerSurvives(soleOwner(), { kind: 'removeAlias', name: 'ghost' }), true)
+  assert.equal(adminSurvives(soleAdmin(), { kind: 'removeAlias', name: 'ghost' }), true)
   assert.equal(
-    ownerSurvives(soleOwner(), { kind: 'removeHolder', name: 'ghost', userId: 'u-1' }),
+    adminSurvives(soleAdmin(), { kind: 'removeHolder', name: 'ghost', userId: 'u-1' }),
     true,
   )
 })
 
-// the built-in Owner alias
+// the built-in Admin alias
 
-test('the built-in Owner alias is the one marked system', () => {
-  const aliases = soleOwner()
-  const owner = aliases.find((a) => a.name === 'owner')
-  assert.equal(owner?.system, true)
+test('the built-in Admin alias is the one marked system', () => {
+  const aliases = soleAdmin()
+  const admin = aliases.find((a) => a.name === 'admin')
+  assert.equal(admin?.system, true)
   assert.equal(aliases.find((a) => a.name === 'eng')?.system, false)
 })
 
-test('SYSTEM_ALIAS_MESSAGE names Owner, so the refusal copy cannot drift', () => {
-  assert.ok(SYSTEM_ALIAS_MESSAGE.includes(OWNER_ALIAS_NAME))
+test('SYSTEM_ALIAS_MESSAGE names Admin, so the refusal copy cannot drift', () => {
+  assert.ok(SYSTEM_ALIAS_MESSAGE.includes(ADMIN_ALIAS_NAME))
 })
 
 // naming (create / rename)
@@ -175,11 +175,11 @@ test('aliasNameError rejects a name already in use, case-insensitively', () => {
   assert.ok(aliasNameError('  FOUNDER  ', ['Founder']))
 })
 
-test('aliasNameError reserves the built-in Owner name', () => {
-  assert.ok(aliasNameError(OWNER_ALIAS_NAME, []))
-  assert.ok(aliasNameError(OWNER_ALIAS_NAME.toLowerCase(), []))
-  // …unless it IS Owner being left alone, which a no-op rename would be.
-  assert.equal(aliasNameError(OWNER_ALIAS_NAME, [OWNER_ALIAS_NAME], OWNER_ALIAS_NAME), null)
+test('aliasNameError reserves the built-in Admin name', () => {
+  assert.ok(aliasNameError(ADMIN_ALIAS_NAME, []))
+  assert.ok(aliasNameError(ADMIN_ALIAS_NAME.toLowerCase(), []))
+  // …unless it IS Admin being left alone, which a no-op rename would be.
+  assert.equal(aliasNameError(ADMIN_ALIAS_NAME, [ADMIN_ALIAS_NAME], ADMIN_ALIAS_NAME), null)
 })
 
 test('aliasNameError lets an alias keep its own name when renaming', () => {
@@ -247,7 +247,7 @@ test('a holder row pointing at a deleted alias attaches to nothing', () => {
 })
 
 const VOCABULARY: SpaceAlias[] = [
-  { id: 'owner', name: 'Owner', color: '#b4881b', nodeType: 'Person', owner: true, system: true },
+  { id: 'admin', name: 'Admin', color: '#b4881b', nodeType: 'Person', admin: true, system: true },
   { id: 'al_1', name: 'Founder', color: '#16a34a', nodeType: 'Person' },
   { id: 'al_2', name: 'Portfolio', color: '#0891b2', nodeType: 'Space' },
 ]
@@ -273,11 +273,11 @@ test('findAliasByRef scopes to a node type when asked', () => {
   assert.equal(findAliasByRef(VOCABULARY, 'Founder', 'Space'), undefined)
 })
 
-test('findAliasByRef finds the built-in Owner, stored or not', () => {
-  assert.equal(findAliasByRef(VOCABULARY, OWNER_ALIAS_ID, 'Person')?.name, 'Owner')
-  // A space that never stored Owner still resolves it — personAliases grafts it.
-  assert.equal(findAliasByRef(personAliases([]), OWNER_ALIAS_ID, 'Person')?.id, OWNER_ALIAS_ID)
-  assert.equal(findAliasByRef(personAliases([]), 'owner', 'Person')?.name, 'Owner')
+test('findAliasByRef finds the built-in Admin, stored or not', () => {
+  assert.equal(findAliasByRef(VOCABULARY, ADMIN_ALIAS_ID, 'Person')?.name, 'Admin')
+  // A space that never stored Admin still resolves it — personAliases grafts it.
+  assert.equal(findAliasByRef(personAliases([]), ADMIN_ALIAS_ID, 'Person')?.id, ADMIN_ALIAS_ID)
+  assert.equal(findAliasByRef(personAliases([]), 'admin', 'Person')?.name, 'Admin')
 })
 
 test('findAliasByRef is empty-safe', () => {
@@ -287,9 +287,9 @@ test('findAliasByRef is empty-safe', () => {
   assert.equal(findAliasByRef(VOCABULARY, 'Nope'), undefined)
 })
 
-test('personAliases pins Owner to its reserved id even if storage says otherwise', () => {
+test('personAliases pins Admin to its reserved id even if storage says otherwise', () => {
   const grafted = personAliases([
-    { id: 'al_wrong', name: 'Owner', color: '#b4881b', nodeType: 'Person', owner: true, system: true },
+    { id: 'al_wrong', name: 'Admin', color: '#b4881b', nodeType: 'Person', admin: true, system: true },
   ])
-  assert.equal(grafted[0].id, OWNER_ALIAS_ID)
+  assert.equal(grafted[0].id, ADMIN_ALIAS_ID)
 })

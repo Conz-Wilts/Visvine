@@ -10,6 +10,9 @@ import { normalizeImageUrl } from '@/lib/mediaUrl';
 import { handleApiError, requireApiSession } from '@/lib/api/route';
 import { attachIdentity } from '@/lib/identity/attachIdentity';
 import { ensureEntityNote } from '@/lib/notes/context/entityNodes';
+import { followGlobalSafe } from '@/lib/global/binding';
+import { syncGlobalRecordSafe } from '@/lib/global/record';
+import { isGlobalSpace } from '@/lib/spaces/globalSpace';
 
 function nodeRowToNBNode(row: {
   id: string; type: string; name: string; alias: string | null; subtitle: string | null;
@@ -88,6 +91,8 @@ export async function POST(request: NextRequest) {
       // it the server resolves the identity itself — the client can never silently
       // force a merge.
       identity_id?: string | null;
+      /** The pick came from the Visvine space: mirror its record (lib/global/binding.ts). */
+      global_follow?: boolean;
     };
 
     if (!space_id) {
@@ -103,6 +108,9 @@ export async function POST(request: NextRequest) {
 
     if (!userIsAdmin) {
       return NextResponse.json({ error: 'Admin access required to create nodes' }, { status: 403 });
+    }
+    if (isGlobalSpace(space_id)) {
+      return NextResponse.json({ error: 'Visvine records are built from public spaces and profiles, not created by hand' }, { status: 403 });
     }
 
     // ── Resolve the canonical cross-space identity (people/orgs only) ──
@@ -161,6 +169,16 @@ export async function POST(request: NextRequest) {
       },
     );
 
+    if (identityId && body.global_follow === true) {
+      await followGlobalSafe(row.id, identityId, {
+        id: session?.userId ?? 'system',
+        name: session?.name ?? 'Visvine',
+        email: session?.email ?? null,
+      });
+    } else if (identityId) {
+      // A new public card is a new source for the record.
+      await syncGlobalRecordSafe(identityId);
+    }
     revalidateTag('context-data-v2', { expire: 0 });
     // `resolution` lets the client surface possible-match suggestions (Tier C) for
     // inline confirmation; null when the type has no identity or an explicit pick won.

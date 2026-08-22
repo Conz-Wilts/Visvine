@@ -17,6 +17,7 @@ import { logger } from '../logger';
 import { entityKindOf } from '../notes/entities';
 import { confirmIdentity } from './resolve';
 import { normalizeEmail, nameKey } from './normalize';
+import { syncGlobalRecordSafe } from '../global/record';
 
 export type ConnectError = 'not_found' | 'not_person' | 'duplicate' | 'identity_conflict';
 
@@ -139,6 +140,8 @@ export async function connectNodeToUser(
     actorUserId: opts.actorUserId ?? null,
     reason: opts.reason ?? 'connected to member',
   });
+  // The member's profile is now a public source for this identity.
+  await syncGlobalRecordSafe(identity.id);
   return { ok: true, identityId: identity.id };
 }
 

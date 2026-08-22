@@ -96,7 +96,7 @@ export default function SpaceSelector({
           <div className="w-10 h-10 rounded-[10px] bg-surface-3 flex-shrink-0" />
         )}
         {!iconOnly && (
-          <span className="hidden md:inline font-open-sauce">{currentSpace?.name || 'Select Space'}</span>
+          <span className="hidden md:inline font-open-sauce font-semibold text-text-primary">{currentSpace?.name || 'Select Space'}</span>
         )}
       </button>
 

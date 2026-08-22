@@ -51,12 +51,15 @@ Read this week's notes under updates/ and write a digest to reports/weekly.md �
   `author_gone`, deactivated.
 - **Model keys are the Space's** — `MODEL_KEY_GEMINI` / `MODEL_KEY_OPENAI` / `MODEL_KEY_ANTHROPIC` /
   `MODEL_KEY_CUSTOM` in `ConnectorSecret` (encrypted, admin-only, write-only), managed from the
-  Model keys card on `/agents`. Providers and their base URLs are pinned in `lib/agents/registry.ts`;
-  `custom/<id>` uses the admin-only `Space.agentConfig.customEndpoint`.
-- **Model connectors** — a provider can also appear as a connector: `connectors/<name>.md` with
-  `type: connector`, `kind: model`, `provider: gemini|openai|anthropic|custom` (Create panel →
-  Connector → *Model provider*). It sits in the Connectors list beside HTTP connectors, its page
-  shows the provider, pinned base URL, known model ids and the `MODEL_KEY_<PROVIDER>` key editor,
+  model connector's page under `/connectors`. Providers and their base URLs are pinned in
+  `lib/agents/registry.ts`; `custom/<id>` uses the `base_url:` of the Space's `provider: custom`
+  model connector (`lib/agents/providers.ts#findCustomModelEndpoint` — one per Space, SSRF-checked
+  on save and on every resolve).
+- **Model connectors** — a model IS a connector: `connectors/<name>.md` with `type: connector`,
+  `kind: model`, `provider: gemini|openai|anthropic|custom`, plus `base_url:` for `custom` (Create
+  panel → Connector → *Model provider*). It sits in the Connectors list beside HTTP connectors, its
+  page shows the provider, base URL (editable for custom), known model ids and the
+  `MODEL_KEY_<PROVIDER>` key editor,
   and a brief may name it in `connectors:`. It has no perimeter and is **never runnable** —
   `loadConnector` refuses `kind: model`, so MCP/agent `run_connector` and the console can't hand
   caller-authored JS the key. Base URL always comes from the registry, never the note
@@ -239,9 +242,11 @@ gcloud scheduler jobs create http visvine-agent-tick \
   --attempt-deadline=1500s
 ```
 
-Migration `20260817120000_agents` adds `spaces.timezone`, `spaces.agent_config`, `agent_state`,
+Migration `20260817120000_agents` adds `spaces.timezone`, `agent_state`,
 `agent_runs`, `agent_heartbeat`; `20260820120000_agent_events` adds `agent_events`,
-`agent_state.triggers_json` / `debounce_ms` and `agent_runs.event_count` / `input` — all applied by
+`agent_state.triggers_json` / `debounce_ms` and `agent_runs.event_count` / `input`;
+`20260826120000_model_connector_base_url` drops `spaces.agent_config` (the custom endpoint is now the
+model connector's `base_url:`) — all applied by
 `prisma migrate deploy` in the deploy workflow. The Scheduler job's cadence is the one thing not in
 a migration: existing deployments should be updated to `--schedule="* * * * *"`
 (`gcloud scheduler jobs update http visvine-agent-tick --schedule="* * * * *" …`).
@@ -256,7 +261,7 @@ deadline, UTC) was already correct and was left untouched.
   `debounce`), Run now (author/admin), Model keys (admins), scheduler banner.
 - `/directory/agent:<name>` — Agent tab (status, activation, spend + budget, runs with live
   transcripts) beside the Context/Raw note tabs.
-- Console → General → Agents: Space timezone, custom model endpoint.
+- Console → Agents: Space timezone. (Models and keys are connectors; activation is per agent on `/agents`.)
 - API: `GET/PATCH /api/communities/[spaceId]/agents[/[name]]`, `POST …/[name]/run`,
   `GET …/[name]/runs[/[runId]]`, `GET/PUT …/[name]/budget`.
 - MCP: `list_agents` (`context:read`; includes `schedule`, `every` and `triggers` so a trigger-only

@@ -116,8 +116,9 @@ test("isStructuralNodeType leaves the directory kinds alone", () => {
 });
 
 // Retired types are exempt: they're listed only so leftover rows stay filtered
-// out, and DEFAULT_NODE_TYPES no longer describes them.
-const RETIRED_TYPES = ["note", "file"];
+// out, and DEFAULT_NODE_TYPES does not describe them. `index` is among them
+// because a folder is a path, never a type (lib/notes/shared/indexNote.ts).
+const RETIRED_TYPES = ["note", "file", "index"];
 
 test("every live structural type resolves to a non-grey colour", () => {
   for (const type of STRUCTURAL_NODE_TYPES) {

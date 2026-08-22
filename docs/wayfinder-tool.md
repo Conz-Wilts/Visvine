@@ -37,12 +37,12 @@ carries `## Goal`, `## Brief` and `## Plan`. Task frontmatter carries `id`,
 `touches[]`, and — once Run has been pressed — `agent` and `run: { id, status, at,
 detail }`. The body carries `## Task` and `## Outcome`.
 
-**The project note is `project.md`, not `index.md`.** This is a deviation from the
-original spec, forced by a real invariant: the note store holds every note at an
-index path to `type: Index` (`lib/notes/shared/indexNote.ts#enforceIndexFrontmatter`
-— an index note *is* its folder), so no Tool can own a folder index's type. The
-project note sits beside the folder index instead. Nothing was bypassed to find
-that out, which is what an acceptance test is for.
+**The project note is `project.md`, not `index.md`.** An index note's `type:` is
+its subject (`lib/notes/shared/indexNote.ts#enforceIndexFrontmatter`), so
+`type: wayfinder-project` on `harness/<project>/index.md` would hold — the split
+is a choice, not a constraint. It earns its keep: the project note is a Tool's
+own record with a Tool's own schema, and the folder index is the human-readable
+home page that lists the tasks.
 
 ### Frontmatter without a YAML library
 

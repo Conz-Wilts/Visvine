@@ -14,7 +14,7 @@
  */
 import 'dotenv/config';
 import prisma from '../lib/prisma';
-import { OWNER_ALIAS_ID } from '../lib/types/context';
+import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { resolveContext, principalOf } from '../lib/notes/resolve';
 import { executeConnectorScript, listConnectors, loadConnector } from '../lib/connectors/service';
 
@@ -30,7 +30,7 @@ function check(label: string, ok: boolean, detail: string) {
 
 async function main() {
   const holder = await prisma.userAlias.findFirst({
-    where: { spaceId: SPACE, aliasId: OWNER_ALIAS_ID },
+    where: { spaceId: SPACE, aliasId: ADMIN_ALIAS_ID },
     select: { userId: true },
   });
   if (!holder) throw new Error(`nobody manages ${SPACE}`);

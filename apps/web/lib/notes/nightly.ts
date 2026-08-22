@@ -4,12 +4,18 @@
 // reasonHash gated), so a re-run, an overlap with the live fire-and-forget
 // triggers, or two server instances racing are all harmless — just wasted reads.
 //
-// There is no queue or external cron in this deploy (long-lived Docker/GCP Node
-// server), so the schedule lives in-process: instrumentation.ts calls
-// startNightlySchedule() once per server start, and a setTimeout chain fires at
-// NIGHTLY_MAINTENANCE_HOUR (server-local, default 3am). Production-only by
-// default so a dev server left running doesn't spend API tokens overnight;
-// NIGHTLY_MAINTENANCE=on|off overrides either way.
+// WHAT FIRES IT depends on the runtime, and the distinction matters — see
+// shared/nightly.ts#nightlyDriver. On a long-lived server the schedule lives
+// in-process: instrumentation.ts calls startNightlySchedule() once per server
+// start and a setTimeout chain fires at NIGHTLY_MAINTENANCE_HOUR (server-local,
+// default 3am). On Cloud Run, which scales to zero, that timer would mostly
+// never fire — nobody is awake at 3am, which is the entire premise — so Cloud
+// Scheduler POSTs /api/internal/maintenance/nightly instead and this file's
+// startNightlySchedule() deliberately arms nothing.
+//
+// Production-only by default so a dev server left running doesn't spend API
+// tokens overnight; NIGHTLY_MAINTENANCE=on|off overrides either way, and
+// NIGHTLY_MAINTENANCE_DRIVER=in-process|scheduler overrides who fires it.
 
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
@@ -17,7 +23,8 @@ import { aiConfigured } from '@/lib/notes/ai'
 import { embedSweep } from '@/lib/notes/embedSweep'
 import { generateLinkReasons } from '@/lib/notes/linkReasons'
 import { drainProjections, projectionBacklog } from '@/lib/notes/projections'
-import { msUntilNextRun, nightlyEnabled, nightlyRunHour } from './shared/nightly'
+import { pruneRateLimits } from '@/lib/rateLimit'
+import { msUntilNextRun, nightlyDriver, nightlyRunHour } from './shared/nightly'
 
 let sweeping = false
 
@@ -27,8 +34,11 @@ let sweeping = false
  * env (OPENAI_API_KEY / GEMINI_API_KEY) and skips silently when unkeyed, so
  * partial configuration runs whatever it can.
  */
-async function runNightlyMaintenance(): Promise<void> {
-  if (sweeping) return
+export async function runNightlyMaintenance(): Promise<{ ran: boolean; ms: number }> {
+  // Concurrency guard for THIS process only. Cross-instance overlap stays
+  // harmless by design (every stage is mtime/hash gated) and the scheduler
+  // driver makes it rare rather than relying on it.
+  if (sweeping) return { ran: false, ms: 0 }
   sweeping = true
   const startedAt = Date.now()
   try {
@@ -82,6 +92,17 @@ async function runNightlyMaintenance(): Promise<void> {
       }
     }
 
+    // Rate-limit buckets are keyed by caller (an IP, an email), so the table's
+    // key space is open-ended. A bucket idle long enough to have refilled to
+    // full carries no state worth keeping, so this is pure reclamation — the
+    // opportunistic sweep in lib/rateLimit.ts handles the hot path, this is the
+    // backstop for a quiet table nobody is taking from.
+    const prunedBuckets = await pruneRateLimits().catch((err) => {
+      logger.error('notes.nightly.rate_limit_prune_failed', { err })
+      return 0
+    })
+    if (prunedBuckets) logger.info('notes.nightly.rate_limits', { pruned: prunedBuckets })
+
     if (aiConfigured()) {
       const spaces = await prisma.space.findMany({ select: { id: true } })
       let updated = 0
@@ -99,6 +120,7 @@ async function runNightlyMaintenance(): Promise<void> {
   } finally {
     sweeping = false
   }
+  return { ran: true, ms: Date.now() - startedAt }
 }
 
 let scheduled = false
@@ -110,7 +132,16 @@ let scheduled = false
  */
 export function startNightlySchedule(): void {
   if (scheduled) return
-  if (!nightlyEnabled(process.env)) return
+  const driver = nightlyDriver(process.env)
+  if (driver === 'scheduler') {
+    // Say so out loud. A silent no-op here is exactly the failure this split
+    // exists to fix, and the log line is what tells you the Cloud Scheduler job
+    // is now the only thing that will ever run maintenance.
+    logger.info('notes.nightly.delegated', { driver, endpoint: '/api/internal/maintenance/nightly' })
+    scheduled = true
+    return
+  }
+  if (driver === 'off') return
   scheduled = true
 
   const runHour = nightlyRunHour(process.env)

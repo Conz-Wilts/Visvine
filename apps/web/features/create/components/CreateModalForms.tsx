@@ -131,13 +131,13 @@ export const TYPE_OPTIONS: TypeOption[] = [
     // A folder, written as its index note — the two are the same thing
     // (lib/notes/shared/indexNote.ts). Note-first like Context, so this entry
     // exists for label/colour lookups; the form lives on /directory/new.
-    id: 'index',
-    label: 'Index',
-    description: 'The home page for a group of notes',
-    color: '#c026d3',
+    id: 'folder',
+    label: 'Folder',
+    description: 'A group of notes, with a home page',
+    color: '#6b7280',
     inGrid: false,
-    // A page listing what sits under it, not a folder tab: an index is a note
-    // you read, and the glyph should say that.
+    // A page listing what sits under it, not a folder tab: a folder here IS a
+    // note you read (its index.md), and the glyph should say that.
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5h16M4 5v14M8 10h9M8 14h9M8 18h6" />
@@ -844,6 +844,8 @@ export interface ConnectorFormData {
   kind: 'http' | 'model';
   /** Model connectors only: a registry provider id (gemini, openai, anthropic, custom). */
   provider: string;
+  /** Model connectors with `provider: custom`: the OpenAI-compatible https base URL. */
+  baseUrl: string;
   /** One `host` or `host:port` per line — what the sandbox may reach. Empty = no network yet. */
   hosts: string;
   /** Optional NAME of a stored secret, exposed to commands as $NAME. */
@@ -872,7 +874,19 @@ function connectorFormError(data: ConnectorFormData): string | null {
   if (!name) return null; // not an error yet — just nothing typed
   if (!connectorSlug(name)) return 'Use letters and numbers — that name has none.';
   if (data.kind === 'model') {
-    return PROVIDERS.some((p) => p.id === data.provider) ? null : 'Pick a model provider.';
+    if (!PROVIDERS.some((p) => p.id === data.provider)) return 'Pick a model provider.';
+    if (data.provider === 'custom') {
+      const url = data.baseUrl.trim();
+      if (!url) return 'A custom provider needs its base URL.';
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'https:') return 'The base URL must use https.';
+        if (parsed.search || parsed.hash) return 'The base URL must not carry a query or fragment.';
+      } catch {
+        return 'The base URL must be an absolute URL, e.g. https://llm.example.com/v1/.';
+      }
+    }
+    return null;
   }
   for (const line of data.hosts.split('\n').map((l) => l.trim()).filter(Boolean)) {
     if (!HOST_LINE_RE.test(line)) {
@@ -969,9 +983,22 @@ export function ConnectorForm({
               ))}
             </select>
           </Field>
+          {data.provider === 'custom' && (
+            <Field label="Base URL" required>
+              <input
+                type="url"
+                className={`${inputClass} font-mono`}
+                value={data.baseUrl}
+                placeholder="https://llm.example.com/v1/"
+                onChange={(e) => onChange({ ...data, baseUrl: e.target.value })}
+              />
+            </Field>
+          )}
           <p className="text-xs text-text-muted">
-            The endpoint is the provider&apos;s own — pinned by Visvine, not by the note. Its API key
-            ({PROVIDERS.find((p) => p.id === data.provider)?.keySecret ?? 'MODEL_KEY_…'}) is set on the
+            {data.provider === 'custom'
+              ? 'The base URL is an OpenAI-compatible https endpoint — where this space\u2019s agents send their context. Only an admin can change it.'
+              : 'The endpoint is the provider\u2019s own — pinned by Visvine, not by the note.'}{' '}
+            Its API key ({PROVIDERS.find((p) => p.id === data.provider)?.keySecret ?? 'MODEL_KEY_…'}) is set on the
             connector&apos;s page afterwards. Agents pick a model with{' '}
             <span className="font-mono">model: {data.provider || 'provider'}/…</span> in their brief.
             Not runnable: no note or agent can read or spend the key.

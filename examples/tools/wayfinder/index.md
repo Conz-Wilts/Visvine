@@ -31,9 +31,10 @@ harness/<project>/project.md              the goal, the waves, the plan
 harness/<project>/tasks/<id>-<slug>.md    one task
 ```
 
-`harness/<project>/index.md` is NOT the project note. The note store holds every
-`index.md` to `type: Index` — an index note *is* its folder — so a Tool can never
-own a folder index's type. The project note sits beside it, at `project.md`.
+`harness/<project>/index.md` is NOT the project note. The folder index is the
+human-readable home page for the project's tasks; the project note is this
+Tool's own record, with this Tool's own schema. They stay separate on purpose,
+and the project note sits beside the index at `project.md`.
 
 ### `project.md`
 

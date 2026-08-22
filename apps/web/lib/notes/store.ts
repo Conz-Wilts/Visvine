@@ -52,13 +52,11 @@ import {
   ancestorFolders,
   applyChildrenBlock,
   buildIndexStub,
-  enforceEntityIndexFrontmatter,
   enforceIndexFrontmatter,
   folderOfIndexPath,
   hasChildrenBlock,
   indexFolderPathOf,
   indexPathOf,
-  isIndexContent,
   isIndexPath,
   newIndexContent,
   nextIndexTitle,
@@ -210,20 +208,20 @@ export async function createNote(
    */
   stamp?: WriteStamp,
 ): Promise<RawNote> {
-  const requested = await canonicalEntityWritePath(context, path)
-  assertMarkdown(requested)
-  // An index note IS a folder: creating `a/b.md` with `type: Index` creates the
-  // folder `a/b` and writes its index, never a loose note that claims the type.
-  let p = requested
-  if (isIndexContent(content) && !isIndexPath(requested)) {
-    const denial = await indexConversionDenial(context, requested)
-    if (denial) throw new Error(denial)
-    p = indexPathOf(indexFolderPathOf(requested))
-    // A brand-new entity note created straight as an index is an entity folder
-    // from birth: seeded with this content, typed as the entity, pointer set.
-    if (parseEntityHref(requested)) {
-      if (await findLive(context, requested)) throw new Error(`A note already exists at: ${requested}`)
-      if (await findLive(context, p)) throw new Error(`A note already exists at: ${p}`)
+  const p = await canonicalEntityWritePath(context, path)
+  assertMarkdown(p)
+  // A create addressed straight at an entity's folder index (people/<slug>/index.md)
+  // is that entity becoming a folder, not a loose note at an index path — it needs
+  // the node pointer and the entity contract, which only ensureEntityFolder sets.
+  if (isEntityFolderIndex(p) && !(await findLive(context, p))) {
+    const node = await nodeForEntityPath(context.spaceId, p)
+    if (node) {
+      const flat = entityFlatPath(node)
+      // The flat note is the SAME note — converting it would discard `content`.
+      // Say so, rather than silently choosing one of the two bodies.
+      if (flat && (await findLive(context, flat))) {
+        throw new Error(`A note already exists at: ${flat} — write a note under ${folderOfIndexPath(p)}/ to make it a folder`)
+      }
       // The folder is built by helpers that own their own writes, so there is
       // no note transaction here for the job to ride. The job is therefore
       // enqueued BEFORE the build rather than after it, which is the safe half
@@ -232,13 +230,9 @@ export async function createNote(
       // staleness" — the mutation that owns the path is authoritative for it).
       // Enqueueing afterwards left the opposite and worse case, a built folder
       // with no record that its projections were ever owed.
-      const node = await nodeForEntityPath(context.spaceId, requested)
-      if (!node) throw new Error(`"${requested}" is not a directory entity's note — no such node`)
-      const dest = entityIndexPathOf(node)
-      if (!dest) throw new Error(`"${requested}" is not a directory entity`)
       const projection: ProjectionInput = {
         context,
-        path: dest,
+        path: p,
         kind: 'write',
         origin: stamp?.origin ?? 'edit',
         actor,
@@ -247,18 +241,21 @@ export async function createNote(
       }
       const jobId = await enqueueProjection(prisma, projection)
       await ensureEntityFolder(context, node, actor, content)
-      const row = await findLive(context, dest)
-      if (!row) throw new Error(`Note not found: ${dest}`)
+      const row = await findLive(context, p)
+      if (!row) throw new Error(`Note not found: ${p}`)
       await settleProjection(jobId, projection)
       return toRaw(row)
     }
   }
-  // A note landing inside an entity's folder makes that folder exist: the
-  // entity note becomes people/<slug>/index.md first (or the create is refused
-  // when no such entity exists — sub-notes need a node to belong to).
-  await ensureOwnerFolderFor(context, p, actor)
-  // The reverse guard: a note AT an index path is a folder whatever its
-  // frontmatter says, so the Index type is enforced rather than trusted.
+  // A note landing under `a/b/` makes `a/b` a folder: if `a/b.md` is a live
+  // note it becomes `a/b/index.md`, so the note you were reading is now the
+  // folder's home page. Under an entity namespace that conversion is the
+  // entity's (people/<slug>.md → people/<slug>/index.md), and the create is
+  // refused when no such entity exists — sub-notes need a node to belong to.
+  await ensureParentFolderNote(context, p, actor)
+  // A note AT an index path IS a folder whatever its frontmatter says, so the
+  // contract (a title, and the entity's type and node: when the folder is an
+  // entity's) is enforced rather than trusted.
   if (isIndexPath(p)) content = await enforceIndexContract(context, p, content)
   if (await findLive(context, p)) throw new Error(`A note already exists at: ${p}`)
   const projection: ProjectionInput = {
@@ -495,8 +492,9 @@ export async function ensureRootIndex(
 // then record the new snapshot tagged with how it arose.
 //
 // Returns the note's path after the save. It differs from `path` only when the
-// save retyped the note to `Index` and so turned it into a folder — callers that
-// hold a path (the editor, the API) redirect to the returned one.
+// note has since become its own folder and the save was redirected to the
+// folder's index — callers that hold a path (the editor, the API) follow the
+// returned one.
 export async function writeNote(
   context: Context,
   path: string,
@@ -507,22 +505,14 @@ export async function writeNote(
 ): Promise<string> {
   const p = await canonicalEntityWritePath(context, path)
   assertMarkdown(p)
-  // Retyping a note to `Index` makes it a folder (below). Refuse the whole save
-  // when it can't be one, rather than storing a note whose type contradicts
-  // where it lives. Replica writes never restructure their target context.
-  const converting = origin !== 'publish' && isIndexContent(content) && !isIndexPath(p)
-  if (converting) {
-    const denial = await indexConversionDenial(context, p)
-    if (denial) throw new Error(denial)
-  }
   const existing = await findLive(context, p)
-  // An upsert-create inside an entity's folder converts the entity note first,
-  // exactly as createNote does.
-  if (!existing) await ensureOwnerFolderFor(context, p, actor)
-  // The reverse guard: a save at an index path keeps `type: Index` (and a
-  // title) whatever the incoming frontmatter says — dropping the type would
-  // silently turn the folder into a loose note. An entity folder's index keeps
-  // its ENTITY type instead (it is the person's note; the path is the folder).
+  // An upsert-create under `a/b/` makes `a/b` a folder first, exactly as
+  // createNote does. Replica writes never restructure their target context.
+  if (!existing && origin !== 'publish') await ensureParentFolderNote(context, p, actor)
+  // A save at an index path is a save to a FOLDER's home page: the contract
+  // (a title — the folder's display name — plus the entity's type and `node:`
+  // when the folder is an entity's) is enforced whatever the incoming
+  // frontmatter says.
   if (isIndexPath(p)) content = await enforceIndexContract(context, p, content)
   const prev = existing?.content ?? null
 
@@ -609,16 +599,7 @@ export async function writeNote(
   // Even a no-op save bumped updatedAt above, so the memo's stamp is stale.
   invalidateVault(context)
 
-  // The type is what makes a note an index, so the path follows it. An entity
-  // note retyped to Index becomes an entity folder — same move, but the note
-  // keeps being the entity (type put back, pointer set on the node).
-  const finalPath = converting
-    ? parseEntityHref(p)
-      ? await ensureEntityFolderFor(context, p, actor)
-      : await convertNoteToIndex(context, p, actor)
-    : p
-
-  return finalPath
+  return p
 }
 
 interface RevisionInput {
@@ -713,7 +694,7 @@ export async function renameNote(
   // refused when no such entity exists). Callers without an actor (system
   // moves) can't convert, so a sub-note destination needs the folder to exist.
   if (t !== f) {
-    if (actor) await ensureOwnerFolderFor(context, t, actor)
+    if (actor) await ensureParentFolderNote(context, t, actor, f)
     else if (entityOwnerPathOf(t) && !(await findLive(context, indexPathOf(entityOwnerPathOf(t)!)))) {
       throw new Error(`"${entityOwnerPathOf(t)}" is not a folder yet — open the entity and add a note first`)
     }
@@ -896,10 +877,8 @@ export async function createIndexFolder(
 async function indexConversionDenial(context: Context, path: string): Promise<string | null> {
   const p = sanitizePath(path)
   if (isIndexPath(p)) return null
-  // A canonical entity note may become a folder — its OWN folder
-  // (people/<slug>/index.md), which ensureEntityFolder handles: the node keeps
-  // pointing at it. Nothing else to check here; the target folder can't already
-  // exist without the index (ensureEntityFolder is the only way it appears).
+  // A canonical entity note becomes its OWN folder through ensureEntityFolder
+  // instead (the node keeps pointing at it), so it never reaches here.
   if (parseEntityHref(p)) return null
   const folder = indexFolderPathOf(p)
   if (await findLive(context, indexPathOf(folder))) {
@@ -1060,7 +1039,7 @@ async function ensureEntityFolder(
     const idx = await findLive(context, dest, tx)
     let content = idx?.content ?? ''
     if (idx) {
-      const next = enforceEntityIndexFrontmatter(idx.content, entityContractOf(node))
+      const next = enforceIndexFrontmatter(idx.content, folder, entityContractOf(node))
       if (next !== idx.content) {
         await tx.contextNote.update({ where: { id: idx.id }, data: { content: next } })
         content = next
@@ -1119,57 +1098,83 @@ function bustContextData(): void {
   }
 }
 
-/** ensureEntityFolder for the node whose entity note is `entityPath` (either form). */
-async function ensureEntityFolderFor(
-  context: Context,
-  entityPath: string,
-  actor: Actor,
-  seed?: string,
-): Promise<string> {
-  const node = await nodeForEntityPath(context.spaceId, entityPath)
-  if (!node) throw new Error(`"${entityPath}" is not a directory entity's note — no such node`)
-  return ensureEntityFolder(context, node, actor, seed)
-}
-
 /**
- * A note about to land at `path`: if that is inside an entity's folder
- * (people/<slug>/…), make the folder exist first — converting the entity note —
- * or refuse when there is no such entity. Anything else is a no-op.
+ * A note is about to land at `path`. Make its parent folder real first.
+ *
+ * This is the ONE gesture that turns a note into a folder, and it is the one
+ * people actually perform: a second note about Connor is written at
+ * `people/connor/comms.md`, so `people/connor.md` becomes
+ * `people/connor/index.md` — still Connor's note, now also the folder's home
+ * page. No retype, no separate "convert" step, nothing to know in advance.
+ *
+ * Two cases, one rule:
+ *
+ * - Inside an entity namespace (`people/<slug>/…`) the conversion is the
+ *   ENTITY's, so ensureEntityFolder owns it: the note keeps its type and
+ *   `node:`, and the node records where it moved. A path under a namespace
+ *   with no entity behind it is refused — sub-notes need a node to belong to.
+ * - Anywhere else, `a/b.md` is an ordinary note and convertNoteToIndex moves it.
+ *   If nothing lives at `a/b.md` there is nothing to convert: the folder and
+ *   its stub index are created by the ancestor pass on the write itself.
+ *
+ * Only the note's IMMEDIATE parent is considered — deeper ancestors are folders
+ * that already have (or will get) generated indexes, and a note two levels up is
+ * not what the writer was extending.
  */
-async function ensureOwnerFolderFor(context: Context, path: string, actor: Actor): Promise<void> {
+async function ensureParentFolderNote(
+  context: Context,
+  path: string,
+  actor: Actor,
+  /** A note being MOVED here: it can't also be the parent it converts into. */
+  exclude?: string,
+): Promise<void> {
   const owner = entityOwnerPathOf(path)
-  if (!owner) return
-  if (await findLive(context, indexPathOf(owner))) return
-  const node = await nodeForEntityPath(context.spaceId, `${owner}.md`)
-  if (!node) {
-    throw new Error(
-      `"${owner}" is not a directory entity — notes filed under an entity namespace must belong to one`,
-    )
+  if (owner) {
+    if (await findLive(context, indexPathOf(owner))) return
+    const node = await nodeForEntityPath(context.spaceId, `${owner}.md`)
+    if (!node) {
+      throw new Error(
+        `"${owner}" is not a directory entity — notes filed under an entity namespace must belong to one`,
+      )
+    }
+    await ensureEntityFolder(context, node, actor)
+    return
   }
-  await ensureEntityFolder(context, node, actor)
+  const parent = folderOf(sanitizePath(path))
+  if (!parent) return
+  const parentNote = `${parent}.md`
+  if (exclude && sanitizePath(exclude) === parentNote) return
+  if (await findLive(context, indexPathOf(parent))) return
+  if (!(await findLive(context, parentNote))) return
+  await convertNoteToIndex(context, parentNote, actor)
 }
 
 /**
- * The index contract for a write at index path `p`: an entity folder's index
- * keeps the entity's type and `node:`; every other index carries `type: Index`.
- * An entity-shaped index path with no node behind it (a folder somebody hand-
- * made under people/) falls back to the plain contract — EXCEPT a Tool: it is
- * folder-only (lib/notes/entities.ts FOLDER_ONLY_ENTITY_KINDS), so a write
- * straight at `tools/<name>/index.md` declaring `type: tool` is its only
- * chance to gain the node that makes it a real Tool, and ensureToolNode makes
- * it right here — before the frontmatter below is decided, since this runs
- * ahead of syncContextLinks (see ensureToolNode's own comment for why that
- * ordering matters).
+ * The index contract for a write at index path `p`.
+ *
+ * A folder's index owes a title. When the folder is a directory entity's own
+ * (`people/<slug>/`), the index IS the entity's note, so it also owes the
+ * entity's type and `node:` — that is the whole difference, and it is passed
+ * to the one contract function rather than being a second contract.
+ *
+ * An entity-shaped index path with no node behind it (a folder somebody
+ * hand-made under people/) is just a folder — EXCEPT a Tool: it is folder-only
+ * (lib/notes/entities.ts FOLDER_ONLY_ENTITY_KINDS), so a write straight at
+ * `tools/<name>/index.md` declaring `type: tool` is its only chance to gain the
+ * node that makes it a real Tool, and ensureToolNode makes it right here —
+ * before the frontmatter below is decided, since this runs ahead of
+ * syncContextLinks (see ensureToolNode's own comment for why that matters).
  */
 async function enforceIndexContract(context: Context, p: string, content: string): Promise<string> {
+  const folder = folderOfIndexPath(p)
   if (isEntityFolderIndex(p)) {
     let node = await nodeForEntityPath(context.spaceId, p)
     if (!node && context.ownerKey === SHARED_OWNER_KEY && (await ensureToolNode(context.spaceId, p, content))) {
       node = await nodeForEntityPath(context.spaceId, p)
     }
-    if (node) return enforceEntityIndexFrontmatter(content, entityContractOf(node))
+    if (node) return enforceIndexFrontmatter(content, folder, entityContractOf(node))
   }
-  return enforceIndexFrontmatter(content, folderOfIndexPath(p))
+  return enforceIndexFrontmatter(content, folder)
 }
 
 /**
@@ -1209,7 +1214,7 @@ export async function renameFolder(
     throw new Error(`"${t}" is where a directory entity's notes live — a folder can't be renamed into it`)
   }
   // Moving a folder INTO an entity's folder converts the entity note first.
-  if (actor) await ensureOwnerFolderFor(context, `${t}/x.md`, actor)
+  if (actor) await ensureParentFolderNote(context, `${t}/x.md`, actor)
   const notes = await prisma.contextNote.findMany({
     where: {
       spaceId: context.spaceId,

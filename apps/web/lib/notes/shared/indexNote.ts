@@ -1,7 +1,13 @@
 // Per-folder index notes: an index note and a folder are THE SAME THING. Every
-// folder carries an `index.md` — a `type: Index` note whose title is the
-// folder's display name and whose body lists the folder's notes. Creating an
-// Index creates a folder; retyping a note to Index turns it into one.
+// folder carries an `index.md` whose title is the folder's display name and
+// whose body lists the folder's notes.
+//
+// Index-ness is the PATH, and only the path. A note's `type:` says what it is
+// ABOUT — so a person's context folder is `type: Person`, and a folder about
+// nothing in particular carries no type at all. There is no `Index` type in
+// this system; `declaresIndexType` exists to reject the spelling, not to act
+// on it. A folder appears when one is needed: write a note under `a/b/` and
+// `a/b.md` becomes `a/b/index.md` by itself (store.ensureParentFolderNote).
 //
 // These are the pure path/content helpers; the DB side (ensureAncestorIndexes,
 // createIndexFolder, convertNoteToIndex, refreshFolderIndex) lives in
@@ -32,15 +38,19 @@ export function folderOfIndexPath(indexPath: string): string {
   return indexPath.slice(0, Math.max(0, indexPath.length - INDEX_BASENAME.length - 1))
 }
 
-// Does this note DECLARE itself an index? The type is what makes a note a
-// folder, so this is the trigger for conversion — not the path.
-export function isIndexContent(content: string): boolean {
+/**
+ * Does this note declare the reserved word `Index` as its type? Nothing in the
+ * system acts on it — a folder is a path, not a type — so this is purely the
+ * guard that keeps the spelling out of stored frontmatter: the index contract
+ * strips it on write, and db:notes:verify fails on any that survive.
+ */
+export function declaresIndexType(content: string): boolean {
   const declared = parseFrontmatter(content).type
   return typeof declared === 'string' && declared.trim().toLowerCase() === 'index'
 }
 
-// The folder a non-index note becomes when it is retyped to Index:
-// 'a/b.md' → 'a/b'. Undefined for a path that is already an index.
+// The folder a non-index note becomes when it is converted to one:
+// 'a/b.md' → 'a/b'. Meaningless for a path that is already an index.
 export function indexFolderPathOf(notePath: string): string {
   return notePath.replace(/\.md$/i, '')
 }
@@ -84,27 +94,52 @@ export function nextIndexTitle(
 }
 
 /**
- * Hold a write to an index path to the index contract: the frontmatter carries
- * `type: Index` and a title. An index note IS its folder, so a save that drops
- * the type would silently turn the folder into a loose note — instead the type
- * is put back and the rest of the frontmatter (description, tags…) rides
- * through untouched. The title falls back to the folder's display name only
- * when the write carries none; a title the writer chose is kept.
+ * Hold a write at an index path to the index contract.
+ *
+ * A folder IS its index note, and index-ness is the PATH — so the only thing
+ * an ordinary folder's index owes is a `title:`, which is the folder's display
+ * name. Whatever `type:` the writer declared says what the folder is ABOUT and
+ * rides through untouched, as does the rest of the frontmatter; a folder about
+ * nothing in particular carries no type at all. The one word that cannot
+ * survive is `Index` itself — it names a shape, and the shape is already the
+ * path — so a write carrying it is stripped rather than obeyed.
+ *
+ * `entity` is passed when the folder is a directory entity's own context folder
+ * (`people/<slug>/`). Then the index IS the entity's note, so it must carry the
+ * entity's type label and its `node:` back-pointer — and a write that dropped
+ * either (an agent following the plain folder rule) gets them put back. A title
+ * the writer chose is always kept.
  *
  * Returns `content` unchanged when it already conforms, so callers can apply
  * this unconditionally on every index-path write.
  */
-export function enforceIndexFrontmatter(content: string, folderPath: string): string {
+export function enforceIndexFrontmatter(
+  content: string,
+  folderPath: string,
+  entity?: { typeLabel: string; nodeId: string; name: string },
+): string {
   const fm = parseFrontmatter(content)
+  const declaredType = typeof fm.type === 'string' ? fm.type.trim() : ''
   const declaredTitle = typeof fm.title === 'string' ? fm.title.trim() : ''
-  if (isIndexContent(content) && declaredTitle) return content
+  const declaredNode = typeof fm.node === 'string' ? fm.node.trim() : ''
+  const claimsShape = declaredType.toLowerCase() === 'index'
+  const typeOk = entity
+    ? declaredType.toLowerCase() === entity.typeLabel.toLowerCase()
+    : !claimsShape
+  const nodeOk = !entity || declaredNode === entity.nodeId
+  if (typeOk && nodeOk && declaredTitle) return content
+
   const { body } = splitFrontmatter(content)
   const segment = folderPath.split('/').pop() ?? folderPath
-  const title = declaredTitle || humanizeFolderName(segment)
-  return joinFrontmatter(
-    { ...fm, type: 'Index', ...(title ? { title } : {}) },
-    body,
-  )
+  const title = declaredTitle || entity?.name || humanizeFolderName(segment)
+  const next: Record<string, unknown> = { ...fm, ...(title ? { title } : {}) }
+  if (entity) {
+    next.type = typeOk ? declaredType : entity.typeLabel
+    next.node = entity.nodeId
+  } else if (claimsShape) {
+    delete next.type
+  }
+  return joinFrontmatter(next, body)
 }
 
 /**
@@ -138,40 +173,6 @@ export function declaredFolderOnlyEntity(
  */
 export function entityNameClashDenial(name: string, kindLabel: string, howToCreate: string): string {
   return `The name "${name}" is taken — create this ${kindLabel} with a different name (see ${howToCreate}).`
-}
-
-/**
- * The entity-folder variant of the contract: an index at 'people/<slug>/index.md'
- * IS the person's note, so it keeps the entity's own type (`Person`, …) and its
- * `node:` back-pointer rather than `type: Index` — index-ness is the path. A
- * write that swapped the type for `Index` (an agent following the plain index
- * rule) or dropped it is put back; a title the writer chose is kept, falling
- * back to the entity's name. Everything else in the frontmatter rides through.
- *
- * `entity` is the type label and node id the note must carry (see
- * lib/notes/entities.ts ENTITY_TYPE_LABEL / entityDraftContent). Returns
- * `content` unchanged when it already conforms.
- */
-export function enforceEntityIndexFrontmatter(
-  content: string,
-  entity: { typeLabel: string; nodeId: string; name: string },
-): string {
-  const fm = parseFrontmatter(content)
-  const declaredType = typeof fm.type === 'string' ? fm.type.trim() : ''
-  const declaredTitle = typeof fm.title === 'string' ? fm.title.trim() : ''
-  const declaredNode = typeof fm.node === 'string' ? fm.node.trim() : ''
-  const typeOk = declaredType.toLowerCase() === entity.typeLabel.toLowerCase()
-  if (typeOk && declaredTitle && declaredNode === entity.nodeId) return content
-  const { body } = splitFrontmatter(content)
-  return joinFrontmatter(
-    {
-      ...fm,
-      type: typeOk ? declaredType : entity.typeLabel,
-      title: declaredTitle || entity.name,
-      node: entity.nodeId,
-    },
-    body,
-  )
 }
 
 // the managed child list
@@ -290,7 +291,6 @@ export function buildIndexStub(folderPath: string, children: IndexChild[]): stri
   const name = folderPath.split('/').pop() ?? folderPath
   return (
     `---\n` +
-    `type: Index\n` +
     `title: ${JSON.stringify(humanizeFolderName(name))}\n` +
     `tags: []\n` +
     `---\n\n` +
@@ -299,22 +299,28 @@ export function buildIndexStub(folderPath: string, children: IndexChild[]): stri
 }
 
 /**
- * Seed body for an index somebody just created — the folder's home page. Mirrors
+ * Seed body for a folder somebody just created — its home page. Mirrors
  * newNoteContent in ./newContext.ts (same frontmatter shape, H1, starting text),
- * with `type: Index` and an empty managed block the store fills as notes land.
+ * plus the empty managed block the store fills as notes land in the folder.
+ *
+ * `type` is the folder's SUBJECT, and it is optional: a folder about a person
+ * is `type: Person`, a folder that just groups notes carries no type. Nothing
+ * here records that this is a folder — the path does that.
  */
 export function newIndexContent(input: {
   title: string
   author?: string
   tags?: string[]
   body?: string
+  type?: string | null
 }): string {
   const tags = (input.tags ?? []).map((t) => t.trim()).filter(Boolean)
   const authorLine = input.author ? `author: ${input.author}\n` : ''
+  const typeLine = input.type?.trim() ? `type: ${input.type.trim()}\n` : ''
   const body = (input.body ?? '').trim()
   return (
     `---\n` +
-    `type: Index\n` +
+    typeLine +
     `title: ${input.title}\n` +
     authorLine +
     `tags: [${tags.join(', ')}]\n` +

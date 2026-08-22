@@ -85,7 +85,7 @@ export type DraftType =
   | 'note'
   // A folder, written as its index note — an index note IS a folder
   // (lib/notes/shared/indexNote.ts). The title names the folder everywhere.
-  | 'index'
+  | 'folder'
   | 'person'
   // The org type — a node and a
   // note recording that a group/organisation exists. Provisioning a real space
@@ -136,7 +136,7 @@ const DRAFT_TYPES: DraftTypeOption[] = [
   { id: 'section', label: 'Section', configName: 'Section', color: NOTE_COLOR, creatable: 'section' },
   { id: 'channel', label: 'Channel', configName: 'Channel', color: NOTE_COLOR, creatable: 'channel' },
   { id: 'connector', label: 'Connector', configName: 'Connector', color: NOTE_COLOR, creatable: 'connector' },
-  { id: 'index', label: 'Index', configName: 'Index', color: NOTE_COLOR, creatable: 'index' },
+  { id: 'folder', label: 'Folder', configName: null, color: NOTE_COLOR, creatable: 'folder' },
   { id: 'file', label: 'File', configName: null, color: '#0ea5e9', creatable: 'file' },
 ]
 
@@ -145,8 +145,8 @@ const DRAFT_TYPES: DraftTypeOption[] = [
  *  the server's list, and a type here that isn't there 400s on commit. */
 const ENTITY_TYPES = new Set<DraftType>(['person', 'space', 'resource', 'event'])
 /** Types whose only inline field is the destination folder in the context.
- *  For an index the picker chooses its PARENT — the index is a folder itself. */
-const FOLDERED_TYPES = new Set<DraftType>(['note', 'index', 'file'])
+ *  For a folder the picker chooses its PARENT — the folder is one itself. */
+const FOLDERED_TYPES = new Set<DraftType>(['note', 'folder', 'file'])
 
 interface DraftContextPanelProps {
   mode?: NoteMode
@@ -308,6 +308,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     // from the Create panel (or a hand-written `kind: model` note).
     kind: 'http',
     provider: '',
+    baseUrl: '',
     hosts: extras.hosts,
     secretName: extras.secretName,
   }
@@ -400,7 +401,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     (dest: string) => {
       if (!titleUsable) return ''
       if (type === 'note') return availableNotePath(dest, title, contextFolderTree.notePaths)
-      if (type === 'index') return indexPathOf(availableFolderPath(dest, title, folderPaths))
+      if (type === 'folder') return indexPathOf(availableFolderPath(dest, title, folderPaths))
       return ''
     },
     [type, titleUsable, title, contextFolderTree.notePaths, folderPaths],
@@ -477,16 +478,23 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
   // An index IS a folder: this creates the folder and writes the note that names
   // it, in one call. `dest` is the PARENT it was dropped into.
-  const commitIndex = useCallback(async (dest: string) => {
+  const commitFolder = useCallback(async (dest: string) => {
     if (!spaceId) return
     const folderPath = availableFolderPath(dest, title, folderPaths)
-    const content = newIndexContent({ title: title.trim(), tags, body: bodyRef.current })
+    const content = newIndexContent({
+      title: title.trim(),
+      tags,
+      body: bodyRef.current,
+      // A folder's type is its SUBJECT, same field and same rule as a note's:
+      // the REGISTERED spelling, because retrieval compares it exactly.
+      type: customConfig?.name ?? customType ?? undefined,
+    })
     const { indexPath } = await notesApi.createFolder(spaceId, folderPath, content)
     invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
     primeContextCache(contextKeys.read(spaceId, indexPath), { status: 'ok', content })
     sessionStorage.removeItem(STASH_KEY)
     router.replace(noteHref(indexPath))
-  }, [spaceId, title, tags, folderPaths, router])
+  }, [spaceId, title, tags, folderPaths, router, customType, customConfig])
 
   const commitEntity = useCallback(async () => {
     if (!spaceId || !type) return
@@ -636,7 +644,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     setError(null)
     try {
       if (type === 'note') await commitNote(where)
-      else if (type === 'index') await commitIndex(where)
+      else if (type === 'folder') await commitFolder(where)
       else if (type === 'connector') await commitConnector()
       else if (type === 'channel') await commitChannel()
       // 'section' is the channels-tool container; 'space' (the org type) falls
@@ -657,16 +665,16 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     }
   }, [
     ready, committing, spaceId, type, folder,
-    commitNote, commitIndex, commitEntity, commitConnector, commitChannel, commitSpace, commitFiles,
+    commitNote, commitFolder, commitEntity, commitConnector, commitChannel, commitSpace, commitFiles,
   ])
 
-  // Pressing Create on a note or an index asks WHERE first, in a popup over the
+  // Pressing Create on a note or a folder asks WHERE first, in a popup over the
   // draft. The destination used to be a row in the header, which put a filing
   // decision in front of a note nobody had written yet — and every entity type
   // gets its folder from its namespace, so the row was blank space on most of
   // them. Everything else commits straight away (a file carries its own
   // destination inside the upload form).
-  const asksWhere = type === 'note' || type === 'index'
+  const asksWhere = type === 'note' || type === 'folder'
   const requestCommit = useCallback(() => {
     if (!ready || committing) return
     if (asksWhere) setDestOpen(true)
@@ -674,7 +682,9 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   }, [ready, committing, asksWhere, commit])
 
   // The one place type, alias and customType are set — together, so the
-  // "a custom type is always a note" invariant can't drift apart.
+  // "a custom type only ever rides a note or a folder" invariant can't drift
+  // apart. Shape (note vs folder vs entity) and subject (the type) are separate
+  // facts about what is being created, exactly as they are on the stored note.
   const pickType = useCallback((next: DraftType, nextAlias: string | null = null, nextCustom: string | null = null) => {
     // Every type is a state here now, events included: picking one used to jump
     // straight to the Events composer, which threw away the draft you were
@@ -705,14 +715,16 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       return
     }
     if (merged.created) setAddedTypes((prev) => [...prev, merged.type])
-    pickType('note', null, merged.type.name)
+    // A custom type is what the thing is ABOUT, so it doesn't decide the shape:
+    // a folder being drafted stays a folder and carries the type on its index.
+    pickType(type === 'folder' ? 'folder' : 'note', null, merged.type.name)
     if (!spaceId || !merged.created) return
     void fetch(`/api/communities/${encodeURIComponent(spaceId)}/node-types`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: merged.type.name, color: merged.type.color }),
     }).catch(() => {})
-  }, [spaceId, currentSpace?.nodeTypes, addedTypes, pickType])
+  }, [spaceId, currentSpace?.nodeTypes, addedTypes, pickType, type])
 
   const typeRow = (
     <TypeMenu
@@ -942,7 +954,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         open={destOpen}
         onClose={() => setDestOpen(false)}
         size="sm"
-        title={type === 'index' ? 'Drop it in a folder' : 'Drop the note in a folder'}
+        title={type === 'folder' ? 'Drop it in a folder' : 'Drop the note in a folder'}
         footer={
           <div className="flex justify-end">
             <button

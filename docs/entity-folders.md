@@ -106,8 +106,8 @@ after the conversion resolves.
 
 ## Verification
 
-- `scripts/verify-notes-rules.ts` rule 3: an entity-folder index must declare the
-  entity type + `node:` (not `type: Index`); rule 6: `metadata.notePath` ⇔ the
+- `scripts/verify-notes-rules.ts` rule 1: no note anywhere declares `type: Index`;
+  rule 3: an entity-folder index must declare the entity type + `node:`; rule 6: `metadata.notePath` ⇔ the
   live index (drift both ways), and never both forms live at once.
 - Unit tests: `tests/notes-entities.test.ts`, `tests/notes-index.test.ts`.
 

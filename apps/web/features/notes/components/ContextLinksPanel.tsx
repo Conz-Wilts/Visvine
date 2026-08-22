@@ -9,10 +9,11 @@
 // row as an arrow (→ out, ← in, ↔ mutual) rather than splitting the list in
 // two and making you read both halves to find one name.
 //
-// Index notes — the thing a folder actually IS in this product — get their own
-// group, pinned to the top, above the notes that live inside them. The label
-// comes from the space's own type registry, so it reads "Index" by default
-// and follows a rename for free; it is never called a folder here.
+// A folder — which in this product IS its index note — groups by what it is
+// ABOUT, exactly like every other row: a person's context folder sits under
+// People beside the flat person notes, because it is a person note that grew a
+// folder. Only a folder that claims no subject falls into its own "Folders"
+// group, pinned to the top above the notes that live inside them.
 //
 // Each group is painted in its type's configured colour — the same colour the
 // directory grid and the profile rails use — because the grouping IS the
@@ -48,10 +49,11 @@ interface Group {
   connections: Connection[];
 }
 
-// Sort keys, not labels. INDEX pins the index group to the top; the other two
-// stand for "this has no type" and "there's nothing on the other end", which
-// are absences rather than types and are deliberately left uncoloured.
-const INDEX = '__index__';
+// Sort keys, not labels. FOLDER pins the untyped-folder group to the top; the
+// other two stand for "this has no type" and "there's nothing on the other
+// end", which are absences rather than types and are deliberately left
+// uncoloured.
+const FOLDER = '__folder__';
 const UNTYPED = '__note__';
 const UNRESOLVED = '__unresolved__';
 
@@ -131,10 +133,6 @@ export default function ContextLinksPanel({
       connections.push({ key: `unresolved:${name}`, path: null, title: name, direction: 'unresolved' });
     }
 
-    // The index group's label and colour come from the space's own Index
-    // type, so a space that renames or recolours it is obeyed here too.
-    const indexConfig = getNodeTypeConfig('Index', nodeTypes);
-
     const grouped = new Map<string, Group>();
     for (const connection of connections) {
       // Group by the space's own type names (the console is the registry),
@@ -153,10 +151,12 @@ export default function ContextLinksPanel({
         key = UNRESOLVED;
         label = 'Unresolved';
         color = NEUTRAL;
-      } else if (isIndexPath(connection.path)) {
-        key = INDEX;
-        label = indexConfig.name;
-        color = indexConfig.color;
+      } else if (!rawType && isIndexPath(connection.path)) {
+        // A folder about nothing in particular. Typed folders never reach here:
+        // they group under their subject with everything else of that type.
+        key = FOLDER;
+        label = 'Folders';
+        color = NEUTRAL;
       } else if (!rawType) {
         key = UNTYPED;
         label = 'Untyped';
@@ -184,8 +184,8 @@ export default function ContextLinksPanel({
       // the biggest group — the note's dominant relationship — with unresolved
       // always last, since it's a to-do list, not a neighbourhood.
       .sort((a, b) => {
-        if (a.key === INDEX) return -1;
-        if (b.key === INDEX) return 1;
+        if (a.key === FOLDER) return -1;
+        if (b.key === FOLDER) return 1;
         if (a.key === UNRESOLVED) return 1;
         if (b.key === UNRESOLVED) return -1;
         return b.connections.length - a.connections.length || a.label.localeCompare(b.label);

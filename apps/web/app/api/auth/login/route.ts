@@ -4,23 +4,22 @@ import { safeRelativePath } from "@/lib/redirects";
 import { verifyPassword, validateEmail } from "@/lib/auth/password";
 import { ensurePerson, setSessionCookie } from "@/lib/auth/bootstrap";
 import prisma from "@/lib/prisma";
+import { takeToken } from "@/lib/rateLimit";
 
 const GENERIC_ERROR = "Invalid email or password.";
 
-// In-memory sliding-window limiter (per Node process), keyed by IP + email.
-// Slows credential-stuffing without external infra. Mirrors lib/crm/rateLimit.ts.
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_ATTEMPTS = 10;
-const attempts = new Map<string, number[]>();
+// Credential-stuffing brake, keyed by IP + email, and shared across instances
+// (lib/rateLimit.ts) because a per-process one is not a brake here: an attacker
+// reaching a service that scales out gets a fresh allowance per instance and
+// again on every cold start.
+//
+// 10 back-to-back attempts, then one more every 90s — the same shape as a
+// 10-per-15-minutes window, expressed as the bucket the shared limiter speaks.
+const LOGIN_LIMIT = { capacity: 10, refillPerSec: 10 / (15 * 60) };
 
-function isRateLimited(key: string): boolean {
-  const windowStart = Date.now() - WINDOW_MS;
-  const recent = (attempts.get(key) ?? []).filter((t) => t > windowStart);
-  attempts.set(key, recent);
-  if (recent.length >= MAX_ATTEMPTS) return true;
-  recent.push(Date.now());
-  return false;
-}
+// Per attacker-controlled key, so it must not be a way to grow the bucket table
+// without bound: the shared limiter hashes keys and sweeps idle ones.
+const CREDENTIAL_KEY = (ip: string, email: string) => `login:${ip}:${email}`;
 
 function json(body: unknown, status: number) {
   return NextResponse.json(body, { status });
@@ -51,10 +50,14 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  if (isRateLimited(`${ip}:${email}`)) {
-    return json(
+  const limit = await takeToken(CREDENTIAL_KEY(ip, email), LOGIN_LIMIT);
+  if (!limit.ok) {
+    return NextResponse.json(
       { error: "Too many attempts. Please try again in a few minutes." },
-      429
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)) },
+      }
     );
   }
 

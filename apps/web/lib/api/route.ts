@@ -44,7 +44,7 @@ export async function requireApiSession(): Promise<SessionPayload | NextResponse
 
 /**
  * Session + space-admin gate, or 401/403. "Admin" has one definition in
- * this app: holding a Person alias flagged `owner` (lib/auth.ts#isAdmin, super
+ * this app: holding a Person alias flagged `admin` (lib/auth.ts#isAdmin, super
  * admins bypass). Membership carries no role, so there is nothing finer than
  * this to check. Usage:
  * `const session = await requireSpaceAdmin(spaceId); if (session instanceof NextResponse) return session;`

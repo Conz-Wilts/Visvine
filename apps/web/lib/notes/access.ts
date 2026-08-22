@@ -23,7 +23,7 @@ import {
   type GrantSubjectType,
 } from './shared/authz'
 import { loadAliasSummaries, loadPersonAliases } from './aliases'
-import { holdsOwner } from './shared/aliases'
+import { holdsAdmin } from './shared/aliases'
 import { findAliasByRef, type SpaceAlias } from '@/lib/types/context'
 
 const STATE_FILE = 'access-state.json'
@@ -129,7 +129,7 @@ export async function ensureAccessSeeded(spaceId: string): Promise<void> {
           subjectType: 'user',
           subjectId: m.userId,
           resourcePath: '',
-          level: holdsOwner(aliases, m.userId) ? LEVEL_FULL : LEVEL_EDIT,
+          level: holdsAdmin(aliases, m.userId) ? LEVEL_FULL : LEVEL_EDIT,
           grantedBy: 'system',
         })),
         skipDuplicates: true,

@@ -10,8 +10,9 @@
 // (403 with the denial reason). Rename + delete are ADDITIONALLY gated by
 // context.canRemove (personal: always; shared: admins or the note's author).
 //
-// `movedTo` appears when a write turned the note into a folder: an index note IS
-// a folder, so writing `type: Index` at `a/b.md` lands it at `a/b/index.md`.
+// `movedTo` appears when the path the write landed at isn't the one asked for —
+// the note had become its own folder since, so the write was redirected to
+// `a/b/index.md`.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireContext, fail, failFromError } from '@/lib/notes/api'
@@ -65,8 +66,8 @@ export async function POST(req: NextRequest) {
       ? body.content
       : DEFAULT_NOTE(title, context.actor.name)
   try {
-    // A `type: Index` note IS a folder, so createNote may land it at
-    // `<path-without-.md>/index.md` — take the path it actually wrote.
+    // createNote may redirect an entity write to the folder form the entity has
+    // since taken (people/<slug>/index.md) — take the path it actually wrote.
     const created = await createNote(context, path, content, context.actor)
     const meta = buildNoteIndex(await listRaw(context)).find((m) => m.path === created.path) ?? null
     return NextResponse.json(

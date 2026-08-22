@@ -22,6 +22,7 @@ import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
 import { spaceMemberForbidden } from '@/lib/auth';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
 import { resolveNodeConnection } from '@/lib/identity/connection';
+import { syncGlobalRecordForUser } from '@/lib/global/record';
 
 type RouteContext = { params: Promise<{ personId: string }> };
 
@@ -182,6 +183,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     },
   });
 
+  // The profile is the first source of the member's global record.
+  await syncGlobalRecordForUser(userId);
   // Profile fields feed the profile page's own cache tag.
   revalidateTag('context-data-v2', { expire: 0 });
 

@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { removeMemberAccess } from '@/lib/notes/access';
 import { aliasesForType, findAliasByRef, type SpaceAlias } from '@/lib/types';
 import { ensureMemberNode } from '@/lib/spaces/memberNode';
+import { isGlobalSpace } from '@/lib/spaces/globalSpace';
 
 /**
  * POST: Current user joins a space (self-service)
@@ -33,6 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
     // nobody but the owner may join one.
     if (isForeignPersonalSpace(space.personalOwnerId, session.userId)) {
       return NextResponse.json({ error: 'This space is private' }, { status: 403 });
+    }
+    // The global space has no members — everyone already reads it.
+    if (isGlobalSpace(space.id)) {
+      return NextResponse.json({ error: 'Visvine is open to everyone; there is nothing to join' }, { status: 400 });
     }
 
     // Private spaces are not self-joinable — entry is via an invite link

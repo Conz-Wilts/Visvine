@@ -35,7 +35,7 @@ interface ConnectorRow {
   path: string;
   /** `model` = an LLM provider the space's agents run on; never runnable, keyed by MODEL_KEY_*. */
   kind: 'http' | 'model';
-  model: { provider: string; providerLabel: string; baseURL: string | null; keySecret: string } | null;
+  model: { provider: string; providerLabel: string; baseURL: string; keySecret: string } | null;
   alias: string | null;
   description: string | null;
   hosts: string[];
@@ -78,10 +78,9 @@ function statusOf(connector: ConnectorRow): { label: string; detail: string; ton
   }
   if (connector.kind === 'model') {
     // A model connector has no perimeter to be empty: with its key stored it
-    // is ready, and its "hosts" are the provider's pinned endpoint.
-    const detail = connector.model?.baseURL
-      ? new URL(connector.model.baseURL).host
-      : 'custom endpoint (agent settings)';
+    // is ready, and its "host" is the provider's endpoint (pinned, or the
+    // note's own base_url for custom). No model info = the note didn't parse.
+    const detail = connector.model ? new URL(connector.model.baseURL).host : 'invalid';
     return { label: 'Ready', detail: `${connector.model?.providerLabel ?? 'Model'} · ${detail}`, tone: 'ok' };
   }
   if (connector.hosts.length === 0) {

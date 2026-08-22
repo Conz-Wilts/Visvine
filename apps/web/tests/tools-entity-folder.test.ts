@@ -22,7 +22,6 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   declaredFolderOnlyEntity,
-  enforceEntityIndexFrontmatter,
   enforceIndexFrontmatter,
   entityNameClashDenial,
 } from '../lib/notes/shared/indexNote'
@@ -75,9 +74,9 @@ test('once a node backs it, the write ends up parseable by parseToolConfig', () 
   assert.ok(intent)
 
   // This is what enforceIndexContract does once ensureToolNode has created
-  // (or found) the node: hold the note to the entity contract instead of the
-  // plain Index one.
-  const held = enforceEntityIndexFrontmatter(written, {
+  // (or found) the node: hold the note to the contract WITH its entity, which
+  // is what stamps the `node:` back-pointer on.
+  const held = enforceIndexFrontmatter(written, `tools/${NAME}`, {
     typeLabel: 'tool',
     nodeId: `tool:${NAME}`,
     name: intent!.name,
@@ -94,15 +93,17 @@ test('once a node backs it, the write ends up parseable by parseToolConfig', () 
   assert.equal((heldFm as Record<string, unknown>).node, `tool:${NAME}`)
 })
 
-test('without a node, the plain Index contract still applies — the pre-fix failure mode', () => {
-  // Exactly what used to happen (and still does for a write that never
-  // resolves a node — the write is unaffected outside the tools/ namespace):
-  // the entity contract never applies, so type: tool is lost.
+test('without a node the config survives — it just has no back-pointer', () => {
+  // A write that never resolves a node (only reachable in a personal context;
+  // a shared write gets one from ensureToolNode). The type is the note's own
+  // statement of what it is, so the contract leaves it alone — what is missing
+  // is the `node:`, and that is what says a real Tool stands behind it.
   const written = newToolIndexNote({ name: NAME, title: 'Deal Pipeline' })
   const plain = enforceIndexFrontmatter(written, `tools/${NAME}`)
-  const parsed = parseToolConfig(parseFrontmatter(plain), NAME)
-  assert.equal(parsed.ok, false)
-  if (!parsed.ok) assert.match(parsed.error, /type: tool/)
+  const fm = parseFrontmatter(plain)
+  assert.equal(fm.type, 'tool')
+  assert.equal((fm as Record<string, unknown>).node, undefined)
+  assert.equal(parseToolConfig(fm, NAME).ok, true)
 })
 
 test('a name claimed by another space is refused with a message naming createTool', () => {
@@ -114,6 +115,7 @@ test('a name claimed by another space is refused with a message naming createToo
 test('an ordinary folder index (no type: tool claim) is untouched by the tool contract', () => {
   const plain = '---\ntitle: Deals\n---\n\nJust a folder.\n'
   assert.equal(declaredFolderOnlyEntity(parseFrontmatter(plain), 'tool', NAME), null)
-  const held = enforceIndexFrontmatter(plain, `tools/${NAME}`)
-  assert.equal(parseFrontmatter(held).type, 'Index')
+  // Byte-identical: a folder that says nothing about its subject is left saying
+  // nothing. The path is what makes it a folder.
+  assert.equal(enforceIndexFrontmatter(plain, `tools/${NAME}`), plain)
 })

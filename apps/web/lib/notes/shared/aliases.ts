@@ -8,26 +8,26 @@
 // set of holders, and a set of ContextGrants — not three separate things.
 //
 // A person holds any number of them, with no restrictions. An alias marked
-// `owner` means its holders manage the space; the built-in Owner alias
-// always does and can never be removed or un-owned (lib/types/context.ts
-// #OWNER_ALIAS), so a space can never be left with nothing that owns it.
-// The four mutations that could otherwise break that ask `ownerSurvives` first.
+// `admin` means its holders manage the space; the built-in Admin alias
+// always does and can never be removed or demoted (lib/types/context.ts
+// #ADMIN_ALIAS), so a space can never be left with nothing that owns it.
+// The four mutations that could otherwise break that ask `adminSurvives` first.
 //
 // Pure — no Prisma/Node/DOM imports; usable from server, client, and tests.
 // The DB side lives in lib/notes/aliases.ts.
 
-import { OWNER_ALIAS_NAME, type SpaceAlias } from '@/lib/types/context'
+import { ADMIN_ALIAS_NAME, type SpaceAlias } from '@/lib/types/context'
 
-export { OWNER_ALIAS_NAME } from '@/lib/types/context'
+export { ADMIN_ALIAS_NAME } from '@/lib/types/context'
 
-/** A Person alias plus who holds it — what the owner invariant reasons over. */
+/** A Person alias plus who holds it — what the admin invariant reasons over. */
 export interface AliasSummary {
   /** The alias's stable id, which is what holder rows point at. */
   id?: string
   name: string
   color: string
-  owner: boolean
-  /** The built-in Owner alias: fixed, and rendered in gold. */
+  admin: boolean
+  /** The built-in Admin alias: fixed, and rendered in gold. */
   system: boolean
   holderIds: string[]
 }
@@ -35,7 +35,7 @@ export interface AliasSummary {
 /** A mutation that could leave the space with nobody able to manage it. */
 export type AliasChange =
   | { kind: 'removeAlias'; name: string }
-  | { kind: 'setOwner'; name: string; owner: boolean }
+  | { kind: 'setAdmin'; name: string; admin: boolean }
   | { kind: 'removeHolder'; name: string; userId: string }
   /** People leaving the space entirely — every alias loses them. */
   | { kind: 'removeMember'; userIds: string[] }
@@ -55,21 +55,21 @@ export function summarize(
     id: a.id,
     name: a.name,
     color: a.color,
-    owner: a.owner === true || a.system === true,
+    admin: a.admin === true || a.system === true,
     system: a.system === true,
     holderIds: holders.filter((h) => h.aliasId === a.id).map((h) => h.userId),
   }))
 }
 
-/** Whether this person manages the space: holds any alias with `owner`. */
-export function holdsOwner(aliases: AliasSummary[], userId: string): boolean {
-  return aliases.some((a) => a.owner && a.holderIds.includes(userId))
+/** Whether this person manages the space: holds any alias with `admin`. */
+export function holdsAdmin(aliases: AliasSummary[], userId: string): boolean {
+  return aliases.some((a) => a.admin && a.holderIds.includes(userId))
 }
 
 /** Everyone who manages the space, deduplicated. */
-export function ownerHolderIds(aliases: AliasSummary[]): string[] {
+export function adminHolderIds(aliases: AliasSummary[]): string[] {
   const ids = new Set<string>()
-  for (const a of aliases) if (a.owner) for (const id of a.holderIds) ids.add(id)
+  for (const a of aliases) if (a.admin) for (const id of a.holderIds) ids.add(id)
   return [...ids]
 }
 
@@ -78,8 +78,8 @@ function applyChange(aliases: AliasSummary[], change: AliasChange): AliasSummary
   switch (change.kind) {
     case 'removeAlias':
       return aliases.filter((a) => a.name !== change.name)
-    case 'setOwner':
-      return aliases.map((a) => (a.name === change.name ? { ...a, owner: change.owner } : a))
+    case 'setAdmin':
+      return aliases.map((a) => (a.name === change.name ? { ...a, admin: change.admin } : a))
     case 'removeHolder':
       return aliases.map((a) =>
         a.name === change.name
@@ -101,16 +101,16 @@ function applyChange(aliases: AliasSummary[], change: AliasChange): AliasSummary
  * False is a refusal, not an error — the caller turns it into a 400 explaining
  * that somebody has to be able to let the others back in.
  */
-export function ownerSurvives(aliases: AliasSummary[], change: AliasChange): boolean {
-  return ownerHolderIds(applyChange(aliases, change)).length > 0
+export function adminSurvives(aliases: AliasSummary[], change: AliasChange): boolean {
+  return adminHolderIds(applyChange(aliases, change)).length > 0
 }
 
 /** The refusal copy, shared by every caller so the wording never drifts. */
-export const LAST_OWNER_MESSAGE =
+export const LAST_ADMIN_MESSAGE =
   'Someone has to be able to manage this space — give another person an alias that owns it first.'
 
-/** The refusal for any attempt to remove or un-own the built-in alias. */
-export const SYSTEM_ALIAS_MESSAGE = `${OWNER_ALIAS_NAME} is built in — it can't be removed, recoloured, or stop owning the space. You can still choose who holds it and what it reaches.`
+/** The refusal for any attempt to remove or demote the built-in alias. */
+export const SYSTEM_ALIAS_MESSAGE = `${ADMIN_ALIAS_NAME} is built in — it can't be removed, recoloured, or stop owning the space. You can still choose who holds it and what it reaches.`
 
 /** The longest an alias name may be — matches the console's input maxLength. */
 export const MAX_ALIAS_NAME = 40
@@ -133,8 +133,8 @@ export function aliasNameError(
     return `Alias names are at most ${MAX_ALIAS_NAME} characters.`
   }
   const lower = trimmed.toLowerCase()
-  if (lower === OWNER_ALIAS_NAME.toLowerCase() && except !== OWNER_ALIAS_NAME) {
-    return `"${OWNER_ALIAS_NAME}" is the built-in alias — pick another name.`
+  if (lower === ADMIN_ALIAS_NAME.toLowerCase() && except !== ADMIN_ALIAS_NAME) {
+    return `"${ADMIN_ALIAS_NAME}" is the built-in alias — pick another name.`
   }
   const taken = existingNames.some(
     (n) => n.toLowerCase() === lower && n.toLowerCase() !== except?.toLowerCase(),

@@ -11,14 +11,13 @@ import {
   ancestorFolders,
   applyChildrenBlock,
   buildIndexStub,
-  enforceEntityIndexFrontmatter,
   enforceIndexFrontmatter,
   folderOfIndexPath,
   hasChildrenBlock,
   humanizeFolderName,
   indexFolderPathOf,
   indexPathOf,
-  isIndexContent,
+  declaresIndexType,
   isIndexPath,
   newIndexContent,
   nextIndexTitle,
@@ -49,13 +48,14 @@ test('humanizeFolderName title-cases dashed/underscored segments', () => {
   assert.equal(humanizeFolderName('people'), 'People')
 })
 
-test('buildIndexStub emits Index frontmatter and a sorted linked list', () => {
+test('buildIndexStub emits a titled folder note and a sorted linked list', () => {
   const stub = buildIndexStub('people', [
     { path: 'people/zoe.md', title: 'Zoe' },
     { path: 'people/craig-piggott.md', title: 'Craig Piggott' },
   ])
   const fm = parseFrontmatter(stub)
-  assert.equal(fm.type, 'Index')
+  // No type: a generated folder note says nothing about a subject nobody chose.
+  assert.equal(fm.type, undefined)
   assert.equal(fm.title, 'People')
   const { body } = splitFrontmatter(stub)
   assert.deepEqual(body.trim().split('\n'), [
@@ -72,43 +72,42 @@ test('buildIndexStub for an empty folder has an empty managed block', () => {
   assert.equal(splitFrontmatter(stub).body.trim(), `${CHILDREN_OPEN}\n${CHILDREN_CLOSE}`)
 })
 
-// The reverse guard: a write AT an index path keeps the index contract.
-test('enforceIndexFrontmatter restores a dropped type, keeping the rest', () => {
+// The contract at an index path: a title, and nothing about the shape. The
+// path already says it is a folder, so `type:` is left to mean the subject.
+test('enforceIndexFrontmatter keeps a declared type — that is the subject', () => {
   const written =
-    '---\ntitle: Blackbird Portfolio Companies\ndescription: Master index\n---\n\n# Portfolio\n\nprose\n'
-  const fixed = enforceIndexFrontmatter(written, 'communities')
+    '---\ntype: Playbook\ntitle: Blackbird Portfolio Companies\ndescription: Master index\n---\n\n# Portfolio\n\nprose\n'
+  assert.equal(enforceIndexFrontmatter(written, 'communities'), written)
+})
+
+test('enforceIndexFrontmatter strips type: Index — a folder is a path, not a type', () => {
+  const fixed = enforceIndexFrontmatter('---\ntype: Index\ntitle: People\ntags: [a]\n---\n\nbody\n', 'people')
   const fm = parseFrontmatter(fixed)
-  assert.equal(fm.type, 'Index')
-  assert.equal(fm.title, 'Blackbird Portfolio Companies')
-  assert.equal(fm.description, 'Master index')
-  assert.ok(splitFrontmatter(fixed).body.includes('# Portfolio'))
+  assert.equal(fm.type, undefined)
+  assert.equal(fm.title, 'People')
+  assert.deepEqual(fm.tags, ['a'])
+  assert.ok(splitFrontmatter(fixed).body.includes('body'))
 })
 
 test('enforceIndexFrontmatter falls back to the folder display name for a missing title', () => {
   const fixed = enforceIndexFrontmatter('just a body, no frontmatter\n', 'deal-flow')
   const fm = parseFrontmatter(fixed)
-  assert.equal(fm.type, 'Index')
+  assert.equal(fm.type, undefined)
   assert.equal(fm.title, 'Deal Flow')
   assert.ok(splitFrontmatter(fixed).body.includes('just a body'))
 })
 
 test('enforceIndexFrontmatter is a byte no-op on conforming content', () => {
-  const ok = '---\ntype: Index\ntitle: People\n---\n\nbody\n'
-  assert.equal(enforceIndexFrontmatter(ok, 'people'), ok)
+  const untyped = '---\ntitle: People\n---\n\nbody\n'
+  assert.equal(enforceIndexFrontmatter(untyped, 'people'), untyped)
 })
 
-test('enforceIndexFrontmatter overrides a wrong declared type', () => {
-  const fixed = enforceIndexFrontmatter('---\ntype: Note\ntitle: People\n---\n\nbody\n', 'people')
-  assert.equal(parseFrontmatter(fixed).type, 'Index')
-  assert.equal(parseFrontmatter(fixed).title, 'People')
-})
-
-// The type is what makes a note an index — the path follows it, not the reverse.
-test('isIndexContent reads the declared type, case-insensitively', () => {
-  assert.equal(isIndexContent('---\ntype: Index\n---\n\nhi\n'), true)
-  assert.equal(isIndexContent('---\ntype: index\n---\n'), true)
-  assert.equal(isIndexContent('---\ntype: Note\n---\n'), false)
-  assert.equal(isIndexContent('no frontmatter at all'), false)
+// Nothing acts on the word any more; the guard exists to keep it out of storage.
+test('declaresIndexType reads the declared type, case-insensitively', () => {
+  assert.equal(declaresIndexType('---\ntype: Index\n---\n\nhi\n'), true)
+  assert.equal(declaresIndexType('---\ntype: index\n---\n'), true)
+  assert.equal(declaresIndexType('---\ntype: Note\n---\n'), false)
+  assert.equal(declaresIndexType('no frontmatter at all'), false)
 })
 
 test('indexFolderPathOf / folderOfIndexPath name the folder a note becomes', () => {
@@ -127,7 +126,7 @@ const CHILDREN = [
 ]
 
 test('applyChildrenBlock appends a block to a body that has none', () => {
-  const before = '---\ntype: Index\ntitle: People\n---\n\n# People\n\nWho we back.\n'
+  const before = '---\ntitle: People\n---\n\n# People\n\nWho we back.\n'
   const after = applyChildrenBlock(before, CHILDREN)
   assert.ok(after.startsWith(before.trimEnd()), 'curated prose is preserved verbatim')
   assert.ok(hasChildrenBlock(after))
@@ -136,7 +135,7 @@ test('applyChildrenBlock appends a block to a body that has none', () => {
 })
 
 test('applyChildrenBlock replaces an existing block in place, leaving prose alone', () => {
-  const first = applyChildrenBlock('---\ntype: Index\n---\n\nWho we back.\n', CHILDREN)
+  const first = applyChildrenBlock('---\ntitle: People\n---\n\nWho we back.\n', CHILDREN)
   const second = applyChildrenBlock(first, [{ path: 'people/ann.md', title: 'Ann' }])
   assert.ok(second.includes('Who we back.'))
   assert.ok(second.includes('- [Ann](/people/ann.md)'))
@@ -147,7 +146,7 @@ test('applyChildrenBlock replaces an existing block in place, leaving prose alon
 // A curated index that walks through its own contents keeps that writing; the
 // block only picks up what the prose hasn't already introduced.
 test('applyChildrenBlock leaves out children the curated prose already links', () => {
-  const curated = '---\ntype: Index\n---\n\n- [Zoe](/people/zoe.md) — leads the seed fund\n'
+  const curated = '---\ntitle: People\n---\n\n- [Zoe](/people/zoe.md) — leads the seed fund\n'
   const after = applyChildrenBlock(curated, CHILDREN)
   assert.ok(after.includes('leads the seed fund'))
   assert.ok(after.includes('- [Craig](/people/craig.md)'))
@@ -160,28 +159,28 @@ test('applyChildrenBlock leaves out children the curated prose already links', (
 
 test('a fully curated index grows an empty block, not a duplicate list', () => {
   const curated =
-    '---\ntype: Index\n---\n\n- [Craig](/people/craig.md)\n- [Zoe](/people/zoe.md)\n'
+    '---\ntitle: People\n---\n\n- [Craig](/people/craig.md)\n- [Zoe](/people/zoe.md)\n'
   const after = applyChildrenBlock(curated, CHILDREN)
   assert.ok(after.endsWith(`${CHILDREN_OPEN}\n${CHILDREN_CLOSE}\n`))
 })
 
 test('applyChildrenBlock is a no-op when nothing changed — callers skip the write', () => {
-  const once = applyChildrenBlock('---\ntype: Index\n---\n\nProse.\n', CHILDREN)
+  const once = applyChildrenBlock('---\ntitle: People\n---\n\nProse.\n', CHILDREN)
   assert.equal(applyChildrenBlock(once, CHILDREN), once)
 })
 
 test('applyChildrenBlock keeps trailing prose below the block on a refresh', () => {
-  const before = `---\ntype: Index\n---\n\nAbove.\n\n${CHILDREN_OPEN}\n${CHILDREN_CLOSE}\n\nBelow.\n`
+  const before = `---\ntitle: People\n---\n\nAbove.\n\n${CHILDREN_OPEN}\n${CHILDREN_CLOSE}\n\nBelow.\n`
   const after = applyChildrenBlock(before, CHILDREN)
   assert.ok(after.includes('Above.'))
   assert.ok(after.endsWith('Below.\n'))
 })
 
-test('newIndexContent is an Index note with an empty block ready to fill', () => {
+test('newIndexContent seeds a folder home page with an empty block ready to fill', () => {
   const content = newIndexContent({ title: 'Research', tags: ['deals'], body: 'Live work.' })
-  assert.equal(parseFrontmatter(content).type, 'Index')
+  assert.equal(parseFrontmatter(content).type, undefined)
   assert.equal(parseFrontmatter(content).title, 'Research')
-  assert.equal(isIndexContent(content), true)
+  assert.equal(declaresIndexType(content), false)
   assert.ok(content.includes('# Research'))
   assert.ok(content.includes('Live work.'))
   assert.equal(hasChildrenBlock(content), true)
@@ -215,7 +214,7 @@ test('an emptied index body keeps its block, without a leading blank run', () =>
 })
 
 test('parseChildrenBlock reads back exactly what renderChildrenBlock wrote', () => {
-  const listed = applyChildrenBlock('---\ntype: Index\n---\n\n', [
+  const listed = applyChildrenBlock('---\ntitle: People\n---\n\n', [
     { path: 'people/zoe.md', title: 'Zoe' },
     { path: 'people/ann.md', title: 'Ann' },
   ])
@@ -234,16 +233,17 @@ test('parseChildrenBlock reads back exactly what renderChildrenBlock wrote', () 
 // The CONTEXT ROOT's index — the space home page the Directory's Context tab
 // routes to. Seeded by ensureRootIndex (lib/notes/store.ts) at space
 // creation; these pin the contract that helper leans on.
-test('the root index path is the bare basename, and declares itself an Index', () => {
+test('the root index path is the bare basename, and names the context', () => {
   assert.equal(indexPathOf(''), INDEX_BASENAME)
   assert.equal(isIndexPath(INDEX_BASENAME), true)
 
   // What ensureRootIndex writes must satisfy the repo's own note invariant
-  // (scripts/verify-notes-rules.ts: an index.md must declare `type: Index`),
-  // and carry a children block so the root opts in to auto-listing — a root
-  // WITHOUT one is deliberately left alone by refreshFolderIndex.
+  // (scripts/verify-notes-rules.ts: an index.md carries a title, and nobody
+  // declares `type: Index`), and carry a children block so the root opts in to
+  // auto-listing — a root WITHOUT one is deliberately left alone by
+  // refreshFolderIndex.
   const content = newIndexContent({ title: "Connor's Space" })
-  assert.equal(parseFrontmatter(content).type, 'Index')
+  assert.equal(parseFrontmatter(content).type, undefined)
   assert.equal(parseFrontmatter(content).title, "Connor's Space")
   assert.equal(hasChildrenBlock(content), true)
 })
@@ -277,12 +277,14 @@ test('INDEX_BASENAME is the canonical filename', () => {
   assert.equal(INDEX_BASENAME, 'index.md')
 })
 
-// The entity-folder variant: 'people/<slug>/index.md' keeps the entity's type.
+// An entity's own folder: 'people/<slug>/index.md' IS the person's note, so the
+// same contract additionally holds its type and node: back-pointer.
 const CONNOR = { typeLabel: 'Person', nodeId: 'person:connor', name: 'Connor' }
 
-test('enforceEntityIndexFrontmatter puts an entity type back over Index', () => {
-  const fixed = enforceEntityIndexFrontmatter(
+test('an entity folder index gets its entity type back over Index', () => {
+  const fixed = enforceIndexFrontmatter(
     '---\ntype: Index\ntitle: Connor\ntags: [person]\n---\n\nbody\n',
+    'people/connor',
     CONNOR,
   )
   const fm = parseFrontmatter(fixed)
@@ -293,16 +295,16 @@ test('enforceEntityIndexFrontmatter puts an entity type back over Index', () => 
   assert.ok(splitFrontmatter(fixed).body.includes('body'))
 })
 
-test('enforceEntityIndexFrontmatter is a byte no-op on conforming content', () => {
+test('an entity folder index is a byte no-op on conforming content', () => {
   const ok = '---\ntype: Person\ntitle: Connor W\nnode: person:connor\n---\n\nbody\n'
-  assert.equal(enforceEntityIndexFrontmatter(ok, CONNOR), ok)
+  assert.equal(enforceIndexFrontmatter(ok, 'people/connor', CONNOR), ok)
   // Case of the type label is the writer's; only the meaning is enforced.
   const lower = '---\ntype: person\ntitle: Connor W\nnode: person:connor\n---\n\nbody\n'
-  assert.equal(enforceEntityIndexFrontmatter(lower, CONNOR), lower)
+  assert.equal(enforceIndexFrontmatter(lower, 'people/connor', CONNOR), lower)
 })
 
-test('enforceEntityIndexFrontmatter fills a missing title and node from the entity', () => {
-  const fixed = enforceEntityIndexFrontmatter('no frontmatter at all\n', CONNOR)
+test('an entity folder index fills a missing title and node from the entity', () => {
+  const fixed = enforceIndexFrontmatter('no frontmatter at all\n', 'people/connor', CONNOR)
   const fm = parseFrontmatter(fixed)
   assert.equal(fm.type, 'Person')
   assert.equal(fm.title, 'Connor')

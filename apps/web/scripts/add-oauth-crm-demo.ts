@@ -18,7 +18,7 @@
 import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
 import prisma from '../lib/prisma';
-import { OWNER_ALIAS_ID } from '../lib/types/context';
+import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { encryptSecret } from '../lib/crypto/secrets';
 import { syncContextLinksBulk } from '../lib/notes/entityLinks';
 
@@ -179,7 +179,7 @@ async function main() {
 
   const owner =
     (await prisma.userAlias.findFirst({
-      where: { spaceId, aliasId: OWNER_ALIAS_ID },
+      where: { spaceId, aliasId: ADMIN_ALIAS_ID },
       select: { userId: true },
     })) ?? (await prisma.spaceMember.findFirst({ where: { spaceId }, select: { userId: true } }));
   if (!owner) throw new Error(`space ${spaceId} has no members to attribute the note to`);

@@ -57,7 +57,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type BrowserContext, type FrameLocator, type Page } from 'playwright';
 import prisma from '../lib/prisma';
-import { OWNER_ALIAS_ID } from '../lib/types/context';
+import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { getNodeTypeConfig } from '../lib/types';
 import { resolveContext } from '../lib/notes/resolve';
 import { readSpaceConfig } from '../lib/spaces/spaceConfig';
@@ -345,7 +345,7 @@ function runSeed(): { ok: boolean; detail: string } {
 
 async function main(): Promise<void> {
   const holder = await prisma.userAlias.findFirst({
-    where: { spaceId: SPACE, aliasId: OWNER_ALIAS_ID },
+    where: { spaceId: SPACE, aliasId: ADMIN_ALIAS_ID },
     select: { userId: true },
   });
   if (!holder) throw new Error(`nobody manages ${SPACE}`);

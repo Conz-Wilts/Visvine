@@ -96,7 +96,7 @@ export function serializeConfigNote(kind: ConfigNoteKind, config: SpaceConfig): 
           linkTypes: config.linkTypes ?? [],
           aliases: config.aliases ?? [],
         },
-        'An alias flagged `owner: true` makes its holders admins of this space, so ' +
+        'An alias flagged `admin: true` makes its holders admins of this space, so ' +
           'that flag is the space\'s permission model and not a label. `system: true` ' +
           'marks a built-in that cannot be removed.',
       )
@@ -229,7 +229,7 @@ function parseAliases(items: Record<string, unknown>[], errors: string[]): Space
       name,
       color,
       nodeType,
-      ...(item.owner === true ? { owner: true } : {}),
+      ...(item.admin === true ? { admin: true } : {}),
       ...(item.system === true ? { system: true } : {}),
     })
   })
@@ -269,26 +269,26 @@ export function parseConfigNote(kind: ConfigNoteKind, content: string): ParsedCo
 
 /**
  * The one rule that cannot be judged from the note alone: an edit must not
- * remove the LAST owner alias. Holding an owner alias is what makes somebody an
+ * remove the LAST admin alias. Holding an admin alias is what makes somebody an
  * admin of a space (lib/auth.ts#isAdmin), so an edit that drops the last one
  * locks everybody out of their own console — and nobody left would be allowed
  * to put it back.
  *
- * A transition check, not a validity check. Plenty of real spaces have no owner
+ * A transition check, not a validity check. Plenty of real spaces have no admin
  * alias at all (they are administered by super admins, or predate the seeded
- * Owner alias); those are fine and stay fine. What is refused is going from
+ * Admin alias); those are fine and stay fine. What is refused is going from
  * some to none.
  */
-export function ownerAliasDenial(
+export function adminAliasDenial(
   patch: SpaceConfigPatch,
   stored: Pick<SpaceConfig, 'aliases'>,
 ): string | null {
   if (!patch.aliases) return null
-  const had = (stored.aliases ?? []).some((a) => a.owner)
+  const had = (stored.aliases ?? []).some((a) => a.admin)
   if (!had) return null
-  if (patch.aliases.some((a) => a.owner)) return null
+  if (patch.aliases.some((a) => a.admin)) return null
   return (
-    'This edit removes the last alias with `owner: true`, which would leave ' +
-    'nobody able to administer this space. Keep one owner alias.'
+    'This edit removes the last alias with `admin: true`, which would leave ' +
+    'nobody able to administer this space. Keep one admin alias.'
   )
 }

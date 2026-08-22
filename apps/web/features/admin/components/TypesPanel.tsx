@@ -134,7 +134,7 @@ function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabl
 /**
  * What a Person can be, without being the place you change it. The chips are the
  * live permission snapshot rather than the space record, so they include the
- * built-in Owner and stay honest the moment an alias is renamed on Members. The
+ * built-in Admin and stay honest the moment an alias is renamed on Members. The
  * hover title carries the holder count; the row itself is just the vocabulary.
  */
 function PersonAliases() {
@@ -145,7 +145,7 @@ function PersonAliases() {
   const aliases = [...data.aliases].sort(
     (a, b) =>
       Number(b.system) - Number(a.system) ||
-      Number(b.owner) - Number(a.owner) ||
+      Number(b.admin) - Number(a.admin) ||
       a.name.localeCompare(b.name),
   );
 
@@ -156,7 +156,7 @@ function PersonAliases() {
           key={alias.name}
           size="lg"
           color={alias.color}
-          title={`${alias.name} — ${alias.holders.length} ${alias.holders.length === 1 ? 'person' : 'people'}${alias.owner ? ', owns the space' : ''}`}
+          title={`${alias.name} — ${alias.holders.length} ${alias.holders.length === 1 ? 'person' : 'people'}${alias.admin ? ', is admin of the space' : ''}`}
         >
           {alias.name}
         </Chip>
@@ -205,13 +205,13 @@ function TypePageOwner({ typeName, claimants, onChoose, saving }: {
     );
   }
 
-  const owner = claimants[0] ?? null;
+  const admin = claimants[0] ?? null;
   return (
     <span
       className="w-24 shrink-0 truncate text-right text-xs text-text-muted"
-      title={owner ? `${owner.title} draws the page for ${noun}` : `No installed tool draws a page for ${noun}`}
+      title={admin ? `${admin.title} draws the page for ${noun}` : `No installed tool draws a page for ${noun}`}
     >
-      {owner ? owner.title : '—'}
+      {admin ? admin.title : '—'}
     </span>
   );
 }
@@ -547,7 +547,7 @@ export default function TypesPanel() {
         allAliases={aliases}
         isPerson={isPerson}
         // Person's preview comes from the live permission snapshot, which
-        // already grafts in the built-in Owner; every other type's from the
+        // already grafts in the built-in Admin; every other type's from the
         // space record it saves to.
         previewChips={isPerson ? (data?.aliases ?? []) : typeAliases}
         onAddAlias={handleAddAlias}
