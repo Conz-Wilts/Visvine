@@ -369,14 +369,6 @@ Written down because they are decisions, not oversights.
   `/_not-found` is the one prerendered HTML route, so under `strict-dynamic` its
   scripts are not nonce-stamped. It still renders server-side; only client-side
   navigation from it is lost.
-- **`Open Sauce One` heads the UI font stacks but is not shipped.** It is not a
-  Google Fonts family — `?family=Open+Sauce+One` answers 400 — so what actually
-  renders is the next face in the stack: San Francisco on macOS, Segoe UI on
-  Windows, Roboto elsewhere. The name is kept at the head of the stacks so
-  self-hosting it (OFL 1.1, github.com/marcologous/Open-Sauce-Fonts, beside the
-  Visvine faces already in `public/fonts/`) is one `@font-face` block. Doing so
-  would change typography on every screen, so it is a design decision rather
-  than a fix.
 - **Rate limiting fails open.** If Postgres is unreachable the limiter drops to a
   per-process bucket rather than rejecting traffic (`lib/rateLimit/`). A weaker
   limit during a database blip beats converting a degradation into an outage.

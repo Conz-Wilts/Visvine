@@ -1,12 +1,53 @@
-/* Open Sauce One is NOT served by Google Fonts — `?family=Open+Sauce+One`
-   answers 400 "Font family not found", so the import that used to sit here was
-   a failed request on every page load and the family never resolved. It is kept
-   at the head of the stacks below deliberately: it costs nothing when absent,
-   and self-hosting it later (OFL 1.1, github.com/marcologous/Open-Sauce-Fonts,
-   beside the Visvine faces already in public/fonts/) is then one @font-face
-   block rather than a hunt through every stack. Until then the system faces
-   after it are what actually render. */
 @import "tailwindcss";
+
+/* ─── Open Sauce One — local font faces ─── */
+/* Self-hosted, like the Visvine faces below, and for the same two reasons: it is
+   not on a webfont CDN to be fetched from (it is not a Google Fonts family —
+   `?family=Open+Sauce+One` answers 400), and a local face keeps every third-party
+   origin out of the Content-Security-Policy's style-src and font-src.
+
+   Upright weights only, matching the five the design tokens use. Italics are
+   synthesised by the browser, which is what happened before these faces existed
+   and is unchanged by adding them.
+
+   SIL Open Font License 1.1 — public/fonts/OpenSauceOne-OFL.txt, which the
+   licence requires be distributed alongside the fonts. Source:
+   github.com/marcologous/Open-Sauce-Fonts */
+@font-face {
+  font-family: 'Open Sauce One';
+  src: url('/fonts/OpenSauceOne-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Open Sauce One';
+  src: url('/fonts/OpenSauceOne-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Open Sauce One';
+  src: url('/fonts/OpenSauceOne-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Open Sauce One';
+  src: url('/fonts/OpenSauceOne-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Open Sauce One';
+  src: url('/fonts/OpenSauceOne-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
 
 /* ─── ABC Ginto Rounded — local font faces ─── */
 @font-face {
