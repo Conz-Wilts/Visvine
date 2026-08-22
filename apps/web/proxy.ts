@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySession, COOKIE_NAME } from "@/lib/session";
 import { isDevAuthEnabled } from "@/lib/dev-auth";
 import { toolsHostDecision } from "@/lib/tools/origin";
+import { buildCsp, newNonce } from "@/lib/security/csp";
 
 const PUBLIC_PATHS = [
   "/signin",
@@ -41,8 +42,55 @@ const PUBLIC_PATHS = [
   ...(isDevAuthEnabled() ? ["/dev", "/api/dev"] : []),
 ];
 
+/**
+ * The Tool runtime is the one surface whose CSP is NOT ours to set. Its routes
+ * mint a per-response policy naming the app as the only permitted frame-ancestor
+ * and pinning `connect-src 'none'` (lib/tools/csp.ts) — that `connect-src` is
+ * the entire exfiltration control the sandbox rests on. Overwriting it from
+ * here with the app's own policy would not merge with it; it would replace it.
+ */
+const TOOL_RUNTIME_PREFIX = "/api/tools/runtime";
+
+/** The consent form's approve response is a cross-origin 303. See buildCsp. */
+const OAUTH_AUTHORIZE = "/api/oauth/authorize";
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Minted before anything branches, so that EVERY response below carries the
+  // same policy — a redirect to /signin and a 401 JSON body are documents a
+  // browser will happily render, and a policy that only covers the happy path
+  // is a policy with holes in it.
+  const nonce = newNonce();
+  const csp = buildCsp({
+    nonce,
+    isDev: process.env.NODE_ENV === "development",
+    toolsOrigin: process.env.TOOLS_ORIGIN || null,
+    allowCrossOriginFormPost: pathname === OAUTH_AUTHORIZE,
+    // Cloud Run terminates TLS and forwards the original scheme; the nextUrl
+    // check covers running behind nothing at all.
+    isSecureOrigin:
+      req.headers.get("x-forwarded-proto") === "https" || req.nextUrl.protocol === "https:",
+  });
+
+  /** Stamp the policy on a response on its way out. */
+  const secured = (res: NextResponse): NextResponse => {
+    res.headers.set("Content-Security-Policy", csp);
+    return res;
+  };
+
+  /**
+   * Continue rendering, handing the nonce forward on the REQUEST. Next reads it
+   * back off this header during server rendering and stamps its own bootstrap
+   * and bundles with it — which is what makes `'strict-dynamic'` work without
+   * anything in app code having to know about nonces.
+   */
+  const forward = (): NextResponse => {
+    const headers = new Headers(req.headers);
+    headers.set("x-nonce", nonce);
+    headers.set("Content-Security-Policy", csp);
+    return secured(NextResponse.next({ request: { headers } }));
+  };
 
   // The Tool frame origin (TOOLS_ORIGIN, e.g. tools.visvine.com) is this same
   // service reached under a different host. It exists so that third-party Tool
@@ -52,6 +100,11 @@ export async function proxy(req: NextRequest) {
   // token in the URL is what authorizes them. See lib/tools/origin.ts.
   const hostDecision = toolsHostDecision(req.headers.get("host"), pathname);
   if (hostDecision === "tool-runtime") return NextResponse.next();
+
+  // The same paths reached on the APP host — the same-origin fallback while
+  // TOOLS_ORIGIN is unset. They too must keep the frame's own policy, so they
+  // leave before anything below can stamp the app's over it.
+  if (pathname.startsWith(TOOL_RUNTIME_PREFIX)) return NextResponse.next();
   if (hostDecision === "not-found") {
     return new NextResponse("Not Found", {
       status: 404,
@@ -68,13 +121,13 @@ export async function proxy(req: NextRequest) {
     pathname.startsWith("/images") ||
     pathname.startsWith("/uploads");
 
-  if (isPublic) return NextResponse.next();
+  if (isPublic) return forward();
 
   // Check cookie-based session
   const cookieToken = req.cookies.get(COOKIE_NAME)?.value;
   if (cookieToken) {
     const session = await verifySession(cookieToken);
-    if (session) return NextResponse.next();
+    if (session) return forward();
   }
 
   // Check Bearer token (mobile app)
@@ -82,7 +135,7 @@ export async function proxy(req: NextRequest) {
   if (authHeader?.startsWith("Bearer ")) {
     const bearerToken = authHeader.substring(7);
     const session = await verifySession(bearerToken);
-    if (session) return NextResponse.next();
+    if (session) return forward();
   }
 
   // API requests must never be redirected to the sign-in page: a JSON client
@@ -93,7 +146,7 @@ export async function proxy(req: NextRequest) {
   if (pathname.startsWith("/api/")) {
     const res = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (cookieToken) res.cookies.delete(COOKIE_NAME);
-    return res;
+    return secured(res);
   }
 
   // A logged-out visitor opening an in-app event detail link (/events/<id>)
@@ -106,7 +159,7 @@ export async function proxy(req: NextRequest) {
   const eventDetail = pathname.match(/^\/events\/([^/]+)$/);
   if (eventDetail && eventDetail[1] !== "new") {
     const slug = decodeURIComponent(eventDetail[1]).replace(/^event:/, "");
-    return NextResponse.redirect(new URL(`/e/${encodeURIComponent(slug)}`, req.url));
+    return secured(NextResponse.redirect(new URL(`/e/${encodeURIComponent(slug)}`, req.url)));
   }
 
   const signIn = new URL("/signin", req.url);
@@ -115,7 +168,7 @@ export async function proxy(req: NextRequest) {
   // A cookie that exists but failed verification is dead weight — clear it so
   // it can't keep bouncing future requests.
   if (cookieToken) redirect.cookies.delete(COOKIE_NAME);
-  return redirect;
+  return secured(redirect);
 }
 
 export const config = {

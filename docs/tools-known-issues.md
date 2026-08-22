@@ -40,14 +40,15 @@ GitHub → Settings → Secrets and variables → Actions → Variables →
 `TOOLS_ORIGIN=https://tools.visvine.com`. It is a public hostname, so a variable,
 not a secret.
 
-No YAML edit is needed — `.github/workflows/deploy.yml` already passes it as both
-`--build-arg` and `--set-env-vars`, and its "Verify TOOLS_ORIGIN survived the
-build" step fails the deploy if the built image's `frame-src` does not name it.
+No YAML edit is needed — `.github/workflows/deploy.yml` passes it in
+`--set-env-vars`, and that is all it needs to be. The Content-Security-Policy is
+built per request in `proxy.ts` (`lib/security/csp.ts`), because it carries a
+nonce, so `frame-src` reads the environment on every response.
 
-**Why both:** Next bakes `headers()` into `.next/routes-manifest.json` at BUILD
-time and the standalone server serves from that manifest. An image built without
-`TOOLS_ORIGIN` bakes `frame-src 'self'` and no Tool renders behind the very
-origin split meant to protect it. Runtime env alone is not enough.
+**What that means operationally:** the value takes effect on the next revision,
+not the next build. Cloud Run resolves env vars when a revision is created, so
+after setting the variable make a revision — a push to main, or
+`gh workflow run "Deploy to Cloud Run"`.
 
 Until the variable is set, leaving it unset is the safe state — `toolsOrigin()`
 returns null and the app degrades to the documented same-origin fallback.

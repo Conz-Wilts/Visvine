@@ -253,6 +253,36 @@ and redeploy, since `--set-secrets` resolves `:latest` at revision creation.
 
 ---
 
+## Content-Security-Policy
+
+Built per request in `proxy.ts` from `lib/security/csp.ts`, and **not** in
+`next.config.ts` — it carries a nonce, so it cannot be a constant. Setting it in
+both places would emit two CSP headers, which browsers enforce as the
+INTERSECTION of the two; the nonce'd policy and a static one would cancel out and
+leave the app with no working scripts.
+
+`script-src` is `'self' 'nonce-…' 'strict-dynamic'`, with `'unsafe-eval'` added
+only in development (React uses `eval` there to rebuild server stack traces).
+Next reads the nonce back off the request header during rendering and stamps its
+own bootstrap and bundles with it, so no app code has to know about nonces.
+
+Two surfaces are deliberately exempt, and both leave the proxy before it can
+stamp anything:
+
+- **the Tool runtime** (`/api/tools/runtime/*`, on either host) mints its own
+  policy in `lib/tools/csp.ts` — its `connect-src 'none'` is the entire
+  exfiltration control the sandbox rests on, and the app's policy would replace
+  it rather than merge with it.
+- **`/api/oauth/authorize`** gets `form-action 'self' https:`, because the
+  consent form's approve response is a 303 to the client's registered callback on
+  another origin.
+
+`tests/csp.test.ts` pins the shape. Check what is actually served with:
+
+```bash
+curl -sI https://visvine.com/ | grep -i content-security-policy
+```
+
 ## Repository hardening
 
 Applied to `Conz-Wilts/Visvine`, and worth re-checking after any settings change:
@@ -327,9 +357,20 @@ Written down because they are decisions, not oversights.
 - **Single region.** `australia-southeast1` only. A regional outage is an outage.
 - **No CDN in front of Cloud Run.** Static assets are served from the container.
   Fine at current traffic; the first thing to change if it is not.
-- **CSP keeps `unsafe-inline`/`unsafe-eval` on scripts**, because Next injects an
-  inline bootstrap without a nonce. Everything else in the policy is enforced —
-  see the reasoning in `next.config.ts`.
+- **CSP allows inline STYLES** (`style-src 'unsafe-inline'`). Scripts do not —
+  they are nonce-gated with `strict-dynamic` (`lib/security/csp.ts`). The editor,
+  the charts and the emoji picker all set element styles at runtime, so closing
+  this would mean patching third-party render paths; an injected stylesheet can
+  deface, an injected script owns the session, and only one of those is cheap to
+  close.
+- **The 404 page renders without client JS.** Nonces need dynamic rendering, and
+  `/_not-found` is the one prerendered HTML route, so under `strict-dynamic` its
+  scripts are not nonce-stamped. It still renders server-side; only client-side
+  navigation from it is lost.
+- **Open Sauce One is loaded from Google Fonts**, so `style-src`/`font-src` name
+  `fonts.googleapis.com` / `fonts.gstatic.com`. Self-hosting it beside the
+  existing `public/fonts/Visvine-*.woff2` would drop two third-party origins from
+  the policy and one render-blocking request from every page load.
 - **Rate limiting fails open.** If Postgres is unreachable the limiter drops to a
   per-process bucket rather than rejecting traffic (`lib/rateLimit/`). A weaker
   limit during a database blip beats converting a degradation into an outage.

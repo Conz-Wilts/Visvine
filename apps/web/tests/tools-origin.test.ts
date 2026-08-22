@@ -232,9 +232,9 @@ test('bundleHeaders caches content-addressed JS forever, working copies never', 
   assert.equal(bundleHeaders({ immutable: false })['Cache-Control'], 'no-store')
 })
 
-// ── next.config.ts must not let the app-wide policy clobber the frame's own ──
+// ── next.config.ts must not let the app-wide headers clobber the frame's own ──
 
-test("next.config's app-wide CSP/X-Frame-Options do not match the Tool runtime, and still match everything else", async () => {
+test("next.config's transport headers exempt the Tool runtime, and still cover everything else", async () => {
   // Same matcher Next itself compiles `source` strings with, so this pins the
   // config's actual routing behavior rather than a hand-rolled approximation.
   // @ts-expect-error -- Next vendors this with no published types.
@@ -252,18 +252,34 @@ test("next.config's app-wide CSP/X-Frame-Options do not match the Tool runtime, 
     return merged
   }
 
+  // The Content-Security-Policy is NOWHERE in this config — it carries a
+  // per-request nonce, so proxy.ts builds and sets it (lib/security/csp.ts).
+  // Emitting it from both places would give every response two CSP headers,
+  // which browsers enforce as the intersection of the two: the nonce'd policy
+  // and a static one cancel out and the app loses every script. This assertion
+  // is the guard against someone "helpfully" restoring it here.
+  for (const entry of entries) {
+    for (const h of entry.headers) {
+      assert.notEqual(
+        h.key.toLowerCase(),
+        'content-security-policy',
+        `next.config must not set a CSP (found one on "${entry.source}")`,
+      )
+    }
+  }
+
   const runtime = headersFor('/api/tools/runtime/frame')
-  assert.equal(runtime['Content-Security-Policy'], undefined, 'the frame mints its own CSP')
   assert.equal(runtime['X-Frame-Options'], undefined, 'XFO has no origin-list form; frame-ancestors owns this')
   assert.equal(runtime['Referrer-Policy'], undefined, 'the frame sets no-referrer itself')
   assert.equal(runtime['Strict-Transport-Security'], 'max-age=63072000; includeSubDomains; preload')
   assert.equal(runtime['Permissions-Policy'], 'camera=(), microphone=(), geolocation=(), browsing-topics=()')
 
-  const directory = headersFor('/directory')
-  assert.ok(directory['Content-Security-Policy']?.includes("frame-ancestors 'none'"))
-  assert.equal(directory['X-Frame-Options'], 'DENY')
-
-  const authorize = headersFor('/api/oauth/authorize')
-  assert.ok(authorize['Content-Security-Policy']?.includes("form-action 'self' https:"))
-  assert.equal(authorize['X-Frame-Options'], 'DENY')
+  // Everything that is not the Tool runtime keeps the full transport set.
+  for (const path of ['/directory', '/api/oauth/authorize', '/']) {
+    const headers = headersFor(path)
+    assert.equal(headers['X-Frame-Options'], 'DENY', path)
+    assert.equal(headers['Referrer-Policy'], 'strict-origin-when-cross-origin', path)
+    assert.equal(headers['X-Content-Type-Options'], 'nosniff', path)
+    assert.equal(headers['Strict-Transport-Security'], 'max-age=63072000; includeSubDomains; preload', path)
+  }
 })

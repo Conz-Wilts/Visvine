@@ -48,7 +48,7 @@
  */
 import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -293,50 +293,32 @@ async function cleanup(spaceId: string, dropOrder: boolean): Promise<void> {
   });
 }
 
-// ── build-time bake-in guard ─────────────────────────────────────────────────
+// ── frame-src reaches the response ───────────────────────────────────────────
 
 /**
- * `headers()` in next.config.ts runs once, at `next build` time, and its
- * output is baked into `.next/routes-manifest.json` — the standalone
- * production server reads headers straight from that file and never
- * re-evaluates next.config.ts per request, unlike `next dev`. So a
- * `TOOLS_ORIGIN` set only as a Cloud Run RUNTIME env var (`--set-env-vars`)
- * never reaches `frame-src`: whatever was, or wasn't, in the shell that ran
- * `next build` is what ships until the next build. Confirmed by building this
- * app twice, with and without TOOLS_ORIGIN, and diffing routes-manifest.json.
+ * The Tool iframe is served from TOOLS_ORIGIN, a different host from the app, so
+ * `frame-src` has to name it — `frame-src 'self'` alone blocks the very frame
+ * the app renders, and the symptom is a Tool that simply never appears.
  *
- * This check catches that regression without a browser: if a
- * `.next/routes-manifest.json` sits next to this script (this checkout ran
- * `pnpm build`, not just `pnpm dev`) and TOOLS_ORIGIN is set in this process's
- * env, the manifest's frame-src must name it. No manifest on disk is not a
- * failure — a bare `pnpm dev` checkout never bakes headers, so there is
- * nothing here to check.
+ * The policy is built per request (lib/security/csp.ts) because it carries a
+ * nonce, so the only honest place to check it is the response itself. Asking the
+ * running app is also what makes this check independent of how the app was
+ * built or which env the build shell happened to have.
  */
-function checkBuiltManifestBakesToolsOrigin(): void {
-  const manifestPath = join(dirname(fileURLToPath(import.meta.url)), '..', '.next', 'routes-manifest.json');
-  if (!existsSync(manifestPath)) {
-    console.log(
-      'SKIP  built manifest frame-src check\n' +
-        '        no .next/routes-manifest.json next to this script — this checkout has not run `pnpm build`',
-    );
-    return;
-  }
+async function checkServedFrameSrcNamesToolsOrigin(): Promise<void> {
   const origin = (process.env.TOOLS_ORIGIN ?? '').trim().replace(/\/+$/, '');
   if (!origin) {
-    console.log('SKIP  built manifest frame-src check\n        TOOLS_ORIGIN is not set in this shell');
+    console.log('SKIP  served frame-src check\n        TOOLS_ORIGIN is not set in this shell');
     return;
   }
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-    headers?: Array<{ source: string; headers: Array<{ key: string; value: string }> }>;
-  };
-  const catchAll = manifest.headers?.find((entry) => entry.source.startsWith('/:path'));
-  const csp = catchAll?.headers.find((header) => header.key === 'Content-Security-Policy')?.value ?? '';
+  const res = await fetch(`${APP}/`, { signal: AbortSignal.timeout(10_000) });
+  const csp = res.headers.get('content-security-policy') ?? '';
   const frameSrc = csp.split('; ').find((directive) => directive.startsWith('frame-src')) ?? '';
   check(
-    'the built manifest bakes TOOLS_ORIGIN into frame-src',
-    frameSrc.includes(origin),
-    `TOOLS_ORIGIN=${origin} · frame-src "${frameSrc || '(missing)'}" — a build without this origin in its ` +
-      'env ships an image whose Tool iframe can never load, no matter what the runtime env is set to',
+    'the served CSP names TOOLS_ORIGIN in frame-src',
+    frameSrc.split(/\s+/).slice(1).includes(origin),
+    `TOOLS_ORIGIN=${origin} · frame-src "${frameSrc || '(missing)'}" — without this origin the Tool ` +
+      'iframe can never load, however the sandbox itself is configured',
   );
 }
 
@@ -352,8 +334,8 @@ async function serverIsUp(): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
-  step('0. the built manifest, if there is one');
-  checkBuiltManifestBakesToolsOrigin();
+  step('0. the served CSP');
+  await checkServedFrameSrcNamesToolsOrigin();
 
   const holder = await prisma.userAlias.findFirst({
     where: { spaceId: SPACE, aliasId: ADMIN_ALIAS_ID },

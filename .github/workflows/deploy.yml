@@ -82,47 +82,7 @@ jobs:
       # the schema ahead of the code that is still serving.
       - name: Build image
         run: |
-          # TOOLS_ORIGIN is a build arg, not just a runtime env var: next.config.ts's
-          # headers() bakes frame-src into .next/routes-manifest.json at `next build`
-          # time (see Dockerfile), so it has to be here for the image to ship a
-          # frame-src that can load the Tool iframe. Empty (the default, until the
-          # tools.visvine.com domain mapping exists) degrades to the documented
-          # same-origin fallback — see docs/tools.md's Ops runbook.
-          #
-          # One --build-arg per argument: comma-joining two makes the second part
-          # of the first one's value, and a TOOLS_ORIGIN carrying a trailing
-          # ",KEY=value" ships a frame-src naming a host that does not exist.
-          # AGENT_TICK_SERVICE_ACCOUNT is read per request, so it is runtime-only
-          # and belongs in --set-env-vars below, not here.
-          docker build \
-            --build-arg TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }} \
-            -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
-
-      - name: Verify TOOLS_ORIGIN survived the build
-        if: ${{ vars.TOOLS_ORIGIN != '' }}
-        env:
-          TOOLS_ORIGIN: ${{ vars.TOOLS_ORIGIN }}
-        run: |
-          cid=$(docker create ${{ env.IMAGE }}:${{ github.sha }})
-          docker cp "$cid:/app/apps/web/.next/routes-manifest.json" ./routes-manifest.json
-          docker rm "$cid" >/dev/null
-          node -e "
-            const fs = require('fs');
-            const manifest = JSON.parse(fs.readFileSync('./routes-manifest.json', 'utf8'));
-            const origin = process.env.TOOLS_ORIGIN;
-            const entry = (manifest.headers || []).find((h) => h.source.startsWith('/:path'));
-            const csp = (entry && entry.headers.find((h) => h.key === 'Content-Security-Policy')) || {};
-            const frameSrc = (csp.value || '').split('; ').find((d) => d.startsWith('frame-src')) || '';
-            // Whole-token match, not a substring: a build arg that picked up a
-            // trailing ',SOMETHING=else' would satisfy includes() and still name
-            // a host no browser can load the Tool frame from.
-            const sources = frameSrc.split(/\s+/).slice(1);
-            if (!sources.includes(origin)) {
-              console.error('frame-src does not name TOOLS_ORIGIN ' + origin + ' in the built image: ' + JSON.stringify(frameSrc));
-              process.exit(1);
-            }
-            console.log('frame-src bakes TOOLS_ORIGIN: ' + frameSrc);
-          "
+          docker build -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
 
       - name: Push image
         run: |

@@ -18,14 +18,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY . .
-# next.config.ts#headers() runs once, HERE, at `next build` time — its output is
-# baked into .next/routes-manifest.json, which the standalone server.js serves
-# from directly and never re-evaluates. TOOLS_ORIGIN therefore has to be present
-# in THIS shell to reach frame-src; a Cloud Run runtime `--set-env-vars` alone
-# (set after this image already exists) cannot change it. See docs/tools.md's
-# Ops runbook for the matching deploy.yml build-arg.
-ARG TOOLS_ORIGIN=""
-ENV TOOLS_ORIGIN=$TOOLS_ORIGIN
+# TOOLS_ORIGIN is deliberately NOT a build arg. The Content-Security-Policy is
+# built per request in proxy.ts, so `frame-src` reads the runtime environment on
+# every response — setting the origin on Cloud Run takes effect on the next
+# revision, with no rebuild and nothing baked into the image.
 RUN pnpm --filter @visvine/web exec prisma generate
 RUN pnpm --filter @visvine/web build
 

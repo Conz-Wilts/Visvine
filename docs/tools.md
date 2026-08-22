@@ -605,25 +605,13 @@ production: the app falls back to the same-origin sandbox automatically (still
 `sandbox="allow-scripts"` + the full CSP, just weaker host isolation), never a
 hard failure.
 
-**`TOOLS_ORIGIN` has to be a BUILD-time value, not just a runtime one.**
-`next.config.ts#headers()` runs once, at `next build` time, and its output is
-baked into `.next/routes-manifest.json` — the standalone production server
-(`server.js`) serves headers straight from that file and never re-evaluates
-`next.config.ts` per request (unlike `next dev`, which does, on every
-request). So setting `TOOLS_ORIGIN` only as a Cloud Run *runtime* env var
-(`--set-env-vars`, after the image already exists) has no effect on
-`frame-src` at all — the CSP baked into the image at build time is whatever
-was, or wasn't, in the shell that ran `next build`. Confirmed locally by
-building this app twice, with and without `TOOLS_ORIGIN`, and diffing
-`routes-manifest.json`'s `frame-src` between the two.
+**`TOOLS_ORIGIN` is a pure RUNTIME value.** The Content-Security-Policy is built
+per request in `proxy.ts` (`lib/security/csp.ts`) — it has to be, because it
+carries a per-request nonce — so `frame-src` reads the environment on every
+response. Setting the origin on Cloud Run takes effect on the next revision,
+with no rebuild, and nothing about it is baked into the image.
 
-`deploy.yml` and the root `Dockerfile` already carry the plumbing for this —
-`docker build --build-arg TOOLS_ORIGIN=...` sets it as a build-time `ENV`
-before `next build` runs, and the same value also rides `--set-env-vars` on
-the Cloud Run deploy step (the proxy's host split and `frameUrl()` read it at
-*runtime* too, so both matter). Both draw from one place: the GitHub Actions
-repository variable `TOOLS_ORIGIN`. To turn on the separate origin, it is a
-**single checklist**, not two unrelated changes:
+To turn on the separate origin:
 
 ```sh
 # 1. DNS: CNAME tools.visvine.com to Cloud Run's mapping target.
@@ -642,12 +630,10 @@ gcloud run domain-mappings create \
 #    variables → Actions → Variables → New repository variable). It is not a
 #    secret — it's a public hostname — so it's a variable, not a secret:
 gh variable set TOOLS_ORIGIN --body "https://tools.visvine.com"
-#    No YAML edit needed: the next push to main builds the image with
-#    --build-arg TOOLS_ORIGIN=<that value>, deploys with the matching
-#    --set-env-vars, and a "Verify TOOLS_ORIGIN survived the build" step fails
-#    the deploy outright if the built image's frame-src doesn't name it —
-#    the CI equivalent of the diff described above, run on every deploy
-#    instead of by hand.
+
+# 4. Make a new revision so Cloud Run picks the value up. A push to main does
+#    it, or trigger the pipeline by hand without one:
+gh workflow run "Deploy to Cloud Run"
 ```
 
 **Verify** (once the mapping has propagated — can take a few minutes):
@@ -662,9 +648,8 @@ splitting the host, not just answering the app on a second name. To check
 `frame-src` itself without waiting on DNS, inspect the response headers on any
 page: `curl -sI https://visvine.com/ | grep -i content-security-policy` must
 show `frame-src 'self' https://tools.visvine.com`, not `frame-src 'self'`
-alone — the latter means the image was built without `TOOLS_ORIGIN` (the CI
-gate above exists so that should never reach prod, but this is the direct
-check if it ever does).
+alone — the latter means the serving revision does not have the env var, which
+a redeploy fixes.
 
 ### `TOOLS_SCREENSHOT` and `TOOLS_TRUSTED_PUBLISHERS`
 
@@ -723,12 +708,11 @@ pnpm --filter @visvine/web verify:tools:escape    # adversarial: undeclared read
 pnpm --filter @visvine/web verify:wayfinder-tool  # the acceptance Tool: board renders, writes, agent dispatch
 ```
 
-`verify:tools:escape`'s first step is a standalone guard against the
-build-vs-runtime `TOOLS_ORIGIN` trap described in "Production setup": if
-`apps/web/.next/routes-manifest.json` exists (this checkout ran `pnpm build`,
-not just `pnpm dev`) and `TOOLS_ORIGIN` is set in the shell, it fails unless
-the manifest's baked `frame-src` names that origin. No manifest on disk — the
-common case, a plain `pnpm dev` checkout — is a SKIP, not a failure.
+`verify:tools:escape`'s first step asks the running app for its
+`Content-Security-Policy` and fails unless `frame-src` names `TOOLS_ORIGIN` —
+`frame-src 'self'` alone blocks the very frame the app renders, and the symptom
+is a Tool that never appears rather than an error. `TOOLS_ORIGIN` unset in the
+shell — the common case — is a SKIP, not a failure.
 
 `verify:tools` and `verify:tools:escape` remove every row and note they create,
 leaving the shared dev DB as they found it. `verify:wayfinder-tool` instead

@@ -236,6 +236,11 @@ backups, secret rotation. The parts that constrain how you write code:
   `error` for a genuine fault and `warn` for the app working as designed — a
   warn routed to error reporting buries the real failures. Always pass the
   caught value (`{ err }`) so the record carries a real stack.
+- **The CSP is per request, in `proxy.ts`.** It carries a nonce, so it cannot
+  live in `next.config.ts#headers()` — setting it in both places emits two CSP
+  headers, which browsers enforce as the intersection, and the app loses every
+  script. `script-src` has no `'unsafe-inline'`; if something needs an inline
+  script, it needs the nonce, not a policy change (`lib/security/csp.ts`).
 - **`/api/health` must never grow a dependency.** Cloud Run's liveness probe
   uses it; making it require the database means a database outage kills and
   restarts every instance into that same outage. Deep checks go behind `?deep=1`.
