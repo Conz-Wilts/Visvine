@@ -100,19 +100,19 @@ test('the directives the app depends on are all present', () => {
   assert.ok(directive(csp, 'img-src').includes('https:'))
 })
 
-test('the Open Sauce One font can actually load', () => {
-  // Both hosts or neither: googleapis serves the @font-face stylesheet,
-  // gstatic serves the files it points at. Blocking either one silently drops
-  // the app to the system font stack, which is a change nobody reports.
+test('no third-party origin may serve styles, fonts or scripts', () => {
+  // Every face the app uses is local (public/fonts/). Keeping the policy free
+  // of a webfont CDN is the point: it is both a render-blocking dependency on
+  // someone else's uptime and the easiest directive to quietly widen.
   const csp = buildCsp(PROD)
-  assert.ok(
-    directive(csp, 'style-src').includes('https://fonts.googleapis.com'),
-    'style-src must allow the Google Fonts stylesheet',
-  )
-  assert.ok(
-    directive(csp, 'font-src').includes('https://fonts.gstatic.com'),
-    'font-src must allow the font files that stylesheet references',
-  )
+  for (const name of ['style-src', 'font-src', 'script-src']) {
+    for (const source of directive(csp, name)) {
+      assert.ok(
+        !source.startsWith('http'),
+        `${name} must name no external origin, found ${source}`,
+      )
+    }
+  }
 })
 
 test('nonces are unguessable and never repeat', () => {

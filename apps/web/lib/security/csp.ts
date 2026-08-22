@@ -33,19 +33,15 @@ const STATIC_DIRECTIVES = [
   // render paths. An injected stylesheet can deface and can exfiltrate some
   // form state; an injected script owns the session. The two are not the same
   // risk, and only one of them is cheap to close.
-  //
-  // fonts.googleapis.com serves the @font-face stylesheet for Open Sauce One —
-  // the app's primary UI font, which app/globals.css imports and --font-main /
-  // --font-utility resolve to. Omit the host and the import is blocked, the
-  // page drops silently to the system stack, and nothing in the app says so.
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "style-src 'self' 'unsafe-inline'",
 
   // https: for Google avatars and GCS-served media.
   "img-src 'self' data: blob: https:",
 
-  // gstatic serves the font FILES that stylesheet points at. The two hosts go
-  // together; allowing one without the other fails just as completely.
-  "font-src 'self' data: https://fonts.gstatic.com",
+  // No third-party host: every face the app uses is served from public/fonts/.
+  // Keep it that way — a webfont CDN is a render-blocking dependency on someone
+  // else's uptime and a place for the policy to leak open.
+  "font-src 'self' data:",
 
   // https: because connectors and the app itself call out over TLS.
   "connect-src 'self' https:",

@@ -1,4 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Open+Sauce+One:wght@300;400;500;600;700&display=swap');
+/* Open Sauce One is NOT served by Google Fonts — `?family=Open+Sauce+One`
+   answers 400 "Font family not found", so the import that used to sit here was
+   a failed request on every page load and the family never resolved. It is kept
+   at the head of the stacks below deliberately: it costs nothing when absent,
+   and self-hosting it later (OFL 1.1, github.com/marcologous/Open-Sauce-Fonts,
+   beside the Visvine faces already in public/fonts/) is then one @font-face
+   block rather than a hunt through every stack. Until then the system faces
+   after it are what actually render. */
 @import "tailwindcss";
 
 /* ─── ABC Ginto Rounded — local font faces ─── */

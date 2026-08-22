@@ -277,7 +277,9 @@ stamp anything:
   consent form's approve response is a 303 to the client's registered callback on
   another origin.
 
-`tests/csp.test.ts` pins the shape. Check what is actually served with:
+No third-party origin may serve a script, style or font — every face is local,
+and `tests/csp.test.ts` fails if an `http…` source appears in any of the three.
+Check what is actually served with:
 
 ```bash
 curl -sI https://visvine.com/ | grep -i content-security-policy
@@ -367,10 +369,14 @@ Written down because they are decisions, not oversights.
   `/_not-found` is the one prerendered HTML route, so under `strict-dynamic` its
   scripts are not nonce-stamped. It still renders server-side; only client-side
   navigation from it is lost.
-- **Open Sauce One is loaded from Google Fonts**, so `style-src`/`font-src` name
-  `fonts.googleapis.com` / `fonts.gstatic.com`. Self-hosting it beside the
-  existing `public/fonts/Visvine-*.woff2` would drop two third-party origins from
-  the policy and one render-blocking request from every page load.
+- **`Open Sauce One` heads the UI font stacks but is not shipped.** It is not a
+  Google Fonts family — `?family=Open+Sauce+One` answers 400 — so what actually
+  renders is the next face in the stack: San Francisco on macOS, Segoe UI on
+  Windows, Roboto elsewhere. The name is kept at the head of the stacks so
+  self-hosting it (OFL 1.1, github.com/marcologous/Open-Sauce-Fonts, beside the
+  Visvine faces already in `public/fonts/`) is one `@font-face` block. Doing so
+  would change typography on every screen, so it is a design decision rather
+  than a fix.
 - **Rate limiting fails open.** If Postgres is unreachable the limiter drops to a
   per-process bucket rather than rejecting traffic (`lib/rateLimit/`). A weaker
   limit during a database blip beats converting a degradation into an outage.
