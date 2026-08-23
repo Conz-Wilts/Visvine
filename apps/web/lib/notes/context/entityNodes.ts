@@ -69,6 +69,7 @@ const RECORD_KEY: Partial<Record<EntityNodeType, string>> = {
   section: 'sectionId',
   channel: 'conversationId',
   connector: 'notePath',
+  tool: 'notePath',
 }
 
 /** Writes made by a background job rather than a signed-in person. */

@@ -86,9 +86,16 @@ on:                        # a MAP = event triggers (a bare string is still the 
   webhook: hubspot         # connector whose inbound hook feeds this agent
   weekday: monday          # only with schedule: weekly (the bare-string form, moved into the map)
 debounce: 2m               # coalesce window: Ns | Nm, default 60s, max 30m
-timezone: Pacific/Auckland
+timezone: Pacific/Auckland # required to activate anything with a clock
 ---
 ```
+
+- **Timezone.** The zone is the agent's, not the space's: turning on an agent with a schedule or an
+  `every` refuses without one (`PATCH …/agents/[name]` 400s, and the dialog won't submit), because
+  "daily at 07:00" says nothing until somebody says whose 07:00. Trigger-only agents may omit it —
+  there is no time to interpret. Notes written before this rule fall back to `spaces.timezone` and
+  then UTC (`effectiveTimezone`), so an old agent keeps the hour it has always fired at; nothing
+  writes `spaces.timezone` any more.
 
 - **Grammar.** `every` accepts `Nm`/`Nh` (min 5m, max 24h; fires on the clock grid — `15m` at
   :00/:15/:30/:45) or a 5-field cron (`*`, `*/n`, lists, ranges, `a-b/n`; day-of-month and
@@ -261,7 +268,9 @@ deadline, UTC) was already correct and was left untouched.
   `debounce`), Run now (author/admin), Model keys (admins), scheduler banner.
 - `/directory/agent:<name>` — Agent tab (status, activation, spend + budget, runs with live
   transcripts) beside the Context/Raw note tabs.
-- Console → Agents: Space timezone. (Models and keys are connectors; activation is per agent on `/agents`.)
+- Console → Agents: **gone.** Everything it held now lives on the agent: the run timezone is part of
+  the activation note (required to turn a scheduled agent on), models and keys are connectors, and
+  activation was always per agent on `/agents`.
 - API: `GET/PATCH /api/communities/[spaceId]/agents[/[name]]`, `POST …/[name]/run`,
   `GET …/[name]/runs[/[runId]]`, `GET/PUT …/[name]/budget`.
 - MCP: `list_agents` (`context:read`; includes `schedule`, `every` and `triggers` so a trigger-only

@@ -62,15 +62,17 @@ test('the note-first types stay open to everyone', () => {
   }
 })
 
-test('the Tool tile follows the tools feature and is open to members', () => {
+test('the Tool tile is open to members, and tools cannot be switched off', () => {
   assert.equal(canCreateType('tool', ADMIN), true)
   // tools/ has no admin clause (lib/tools/service.ts) — members author, admins publish.
   assert.equal(canCreateType('tool', MEMBER), true)
+  // tools is core: a stored `tools: false` (from before the key became core)
+  // no longer hides the tile — the gate is review + install, not a switch.
   assert.equal(
     canCreateType('tool', {
       featureConfig: { enabled: { channels: true, notes: true, resources: true, connectors: true, tools: false } } as SpaceFeatureConfig,
       isAdmin: true,
     }),
-    false,
+    true,
   )
 })

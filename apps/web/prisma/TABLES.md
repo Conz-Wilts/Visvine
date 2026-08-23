@@ -13,6 +13,7 @@ things go unprefixed (`spaces`, `users`, `people`, `identities`, `nodes`,
 | --- | --- |
 | `spaces` | A Space — the tenant. Name, emoji, image, location, tags, public/private, invite token, and its **vocabulary**: which node types, aliases, and link types exist (stored as JSON). `personal_owner_id` set = it's a hidden one-person Space holding that user's personal notes. |
 | `space_members` | Who belongs to a Space, and whether they're `active` or `pending` (asked to join via invite link). Carries **no role** — permissions come from aliases. |
+| `space_invitations` | An admin asking someone to join, and their answer (`pending` / `accepted` / `declined`). Grants nothing on its own — accepting is what writes the `space_members` row and the `user_aliases` staged in `alias_ids`. Kept out of `space_members` on purpose: most membership checks read whether the row exists, not its status. |
 | `user_aliases` | Which aliases a member holds ("Admin", "Investor", …). This *is* the permission model: holding an alias marked `admin` = admin of that Space. Keyed by `user_id`, so it applies to a login account, not to a directory card. |
 
 ## Context
@@ -85,7 +86,6 @@ the entity notes in Context. They're the shared graph primitives.
 | --- | --- |
 | `oauth_clients` | Registered MCP/OAuth apps, and the redirect URLs each is allowed to use. |
 | `oauth_auth_codes` | Short-lived, single-use login codes during the OAuth handshake (PKCE). |
-| `oauth_refresh_tokens` | Long-lived refresh tokens, stored hashed, revocable. |
 
 ## Messages
 

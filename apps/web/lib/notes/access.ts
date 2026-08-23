@@ -12,7 +12,6 @@ import { resolveRegistry } from './registry'
 import { logAudit } from './audit'
 import {
   LEVEL_EDIT,
-  LEVEL_FULL,
   SUBJECT_TYPES,
   levelName,
   migrateLegacyRegistry,
@@ -22,8 +21,7 @@ import {
   type ContextAccess,
   type GrantSubjectType,
 } from './shared/authz'
-import { loadAliasSummaries, loadPersonAliases } from './aliases'
-import { holdsAdmin } from './shared/aliases'
+import { loadPersonAliases } from './aliases'
 import { findAliasByRef, type SpaceAlias } from '@/lib/types/context'
 
 const STATE_FILE = 'access-state.json'
@@ -77,8 +75,8 @@ export async function markAccessSeeded(spaceId: string): Promise<void> {
  * - a legacy `folders.json` registry migrates via authz.migrateLegacyRegistry
  *   (member levels → grants, private folders → restricted, locks carried);
  * - a space with no registry grandfathers its CURRENT active members at the
- *   root (holders of an owner alias full, everyone else edit) — the old ensureContextGate
- *   behavior: joining later grants nothing until someone shares.
+ *   root as Editors — the old ensureContextGate behavior: joining later grants
+ *   nothing until someone shares.
  * Personal spaces must never call this (they are never gated).
  */
 export async function ensureAccessSeeded(spaceId: string): Promise<void> {
@@ -115,13 +113,10 @@ export async function ensureAccessSeeded(spaceId: string): Promise<void> {
     }
   } else {
     seededFrom = 'grandfather'
-    const [memberships, aliases] = await Promise.all([
-      prisma.spaceMember.findMany({
-        where: { spaceId, status: 'active' },
-        select: { userId: true },
-      }),
-      loadAliasSummaries(spaceId),
-    ])
+    const memberships = await prisma.spaceMember.findMany({
+      where: { spaceId, status: 'active' },
+      select: { userId: true },
+    })
     if (memberships.length) {
       await prisma.contextGrant.createMany({
         data: memberships.map((m) => ({
@@ -129,7 +124,10 @@ export async function ensureAccessSeeded(spaceId: string): Promise<void> {
           subjectType: 'user',
           subjectId: m.userId,
           resourcePath: '',
-          level: holdsAdmin(aliases, m.userId) ? LEVEL_FULL : LEVEL_EDIT,
+          // Everyone is grandfathered in as an Editor at the root. Admins need
+          // no extra row: their administrative powers ride on the space role,
+          // not on a grant.
+          level: LEVEL_EDIT,
           grantedBy: 'system',
         })),
         skipDuplicates: true,
@@ -265,8 +263,8 @@ export interface AccessListEntry {
 /**
  * The merged "who has access" list for a path: one row per subject holding a
  * reaching grant, with its effective level and the winning grant's provenance.
- * (Space admins additionally always have full access — a UI-copy fact, not
- * a row.) This list IS the audit: every answer is one grant.
+ * (Space admins additionally reach everything and administer access — a role,
+ * not a row.) This list IS the audit: every answer is one grant.
  */
 export async function accessListFor(spaceId: string, path: string): Promise<AccessListEntry[]> {
   const { grants, restricted } = await loadSpaceAccess(spaceId)

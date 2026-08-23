@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { PlugIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { Skeleton, Alert, EmptyState } from '@/components/ui';
-import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
+import { useCreateSurface } from '@/features/shared/contexts/CreateModalContext';
 import { fetchJson } from '@/lib/fetchJson';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 
@@ -126,7 +126,7 @@ export default function ConnectorsPage() {
   // The space has to resolve before the fetch: its id is half the URL, and
   // a switch mid-flight has to re-run this against the space now on screen.
   const { currentSpace, loading: spaceLoading } = useSpace();
-  const { open: openCreate } = useCreateModal();
+  const openCreate = useCreateSurface();
   const spaceId = currentSpace?.id;
 
   const [connectors, setConnectors] = useState<ConnectorRow[]>([]);
@@ -176,6 +176,8 @@ export default function ConnectorsPage() {
           title="No connectors yet"
           description="A connector is a gateway to an external API or a model provider your agents run on."
           action={{ label: 'Create a connector', onClick: () => openCreate('connector') }}
+          size="page"
+          actionStyle="solid"
         />
       );
     }

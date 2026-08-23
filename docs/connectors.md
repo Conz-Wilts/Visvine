@@ -4,8 +4,9 @@ A connector lets Visvine reach a service it doesn't own — an API, a database, 
 from inside a sandbox, under a perimeter an admin wrote down. This page is the operator and author
 guide: what you can connect, how a connector knows who is asking, and how agents fit.
 
-Code lives in `apps/web/lib/connectors/`. The MCP tools that drive it are `list_connectors` and
-`run_connector` (`lib/mcp/tools.ts`), gated on the `connectors:use` scope.
+Code lives in `apps/web/lib/connectors/`. The MCP tools that drive it are `list_connectors`,
+`run_connector` (gated on `connectors:use`) and `set_connector_secret` (gated on `secrets:write`,
+space admins only) — all in `lib/mcp/tools.ts`.
 
 ## What a connector is
 
@@ -135,6 +136,36 @@ different questions.
 `env: { API_KEY: "{{secret:API_KEY}}" }`. One credential, one view, every member sees the same
 thing. Right for Stripe, Companies House, OpenAI — services where there is one company account and
 no per-person view to have.
+
+**Storing the value.** Two doors, both admin-only, both onto the same store
+(`lib/connectors/secretStore.ts`):
+
+| | Who | When |
+|---|---|---|
+| The connector page's Environment card | an admin in a browser | the normal path; rotation is a click |
+| `set_connector_secret` (MCP) | an admin's client, holding `secrets:write` | building a connector end to end in one pass |
+
+The tool exists so that "write the note, store the key, prove it works" is one unbroken sequence
+rather than three steps with a human in the middle of it. It is narrower than the page in three ways
+that matter:
+
+- **The name must already be referenced** by the connector note. You cannot invent a secret name —
+  only fill in a blank the note declared. The note, which is reviewable and visible, is what decides
+  which credentials may exist.
+- **No overwrite by default.** Re-running a setup script gets `already_set` rather than silently
+  replacing a working credential; `overwrite: true` is how an admin means it.
+- **Admin is re-derived live**, through `resolveContext`, on every call — never read off the token.
+
+`secrets:write` is its own scope and deliberately not part of `connectors:use`: a token granted to
+*call* Stripe must not thereby be able to *replace* the Stripe key. A client has to ask for it at
+consent, and the scope is necessary but never sufficient — the admin check sits underneath it.
+
+It is **not** on the agent runtime surface (`lib/agents/tools.ts`). An unattended 3am run has no
+business rotating a credential, and an agent that could would be an agent that could lock a space out
+of its own integrations.
+
+Storing is still one-way. Nothing reads a value back — not the page, not a tool, not an admin. Keep
+the credential wherever you normally keep credentials before you store it here.
 
 ### `identity:` — attesting who the caller is
 
@@ -341,6 +372,7 @@ A connector earns its place when Claude isn't in the loop:
 | File | What it holds |
 |---|---|
 | `config.ts` | Perimeter parsing, the allowlist grammar, secret references, redaction |
+| `secretStore.ts` | The space secret store — validation, encryption and the audit line, shared by the admin route and `set_connector_secret`. Write-only by construction; does no authorization of its own. |
 | `auth.ts` | The `auth:` block; `user`/`space` mode |
 | `oauth.ts` | Discovery, PKCE, dynamic registration, token exchange and refresh |
 | `connections.ts` | Stored connections, refresh, the step-up message |

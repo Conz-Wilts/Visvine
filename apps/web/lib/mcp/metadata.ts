@@ -27,13 +27,14 @@ export function authorizationServerMetadata(): Record<string, unknown> {
     // Retained for clients that predate Client ID Metadata Documents; MCP
     // 2026-07-28 deprecates dynamic registration in favour of the flag below.
     registration_endpoint: `${issuer}/api/oauth/register`,
-    revocation_endpoint: `${issuer}/api/oauth/revoke`,
     scopes_supported: [...MCP_SCOPES],
     response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code', 'refresh_token'],
+    // Authorization code only. There are no refresh tokens to grant, and
+    // nothing to revoke — an access token is a stateless 30-day JWT, so this
+    // server advertises no revocation endpoint either.
+    grant_types_supported: ['authorization_code'],
     code_challenge_methods_supported: ['S256'],
     token_endpoint_auth_methods_supported: ['none'],
-    revocation_endpoint_auth_methods_supported: ['none'],
     // A client may use its own HTTPS metadata-document URL as its client_id and
     // skip registration entirely.
     client_id_metadata_document_supported: true,

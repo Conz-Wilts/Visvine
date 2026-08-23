@@ -38,6 +38,7 @@ import {
   entityStub,
   entityTypeLabelOf,
   isEntityFolderIndex,
+  namespaceFolderDenial,
   parseEntityHref,
   type EntityNodeLike,
 } from './entities'
@@ -772,14 +773,60 @@ export async function listTrash(context: Context): Promise<TrashEntry[]> {
   const rows = await prisma.contextNote.findMany({
     where: { spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: { not: null } },
     orderBy: { deletedAt: 'desc' },
-    select: { id: true, deletedPath: true, deletedAt: true },
+    // `content` rides along for the TITLE. A note's display name lives in its
+    // frontmatter, not in any column, so the live tree gets it by parsing the
+    // note (buildNoteIndex). Trash used to skip that and show the FILENAME,
+    // which is why a note called "Q3 board pack" appeared in the trash as
+    // "q3-board-pack.md" — the same note under a different name, exactly when
+    // you are trying to identify it well enough to restore or purge it.
+    select: { id: true, deletedPath: true, deletedAt: true, content: true },
   })
-  return rows.map((r) => ({
-    id: r.id,
-    name: baseName(r.deletedPath ?? r.id),
-    path: r.deletedPath ?? '',
-    deletedAt: r.deletedAt ? r.deletedAt.getTime() : 0,
-  }))
+  return rows.map((r) => {
+    const path = r.deletedPath ?? ''
+    return {
+      id: r.id,
+      name: baseName(r.deletedPath ?? r.id),
+      title: trashTitleOf(r.content, path) || baseName(r.deletedPath ?? r.id),
+      path,
+      deletedAt: r.deletedAt ? r.deletedAt.getTime() : 0,
+    }
+  })
+}
+
+/** A trashed note's display name: its frontmatter title, else its filename
+ *  without the extension — the same precedence buildNoteIndex uses for a live
+ *  note, so a note keeps its name across the delete. */
+function trashTitleOf(content: string, path: string): string {
+  const fm = parseFrontmatter(content).title
+  if (typeof fm === 'string' && fm.trim()) return fm.trim()
+  return baseName(path).replace(/\.md$/i, '')
+}
+
+/**
+ * One trashed note, for the read-only preview behind a trash row. Soft-delete
+ * keeps the content, so this is a plain read of a row the live lookups skip
+ * (findLive filters `deletedAt: null`).
+ *
+ * No authorization of its own — the route resolves the entry through listTrash
+ * and applies the same `canReadPath` lens the listing does, so an entry the
+ * caller cannot see 404s exactly like an unknown id.
+ */
+export async function readTrashedNote(
+  context: Context,
+  id: string,
+): Promise<{ path: string; title: string; content: string; deletedAt: number } | null> {
+  const row = await prisma.contextNote.findFirst({
+    where: { id, spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: { not: null } },
+    select: { deletedPath: true, deletedAt: true, content: true },
+  })
+  if (!row) return null
+  const path = row.deletedPath ?? ''
+  return {
+    path,
+    title: trashTitleOf(row.content, path) || baseName(path),
+    content: row.content,
+    deletedAt: row.deletedAt ? row.deletedAt.getTime() : 0,
+  }
 }
 
 // Restore a trashed note to its original path, suffixing on collision.
@@ -1213,6 +1260,15 @@ export async function renameFolder(
   if (isEntityFolder(t)) {
     throw new Error(`"${t}" is where a directory entity's notes live — a folder can't be renamed into it`)
   }
+  // A namespace folder is fixed in both directions: `agents/` can't be moved or
+  // renamed away, and nothing else can be renamed into its name — a second
+  // folder claiming to be `agents/` is exactly the collision the runtime can't
+  // see (namespaceFolderDenial).
+  const fromNamespace = namespaceFolderDenial(f)
+  if (fromNamespace) throw new Error(fromNamespace)
+  if (namespaceFolderDenial(t)) {
+    throw new Error(`"${t}" is one of the space's built-in folders — a folder can't be renamed into it`)
+  }
   // Moving a folder INTO an entity's folder converts the entity note first.
   if (actor) await ensureParentFolderNote(context, `${t}/x.md`, actor)
   const notes = await prisma.contextNote.findMany({
@@ -1335,6 +1391,13 @@ async function retitleIndexAfterRename(
 // Soft-delete a folder: trash every note under it and drop the folder rows.
 export async function deleteFolder(context: Context, path: string): Promise<void> {
   const p = sanitizePath(path)
+  // The last word on it: every door into a folder delete — the route, the MCP
+  // tool, a script — comes through here, so the namespaces are safe without
+  // each caller having to remember them. Deleting what's INSIDE one is
+  // untouched: `tools/<name>` and `agents/live/<name>` are ordinary paths and
+  // the teardown hooks that remove them still work.
+  const denial = namespaceFolderDenial(p)
+  if (denial) throw new Error(denial)
   const notes = await prisma.contextNote.findMany({
     where: {
       spaceId: context.spaceId,

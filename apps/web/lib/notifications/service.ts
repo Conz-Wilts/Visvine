@@ -23,8 +23,10 @@ import { publishToUsers } from '@/lib/messages/realtime'
 import {
   LIST_MAX_TAKE,
   normalizeNotifyInput,
+  scopeFilter,
   uniqueUserIds,
   type NotificationDTO,
+  type NotificationScope,
   type NotifyInput,
 } from './types'
 
@@ -133,11 +135,15 @@ export function isForeignKeyFailure(err: unknown): boolean {
 
 export async function listNotifications(
   userId: string,
-  opts: { unreadOnly?: boolean; take?: number } = {},
+  opts: { unreadOnly?: boolean; take?: number; scope?: NotificationScope; spaceId?: string | null } = {},
 ): Promise<NotificationDTO[]> {
   const take = Math.min(Math.max(1, opts.take ?? 30), LIST_MAX_TAKE)
+  const scoped = scopeFilter(opts.scope ?? 'all', opts.spaceId ?? null)
+  // `null` is "no row can match" — asked for a space's lines while standing in
+  // no space. Answering with everything would be the opposite of the filter.
+  if (scoped === null) return []
   const rows = await prisma.notification.findMany({
-    where: { userId, ...(opts.unreadOnly ? { readAt: null } : {}) },
+    where: { userId, ...scoped, ...(opts.unreadOnly ? { readAt: null } : {}) },
     orderBy: { createdAt: 'desc' },
     take,
   })
@@ -148,10 +154,36 @@ export async function unreadCount(userId: string): Promise<number> {
   return prisma.notification.count({ where: { userId, readAt: null } })
 }
 
-/** Mark the given ids (only the caller's own rows) or everything unread as read. */
-export async function markRead(userId: string, target: { ids?: string[]; all?: boolean }): Promise<{ updated: number }> {
+/**
+ * The three numbers the bell's tabs need in one round-trip: everything unread,
+ * the person's own (space-less) lines, and this space's. `space` is 0 when the
+ * caller isn't in a space rather than a repeat of the total.
+ */
+export async function unreadCounts(
+  userId: string,
+  spaceId: string | null,
+): Promise<{ total: number; global: number; space: number }> {
+  const [total, global, space] = await Promise.all([
+    prisma.notification.count({ where: { userId, readAt: null } }),
+    prisma.notification.count({ where: { userId, readAt: null, spaceId: null } }),
+    spaceId ? prisma.notification.count({ where: { userId, readAt: null, spaceId } }) : Promise.resolve(0),
+  ])
+  return { total, global, space }
+}
+
+/**
+ * Mark the given ids (only the caller's own rows) or everything unread as read.
+ * With `all`, an optional scope limits it to the half the person is looking at:
+ * "Mark all read" on the space tab must not silently clear the global one.
+ */
+export async function markRead(
+  userId: string,
+  target: { ids?: string[]; all?: boolean; scope?: NotificationScope; spaceId?: string | null },
+): Promise<{ updated: number }> {
+  const scoped = target.all ? scopeFilter(target.scope ?? 'all', target.spaceId ?? null) : {}
+  if (scoped === null) return { updated: 0 }
   const where = target.all
-    ? { userId, readAt: null }
+    ? { userId, readAt: null, ...scoped }
     : { userId, readAt: null, id: { in: (target.ids ?? []).filter((id) => typeof id === 'string').slice(0, 500) } }
   if (!target.all && (where as { id: { in: string[] } }).id.in.length === 0) return { updated: 0 }
   const res = await prisma.notification.updateMany({ where, data: { readAt: new Date() } })

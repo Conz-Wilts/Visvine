@@ -45,7 +45,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const [openRun, setOpenRun] = useState<string | null>(null);
   const [editingBudget, setEditingBudget] = useState(false);
   const [budgetInput, setBudgetInput] = useState<string>('');
-  const [spaceTimezone, setSpaceTimezone] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!spaceId) return;
@@ -69,10 +68,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     }
     setLoading(true);
     void reload();
-    // The space timezone (for the activation dialog) rides on the roster route.
-    fetchJson<{ spaceTimezone: string | null }>(`/api/communities/${spaceId}/agents`)
-      .then((r) => setSpaceTimezone(r.spaceTimezone))
-      .catch(() => {});
   }, [spaceId, spaceLoading, reload]);
 
   // While a run is in flight the row and the list move; keep them fresh.
@@ -270,7 +265,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         <ActivateAgentDialog
           spaceId={spaceId}
           agent={agent}
-          spaceTimezone={spaceTimezone}
           onClose={() => setActivating(false)}
           onDone={(warning) => {
             setActivating(false);

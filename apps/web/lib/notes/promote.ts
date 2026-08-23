@@ -1,6 +1,6 @@
 // Publish proposals — how knowledge moves up the tree when the proposer lacks
 // write access at the destination. POST /api/notes/publications queues a
-// proposal and a folder admin approves it here, which creates the live
+// proposal and a space admin approves it here, which creates the live
 // publication (lib/notes/publications.ts).
 //
 // Backed by the `context_move_proposals` table. Resolution is a single
@@ -68,21 +68,20 @@ export async function queuePublishProposal(
 
 /** Proposals the principal may see: their own, plus any folder they manage. */
 export async function listProposals(p: ContextPrincipal): Promise<MoveProposalEntry[]> {
-  // Newest first. The folder-manage half of the filter is a per-folder decision
-  // the DB cannot express, so the caller's own proposals are narrowed in SQL and
-  // the rest is filtered here — the same reach the sidecar version had.
+  // Newest first. Space admins see the whole queue; everyone else sees only
+  // what they proposed themselves.
   const rows = await prisma.contextMoveProposal.findMany({
-    where: { spaceId: p.spaceId },
+    where: principalCanManage(p) ? { spaceId: p.spaceId } : { spaceId: p.spaceId, proposedBy: p.userId },
     orderBy: { proposedAt: 'desc' },
   })
-  return rows
-    .filter((r) => r.proposedBy === p.userId || principalCanManage(p, r.folderId))
-    .map(toEntry)
+  return rows.map(toEntry)
 }
 
 /**
- * Approve or deny a pending promotion/publication. Requires manage (full) at
- * the destination folder. Approving a copy writes the proposal's snapshot into
+ * Approve or deny a pending promotion/publication. Space admins only — letting
+ * someone else's note into the shared context is an administrative call, not
+ * something an edit grant on the destination confers. Approving a copy writes
+ * the proposal's snapshot into
  * the shared folder; approving a PUBLISH proposal creates the live publication
  * from the proposer's personal context (reading its CURRENT content — the
  * snapshot is only the preview). The personal original is left to its owner —
@@ -97,8 +96,8 @@ export async function resolveProposal(
     where: { id: proposalId, spaceId: p.spaceId },
   })
   if (!existing) throw new Error('Proposal not found')
-  if (!principalCanManage(p, existing.folderId)) {
-    throw new Error('Only a folder admin can resolve promotion proposals')
+  if (!principalCanManage(p)) {
+    throw new Error('Only a space admin can resolve promotion proposals')
   }
   if (existing.status !== 'pending') return toEntry(existing)
 

@@ -19,6 +19,7 @@ export const MCP_SCOPES = [
   'agents:run',
   'tools:author',
   'tools:install',
+  'secrets:write',
 ] as const
 
 export type McpScope = (typeof MCP_SCOPES)[number]
@@ -57,6 +58,8 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
     'Build tools in your spaces — write their code, compile it, and submit one for review to the tool marketplace',
   'tools:install':
     'Install a reviewed tool from the marketplace into a space you administer',
+  'secrets:write':
+    'Store and rotate connector credentials in spaces you administer — values are write-only and can never be read back, by this client or any other',
 }
 
 /**
@@ -67,6 +70,12 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
  * the same map, so the two can never disagree.
  */
 export const TOOL_SCOPES = {
+  // The planner reads nothing a `context:read` token could not already fetch —
+  // the space's role, features, and the connector/agent names list_connectors
+  // and list_agents return anyway. It rides the read scope so that the tool
+  // whose whole job is telling a client which door to use is never itself
+  // behind a door the client has not opened.
+  plan_visvine_query: 'context:read',
   list_spaces: 'context:read',
   list_context: 'context:read',
   search_context: 'context:read',
@@ -88,6 +97,13 @@ export const TOOL_SCOPES = {
   // to read tokens, so discovery isn't the secret; execution is.
   list_connectors: 'context:read',
   run_connector: 'connectors:use',
+  // Storing a credential is not "using a connector" and must never ride
+  // `connectors:use`: a token granted to CALL Stripe would otherwise be able to
+  // REPLACE the Stripe key. It is its own scope so that a client asking for it
+  // has to say so at consent, and so a connection that only reads and runs can
+  // never acquire it by accident. Underneath, the tool re-derives space
+  // admin live — the scope is necessary, never sufficient.
+  set_connector_secret: 'secrets:write',
   // Same split as connectors: the roster is member-visible, execution is the
   // privilege. Authoring a brief is NOT an MCP tool — agents/ is frozen for
   // AI origins (agents are written by people).

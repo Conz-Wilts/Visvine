@@ -63,6 +63,38 @@ export function mcpServerInfo(kind: McpServerKind = 'context'): Implementation {
 }
 
 /**
+ * The `instructions` a client receives at initialize — the one piece of text
+ * every model reads before it has called anything, and therefore the only place
+ * that can correct the wrong first impression this surface gives.
+ *
+ * The wrong impression is specific and worth naming: the tool list is mostly
+ * list_/run_ verbs, so a client asked to create a connector looks for
+ * `create_connector`, does not find it, and reports that connectors can only be
+ * made in the app. That is false — a connector IS a note, and edit_context
+ * writes it. Rather than restate every recipe here (they change; this string is
+ * cached by clients), this points at `plan_visvine_query`, which holds them.
+ */
+export function mcpInstructions(kind: McpServerKind = 'context'): string {
+  const shared =
+    'Visvine is NOTE-FIRST. Almost everything in a space is a markdown note at a deterministic path, ' +
+    'and the note IS the thing — not a description of a record stored elsewhere. A connector is ' +
+    'connectors/<name>.md. An agent is agents/<name>.md plus agents/live/<name>.md. A Tool is three ' +
+    'notes under tools/<name>/. An entity is a typed node plus its note (people/<slug>.md). Links are ' +
+    'never authored: a markdown link to an entity note, inside a shared note, IS the edge.\n\n' +
+    'Because of that, this surface has few create_* tools, and their absence does NOT mean the thing ' +
+    "cannot be made. It usually means it is written with edit_context at the right path. Never tell a " +
+    'user something is impossible here because you could not find a tool named for it.\n\n' +
+    'CALL plan_visvine_query FIRST, with the user\'s message verbatim, on every new request. It returns ' +
+    'the ordered tool plan, the exact note contract where one applies, the refusals to expect, and what ' +
+    'the space already has. It is free, read-only, and it is the index to everything else.'
+  return kind === 'creator'
+    ? `${shared}\n\nThis is the CREATOR server: the Tool authoring loop only (create_tool → write_tool → ` +
+        'check_tool → preview_tool → publish_tool). Reading and writing ordinary context, calling connectors ' +
+        'and running agents live on the context server at /api/mcp.'
+    : `${shared}\n\nAuthoring a Tool is not on this server — connect to /api/mcp/creator for that loop.`
+}
+
+/**
  * The RFC 8707 resource identifier for one MCP server. The access token `aud`
  * must equal this, and that server's protected-resource metadata advertises it.
  * The creator server always hangs off the context server's URL, so a single

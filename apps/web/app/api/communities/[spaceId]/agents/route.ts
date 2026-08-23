@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAgentsAccess } from '@/lib/agents/route'
 import { listAgents } from '@/lib/agents/service'
-import prisma from '@/lib/prisma'
 
 /**
  * The roster: every agent brief the caller can see, joined with its
@@ -16,10 +15,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
   if (ctx instanceof Response) return ctx
   const { resolved, principal } = ctx
 
-  const [{ agents, folders, heartbeatAt }, space] = await Promise.all([
-    listAgents(principal, resolved, { includeSpend: resolved.isAdmin }),
-    prisma.space.findUnique({ where: { id: spaceId }, select: { timezone: true } }),
-  ])
+  // No space timezone here any more: an agent's zone is part of its own
+  // activation note, so there is no space-wide default for the roster to carry.
+  const { agents, folders, heartbeatAt } = await listAgents(principal, resolved, { includeSpend: resolved.isAdmin })
 
   return NextResponse.json({
     agents: resolved.isAdmin ? agents : agents.map((a) => ({ ...a, spend: null })),
@@ -27,6 +25,5 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
     heartbeatAt,
     isAdmin: resolved.isAdmin,
     currentUserId: resolved.actor.id,
-    spaceTimezone: space?.timezone ?? null,
   })
 }

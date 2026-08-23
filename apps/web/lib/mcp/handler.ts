@@ -13,7 +13,7 @@ import { createMcpHandler, withMcpAuth } from 'mcp-handler'
 import type { McpServer } from '@modelcontextprotocol/server'
 import { mcpBearerVerifier } from '@/lib/mcp/auth'
 import { withScopeGate, withScopeHint } from '@/lib/mcp/challenge'
-import { mcpResourceUrl, mcpServerInfo, type McpServerKind } from '@/lib/mcp/config'
+import { mcpInstructions, mcpResourceUrl, mcpServerInfo, type McpServerKind } from '@/lib/mcp/config'
 
 export function buildMcpHandler(
   kind: McpServerKind,
@@ -24,6 +24,9 @@ export function buildMcpHandler(
 
   const handler = createMcpHandler((server) => register(server), {
     serverInfo: mcpServerInfo(kind),
+    // Read by the client at initialize, before it has called anything — the
+    // only place to correct the note-first misreading this surface invites.
+    instructions: mcpInstructions(kind),
     verboseLogs: process.env.NODE_ENV !== 'production',
   })
 

@@ -11,9 +11,13 @@ import {
   LIST_MAX_TAKE,
   NOTIFICATION_KINDS,
   clampTake,
+  invitationHref,
+  invitationIdOfHref,
   isNotificationKind,
   normalizeNotifyInput,
+  parseScope,
   relativeTime,
+  scopeFilter,
   uniqueUserIds,
 } from '../lib/notifications/types'
 import { isForeignKeyFailure } from '../lib/notifications/service'
@@ -28,7 +32,10 @@ test('kinds: every writer is present and nothing else passes', () => {
       'agent_notify',
       'agent_question',
       'tool_review',
+      'tool_install_request',
       'access_request',
+      'space_invite',
+      'space_invite_answered',
       'projection_stalled',
     ],
   )
@@ -70,6 +77,32 @@ test('clampTake: default, floor, cap', () => {
   assert.equal(clampTake('7'), 7)
   assert.equal(clampTake('9999'), LIST_MAX_TAKE)
   assert.equal(clampTake(12.9), 12)
+})
+
+test('parseScope only honours the two real halves', () => {
+  assert.equal(parseScope('global'), 'global')
+  assert.equal(parseScope('space'), 'space')
+  assert.equal(parseScope(null), 'all')
+  assert.equal(parseScope('everything'), 'all')
+})
+
+test('scopeFilter: space with no space matches nothing, never everything', () => {
+  assert.deepEqual(scopeFilter('all', 'sp1'), {})
+  assert.deepEqual(scopeFilter('global', 'sp1'), { spaceId: null })
+  assert.deepEqual(scopeFilter('space', 'sp1'), { spaceId: 'sp1' })
+  // The one that matters: no current space must not fall back to unfiltered.
+  assert.equal(scopeFilter('space', null), null)
+})
+
+test('an invitation id survives the round-trip through its href', () => {
+  const href = invitationHref('inv-123')
+  assert.equal(href, '/invitations/inv-123')
+  assert.equal(invitationIdOfHref(href), 'inv-123')
+  assert.equal(invitationIdOfHref(' /invitations/inv-123 '), 'inv-123')
+  // Anything that isn't exactly one invitation path names no invitation.
+  assert.equal(invitationIdOfHref('/invitations/inv-123/extra'), null)
+  assert.equal(invitationIdOfHref('/directory/agent:foo'), null)
+  assert.equal(invitationIdOfHref(null), null)
 })
 
 test('isForeignKeyFailure recognises a stale space id however Prisma reports it', () => {

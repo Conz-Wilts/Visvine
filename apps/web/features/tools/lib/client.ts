@@ -97,6 +97,23 @@ export function patchInstall(
   )
 }
 
+/**
+ * A member asking their space admins to install a Tool — the marketplace's
+ * answer when the viewer isn't an admin. Lands in every admin's notification
+ * bell; one open ask per member+tool (the server dedupes while unread).
+ */
+export function requestInstall(
+  spaceId: string,
+  versionId: string,
+  message?: string,
+): Promise<{ ok: true; notified: number }> {
+  return fetchJsonBody<{ ok: true; notified: number }>(
+    `/api/communities/${encodeURIComponent(spaceId)}/tools/requests`,
+    'POST',
+    { versionId, ...(message?.trim() ? { message: message.trim() } : {}) },
+  )
+}
+
 export function uninstallTool(spaceId: string, installId: string): Promise<{ ok: true }> {
   return fetchJson<{ ok: true }>(
     `/api/communities/${encodeURIComponent(spaceId)}/tools/${encodeURIComponent(installId)}`,
@@ -134,6 +151,19 @@ export function createTool(spaceId: string, input: CreateToolRequest): Promise<C
     `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring`,
     'POST',
     input,
+  )
+}
+
+/**
+ * Delete a working copy — its notes, folder, node and build. Published
+ * versions in the registry stay. The server holds this to the note store's
+ * removal bar (admin, the author, or a full-access member) and refuses a
+ * non-admin whose Tool is still installed in this space.
+ */
+export function deleteAuthoredTool(spaceId: string, name: string): Promise<{ ok: true }> {
+  return fetchJson<{ ok: true }>(
+    `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
+    { method: 'DELETE' },
   )
 }
 

@@ -8,6 +8,15 @@ import type { AgentSummary } from '@/lib/agents/service';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
+/** The zone this browser is in, or '' when the runtime won't say. */
+function browserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {
+    return '';
+  }
+}
+
 type Kind = 'none' | 'hourly' | 'daily' | 'weekly' | 'every';
 
 /**
@@ -20,13 +29,11 @@ type Kind = 'none' | 'hourly' | 'daily' | 'weekly' | 'every';
 export default function ActivateAgentDialog({
   spaceId,
   agent,
-  spaceTimezone,
   onClose,
   onDone,
 }: {
   spaceId: string;
   agent: AgentSummary;
-  spaceTimezone: string | null;
   onClose: () => void;
   onDone: (warning: string | null) => void;
 }) {
@@ -41,7 +48,10 @@ export default function ActivateAgentDialog({
   );
   const [on, setOn] = useState(initial?.kind === 'weekly' ? WEEKDAYS[(initial.weekday + 6) % 7] : 'monday');
   const [every, setEvery] = useState(agent.activation.every ?? '15m');
-  const [timezone, setTimezone] = useState(agent.activation.timezone ?? '');
+  // Seeded from the note, then from the browser — the admin turning an agent on
+  // is nearly always in the zone it should run in. It is still written out
+  // explicitly; what is refused is a schedule with no zone on it at all.
+  const [timezone, setTimezone] = useState(agent.activation.timezone ?? browserTimeZone());
   const [contextGlobs, setContextGlobs] = useState((agent.activation.on?.context ?? []).join('\n'));
   const [webhook, setWebhook] = useState(agent.activation.on?.webhook ?? '');
   const [debounce, setDebounce] = useState(
@@ -76,7 +86,11 @@ export default function ActivateAgentDialog({
     .map((g) => g.trim())
     .filter(Boolean);
   const hasTrigger = globs.length > 0 || !!webhook;
-  const canSubmit = kind !== 'none' || hasTrigger;
+  // Any clock needs a zone to be read in — the same line the API draws. A
+  // trigger-only agent fires when something happens, so there is no "07:00"
+  // to interpret and no zone to ask for.
+  const needsClock = kind !== 'none';
+  const canSubmit = (needsClock || hasTrigger) && (!needsClock || !!timezone);
 
   const submit = async () => {
     setBusy(true);
@@ -162,10 +176,15 @@ export default function ActivateAgentDialog({
           </div>
         )}
 
-        {(kind === 'daily' || kind === 'weekly' || kind === 'every') && (
-          <Field label="Timezone">
+        {needsClock && (
+          <Field label="Timezone" hint="Whose clock “07:00” means. Written into the agent's activation note.">
             <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-              <option value="">{spaceTimezone ?? 'UTC'} (space default)</option>
+              {/* No "space default": the space no longer keeps one, and a
+                  schedule whose zone is implied is a schedule nobody can read
+                  off the note. */}
+              <option value="" disabled>
+                Pick a timezone
+              </option>
               {zones.map((z) => (
                 <option key={z} value={z}>
                   {z}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { parseBody } from '@/lib/api/route'
-import { describeAuthoredTool, toolRequirementsInSpace } from '@/lib/tools/service'
+import { deleteTool, describeAuthoredTool, toolRequirementsInSpace } from '@/lib/tools/service'
 import { publishTool, toolKey, versionHistory } from '@/lib/tools/registry'
 import { bad, requireToolsAccess } from '@/lib/tools/route'
 import type {
@@ -95,4 +95,27 @@ export async function POST(
 
   const answer: PublishResponse = { version: result.version, warning: result.warning }
   return NextResponse.json(answer, { status: 201 })
+}
+
+/**
+ * Delete the working copy — notes, folder, node, build, and (admin only) this
+ * space's install. Published versions in the registry survive on purpose: they
+ * are immutable snapshots other spaces may be running.
+ *
+ * Not admin-gated here, mirroring create: the service holds it to the note
+ * store's own removal bar (admin, the author, or a full-access member), and
+ * refuses a non-admin whose Tool is still installed in this space.
+ */
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ spaceId: string; name: string }> },
+) {
+  const { spaceId, name: raw } = await params
+  const name = decodeURIComponent(raw)
+  const ctx = await requireToolsAccess(spaceId)
+  if (ctx instanceof Response) return ctx
+
+  const result = await deleteTool(ctx.principal, ctx.resolved, name)
+  if (!result.ok) return bad(result.error, result.status)
+  return NextResponse.json({ ok: true })
 }

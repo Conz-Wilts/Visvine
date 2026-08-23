@@ -39,15 +39,11 @@ const TZ = 'Australia/Sydney';
 
 // The anchors from prisma/seed.ts. ADMIN holds Owner + Partner.
 const ADMIN = 'user_dev_admin';
-const PARTNER = 'user_dev_partner';
 const MEMBER = 'user_dev_member';
-const LP = 'user_dev_lp';
-const ANCHORS = [ADMIN, PARTNER, MEMBER, LP];
+const ANCHORS = [ADMIN, MEMBER];
 
 const NODE_ADMIN = 'person:dev_admin';
-const NODE_PARTNER = 'person:dev_partner';
 const NODE_MEMBER = 'person:dev_member';
-const NODE_LP = 'person:dev_lp';
 
 // ---- utilities ---------------------------------------------------------------
 
@@ -107,26 +103,19 @@ const EVENTS = [
     description: 'Quarterly update for limited partners: fund marks, new positions, and the reserves plan for the next two quarters.',
   },
   {
-    slug: 'portfolio-founder-dinner', name: 'Portfolio Founder Dinner', hosts: [NODE_ADMIN, NODE_PARTNER],
+    slug: 'portfolio-founder-dinner', name: 'Portfolio Founder Dinner', hosts: [NODE_ADMIN],
     start: inDays(9, 18, 30), end: inDays(9, 22),
     location: { label: 'Bentley Restaurant + Bar', address: '27 O’Connell St, Sydney NSW', lat: -33.8641, lon: 151.2093 },
     visibility: 'space', status: 'published', capacity: 40, views: 187, allowPlusOnes: 1,
     description: 'Twice-yearly dinner for portfolio founders. No panels, no decks — just the people building, in one room.',
   },
   {
-    slug: 'blackbird-demo-day', name: 'Blackbird Demo Day', hosts: [NODE_ADMIN, NODE_PARTNER],
+    slug: 'blackbird-demo-day', name: 'Blackbird Demo Day', hosts: [NODE_ADMIN],
     start: inDays(31, 15), end: inDays(31, 20),
     location: { label: 'Carriageworks', address: '245 Wilson St, Eveleigh NSW', lat: -33.8974, lon: 151.1949 },
     visibility: 'public', status: 'published', capacity: 250, views: 1204,
     waitlistEnabled: true, allowPlusOnes: 1, guestListVisible: true, form: demoDayForm,
     description: 'The portfolio on stage: ten companies, five minutes each, in front of LPs, co-investors and the wider ANZ ecosystem.',
-  },
-  {
-    slug: 'nz-founder-office-hours', name: 'NZ Founder Office Hours (planning)', hosts: [NODE_PARTNER],
-    start: inDays(52, 10), end: inDays(52, 13),
-    location: { label: 'TBC — Auckland' },
-    visibility: 'space', status: 'draft', capacity: 12, views: 6,
-    description: 'Draft: a day of 20-minute slots for New Zealand founders, pre-seed and seed. Venue and date being locked in.',
   },
 ];
 
@@ -134,8 +123,6 @@ const EVENTS = [
 // loginless (name/email only). Real portfolio founders are mixed in at runtime.
 const ATTENDEES = {
   'q3-lp-update': [
-    { n: 1, person: NODE_LP, email: 'lp@local.dev', status: 'checked_in', response: 'going' },
-    { n: 2, person: NODE_PARTNER, email: 'partner@local.dev', status: 'checked_in', response: 'going' },
     { n: 3, name: 'Sandra Yeo', email: 'sandra.yeo@superfund.example.com', status: 'checked_in', response: 'going', company: 'Meridian Super', role: 'Investment Director' },
     { n: 4, name: 'Peter Hale', email: 'peter.hale@familyoffice.example.com', status: 'no_show', response: 'going', company: 'Hale Family Office' },
   ],
@@ -147,8 +134,6 @@ const ATTENDEES = {
   ],
   'blackbird-demo-day': [
     { n: 1, person: NODE_MEMBER, email: 'member@local.dev', status: 'going', response: 'going', answers: { company: 'Loopwork', relationship: 'Portfolio founder', pitching: true, dietary: '' } },
-    { n: 2, person: NODE_LP, email: 'lp@local.dev', status: 'going', response: 'going', answers: { company: 'Meridian Super', relationship: 'LP', pitching: false, dietary: 'Vegetarian' } },
-    { n: 3, person: NODE_PARTNER, email: 'partner@local.dev', status: 'going', response: 'going', answers: { company: 'Blackbird', relationship: 'Blackbird team', pitching: false, dietary: '' } },
     { n: 4, name: 'Priya Raman', email: 'priya.raman@example.com', status: 'pending', response: 'going', company: 'Northbound Capital', role: 'Principal', answers: { company: 'Northbound Capital', relationship: 'Co-investor', pitching: false, dietary: 'GF' } },
     { n: 5, name: 'Marcus Webb', email: 'marcus.webb@example.com', status: 'waitlisted', response: 'going', answers: { company: '—', relationship: 'Prospective founder', pitching: false, dietary: '' } },
     { n: 6, name: 'Elena Costa', email: 'elena.costa@example.com', status: 'invited', company: 'The Australian Financial Review', role: 'Reporter' },
@@ -170,16 +155,6 @@ const FILE_RESOURCES = [
       'Blackbird Ventures IV,2020,500,74,1.9,0.1,21.6',
       'Blackbird Ventures V,2022,1000,41,1.3,0.0,14.2',
       'Blackbird Follow-On I,2021,300,68,1.6,0.0,17.8',
-    ].join('\n'),
-  },
-  {
-    file: 'portfolio-review.csv', name: 'Portfolio review template', fileType: 'csv', uploadedBy: PARTNER, daysAgo: 11,
-    body: [
-      'company,sector,stage,last_round_date,ownership_pct,mark,runway_months,owner,flag',
-      'Canva,SaaS & Enterprise,Growth,2024-05-01,2.1,hold,60+,Partner,',
-      'Halter,Agtech & Food,Series D+,2024-09-12,6.4,mark up,34,Partner,',
-      'Zeller,Fintech,Series C,2023-11-02,4.8,hold,22,Partner,watch',
-      'Baraja,Deep Tech & Hardware,Series C,2022-07-19,5.1,mark down,11,Partner,watch',
     ].join('\n'),
   },
   {
@@ -243,30 +218,13 @@ const CHANNELS = [
 
 // hoursAgo counts back from now; keeps ordering stable across runs.
 const MESSAGES = [
-  { id: 'msg_bb_001', chan: 'chan_bb_general', from: ADMIN, hoursAgo: 500, text: 'Morning all — Q3 close is the 30th. Marks need to be in the roll-up by the 24th, no exceptions this time 🙏', pinned: true, reactions: [{ from: PARTNER, emoji: '👍' }, { from: LP, emoji: '👀' }] },
-  { id: 'msg_bb_002', chan: 'chan_bb_general', from: PARTNER, hoursAgo: 470, text: 'Flying to Auckland Thursday for two days of founder meetings. If anyone wants me to drop in on a company while I am there, shout.' },
+  { id: 'msg_bb_001', chan: 'chan_bb_general', from: ADMIN, hoursAgo: 500, text: 'Morning all — Q3 close is the 30th. Marks need to be in the roll-up by the 24th, no exceptions this time 🙏', pinned: true },
   { id: 'msg_bb_003', chan: 'chan_bb_general', from: MEMBER, hoursAgo: 300, text: 'Is the IC memo template in the resource library the current one? The version I have has a different terms table.' },
   { id: 'msg_bb_004', chan: 'chan_bb_general', from: ADMIN, hoursAgo: 298, text: 'The library one is current — I updated it last month. Yours is probably the 2024 copy.', replyTo: 'msg_bb_003', reactions: [{ from: MEMBER, emoji: '🙏' }] },
-  { id: 'msg_bb_010', chan: 'chan_bb_dealflow', from: PARTNER, hoursAgo: 420, text: 'Seeing a real cluster of ANZ climate-hardware companies raising this quarter. Four in the last fortnight, all with credible engineering teams. Something has shifted in the talent pool.', reactions: [{ from: ADMIN, emoji: '👀' }] },
-  { id: 'msg_bb_011', chan: 'chan_bb_dealflow', from: ADMIN, hoursAgo: 418, text: 'Agreed. My read is it is the ex-Tritium and ex-Redflow people finally coming free.', replyTo: 'msg_bb_010' },
-  { id: 'msg_bb_012', chan: 'chan_bb_dealflow', from: PARTNER, hoursAgo: 200, text: 'Reminder that anything with a term sheet needs the memo circulated 48h before IC, not the morning of. Looking at nobody in particular.', reactions: [{ from: ADMIN, emoji: '😅' }] },
   { id: 'msg_bb_013', chan: 'chan_bb_dealflow', from: MEMBER, hoursAgo: 60, text: 'Intro request came in via the invite link — founder out of Christchurch doing marine sensing. Deck is genuinely good. Putting it in the pipeline note.' },
-  { id: 'msg_bb_020', chan: 'chan_bb_portfolio', from: ADMIN, hoursAgo: 360, text: '🎉 Halter closed their Series D. Congratulations to the whole team — eight years from a paddock in Waikato to this.', pinned: true, reactions: [{ from: PARTNER, emoji: '🎉' }, { from: MEMBER, emoji: '🐄' }, { from: LP, emoji: '👏' }] },
-  { id: 'msg_bb_021', chan: 'chan_bb_portfolio', from: PARTNER, hoursAgo: 240, text: 'Canva shipped their enterprise suite. Worth reading the launch post even if you do not care about design tools — the go-to-market is the interesting part.' },
+  { id: 'msg_bb_020', chan: 'chan_bb_portfolio', from: ADMIN, hoursAgo: 360, text: '🎉 Halter closed their Series D. Congratulations to the whole team — eight years from a paddock in Waikato to this.', pinned: true, reactions: [{ from: MEMBER, emoji: '🐄' }] },
   { id: 'msg_bb_022', chan: 'chan_bb_portfolio', from: MEMBER, hoursAgo: 80, text: 'Zeller hit a milestone worth noting internally: more merchants added last quarter than in all of 2024.', reactions: [{ from: ADMIN, emoji: '📈' }] },
-  { id: 'msg_bb_030', chan: 'chan_bb_lp', from: ADMIN, hoursAgo: 340, text: 'Q3 LP update deck is drafted. Partners — please read the marks section before Friday, that is the bit that generates questions.', reactions: [{ from: PARTNER, emoji: '✅' }] },
-  { id: 'msg_bb_031', chan: 'chan_bb_lp', from: LP, hoursAgo: 150, text: 'Question from our side: are the Fund IV reserves still assuming a 2026 deployment schedule, or has that moved out?' },
-  { id: 'msg_bb_032', chan: 'chan_bb_lp', from: ADMIN, hoursAgo: 148, text: 'Moved out by roughly two quarters — the detail is in the reserves section of the roll-up. Happy to walk through it on a call.', replyTo: 'msg_bb_031', reactions: [{ from: LP, emoji: '🙏' }] },
-];
-
-
-const DM_MESSAGES = [
-  { id: 'msg_bb_dm1', from: ADMIN, hoursAgo: 130, text: 'Got a minute to look at the Demo Day shortlist before it goes to the wider team?' },
-  { id: 'msg_bb_dm2', from: PARTNER, hoursAgo: 129, text: 'Send it through.' },
-  { id: 'msg_bb_dm3', from: ADMIN, hoursAgo: 128, text: 'Ten slots, seven obvious. The last three I have as Halter, Zeller and one wildcard from the open applications.' },
-  { id: 'msg_bb_dm4', from: PARTNER, hoursAgo: 126, text: 'Halter and Zeller are both well past the stage where a demo day helps them. Give those two slots to companies that need the room.' },
-  { id: 'msg_bb_dm5', from: ADMIN, hoursAgo: 125, text: 'Fair. Redoing the bottom half tonight.' },
-  { id: 'msg_bb_dm6', from: PARTNER, hoursAgo: 18, text: 'Registrations are past 180 already. We may need the bigger hall 👀' },
+  { id: 'msg_bb_030', chan: 'chan_bb_lp', from: ADMIN, hoursAgo: 340, text: 'Q3 LP update deck is drafted. Partners — please read the marks section before Friday, that is the bit that generates questions.' },
 ];
 
 // ---- write to the DB ---------------------------------------------------------
@@ -390,8 +348,8 @@ try {
   }
   await client.query(
     `INSERT INTO resource_comments (resource_id, cell_ref, author, content, created_at)
-     VALUES ($1, 'F5', 'Dev Partner', 'Fund IV net IRR looks stale — this is the pre-mark number.', NOW() - interval '4 days'),
-            ($1, NULL, 'Dev Admin', 'Good catch, refreshing after Q3 close.', NOW() - interval '3 days')`,
+     VALUES ($1, 'F5', 'Dev Admin', 'Fund IV net IRR looks stale — this is the pre-mark number.', NOW() - interval '4 days'),
+            ($1, NULL, 'Dev Admin', 'Refreshing the whole roll-up after Q3 close.', NOW() - interval '3 days')`,
     [resourceIdByFile.get('fund-roll-up.csv')],
   );
   console.log(`  ✓ ${FILE_RESOURCES.length} files + 2 comments`);
@@ -439,32 +397,6 @@ try {
     }
   }
   console.log(`  ✓ ${SECTIONS.length} sections, ${CHANNELS.length} channels, ${MESSAGES.length} messages`);
-
-
-  // 6. Admin ↔ Partner DM
-  const dmKey = [ADMIN, PARTNER].sort().join(':');
-  const dm = await client.query(
-    `INSERT INTO conversations (id, type, dm_key, created_by_id, created_at, updated_at)
-     VALUES ('conv_bb_dm_admin_partner', 'DM', $1, $2, NOW() - interval '14 days', NOW())
-     ON CONFLICT (dm_key) DO UPDATE SET updated_at = NOW() RETURNING id`,
-    [dmKey, ADMIN],
-  );
-  const dmId = dm.rows[0].id;
-  for (const uid of [ADMIN, PARTNER]) {
-    await client.query(
-      `INSERT INTO conversation_members (conversation_id, user_id, joined_at)
-       VALUES ($1, $2, NOW() - interval '14 days') ON CONFLICT (conversation_id, user_id) DO NOTHING`,
-      [dmId, uid],
-    );
-  }
-  for (const m of DM_MESSAGES) {
-    await client.query(
-      `INSERT INTO messages (id, conversation_id, sender_id, text, created_at) VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (id) DO UPDATE SET text = EXCLUDED.text, created_at = EXCLUDED.created_at`,
-      [m.id, dmId, m.from, m.text, hoursAgo(m.hoursAgo)],
-    );
-  }
-  console.log(`  ✓ admin↔partner DM (${DM_MESSAGES.length} messages)`);
 
   await client.query('COMMIT');
   console.log('\n=== Committed ===');

@@ -13,7 +13,16 @@ export const NOTIFICATION_KINDS = [
   'agent_notify',
   'agent_question',
   'tool_review',
+  // A member asked their space admins to install a marketplace Tool — the
+  // member-facing half of "only admins install".
+  'tool_install_request',
   'access_request',
+  // An admin asked someone to join their space. The only notification that is
+  // itself the decision: nothing has been granted when it arrives, and the
+  // Accept in the bell is what writes the membership (lib/spaces/invitations.ts).
+  'space_invite',
+  // …and the answer, back to the admin who asked.
+  'space_invite_answered',
   // A note's derived state is permanently stale: its projection job exhausted
   // every retry and was parked. Everything else on this list is something a
   // person did or a connection did; this one is the machinery reporting that it
@@ -94,6 +103,48 @@ export function uniqueUserIds(userIds: readonly string[]): string[] {
   return [...new Set(userIds.filter((id) => typeof id === 'string' && id.length > 0))]
 }
 
+/**
+ * Which half of the inbox is being asked for. A notification either belongs to
+ * a space (`spaceId` set — a review in Sales, an agent that runs there) or to
+ * the person (`spaceId` null — an invitation to a space they are not in yet, a
+ * broken personal connection). The bell shows one at a time so the space you
+ * are standing in isn't buried under the other five.
+ */
+export type NotificationScope = 'all' | 'global' | 'space'
+
+export function parseScope(raw: string | null | undefined): NotificationScope {
+  return raw === 'global' || raw === 'space' ? raw : 'all'
+}
+
+/**
+ * The `spaceId` filter a scope means, as a Prisma where-fragment — or `null`
+ * for "no row can match", which is what `space` means when the caller isn't
+ * standing in one. That case is NOT "every space": an unresolved current space
+ * must show an empty tab, never somebody else's lines.
+ */
+export function scopeFilter(
+  scope: NotificationScope,
+  spaceId: string | null,
+): { spaceId?: string | null } | null {
+  if (scope === 'space') return spaceId ? { spaceId } : null
+  if (scope === 'global') return { spaceId: null }
+  return {}
+}
+
+/**
+ * A `space_invite` line names its invitation in its href, the same way an
+ * `agent_question` names its agent — there is no metadata column, and the bell
+ * needs the id to send the answer. It is not a navigable path: the bell reads
+ * the id and answers in place.
+ */
+export function invitationHref(invitationId: string): string {
+  return `/invitations/${invitationId}`
+}
+
+export function invitationIdOfHref(href: string | null | undefined): string | null {
+  const match = /^\/invitations\/([A-Za-z0-9_-]+)$/.exec((href ?? '').trim())
+  return match ? match[1] : null
+}
 
 /** Clamp a `take` query param into [1, LIST_MAX_TAKE]; default 30. */
 export function clampTake(raw: string | number | null | undefined, fallback = 30): number {

@@ -197,6 +197,55 @@ test('names the file it was given in diagnostics', async () => {
   assert.equal(first.line, 1)
 })
 
+// ── design lint ───────────────────────────────────────────────────────────────
+
+test('warns — but still compiles — when the Tool paints the page background', async () => {
+  const result = await compileToolUi(`
+    const css = \`body { margin: 0; background: linear-gradient(#fff, #eee); }\`
+    export default function Tool() {
+      return <><style>{css}</style><div>hi</div></>
+    }
+  `)
+  assert.equal(result.ok, true, messages(result))
+  if (!result.ok) return
+  assert.equal(result.warnings.length >= 1, true)
+  assert.match(result.warnings[0].message, /backdrop/)
+  assert.equal(result.warnings[0].line, 2)
+})
+
+test('warns on a hardcoded white background and points at var(--vv-surface)', async () => {
+  const result = await compileToolUi(`
+    export default function Tool() {
+      return <div style={{ background: '#ffffff', padding: 20 }}>content</div>
+    }
+  `)
+  assert.equal(result.ok, true, messages(result))
+  if (!result.ok) return
+  assert.match(result.warnings.map((w) => w.message).join('\n'), /var\(--vv-surface\)/)
+})
+
+test('warns on 100vh and position: fixed, which measure the iframe', async () => {
+  const result = await compileToolUi(`
+    export default function Tool() {
+      return <div style={{ minHeight: '100vh', position: 'fixed' }}>x</div>
+    }
+  `)
+  assert.equal(result.ok, true, messages(result))
+  if (!result.ok) return
+  assert.match(result.warnings.map((w) => w.message).join('\n'), /iframe, not the window/)
+})
+
+test('stays quiet for a Tool styled from the theme tokens', async () => {
+  const result = await compileToolUi(`
+    export default function Tool() {
+      return <div style={{ background: 'var(--vv-surface)', color: 'var(--vv-text)' }}>ok</div>
+    }
+  `)
+  assert.equal(result.ok, true, messages(result))
+  if (!result.ok) return
+  assert.deepEqual(result.warnings, [])
+})
+
 // ── data.js ───────────────────────────────────────────────────────────────────
 
 test('lowers data.js to es2020 and hands back a plain script', async () => {

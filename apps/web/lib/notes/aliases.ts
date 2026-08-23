@@ -76,7 +76,7 @@ export async function loadPersonAliases(spaceId: string): Promise<SpaceAlias[]> 
 }
 
 /** Just enough of every alias to decide the admin invariant. */
-export async function loadAliasSummaries(spaceId: string): Promise<AliasSummary[]> {
+async function loadAliasSummaries(spaceId: string): Promise<AliasSummary[]> {
   const [aliases, holders] = await Promise.all([
     loadPersonAliases(spaceId),
     prisma.userAlias.findMany({ where: { spaceId }, select: { aliasId: true, userId: true } }),

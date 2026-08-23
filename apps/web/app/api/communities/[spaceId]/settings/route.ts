@@ -11,7 +11,6 @@ import {
 } from '@/lib/spaces/publicName';
 import { updateSpaceConfig, UnknownSpaceError } from '@/lib/spaces/spaceConfig';
 import { mergeDesignConfig } from '@/lib/spaces/configMerge';
-import { isValidTimeZone } from '@/lib/agents/config';
 
 /**
  * PUT: Update space settings (admin only)
@@ -28,7 +27,9 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const { name, description, country, location, tags, designConfig, featureConfig, visibility, timezone } = body as {
+  // `timezone` is deliberately not read: a scheduled agent names its own zone
+  // in its activation note, so there is no space-wide default to set here.
+  const { name, description, country, location, tags, designConfig, featureConfig, visibility } = body as {
     name?: string;
     description?: string;
     country?: string | null;
@@ -37,18 +38,10 @@ export async function PUT(
     designConfig?: Record<string, unknown>;
     featureConfig?: { enabled?: Record<string, boolean>; directoryPrivate?: boolean; adminOnly?: string[]; order?: string[]; more?: string[] };
     visibility?: string;
-    /** IANA zone the space's scheduled agents run in; null clears it (UTC). */
-    timezone?: string | null;
   };
 
   if (name !== undefined && !name.trim()) {
     return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
-  }
-
-  if (timezone !== undefined && timezone !== null) {
-    if (typeof timezone !== 'string' || !isValidTimeZone(timezone)) {
-      return NextResponse.json({ error: 'timezone must be an IANA zone name (e.g. Pacific/Auckland)' }, { status: 400 });
-    }
   }
 
   if (country !== undefined && country !== null && typeof country !== 'string') {
@@ -161,7 +154,6 @@ export async function PUT(
           ...(location !== undefined && { location: location || null }),
           ...(tags !== undefined && { tags }),
           ...(visibility !== undefined && { visibility }),
-          ...(timezone !== undefined && { timezone: timezone || null }),
         },
         skipRevalidate: true,
       },

@@ -67,13 +67,16 @@ function InviteLinkRow({ spaceId }: { spaceId: string }) {
   return (
     <div>
       {loadError && <Alert variant="error" inline>{loadError}</Alert>}
+      {/* Text, not an input. The link isn't editable — a box you can click into
+          and type in says it is, and then hands you a Copy button for whatever
+          you typed. `select-all` keeps the one thing an input was good for. */}
       <div className="flex items-center gap-2">
-        <input
-          readOnly
-          value={url === null ? 'Loading…' : url}
+        <p
           aria-label="Invite link"
-          className="min-w-0 flex-1 truncate rounded-xl border border-transparent bg-surface-2 px-3.5 py-2.5 text-xs text-text-secondary"
-        />
+          className="min-w-0 flex-1 select-all truncate rounded-xl bg-surface-2 px-3.5 py-2.5 text-sm text-text-secondary"
+        >
+          {url === null ? 'Loading…' : url}
+        </p>
         <Button variant="brand" onClick={copyUrl} disabled={!url}>
           {copied ? 'Copied' : 'Copy'}
         </Button>
@@ -101,7 +104,7 @@ function InviteLinkRow({ spaceId }: { spaceId: string }) {
   );
 }
 
-/** Invite by email, optionally handing over aliases in the same step. */
+/** Invite by email, naming the aliases they'd hold if they say yes. */
 function InviteByEmail({ spaceId, aliases, onDone }: {
   spaceId: string;
   aliases: PeopleData['aliases'];
@@ -110,8 +113,10 @@ function InviteByEmail({ spaceId, aliases, onDone }: {
   const [email, setEmail] = useState('');
   const [chosen, setChosen] = useState<string[]>([]);
   const [error, setError] = useState('');
-  const [added, setAdded] = useState<string | null>(null);
+  const [invited, setInvited] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const ready = email.trim().length > 0 && (aliases.length === 0 || chosen.length > 0);
 
   const toggle = (name: string) =>
     setChosen((prev) => (prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]));
@@ -119,20 +124,20 @@ function InviteByEmail({ spaceId, aliases, onDone }: {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setAdded(null);
+    setInvited(null);
     setLoading(true);
     const address = email.trim();
     try {
-      await fetchJsonBody(`/api/communities/${spaceId}/members`, 'POST', {
+      await fetchJsonBody(`/api/communities/${spaceId}/invitations`, 'POST', {
         email: address,
         aliases: chosen,
       });
       await onDone();
       setEmail('');
       setChosen([]);
-      setAdded(address);
+      setInvited(address);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add member');
+      setError(err instanceof Error ? err.message : 'Failed to send the invitation');
     } finally {
       setLoading(false);
     }
@@ -140,15 +145,16 @@ function InviteByEmail({ spaceId, aliases, onDone }: {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <Field label="Email address">
-        <Input
-          type="email"
-          required
-          placeholder="user@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-      </Field>
+      {/* No visible label — "Invite by email" is directly above it, and saying
+          it twice is noise. The placeholder and the aria-label carry it. */}
+      <Input
+        type="email"
+        required
+        aria-label="Email address"
+        placeholder="user@example.com"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
       {aliases.length > 0 && (
         <Field label="Aliases">
           <div className="flex flex-wrap gap-1.5">
@@ -166,16 +172,25 @@ function InviteByEmail({ spaceId, aliases, onDone }: {
         </Field>
       )}
       {error && <Alert variant="error" inline>{error}</Alert>}
-      {added && (
+      {invited && (
         <Alert variant="success" inline>
-          {added} is now a member. They show up under People.
+          Invitation sent to {invited}. They join when they accept it.
         </Alert>
       )}
       <div>
-        <Button type="submit" variant="brand" loading={loading} loadingText="Adding…">
+        {/* Grey until the form can actually do something: an address, and — when
+            the space has any to hand out — at least one alias. A solid brand
+            button that 400s on submit is a lie about what's ready. */}
+        <Button
+          type="submit"
+          variant={ready ? 'brand' : 'neutral'}
+          disabled={!ready}
+          loading={loading}
+          loadingText="Sending…"
+        >
           <span className="inline-flex items-center gap-1.5">
             <UserPlusIcon size={14} />
-            Add to space
+            Send invitation
           </span>
         </Button>
       </div>
@@ -190,17 +205,13 @@ export default function InvitePanel() {
     <div className="space-y-8">
       {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
 
-      <SettingsSection
-        title="Invite link"
-        description="Share this with anyone. Following it puts them in the waiting list on Members — nobody joins without an admin approving them."
-      >
+      <SettingsSection title={<span className="text-base">Invite link</span>}>
         <InviteLinkRow spaceId={spaceId} />
       </SettingsSection>
 
-      <SettingsSection
-        title="Invite by email"
-        description="For someone who already has an account. They join immediately, with whatever aliases you tick — no approval step. If the address has never signed up, this will tell you so."
-      >
+      {/* Larger than the sibling headings on purpose: with the description gone
+          this is the only thing naming the form under it. */}
+      <SettingsSection title={<span className="text-base">Invite by email</span>}>
         {data === null ? (
           <p className="text-sm text-text-muted">Loading…</p>
         ) : (
@@ -211,6 +222,50 @@ export default function InvitePanel() {
           />
         )}
       </SettingsSection>
+
+      {data !== null && data.invitations.length > 0 && (
+        <SettingsSection
+          title={`Waiting on a reply (${data.invitations.length})`}
+          description="Sent, unanswered. Withdrawing one takes it out of their bell."
+        >
+          <PendingInvitations spaceId={spaceId} invitations={data.invitations} />
+        </SettingsSection>
+      )}
+    </div>
+  );
+}
+
+/** Invitations nobody has answered yet, each with the way to take it back. */
+function PendingInvitations({ spaceId, invitations }: {
+  spaceId: string;
+  invitations: PeopleData['invitations'];
+}) {
+  const { busy, run } = usePeopleSection();
+
+  const withdraw = (id: string) =>
+    run(() => fetchJson(`/api/communities/${spaceId}/invitations/${id}`, { method: 'DELETE' }));
+
+  return (
+    <div className="divide-y divide-border-subtle">
+      {invitations.map((invitation) => (
+        <div key={invitation.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-text-primary">{invitation.user.name}</div>
+            <div className="truncate text-xs text-text-muted">
+              {invitation.user.email}
+              {invitation.aliases.length > 0 && ` · ${invitation.aliases.join(', ')}`}
+            </div>
+          </div>
+          <Button
+            variant="neutral"
+            onClick={() => void withdraw(invitation.id)}
+            disabled={busy}
+            className="!px-3 !py-1.5 !text-xs"
+          >
+            Withdraw
+          </Button>
+        </div>
+      ))}
     </div>
   );
 }

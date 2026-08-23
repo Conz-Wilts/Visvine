@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       scope: client.scope,
       application_type: applicationType,
       token_endpoint_auth_method: 'none',
-      grant_types: ['authorization_code', 'refresh_token'],
+      grant_types: ['authorization_code'],
       response_types: ['code'],
       client_id_issued_at: Math.floor(client.createdAt.getTime() / 1000),
     },

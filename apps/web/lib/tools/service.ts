@@ -28,14 +28,14 @@
  */
 import prisma from '@/lib/prisma'
 import { readVisible, visibleVault, writeDenialFull, writeGated } from '@/lib/notes/contextService'
-import { spaceNodeId, syncEntityNode } from '@/lib/notes/context/entityNodes'
+import { removeEntityNode, spaceNodeId, syncEntityNode } from '@/lib/notes/context/entityNodes'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { canRemove, type ResolvedContext } from '@/lib/notes/resolve'
 import * as store from '@/lib/notes/store'
 import { SHARED_OWNER_KEY, type Actor, type Context } from '@/lib/notes/store'
 import { computeRequirements, type ToolRequirements } from './requirements'
-import { spaceFacts } from './installs'
+import { removeInstallForTool, spaceFacts } from './installs'
 import type { ToolPerimeter } from './perimeter'
 import { latestPublications, toolKey, type ToolPublicationSummary } from './registry'
 import {
@@ -504,6 +504,66 @@ export async function deleteToolIcon(
   // Deleting goes around the store's write hook, so the rebuild is explicit —
   // otherwise the build would keep serving the icon that is no longer there.
   return { ok: true, path, build: toBuildSummary(await rebuildTool(context.spaceId, name)) }
+}
+
+export type DeleteToolResult = { ok: true } | ToolServiceError
+
+/**
+ * Delete a Tool's working copy: its notes (trashed, like any other note), its
+ * folder, its `tool:<name>` node, and — through the store's delete hook — its
+ * build row.
+ *
+ * What this deliberately does NOT touch is the registry. A published
+ * `AppToolVersion` is immutable and other spaces may run it, so versions
+ * survive the working copy the way a released package survives its repo.
+ *
+ * Held to the same bar as removing any note — admin, the author, or an edit
+ * grant at the path (`canRemove`) — on top of write access to the index path.
+ * This space's own install goes with it (removeInstallForTool), exactly as it
+ * does when the index note is trashed from any note surface instead — the two
+ * deletion doors are kept connected by lib/tools/hooks.ts#teardownTool.
+ */
+export async function deleteTool(
+  p: ContextPrincipal,
+  context: ResolvedContext,
+  name: string,
+): Promise<DeleteToolResult> {
+  if (!TOOL_NAME_RE.test(name)) return badName(name)
+  if (!isShared(context)) {
+    return { ok: false, status: 400, error: 'Tools are authored in a space, not in personal context.' }
+  }
+
+  const indexPath = toolIndexPath(name)
+  if (!(await store.readNoteOrNull(context, indexPath))) {
+    return { ok: false, status: 404, error: `No tool named "${name}".` }
+  }
+
+  const denial = await writeDenialFull(p, context, indexPath)
+  if (denial) return { ok: false, status: 403, error: denial }
+  const createdBy = await store.getNoteCreatedBy(context, indexPath)
+  if (!canRemove(context, createdBy, { principal: p, path: indexPath })) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'Only an admin, the author, or a full-access member can delete this tool.',
+    }
+  }
+
+  // This space's own install goes with the working copy — the same
+  // system-level removal the note-delete hook applies (lib/tools/hooks.ts
+  // #teardownTool), so both deletion doors land in the same place. No admin
+  // gate beyond canRemove above: a Tool whose author may throw it away must
+  // not keep a console entry pointing at it. Other spaces run the published
+  // snapshot and keep theirs.
+  await removeInstallForTool(context.spaceId, name)
+
+  // The node goes first, while its metadata still points at the index note —
+  // that pointer is how removeEntityNode finds it. Links cascade with it.
+  await removeEntityNode(context.spaceId, 'tool', indexPath)
+  // Then the folder: trashes every note (which drops the build via the store's
+  // delete hook), removes the folder rows, and drops grants into the subtree.
+  await store.deleteFolder(context, toolFolderPath(name))
+  return { ok: true }
 }
 
 /**

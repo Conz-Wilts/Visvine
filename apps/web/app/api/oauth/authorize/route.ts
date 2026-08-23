@@ -13,6 +13,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
+import { isDevAuthEnabled } from '@/lib/dev-auth'
 import { createAuthCode } from '@/lib/mcp/oauth'
 import { resolveClient, ClientResolutionError, type McpClient } from '@/lib/mcp/clients'
 import { oauthIssuer, isCanonicalResource, mcpResourceUrl, resourceKindOf } from '@/lib/mcp/config'
@@ -110,11 +111,17 @@ export async function GET(req: NextRequest) {
   const resourceKind = resourceKindOf(resource) ?? 'context'
 
   // The user must be signed in to Visvine to grant access as themselves.
+  // Locally that means the seeded-user picker rather than Google: /dev/login
+  // lists the `@local.dev` users and POSTs to /api/dev/login-as, which sets the
+  // session cookie and 303s back to this same URL — so an MCP client's very
+  // first connection is "browser opens, click a dev user, approve", with no
+  // token to mint or paste. Both hops are dev-gated (`isDevAuthEnabled`), and
+  // `callbackUrl` is run through `safeRelativePath` on the way through.
   const session = await getSession()
   if (!session) {
-    const signin = new URL('/signin', oauthIssuer())
-    signin.searchParams.set('callbackUrl', url.pathname + url.search)
-    return NextResponse.redirect(signin)
+    const next = new URL(isDevAuthEnabled() ? '/dev/login' : '/signin', oauthIssuer())
+    next.searchParams.set('callbackUrl', url.pathname + url.search)
+    return NextResponse.redirect(next)
   }
 
   const scopes = negotiateScopes(sp.get('scope'), client.scope, resourceKind)
@@ -137,12 +144,23 @@ export async function GET(req: NextRequest) {
         )}</strong>, which publishes this application's details.</p>`
       : ''
 
+  // Whoever the browser is already signed in as is who the grant would be for.
+  // Locally that is usually an accident of an earlier tab, so offer the picker
+  // as an escape hatch — otherwise "connect as the other dev user" means going
+  // and clearing a cookie by hand.
+  const switchUser = isDevAuthEnabled()
+    ? `<p style="color:#555;font-size:.9rem"><a href="/dev/login?callbackUrl=${esc(
+        encodeURIComponent(url.pathname + url.search),
+      )}" style="color:#1f6f54">Authorize as a different dev user</a></p>`
+    : ''
+
   const page = `<!doctype html><meta charset="utf-8"><title>Authorize ${esc(clientName)}</title>
 <body style="font-family:system-ui;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#14342b">
   <h1 style="font-size:1.4rem">Authorize access</h1>
   <p><strong>${esc(clientName)}</strong> wants to access
      <strong>${resourceKind === 'creator' ? 'Visvine Creator (Tool authoring)' : 'Visvine'}</strong> as
      <strong>${esc(session.email)}</strong>.</p>
+  ${switchUser}
   ${provenance}
   <p>It will be able to:</p>
   <ul>${scopes.map((s) => `<li>${esc(SCOPE_DESCRIPTIONS[s])}</li>`).join('')}</ul>

@@ -20,14 +20,14 @@
 import { useState } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from 'next/link';
-import { CheckIcon, CopyIcon, ExternalLinkIcon, EyeIcon, HammerIcon } from '@/features/shared/icons';
-import { Chip, EmptyState, Modal, Skeleton, Textarea } from '@/components/ui';
+import { CheckIcon, CopyIcon, ExternalLinkIcon, EyeIcon, HammerIcon, Trash2Icon } from '@/features/shared/icons';
+import { Chip, ConfirmDialog, EmptyState, Modal, Skeleton, Textarea } from '@/components/ui';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import { toolDiagnosticLine } from '@/features/tools/components/BuildDiagnostics';
 import ToolIconPicker from '@/features/tools/components/marketplace/ToolIconPicker';
-import { publishTool } from '@/features/tools/lib/client';
+import { deleteAuthoredTool, publishTool } from '@/features/tools/lib/client';
 import type { AuthoredToolSummary } from '@/lib/tools/api';
 import type { ToolVersionStatus } from '@/lib/tools/registry';
 
@@ -53,6 +53,7 @@ export default function MineTab({
   onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
 }) {
   const [publishing, setPublishing] = useState<AuthoredToolSummary | null>(null);
+  const [removing, setRemoving] = useState<AuthoredToolSummary | null>(null);
 
   return (
     <div className="space-y-4">
@@ -82,6 +83,7 @@ export default function MineTab({
             tool={tool}
             isAdmin={isAdmin}
             onPublish={() => setPublishing(tool)}
+            onRemove={() => setRemoving(tool)}
             onChanged={onChanged}
             onToast={onToast}
           />
@@ -101,6 +103,33 @@ export default function MineTab({
           onToast={onToast}
         />
       )}
+
+      <ConfirmDialog
+        open={removing !== null}
+        title={`Delete ${removing?.title || removing?.name || ''}?`}
+        body={
+          <>
+            Its source notes under <code className="font-mono text-[13px]">tools/{removing?.name}</code> are
+            trashed and it disappears from this list and the graph. Versions already published to the
+            marketplace are immutable snapshots and stay.
+          </>
+        }
+        confirmLabel="Delete tool"
+        destructive
+        onConfirm={async () => {
+          if (!removing || !spaceId) return;
+          const target = removing;
+          setRemoving(null);
+          try {
+            await deleteAuthoredTool(spaceId, target.name);
+            onToast('success', `${target.title || target.name} deleted.`);
+            onChanged();
+          } catch (err) {
+            onToast('error', err instanceof Error ? err.message : 'The delete did not go through.');
+          }
+        }}
+        onClose={() => setRemoving(null)}
+      />
     </div>
   );
 }
@@ -132,6 +161,7 @@ function AuthoredRow({
   tool,
   isAdmin,
   onPublish,
+  onRemove,
   onChanged,
   onToast,
 }: {
@@ -139,6 +169,7 @@ function AuthoredRow({
   tool: AuthoredToolSummary;
   isAdmin: boolean;
   onPublish: () => void;
+  onRemove: () => void;
   onChanged: () => void;
   onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
 }) {
@@ -191,6 +222,17 @@ function AuthoredRow({
             <EyeIcon className="h-3.5 w-3.5" aria-hidden />
             Preview
           </Link>
+          {/* Always offered: the server holds the delete to the note store's
+              removal bar (admin, the author, or edit access), and its refusal
+              sentence lands in the toast. */}
+          <button
+            type="button"
+            onClick={onRemove}
+            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-3 hover:text-red-600"
+          >
+            <Trash2Icon className="h-3.5 w-3.5" aria-hidden />
+            Delete
+          </button>
           {isAdmin && (
             <Button variant="brand" size="sm" onClick={onPublish} disabled={!publishable}>
               Publish

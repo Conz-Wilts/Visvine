@@ -703,9 +703,9 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
         </div>
       )}
 
-      {/* Waiting for access — requests filed against THIS path. The console
-          queue covers space admins; this block is the only place a
-          non-admin folder manager can resolve their own. */}
+      {/* Waiting for access — requests filed against THIS path. Admin-only,
+          like every other mutation here; it saves a trip to the console queue
+          when you're already looking at the resource. */}
       {canManage && openRequests.length > 0 && (
         <section>
           <SectionHeading>Waiting for access ({openRequests.length})</SectionHeading>
@@ -792,7 +792,8 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
           )}
         </div>
         <p className="mt-1 text-[11px] text-text-muted">
-          Space admins always have full access · You: {levelDisplayLabel(access.myLevel)}
+          Space admins can see everything and are the only ones who can change access · You:{' '}
+          {levelDisplayLabel(access.myLevel)}
         </p>
       </section>
 
@@ -841,7 +842,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
               {spaceEntry
                 ? spaceEntry.via === path
                   ? `Anyone in ${spaceName} can ${
-                      spaceEntry.levelName === 'view' ? 'view' : 'access'
+                      spaceEntry.levelName === 'view' ? 'view' : 'edit'
                     } this`
                   : `Inherited from ${spaceEntry.via === '' ? 'the context root' : `${spaceEntry.via}/`}`
                 : 'Only people added above and space admins'}

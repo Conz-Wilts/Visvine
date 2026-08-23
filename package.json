@@ -42,13 +42,14 @@
     "db:blackbird": "node apps/web/scripts/add-blackbird-ventures.mjs",
     "db:blackbird:notes": "node apps/web/scripts/add-blackbird-notes.mjs",
     "db:blackbird:extras": "node apps/web/scripts/add-blackbird-extras.mjs",
-    "db:blackbird:full": "pnpm db:seed && pnpm --filter @visvine/web db:blackbird:ventures && pnpm --filter @visvine/web db:blackbird:notes && pnpm --filter @visvine/web db:blackbird:extras && pnpm --filter @visvine/web db:connectors:demo community:blackbird-ventures && pnpm --filter @visvine/web db:context-links && pnpm --filter @visvine/web db:index-notes:rebuild && pnpm --filter @visvine/web db:notes:verify",
+    "db:blackbird:full": "pnpm db:seed && pnpm --filter @visvine/web db:blackbird:ventures && pnpm --filter @visvine/web db:blackbird:notes && pnpm --filter @visvine/web db:blackbird:extras && pnpm --filter @visvine/web db:connectors:demo community:blackbird-ventures && pnpm --filter @visvine/web db:connectors:funds && pnpm --filter @visvine/web db:connectors:oauth && pnpm --filter @visvine/web db:context-links && pnpm --filter @visvine/web db:tool:seed && pnpm --filter @visvine/web db:index-notes:rebuild && pnpm --filter @visvine/web db:index-notes:strip-type && pnpm --filter @visvine/web db:blackbird:placeholders && pnpm --filter @visvine/web db:notes:verify",
     "db:secrets:rotate": "pnpm --filter @visvine/web db:secrets:rotate",
     "db:connectors:demo": "pnpm --filter @visvine/web db:connectors:demo",
     "db:icehouse": "node apps/web/scripts/add-icehouse-ventures.mjs",
     "db:reset": "node scripts/guard-local-db.mjs && node scripts/db-reset.mjs",
     "db:fresh": "pnpm --filter @visvine/web db:fresh:schema && pnpm db:blackbird:full",
     "db:check": "node scripts/db-check.mjs",
+    "mcp:dev": "docker compose up -d --wait && node scripts/mcp-dev.mjs",
     "env:pull:prod": "node scripts/env-pull-prod.mjs",
     "env:check": "node scripts/check-no-env-committed.mjs",
     "env:check:staged": "node scripts/check-no-env-committed.mjs --staged",
@@ -64,42 +65,11 @@
     "db:publish": "node scripts/db-publish.mjs",
     "db:restore": "node scripts/db-restore.mjs",
     "setup:fixture": "pnpm install && docker compose up -d --wait && pnpm prisma:generate && pnpm db:migrate && pnpm db:restore",
-    "clean": "pnpm --filter @visvine/web clean"
+    "clean": "pnpm --filter @visvine/web clean",
+    "db:blackbird:placeholders": "pnpm --filter @visvine/web db:blackbird:placeholders"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron"
-    ],
-    "overrides": {
-      "@xmldom/xmldom": "^0.8.13",
-      "linkify-it": "^5.0.2",
-      "nanoid@^3": "^3.3.18",
-      "fast-xml-builder": "^1.1.7",
-      "form-data@^2": "^2.5.6",
-      "lodash": "^4.18.0",
-      "hono": "^4.12.25",
-      "@hono/node-server": "^1.19.10",
-      "effect": "^3.20.0",
-      "shell-quote": "^1.10.0",
-      "tar": "^7.5.22",
-      "app-builder-lib": "^26.15.3",
-      "builder-util-runtime": "^9.7.0",
-      "js-yaml@^4": "^4.3.1",
-      "brace-expansion@^1": "^1.1.18",
-      "brace-expansion@^5": "^5.0.9",
-      "postcss": "^8.5.26",
-      "deepmerge-ts": "^8.0.2",
-      "@tootallnate/once": "^2.0.1",
-      "fast-xml-parser": "^5.7.0",
-      "valibot": "^1.4.2"
-    },
-    "auditConfig": {
-      "ignoreGhsas": [
-        "GHSA-w5hq-g745-h8pq"
-      ]
-    }
+    "concurrently": "^9.2.1",
+    "pg": "^8.20.0"
   }
 }

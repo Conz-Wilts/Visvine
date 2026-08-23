@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { loadPersonAliases } from '@/lib/notes/aliases';
-import { findAliasByRef } from '@/lib/types/context';
-import { ensureMemberNode } from '@/lib/spaces/memberNode';
 
 /**
  * GET: List all members of a space, each with the aliases they hold
@@ -60,80 +58,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
 }
 
 /**
- * POST: Add a user to a space by email, optionally giving them aliases
- * straight away (admin only).
+ * There is deliberately no POST here any more. An admin used to be able to
+ * write an active membership for somebody else's account by typing their
+ * address; being added to a space is now something the person agrees to, so
+ * that path is `POST /api/communities/[spaceId]/invitations` — it asks, and
+ * accepting (lib/spaces/invitations.ts) is what creates the member row.
  */
-export async function POST(req: NextRequest, { params }: { params: Promise<{ spaceId: string }> }) {
-  const { spaceId } = await params;
-
-  const session = await requireAdmin(spaceId);
-  if (!session) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const body = await req.json();
-  const { email, aliases = [] } = body as { email: string; aliases?: string[] };
-
-  if (!email) {
-    return NextResponse.json({ error: 'email is required' }, { status: 400 });
-  }
-
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    return NextResponse.json({ error: 'No user found with that email' }, { status: 404 });
-  }
-
-  const existing = await prisma.spaceMember.findUnique({
-    where: { userId_spaceId: { userId: user.id, spaceId } },
-  });
-  if (existing) {
-    return NextResponse.json({ error: 'User is already a member' }, { status: 409 });
-  }
-
-  // Admin-added members are active immediately (no approval needed).
-  const membership = await prisma.spaceMember.create({
-    data: { userId: user.id, spaceId, status: 'active', addedBy: session.userId },
-    include: { user: { select: { id: true, name: true, email: true, image: true, createdAt: true } } },
-  });
-
-  // Only Person aliases this space actually defines — anything else is silently
-  // ignored rather than creating a holder of an alias that doesn't exist. The
-  // invite carries names, so each is resolved to its id (case-insensitively,
-  // via findAliasByRef) before the holder row is written.
-  const vocabulary = await loadPersonAliases(spaceId);
-  const resolved = aliases
-    .map(a => findAliasByRef(vocabulary, a, 'Person'))
-    .filter(a => Boolean(a?.id));
-  const granted = [...new Set(resolved.map(a => a!.name))];
-  const grantedIds = [...new Set(resolved.map(a => a!.id!))];
-  if (grantedIds.length) {
-    await prisma.userAlias.createMany({
-      data: grantedIds.map(aliasId => ({ spaceId, aliasId, userId: user.id, addedBy: session.userId })),
-      skipDuplicates: true,
-    });
-  }
-
-  // The new member's connected person node in this directory (best-effort).
-  await ensureMemberNode(spaceId, user.id, {
-    id: session.userId,
-    name: session.name,
-    email: session.email ?? null,
-  });
-
-  return NextResponse.json({
-    member: {
-      id: membership.id,
-      userId: membership.userId,
-      aliases: granted,
-      status: membership.status,
-      joinedAt: membership.joinedAt.toISOString(),
-      user: {
-        id: membership.user.id,
-        name: membership.user.name,
-        email: membership.user.email,
-        image: membership.user.image,
-        createdAt: membership.user.createdAt.toISOString(),
-      },
-    },
-  }, { status: 201 });
-}

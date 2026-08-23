@@ -45,7 +45,7 @@ import { DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types/context'
 import type { SpaceFeatureConfig } from '@/lib/types/space'
 import { TOOL_NAME_RE, type ToolTypeSurface } from './config'
 import { diffPerimeter, type PerimeterDiff } from './perimeter'
-import { decodeToolConfig, decodeToolPerimeter, type RegistryError } from './registry'
+import { decodeToolConfig, decodeToolPerimeter, toolKey, type RegistryError } from './registry'
 import {
   computeRequirements,
   isDegraded,
@@ -689,6 +689,31 @@ export async function uninstall(
     detail: `uninstalled ${install.key} (${install.slug})`,
   })
   return { ok: true }
+}
+
+/**
+ * Drop a space's install of a Tool IT AUTHORED, rail key included — the
+ * system-level half of `uninstall`, with no admin gate and no refusals.
+ *
+ * This is what connects the two deletion doors: deleting the working copy
+ * (lib/tools/service.ts#deleteTool, or trashing `tools/<name>/index.md`
+ * straight from the context — lib/tools/hooks.ts#toolNoteDeleted) must not
+ * leave the console showing an install of a Tool whose author threw it away.
+ * The note deletion that gets us here was already held to `canRemove`, which
+ * is the bar that matters. A no-op when the space never installed its own
+ * Tool. Only ever THIS space's install — other spaces run the published
+ * snapshot and keep it.
+ */
+export async function removeInstallForTool(spaceId: string, name: string): Promise<void> {
+  const install = await prisma.appToolInstall.findUnique({
+    where: { app_tool_install_identity: { spaceId, key: toolKey(spaceId, name) } },
+    select: { id: true, slug: true },
+  })
+  if (!install) return
+  await updateSpaceConfig(spaceId, async (stored, tx) => {
+    await tx.appToolInstall.deleteMany({ where: { id: install.id, spaceId } })
+    return { featureConfig: featureConfigWithoutRail(stored.featureConfig, toolRailKey(install.slug)) }
+  })
 }
 
 /** The admin's on/off switch for one install. The rail key stays put, so the

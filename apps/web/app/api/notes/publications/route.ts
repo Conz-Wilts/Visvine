@@ -6,10 +6,9 @@
 //        'publish'   { fromSpaceId?, fromPath, toPath } — publish a note the
 //             caller can READ (default source: their personal context) into THIS
 //             space. Needs edit at the destination; otherwise the request
-//             queues as a publish proposal for a folder manager to approve.
+//             queues as a publish proposal for a space admin to approve.
 //        'unpublish' { id } — deactivate; the replica stays as a plain copy.
-//             Allowed for the publication's creator, a manager of the target
-//             path, or an admin of either space.
+//             Allowed for the publication's creator or an admin of either space.
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
@@ -29,10 +28,7 @@ import {
 } from '@/lib/notes/publications'
 import { queuePublishProposal } from '@/lib/notes/promote'
 import { isAdmin } from '@/lib/auth'
-import {
-  principalCanManage,
-  principalCanRead,
-} from '@/lib/notes/shared/permissions'
+import { principalCanRead } from '@/lib/notes/shared/permissions'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { SessionPayload } from '@/lib/session'
 
@@ -114,7 +110,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Edit at the destination applies the publication now; anything less
-      // queues it for a folder manager — same double door as promote.
+      // queues it for a space admin — same double door as promote.
       const targetP = await principalOf(context)
       const denial = writeDenial(targetP, { spaceId: context.spaceId, ownerKey: 'shared' }, toPath)
       if (denial) {
@@ -141,14 +137,12 @@ export async function POST(req: NextRequest) {
       if (!id) return fail('id is required')
       const pub = await getPublication(id)
       if (!pub) return fail('Unknown publication', 404)
-      const targetP = pub.targetSpaceId === context.spaceId ? await principalOf(context) : null
       const allowed =
         pub.createdBy === session.userId ||
-        (targetP !== null && principalCanManage(targetP, pub.targetPath)) ||
         (await isAdmin(session.userId, pub.targetSpaceId, session.email)) ||
         (await isAdmin(session.userId, pub.sourceSpaceId, session.email))
       if (!allowed) {
-        return fail('Only the publisher, a folder manager, or an admin can unlink this', 403)
+        return fail('Only the publisher or an admin of either space can unlink this', 403)
       }
       const updated = await unpublish(id, { id: session.userId, name: session.name, email: session.email })
       return NextResponse.json({ publication: updated })

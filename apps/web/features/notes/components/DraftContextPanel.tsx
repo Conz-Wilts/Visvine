@@ -49,12 +49,12 @@ import { useContextFolderTree, FolderDropBoard, PathPreview } from '@/features/c
 import {
   FileForm,
   connectorSlug,
-  connectorFormReady,
-  type ConnectorFormData,
+  agentSlug,
   type FileEntry,
   type FileFormData,
 } from '@/features/create/components/CreateModalForms'
 import { newConnectorNote } from '@/lib/connectors/config'
+import { agentBriefPath, newAgentNote } from '@/lib/agents/config'
 import type { ChannelSectionEntry } from '@/lib/messages/types'
 import { useNodeSearch, type NodeSearchResult } from '@/features/shared/hooks/useNodeSearch'
 import MatchPanel from '@/features/create/components/MatchPanel'
@@ -96,6 +96,10 @@ export type DraftType =
   | 'event'
   | 'resource'
   | 'connector'
+  // A scheduled agent, written as its brief under agents/ (lib/agents/config).
+  // The title names it, the editor body IS the brief; an admin activates it
+  // afterwards from /agents.
+  | 'agent'
   | 'channel'
   // The channels-tool container.
   | 'section'
@@ -136,6 +140,7 @@ const DRAFT_TYPES: DraftTypeOption[] = [
   { id: 'section', label: 'Section', configName: 'Section', color: NOTE_COLOR, creatable: 'section' },
   { id: 'channel', label: 'Channel', configName: 'Channel', color: NOTE_COLOR, creatable: 'channel' },
   { id: 'connector', label: 'Connector', configName: 'Connector', color: NOTE_COLOR, creatable: 'connector' },
+  { id: 'agent', label: 'Agent', configName: 'Agent', color: NOTE_COLOR, creatable: 'agent' },
   { id: 'folder', label: 'Folder', configName: null, color: NOTE_COLOR, creatable: 'folder' },
   { id: 'file', label: 'File', configName: null, color: '#0ea5e9', creatable: 'file' },
 ]
@@ -174,24 +179,22 @@ interface Stash {
 }
 
 /**
- * The inline settings the non-note types need at creation time — the ones that
- * can't sensibly be changed afterwards, or that the create endpoint requires.
- * Everything else about a channel/section/space/connector is edited on the
- * thing itself once it exists. Files are deliberately absent: `File` objects
- * don't survive a JSON round-trip, so a picked upload isn't stashed.
+ * The inline settings a type's create endpoint cannot go without — which is now
+ * only a channel's, since a channel is a conversation row rather than a note.
+ * Everything a note carries in its frontmatter (a connector's hosts and secret,
+ * an agent's model and connectors) is scaffolded at its defaults and edited on
+ * the note afterwards: the draft surface is for saying what a thing is and
+ * naming it, not for filling in a form in front of it. Files are deliberately
+ * absent too — `File` objects don't survive a JSON round-trip, so a picked
+ * upload isn't stashed.
  */
 interface Extras {
-  /** connector */
-  hosts: string
-  secretName: string
   /** channel */
   viewMode: 'CHAT' | 'FEED'
   sectionId: string
 }
 
 const EMPTY_EXTRAS: Extras = {
-  hosts: '',
-  secretName: '',
   viewMode: 'CHAT',
   sectionId: '',
 }
@@ -229,6 +232,10 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const [fields, setFields] = useState<Record<string, string>>(stash.fields ?? {})
   const [tags, setTags] = useState<string[]>(stash.tags ?? [])
   const [extras, setExtras] = useState<Extras>({ ...EMPTY_EXTRAS, ...(stash.extras ?? {}) })
+  // An agent's `?folder=` names a folder of AGENTS — the roster row it was
+  // pressed on — not a folder in the context tree, so it is kept apart from the
+  // destination picker and only ever used to build the brief's path.
+  const agentFolder = useRef(initialType === 'agent' ? initialFolder : '').current
   const [files, setFiles] = useState<FileEntry[]>([])
   const [sections, setSections] = useState<ChannelSectionEntry[]>([])
   const [addingTag, setAddingTag] = useState(false)
@@ -299,31 +306,21 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // would produce the id `person:`. The SLUG is the readiness test, not the text.
   const titleUsable = slug !== 'untitled' || title.trim().toLowerCase() === 'untitled'
 
-  // A connector's note IS its config, so the perimeter settings (hosts, the
-  // name of a secret) have to be here — the note is written with them inline.
-  const connectorDraft: ConnectorFormData = {
-    name: title,
-    description: '',
-    // The draft panel builds service connectors only; model connectors come
-    // from the Create panel (or a hand-written `kind: model` note).
-    kind: 'http',
-    provider: '',
-    baseUrl: '',
-    hosts: extras.hosts,
-    secretName: extras.secretName,
-  }
   const queuedFiles = files.filter((f) => f.status === 'queued')
 
   // An upload has no title — the files carry their own names — so readiness is
-  // per-type rather than one rule.
+  // per-type rather than one rule. A connector and an agent are named by a
+  // slug rather than a file name, so theirs has to survive slugging too.
   const ready =
     type === null
       ? false
       : type === 'file'
         ? queuedFiles.length > 0
         : type === 'connector'
-          ? connectorFormReady(connectorDraft)
-          : titleUsable
+          ? titleUsable && !!connectorSlug(title)
+          : type === 'agent'
+            ? titleUsable && !!agentSlug(title)
+            : titleUsable
 
   // The types this space invented — anything in its nodeTypes that isn't a
   // built-in (or a synonym of one), plus whatever was created in this session.
@@ -552,16 +549,16 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // reuse commitEntity — they aren't directory nodes, they're their own
   // endpoints (and a connector is a note whose frontmatter IS its config).
 
+  // Written with no hosts and no secret — `hosts: []` is a supported state (the
+  // isolate simply has no network yet), and the scaffolded body says how to add
+  // them. Both are edited on the note afterwards, so neither is worth a form in
+  // front of a connector nobody has described yet.
   const commitConnector = useCallback(async () => {
     if (!spaceId) return
     const name = connectorSlug(title)
     const path = `connectors/${name}.md`
     const body = bodyRef.current.trim()
-    const note = newConnectorNote({
-      name,
-      hosts: extras.hosts.split('\n').map((l) => l.trim()).filter(Boolean),
-      secretName: extras.secretName,
-    })
+    const note = newConnectorNote({ name })
     // The generated note already carries a documentation body; anything typed
     // in the editor is appended to it rather than replacing the scaffold.
     await notesApi.create(spaceId, path, body ? `${note}\n\n${body}` : note)
@@ -575,7 +572,34 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     // Its own page, not the bare note: the write synced a `connector:<name>`
     // node, and that page is where the secret gets set.
     router.replace(`/directory/${encodeURIComponent(`connector:${name}`)}`)
-  }, [spaceId, title, extras, router])
+  }, [spaceId, title, router])
+
+  // An agent is a note under `agents/`: the title names it, the body is the
+  // brief. The frontmatter it needs to run — the model, the connectors it may
+  // call — is scaffolded at its defaults and edited on the note afterwards (the
+  // Raw tab, or its own page); nothing about it is unchangeable, so nothing
+  // about it belongs in a form in front of the brief. It does nothing at all
+  // until an admin activates it from /agents.
+  const commitAgent = useCallback(async () => {
+    if (!spaceId) return
+    const name = agentSlug(title)
+    const path = agentBriefPath(name, agentFolder)
+    await notesApi.create(
+      spaceId,
+      path,
+      newAgentNote({ name, title: title.trim(), body: bodyRef.current.trim() }),
+    )
+    invalidateContextCache(
+      contextKeys.tree(spaceId),
+      contextKeys.list(spaceId),
+      contextKeys.read(spaceId, path),
+    )
+    clearContextCache(spaceId)
+    sessionStorage.removeItem(STASH_KEY)
+    // Its own page rather than the bare note: the write synced an `agent:<name>`
+    // node, and that page is where the schedule and activation live.
+    router.replace(`/directory/${encodeURIComponent(`agent:${name}`)}`)
+  }, [spaceId, title, agentFolder, router])
 
   const commitChannel = useCallback(async () => {
     if (!spaceId) return
@@ -646,6 +670,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       if (type === 'note') await commitNote(where)
       else if (type === 'folder') await commitFolder(where)
       else if (type === 'connector') await commitConnector()
+      else if (type === 'agent') await commitAgent()
       else if (type === 'channel') await commitChannel()
       // 'section' is the channels-tool container; 'space' (the org type) falls
       // through to commitEntity with the other directory entities.
@@ -665,7 +690,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     }
   }, [
     ready, committing, spaceId, type, folder,
-    commitNote, commitFolder, commitEntity, commitConnector, commitChannel, commitSpace, commitFiles,
+    commitNote, commitFolder, commitEntity, commitConnector, commitAgent, commitChannel, commitSpace, commitFiles,
   ])
 
   // Pressing Create on a note or a folder asks WHERE first, in a popup over the
@@ -758,11 +783,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
             ? 'Pick a type first'
             : type === 'file'
               ? 'Add a file first'
-              : !titleUsable
-                ? 'Give it a name first'
-                : type === 'connector'
-                  ? 'Check the connector fields first'
-                  : 'Pick a type first'
+              : 'Give it a name first'
       }
       className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
       style={{ background: theme.base }}
@@ -882,13 +903,19 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         </div>
       )}
 
-      {type === 'connector' && (
-        <ConnectorExtras
-          extras={extras}
-          onChange={setExtras}
-          slug={connectorSlug(title)}
-          accent={theme.dark}
-        />
+      {/* A connector and an agent have no extras: each is a note, and every
+          setting in it is editable on the note the moment it exists. All the
+          draft owes them is where the note will land. */}
+      {type === 'connector' && connectorSlug(title) && (
+        <div className="mt-4">
+          <PathPreview path={`connectors/${connectorSlug(title)}.md`} />
+        </div>
+      )}
+
+      {type === 'agent' && agentSlug(title) && (
+        <div className="mt-4">
+          <PathPreview path={agentBriefPath(agentSlug(title), agentFolder)} />
+        </div>
       )}
 
       {type === 'channel' && (
@@ -1333,9 +1360,9 @@ function TypeMenu({
 // ─── Per-type extras ─────────────────────────────────────────────────────────
 // Deliberately small. The draft surface's whole argument is that creating is
 // choosing what a thing is and naming it — anything editable on the thing's own
-// page afterwards does NOT belong here. What's left is the irreducible part:
-// a connector's transport and endpoint (its note is its config, and one without
-// them is invalid), and a channel's view style and section.
+// page afterwards does NOT belong here. What's left is a channel's view style
+// and section: a channel is a conversation row, not a note, so there is nowhere
+// else to say them.
 
 function ExtraField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -1384,47 +1411,6 @@ function SegmentedChoice<T extends string>({
           </button>
         )
       })}
-    </div>
-  )
-}
-
-function ConnectorExtras({
-  extras,
-  onChange,
-  slug,
-  accent,
-}: {
-  extras: Extras
-  onChange: (next: Extras) => void
-  slug: string
-  accent: string
-}) {
-  return (
-    <div className="mt-4 space-y-3" style={{ ['--accent' as string]: accent }}>
-      <ExtraField label="Hosts">
-        <textarea
-          className={`${extraInput} resize-none font-mono`}
-          rows={2}
-          placeholder={'api.stripe.com'}
-          value={extras.hosts}
-          onChange={(e) => onChange({ ...extras, hosts: e.target.value })}
-        />
-      </ExtraField>
-      <ExtraField label="Secret">
-        <input
-          className={`${extraInput} font-mono`}
-          placeholder="STRIPE_KEY"
-          value={extras.secretName}
-          onChange={(e) => onChange({ ...extras, secretName: e.target.value })}
-        />
-      </ExtraField>
-      <p className="text-xs text-text-muted">
-        Agents run commands in a sandbox that can only reach these hosts (one per line). The
-        secret&apos;s value is set on the connector&apos;s page afterwards and reaches commands as{' '}
-        <span className="font-mono">${extras.secretName.trim().toUpperCase() || 'NAME'}</span>.
-      </p>
-
-      {slug && <PathPreview path={`connectors/${slug}.md`} />}
     </div>
   )
 }

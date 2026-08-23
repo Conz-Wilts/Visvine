@@ -17,7 +17,7 @@ model Space {
   createdAt       DateTime               @default(now()) @map("created_at")
   imageUrl        String?                @map("image_url")
   nodeTypes       Json?                  @default("[{\"name\": \"Person\", \"color\": \"#2563eb\", \"shape\": \"rectangle\"}, {\"name\": \"Space\", \"color\": \"#78d870\", \"shape\": \"square\"}, {\"name\": \"Event\", \"color\": \"#ef4444\", \"shape\": \"rectangle\"}]") @map("node_types")
-  aliases         Json?                  @default("[{\"name\": \"Admin\", \"color\": \"#b4881b\", \"admin\": true, \"system\": true, \"nodeType\": \"Person\"}]")
+  aliases         Json?                  @default("[{\"id\": \"admin\", \"name\": \"Admin\", \"color\": \"#b4881b\", \"admin\": true, \"system\": true, \"nodeType\": \"Person\"}]")
   linkTypes       Json?                  @default("[{\"name\": \"Related\", \"color\": \"#94a3b8\", \"directed\": false}, {\"name\": \"Knows\", \"color\": \"#2563eb\", \"directed\": false}, {\"name\": \"Works at\", \"color\": \"#9333ea\", \"directed\": true}, {\"name\": \"Founded\", \"color\": \"#16a34a\", \"directed\": true}, {\"name\": \"Invested in\", \"color\": \"#f59e0b\", \"directed\": true}, {\"name\": \"Member of\", \"color\": \"#0ea5e9\", \"directed\": true}, {\"name\": \"Partner\", \"color\": \"#ec4899\", \"directed\": false}, {\"name\": \"Mentors\", \"color\": \"#14b8a6\", \"directed\": true}, {\"name\": \"Attended\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Hosting\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Introduced\", \"color\": \"#06b6d4\", \"directed\": false, \"system\": true}, {\"name\": \"Mentioned\", \"color\": \"#8b5cf6\", \"directed\": false, \"system\": true}]") @map("link_types")
   country         String?
   designConfig    Json                   @default("{}") @map("design_config")
@@ -41,6 +41,7 @@ model Space {
   links           Link[]
   nodes           Node[]
   members         SpaceMember[]
+  invitations     SpaceInvitation[]
   notes           ContextNote[]
   noteFolders     ContextFolder[]
   contextState    ContextState[]
@@ -594,7 +595,12 @@ model ContextGrant {
   // alias's stable id, never its name — see the note on UserAlias.
   subjectId    String   @default("") @map("subject_id")
   resourcePath String   @default("") @map("resource_path") // '' = context root
-  level        Int // 10 view · 20 comment · 30 edit · 40 full
+  // 10 view · 30 edit. These are the only two grantable levels: permissions
+  // ABOUT a resource (sharing, restricting, deleting a folder) are a space-admin
+  // power, not a level. 20 ('comment') and 40 ('full') are RETIRED — rows may
+  // still hold them and the max-wins ladder reads them as view and edit
+  // respectively, so never reuse those values. See lib/notes/shared/authz.ts.
+  level        Int
   grantedBy    String   @map("granted_by")
   createdAt    DateTime @default(now()) @map("created_at")
   space        Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
@@ -607,16 +613,16 @@ model ContextGrant {
 /// A member's request for access to part of a space's SHARED context, filed
 /// from whatever surface denied them (`resourcePath` '' = the context root gate, a
 /// folder, or a single note path — the path is recorded even when it doesn't
-/// exist, so the denial copy never has to admit whether it does). Whoever
-/// MANAGES that path resolves it: approval writes a ContextGrant at exactly the
-/// requested path (lib/notes/accessRequests.ts). Resolved rows are kept as the
-/// audit trail behind Console → People → Waiting.
+/// exist, so the denial copy never has to admit whether it does). A SPACE ADMIN
+/// resolves it: approval writes a ContextGrant at exactly the requested path
+/// (lib/notes/accessRequests.ts). Resolved rows are kept as the audit trail
+/// behind Console → People → Waiting.
 model ContextAccessRequest {
   id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId      String    @map("space_id")
   userId       String    @map("user_id")
   resourcePath String    @default("") @map("resource_path") // '' = context root
-  level        Int       @default(10) // the level asked for (10 view · 20 comment · 30 edit · 40 full)
+  level        Int       @default(10) // the level asked for (10 view · 30 edit; see ContextGrant.level)
   message      String?
   status       String    @default("pending") // 'pending' | 'approved' | 'denied'
   createdAt    DateTime  @default(now()) @map("created_at")
@@ -941,6 +947,9 @@ model User {
   membersAdded  SpaceMember[] @relation("AddedByRelation")
   memberships   SpaceMember[] @relation("MemberOf")
 
+  invitations     SpaceInvitation[] @relation("InvitedUser")
+  invitationsSent SpaceInvitation[] @relation("InvitedByUser")
+
   // --- messaging ---
   conversationMemberships ConversationMember[]
   conversationsCreated    Conversation[]       @relation("ConversationCreator")
@@ -961,7 +970,6 @@ model User {
   accessRequests          ContextAccessRequest[]
   identity                Identity?
   oauthAuthCodes          OAuthAuthCode[]
-  oauthRefreshTokens      OAuthRefreshToken[]
 
   @@map("users")
 }
@@ -1009,6 +1017,36 @@ model SpaceMember {
   @@index([userId])
   @@index([spaceId])
   @@map("space_members")
+}
+
+/**
+ * An admin asking someone to join. Deliberately NOT a SpaceMember row in some
+ * third status: most membership checks read the row's existence, not its
+ * status, so an unanswered invitation living in space_members would be access
+ * granted before the person said yes. Nothing here grants anything — accepting
+ * is what writes the SpaceMember (and the UserAlias rows staged in aliasIds).
+ */
+model SpaceInvitation {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId     String    @map("space_id")
+  userId      String    @map("user_id")
+  invitedBy   String?   @map("invited_by")
+  // The aliases the admin ticked, parked until the answer. Ids, not names: an
+  // alias renamed while the invitation sits unanswered is still the same alias.
+  aliasIds    String[]  @default([]) @map("alias_ids")
+  // "pending" | "accepted" | "declined". Answered rows are kept so an admin can
+  // see they were turned down rather than watching the invite disappear.
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  respondedAt DateTime? @map("responded_at")
+  space       Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user        User      @relation("InvitedUser", fields: [userId], references: [id], onDelete: Cascade)
+  inviter     User?     @relation("InvitedByUser", fields: [invitedBy], references: [id], onDelete: SetNull)
+
+  @@unique([spaceId, userId])
+  @@index([userId, status])
+  @@index([spaceId, status])
+  @@map("space_invitations")
 }
 
 model Person {
@@ -1228,24 +1266,6 @@ model OAuthAuthCode {
 
   @@index([expiresAt])
   @@map("oauth_auth_codes")
-}
-
-/// Rotating refresh token (stored as a SHA-256 hash, never plaintext).
-model OAuthRefreshToken {
-  id        String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  tokenHash String    @unique @map("token_hash")
-  clientId  String    @map("client_id")
-  userId    String    @map("user_id")
-  scope     String
-  /// Which MCP server refreshed tokens are for (RFC 8707): "context" | "creator".
-  resource  String    @default("context")
-  expiresAt DateTime  @map("expires_at")
-  revokedAt DateTime? @map("revoked_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("oauth_refresh_tokens")
 }
 
 // ============================================================

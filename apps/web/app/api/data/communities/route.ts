@@ -18,7 +18,7 @@ import {
   findPublicNameConflict,
   publicNameTakenMessage,
 } from '@/lib/spaces/publicName';
-import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
+import { defaultFeatureConfig } from '@/lib/featureAccess';
 import { updateSpaceConfig } from '@/lib/spaces/spaceConfig';
 import { mergeAliasList, mergeLinkTypeList } from '@/lib/spaces/configMerge';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
@@ -91,13 +91,10 @@ export async function POST(request: NextRequest) {
         imageUrl: space.imageUrl ?? null,
         nodeTypes: space.nodeTypes as object ?? null,
         aliases: space.aliases as object ?? [],
-        // Same defaults as the user-facing create: private, Directory only.
+        // Same defaults as the user-facing create: private, Directory plus the
+        // DEFAULT_ON set (Tools — marketplace and community-built Tools).
         visibility: space.visibility === 'public' ? 'public' : 'private',
-        featureConfig: {
-          enabled: Object.fromEntries(
-            ALL_FEATURE_KEYS.filter((key) => !CORE_FEATURE_KEYS.includes(key)).map((key) => [key, false])
-          ),
-        },
+        featureConfig: defaultFeatureConfig() as object,
       },
     });
 

@@ -16,6 +16,8 @@ import {
   entityNotePaths,
   entityOwnerPathOf,
   isEntityFolderIndex,
+  namespaceFolderDenial,
+  structuralFolders,
   entityKindOfDir,
   entityContextHref,
   hrefForNotePath,
@@ -411,4 +413,51 @@ test('resolveEntityNode resolves through the node map, never by string surgery',
   assert.equal(resolveEntityNode('notes/welcome.md', new Map([['notes/welcome.md', { id: 'x' }]])), null);
   // Tolerates a missing map.
   assert.equal(resolveEntityNode('people/craig-piggott.md', null), null);
+});
+
+test('namespaceFolderDenial pins the built-in folders, not what is inside them', () => {
+  // The three the runtime resolves against by name...
+  for (const dir of ['agents', 'connectors', 'tools']) {
+    assert.ok(namespaceFolderDenial(dir), `${dir} should be undeletable`);
+  }
+  // ...and the entity namespaces, which are the same bargain: every note's
+  // path is its identity, so removing the folder would trash all of them.
+  for (const dir of ['people', 'communities', 'events', 'resources', 'channels', 'spaces']) {
+    assert.ok(namespaceFolderDenial(dir), `${dir} should be undeletable`);
+  }
+
+  // Everything INSIDE stays ordinary — deleting one agent, one Tool or one
+  // person is exactly the operation the guard is there to keep possible.
+  assert.equal(namespaceFolderDenial('agents/ops'), null);
+  assert.equal(namespaceFolderDenial('agents/live'), null);
+  assert.equal(namespaceFolderDenial('tools/roster'), null);
+  assert.equal(namespaceFolderDenial('connectors/hubspot'), null);
+  assert.equal(namespaceFolderDenial('people/craig-piggott'), null);
+
+  // A folder that merely starts with the name isn't the namespace.
+  assert.equal(namespaceFolderDenial('agents-archive'), null);
+  assert.equal(namespaceFolderDenial('ops/agents'), null);
+  assert.equal(namespaceFolderDenial(''), null);
+});
+
+test('structuralFolders follows the tools a space runs', () => {
+  // Nothing configured: every tool is on by default, so all three are there.
+  assert.deepEqual(structuralFolders(null).sort(), ['agents', 'connectors', 'tools']);
+
+  // Agents off -> no agents/ folder; the other two are untouched.
+  assert.deepEqual(
+    structuralFolders({ enabled: { agents: false } }).sort(),
+    ['connectors', 'tools'],
+  );
+  assert.deepEqual(
+    structuralFolders({ enabled: { connectors: false } }).sort(),
+    ['agents', 'tools'],
+  );
+
+  // tools is a core feature key, so it survives even an explicit false —
+  // "tools is always there" needs no special case.
+  assert.deepEqual(
+    structuralFolders({ enabled: { agents: false, connectors: false, tools: false } }),
+    ['tools'],
+  );
 });

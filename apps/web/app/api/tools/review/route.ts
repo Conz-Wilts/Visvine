@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSuperAdmin, requireSession } from '@/lib/session'
-import { listRecentDecisions, listReviewQueue, perimeterDiffForVersion } from '@/lib/tools/registry'
+import { listReviewQueue, perimeterDiffForVersion } from '@/lib/tools/registry'
 import { EMPTY_PERIMETER, diffPerimeter } from '@/lib/tools/perimeter'
-import type { ReviewHistoryResponse, ReviewQueueItem, ReviewQueueResponse } from '@/lib/tools/api'
-
-/** How far back the reviewer's own trail reads. A queue, not an archive. */
-const HISTORY_LIMIT = 25
+import type { ReviewQueueItem, ReviewQueueResponse } from '@/lib/tools/api'
 
 /**
  * The Visvine super admin's review queue: every version awaiting a decision,
@@ -17,12 +14,11 @@ const HISTORY_LIMIT = 25
  * only, so it is a handful of rows, and the diff needs the PREVIOUS approved
  * version of each key, which is a different lookup per row anyway.
  *
- * `?status=reviewed` answers with the decisions already made instead — the
- * History list beside the queue. Same route because it is the same screen and
- * the same gate; the envelope differs (`reviewed`, not `queue`) so a caller
- * cannot mistake a decided version for one still waiting.
+ * A queue, not an archive: decided versions leave it and are not re-listed —
+ * each Tool's own detail (versionHistory on the authoring route, the version
+ * trail on the marketplace card) is where a past verdict is read.
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const session = await requireSession()
   if (session instanceof Response) return session
   if (!isSuperAdmin(session.email)) {
@@ -30,11 +26,6 @@ export async function GET(req: NextRequest) {
       { error: 'Only Visvine super admins can review tool submissions.' },
       { status: 403 },
     )
-  }
-
-  if (req.nextUrl.searchParams.get('status') === 'reviewed') {
-    const body: ReviewHistoryResponse = { reviewed: await listRecentDecisions(HISTORY_LIMIT) }
-    return NextResponse.json(body)
   }
 
   const pending = await listReviewQueue()

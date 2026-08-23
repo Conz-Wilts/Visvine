@@ -3,16 +3,17 @@
  * registerCreatorTools at the bottom):
  *
  *   CONTEXT server (/api/mcp)
+ *   plan     plan_visvine_query            (call first — routes an ask to a recipe)
  *   read     list_spaces, list_context, search_context, read_context,
  *            list_files, read_file
  *   write    add_context, edit_context, append_context, move_context
  *   maintain clean_context, manage_alias
- *   connect  list_connectors, run_connector
+ *   connect  list_connectors, run_connector, set_connector_secret (admin)
  *   agents   list_agents, run_agent
  *   tools    list_tools, install_tool          (discover + activate)
  *
  *   CREATOR server (/api/mcp/creator)
- *   list_spaces + the Tool authoring loop (lib/mcp/appTools.ts)
+ *   plan_visvine_query + list_spaces + the Tool authoring loop (lib/mcp/appTools.ts)
  *
  * The shape of this surface follows the shape of the model, deliberately:
  *
@@ -49,7 +50,7 @@ import {
   listVisibleSources,
   readSourceVisible,
 } from '@/lib/notes/contextService'
-import { readableRoots, LEVEL_FULL } from '@/lib/notes/shared/authz'
+import { readableRoots, LEVEL_EDIT } from '@/lib/notes/shared/authz'
 import { audienceSummary } from '@/lib/notes/shared/audience'
 import { loadSpaceAccess, grantAccess, setFolderRestricted } from '@/lib/notes/access'
 import { buildTypeCatalog } from '@/lib/mcp/typeCatalog'
@@ -86,11 +87,18 @@ import { readFields } from '@/lib/create/typeFields'
 import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
 import { ConnectorError } from '@/lib/connectors/config'
-import { executeConnectorScript, listConnectors, loadConnector } from '@/lib/connectors/service'
+import {
+  describeConnector,
+  executeConnectorScript,
+  listConnectors,
+  loadConnector,
+} from '@/lib/connectors/service'
+import { setSpaceSecret, storedSecretNames, SECRET_MAX_CHARS } from '@/lib/connectors/secretStore'
 import { canTriggerRun, listAgents } from '@/lib/agents/service'
 import { claimManualRun } from '@/lib/agents/schedule'
 import { featureAccessForbidden } from '@/lib/auth'
 import { registerAppTools } from '@/lib/mcp/appTools'
+import { buildPlan, planFeatures, type PlanSpaceFacts } from '@/lib/mcp/planner'
 import { readNoteOrNull, type Context } from '@/lib/notes/store'
 import { runClean, applyCleanFixes, trashNotes } from '@/lib/notes/clean'
 import type { CleanRole } from '@/lib/notes/shared/clean'
@@ -218,12 +226,19 @@ const visibilityArg = z
 
 /**
  * Make a freshly created shared note private-by-default: the author gets an
- * explicit FULL grant FIRST, then the note path is restricted (a restricted
+ * explicit EDIT grant FIRST, then the note path is restricted (a restricted
  * boundary on a note path is exactly the app's "Make private"). The order
  * mirrors app/api/notes/access/route.ts — the grant must exist before the cut
  * so a non-admin author never severs their own access. The grant is written
  * even for admins: the bypass makes it redundant today, but the explicit row
- * survives role loss and keeps the access list honest. Failures are returned,
+ * survives role loss and keeps the access list honest.
+ *
+ * Note this is the one restrict that a non-admin can still cause, and it is
+ * deliberate: privacy on a note you are creating right now is authorship, not
+ * administration. Undoing it afterwards is a space-admin action like any other
+ * restrict, so an author who wants the note shared again has to ask.
+ *
+ * Failures are returned,
  * not thrown — the content write already succeeded, so this reports like
  * add_context's note_error rather than failing the whole call. Both mutations
  * audit-log themselves.
@@ -236,7 +251,7 @@ async function makeNotePrivate(
   try {
     await grantAccess(
       spaceId,
-      { subjectType: 'user', subjectId: actor.userId, resourcePath: path, level: LEVEL_FULL },
+      { subjectType: 'user', subjectId: actor.userId, resourcePath: path, level: LEVEL_EDIT },
       actor,
     )
     await setFolderRestricted(spaceId, path, true, actor)
@@ -370,6 +385,76 @@ interface WireLifecycle {
   read_instead?: { tool: string; note_path: string }
 }
 
+/**
+ * The planner (lib/mcp/planner.ts), registered on BOTH servers because the
+ * question it answers — "which tool does this ask actually need?" — is the
+ * first question either surface gets, and getting it wrong is what makes a
+ * client report that something is impossible when it is merely note-shaped.
+ *
+ * Space facts are gathered best-effort: a plan that names the caller's role and
+ * what the space already has is far more useful than a generic one, but a plan
+ * is advice, so nothing here is allowed to fail the call. Each probe that
+ * throws (no membership, a feature switched off, a space id that does not
+ * resolve) simply narrows the plan.
+ */
+function registerPlanner(server: McpServer): void {
+  server.registerTool(
+    'plan_visvine_query',
+    {
+      description:
+        'START HERE on every new request. Give it the user\'s message verbatim and it returns the ordered ' +
+        'plan: which Visvine tools to call, in what order, with what arguments — plus the exact note ' +
+        'contract where one applies, the refusals to expect, and what this space already has. ' +
+        'Visvine is NOTE-FIRST, which is the thing this tool exists to tell you: connectors, agents and ' +
+        'Tools are notes at fixed paths, not records behind a create_* API. There is no create_connector ' +
+        'tool because a connector IS connectors/<name>.md, written with edit_context. If you are about to ' +
+        'tell someone that something cannot be done because you cannot find a tool for it, call this first — ' +
+        'that conclusion is usually wrong. Pass space_id when you have it and the plan is tailored to your ' +
+        'role, the space\'s enabled features, and its existing connectors and agents.',
+      inputSchema: {
+        prompt: z
+          .string()
+          .describe("The user's request, verbatim. Do not summarise or rewrite it — the routing reads its wording."),
+        space_id: z
+          .string()
+          .optional()
+          .describe('The space the work targets, when known (list_spaces). Omit for a generic plan.'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (args, extra) =>
+      withCtx(extra, 'plan_visvine_query', async (ctx) => {
+        let space: PlanSpaceFacts | null = null
+        if (args.space_id) {
+          try {
+            const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+            const row = await prisma.space.findUnique({
+              where: { id: args.space_id },
+              select: { name: true, featureConfig: true },
+            })
+            const [connectors, agents] = await Promise.all([
+              listConnectors(principal, context).catch(() => []),
+              listAgents(principal, context).then((r) => r.agents).catch(() => []),
+            ])
+            space = {
+              id: args.space_id,
+              name: row?.name ?? args.space_id,
+              you_are_admin: principal.spaceAdmin === true,
+              features: planFeatures((row?.featureConfig ?? null) as SpaceFeatureConfig | null),
+              connectors: connectors.map((c) => c.name),
+              agents: agents.map((a) => a.name),
+            }
+          } catch {
+            // An unresolvable or unauthorized space just means a generic plan;
+            // the tool the plan names will report the real error itself.
+            space = null
+          }
+        }
+        return buildPlan({ prompt: args.prompt, space, scopes: ctx.scopes })
+      }),
+  )
+}
+
 function registerListSpaces(server: McpServer): void {
   server.registerTool(
     'list_spaces',
@@ -394,6 +479,11 @@ function registerListSpaces(server: McpServer): void {
  * server — see registerCreatorTools.
  */
 export function registerTools(server: McpServer): void {
+  // ── Plan ────────────────────────────────────────────────────────────────
+  // Registered first because it is meant to be called first.
+
+  registerPlanner(server)
+
   // ── Read ────────────────────────────────────────────────────────────────
 
   registerListSpaces(server)
@@ -1154,7 +1244,7 @@ export function registerTools(server: McpServer): void {
         'not merge one away. Establish which note is current and add `supersedes: /<path>` to it, or make the ' +
         'distinction between them explicit in both. Folders frozen for AI are reported ' +
         "but never touched. action:'trash' soft-deletes notes you are allowed to remove (author, admin, or " +
-        'full access; restorable for 7 days) — use it for confirmed duplicates and empties only, AFTER ' +
+        'edit access; restorable for 7 days) — use it for confirmed duplicates and empties only, AFTER ' +
         'reading them. While cleaning, also normalise any index note whose prose uses tables/columns to the ' +
         `fixed index layout (H1, short prose, flat link bullets). When fixing orphans, remember: ${MENTION_RULE}`,
       inputSchema: {
@@ -1340,7 +1430,11 @@ export function registerTools(server: McpServer): void {
         'and the env var names its code can read. `actions` lists named entry points (name, description, params) ' +
         'you can run with run_connector by name instead of writing code. Run one with run_connector; a connector with no hosts is ' +
         "documentation-only. Entries with kind 'model' are LLM providers the space's agents run on (their key " +
-        "is the space's) — they are listed for context but never runnable. Executing needs the 'connectors:use' scope.",
+        "is the space's) — they are listed for context but never runnable. Executing needs the 'connectors:use' scope. " +
+        'TO CREATE ONE: a connector is a NOTE at connectors/<name>.md, written with edit_context ' +
+        "(scope:'shared', visibility:'inherit'), space admins only — there is no create_connector tool because " +
+        'there is nothing to create but the note. Call plan_visvine_query for the frontmatter contract and the ' +
+        'ordered steps before you write it.',
       inputSchema: { space_id: z.string() },
       annotations: { readOnlyHint: true },
     },
@@ -1422,6 +1516,111 @@ export function registerTools(server: McpServer): void {
       }),
   )
 
+  // The one write into the secret store the tool surface has. It exists so that
+  // "build this connector and prove it works" is a single unbroken sequence:
+  // edit_context writes the note, this stores the credential the note REFERENCES,
+  // run_connector proves it. Before it existed the middle step was impossible for
+  // any caller but a human in a browser, so every connector build stopped
+  // half-finished at `missing_secret`.
+  //
+  // Four things keep that convenience from becoming a hole, and none of them is
+  // the scope alone:
+  //
+  //   1. SPACE ADMIN, RE-DERIVED LIVE. Not read off the token — resolved through
+  //      resolveContext on every call, so losing admin takes the capability away
+  //      immediately, exactly as it does in the app.
+  //   2. THE NAME MUST ALREADY BE REFERENCED by a connector note this caller can
+  //      see. You cannot invent a secret name; you can only fill in a blank the
+  //      note declared. That makes the note — reviewable, visible, versioned —
+  //      the thing that decides which credentials may exist.
+  //   3. WRITE-ONLY, STILL. There is no read tool and this one returns no value.
+  //      Storing a secret does not make it fetchable; it only makes runs work.
+  //   4. NO OVERWRITE BY DEFAULT. A rerun of a setup script cannot silently
+  //      replace a working credential with a stale one.
+  //
+  // Deliberately NOT on the agent runtime surface (lib/agents/tools.ts): an
+  // unattended 3am run has no business rotating credentials, and an agent that
+  // could would be an agent that could lock a space out of its own integrations.
+  server.registerTool(
+    'set_connector_secret',
+    {
+      description:
+        'Store the value of a credential a connector note references as `{{secret:NAME}}` — the step between ' +
+        'writing the note and running it. SPACE ADMINS ONLY. `name` must be a secret the named connector ' +
+        'already references (see list_connectors `secrets`); you cannot introduce a new one here, only fill in ' +
+        'a blank the note declared. The value is encrypted at rest and is WRITE-ONLY: nothing — no tool, no ' +
+        'admin, no page — can read it back, so record it wherever you keep credentials before storing it. ' +
+        'Setting an existing secret is refused unless overwrite:true, because the old value cannot be shown to ' +
+        'you for comparison. Returns which of the connector\'s secrets are still unset, so you know when it is ' +
+        'ready for run_connector. NEVER write the value into the note itself, and do not echo it back to the ' +
+        'user afterwards.',
+      inputSchema: {
+        space_id: z.string(),
+        connector: z.string().describe("The connector whose secret this is, e.g. 'stripe' for connectors/stripe.md"),
+        name: z
+          .string()
+          .describe("The secret NAME as the note references it, e.g. 'STRIPE_KEY' for {{secret:STRIPE_KEY}}"),
+        value: z
+          .string()
+          .min(1)
+          .max(SECRET_MAX_CHARS)
+          .describe('The credential itself. Stored encrypted; never returned by anything.'),
+        overwrite: z
+          .boolean()
+          .optional()
+          .describe('Replace an existing value (a rotation). Defaults to false, which refuses rather than clobbers.'),
+      },
+      annotations: { destructiveHint: true },
+    },
+    (args, extra) =>
+      withCtx(extra, 'set_connector_secret', async (ctx) => {
+        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, 'shared')
+        if (!resolved?.isAdmin) {
+          throw new McpError(403, "Only a space admin can store this space's connector secrets")
+        }
+        const connector = await describeConnector(principal, context, args.connector)
+        if (!connector) throw new McpError(404, `No connector named '${args.connector}' in this space`)
+        if (connector.invalid) {
+          throw new McpError(
+            400,
+            `connectors/${connector.name}.md does not parse, so its secret references cannot be trusted: ${connector.invalid}`,
+          )
+        }
+
+        const name = args.name.trim()
+        if (!connector.secrets.includes(name)) {
+          throw new McpError(
+            400,
+            connector.secrets.length === 0
+              ? `${connector.name} references no secrets. Add \`{{secret:${name}}}\` to its \`env:\` first, then store the value.`
+              : `${connector.name} does not reference '${name}'. It references: ${connector.secrets.join(', ')}. ` +
+                'Fix the note if the name is wrong — the note decides which secrets may exist.',
+          )
+        }
+
+        const result = await setSpaceSecret(
+          args.space_id,
+          { userId: ctx.userId, name: ctx.name || ctx.email, email: ctx.email },
+          { name, value: args.value, overwrite: args.overwrite === true },
+        )
+        if (!result.ok) throw new McpError(result.code === 'already_set' ? 409 : 400, result.error)
+
+        const stored = await storedSecretNames(args.space_id, connector.secrets)
+        const missing = connector.secrets.filter((s) => !stored.has(s))
+        return {
+          stored: result.name,
+          rotated: result.rotated,
+          connector: connector.name,
+          secrets_missing: missing,
+          ready_to_run: missing.length === 0,
+          note:
+            missing.length === 0
+              ? `${connector.name} has every secret it references. Probe it with run_connector.`
+              : `Still unset: ${missing.join(', ')}. run_connector will fail with missing_secret until they are stored.`,
+        }
+      }),
+  )
+
   // ── Agents ──────────────────────────────────────────────────────────────
   // An agent is two notes — agents/<name>.md (the brief, member-writable) and
   // agents/live/<name>.md (activation, admin-only) — plus a scheduler row.
@@ -1436,7 +1635,11 @@ export function registerTools(server: McpServer): void {
       description:
         "List the space's scheduled agents: name, brief summary, model, declared connectors, whether it is active, " +
         'its schedule, next run and last run outcome. Spend is not included (admins see it in the app). ' +
-        "Trigger one with run_agent (needs the 'agents:run' scope; the agent must be active).",
+        "Trigger one with run_agent (needs the 'agents:run' scope; the agent must be active). " +
+        'AUTHORING IS CLOSED TO YOU: an agent is a brief at agents/<name>.md plus an admin activation at ' +
+        'agents/live/<name>.md, and agents/ is structurally frozen against AI writes — edit_context there is ' +
+        'refused whatever your permissions. Draft the brief and hand it to a human. plan_visvine_query has the ' +
+        'brief contract and the hand-off steps.',
       inputSchema: { space_id: z.string() },
       annotations: { readOnlyHint: true },
     },
@@ -1517,6 +1720,7 @@ export function registerTools(server: McpServer): void {
  * tools that write executable code into a space.
  */
 export function registerCreatorTools(server: McpServer): void {
+  registerPlanner(server)
   registerListSpaces(server)
   registerAppTools(server, 'creator')
 }

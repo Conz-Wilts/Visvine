@@ -6,7 +6,6 @@
 
 import type { ContextPrincipal } from './contextTypes'
 import {
-  canManage,
   canRead,
   canWrite,
   effectiveLevel,
@@ -33,12 +32,18 @@ export function principalCanWrite(p: ContextPrincipal, path: string): boolean {
 }
 
 /**
- * Whether the principal MANAGES a path (full level: share, restrict, delete
- * within the subtree) — the successor of the old per-folder admin.
+ * Whether the principal may administer the context's ACCESS: share, restrict,
+ * lock, resolve access requests and promotion proposals.
+ *
+ * Deliberately path-free. Grants only ever carry view/edit on a resource;
+ * nothing a grant can say makes you an administrator of it. So this is exactly
+ * "is a space admin (or the system principal)" — the per-folder manager role is
+ * gone. Content operations that used to ride on it (deleting a note, renaming
+ * or deleting a folder) are gated on edit at the path instead, which is what
+ * Editor advertises.
  */
-export function principalCanManage(p: ContextPrincipal, path: string): boolean {
-  if (principalIsSuperAdmin(p)) return true
-  return canManage(p.access, path)
+export function principalCanManage(p: ContextPrincipal): boolean {
+  return principalIsSuperAdmin(p)
 }
 
 /** Whether a folder should appear in this principal's tree at all. */
@@ -47,8 +52,10 @@ export function principalSeesFolder(p: ContextPrincipal, folderPath: string): bo
   return folderVisible(p.access, folderPath)
 }
 
-/** The principal's effective level name at a path (admins read as 'full'). */
+/** The principal's effective level name at a path. Admins read as 'edit', the
+ *  top grantable level — their administrative powers aren't a level, so the UI
+ *  says "space admin" separately rather than inventing a rung for it. */
 export function principalLevelName(p: ContextPrincipal, path: string): AccessLevelName | null {
-  if (principalIsSuperAdmin(p)) return 'full'
+  if (principalIsSuperAdmin(p)) return 'edit'
   return levelName(effectiveLevel(p.access, path))
 }

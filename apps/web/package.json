@@ -57,7 +57,8 @@
     "verify:agents-events": "tsx scripts/verify-agents-events.ts",
     "verify:tools": "tsx scripts/verify-tools-e2e.ts",
     "verify:tools:escape": "tsx scripts/verify-tools-escape.ts",
-    "verify:wayfinder-tool": "tsx scripts/verify-wayfinder-tool.ts"
+    "db:blackbird:placeholders": "tsx scripts/add-blackbird-placeholders.ts",
+    "db:tool:seed": "tsx scripts/seed-placeholder-tool.ts"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.5",

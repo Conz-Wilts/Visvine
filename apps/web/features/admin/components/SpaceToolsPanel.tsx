@@ -4,10 +4,11 @@ import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trash2Icon } from '@/features/shared/icons';
 import { Space, SpaceFeatureConfig } from '@/lib/types';
 import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, adminOnlyFeatureKeys, featureNodeTypeNames, isFeatureEnabled, isToolRailKey, moreFeatureKeys, sortFeatureKeys, toolFeatures } from '@/features/shared/lib/features';
-import { Modal, SearchInput, SettingsSection } from '@/components/ui';
+import { ConfirmDialog, Modal, SearchInput, SettingsSection } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { fetchJsonBody } from '@/lib/fetchJson';
+import { deleteAuthoredTool, uninstallTool } from '@/features/tools/lib/client';
 
 interface Props {
   space: Space;
@@ -84,9 +85,9 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   const savedConfig = (space.featureConfig ?? {}) as SpaceFeatureConfig;
 
   // An installed Tool is a row here exactly like a built-in: same drag, same
-  // More toggle, same commit path. What it does NOT get is the Add/Remove pair —
-  // whether a Tool is installed and enabled is decided in /tools → Installed, and
-  // a trash icon on this page would read as an uninstall it isn't.
+  // More toggle, same commit path. Its bin really does uninstall (and, for a
+  // Tool authored in this space, deletes the working copy too) — the row goes
+  // through the Tools REST surface rather than this panel's settings PUT.
   const toolRows = useMemo(() => toolFeatures(space.installedTools), [space.installedTools]);
   const allFeatures = useMemo(() => [...FEATURES, ...toolRows], [toolRows]);
   const featureOf = (key: string) => allFeatures.find(f => f.key === key);
@@ -147,8 +148,10 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   // UI — a row below the More divider is in More — but stored as its own list.
   const [more, setMore] = useState<string[]>(() => moreFeatureKeys(savedConfig));
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
-  // The row whose Remove button is awaiting confirmation. Removing hides a
-  // surface and its node types space-wide, so it asks first.
+  // The row whose Remove button is awaiting confirmation — a centred
+  // ConfirmDialog, not an inline panel, so the question can't be missed under
+  // a long list. Removing hides a surface and its node types space-wide (or,
+  // for an installed Tool, really uninstalls/deletes), so it asks first.
   const [confirmRemoveKey, setConfirmRemoveKey] = useState<string | null>(null);
   // The "Add tool" picker. Tools a space hasn't added live in here rather
   // than on the page — the panel shows what's on, not the whole catalogue.
@@ -383,6 +386,53 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
     );
   };
 
+  // The bin on an INSTALLED Tool's row. Unlike removeTool below, this is not a
+  // config edit: it uninstalls through the Tools REST surface (rail key, install
+  // row and stored state in one transaction server-side), and — when the Tool
+  // was authored in this space — deletes the working copy with it, which is the
+  // whole "remove a created tool" ask. Published marketplace versions stay.
+  const [removeInstallError, setRemoveInstallError] = useState<string | null>(null);
+
+  const installOf = (key: string) =>
+    (space.installedTools ?? []).find(t => `tool:${t.slug}` === key) ?? null;
+
+  /** `<name>` when this space authored the Tool (its key is `<spaceId>/<name>`), else null. */
+  const authoredNameOf = (toolKey: string) =>
+    toolKey.startsWith(`${space.id}/`) ? toolKey.slice(space.id.length + 1) : null;
+
+  const removeInstalledTool = async (key: string) => {
+    const dto = installOf(key);
+    if (!dto) return;
+    setRemoveInstallError(null);
+    try {
+      const authoredName = authoredNameOf(dto.key);
+      if (authoredName) {
+        await deleteAuthoredTool(space.id, authoredName);
+      } else {
+        await uninstallTool(space.id, dto.id);
+      }
+      setConfirmRemoveKey(null);
+      // Strip the row locally so it disappears now; onSaved also triggers a
+      // refetch that re-syncs installedTools and the stored config.
+      const strip = (list?: string[]) => (list ?? []).filter(k => k !== key);
+      const cfg = (space.featureConfig ?? {}) as SpaceFeatureConfig;
+      const nextEnabled = { ...(cfg.enabled ?? {}) };
+      delete nextEnabled[key];
+      onSaved({
+        installedTools: (space.installedTools ?? []).filter(t => t.slug !== dto.slug),
+        featureConfig: {
+          ...cfg,
+          enabled: nextEnabled,
+          order: strip(cfg.order),
+          more: strip(cfg.more),
+          adminOnly: strip(cfg.adminOnly),
+        },
+      });
+    } catch (err) {
+      setRemoveInstallError(err instanceof Error ? err.message : 'The remove did not go through.');
+    }
+  };
+
   /** Remove a tool: its nav row, its pages and its node types all go with it. */
   const removeTool = (key: string) => {
     setConfirmRemoveKey(null);
@@ -424,9 +474,11 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   /** One tool row. Rendered in both the rail list and the More block. */
   const renderToolRow = (item: string) => {
     const feature = featureOf(item)!;
-    // Core tools can't be removed, and an installed Tool isn't removed from
-    // here at all — both keep the slot so every row's controls line up.
-    const isFixed = feature.core === true || isToolRailKey(feature.key);
+    // Core tools can't be removed. An installed Tool CAN — its bin uninstalls
+    // (and deletes an authored working copy) via removeInstalledTool; only a
+    // `tool:` key with no install row behind it has nothing to act on.
+    const install = isToolRailKey(feature.key) ? installOf(feature.key) : null;
+    const isFixed = feature.core === true || (isToolRailKey(feature.key) && !install);
     // Position across both lists — arrow keys walk the whole sequence, crossing
     // into and out of More on the way.
     const position = sequence.indexOf(feature.key) + 1;
@@ -489,51 +541,26 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
             <button
               type="button"
               data-no-drag
-              onClick={() => setConfirmRemoveKey(confirmRemoveKey === feature.key ? null : feature.key)}
-              aria-expanded={confirmRemoveKey === feature.key}
+              onClick={() => { setRemoveInstallError(null); setConfirmRemoveKey(feature.key); }}
               aria-label={`Remove ${feature.label}`}
               title={`Remove ${feature.label}`}
-              className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg transition-colors ${
-                confirmRemoveKey === feature.key
-                  ? 'bg-red-500/15 text-red-500'
-                  : 'text-text-muted hover:bg-red-500/10 hover:text-red-500'
-              }`}
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500"
             >
               <Trash2Icon className="h-4 w-4" />
             </button>
           )}
         </div>
 
-        {confirmRemoveKey === feature.key && (
-          <div data-no-drag className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2">
-            <span className="min-w-0 text-sm text-text-secondary">
-              Remove {feature.label}?
-              {typeNamesPhrase(feature.key)
-                ? ` Its pages and ${typeNamesPhrase(feature.key)} disappear for everyone. Nothing is deleted — add it back any time.`
-                : ' Its pages disappear for everyone. Nothing is deleted — add it back any time.'}
-            </span>
-            <span className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmRemoveKey(null)}
-                className="rounded-lg px-3 py-1.5 text-sm text-text-secondary transition-colors hover:bg-surface-2"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => removeTool(feature.key)}
-                className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700"
-              >
-                Remove
-              </button>
-            </span>
-          </div>
-        )}
-
       </div>
     );
   };
+
+  // What the centred confirm asks depends on the row: a built-in is only
+  // hidden (config edit), an installed Tool is really uninstalled, and one
+  // authored here is deleted outright.
+  const confirmFeature = confirmRemoveKey ? featureOf(confirmRemoveKey) : undefined;
+  const confirmInstall = confirmRemoveKey ? installOf(confirmRemoveKey) : null;
+  const confirmAuthoredName = confirmInstall ? authoredNameOf(confirmInstall.key) : null;
 
   return (
     <div ref={flipRoot} className="w-full space-y-8">
@@ -692,6 +719,52 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
           )}
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmRemoveKey !== null && confirmFeature !== undefined}
+        title={
+          confirmInstall
+            ? confirmAuthoredName
+              ? `Delete ${confirmFeature?.label}?`
+              : `Uninstall ${confirmFeature?.label}?`
+            : `Remove ${confirmFeature?.label}?`
+        }
+        body={
+          confirmInstall ? (
+            confirmAuthoredName ? (
+              <>
+                It&rsquo;s uninstalled from this space and its working copy under{' '}
+                <code className="font-mono text-[13px]">tools/{confirmAuthoredName}</code> is deleted.
+                Versions already published to the marketplace stay.
+              </>
+            ) : (
+              <>
+                Its sidebar row and anything it stored for itself go with it. The marketplace listing stays —
+                install it again any time.
+              </>
+            )
+          ) : confirmFeature && typeNamesPhrase(confirmFeature.key) ? (
+            <>
+              Its pages and {typeNamesPhrase(confirmFeature.key)} disappear for everyone. Nothing is deleted —
+              add it back any time.
+            </>
+          ) : (
+            <>Its pages disappear for everyone. Nothing is deleted — add it back any time.</>
+          )
+        }
+        confirmLabel={confirmInstall ? (confirmAuthoredName ? 'Delete tool' : 'Uninstall') : 'Remove'}
+        destructive
+        error={removeInstallError}
+        onConfirm={async () => {
+          if (!confirmRemoveKey) return;
+          if (confirmInstall) {
+            await removeInstalledTool(confirmRemoveKey);
+          } else {
+            removeTool(confirmRemoveKey);
+          }
+        }}
+        onClose={() => { setConfirmRemoveKey(null); setRemoveInstallError(null); }}
+      />
     </div>
   );
 }

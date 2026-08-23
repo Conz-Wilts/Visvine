@@ -142,6 +142,25 @@ The identity clients render — name, title, website, logo — is
 because a client fetches it cross-origin and unauthenticated long after that
 build. Keep the two files identical.
 
+Locally there is no auth at all. `pnpm mcp:dev` (root `scripts/mcp-dev.mjs`) is
+`pnpm dev` plus a banner, the committed `.mcp.json` points at both endpoints with
+no token, and `mcpBearerVerifier` turns a request with no bearer token into the
+seeded dev user with every scope that server grants (`lib/mcp/devIdentity.ts`;
+`--user`/`DEV_MCP_USER` picks which one). The guard is `isDevAuthEnabled()` —
+`ENABLE_DEV_AUTH=true` AND `NODE_ENV=development`, which `next build` cannot
+satisfy. A token that *is* presented is verified normally, so `insufficient_scope`
+step-up is still reproducible locally.
+
+Production is the full OAuth 2.1 flow and nothing else. There is no refresh
+grant: an access token is a stateless **30-day** JWT and that is the whole life
+of a grant, so `grant_types_supported` is `['authorization_code']`, there is no
+revocation endpoint (nothing is stored to revoke) and the `oauth_refresh_tokens`
+table is dropped (migration `20260830120000`). The reason that is tolerable is
+that the token carries identity, never authorization — `lib/mcp/context.ts`
+re-resolves the principal and their per-space access from the database on every
+tool call, so removing someone bites immediately regardless of what they hold.
+`ACCESS_TTL_SECONDS` is the only lever on the window.
+
 Reads default to the **shared** context, writes to your **personal** one. Notes
 created in a real space's shared context are private by default (author gets FULL,
 then the path is restricted); pass `visibility: 'inherit'` to follow the folder.

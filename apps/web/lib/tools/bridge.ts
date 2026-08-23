@@ -249,7 +249,7 @@ function agentBriefName(path: string): string | null {
  * Does this perimeter name that agent BY NAME? A bare `*` does not: the whole
  * point of the exemption is that an admin reading the install screen saw which
  * agent this Tool would author, and `agents: ["*"]` tells them nothing. A prefix
- * (`wayfinder-*`) does count — it is a namespace the reviewer can read.
+ * (`digest-*`) does count — it is a namespace the reviewer can read.
  *
  * Reuses refuseAgent rather than re-implementing nameMatch, so "which names does
  * this entry cover" has exactly one answer in the codebase.

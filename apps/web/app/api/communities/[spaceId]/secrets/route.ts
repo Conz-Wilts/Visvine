@@ -1,16 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
-import prisma from '@/lib/prisma';
-import { encryptSecret } from '@/lib/crypto/secrets';
-import { isValidSecretName } from '@/lib/connectors/config';
-import { logAudit } from '@/lib/notes/audit';
+import {
+  setSpaceSecret,
+  deleteSpaceSecret,
+  listSecretNames,
+  type SecretActor,
+} from '@/lib/connectors/secretStore';
 
 /**
  * Space connector secrets (admin only). Deliberately write-only: GET
  * returns names and timestamps, never values — a stored secret can be
  * overwritten or deleted but not read back. Values are only ever decrypted
  * server-side while executing a connector call (lib/connectors/service.ts).
+ *
+ * Every mutation goes through lib/connectors/secretStore.ts, the same module
+ * the MCP `set_connector_secret` tool calls, so validation, encryption and the
+ * audit line cannot drift between a browser admin and a token-holding client.
+ * All this route adds is the browser half: the session that proves admin, and
+ * the mapping from a store refusal to an HTTP status.
  */
+
+/** The store wants both names; the session carries them under different keys. */
+function actorOf(session: { userId: string; name: string; email: string }): SecretActor {
+  return { userId: session.userId, name: session.name, email: session.email };
+}
 
 export async function GET(
   _req: NextRequest,
@@ -20,14 +33,14 @@ export async function GET(
   const session = await requireAdmin(spaceId);
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const rows = await prisma.connectorSecret.findMany({
-    where: { spaceId },
-    select: { name: true, createdBy: true, updatedAt: true },
-    orderBy: { name: 'asc' },
-  });
-  return NextResponse.json({ secrets: rows });
+  return NextResponse.json({ secrets: await listSecretNames(spaceId) });
 }
 
+/**
+ * Store or rotate one secret. `overwrite` is true here, unlike the MCP tool's
+ * default: an admin typing into the connector page's Rotate field is looking at
+ * the name they mean to replace and has already decided.
+ */
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ spaceId: string }> }
@@ -37,37 +50,20 @@ export async function PUT(
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = (await req.json()) as { name?: unknown; value?: unknown };
-  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  const name = typeof body.name === 'string' ? body.name : '';
   const value = typeof body.value === 'string' ? body.value : '';
-  if (!isValidSecretName(name)) {
-    return NextResponse.json(
-      { error: 'Secret names are UPPER_SNAKE_CASE: start with A-Z, then A-Z, 0-9 or _ (max 64 chars)' },
-      { status: 400 }
-    );
-  }
-  if (value.length === 0 || value.length > 8192) {
-    return NextResponse.json({ error: 'Secret value must be 1–8192 characters' }, { status: 400 });
-  }
 
-  let ciphertext: string;
-  try {
-    ciphertext = encryptSecret(value);
-  } catch {
+  const result = await setSpaceSecret(spaceId, actorOf(session), { name, value, overwrite: true });
+  if (!result.ok) {
+    // `unconfigured` is the server missing SECRETS_KEY, not the admin sending
+    // something wrong — the only one of these that is a 5xx.
     return NextResponse.json(
-      { error: 'Connector secrets are not configured on this server (SECRETS_KEY)' },
-      { status: 500 }
+      { error: result.error },
+      { status: result.code === 'unconfigured' ? 500 : 400 }
     );
   }
 
-  await prisma.connectorSecret.upsert({
-    where: { secret_identity: { spaceId, name } },
-    create: { spaceId, name, ciphertext, createdBy: session.email },
-    update: { ciphertext, createdBy: session.email },
-  });
-  // Rotation leaves a trace — the name only, never the value.
-  await logAudit(spaceId, { userId: session.userId, name: session.name, action: 'secret', path: name, detail: 'set' });
-
-  return NextResponse.json({ ok: true, name });
+  return NextResponse.json({ ok: true, name: result.name, rotated: result.rotated });
 }
 
 export async function DELETE(
@@ -82,8 +78,6 @@ export async function DELETE(
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
 
-  await prisma.connectorSecret.deleteMany({ where: { spaceId, name } });
-  await logAudit(spaceId, { userId: session.userId, name: session.name, action: 'secret', path: name, detail: 'deleted' });
-
+  await deleteSpaceSecret(spaceId, actorOf(session), name);
   return NextResponse.json({ ok: true });
 }

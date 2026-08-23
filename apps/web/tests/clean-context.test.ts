@@ -131,7 +131,7 @@ test('unknown issue kinds get the default edit_context guidance', () => {
 // ── lockedDenial: the "Freeze for AI" write gate ──
 
 import { lockedDenial } from '../lib/notes/contextService'
-import { OPEN_ACCESS, LEVEL_FULL } from '../lib/notes/shared/authz'
+import { OPEN_ACCESS, LEVEL_EDIT } from '../lib/notes/shared/authz'
 import type { ContextPrincipal } from '../lib/notes/shared/contextTypes'
 
 const SHARED = { spaceId: 'c1', ownerKey: 'shared' }
@@ -144,7 +144,7 @@ const principal = (locked: string[]): ContextPrincipal => ({
   spaceId: 'c1',
   spaceAdmin: true, // the lock binds even admins' AI writes — it is about origin, not rank
   access: {
-    grants: [{ subjectType: 'space', subjectId: '', resourcePath: '', level: LEVEL_FULL }],
+    grants: [{ subjectType: 'space', subjectId: '', resourcePath: '', level: LEVEL_EDIT }],
     restricted: [],
     locked,
   },

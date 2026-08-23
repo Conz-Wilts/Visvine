@@ -74,7 +74,16 @@ async function readSharedNote(spaceId: string, path: string) {
   })
 }
 
-/** The IANA zone a live agent runs in: note → Space → UTC. */
+/**
+ * The IANA zone a live agent runs in: its own activation note, else UTC.
+ *
+ * There is no space-wide default any more — activating a scheduled agent
+ * requires naming the zone (lib/agents/service.ts#activateAgent), so the only
+ * notes that reach the UTC fallback are ones written before that rule, or by
+ * hand. `Space.timezone` is still read here for exactly those: a legacy agent
+ * whose space set a zone keeps firing at the hour it always did, rather than
+ * silently jumping to UTC the day this shipped.
+ */
 export async function effectiveTimezone(spaceId: string, noteTz: string | null): Promise<string> {
   if (noteTz) return noteTz
   const space = await prisma.space.findUnique({ where: { id: spaceId }, select: { timezone: true } })

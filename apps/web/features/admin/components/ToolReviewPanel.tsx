@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
-import { Alert, Button, Chip, Field, LoadingText, Textarea } from '@/components/ui';
+import { Alert, Button, Chip, ConfirmDialog, Field, LoadingText, Textarea } from '@/components/ui';
+import { Trash2Icon } from '@/features/shared/icons';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import CodeDiff from '@/features/tools/components/CodeDiff';
 import ToolIcon from '@/features/tools/components/toolIcons';
@@ -13,7 +14,6 @@ import { formatBytes } from '@/lib/utils';
 import type {
   ReviewDecisionResponse,
   ReviewDetailResponse,
-  ReviewHistoryResponse,
   ReviewQueueItem,
   ReviewQueueResponse,
   ToolVersionSummary,
@@ -145,14 +145,14 @@ function VersionRow({
 }
 
 export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
-  const [history, setHistory] = useState<ToolVersionSummary[]>([]);
-  const [historyNonce, setHistoryNonce] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ReviewDetailResponse | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [note, setNote] = useState('');
   const [deciding, setDeciding] = useState<'approved' | 'rejected' | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
 
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -164,20 +164,6 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
   useEffect(() => () => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
   }, []);
-
-  useEffect(() => {
-    let live = true;
-    fetchJson<ReviewHistoryResponse>('/api/tools/review?status=reviewed')
-      .then((data) => {
-        if (live) setHistory(data.reviewed);
-      })
-      // A trail that won't load is not worth an error banner over the queue —
-      // the decision itself is unaffected.
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, [historyNonce]);
 
   // Land on the oldest waiting submission, which is what a queue is for. Only
   // while nothing is chosen, so a refresh after a verdict doesn't yank the
@@ -224,10 +210,9 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
         'POST',
         { decision, ...(trimmed ? { note: trimmed } : {}) },
       );
-      // Both lists moved: this version left the queue and joined the trail. The
-      // selection stays put so the verdict is visible where the buttons were.
+      // The version left the queue. The selection stays put so the verdict is
+      // visible where the buttons were.
       queue.refresh();
-      setHistoryNonce((n) => n + 1);
       setDetail((prev) => (prev ? { ...prev, version: { ...prev.version, ...result.version } } : prev));
       setNote('');
       showToast(
@@ -245,13 +230,36 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
     }
   }
 
+  /**
+   * Delete the selected version from the registry outright. The server refuses
+   * it (409) while any space runs it — its sentence lands in the toast.
+   */
+  async function removeVersion() {
+    if (!detail) return;
+    const target = detail.version;
+    setConfirmingDelete(false);
+    setDeleting(true);
+    try {
+      await fetchJson<{ ok: true }>(`/api/tools/review/${target.id}`, { method: 'DELETE' });
+      queue.refresh();
+      setSelectedId(null);
+      setDetail(null);
+      showToast(`Deleted ${target.title} v${target.version} from the registry.`, 'success');
+    } catch (err) {
+      showToast((err as Error).message, 'error');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const version = detail?.version;
   const pendingDecision = version?.status === 'pending';
 
   return (
     <div className="w-full">
       <div className="flex flex-col gap-6 lg:flex-row">
-        {/* The two lists: what is waiting, and what has been decided. */}
+        {/* What is waiting. Decided versions leave the screen — a past verdict
+            is read on the Tool's own version trail, not here. */}
         <div className="w-full shrink-0 space-y-6 lg:w-72">
           <section>
             <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
@@ -280,24 +288,6 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
             )}
           </section>
 
-          {history.length > 0 && (
-            <section>
-              <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
-                History
-              </h2>
-              <div className="space-y-1">
-                {history.map((item) => (
-                  <VersionRow
-                    key={item.id}
-                    version={item}
-                    selected={item.id === selectedId}
-                    subtitle={`${item.status} · ${item.reviewedAt ? timeAgo(item.reviewedAt, { style: 'short' }) : ''}`}
-                    onSelect={() => setSelectedId(item.id)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
         </div>
 
         {/* The submission itself. */}
@@ -306,11 +296,7 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
             <LoadingText text="Loading submission…" />
           ) : detailError ? (
             <Alert variant="error">{detailError}</Alert>
-          ) : !version ? (
-            <p className="text-sm text-text-muted">
-              Select a submission to read its perimeter and its code.
-            </p>
-          ) : (
+          ) : !version ? null : (
             <div className="space-y-6">
               <header>
                 <div className="flex flex-wrap items-center gap-2">
@@ -336,6 +322,19 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                       custom icon
                     </Chip>
                   )}
+                  {/* The reviewer's bin: removes this version row from the
+                      registry for good. Refused server-side while any space
+                      runs it, so a stray click can never strand an install. */}
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(true)}
+                    disabled={deleting}
+                    aria-label={`Delete ${version.title} v${version.version} from the registry`}
+                    title="Delete this version from the registry"
+                    className="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
+                  >
+                    <Trash2Icon className="h-4 w-4" />
+                  </button>
                 </div>
                 {version.description && (
                   <p className="mt-1 text-sm text-text-secondary">{version.description}</p>
@@ -455,6 +454,22 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete ${version?.title ?? ''} v${version?.version ?? ''}?`}
+        body={
+          <>
+            This removes the version from the registry for good — it leaves the marketplace and can never
+            be installed again. It is refused while any space still runs it. The author&rsquo;s working copy
+            in their space is untouched.
+          </>
+        }
+        confirmLabel="Delete version"
+        destructive
+        onConfirm={removeVersion}
+        onClose={() => setConfirmingDelete(false)}
+      />
 
       {toast && (
         <div

@@ -26,7 +26,7 @@ import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
 import { entityKindOf } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { TRASH_PATH, useContextTreeState } from '@/features/notes/hooks/useContextTreeState'
-import { canMoveInto, moveDenial, parentFolderOf } from '../lib/useContextTree'
+import { canMoveInto, deleteFolderDenial, moveDenial, parentFolderOf } from '../lib/useContextTree'
 
 // Expansion state (openPaths + reveal overlay + persistence) lives in
 // useContextTreeState, shared with the full-screen Context explorer so both
@@ -137,8 +137,16 @@ function Branch({ open, children }: { open: boolean; children: React.ReactNode }
       {/* Clipped on the vertical axis only: rows bleed 999px to the left to
           paint their hover band to the panel edge, and `overflow: hidden` here
           would cut that off. `visible` pairs legally with `clip` where it
-          cannot with `hidden`. */}
-      <div ref={inner} className="min-h-0 overflow-x-visible overflow-y-clip">
+          cannot with `hidden`.
+
+          `min-w-0` is load-bearing, not tidying: a grid item's automatic
+          minimum size is its MIN-CONTENT width, and ROW_BLEED gives every row
+          999px of left padding — so without it the column sizes itself to that
+          and the branch overflows the panel to the RIGHT. One level of nesting
+          was enough to push each row's trailing ⋯ menu past the panel's
+          `overflow-hidden` edge, which silently took Share/Move/Delete away
+          from every note inside a folder while the top-level rows kept theirs. */}
+      <div ref={inner} className="min-h-0 min-w-0 overflow-x-visible overflow-y-clip">
         {children}
       </div>
     </div>
@@ -171,7 +179,7 @@ function noteGlyph(type: string | undefined): NodeGlyph | null {
 interface FolderBadge {
   restricted: boolean
   locked?: boolean
-  /** The viewer's own effective level at the folder ('view'â€¦'full'). */
+  /** The viewer's own effective level at the folder ('view' or 'edit'). */
   level?: string
 }
 
@@ -250,6 +258,9 @@ interface NoteSidebarProps {
   onRestoreTrash?: (id: string) => void
   onPurgeTrash?: (id: string) => void
   onEmptyTrash?: () => void
+  /** Open a trashed note's read-only preview. Omit to leave trash rows as
+   *  plain labels. */
+  onOpenTrash?: (entry: TrashEntry) => void
   /** Note to temporarily expand the tree down to (the context search's focused
    *  match, or the note a profile page has open). Unlike a click this never
    *  changes the saved expansion â€” clearing it collapses the peek back to
@@ -276,6 +287,7 @@ export function NoteSidebar({
   onRestoreTrash,
   onPurgeTrash,
   onEmptyTrash,
+  onOpenTrash,
   bare = false,
   root,
   storageKey = null,
@@ -477,6 +489,7 @@ export function NoteSidebar({
               onRestore={onRestoreTrash}
               onPurge={onPurgeTrash}
               onEmpty={onEmptyTrash}
+              onOpen={onOpenTrash}
             />
           )}
         </div>
@@ -513,6 +526,7 @@ function TrashFolder({
   onRestore,
   onPurge,
   onEmpty,
+  onOpen,
 }: {
   entries: TrashEntry[]
   open: boolean
@@ -520,6 +534,7 @@ function TrashFolder({
   onRestore?: (id: string) => void
   onPurge?: (id: string) => void
   onEmpty?: () => void
+  onOpen?: (entry: TrashEntry) => void
 }) {
   return (
     <div className="mt-1">
@@ -571,6 +586,7 @@ function TrashFolder({
                 guide={i === entries.length - 1 ? 'last' : 'mid'}
                 onRestore={onRestore}
                 onPurge={onPurge}
+                onOpen={onOpen}
               />
             ))
           )}
@@ -590,30 +606,54 @@ function TrashRow({
   guide,
   onRestore,
   onPurge,
+  onOpen,
 }: {
   entry: TrashEntry
   guide: Guide
   onRestore?: (id: string) => void
   onPurge?: (id: string) => void
+  onOpen?: (entry: TrashEntry) => void
 }) {
   const left = daysLeft(entry.deletedAt)
+  // The row opens a READ-ONLY preview rather than the note itself: the note is
+  // soft-deleted, so there is no live path to route to, but its content is all
+  // still there, and "what was in it?" is the question you have to answer
+  // before you can choose between Restore and Delete forever.
+  const label = (
+    <>
+      <span className="shrink-0 text-text-muted">
+        <FileIcon />
+      </span>
+      <span className="truncate text-text-secondary">{entry.title || entry.name}</span>
+      <span className="shrink-0 text-[11px] text-text-muted">
+        {left === 0 ? 'today' : `${left}d`}
+      </span>
+    </>
+  )
   return (
     <div className={`group flex items-center pr-1.5 transition hover:bg-surface-2 ${ROW_BLEED}`}>
-      {/* A trashed note has nothing to open â€” the row is a label, and the â‹¯ menu
-          carries the only two things you can do with it. */}
       <GuideLine guide={guide} />
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-[15px]" title={entry.path}>
-        <span className="shrink-0 text-text-muted">
-          <FileIcon />
-        </span>
-        <span className="truncate text-text-secondary">{entry.name}</span>
-        <span className="shrink-0 text-[11px] text-text-muted">
-          {left === 0 ? 'today' : `${left}d`}
-        </span>
-      </div>
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={() => onOpen(entry)}
+          title={entry.path}
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-left text-[15px]"
+        >
+          {label}
+        </button>
+      ) : (
+        <div
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-[15px]"
+          title={entry.path}
+        >
+          {label}
+        </div>
+      )}
       <RowMenu
         selected={false}
         items={[
+          ...(onOpen ? [{ label: 'Preview', icon: <FileIcon />, onClick: () => onOpen(entry) }] : []),
           ...(onRestore ? [{ label: 'Restore', icon: <RestoreIcon />, onClick: () => onRestore(entry.id) }] : []),
           ...(onPurge
             ? [{ label: 'Delete forever', icon: <TrashIcon />, danger: true, onClick: () => onPurge(entry.id) }]
@@ -909,8 +949,11 @@ function FolderRow(props: {
             ...(draggable
               ? [{ label: 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
               : []),
-            // The root row is the context itself â€” not deletable from the tree.
-            ...(props.onDeleteFolder && props.node.path !== ''
+            // No Delete on the root (that row is the context itself), nor on a
+            // built-in folder: agents/, connectors/, tools/, people/ and the
+            // rest are structure the runtime resolves against, so the row
+            // offers no way to remove one (deleteFolderDenial).
+            ...(props.onDeleteFolder && !deleteFolderDenial(props.node.path)
               ? [
                   {
                     label: 'Delete',

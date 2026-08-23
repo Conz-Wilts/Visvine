@@ -73,7 +73,8 @@ export async function PUT(req: NextRequest) {
     const request = await resolveAccessRequest(p, requestId, approve, level)
     return NextResponse.json({ request })
   } catch (err) {
-    if (err instanceof Error && err.message.startsWith('Only someone with full access')) {
+    // resolveAccessRequest throws this when the caller isn't a space admin.
+    if (err instanceof Error && err.message.startsWith('Only a space admin')) {
       return fail(err.message, 403)
     }
     return failFromError(err)

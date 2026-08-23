@@ -150,22 +150,17 @@ test('switching a tool off in featureConfig.enabled drops its row', () => {
   assert.equal(nav(config, false, [install('deals')]).rail.includes('tool:deals'), false)
 })
 
-test('switching the `tools` vocabulary off drops every installed Tool row wholesale', () => {
-  // Matches the bridge's forbiddenForTools (lib/tools/target.ts): a disabled
-  // space never sees the shape of a Tool it may not run, install-scoped
-  // `enabled` included — so an install's own `enabled`/`order` placement must
-  // not keep its row alive once `tools` itself is off.
+test('a stored `tools: false` no longer drops installed Tool rows — the key is core', () => {
+  // Written before `tools` became core, such a config must be ignored: what a
+  // space runs is decided by review + install, and an install that exists IS
+  // that decision. Its row therefore stays for everyone.
   const config: SpaceFeatureConfig = {
     enabled: { tools: false },
     order: ['tool:deals', 'directory'],
   }
   const tools = [install('deals')]
-  const { rail, more } = nav(config, false, tools)
-  assert.equal([...rail, ...more].includes('tool:deals'), false)
-  assert.deepEqual(rail, BUILT_IN_RAIL)
-  // An admin sees the same thing — `tools` off is off for everyone, unlike a
-  // per-row admin lock.
-  assert.equal(nav(config, true, tools).rail.includes('tool:deals'), false)
+  assert.equal(nav(config, false, tools).rail.includes('tool:deals'), true)
+  assert.equal(nav(config, true, tools).rail.includes('tool:deals'), true)
 })
 
 test('nav-hidden keys never become rows, the tool vocabulary included', () => {

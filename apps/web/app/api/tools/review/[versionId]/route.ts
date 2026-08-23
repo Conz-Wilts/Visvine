@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { parseBody } from '@/lib/api/route'
 import { isSuperAdmin, requireSession, type SessionPayload } from '@/lib/session'
 import {
+  deleteVersion,
   getVersion,
   perimeterDiffForVersion,
   previousApprovedVersion,
@@ -111,4 +112,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ver
 
   const answer: ReviewDecisionResponse = { version: result.version, upgraded: result.upgraded }
   return NextResponse.json(answer)
+}
+
+/**
+ * Remove a version from the registry for good — the reviewer's bin. Refused
+ * while any space runs it (409, naming the count): uninstalling those is each
+ * space's own decision, not the reviewer's.
+ */
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ versionId: string }> }) {
+  const { versionId } = await params
+  const session = await requireReviewer()
+  if (session instanceof Response) return session
+
+  const result = await deleteVersion(versionId, { userId: session.userId, email: session.email })
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
+  return NextResponse.json({ ok: true })
 }

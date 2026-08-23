@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { vaultFor, type VaultEntry } from '@/lib/notes/vaultCache'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
-import { LEVEL_FULL, LEVEL_VIEW } from '@/lib/notes/shared/authz'
+import { LEVEL_EDIT, LEVEL_VIEW } from '@/lib/notes/shared/authz'
 import { buildNoteIndex } from '@/lib/notes/shared/context'
 import type { RawNote } from '@/lib/notes/shared/types'
 
@@ -120,7 +120,7 @@ test('an unfiltered principal never populates the view cache', () => {
     spaceAdmin: true,
     system: true,
     access: {
-      grants: [{ subjectType: 'space', subjectId: '', resourcePath: '', level: LEVEL_FULL }],
+      grants: [{ subjectType: 'space', subjectId: '', resourcePath: '', level: LEVEL_EDIT }],
       restricted: [],
       locked: [],
     },

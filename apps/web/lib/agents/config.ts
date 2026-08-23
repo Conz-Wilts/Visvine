@@ -35,7 +35,7 @@
  *     webhook: hubspot                #   connector whose inbound hook feeds this agent
  *     weekday: monday                 #   only with schedule: weekly (the bare string, moved here)
  *   debounce: 2m                      # coalesce window: Ns | Nm, default 60s, max 30m
- *   timezone: Pacific/Auckland        # optional → Space.timezone → UTC
+ *   timezone: Pacific/Auckland        # required with a clock; UTC only for legacy notes
  *   ---
  *   An active agent needs at least one of `schedule`, `every` or `on`.
  *

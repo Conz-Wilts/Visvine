@@ -6,10 +6,13 @@
 // folder or starts inside it — restricted subtrees stay fully hidden).
 
 import { NextRequest, NextResponse } from 'next/server'
+import prisma from '@/lib/prisma'
 import { requireContext } from '@/lib/notes/api'
 import { principalOf } from '@/lib/notes/resolve'
 import { visibleVault } from '@/lib/notes/contextService'
 import { listFolders } from '@/lib/notes/store'
+import { structuralFolders } from '@/lib/notes/entities'
+import type { SpaceFeatureConfig } from '@/lib/types'
 import { buildTree, sortTree } from '@/lib/notes/shared/context'
 import { principalSeesFolder } from '@/lib/notes/shared/permissions'
 import type { TreeNode } from '@/lib/notes/shared/types'
@@ -38,8 +41,22 @@ export async function GET(req: NextRequest) {
   const context = await requireContext(req)
   if (context instanceof Response) return context
   const p = await principalOf(context)
-  const [{ metas }, folders] = await Promise.all([visibleVault(p, context), listFolders(context)])
+  const [{ metas }, folders, space] = await Promise.all([
+    visibleVault(p, context),
+    listFolders(context),
+    prisma.space.findUnique({ where: { id: context.spaceId }, select: { featureConfig: true } }),
+  ])
   const root = buildTree(metas)
+  // The folders a space has by virtue of the tools it runs — Agents on means
+  // `agents/` is in the tree from the start, empty, rather than appearing the
+  // first time somebody writes one. They aren't rows in contextFolder (nothing
+  // created them), so they're grafted here alongside the real empty folders,
+  // and the same graft is what makes them un-missable: deleting one is refused
+  // (namespaceFolderDenial), and a space that turns the tool off simply stops
+  // being handed the folder.
+  for (const dir of structuralFolders((space?.featureConfig ?? null) as SpaceFeatureConfig | null)) {
+    ensureFolderPath(root, dir)
+  }
   for (const folder of folders) {
     // Graft only folders the caller may see: readable themselves, or holding a
     // readable grant somewhere inside (restricted subtrees stay invisible).

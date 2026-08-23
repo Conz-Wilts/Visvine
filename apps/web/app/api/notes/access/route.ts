@@ -8,11 +8,13 @@
 //        the grantable subjects (members + aliases). `path` may be '' (the root).
 //   GET ?spaceId=            → overview: restricted/locked folders, whether
 //        the caller is gated out of the context entirely, their readable roots.
-//   POST { spaceId, action, ... }:
-//        'grant'    { subjectType, subjectId?, path, level }   — manage at path
-//        'revoke'   { grantId }                                — manage at the grant's path
-//        'restrict' { folderPath, restricted }                 — manage at path
-//        'setLock'  { folderPath, locked }                     — manage at path
+//   POST { spaceId, action, ... }  — every mutation here is space-admin-only,
+//        because changing who can see what is an administrative act, not a
+//        level a grant can carry (shared/permissions.ts: principalCanManage):
+//        'grant'    { subjectType, subjectId?, path, level }   — level is 'view' | 'edit'
+//        'revoke'   { grantId }
+//        'restrict' { folderPath, restricted }
+//        'setLock'  { folderPath, locked }
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
@@ -35,7 +37,6 @@ import {
   principalLevelName,
 } from '@/lib/notes/shared/permissions'
 import {
-  LEVEL_FULL,
   SUBJECT_TYPES,
   parseLevel,
   readableRoots,
@@ -104,7 +105,7 @@ export async function GET(req: NextRequest) {
 
   const canRead = context.isPersonalSpace || principalCanRead(p, path)
   const canWrite = context.isPersonalSpace || principalCanWrite(p, path)
-  const canManage = context.isPersonalSpace ? context.isAdmin : principalCanManage(p, path)
+  const canManage = context.isPersonalSpace ? context.isAdmin : principalCanManage(p)
 
   let entries = null
   let subjects = null
@@ -140,7 +141,7 @@ export async function GET(req: NextRequest) {
     canRead,
     canWrite,
     canManage,
-    myLevel: context.isPersonalSpace ? 'full' : principalLevelName(p, path),
+    myLevel: context.isPersonalSpace ? 'edit' : principalLevelName(p, path),
     restricted: context.isPersonalSpace ? [] : visibleRestricted(p, path),
     locked: context.isPersonalSpace ? [] : p.access.locked,
     entries,
@@ -159,6 +160,12 @@ export async function POST(req: NextRequest) {
   const action = typeof body.action === 'string' ? body.action : null
   const actor = { userId: p.userId, name: p.name }
 
+  // One gate for every mutation below: who can see what is a space-admin
+  // decision, so there is nothing path-specific left to check per action.
+  if (!principalCanManage(p)) {
+    return fail('Only a space admin can change who has access here', 403)
+  }
+
   try {
     switch (action) {
       case 'grant': {
@@ -169,9 +176,6 @@ export async function POST(req: NextRequest) {
           : null
         if (path === null || !level || !subjectType) {
           return fail('path, level, and subjectType are required')
-        }
-        if (!principalCanManage(p, path)) {
-          return fail('Only someone with full access here (or a space admin) can share it', 403)
         }
         const grant = await grantAccess(
           context.spaceId,
@@ -190,40 +194,23 @@ export async function POST(req: NextRequest) {
         if (!grantId) return fail('grantId is required')
         const row = await prisma.contextGrant.findFirst({
           where: { id: grantId, spaceId: context.spaceId },
-          select: { resourcePath: true },
+          select: { id: true },
         })
         if (!row) return fail('Unknown grant', 404)
-        if (!principalCanManage(p, row.resourcePath)) {
-          return fail('Only someone with full access here (or a space admin) can revoke it', 403)
-        }
         await revokeAccess(context.spaceId, grantId, actor)
         return NextResponse.json({ ok: true })
       }
       case 'restrict': {
         const folderPath = typeof body.folderPath === 'string' ? body.folderPath : null
         if (!folderPath) return fail('folderPath is required')
-        if (!principalCanManage(p, folderPath)) {
-          return fail('Only someone with full access here (or a space admin) can restrict it', 403)
-        }
-        // A non-admin restricting a folder keeps full access ON the boundary —
-        // otherwise the cut would sever their own manage rights and nobody
-        // could undo it short of a space admin.
-        if (body.restricted === true && !p.spaceAdmin) {
-          await grantAccess(
-            context.spaceId,
-            { subjectType: 'user', subjectId: p.userId, resourcePath: folderPath, level: LEVEL_FULL },
-            actor,
-          )
-        }
+        // No self-grant on the boundary any more: the only callers who reach
+        // here are admins, and admins bypass every cut.
         await setFolderRestricted(context.spaceId, folderPath, body.restricted === true, actor)
         return NextResponse.json({ ok: true })
       }
       case 'setLock': {
         const folderPath = typeof body.folderPath === 'string' ? body.folderPath : null
         if (!folderPath) return fail('folderPath is required')
-        if (!principalCanManage(p, folderPath)) {
-          return fail('Only someone with full access here (or a space admin) can lock it', 403)
-        }
         await setFolderLocked(context.spaceId, folderPath, body.locked === true, actor)
         return NextResponse.json({ ok: true })
       }

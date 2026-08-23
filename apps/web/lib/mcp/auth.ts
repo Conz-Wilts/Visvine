@@ -4,6 +4,7 @@
  */
 import type { AuthInfo, CallToolResult } from '@modelcontextprotocol/server'
 import { verifyAccessToken } from '@/lib/mcp/tokens'
+import { devMcpAuthInfo, isDevMcpBypassEnabled } from '@/lib/mcp/devIdentity'
 import type { McpServerKind } from '@/lib/mcp/config'
 import { TOOL_SCOPES, type McpToolName } from '@/lib/mcp/scopes'
 
@@ -30,10 +31,16 @@ export class McpError extends Error {
  * The verifier `withMcpAuth` calls on every request, bound to one server: a
  * token minted for the creator server is not a token for the context server,
  * and vice versa (its `aud` says which).
+ *
+ * No token at all is an error everywhere except local development, where it
+ * means "act as the seeded dev user" (lib/mcp/devIdentity.ts) so `pnpm mcp:dev`
+ * needs no auth setup. A token that IS presented is verified either way.
  */
 export function mcpBearerVerifier(kind: McpServerKind) {
   return async (_req: Request, bearerToken?: string): Promise<AuthInfo | undefined> => {
-    if (!bearerToken) return undefined
+    if (!bearerToken) {
+      return isDevMcpBypassEnabled() ? devMcpAuthInfo(kind) : undefined
+    }
     const v = await verifyAccessToken(bearerToken, kind)
     if (!v) return undefined
     return {

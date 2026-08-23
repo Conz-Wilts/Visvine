@@ -166,6 +166,11 @@ export const notesApi = {
   },
 
   trash: (c: string) => getJson<{ trash: TrashEntry[] }>(`/api/notes/trash?${qs(c)}`),
+  /** One trashed note's stored markdown, for the read-only preview. */
+  readTrash: (c: string, id: string) =>
+    getJson<{ path: string; title: string; content: string; deletedAt: number }>(
+      `/api/notes/trash/item?${qs(c, { id })}`,
+    ),
   restoreTrash: (c: string, id: string) =>
     sendJson<{ path: string }>('/api/notes/trash/restore', 'POST', { spaceId: c, id }),
   purgeTrash: (c: string, id: string) =>

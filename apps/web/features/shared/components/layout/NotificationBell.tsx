@@ -1,16 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchJson, fetchJsonBody } from "@/lib/fetchJson";
 import { useRouter } from "next/navigation";
 import { BellIcon } from "@/features/shared/icons";
 import { useClickOutside } from "@/features/shared/hooks/useClickOutside";
-import type { NotificationDTO } from "@/lib/notifications/types";
-import { relativeTime } from "@/lib/notifications/types";
+import { useSpace } from "@/features/shared/contexts/SpaceContext";
+import type { NotificationDTO, NotificationScope } from "@/lib/notifications/types";
+import { invitationIdOfHref, relativeTime } from "@/lib/notifications/types";
 import type { RealtimeEvent } from "@/lib/messages/types";
 
 const POLL_MS = 60_000;
 const TAKE = 30;
+
+/** What the invitee's Accept acts on — the id the notification can't carry. */
+interface PendingInvite {
+  id: string;
+  spaceId: string;
+  spaceName: string;
+}
+
+type CountsResponse = {
+  notifications: NotificationDTO[];
+  unread: number;
+  unreadGlobal: number;
+  unreadSpace: number;
+};
 
 /**
  * The Navbar's inbox: a bell with an unread badge and a dropdown of the latest
@@ -18,29 +33,49 @@ const TAKE = 30;
  * minute, and patches in new lines from the per-user SSE stream — the same
  * `/api/messages/stream` the messages page uses, so an open tab hears about a
  * broken connection or a review the moment it happens.
+ *
+ * Two tabs, because a notification is either about a space or about the person:
+ * **This space** is everything stamped with the space you are standing in,
+ * **Global** is everything that isn't — an invitation to a space you have not
+ * joined, a personal connection that broke. Without the split, the space you
+ * are actually working in gets buried under the other five.
  */
 export default function NotificationBell() {
   const [items, setItems] = useState<NotificationDTO[]>([]);
   const [unread, setUnread] = useState(0);
+  const [unreadGlobal, setUnreadGlobal] = useState(0);
+  const [unreadSpace, setUnreadSpace] = useState(0);
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [invites, setInvites] = useState<PendingInvite[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { currentSpace, refreshSpace } = useSpace();
+  const spaceId = currentSpace?.id ?? null;
+
+  // Default to the space you are in; with no space there is only the global
+  // half, so the tab that would always be empty is never the one you land on.
+  const [scope, setScope] = useState<NotificationScope>("space");
+  const activeScope: NotificationScope = spaceId ? scope : "global";
 
   useClickOutside(menuRef, () => setOpen(false));
 
   const refresh = useCallback(async () => {
     try {
-      const data = await fetchJson<{ notifications: NotificationDTO[]; unread: number }>(`/api/notifications?take=${TAKE}`, { cache: "no-store" });
+      const query = new URLSearchParams({ take: String(TAKE), scope: activeScope });
+      if (spaceId) query.set("spaceId", spaceId);
+      const data = await fetchJson<CountsResponse>(`/api/notifications?${query}`, { cache: "no-store" });
       setItems(data.notifications);
       setUnread(data.unread);
+      setUnreadGlobal(data.unreadGlobal);
+      setUnreadSpace(data.unreadSpace);
       setLoaded(true);
     } catch {
       /* offline / signed out — the next tick retries */
     }
-  }, []);
+  }, [activeScope, spaceId]);
 
-  // Mount + focus + interval.
+  // Mount + focus + interval + whichever tab is showing.
   useEffect(() => {
     void refresh();
     const onFocus = () => void refresh();
@@ -52,7 +87,24 @@ export default function NotificationBell() {
     };
   }, [refresh]);
 
-  // Realtime: patch a fresh line in without a round-trip.
+  const refreshInvites = useCallback(async () => {
+    try {
+      const d = await fetchJson<{ invitations: PendingInvite[] }>("/api/invitations", { cache: "no-store" });
+      setInvites(d.invitations ?? []);
+    } catch {
+      /* the line still reads; only the buttons are missing */
+    }
+  }, []);
+
+  // The invitations waiting on this person, so a `space_invite` line can be
+  // answered where it is read. Only worth a round-trip while the menu is open.
+  useEffect(() => {
+    if (open) void refreshInvites();
+  }, [open, refreshInvites]);
+
+  // Realtime: patch a fresh line in without a round-trip. A line for the other
+  // tab only moves that tab's count — dropping it into this list would show a
+  // space's notification under Global.
   useEffect(() => {
     if (typeof EventSource === "undefined") return;
     const source = new EventSource("/api/messages/stream");
@@ -61,31 +113,55 @@ export default function NotificationBell() {
         const payload = JSON.parse(event.data) as RealtimeEvent;
         if (payload.type !== "notification.new") return;
         const n = payload.notification;
-        setItems((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev].slice(0, TAKE)));
+        const belongsHere = activeScope === "global" ? n.spaceId === null : n.spaceId === spaceId;
+        if (belongsHere) {
+          setItems((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev].slice(0, TAKE)));
+        }
         setUnread((c) => c + 1);
+        if (n.spaceId === null) setUnreadGlobal((c) => c + 1);
+        else if (n.spaceId === spaceId) setUnreadSpace((c) => c + 1);
+        if (n.kind === "space_invite") void refreshInvites();
       } catch {
         /* ignore malformed frames */
       }
     };
     return () => source.close();
+  }, [activeScope, spaceId, refreshInvites]);
+
+  const applyCounts = useCallback((data: Pick<CountsResponse, "unread" | "unreadGlobal" | "unreadSpace">) => {
+    setUnread(data.unread);
+    setUnreadGlobal(data.unreadGlobal);
+    setUnreadSpace(data.unreadSpace);
   }, []);
 
-  const markRead = useCallback(async (target: { ids?: string[]; all?: boolean }) => {
-    // Optimistic: the list reflects the click before the server confirms.
-    const now = new Date().toISOString();
-    setItems((prev) =>
-      prev.map((n) => (target.all || target.ids?.includes(n.id) ? { ...n, readAt: n.readAt ?? now } : n)),
-    );
-    setUnread((c) => (target.all ? 0 : Math.max(0, c - (target.ids?.length ?? 0))));
-    try {
-      const data = await fetchJsonBody<{ unread: number }>("/api/notifications/read", "POST", target);
-      setUnread(data.unread);
-    } catch {
-      /* the next refresh reconciles */
-    }
-  }, []);
+  const markRead = useCallback(
+    async (target: { ids?: string[]; all?: boolean }) => {
+      // Optimistic: the list reflects the click before the server confirms.
+      const now = new Date().toISOString();
+      setItems((prev) =>
+        prev.map((n) => (target.all || target.ids?.includes(n.id) ? { ...n, readAt: n.readAt ?? now } : n)),
+      );
+      try {
+        const data = await fetchJsonBody<CountsResponse>("/api/notifications/read", "POST", {
+          ...target,
+          // "Mark all read" clears the tab you are looking at, not the other one.
+          ...(target.all ? { scope: activeScope, spaceId } : {}),
+        });
+        applyCounts(data);
+      } catch {
+        /* the next refresh reconciles */
+      }
+    },
+    [activeScope, spaceId, applyCounts],
+  );
 
   const onItemClick = (n: NotificationDTO) => {
+    // An invitation's href is an id, not a page, and reading it is not
+    // answering it: clicking the line leaves the Accept / Decline standing.
+    if (n.kind === "space_invite") {
+      if (!n.readAt) void markRead({ ids: [n.id] });
+      return;
+    }
     setOpen(false);
     if (!n.readAt) void markRead({ ids: [n.id] });
     if (n.href) {
@@ -120,7 +196,31 @@ export default function NotificationBell() {
     }
   };
 
+  // An invitation is answered here rather than on a page of its own: it is a
+  // yes/no, and the place it was read is the place to say so.
+  const [inviteBusy, setInviteBusy] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const inviteById = useMemo(() => new Map(invites.map((i) => [i.id, i])), [invites]);
+
+  const answerInvite = async (n: NotificationDTO, invite: PendingInvite, action: "accept" | "decline") => {
+    if (inviteBusy) return;
+    setInviteBusy(invite.id);
+    setInviteError(null);
+    try {
+      await fetchJsonBody(`/api/invitations/${encodeURIComponent(invite.id)}`, "POST", { action });
+      setInvites((prev) => prev.filter((i) => i.id !== invite.id));
+      if (!n.readAt) await markRead({ ids: [n.id] });
+      // Accepting adds a space to the switcher; declining changes nothing there.
+      if (action === "accept") await refreshSpace();
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : "Could not answer the invitation");
+    } finally {
+      setInviteBusy(null);
+    }
+  };
+
   const badge = unread > 99 ? "99+" : String(unread);
+  const tabCount = (which: NotificationScope) => (which === "global" ? unreadGlobal : unreadSpace);
 
   return (
     <div ref={menuRef} className="relative shrink-0">
@@ -153,7 +253,7 @@ export default function NotificationBell() {
         >
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
             <p className="text-sm font-medium text-text-primary">Notifications</p>
-            {unread > 0 && (
+            {tabCount(activeScope) > 0 && (
               <button
                 type="button"
                 onClick={() => void markRead({ all: true })}
@@ -163,13 +263,47 @@ export default function NotificationBell() {
               </button>
             )}
           </div>
+
+          {/* The split. Hidden with no space to stand in: one tab is not a choice. */}
+          {spaceId && (
+            <div role="tablist" className="flex gap-1 px-3 py-2 border-b border-border-subtle">
+              {([
+                ["space", currentSpace?.name ?? "This space"],
+                ["global", "Global"],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeScope === key}
+                  onClick={() => setScope(key)}
+                  className={`flex-1 min-w-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                    activeScope === key
+                      ? "bg-surface-3 text-text-primary"
+                      : "text-text-muted hover:text-text-primary"
+                  }`}
+                >
+                  <span className="truncate">{label}</span>
+                  {tabCount(key) > 0 && (
+                    <span className="ml-1.5 text-[10px] font-semibold text-brand-dark-green">
+                      {tabCount(key) > 99 ? "99+" : tabCount(key)}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
           {items.length === 0 ? (
             <p className="px-4 py-6 text-sm text-text-muted text-center">
               {loaded ? "You're all caught up." : "Loading…"}
             </p>
           ) : (
             <ul className="py-1">
-              {items.map((n) => (
+              {items.map((n) => {
+                const inviteId = n.kind === "space_invite" ? invitationIdOfHref(n.href) : null;
+                const invite = inviteId ? inviteById.get(inviteId) : undefined;
+                return (
                 <li key={n.id}>
                   <button
                     type="button"
@@ -193,6 +327,34 @@ export default function NotificationBell() {
                       <span className="block text-[11px] text-text-muted mt-1">{relativeTime(n.createdAt)}</span>
                     </span>
                   </button>
+
+                  {/* An invitation is only answerable while it is still open —
+                      the row disappears from /api/invitations the moment it is
+                      answered anywhere, so the buttons go with it. */}
+                  {invite && (
+                    <div className="px-4 pb-2.5 -mt-1">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void answerInvite(n, invite, "accept")}
+                          disabled={inviteBusy === invite.id}
+                          className="rounded-lg bg-brand-green px-2.5 py-1 text-xs font-medium text-black disabled:opacity-50"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void answerInvite(n, invite, "decline")}
+                          disabled={inviteBusy === invite.id}
+                          className="rounded-lg bg-surface-2 px-2.5 py-1 text-xs font-medium text-text-secondary hover:bg-surface-3 disabled:opacity-50"
+                        >
+                          Decline
+                        </button>
+                      </div>
+                      {inviteError && <span className="text-[11px] text-red-600">{inviteError}</span>}
+                    </div>
+                  )}
+
                   {n.kind === "agent_question" && !n.readAt && (
                     <div className="px-4 pb-2.5 -mt-1">
                       {replyFor === n.id ? (
@@ -239,7 +401,8 @@ export default function NotificationBell() {
                     </div>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>

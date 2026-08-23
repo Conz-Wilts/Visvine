@@ -357,6 +357,55 @@ function locationAt(source: string, filename: string, index: number): Message['l
   return { file: filename, namespace: '', line, column, length: 0, lineText, suggestion: '' }
 }
 
+// ── design lint ───────────────────────────────────────────────────────────────
+
+/**
+ * Warnings, never errors: each of these compiles and runs, it just makes the
+ * Tool visibly not belong. The frame is transparent so the viewer's chosen
+ * backdrop (often a gradient) shows through — a Tool that repaints the page,
+ * or hardcodes white where the kit has a token, looks right on the plain
+ * theme and wrong on every other one. Matched in the source text because that
+ * is what the author wrote and can point at; each pattern is narrow enough
+ * that a hit is worth a line even when it is a false alarm, since a warning
+ * blocks nothing.
+ */
+const DESIGN_LINTS: ReadonlyArray<{ pattern: RegExp; message: string }> = [
+  {
+    // A stylesheet rule painting the page itself: `body { background: … }`,
+    // `html,body{…background…}`, `#root { background-color: … }`.
+    pattern: /(?:^|[^\w#.-])(?:html|body|#root)\s*(?:,\s*(?:html|body|#root)\s*)*\{[^}]*background/,
+    message:
+      'This styles the page background. The frame is transparent so the app’s own backdrop ' +
+      '(the viewer may have chosen a gradient) shows through — leave html/body/#root unpainted ' +
+      'and put opaque content in a Card or on var(--vv-surface).',
+  },
+  {
+    // A hardcoded white background, CSS or JSX style prop:
+    // `background: #fff`, `backgroundColor: '#ffffff'`, `background:"white"`.
+    pattern: /background(?:-color|Color)?\s*:\s*['"]?\s*(?:#fff\b|#ffffff\b|white\b)/i,
+    message:
+      'Hardcoded white background. Use var(--vv-surface) (or the Card component) instead — ' +
+      'it is white today but stays correct over the viewer’s backdrop and theme choice.',
+  },
+  {
+    // Viewport units and fixed positioning measure the iframe, not the window.
+    pattern: /100(?:vh|dvh|svh)\b|position\s*:\s*['"]?fixed\b/,
+    message:
+      '100vh / position:fixed measure the Tool’s iframe, not the window. The host sizes the ' +
+      'frame to your content — let it grow, or cap a region with maxHeight.',
+  },
+]
+
+/** Design warnings for ui.tsx, each pointed at the first line that matched. */
+function designWarnings(source: string, filename: string): CompileDiagnostic[] {
+  const warnings: CompileDiagnostic[] = []
+  for (const { pattern, message } of DESIGN_LINTS) {
+    const match = pattern.exec(source)
+    if (match) warnings.push(diagnostic(message, locationAt(source, filename, match.index)))
+  }
+  return warnings
+}
+
 /**
  * Whether the bundle exports `default`, read off the metafile rather than
  * matched in the text: `export default function App() {}` and
@@ -411,7 +460,7 @@ export async function compileToolUi(
     return { ok: false, ...fromThrow(e) }
   }
 
-  const warnings = built.warnings.map(fromMessage)
+  const warnings = [...built.warnings.map(fromMessage), ...designWarnings(source, filename)]
   const bundle = built.outputFiles[0]?.text ?? ''
   const sizeBytes = bytes(bundle)
   const errors: CompileDiagnostic[] = []

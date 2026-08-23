@@ -119,7 +119,7 @@ a Tool that could write them could grant itself unreviewed reach — see
 
 **The one exception: creating an agent brief the Tool named.** A Tool may
 `context.write` a note at `agents/<name>.md` when its own `perimeter.agents`
-names that agent — a bare `*` does not count, a prefix like `wayfinder-*` does.
+names that agent — a bare `*` does not count, a prefix like `digest-*` does.
 Everything else in the three namespaces stays sealed, including `agents/live/**`
 (the activation), `context.append` anywhere under `agents/`, and any path a Tool
 did not declare an agent for.
@@ -150,7 +150,25 @@ sidebar label go to `POST /api/communities/[spaceId]/tools/authoring`, which
 calls the same `createTool` scaffold `create_tool` uses (a `railLabel` becomes
 `surfaces.rail` with the default icon), and the success screen shows the
 preview link plus the creator MCP address from `mcpResourceUrl('creator')` —
-"finish it with your coding agent (Settings → MCP)". Visvine runs two MCP
+"finish it with your coding agent (Settings → MCP)".
+
+The marketplace's **Mine** tab can also delete a working copy:
+`DELETE /api/communities/[spaceId]/tools/authoring/[name]` →
+`lib/tools/service.ts#deleteTool` trashes the Tool's notes, removes its folder,
+`tool:<name>` node and build, and (admin) uninstalls it from the space. Held to
+the note store's removal bar — admin, the author, or a full-access member.
+Published `AppToolVersion` rows survive on purpose: they are immutable
+snapshots other spaces may be running.
+
+The other deletion door lands in the same place: trashing
+`tools/<name>/index.md` from ANY note surface (trash menu, folder delete, MCP)
+triggers `lib/tools/hooks.ts#teardownTool`, which removes the node, the rest of
+the folder, the build, and this space's own install
+(`lib/tools/installs.ts#removeInstallForTool` — no admin gate; the note
+deletion was already held to `canRemove`). A Tool never lingers in the console
+after its config note is gone.
+
+Visvine runs two MCP
 servers (`lib/mcp/config.ts#MCP_SERVER_KINDS`), each its own OAuth protected
 resource with its own token audience:
 
@@ -541,18 +559,16 @@ page at `/t/<slug>`. The rail key rides the space's existing `featureConfig`
 machinery (`order`/`more`/`adminOnly`) through `mergeFeatureConfig`, so admins
 reorder or hide an installed Tool exactly like a built-in feature — installing
 never silently reorders the front door: an empty `order` is materialised as the
-registry order *first*, with the new Tool appended after it. `tools` itself
-(the feature key that gates the Tool node type and the `/tools` marketplace) is
-nav-hidden — it has no rail row of its own, reached only from the marketplace
-icon in the navbar.
-
-Turning `tools` off for a space is a **real** switch, not a hidden nav row:
-every door re-asks it server-side. `resolveBridgeTarget` (`lib/tools/target.ts`)
-checks it before any perimeter or config work, which covers both the bridge and
-the frame-token route for installs *and* previews; the MCP authoring and install
-handlers check it (`lib/mcp/appTools.ts`); and the rail rows and `/t/<slug>`
-drop out with it, so a space that switches Tools off is never left with a row
-that renders a failing frame.
+registry order *first*, with the new Tool appended after it. `tools` itself is
+**core and nav-hidden** (`lib/featureAccess.ts#CORE_FEATURE_KEYS`): it has no
+rail row of its own (reached only from the marketplace icon in the navbar) and
+no on/off switch. What a space runs is decided by the pipeline itself — a
+Visvine reviewer approves a version, a space admin installs it. A member's
+Install button becomes **"Ask an admin to install"**: `POST
+/api/communities/[spaceId]/tools/requests` notifies every space admin through
+the bell (`tool_install_request`, deduped per member+tool while unread) and
+links them to the marketplace where Install lives. There is no request table —
+the notification is the request.
 
 ### Type pages
 
@@ -697,15 +713,14 @@ pnpm db:migrate                              # applies the app_tool_* migration 
 ```
 
 Live, scripted checks, in the style of the connector and agent verifications —
-they resolve a real principal and drive the services directly. **All three need
+they resolve a real principal and drive the services directly. **Both need
 a dev server on `:3000`** (`pnpm dev`), because they also exercise the runtime
-routes over real HTTP; the last two additionally drive Chromium through
+routes over real HTTP; the second additionally drives Chromium through
 Playwright. Each is a `pnpm --filter @visvine/web` script:
 
 ```sh
 pnpm --filter @visvine/web verify:tools           # author over MCP → publish → review → install → frame + bridge write
 pnpm --filter @visvine/web verify:tools:escape    # adversarial: undeclared reads, cookie theft, content-area escape, cross-space
-pnpm --filter @visvine/web verify:wayfinder-tool  # the acceptance Tool: board renders, writes, agent dispatch
 ```
 
 `verify:tools:escape`'s first step asks the running app for its
@@ -715,9 +730,10 @@ is a Tool that never appears rather than an error. `TOOLS_ORIGIN` unset in the
 shell — the common case — is a SKIP, not a failure.
 
 `verify:tools` and `verify:tools:escape` remove every row and note they create,
-leaving the shared dev DB as they found it. `verify:wayfinder-tool` instead
-leaves its seed in place and is idempotent — re-running it is the supported way
-to get back to a known board.
+leaving the shared dev DB as they found it. The seeded **Portfolio Board**
+(`pnpm --filter @visvine/web db:tool:seed`) is the opposite: it stays in place
+and is idempotent — re-running it is the supported way to get a known-good Tool
+back into a local space.
 
 > **Local gotcha.** If this box's `apps/web/.env` still carries a
 > `CLOUD_SQL_CONNECTION_NAME` from a `dev:cloud` session,

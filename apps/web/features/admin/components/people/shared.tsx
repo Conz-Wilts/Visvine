@@ -10,6 +10,7 @@ import { useMemo, useRef, useState } from 'react';
 import { ChevronDownIcon, FileTextIcon, FolderIcon, UsersIcon } from '@/features/shared/icons';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
 import type { AliasInfo } from '@/lib/notes/aliases';
+import type { InvitationDTO } from '@/lib/spaces/invitations';
 import type { AccessOverviewResponse } from '@/features/notes/lib/notesApi';
 import {
   ACCESS_LEVELS,
@@ -52,6 +53,8 @@ export interface PathOption {
 /** Everything the sections share, loaded once by PeopleDataProvider. */
 export interface PeopleData {
   members: SpaceMember[];
+  /** Sent, unanswered invitations — people who are not members yet. */
+  invitations: InvitationDTO[];
   aliases: AliasInfo[];
   overview: AccessOverviewResponse | null;
   paths: PathOption[];

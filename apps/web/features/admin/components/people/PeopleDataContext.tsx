@@ -74,8 +74,11 @@ export default function PeopleDataProvider({
   const spaceName = currentSpace?.name ?? null;
 
   const reload = useCallback(async () => {
-    const [membersRes, aliasesRes, overview, treeRes, settingsRes, requestsRes] = await Promise.all([
+    const [membersRes, invitationsRes, aliasesRes, overview, treeRes, settingsRes, requestsRes] = await Promise.all([
       fetchJson<{ members: SpaceMember[] }>(`/api/communities/${spaceId}/members`),
+      fetchJson<{ invitations: PeopleData['invitations'] }>(`/api/communities/${spaceId}/invitations`).catch(
+        () => null,
+      ),
       notesApi.listAliases(spaceId),
       notesApi.getAccessOverview(spaceId).catch(() => null),
       notesApi.tree(spaceId).catch(() => null),
@@ -84,6 +87,7 @@ export default function PeopleDataProvider({
     ]);
     setData({
       members: membersRes.members,
+      invitations: invitationsRes?.invitations ?? [],
       aliases: aliasesRes.aliases,
       overview,
       paths: flattenTree(treeRes?.tree ?? null),

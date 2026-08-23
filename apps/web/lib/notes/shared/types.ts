@@ -61,6 +61,7 @@ export const TRASH_RETENTION_DAYS = 7
 export interface TrashEntry {
   id: string // the note row id
   name: string // the note's original base filename
+  title: string // the note's display name (frontmatter title, else the filename)
   path: string // the note's original context-relative path
   deletedAt: number // epoch ms
 }

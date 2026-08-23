@@ -10,7 +10,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { contextDisplayName } from '@/lib/notes/shared/contextSettings'
-import { entityKindOfPath, entityOwnerPathOf, isEntityNamespaceDir, noteHref } from '@/lib/notes/entities'
+import {
+  entityKindOfPath,
+  entityOwnerPathOf,
+  isEntityNamespaceDir,
+  namespaceFolderDenial,
+  noteHref,
+} from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { notesApi, type AccessOverviewResponse } from './notesApi'
@@ -77,6 +83,17 @@ export function moveDenial(from: string, kind: 'note' | 'folder', destFolder: st
     return 'A folder can’t be moved inside itself.'
   }
   return null
+}
+
+/**
+ * Why this folder can't be deleted, or null when it can. The server is the
+ * authority (store.deleteFolder throws on the same rule); this exists so the
+ * tree doesn't offer a Delete that is going to come back as an error — the
+ * built-in folders simply don't show one, exactly as the root doesn't.
+ */
+export function deleteFolderDenial(path: string): string | null {
+  if (!path) return 'The context root can’t be deleted.'
+  return namespaceFolderDenial(path)
 }
 
 /** Whether a drop on `destFolder` would do anything (legal AND a real change). */
@@ -295,6 +312,13 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     // segment behind it.
     (folderPath: string, label?: string) => {
       if (!spaceId) return
+      // The menu already withholds Delete on a built-in folder; this is here so
+      // no other caller can route around it into a request the server refuses.
+      const denial = deleteFolderDenial(folderPath)
+      if (denial) {
+        window.alert(denial)
+        return
+      }
       const name = label?.trim() || folderPath.split('/').pop() || folderPath
       const count = notes.filter((n) => n.path.startsWith(`${folderPath}/`)).length
       const contents =

@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ALL_FEATURE_KEYS,
+  CORE_FEATURE_KEYS,
   NAV_HIDDEN_FEATURE_KEYS,
   ADMIN_ONLY_FEATURE_KEYS,
   TOOL_RAIL_KEY_PREFIX,
@@ -29,24 +30,27 @@ describe('the tools feature key', () => {
     // Reached from the navbar marketplace icon and per-install rail rows — there
     // is never a "Tools" rail row of its own.
     assert.ok(NAV_HIDDEN_FEATURE_KEYS.includes('tools'));
-    // Members author tools; only installing and publishing are admin acts.
+    // Members author tools and browse the marketplace; only installing and
+    // publishing are admin acts (a member's Install becomes a request).
     assert.equal(ADMIN_ONLY_FEATURE_KEYS.includes('tools'), false);
     assert.equal(canAccessFeature(null, 'tools', false), true);
   });
 
-  it('is toggleable — unlike the other nav-hidden keys, which are core', () => {
+  it('is core — always on; the gate is review + install, not a switch', () => {
+    assert.ok(CORE_FEATURE_KEYS.includes('tools'));
     assert.equal(isFeatureEnabled(null, 'tools'), true);
-    assert.equal(isFeatureEnabled({ enabled: { tools: false } }, 'tools'), false);
-    assert.equal(canAccessFeature({ enabled: { tools: false } }, 'tools', true), false);
+    // A stored `tools: false` (written before the key became core) is ignored,
+    // and a fresh sanitize never persists the key again.
+    assert.equal(isFeatureEnabled({ enabled: { tools: false } }, 'tools'), true);
+    assert.equal(canAccessFeature({ enabled: { tools: false } }, 'tools', false), true);
+    assert.equal('tools' in (sanitizeFeatureConfig({ enabled: { tools: false } }).enabled ?? {}), false);
   });
 
-  it('gates the Tool node type', () => {
-    assert.equal(nodeTypeFeatureKey('Tool'), 'tools');
-    // Stored `node.type` for a tool is lower-case — see lib/notes/entities.ts.
-    assert.equal(nodeTypeFeatureKey('tool'), 'tools');
-    assert.deepEqual(featureNodeTypeNames('tools'), ['Tool']);
-    assert.equal(isNodeTypeEnabled({ enabled: { tools: false } }, 'Tool'), false);
-    assert.equal(isNodeTypeEnabled({ enabled: { tools: true } }, 'Tool'), true);
+  it('never gates the Tool node type — core features have no hidden types', () => {
+    assert.equal(nodeTypeFeatureKey('Tool'), null);
+    assert.equal(nodeTypeFeatureKey('tool'), null);
+    assert.deepEqual(featureNodeTypeNames('tools'), []);
+    assert.equal(isNodeTypeEnabled({ enabled: { tools: false } }, 'Tool'), true);
     assert.equal(isNodeTypeEnabled(null, 'Tool'), true);
   });
 
@@ -163,11 +167,11 @@ describe('mergeFeatureConfig keeps tool rail keys', () => {
   };
 
   it('inherits the tool rows when the patch only sends enabled', () => {
-    const merged = mergeFeatureConfig(stored, { enabled: { tools: true } });
+    const merged = mergeFeatureConfig(stored, { enabled: { agents: true } });
     assert.deepEqual(merged.order, ['directory', 'tool:kanban', 'resources']);
     assert.deepEqual(merged.more, ['tool:kanban']);
     assert.deepEqual(merged.adminOnly, ['tool:kanban']);
-    assert.deepEqual(merged.enabled, { channels: false, tools: true });
+    assert.deepEqual(merged.enabled, { channels: false, agents: true });
   });
 
   it('inherits the tool lock when the patch only sends the layout', () => {

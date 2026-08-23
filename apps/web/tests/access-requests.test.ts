@@ -15,7 +15,7 @@ import {
   requestVisibleTo,
   sortRequests,
 } from '../lib/notes/shared/accessRequests'
-import { LEVEL_EDIT, LEVEL_FULL, LEVEL_VIEW, type AccessGrant, type ContextAccess } from '../lib/notes/shared/authz'
+import { LEVEL_EDIT, LEVEL_VIEW, type AccessGrant, type ContextAccess } from '../lib/notes/shared/authz'
 import type { AccessRequest, ContextPrincipal } from '../lib/notes/shared/contextTypes'
 
 // fixtures
@@ -88,7 +88,7 @@ test('canRequest: a path that does not exist is still requestable', () => {
 
 // seeing and resolving
 
-test('requestVisibleTo: your own request, plus anything you manage', () => {
+test('requestVisibleTo: your own request, plus — for admins — everyone else’s', () => {
   const mine = request({ userId: 'u-me', resourcePath: 'deals' })
   const theirs = request({ userId: 'u-them', resourcePath: 'deals' })
 
@@ -97,32 +97,31 @@ test('requestVisibleTo: your own request, plus anything you manage', () => {
   assert.equal(requestVisibleTo(plain, mine), true)
   assert.equal(requestVisibleTo(plain, theirs), false)
 
-  // Full access at an ANCESTOR manages the path below it.
-  const manager = principal('u-me', access([grant('', LEVEL_FULL)]))
-  assert.equal(requestVisibleTo(manager, theirs), true)
+  // Edit everywhere from the root is still not review standing.
+  const editor = principal('u-me', access([grant('', LEVEL_EDIT)]))
+  assert.equal(requestVisibleTo(editor, theirs), false)
 
-  // Space admins manage everything, including the root gate.
+  // Space admins are the reviewers, so they see the whole queue.
   const admin = principal('u-admin', access([]), { spaceAdmin: true })
+  assert.equal(requestVisibleTo(admin, theirs), true)
   assert.equal(requestVisibleTo(admin, request({ resourcePath: '' })), true)
   assert.equal(requestVisibleTo(admin, request({ resourcePath: 'teams/engineering' })), true)
 })
 
-test('canResolveRequest: manage standing only — filing your own does not qualify', () => {
+test('canResolveRequest: space admins only — no grant confers review standing', () => {
   const mine = request({ userId: 'u-me', resourcePath: 'deals' })
   assert.equal(canResolveRequest(principal('u-me', access([])), mine), false)
   assert.equal(canResolveRequest(principal('u-me', access([grant('deals', LEVEL_EDIT)])), mine), false)
-  assert.equal(canResolveRequest(principal('u-me', access([grant('deals', LEVEL_FULL)])), mine), true)
+  assert.equal(canResolveRequest(principal('u-me', access([grant('', LEVEL_EDIT)])), mine), false)
+  assert.equal(canResolveRequest(principal('u-me', access([]), { spaceAdmin: true }), mine), true)
 })
 
-test('canResolveRequest: a restricted boundary cuts manage standing too', () => {
+test('canResolveRequest: a restricted boundary is irrelevant — admins bypass cuts', () => {
   const deep = request({ resourcePath: 'teams/engineering/oncall.md' })
-  const rootFull = principal('u-me', access([grant('', LEVEL_FULL)], ['teams/engineering']))
-  assert.equal(canResolveRequest(rootFull, deep), false)
-  const onBoundary = principal(
-    'u-me',
-    access([grant('teams/engineering', LEVEL_FULL)], ['teams/engineering']),
-  )
-  assert.equal(canResolveRequest(onBoundary, deep), true)
+  const insider = principal('u-me', access([grant('teams/engineering', LEVEL_EDIT)], ['teams/engineering']))
+  assert.equal(canResolveRequest(insider, deep), false)
+  const admin = principal('u-admin', access([], ['teams/engineering']), { spaceAdmin: true })
+  assert.equal(canResolveRequest(admin, deep), true)
 })
 
 // presentation

@@ -170,9 +170,9 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     })
 
     // MCP/OAuth credentials issued to them. Nothing cascades these, and an
-    // outstanding refresh token would otherwise still be exchangeable.
+    // unconsumed authorization code would otherwise still be exchangeable.
+    // Access tokens are stateless JWTs, so the residue is one hour of validity.
     await tx.oAuthAuthCode.deleteMany({ where: { userId } })
-    await tx.oAuthRefreshToken.deleteMany({ where: { userId } })
 
     // Their PERSONAL connector connections — tokens Visvine holds against
     // somebody else's service on their behalf. These outlive the account

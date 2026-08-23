@@ -5,7 +5,7 @@ import { requireSession } from '@/lib/session';
 import { slugify } from '@/lib/eventUtils';
 import { handleApiError } from '@/lib/api/route';
 import { ADMIN_ALIAS_ID, ADMIN_ALIAS_NAME } from '@/lib/types/context';
-import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
+import { defaultFeatureConfig } from '@/lib/featureAccess';
 import { markAccessSeeded } from '@/lib/notes/access';
 import { findPublicNameConflict, publicNameTakenMessage } from '@/lib/spaces/publicName';
 import { ensureMemberNode } from '@/lib/spaces/memberNode';
@@ -68,14 +68,11 @@ export async function POST(request: NextRequest) {
           location: location || null,
           visibility,
           inviteToken: randomUUID(),
-          // Only the Directory tool to begin with — every toggleable tool starts
-          // off and the admin opts in from the console. (Core keys — directory,
-          // notes, events — are always on and never persisted here.)
-          featureConfig: {
-            enabled: Object.fromEntries(
-              ALL_FEATURE_KEYS.filter((key) => !CORE_FEATURE_KEYS.includes(key)).map((key) => [key, false])
-            ),
-          },
+          // Most toggleable tools start off, opted in from the console — except
+          // the DEFAULT_ON set (Tools: the marketplace and community-built
+          // Tools are on from day one). Core keys — directory, notes, events —
+          // are always on and never persisted here.
+          featureConfig: defaultFeatureConfig() as object,
         },
       });
       await tx.spaceMember.create({

@@ -666,6 +666,50 @@ export async function withdrawVersion(versionId: string, callerId: string): Prom
   return { ok: true, version: toSummary(updated) }
 }
 
+/**
+ * Remove a version row from the registry outright — the reviewer's bin, not
+ * the author's withdraw. Any status can go; what protects a version is not its
+ * verdict but its INSTALLS: while any space runs it the delete is refused (the
+ * `Restrict` FK on app_tool_installs enforces the same), because uninstalling
+ * is each of those spaces' own decision. An install merely OFFERED this
+ * version as an upgrade just loses the offer.
+ */
+export async function deleteVersion(
+  versionId: string,
+  caller: { userId: string; email: string },
+): Promise<VersionResult> {
+  const row = await prisma.appToolVersion.findUnique({
+    where: { id: versionId },
+    select: SUMMARY_SELECT,
+  })
+  if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
+
+  const running = await prisma.appToolInstall.count({ where: { versionId } })
+  if (running > 0) {
+    return {
+      ok: false,
+      status: 409,
+      error: `${running} ${running === 1 ? 'space runs' : 'spaces run'} this version — it can't be deleted while installed.`,
+    }
+  }
+
+  await prisma.$transaction([
+    prisma.appToolInstall.updateMany({
+      where: { pendingVersionId: versionId },
+      data: { pendingVersionId: null },
+    }),
+    prisma.appToolVersion.delete({ where: { id: versionId } }),
+  ])
+  void logAudit(row.sourceSpaceId, {
+    userId: caller.userId,
+    name: caller.email,
+    action: 'tool',
+    path: toolIndexPath(row.name),
+    detail: `deleted v${row.version} from the registry`,
+  })
+  return { ok: true, version: toSummary(row) }
+}
+
 // ── review (super-admin) ─────────────────────────────────────────────────────
 
 /** Everything awaiting review, oldest submission first — a queue, not a feed. */
@@ -673,22 +717,6 @@ export async function listReviewQueue(): Promise<ToolVersionSummary[]> {
   const rows = await prisma.appToolVersion.findMany({
     where: { status: 'pending' },
     orderBy: { submittedAt: 'asc' },
-    select: SUMMARY_SELECT,
-  })
-  return rows.map(toSummary)
-}
-
-/**
- * The decisions already made, newest first — the other half of the reviewer's
- * screen. `withdrawn` is absent on purpose: an author taking a submission back
- * is not a decision anyone made, so it belongs in that Tool's own version
- * history rather than in the reviewer's trail.
- */
-export async function listRecentDecisions(limit: number): Promise<ToolVersionSummary[]> {
-  const rows = await prisma.appToolVersion.findMany({
-    where: { status: { in: ['approved', 'rejected'] }, reviewedAt: { not: null } },
-    orderBy: { reviewedAt: 'desc' },
-    take: limit,
     select: SUMMARY_SELECT,
   })
   return rows.map(toSummary)

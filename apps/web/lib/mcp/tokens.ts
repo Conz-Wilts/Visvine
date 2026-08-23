@@ -13,8 +13,19 @@ import { SignJWT, jwtVerify } from 'jose'
 import { mcpResourceUrl, type McpServerKind } from '@/lib/mcp/config'
 import { serializeScopes } from '@/lib/mcp/scopes'
 
-const ACCESS_TTL_SECONDS = 60 * 60 // 1 hour
-export const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30 // 30 days
+/**
+ * 30 days — the whole life of a grant, since there is no refresh token behind
+ * it. One authorization, one token, a month of access.
+ *
+ * The trade this makes: a token is a stateless JWT, so nothing can call it back
+ * before it expires. There is no revocation endpoint and no stored row to flip.
+ * What still stops a stale token is the layer below — every tool re-resolves the
+ * user and their per-space authorization from the database on every call, so a
+ * deleted account or a revoked space membership takes effect immediately even
+ * though the token itself keeps verifying. Shortening this constant is the only
+ * lever if that ever proves too loose.
+ */
+const ACCESS_TTL_SECONDS = 60 * 60 * 24 * 30
 
 const TOKEN_TYPE = 'mcp_access'
 
@@ -31,12 +42,14 @@ export interface McpIdentity {
   personId?: string | null
 }
 
+/** Every token gets the same 30-day life; there is no refresh grant behind it. */
 export async function mintAccessToken(
   identity: McpIdentity,
   scopes: readonly string[],
   clientId: string,
   kind: McpServerKind,
 ): Promise<{ token: string; expiresIn: number }> {
+  const ttlSeconds = ACCESS_TTL_SECONDS
   const token = await new SignJWT({
     name: identity.name,
     email: identity.email,
@@ -49,9 +62,9 @@ export async function mintAccessToken(
     .setSubject(identity.userId)
     .setAudience(mcpResourceUrl(kind))
     .setIssuedAt()
-    .setExpirationTime(`${ACCESS_TTL_SECONDS}s`)
+    .setExpirationTime(`${ttlSeconds}s`)
     .sign(secret())
-  return { token, expiresIn: ACCESS_TTL_SECONDS }
+  return { token, expiresIn: ttlSeconds }
 }
 
 export interface VerifiedAccessToken {

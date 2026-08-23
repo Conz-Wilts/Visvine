@@ -29,7 +29,7 @@ import {
   type AgentTriggers,
 } from './config'
 import { canonicalBriefOrder, findAgentBrief } from './briefs'
-import { deactivateAgent, effectiveTimezone, syncAgentState } from './hooks'
+import { deactivateAgent, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
 import { latestRun, spendForMonth, type RunListItem } from './runs'
@@ -343,6 +343,12 @@ export async function activateAgent(
   if (!input.schedule && !(input.on && (input.on.context.length || input.on.webhook))) {
     return { ok: false, status: 400, error: 'An active agent needs a schedule, an interval or a trigger.' }
   }
+  // A clock names its zone. Nothing supplies a space-wide default any more, so
+  // a scheduled activation without one would silently mean UTC — which is the
+  // ambiguity this asks the admin to resolve, once, in writing.
+  if (input.schedule && !input.timezone?.trim()) {
+    return { ok: false, status: 400, error: 'A scheduled agent must name the timezone it runs in.' }
+  }
   if (!principalIsSuperAdmin(p)) return { ok: false, status: 403, error: 'Only space admins can activate an agent.' }
   if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
   const row = await findAgentBrief(context.spaceId, name)
@@ -370,7 +376,7 @@ export async function activateAgent(
     name: p.name,
     action: 'agent',
     path: row.path,
-    detail: `activated: ${[describeSchedule(input.schedule, input.timezone ?? (await effectiveTimezone(context.spaceId, null))), describeTriggers(input.on ?? null)].filter(Boolean).join('; ')}`,
+    detail: `activated: ${[describeSchedule(input.schedule, input.timezone ?? 'UTC'), describeTriggers(input.on ?? null)].filter(Boolean).join('; ')}`,
   })
   return { ok: true, warning }
 }

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { Skeleton, Alert } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
-import Link from 'next/link';
 import type { AgentFolder, AgentSummary } from '@/lib/agents/service';
 import AgentsRoster from '@/features/agents/components/AgentsRoster';
 import { DELAYED_AFTER_MS } from '@/lib/agents/limits';
@@ -23,7 +22,6 @@ interface RosterResponse {
   heartbeatAt: string | null;
   isAdmin: boolean;
   currentUserId: string;
-  spaceTimezone: string | null;
 }
 
 export default function AgentsPage() {
@@ -97,17 +95,9 @@ export default function AgentsPage() {
           folders={data.folders}
           isAdmin={data.isAdmin}
           currentUserId={data.currentUserId}
-          spaceTimezone={data.spaceTimezone}
           onChanged={load}
           onNotice={(message, tone) => setNotice({ message, tone })}
         />
-        <p className="text-[13px] text-text-muted">
-          Agents run on the space&apos;s model connectors — add a provider and its key under{' '}
-          <Link href="/connectors" className="text-text-secondary underline-offset-2 hover:underline">
-            Connectors
-          </Link>
-          .
-        </p>
       </div>
     );
   };

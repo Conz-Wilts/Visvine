@@ -18,16 +18,17 @@ export function canRequest(p: ContextPrincipal, path: string): boolean {
 }
 
 /**
- * Whether a principal may see a request in a queue: their own, or any request
- * for a path they manage (space admins manage everything).
+ * Whether a principal may see a request in a queue: their own, or — for space
+ * admins, who are the reviewers — any of them.
  */
 export function requestVisibleTo(p: ContextPrincipal, request: AccessRequest): boolean {
-  return request.userId === p.userId || principalCanManage(p, request.resourcePath)
+  return request.userId === p.userId || principalCanManage(p)
 }
 
-/** Whether a principal may approve/deny a request. Filing your own doesn't count. */
-export function canResolveRequest(p: ContextPrincipal, request: AccessRequest): boolean {
-  return principalCanManage(p, request.resourcePath)
+/** Whether a principal may approve/deny a request: space admins only. Granting
+ *  access is administrative, so no edit grant on the path substitutes for it. */
+export function canResolveRequest(p: ContextPrincipal, _request: AccessRequest): boolean {
+  return principalCanManage(p)
 }
 
 /**

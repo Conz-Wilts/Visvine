@@ -118,12 +118,46 @@ export async function toolNoteRenamed(context: Context, from: string, to: string
   if (toName) await rebuild(context.spaceId, toName)
 }
 
+/**
+ * Losing the index note ends the Tool EVERYWHERE in the space, not just its
+ * build. A context note can be trashed from any note surface — the trash menu,
+ * a folder delete, an MCP call — and each of those must land in the same place
+ * `deleteTool` does: no leftover source notes, no `tool:<name>` node in the
+ * graph, and no install row still drawing a console/sidebar entry for a Tool
+ * whose author threw it away. Everything here is idempotent, so the explicit
+ * `deleteTool` path (which does the same work itself before trashing the
+ * notes) rides through as a set of no-ops.
+ */
+async function teardownTool(context: Context, name: string): Promise<void> {
+  try {
+    // Dynamic imports, same discipline as `rebuild` above: the store imports
+    // this module, and entityNodes/installs both import the store back.
+    const [store, entityNodes, installs, config] = await Promise.all([
+      import('@/lib/notes/store'),
+      import('@/lib/notes/context/entityNodes'),
+      import('./installs'),
+      import('./config'),
+    ])
+    // The node first, while its metadata still points at the index note —
+    // that pointer is how removeEntityNode finds it. Then the rest of the
+    // folder (sources, icon, the folder row itself); trashing the sources
+    // re-fires the hooks below, whose rebuilds the final dropBuild sweeps.
+    await entityNodes.removeEntityNode(context.spaceId, 'tool', config.toolIndexPath(name))
+    await store.deleteFolder(context, config.toolFolderPath(name))
+    await installs.removeInstallForTool(context.spaceId, name)
+  } catch (err) {
+    // Rule 1: never throw into the delete path. The next teardown re-derives.
+    logger.error('tools.teardown.failed', { err, spaceId: context.spaceId, name })
+  }
+}
+
 /** After a note is trashed. Losing the index note ends the Tool. */
 export async function toolNoteDeleted(context: Context, path: string): Promise<void> {
   publishChange({ spaceId: context.spaceId, ownerKey: context.ownerKey, path, kind: 'delete' })
   const name = toolOf(context, path)
   if (!name) return
   if (toolFileKindOfPath(path) === 'index') {
+    await teardownTool(context, name)
     await dropBuild(context.spaceId, name)
     return
   }

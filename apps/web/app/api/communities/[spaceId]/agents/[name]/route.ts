@@ -8,8 +8,8 @@ import { serializeRun } from '@/lib/agents/service'
 /**
  * One agent: brief + activation + state + recent runs. PATCH is the admin
  * activation switch — `{ active: true, schedule?, at?, on?, every?, triggers?:
- * { context?, webhook? }, debounce?, timezone? }` (at least one of schedule /
- * every / triggers) or `{ active: false }`. Activation writes `agents/live/<name>.md` through the
+ * { context?, webhook? }, debounce?, timezone }` (at least one of schedule /
+ * every / triggers; `timezone` is required) or `{ active: false }`. Activation writes `agents/live/<name>.md` through the
  * ordinary write gate (admin-only path) and re-derives the state row.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ spaceId: string; name: string }> }) {
@@ -97,11 +97,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sp
     if (debounceMs === null) return bad('debounce must be like "30s" or "2m" (5s … 30m)')
   }
   if (!schedule.schedule && !on) return bad('an active agent needs a schedule, an every interval, or a trigger')
-  let timezone: string | null = null
-  if (body.timezone !== undefined && body.timezone !== null && body.timezone !== '') {
-    if (typeof body.timezone !== 'string' || !isValidTimeZone(body.timezone)) return bad('timezone must be an IANA zone')
-    timezone = body.timezone
-  }
+  // Required wherever there is a clock, not defaulted. "Daily at 07:00" is
+  // meaningless until somebody says whose 07:00, and the space no longer
+  // answers that — the zone is part of the schedule, in the same note. A
+  // trigger-only agent has no time to interpret, so it may leave it out.
+  const rawZone = typeof body.timezone === 'string' ? body.timezone.trim() : ''
+  if (schedule.schedule && !rawZone) return bad('timezone is required — name the IANA zone this agent runs in')
+  if (rawZone && !isValidTimeZone(rawZone)) return bad('timezone must be an IANA zone')
+  const timezone = rawZone || null
   const r = await activateAgent(principal, resolved, name, { schedule: schedule.schedule, on, debounceMs, timezone })
   if (!r.ok) return bad(r.error, r.status)
   return NextResponse.json({ ok: true, warning: r.warning })

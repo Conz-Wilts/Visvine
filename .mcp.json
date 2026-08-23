@@ -23,6 +23,10 @@
     "visvine": {
       "type": "http",
       "url": "http://localhost:3000/api/mcp"
+    },
+    "visvine-creator": {
+      "type": "http",
+      "url": "http://localhost:3000/api/mcp/creator"
     }
   }
 }

@@ -13,7 +13,8 @@ in the Navbar.
 | Table `notifications` | `apps/web/prisma/migrations/20260821120000_notifications/` (`Notification` model) |
 | Writer + reads | `apps/web/lib/notifications/service.ts` — `notify`, `listNotifications`, `unreadCount`, `markRead` |
 | Kinds + pure helpers | `apps/web/lib/notifications/types.ts` (React-free, Prisma-free) |
-| Routes | `GET /api/notifications?unread=1&take=30`, `POST /api/notifications/read {ids?|all?}`, `POST /api/notifications/[id]/reply {text}` (answers an `agent_question`) — session only |
+| Routes | `GET /api/notifications?unread=1&take=30&scope=global\|space&spaceId=`, `POST /api/notifications/read {ids?\|all?, scope?, spaceId?}`, `POST /api/notifications/[id]/reply {text}` (answers an `agent_question`) — session only |
+| Invitations | `apps/web/lib/spaces/invitations.ts`; `GET/POST /api/communities/[spaceId]/invitations`, `DELETE …/invitations/[id]`, `GET /api/invitations`, `POST /api/invitations/[id] {action}` |
 | Realtime | `{ type: 'notification.new', notification }` on the per-user `/api/messages/stream` |
 | Bell | `apps/web/features/shared/components/layout/NotificationBell.tsx` (in the Navbar) |
 | Who is an admin | `spaceAdminUserIds(spaceId)` in `apps/web/lib/auth.ts` (inverse of `isAdmin`) |
@@ -64,6 +65,8 @@ resolve a request. Super-admins are not implied.
 | `agent_question` | the agent's `ask_human` tool | as addressed | — |
 | `tool_review` | `lib/tools/registry.ts#reviewVersion` | the version's author | — |
 | `access_request` | `lib/notes/accessRequests.ts#createAccessRequest` | the note's managers | — |
+| `space_invite` | `lib/spaces/invitations.ts#inviteMember` | the invited person | `space_invite:<invitationId>` |
+| `space_invite_answered` | `lib/spaces/invitations.ts#respondToInvitation` | the admin who invited | — |
 
 Adding a kind is adding a string to `NOTIFICATION_KINDS` and a writer. Every writer is
 `void notify(...)` — a courtesy that can never change the outcome of the thing it reports.
@@ -84,3 +87,27 @@ Fetches on mount, on window focus and every 60 s; patches in `notification.new` 
 stream; click → mark read + navigate to `href`; "Mark all read". Same `useClickOutside` +
 popover styling as the account menu. Unread `agent_question` rows show a Reply → one-line
 input + Send.
+
+**Two tabs.** A line either belongs to a space (`spaceId` set) or to the person (`spaceId`
+null), and the bell shows one half at a time: **this space** — the space you are standing in,
+the default — and **Global**, everything that isn't any space of yours. With no current space
+there is no split, only the global half. The tabs are `?scope=global|space&spaceId=` on
+`GET /api/notifications`, which answers with `unread`, `unreadGlobal` and `unreadSpace` so the
+badge and both tab counts come from one round-trip. `scope=space` with no `spaceId` matches
+*nothing* (`scopeFilter` returns `null`) rather than falling back to unfiltered — an empty tab,
+never someone else's lines. "Mark all read" carries the visible scope, so clearing one tab
+leaves the other alone.
+
+## Invitations
+
+The one notification that IS the decision. An admin's "invite by email" writes a
+`space_invitations` row (`lib/spaces/invitations.ts`) and sends the invitee a `space_invite`
+line; nothing has been granted when it lands. **Accept** in the bell is what creates the
+`SpaceMember`, the staged `UserAlias` rows and the directory node —
+`POST /api/invitations/[id] {action: 'accept' | 'decline'}`, answerable once, only by the row's
+own invitee. The line is filed **global** (`spaceId: null`) on purpose: stamped with the space,
+it would sit behind a tab someone who isn't a member yet cannot open. Its invitation id rides in
+the `href` (`/invitations/<id>` — `invitationHref` / `invitationIdOfHref`), the same trick
+`agent_question` uses to name its agent; it is not a page, and clicking the line does not answer
+it. The admin hears back with `space_invite_answered` either way, and can withdraw an unanswered
+invite from Console → Invite (`DELETE /api/communities/[spaceId]/invitations/[id]`).

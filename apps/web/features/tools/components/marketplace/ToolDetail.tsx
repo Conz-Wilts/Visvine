@@ -2,8 +2,9 @@
 
 /**
  * One Tool, opened from a Browse card: its own documentation, the reach it
- * declares, the trail of versions it has been through, and — for an admin — the
- * way in to installing it.
+ * declares, the trail of versions it has been through, and the way in to
+ * running it — Install for an admin, "Ask an admin to install" for a member
+ * (which lands in every admin's notification bell).
  *
  * A modal rather than a route. The catalogue is a browsing surface and losing
  * your search results to read a description would be the wrong trade; the card
@@ -21,7 +22,7 @@ import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import ToolIcon from '@/features/tools/components/toolIcons';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
-import { fetchVersion } from '@/features/tools/lib/client';
+import { fetchVersion, requestInstall } from '@/features/tools/lib/client';
 import type { BrowseItem, InstallSummary, VersionDetail, VersionHistoryEntry } from '@/lib/tools/api';
 import type { NodeTypeConfig } from '@/lib/types/context';
 import InstallDialog, { type InstallOutcome } from './InstallDialog';
@@ -65,6 +66,8 @@ export default function ToolDetail({
   const [version, setVersion] = useState<VersionDetail | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [installing, setInstalling] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const [requested, setRequested] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -81,6 +84,22 @@ export default function ToolDetail({
 
   const installed = item.installedInSpace === true;
   const canInstall = isAdmin && spaceId !== null && !installed;
+  // Members don't hit a wall — they ask. The request lands in every space
+  // admin's notification bell; the server dedupes an open ask per member+tool.
+  const canRequest = !isAdmin && spaceId !== null && !installed;
+
+  const askAdmins = async () => {
+    if (!spaceId) return;
+    setRequesting(true);
+    try {
+      await requestInstall(spaceId, item.id);
+      setRequested(true);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'The request did not go through.');
+    } finally {
+      setRequesting(false);
+    }
+  };
 
   return (
     <>
@@ -109,10 +128,24 @@ export default function ToolDetail({
               <Button variant="brand" onClick={() => setInstalling(true)} disabled={!version}>
                 Install
               </Button>
+            ) : canRequest ? (
+              requested ? (
+                <Chip tone="solid" size="sm" color="#16a34a">
+                  Request sent to your admins
+                </Chip>
+              ) : (
+                <Button
+                  variant="brand"
+                  onClick={askAdmins}
+                  disabled={!version}
+                  loading={requesting}
+                  loadingText="Asking…"
+                >
+                  Ask an admin to install
+                </Button>
+              )
             ) : (
-              <span className="text-xs text-text-muted">
-                {spaceId === null ? 'Select a space to install' : 'Only space admins can install'}
-              </span>
+              <span className="text-xs text-text-muted">Select a space to install</span>
             )}
           </div>
         }

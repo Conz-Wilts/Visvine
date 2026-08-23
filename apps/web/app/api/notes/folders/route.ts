@@ -14,17 +14,23 @@ import { requireContext, fail, failFromError } from '@/lib/notes/api'
 import { principalOf, type ResolvedContext } from '@/lib/notes/resolve'
 import { createFolder, createIndexFolder, renameFolder, deleteFolder } from '@/lib/notes/store'
 import { indexPathOf } from '@/lib/notes/shared/indexNote'
-import { principalCanManage, principalCanWrite } from '@/lib/notes/shared/permissions'
+import { principalCanWrite } from '@/lib/notes/shared/permissions'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 
 function gated(context: ResolvedContext): boolean {
   return !context.isPersonalSpace
 }
 
-function manageDenial(p: ContextPrincipal, folderPath: string): string | null {
-  return principalCanManage(p, folderPath)
+/**
+ * Reorganizing a folder needs EDIT on it — moving and deleting is what Editor
+ * says it can do, and an editor could empty the folder note by note anyway, so
+ * gating the folder itself higher bought nothing. (It used to require the
+ * retired 'full' level.)
+ */
+function reorganizeDenial(p: ContextPrincipal, folderPath: string): string | null {
+  return principalCanWrite(p, folderPath)
     ? null
-    : `Only someone with full access to "${folderPath}" (or a space admin) can reorganize it`
+    : `You need edit access to "${folderPath}" to reorganize it`
 }
 
 export async function POST(req: NextRequest) {
@@ -64,7 +70,7 @@ export async function PATCH(req: NextRequest) {
   if (!from || !to) return fail('from and to are required')
   const p = await principalOf(context)
   if (gated(context)) {
-    const denial = manageDenial(p, from)
+    const denial = reorganizeDenial(p,from)
     if (denial) return fail(denial, 403)
     if (!principalCanWrite(p, to)) {
       return fail(`You need edit access at "${to}" to move a folder there`, 403)
@@ -84,7 +90,7 @@ export async function DELETE(req: NextRequest) {
   if (!path) return fail('path is required')
   const p = await principalOf(context)
   if (gated(context)) {
-    const denial = manageDenial(p, path)
+    const denial = reorganizeDenial(p,path)
     if (denial) return fail(denial, 403)
   }
   try {

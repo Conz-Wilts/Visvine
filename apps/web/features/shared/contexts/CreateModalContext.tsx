@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { createSafeContext } from './createSafeContext';
-import { suggestedCreateType } from '@/lib/create/suggestedType';
 
 export type CreateableType =
   | 'person'
@@ -57,9 +56,11 @@ const NOTE_FIRST: Partial<Record<CreateableType, string>> = {
   space: 'space',
   resource: 'resource',
   connector: 'connector',
-  // An agent stays in the docked panel: its form asks for the model, the
-  // connectors and the folder of agents it lands in — the draft surface has no
-  // agent type.
+  // An agent is a note like the rest: the title names it, the editor body is
+  // the brief, and the model/connectors/folder its runner needs are the draft's
+  // inline extras. `?folder=` names a folder of AGENTS here, not one in the
+  // context tree.
+  agent: 'agent',
   channel: 'channel',
   section: 'section',
   file: 'file',
@@ -115,16 +116,15 @@ export function CreateModalProvider({ children }: { children: React.ReactNode })
  */
 export function useCreateSurface() {
   const router = useRouter();
-  const pathname = usePathname();
   const { open } = useCreateModal();
 
   return useCallback(
     (type?: CreateableType, opts?: { folder?: string }) => {
-      // With no explicit type, the page you're on picks the likely one — the
-      // draft still opens blank and freely changeable, the Type row just starts
-      // on Person from the directory rather than unset.
-      const implied = type ?? suggestedCreateType(pathname)?.types.find((t) => t in NOTE_FIRST);
-      const draftType = implied ? NOTE_FIRST[implied] : null;
+      // With no explicit type the draft opens with the Type row UNSET. The route
+      // used to imply one, which meant "Create new" from anywhere under
+      // /directory started on Person — a type nobody asked for, on a surface
+      // whose whole point is that you say what the thing is.
+      const draftType = type ? NOTE_FIRST[type] : null;
       if (type && !draftType) {
         open(type, opts);
         return;
@@ -135,6 +135,6 @@ export function useCreateSurface() {
       const query = params.toString();
       router.push(`/directory/new${query ? `?${query}` : ''}`);
     },
-    [open, pathname, router],
+    [open, router],
   );
 }

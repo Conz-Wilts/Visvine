@@ -219,7 +219,7 @@ export interface TrashResult {
 
 /**
  * Soft-delete notes as part of a clean (7-day restore window). Authority per
- * note: the author, an admin, or FULL access at the path (canRemove), plus the
+ * note: the author, an admin, or edit access at the path (canRemove), plus the
  * ordinary write gate and the "Freeze for AI" lock.
  */
 export async function trashNotes(
@@ -241,7 +241,7 @@ export async function trashNotes(
       ? canRemove(resolved, createdBy, { principal: p, path })
       : true
     if (!removable) {
-      out.push({ path, status: 'denied', reason: 'Only the author, an admin, or full access at this path can remove it' })
+      out.push({ path, status: 'denied', reason: 'Only the author, an admin, or someone with edit access at this path can remove it' })
       continue
     }
     const denial = writeDenial(p, context, path) ?? lockedDenial(p, context, path, 'maintenance')

@@ -148,7 +148,13 @@ declare module '@visvine/tool-kit' {
 
   export function useVisvine(): VisvineApi
   export function useSubject(): ToolSubject | null
-  /** The theme as raw CSS custom properties; prefer styling with var(--vv-*). */
+  /**
+   * The theme as raw CSS custom properties; prefer styling with var(--vv-*),
+   * which the runtime keeps applied to :root and repaints live when the viewer
+   * switches theme. Includes \`--vv-backdrop\` (the app's page backdrop — a
+   * gradient or plain white) for the rare case a value is needed in JS; the
+   * frame is transparent, so never paint it as a page background yourself.
+   */
   export function useTheme(): Record<string, string>
 
   export interface QueryResult<T> {
@@ -624,6 +630,48 @@ calls \`onMove\` and you write the note.
 </KanbanBoard>
 \`\`\`
 
+## Design: sit on the app's canvas
+
+Visvine's page background is the viewer's choice — plain white, or a colour
+gradient painted by the app behind every page. Your Tool's frame is
+**transparent**, so that backdrop shows through it exactly as it does behind a
+native page. This only works if you leave it alone:
+
+- **Never paint a page background.** No \`background\` on \`html\`, \`body\`,
+  \`#root\` or a full-page wrapper \`<div>\`. A hardcoded \`#fff\` or \`white\`
+  wrapper is the classic mistake: it looks fine on the plain theme and turns
+  into a white slab the moment the viewer picks a gradient.
+- **Opaque panels are \`Card\`** (or \`background: var(--vv-surface)\`). That is
+  the app's one opaque surface — cards, floats, inputs — and it is how content
+  gets a solid backing without covering the backdrop edge to edge.
+- **Subtle fills are \`--vv-surface-2\` / \`--vv-surface-3\`.** They are
+  translucent ink tints, not greys: on white they read as light grey, and over
+  a gradient they tint it instead of painting a slab. Use them for hovers,
+  column backgrounds, code blocks.
+
+Style custom markup with the theme tokens, never literal colours — the viewer
+can switch the accent theme live and the runtime repaints \`:root\`, so a
+hardcoded hex is wrong a click later:
+
+| Token | Use for |
+| --- | --- |
+| \`--vv-accent\` / \`--vv-accent-strong\` / \`--vv-accent-soft\` | The space's accent: primary actions, active states, soft highlights |
+| \`--vv-surface\` | The one opaque surface (cards, inputs) |
+| \`--vv-surface-2\` / \`--vv-surface-3\` | Translucent fills (hover, wells) |
+| \`--vv-border\` / \`--vv-border-strong\` | Hairlines / input borders |
+| \`--vv-text\` / \`--vv-text-secondary\` / \`--vv-text-muted\` | Ink, three volumes |
+| \`--vv-danger\` \`--vv-warn\` \`--vv-info\` (+ \`-soft\`) | Status colours |
+| \`--vv-radius\` / \`--vv-radius-lg\` / \`--vv-radius-pill\` | Corner radii |
+| \`--vv-gap-sm\` / \`--vv-gap\` / \`--vv-gap-lg\` | Spacing steps |
+| \`--vv-font\` | The app's typeface (already on \`body\`) |
+| \`--vv-chart-1..8\` | Chart series (or \`useChartColors()\`) |
+| \`--vv-backdrop\` | The backdrop *value* — informational only; do not repaint it |
+
+\`useTheme()\` returns the same map for the rare JS-side need (a \`<canvas>\`, an
+exported image). Everything from the kit — \`Card\`, \`Button\`, the charts, the
+kanban — is already painted from these tokens, which is why "use the kit's
+components first" is a design rule and not just a convenience.
+
 ## Live data
 
 \`useLiveQuery\` is \`useQuery\` that stays current:
@@ -727,6 +775,8 @@ broken instead of incomplete.
 - Keep the perimeter as narrow as the Tool actually needs.
 - Use the kit's components. They carry the space's theme, so an installed Tool
   looks like Visvine and not like a twelfth website.
+- Style your own markup with the \`--vv-*\` tokens, so it follows a live theme
+  switch the way the kit does.
 - Store per-install preferences in \`visvine.state\`.
 - Read \`visvine.viewer.isAdmin\` to hide admin-only affordances — but never to
   protect data. The server decides that.
@@ -738,6 +788,10 @@ broken instead of incomplete.
   all four either fail or do nothing. \`visvine.state\` replaces the first two.
 - Don't import a UI library or a CSS framework. Nothing resolves at runtime and
   the bundle has a size cap.
+- Don't paint a page background or hardcode colours. The frame is transparent
+  over the viewer's chosen backdrop (which may be a gradient), and the accent
+  theme can change under you — a \`background: #fff\` wrapper or a literal hex
+  is the difference between a Tool that belongs and one that looks pasted in.
 - Don't poll. Query on mount and after a write, give the reader a refresh, and
   use \`useLiveQuery\` where staying current matters — it already polls, gently.
 - Don't put a secret in \`ui.tsx\` or \`data.js\`. Both are readable by anyone who

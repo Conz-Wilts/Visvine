@@ -8,12 +8,9 @@ import assert from 'node:assert/strict'
 
 import {
   ACCESS_LEVELS,
-  LEVEL_COMMENT,
   LEVEL_EDIT,
-  LEVEL_FULL,
   LEVEL_VIEW,
   accessSignature,
-  canManage,
   canRead,
   canWrite,
   containsPath,
@@ -74,16 +71,34 @@ const principal = (userId: string, acc: ContextAccess, over: Partial<ContextPrin
 // levels
 
 test('levels are strictly ordered integers with stable names', () => {
-  assert.ok(LEVEL_VIEW < LEVEL_COMMENT && LEVEL_COMMENT < LEVEL_EDIT && LEVEL_EDIT < LEVEL_FULL)
+  assert.ok(LEVEL_VIEW < LEVEL_EDIT)
   assert.equal(levelName(LEVEL_VIEW), 'view')
   assert.equal(levelName(LEVEL_EDIT), 'edit')
-  assert.equal(levelName(LEVEL_FULL), 'full')
   assert.equal(levelName(0), null)
   // In-between values floor to the level they imply.
-  assert.equal(levelName(25), 'comment')
+  assert.equal(levelName(25), 'view')
   for (const { name, level } of ACCESS_LEVELS) assert.equal(parseLevel(name), level)
   assert.equal(parseLevel('admin'), null)
   assert.equal(parseLevel(undefined), null)
+})
+
+test('view and edit are the only grantable levels', () => {
+  assert.deepEqual(ACCESS_LEVELS.map((l) => l.name), ['view', 'edit'])
+  // The retired levels are refused at the door, so a stale client that still
+  // posts them gets a 400 rather than a silently mapped grant.
+  assert.equal(parseLevel('comment'), null)
+  assert.equal(parseLevel('full'), null)
+})
+
+test('rows written at the retired levels still read correctly — no data migration', () => {
+  // 20 was 'comment', which never granted more than view; 40 was 'full', whose
+  // extra powers are now admin-only, so it lands at edit.
+  assert.equal(levelName(20), 'view')
+  assert.equal(levelName(40), 'edit')
+  const legacy = access([grant('wiki', 20), grant('deals', 40)])
+  assert.equal(canRead(legacy, 'wiki/handbook.md'), true)
+  assert.equal(canWrite(legacy, 'wiki/handbook.md'), false)
+  assert.equal(canWrite(legacy, 'deals/canva.md'), true)
 })
 
 // the tree walk
@@ -118,31 +133,30 @@ test('grantReaches: plain inheritance flows down; restriction cuts the beam', ()
 test('nested restricted folders each demand the grant be on or inside them', () => {
   const cuts = ['teams', 'teams/board']
   // A grant on the outer boundary is still cut by the inner one…
-  assert.equal(grantReaches(grant('teams', LEVEL_FULL), 'teams/board/minutes.md', cuts), false)
+  assert.equal(grantReaches(grant('teams', LEVEL_EDIT), 'teams/board/minutes.md', cuts), false)
   // …a grant on the inner boundary reaches through both.
   assert.equal(grantReaches(grant('teams/board', LEVEL_VIEW), 'teams/board/minutes.md', cuts), true)
   // Outer grant still reaches the outer folder's own notes.
-  assert.equal(grantReaches(grant('teams', LEVEL_FULL), 'teams/roster.md', cuts), true)
+  assert.equal(grantReaches(grant('teams', LEVEL_EDIT), 'teams/roster.md', cuts), true)
 })
 
 test('effectiveLevel is the MAX across reaching grants — grants only add', () => {
   const acc = access(
-    [grant('', LEVEL_VIEW), grant('portfolio', LEVEL_EDIT), grant('portfolio/canva.md', LEVEL_COMMENT)],
+    [grant('', LEVEL_VIEW), grant('portfolio', LEVEL_EDIT), grant('portfolio/canva.md', LEVEL_VIEW)],
     [],
   )
   assert.equal(effectiveLevel(acc, 'welcome.md'), LEVEL_VIEW)
-  assert.equal(effectiveLevel(acc, 'portfolio/canva.md'), LEVEL_EDIT) // edit beats comment
+  assert.equal(effectiveLevel(acc, 'portfolio/canva.md'), LEVEL_EDIT) // edit beats the note's own view
   assert.equal(effectiveLevel(acc, 'nowhere/else.md'), LEVEL_VIEW)
   assert.equal(effectiveLevel(access([], []), 'welcome.md'), 0)
 })
 
-test('canRead/canWrite/canManage are threshold checks on the effective level', () => {
-  const acc = access([grant('wiki', LEVEL_COMMENT), grant('deals', LEVEL_FULL)])
+test('canRead/canWrite are threshold checks on the effective level', () => {
+  const acc = access([grant('wiki', LEVEL_VIEW), grant('deals', LEVEL_EDIT)])
   assert.equal(canRead(acc, 'wiki/handbook.md'), true)
-  assert.equal(canWrite(acc, 'wiki/handbook.md'), false) // comment < edit
+  assert.equal(canWrite(acc, 'wiki/handbook.md'), false) // view < edit
+  assert.equal(canRead(acc, 'deals/canva.md'), true)
   assert.equal(canWrite(acc, 'deals/canva.md'), true)
-  assert.equal(canManage(acc, 'deals/canva.md'), true)
-  assert.equal(canManage(acc, 'wiki/handbook.md'), false)
   assert.equal(canRead(acc, 'elsewhere.md'), false)
 })
 
@@ -160,11 +174,11 @@ test('space, alias, and user grants compose additively for one principal', () =>
   const acc = access([
     grant('', LEVEL_VIEW, { type: 'space', id: '' }),
     grant('teams/engineering', LEVEL_EDIT, { type: 'alias', id: 'a-eng' }),
-    grant('strategy/plan.md', LEVEL_FULL, { type: 'user', id: 'u-me' }),
+    grant('strategy/plan.md', LEVEL_EDIT, { type: 'user', id: 'u-me' }),
   ], ['teams/engineering'])
   assert.equal(effectiveLevel(acc, 'handbook/intro.md'), LEVEL_VIEW) // space
   assert.equal(effectiveLevel(acc, 'teams/engineering/oncall.md'), LEVEL_EDIT) // alias, through the cut
-  assert.equal(effectiveLevel(acc, 'strategy/plan.md'), LEVEL_FULL) // direct note grant
+  assert.equal(effectiveLevel(acc, 'strategy/plan.md'), LEVEL_EDIT) // direct note grant
   assert.equal(effectiveLevel(acc, 'strategy/other.md'), LEVEL_VIEW) // note grant does not spread
 })
 
@@ -192,10 +206,10 @@ test('isRestrictedPath and isLockedPath cover boundaries and their subtrees', ()
 
 test('winningGrant picks highest level, then deepest resource, then user > alias > space', () => {
   const cuts: string[] = []
-  const g1 = grant('', LEVEL_EDIT, { type: 'space', id: '' })
-  const g2 = grant('portfolio', LEVEL_EDIT, { type: 'alias', id: 'a1' })
-  const g3 = grant('portfolio', LEVEL_EDIT, { type: 'user', id: 'u1' })
-  const g4 = grant('portfolio', LEVEL_FULL, { type: 'space', id: '' })
+  const g1 = grant('', LEVEL_VIEW, { type: 'space', id: '' })
+  const g2 = grant('portfolio', LEVEL_VIEW, { type: 'alias', id: 'a1' })
+  const g3 = grant('portfolio', LEVEL_VIEW, { type: 'user', id: 'u1' })
+  const g4 = grant('portfolio', LEVEL_EDIT, { type: 'space', id: '' })
   assert.equal(winningGrant([g1, g2], 'portfolio/x.md', cuts), g2) // deeper beats shallower
   assert.equal(winningGrant([g2, g3], 'portfolio/x.md', cuts), g3) // user beats alias
   assert.equal(winningGrant([g3, g4], 'portfolio/x.md', cuts), g4) // level beats everything
@@ -228,7 +242,7 @@ test('principal predicates fold in the admin/system bypass', () => {
   const gated = principal('u-new', access([]))
   assert.equal(principalCanRead(gated, 'welcome.md'), false)
   assert.equal(principalCanWrite(gated, 'welcome.md'), false)
-  assert.equal(principalCanManage(gated, 'welcome.md'), false)
+  assert.equal(principalCanManage(gated), false)
   assert.equal(principalSeesFolder(gated, 'wiki'), false)
   for (const p of [
     principal('u-new', access([]), { spaceAdmin: true }),
@@ -237,10 +251,13 @@ test('principal predicates fold in the admin/system bypass', () => {
     assert.equal(principalIsSuperAdmin(p), true)
     assert.equal(principalCanRead(p, 'teams/engineering/oncall.md'), true)
     assert.equal(principalCanWrite(p, 'anything.md'), true)
-    assert.equal(principalCanManage(p, 'anything.md'), true)
+    assert.equal(principalCanManage(p), true)
     assert.equal(principalSeesFolder(p, 'teams/engineering'), true)
   }
-  assert.equal(principalIsSuperAdmin(principal('u-x', access([grant('', LEVEL_FULL)]))), false)
+  // No grant makes you an administrator — not even edit everywhere from the root.
+  const topGrant = principal('u-x', access([grant('', LEVEL_EDIT)]))
+  assert.equal(principalIsSuperAdmin(topGrant), false)
+  assert.equal(principalCanManage(topGrant), false)
 })
 
 test('filterVisible hides everything no grant reaches — no title leak into the index', () => {
@@ -345,7 +362,7 @@ test('parity: a private folder refines the root — readers in, root writers out
   assert.equal(principalCanRead(grand, 'deals/canva.md'), false)
 })
 
-test('parity: legacy admin level maps to full (manages the folder), locks carry over', () => {
+test('parity: a legacy folder admin becomes an Editor, not a manager; locks carry over', () => {
   const cfg: FoldersConfig = {
     version: 1,
     folders: [
@@ -356,7 +373,10 @@ test('parity: legacy admin level maps to full (manages the folder), locks carry 
   const migrated = migrateLegacyRegistry(cfg)
   assert.deepEqual(migrated.locked, ['frozen'])
   const admin = principal('u-admin', scopeFor(migrated, 'u-admin'))
-  assert.equal(principalCanManage(admin, 'anything/inside.md'), true)
+  // The content half of the old per-folder admin survives…
+  assert.equal(principalCanWrite(admin, 'anything/inside.md'), true)
+  // …the permissions half does not: administering access is a space role now.
+  assert.equal(principalCanManage(admin), false)
 })
 
 test('parity: public folders stay readable by every member, even gated-out ones', () => {
@@ -396,10 +416,10 @@ test('audience: no reaching grants means admins only', () => {
 
 test('audience: the private-by-default note shape — restricted, you + admins only', () => {
   // Exactly what makeNotePrivate produces: a space root grant that a
-  // restricted note path cuts, plus the author's own FULL grant on the note.
+  // restricted note path cuts, plus the author's own EDIT grant on the note.
   const grants = [
     grant('', LEVEL_VIEW, { type: 'space', id: '' }),
-    grant('people/x.md', LEVEL_FULL, { id: 'u-me' }),
+    grant('people/x.md', LEVEL_EDIT, { id: 'u-me' }),
   ]
   const a = audienceSummary('people/x.md', grants, ['people/x.md'], { selfUserId: 'u-me' })
   assert.equal(a.audience, 'you-only')

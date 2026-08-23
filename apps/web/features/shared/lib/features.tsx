@@ -111,11 +111,11 @@ export const FEATURES: FeatureDef[] = [
     label: 'Tools',
     href: '/tools',
     description: 'Tools built by members and installed from the marketplace.',
-    // Nav-less: the marketplace is reached from the navbar icon, and each
-    // INSTALLED Tool gets its own rail row keyed `tool:<slug>` — so this key is
-    // the tool vocabulary itself, never a "Tools" rail item. It is here so the
-    // console's Tools panel can switch the surface (and the Tool node type with
-    // it) on and off like any other. See NAV_HIDDEN_FEATURE_KEYS.
+    // Nav-less AND core: the marketplace is reached from the navbar icon, each
+    // INSTALLED Tool gets its own rail row keyed `tool:<slug>`, and there is no
+    // on/off switch — what a space runs is decided by review + install (admins
+    // install; members request). See CORE_FEATURE_KEYS in lib/featureAccess.ts.
+    core: true,
     icon: <NavToolsIcon className={iconClass} />,
   },
 ];

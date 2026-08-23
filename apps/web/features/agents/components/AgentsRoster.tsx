@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { BotIcon, ChevronRightIcon, FolderIcon, FolderOpenIcon, PlayIcon, PlusIcon } from '@/features/shared/icons';
 import Toggle from '@/components/ui/Toggle';
 import { Button, EmptyState } from '@/components/ui';
-import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
+import { useCreateSurface } from '@/features/shared/contexts/CreateModalContext';
 import { fetchJson } from '@/lib/fetchJson';
 import { noteHref } from '@/lib/notes/entities';
 import type { AgentFolder, AgentSummary } from '@/lib/agents/service';
@@ -13,7 +13,6 @@ import { fmtCents, statusLine, terminalLabel } from '../lib/rowState';
 import { buildAgentTree, flattenAgentTree, type AgentTreeFolder, type AgentTreeLeaf } from '../lib/tree';
 import StatusDot from './StatusDot';
 import ActivateAgentDialog from './ActivateAgentDialog';
-import NewAgentFolderDialog from './NewAgentFolderDialog';
 
 /**
  * The roster as the `agents/` folder: folders of agents (each an index note)
@@ -22,7 +21,8 @@ import NewAgentFolderDialog from './NewAgentFolderDialog';
  * link, and the one line worth knowing beneath — the schedule when it is
  * healthy, the problem when it is not. Admins get the switch and, on hover, a
  * play control; members see the same rows with the switch read-only. Anyone
- * may add a folder or an agent, on the row they are standing on.
+ * may add an agent, on the row they are standing on; folders come from the
+ * agent's context, not from here.
  */
 const INDENT_PX = 22;
 
@@ -32,7 +32,6 @@ export default function AgentsRoster({
   folders,
   isAdmin,
   currentUserId,
-  spaceTimezone,
   onChanged,
   onNotice,
 }: {
@@ -41,16 +40,14 @@ export default function AgentsRoster({
   folders: AgentFolder[];
   isAdmin: boolean;
   currentUserId: string | null;
-  spaceTimezone: string | null;
   onChanged: () => void;
   onNotice: (message: string, tone: 'ok' | 'warn' | 'bad') => void;
 }) {
   const [activating, setActivating] = useState<AgentSummary | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [newFolderIn, setNewFolderIn] = useState<string | null>(null);
   const now = Date.now();
-  const { open: openCreate } = useCreateModal();
+  const openCreate = useCreateSurface();
 
   const tree = useMemo(() => buildAgentTree(folders, agents, now), [folders, agents, now]);
   const rows = useMemo(() => flattenAgentTree(tree, collapsed), [tree, collapsed]);
@@ -101,10 +98,6 @@ export default function AgentsRoster({
 
   const toolbar = (
     <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="sm" onClick={() => setNewFolderIn('')}>
-        <FolderIcon className="h-3.5 w-3.5" />
-        New folder
-      </Button>
       <Button variant="ghost" size="sm" onClick={() => openCreate('agent')}>
         <PlusIcon className="h-3.5 w-3.5" />
         New agent
@@ -112,35 +105,16 @@ export default function AgentsRoster({
     </div>
   );
 
-  const folderDialog = newFolderIn !== null && (
-    <NewAgentFolderDialog
-      spaceId={spaceId}
-      parent={newFolderIn}
-      onClose={() => setNewFolderIn(null)}
-      onCreated={() => {
-        setNewFolderIn(null);
-        onChanged();
-      }}
-    />
-  );
-
   if (agents.length === 0 && folders.length === 0) {
     return (
-      <>
-        <EmptyState
-          icon={<BotIcon />}
-          title="No agents yet"
-          description="Agents run on a schedule or a trigger, on the space's model connectors. Start with one, or a folder to keep them in."
-          action={{ label: 'Create an agent', onClick: () => openCreate('agent') }}
-        />
-        <div className="mt-2 flex justify-center">
-          <Button variant="ghost" size="sm" onClick={() => setNewFolderIn('')}>
-            <FolderIcon className="h-3.5 w-3.5" />
-            New folder
-          </Button>
-        </div>
-        {folderDialog}
-      </>
+      <EmptyState
+        icon={<BotIcon />}
+        title="No agents yet"
+        description="Agents run on a schedule or a trigger, on the space's model connectors. Start with one."
+        action={{ label: 'Create an agent', onClick: () => openCreate('agent') }}
+        size="page"
+        actionStyle="solid"
+      />
     );
   }
 
@@ -176,9 +150,6 @@ export default function AgentsRoster({
         <Link href={noteHref(n.folder.indexPath)} className={hoverControl} title="Open the folder's index note">
           <span className="block text-[11px] font-semibold leading-none">index</span>
         </Link>
-        <button type="button" aria-label={`New folder in ${n.folder.title}`} title="New folder here" onClick={() => setNewFolderIn(n.folder.path)} className={hoverControl}>
-          <FolderIcon className="h-3.5 w-3.5" />
-        </button>
         <button
           type="button"
           aria-label={`New agent in ${n.folder.title}`}
@@ -249,7 +220,6 @@ export default function AgentsRoster({
         <ActivateAgentDialog
           spaceId={spaceId}
           agent={activating}
-          spaceTimezone={spaceTimezone}
           onClose={() => setActivating(null)}
           onDone={(warning) => {
             setActivating(null);
@@ -258,7 +228,6 @@ export default function AgentsRoster({
           }}
         />
       )}
-      {folderDialog}
     </>
   );
 }

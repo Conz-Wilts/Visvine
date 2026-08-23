@@ -46,6 +46,60 @@ cd apps/mobile/android && gradle wrapper && ./gradlew :app:installDebug
 
 The mobile login screen has a "Dev login (skip Google)" button that lists the same seeded users. See `apps/mobile/README.md` for per-platform details.
 
+## MCP locally
+
+```bash
+pnpm mcp:dev                    # Postgres + Next, acting as admin@local.dev
+pnpm mcp:dev --user member      # …as member@local.dev instead
+```
+
+Then connect. There is no token and no sign-in: both servers are in the
+committed `.mcp.json`, and a request with no `Authorization` header is treated
+as the chosen dev user with every scope.
+
+```json
+"visvine":         { "type": "http", "url": "http://localhost:3000/api/mcp" }
+"visvine-creator": { "type": "http", "url": "http://localhost:3000/api/mcp/creator" }
+```
+
+Picking the user is the only local decision. `--user` takes a bare name, an
+email or a user id; `DEV_MCP_USER` in `apps/web/.env` does the same thing
+persistently. `pnpm mcp:dev` prints whoever it resolved, and says so when it
+couldn't find who you asked for.
+
+This holds only while `ENABLE_DEV_AUTH=true` **and** `NODE_ENV=development`
+(`apps/web/lib/mcp/devIdentity.ts`). `next build` bakes `NODE_ENV=production`,
+so no deployed artifact can honour it however the environment is set — the same
+guard, and the same argument, as the rest of `/api/dev`.
+
+## MCP in production
+
+Full OAuth 2.1: authorization code + PKCE, our own authorization server
+(`app/api/oauth/*`), per-resource tokens (a token for the creator server is
+refused by the context server), and a consent screen naming the scopes. A
+request without a valid token gets a 401 whose `WWW-Authenticate` points at the
+protected-resource metadata; one whose token lacks a tool's scope gets a 403 it
+can step up from.
+
+An access token lasts **30 days**, and that is the whole life of a grant —
+there is no refresh token, no rotation and no revocation endpoint. Sign in once
+a month; nothing runs in between.
+
+The trade: a stateless JWT can't be called back before it expires. What limits
+the blast radius is that authorization is never carried in the token — every
+tool re-resolves the user and their per-space access from the database on each
+call, so a deleted account or a removed space membership takes effect at once.
+`ACCESS_TTL_SECONDS` in `lib/mcp/tokens.ts` is the lever if 30 days ever feels
+long.
+
+The same flow runs locally if you want to exercise it — point a client at
+`/api/oauth/authorize` and, under `ENABLE_DEV_AUTH`, it lands on the
+`/dev/login` user picker instead of Google.
+
+Third-party MCP servers in `.mcp.json` (`context7`, `playwright`, …) run over
+stdio and need no auth at all; vendor-hosted ones reached through connectors are
+a different mechanism entirely — see `docs/connectors.md`.
+
 ## Commands
 
 ```
@@ -117,9 +171,12 @@ column — what someone can do comes entirely from the aliases they hold:
 | email                | aliases          | notes |
 |----------------------|------------------|-------|
 | `admin@local.dev`    | Admin, Partner   | manages the space; also super admin via env |
-| `partner@local.dev`  | Partner          | edit on companies/, deals/, data/ |
 | `member@local.dev`   | Founder          | view on companies/ |
-| `lp@local.dev`       | LP               | view on one note — the tightest grant there is |
+
+The alias vocabulary is wider than the two anchors: `Investor`, `Employee` and
+`LP` are seeded with their grants but held by nobody. Hand one out from
+Console → Aliases to exercise a narrower reach — `LP` carries view on a single
+note, the tightest grant the model can express.
 
 ## Multi-machine
 
@@ -175,7 +232,6 @@ this README only names:
 | [`docs/notifications.md`](docs/notifications.md) | Notification kinds, the navbar bell, and why there is deliberately no email channel. |
 | [`docs/icons.md`](docs/icons.md) | The owned icon set and its three codegen targets. No icon library — importing one is a lint error. |
 | [`docs/entity-folders.md`](docs/entity-folders.md) | How a directory node binds to its context note by path, and what happens when one node needs several notes. |
-| [`docs/wayfinder-tool.md`](docs/wayfinder-tool.md) | The Wayfinder Tool that ships as a worked example of the Tools feature. |
 | [`docs/tools-known-issues.md`](docs/tools-known-issues.md) | What is still open on Tools: two deployment steps that need a person, and a short list of accepted defects. |
 | [`docs/desktop-electron-plan.md`](docs/desktop-electron-plan.md) | The Electron desktop shell. |
 

@@ -141,6 +141,9 @@ test('the creator server is list_spaces + authoring; the context server never ca
     'get_tool_sdk',
     'list_spaces',
     'list_tools',
+    // The planner rides both servers: "which tool does this ask need?" is the
+    // first question either surface gets.
+    'plan_visvine_query',
     'preview_tool',
     'publish_tool',
     'read_tool',
@@ -152,7 +155,7 @@ test('the creator server is list_spaces + authoring; the context server never ca
   for (const name of ['create_tool', 'write_tool', 'check_tool', 'preview_tool', 'publish_tool', 'read_tool', 'get_tool_sdk']) {
     assert.ok(!context.names.includes(name), `${name} must not be on the context server`)
   }
-  for (const name of ['list_spaces', 'list_context', 'search_context', 'list_tools', 'install_tool']) {
+  for (const name of ['plan_visvine_query', 'list_spaces', 'list_context', 'search_context', 'list_tools', 'install_tool']) {
     assert.ok(context.names.includes(name), `${name} must be on the context server`)
   }
 })

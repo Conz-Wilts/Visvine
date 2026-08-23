@@ -16,7 +16,7 @@ import { provisionPersonalSpace, personalSpaceId } from '@/lib/spaces/personalSp
 import { SHARED_OWNER_KEY, type Context, type Actor } from './store'
 import type { ContextPrincipal } from './shared/contextTypes'
 import { OPEN_ACCESS } from './shared/authz'
-import { principalCanManage } from './shared/permissions'
+import { principalCanWrite } from './shared/permissions'
 import { contextAccessFor, ensureAccessSeeded } from './access'
 
 // Kept for route/client compat; every scope now resolves to the shared context.
@@ -124,17 +124,18 @@ export async function principalOf(resolved: ResolvedContext): Promise<ContextPri
 
 /**
  * Whether the caller may delete/rename a note. In a personal space the caller
- * is the owner. Elsewhere: space admins, the note's original author, or a
- * FULL-level grant holder at the note's path (full = manage the subtree,
- * deletes included — pass the principal to enable that check). Folder
- * write-gating applies on top in the routes.
+ * is the owner. Elsewhere: space admins, the note's original author, or anyone
+ * with EDIT at the note's path (pass the principal to enable that check) —
+ * deleting is in Editor's job description, and an editor can already blank the
+ * note's content, so withholding delete protected nothing. Folder write-gating
+ * applies on top in the routes.
  */
 export function canRemove(
   context: ResolvedContext,
   noteCreatedBy: string | null,
-  manage?: { principal: ContextPrincipal; path: string },
+  editor?: { principal: ContextPrincipal; path: string },
 ): boolean {
   if (context.isPersonalSpace) return true
   if (context.isAdmin || noteCreatedBy === context.actor.id) return true
-  return manage ? principalCanManage(manage.principal, manage.path) : false
+  return editor ? principalCanWrite(editor.principal, editor.path) : false
 }

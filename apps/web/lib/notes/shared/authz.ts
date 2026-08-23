@@ -14,13 +14,27 @@
 
 // levels
 
-/** Strictly ordered access levels — "does edit imply view?" is a comparison. */
+/**
+ * Strictly ordered access levels — "does edit imply view?" is a comparison.
+ *
+ * There are exactly TWO grantable levels, and they are both per-resource: a
+ * grant says "this subject may read (or write) at this path". Permissions
+ * ABOUT a resource — sharing, restricting, locking, deleting a folder,
+ * resolving requests — are not a level at all; they belong to space admins
+ * (lib/notes/shared/permissions.ts: principalCanManage). That is the whole
+ * model: view/edit are note-by-note, administration is a space role.
+ *
+ * The numbers are spaced, not sequential, and the retired levels' values are
+ * deliberately skipped: rows written when 'comment' (20) and 'full' (40)
+ * existed are still in the DB, and the max-wins ladder reads them correctly
+ * without a data migration — 20 lands at view (it never granted more than
+ * view), 40 lands at edit (its extra powers are now admin-only). Never reuse
+ * 20 or 40 for a new level.
+ */
 export const LEVEL_VIEW = 10
-export const LEVEL_COMMENT = 20
 export const LEVEL_EDIT = 30
-export const LEVEL_FULL = 40
 
-export type AccessLevelName = 'view' | 'comment' | 'edit' | 'full'
+export type AccessLevelName = 'view' | 'edit'
 
 /** The canonical level table — every UI level picker and label renders from
  *  this one list so a new or relabeled level propagates everywhere. */
@@ -31,9 +45,7 @@ export const ACCESS_LEVELS: ReadonlyArray<{
   hint: string
 }> = [
   { name: 'view', level: LEVEL_VIEW, label: 'Viewer', hint: 'Can read, search, and see the context' },
-  { name: 'comment', level: LEVEL_COMMENT, label: 'Commenter', hint: 'Can view and discuss' },
-  { name: 'edit', level: LEVEL_EDIT, label: 'Editor', hint: 'Can view, comment, write, create, and move' },
-  { name: 'full', level: LEVEL_FULL, label: 'Full access', hint: 'Can edit, share, restrict, and delete' },
+  { name: 'edit', level: LEVEL_EDIT, label: 'Editor', hint: 'Can view, write, create, move, and delete' },
 ]
 
 /** Display label for a level name ('view' → 'Viewer'); 'No access' for null. */
@@ -41,7 +53,7 @@ export function levelDisplayLabel(name: AccessLevelName | string | null): string
   return ACCESS_LEVELS.find((l) => l.name === name)?.label ?? name ?? 'No access'
 }
 
-/** The canonical name of a level ('view'…'full'), or null for 0/unknown. */
+/** The canonical name of a level ('view' | 'edit'), or null for 0/unknown. */
 export function levelName(level: number): AccessLevelName | null {
   let best: AccessLevelName | null = null
   for (const l of ACCESS_LEVELS) if (level >= l.level) best = l.name
@@ -83,9 +95,11 @@ export interface ContextAccess {
   locked: string[]
 }
 
-/** Full access from the root — personal spaces are never folder-gated. */
+/** Edit everywhere from the root — personal spaces are never folder-gated.
+ *  (Nothing above edit is a grant any more; the owner's administrative rights
+ *  come from owning the space, checked as `context.isAdmin`.) */
 export const OPEN_ACCESS: ContextAccess = {
-  grants: [{ subjectType: 'space', subjectId: '', resourcePath: '', level: LEVEL_FULL }],
+  grants: [{ subjectType: 'space', subjectId: '', resourcePath: '', level: LEVEL_EDIT }],
   restricted: [],
   locked: [],
 }
@@ -130,10 +144,10 @@ export function canWrite(access: ContextAccess, path: string): boolean {
   return effectiveLevel(access, path) >= LEVEL_EDIT
 }
 
-/** full = edit + share, restrict, and delete within the subtree. */
-export function canManage(access: ContextAccess, path: string): boolean {
-  return effectiveLevel(access, path) >= LEVEL_FULL
-}
+// There is deliberately no canManage() here. Managing a resource — sharing it,
+// restricting it, locking it, resolving requests against it — is not something
+// a grant can confer; it is a space-admin power. See
+// lib/notes/shared/permissions.ts: principalCanManage.
 
 /**
  * Whether a folder should appear at all for this principal: they can read the
@@ -230,7 +244,10 @@ export interface MigratedRegistry {
 const LEGACY_LEVELS: Record<string, number> = {
   read: LEVEL_VIEW,
   write: LEVEL_EDIT,
-  admin: LEVEL_FULL,
+  // A legacy folder 'admin' becomes an Editor: the content half of what they
+  // could do survives as a grant, and the permissions half is now a space-admin
+  // power that no grant can carry.
+  admin: LEVEL_EDIT,
 }
 
 /**
@@ -238,7 +255,7 @@ const LEGACY_LEVELS: Record<string, number> = {
  * grant rows — the one-time migration lib/notes/access.ts runs per space.
  * The mapping preserves who could READ what exactly:
  * - every folder member becomes a direct user grant at the folder's path
- *   (read→view, write→edit, admin→full); the ROOT entry's members become
+ *   (read→view, write→edit, admin→edit); the ROOT entry's members become
  *   root grants — the context gate, expressed as rows;
  * - a PRIVATE registered folder becomes a RESTRICTED folder (the cut keeps
  *   non-members out, exactly as the old refines-the-root ACL did);

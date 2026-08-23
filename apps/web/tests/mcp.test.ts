@@ -50,7 +50,7 @@ process.env.NEXT_PUBLIC_APP_URL ??= 'http://localhost:3000'
 
 const IDENTITY = { userId: 'user_1', name: 'Test User', email: 'test@local.dev', personId: null }
 
-test('the catalogue is the two context scopes plus the four capability scopes', () => {
+test('the catalogue is the two context scopes plus the five capability scopes', () => {
   assert.deepEqual(
     [...MCP_SCOPES],
     [
@@ -60,6 +60,7 @@ test('the catalogue is the two context scopes plus the four capability scopes', 
       'agents:run',
       'tools:author',
       'tools:install',
+      'secrets:write',
     ],
   )
   assert.deepEqual(DEFAULT_SCOPES, ['context:read'])
@@ -262,9 +263,10 @@ test('an omitted application_type is inferred, not defaulted to web', () => {
 
 test('every tool maps to a scope in the catalogue, and reads outnumber writes', () => {
   const tools = Object.keys(TOOL_SCOPES)
-  // 16 context/connector/agent tools + the nine Tool-authoring ones
-  // (tests/mcp-scopes.test.ts pins those against what is actually registered).
-  assert.equal(tools.length, 25)
+  // The planner + 17 context/connector/agent tools + the nine Tool-authoring
+  // ones (tests/mcp-scopes.test.ts pins those against what is actually
+  // registered).
+  assert.equal(tools.length, 27)
   for (const scope of Object.values(TOOL_SCOPES)) {
     assert.ok(MCP_SCOPES.includes(scope), `${scope} is not in the catalogue`)
   }
@@ -283,9 +285,17 @@ test('every tool maps to a scope in the catalogue, and reads outnumber writes', 
   // Connector discovery is a read; execution needs the dedicated scope.
   assert.equal(scopeForTool('list_connectors'), 'context:read')
   assert.equal(scopeForTool('run_connector'), 'connectors:use')
+  // Storing a credential is a THIRD capability, not a flavour of running one:
+  // a token that may call Stripe must not thereby be able to replace the key.
+  assert.equal(scopeForTool('set_connector_secret'), 'secrets:write')
+  assert.notEqual(scopeForTool('set_connector_secret'), scopeForTool('run_connector'))
+  assert.notEqual(scopeForTool('set_connector_secret'), scopeForTool('edit_context'))
   // Same split for agents: the roster is a read; triggering a run needs its own scope.
   assert.equal(scopeForTool('list_agents'), 'context:read')
   assert.equal(scopeForTool('run_agent'), 'agents:run')
+  // The planner is the index to every other tool, so it must never be behind a
+  // scope the client has not already opened.
+  assert.equal(scopeForTool('plan_visvine_query'), 'context:read')
   assert.equal(scopeForTool('no_such_tool'), null)
 })
 
@@ -373,7 +383,9 @@ test('an access token round-trips with its identity and scopes', async () => {
     'mcp_client_1',
     'context',
   )
-  assert.equal(expiresIn, 3600)
+  // 30 days: the whole life of a grant, since there is no refresh token behind
+  // it. Shortening this means every client re-authorizes sooner.
+  assert.equal(expiresIn, 60 * 60 * 24 * 30)
 
   const verified = await verifyAccessToken(token, 'context')
   assert.ok(verified)
@@ -522,7 +534,9 @@ test('the type catalog covers the whole closed vocabulary with the right creatab
   // under tools/, never creatable via add_context (tools/ is frozen for AI).
   const tool = entries.find((e) => e.type === 'tool')!
   assert.equal(tool.enabled, true)
-  assert.equal(tool.feature, 'tools')
+  // Ungated like person/space/event: `tools` is core (review + install is the
+  // gate, not a feature switch), so no feature can ever disable the type.
+  assert.equal(tool.feature, null)
   assert.equal(tool.creatable_via_add_context, false)
   assert.equal(tool.note_dir, 'tools')
   assert.match(tool.guidance, /tools\/<name>\/index\.md/)

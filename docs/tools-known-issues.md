@@ -12,8 +12,8 @@ Ground rules for anyone (or anything) working through these:
 
 - Run all four gates before and after: `pnpm typecheck` · `pnpm lint` ·
   `pnpm test` · `pnpm --filter @visvine/web knip`. All four must stay zero.
-- The two live suites need a dev server on :3000 with `TOOLS_ORIGIN` set:
-  `pnpm --filter @visvine/web verify:tools:escape` and `verify:wayfinder-tool`.
+- The live suites need a dev server on :3000 with `TOOLS_ORIGIN` set:
+  `pnpm --filter @visvine/web verify:tools` and `verify:tools:escape`.
 - Do not weaken the perimeter, the sealed namespaces, the `tools` feature-key
   gate, or the origin split to make any of this easier. Those are the feature's
   security boundary and each has tests pinning it.
@@ -124,16 +124,12 @@ default.
 Design outcomes recorded deliberately. Leave them alone unless a human asks
 otherwise.
 
-- **The Wayfinder Tool's Run dispatches an agent that edits notes, not code.**
-  That is the acceptance test's scope, stated in `docs/wayfinder-tool.md`.
-- **`harness/<project>/project.md`, not `index.md`** — forced by
-  `enforceIndexFrontmatter`; documented rather than worked around.
-- **The seeded Wayfinder install is genuinely degraded** — the space has no
-  `wayfinder-*` agent, so the degraded-mode path is exercised live rather than
-  hypothetically. That is a feature of the test, not a failure.
-- **The seeded Tool (v2, approved, installed), the `wayfinder-project` /
-  `wayfinder-task` node types and the `harness/visvine-tools/` board are left in
-  the local dev DB on purpose.**
+- **A Tool note's own page lives at `<dir>/project.md`, not `index.md`** —
+  forced by `enforceIndexFrontmatter`; documented rather than worked around.
+- **The seeded Portfolio Board (approved, installed) is left in the local dev
+  DB on purpose**, so `app_tool_builds` / `_versions` / `_installs` / `_state`
+  are never empty and the authoring path stays exercised. It declares
+  `write: []` and no agents, so it adds no surface area to the seeded space.
 - **A Tool may create an agent brief but never edit one** — create-only is a
   decision, not an oversight. Note that an exempt create also writes
   `agents/index.md` (the folder's children listing); that is documented at
@@ -163,6 +159,5 @@ Kept as a short list so nothing here gets re-reported.
 | `compileToolUi` passed a non-literal dynamic `import()` straight through the import boundary | `lib/tools/compile.ts` |
 | The `tools` feature key was never enforced server-side; `frame-token` duplicated the bridge's authorization | bridge, frame token, MCP, rail |
 | `app_tool_state` had no per-install key cap — an installed Tool could write unbounded rows | `lib/tools/state.ts` |
-| `verify-wayfinder-tool.ts` accepted a `SEALED` verdict, so a regression of the brief-write path would have passed silently | `scripts/verify-wayfinder-tool.ts` |
 | `frame-src` baked at build time would ship as `'self'` in any image built without `TOOLS_ORIGIN` | `.github/workflows/deploy.yml` |
 | `applyUpgrade`'s Prisma select was missing `version: true` | `lib/tools/installs.ts` |

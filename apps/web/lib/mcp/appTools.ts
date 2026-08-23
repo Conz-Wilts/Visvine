@@ -342,6 +342,7 @@ async function createTool(ctx: McpContext, args: CreateToolArgs, deps: AppToolDe
       'Call get_tool_sdk once — it returns the authoring guide, the @visvine/tool-kit type definitions and the bridge method list.',
       `Then write_tool { name: "${result.name}", file: "ui.tsx", content } and read the build it hands back.`,
       'Declare everything the tool touches in index.md `perimeter:` — the bridge refuses anything undeclared.',
+      'Style with the kit components and the --vv-* theme tokens, and never paint a page background — the frame is transparent so the app’s own backdrop (the viewer may have chosen a gradient) shows through.',
     ],
   }
 }

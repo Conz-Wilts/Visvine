@@ -1,11 +1,13 @@
 /**
  * Local-dev seed — the base layer of the Blackbird Ventures space.
  *
- * Creates four anchor users for the /dev/login picker:
+ * Creates two anchor users for the /dev/login picker:
  *   - admin@local.dev    (Admin + Partner — the one who manages the space)
- *   - partner@local.dev  (Partner)
  *   - member@local.dev   (Founder)
- *   - lp@local.dev       (LP)
+ *
+ * The full alias vocabulary is still seeded, so aliases with no holder
+ * (Investor, Employee, LP) remain available to hand out from the console —
+ * they are the permission model, not a property of who happens to be seeded.
  *
  * Plus the space itself and its aliases, spread across the permission model
  * so every shape of grant is represented:
@@ -84,10 +86,8 @@ interface Anchor {
 }
 
 const ANCHORS: Anchor[] = [
-  { id: "user_dev_admin",   name: "Dev Admin",   email: "admin@local.dev",   aliases: [ADMIN_ALIAS_NAME, "Partner"], personNodeId: "person:dev_admin" },
-  { id: "user_dev_partner", name: "Dev Partner", email: "partner@local.dev", aliases: ["Partner"],                   personNodeId: "person:dev_partner" },
-  { id: "user_dev_member",  name: "Dev Member",  email: "member@local.dev",  aliases: ["Founder"],                   personNodeId: "person:dev_member" },
-  { id: "user_dev_lp",      name: "Dev LP",      email: "lp@local.dev",      aliases: ["LP"],                        personNodeId: "person:dev_lp" },
+  { id: "user_dev_admin",  name: "Dev Admin",  email: "admin@local.dev",  aliases: [ADMIN_ALIAS_NAME, "Partner"], personNodeId: "person:dev_admin" },
+  { id: "user_dev_member", name: "Dev Member", email: "member@local.dev", aliases: ["Founder"],                   personNodeId: "person:dev_member" },
 ];
 
 /** Access levels, mirrored from lib/notes/shared/authz.ts (seed stays dep-free). */
@@ -113,6 +113,21 @@ const NODE_TYPES = [
   { icon: "🧭", name: "Sector", color: "#f97316", shape: "rectangle" },
   { icon: "📓", name: "Journal", color: "#ec4899", shape: "rectangle" },
   { icon: "🤝", name: "Meeting", color: "#14b8a6", shape: "rectangle" },
+  // Structural/document built-ins the demo layers create nodes for (channels,
+  // sections, connectors, agents). Because this list is explicit, omitting one
+  // hides it from the console's Types page even though DEFAULT_NODE_TYPES knows
+  // it — so every kind a seed script writes is declared. Colours match
+  // lib/types/context.ts DEFAULT_NODE_TYPES. `Tool` stays out on purpose: it is
+  // a RESERVED machine type (lib/types/nodeTypeRegistry.ts) the console must
+  // never offer to a note picker.
+  { icon: "🧩", name: "Section", color: "#0ea5e9", shape: "square" },
+  { icon: "💬", name: "Channel", color: "#e0685f", shape: "rectangle" },
+  { icon: "🔌", name: "Connector", color: "#6366f1", shape: "rectangle" },
+  { icon: "🤖", name: "Agent", color: "#0d9488", shape: "rectangle" },
+  // Note vocabulary the placeholder layers write (`type: Deal` frontmatter on
+  // pipeline notes) — scoped to notes, the way the draft-context surface would
+  // have created it.
+  { icon: "💼", name: "Deal", color: "#b45309", shape: "rectangle", scope: "note" },
 ];
 
 /**
@@ -218,6 +233,14 @@ async function wipeData() {
     prisma.identity.deleteMany({}),
     prisma.user.deleteMany({}),
     prisma.space.deleteMany({}),
+    // The marketplace registry is deliberately NOT space-foreign-keyed — a
+    // published version must outlive the space that authored it, because other
+    // spaces may have it installed. That is right in production and wrong for a
+    // local wipe: with every space gone there is no install left to protect, and
+    // skipping this left one orphaned row per Tool per reseed, accumulating
+    // forever. Last, so the Restrict FK from app_tool_installs is already
+    // satisfied by the cascade from the space delete above.
+    prisma.appToolVersion.deleteMany({}),
   ]);
 }
 

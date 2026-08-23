@@ -1,8 +1,8 @@
 // Publish proposals — queued by POST /api/notes/publications when the caller
-// lacks edit access at the destination (lib/notes/promote.ts). Folder managers
+// lacks edit access at the destination (lib/notes/promote.ts). Space admins
 // list and resolve them here.
-//   GET  ?spaceId=                      → { proposals } (own + admined folders')
-//   PUT  { spaceId, proposalId, approve } → { proposal } (folder admin resolves)
+//   GET  ?spaceId=                      → { proposals } (own; admins see all)
+//   PUT  { spaceId, proposalId, approve } → { proposal } (space admin resolves)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireContext, fail, failFromError } from '@/lib/notes/api'
@@ -26,8 +26,8 @@ export async function PUT(req: NextRequest) {
   try {
     return NextResponse.json({ proposal: await resolveProposal(p, proposalId, body.approve === true) })
   } catch (err) {
-    // resolveProposal throws when the caller isn't a folder admin.
-    if (err instanceof Error && err.message.startsWith('Only a folder admin')) {
+    // resolveProposal throws when the caller isn't a space admin.
+    if (err instanceof Error && err.message.startsWith('Only a space admin')) {
       return fail(err.message, 403)
     }
     return failFromError(err)

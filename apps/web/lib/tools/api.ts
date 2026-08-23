@@ -88,16 +88,6 @@ export interface ReviewQueueResponse {
   queue: ReviewQueueItem[]
 }
 
-/**
- * `?status=reviewed` on the same route: the decisions already made, newest
- * first. No perimeter diff — a reviewer reading their own trail is asking what
- * they decided, not what the submission was asking for; opening a row still
- * answers that.
- */
-export interface ReviewHistoryResponse {
-  reviewed: ToolVersionSummary[]
-}
-
 /** The "before" side of the code diff: the last approved version's sources. */
 export interface VersionSources {
   id: string

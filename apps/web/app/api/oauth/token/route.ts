@@ -1,20 +1,22 @@
 /**
- * OAuth 2.1 Token Endpoint: `authorization_code` (PKCE) and `refresh_token`.
+ * OAuth 2.1 Token Endpoint: `authorization_code` (PKCE), and nothing else.
  *
  * Public clients, so there is no client authentication — the security of the
  * code grant rests entirely on the PKCE verifier and the redirect_uri binding,
- * both checked below. Refresh tokens rotate on every use.
+ * both checked below.
+ *
+ * There is no refresh grant. An access token is a stateless 30-day JWT and that
+ * is the whole lifetime of a grant: when it expires the client runs the
+ * authorization flow again. Locally none of this is on the path at all — see
+ * lib/mcp/devIdentity.ts.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import {
   consumeAuthCode,
-  issueRefreshToken,
-  rotateRefreshToken,
   verifyPkceS256,
   getUserIdentity,
   kindFromStored,
 } from '@/lib/mcp/oauth'
-import { resolveClient, ClientResolutionError } from '@/lib/mcp/clients'
 import { isCanonicalResource, mcpResourceUrl, resourceKindOf } from '@/lib/mcp/config'
 import { mintAccessToken } from '@/lib/mcp/tokens'
 import { parseScopes, serializeScopes } from '@/lib/mcp/scopes'
@@ -45,16 +47,6 @@ async function readParams(req: NextRequest): Promise<Record<string, string>> {
     if (typeof v === 'string') out[k] = v
   }
   return out
-}
-
-/** Does this client still exist / still validate? Works for DCR and CIMD alike. */
-async function clientStillValid(clientId: string): Promise<boolean> {
-  try {
-    return (await resolveClient(clientId)) !== null
-  } catch (e) {
-    if (e instanceof ClientResolutionError) return false
-    throw e
-  }
 }
 
 export async function POST(req: NextRequest) {
@@ -94,52 +86,12 @@ export async function POST(req: NextRequest) {
     }
     const scopes = parseScopes(row.scope)
     const { token, expiresIn } = await mintAccessToken(identity, scopes, row.clientId, kind)
-    const refreshToken = await issueRefreshToken({
-      clientId: row.clientId,
-      userId: row.userId,
-      scope: serializeScopes(scopes),
-      resource: kind,
-    })
 
     return NextResponse.json(
       {
         access_token: token,
         token_type: 'Bearer',
         expires_in: expiresIn,
-        refresh_token: refreshToken,
-        scope: serializeScopes(scopes),
-      },
-      { headers: { 'Cache-Control': 'no-store' } },
-    )
-  }
-
-  if (p.grant_type === 'refresh_token') {
-    const rotated = await rotateRefreshToken(p.refresh_token ?? '', requestedKind)
-    if (!rotated) return oauthError('invalid_grant', 'Refresh token is invalid, expired or revoked')
-    if ('wrongResource' in rotated) {
-      return oauthError('invalid_target', `This grant is for ${mcpResourceUrl(rotated.wrongResource)}`)
-    }
-    if (p.client_id && rotated.clientId !== p.client_id) {
-      return oauthError('invalid_grant', 'Refresh token was issued to another client')
-    }
-    if (!(await clientStillValid(rotated.clientId))) {
-      return oauthError('invalid_grant', 'The client registration no longer exists')
-    }
-
-    const identity = await getUserIdentity(rotated.userId)
-    if (!identity) return oauthError('invalid_grant', 'The authorizing user no longer exists')
-
-    // Re-parsed through the current catalogue, so a grant stored before a scope
-    // was retired cannot carry it forward.
-    const scopes = parseScopes(rotated.scope)
-    const { token, expiresIn } = await mintAccessToken(identity, scopes, rotated.clientId, rotated.resource)
-
-    return NextResponse.json(
-      {
-        access_token: token,
-        token_type: 'Bearer',
-        expires_in: expiresIn,
-        refresh_token: rotated.refreshToken,
         scope: serializeScopes(scopes),
       },
       { headers: { 'Cache-Control': 'no-store' } },

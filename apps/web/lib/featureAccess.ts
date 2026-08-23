@@ -9,8 +9,14 @@ import type { SpaceFeatureConfig } from '@/lib/types';
 /**
  * Feature keys that are always on and can never be persisted off. Must stay in
  * sync with the `core: true` entries in features/shared/lib/features.tsx#FEATURES.
+ *
+ * `tools` is core because the marketplace needs no switch: what a space runs
+ * is already decided by two explicit human acts — a Visvine reviewer approving
+ * a version, and a space admin installing it (members can only ASK — see the
+ * install-request flow in app/api/communities/[spaceId]/tools/requests). A
+ * third toggle on top of that pipeline gated nothing anyone needed gated.
  */
-export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events'];
+export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events', 'tools'];
 
 /**
  * Every key in the registry, in its default (registry) order. Must stay in sync
@@ -19,6 +25,20 @@ export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events'];
  * `tool:<slug>` rail keys below (see isPersistableFeatureKey).
  */
 export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'connectors', 'agents', 'tools'];
+
+/**
+ * The `featureConfig` a freshly created space is stored with: core keys
+ * (tools included) are never persisted, every other toggleable feature starts
+ * `false` and is opted in from the console. Both space-creation routes write
+ * this, so the two can't drift.
+ */
+export function defaultFeatureConfig(): SpaceFeatureConfig {
+  return {
+    enabled: Object.fromEntries(
+      ALL_FEATURE_KEYS.filter((key) => !CORE_FEATURE_KEYS.includes(key)).map((key) => [key, false]),
+    ),
+  };
+}
 
 /**
  * The prefix of an INSTALLED Tool's dynamic rail key: `tool:<slug>`.
@@ -106,9 +126,10 @@ export function isFeatureEnabled(config: SpaceFeatureConfig | null | undefined, 
  * drifts — 'section' vs 'Section'), valued by the feature slug that owns them.
  *
  * Person and Space (the org type) belong to the always-on
- * directory and Event to the always-on navbar Events surface — none of them
- * appears here, so they're never hidden. In particular 'space' must NOT be
- * added: it would hide every org record whenever the Channels tool is off.
+ * directory, Event to the always-on navbar Events surface, and Tool to the
+ * always-on marketplace — none of them appears here, so they're never hidden.
+ * In particular 'space' must NOT be added: it would hide every org record
+ * whenever the Channels tool is off.
  */
 const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   resource: 'resources',
@@ -116,7 +137,6 @@ const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   channel: 'channels',
   connector: 'connectors',
   agent: 'agents',
-  tool: 'tools',
 };
 
 /** The feature slug a node type belongs to, or null if it isn't feature-gated. */

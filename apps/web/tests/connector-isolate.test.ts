@@ -577,6 +577,45 @@ test('visvine.crypto.sigv4 signs with keys read from env by NAME and matches the
 
 // ── fetch follow (lib/connectors/hostFetch.ts) ────────────────────────────────
 
+// A custom auth header is the ordinary case for a keyed API (Azure APIM's
+// Ocp-Apim-Subscription-Key, and every x-api-key service), and the runtime
+// touches request headers in three places: it lowercases them, it drops
+// FORBIDDEN_HEADERS and proxy-*, and it reserves the identity/Authorization
+// names it stamps itself. None of that should reach a vendor's key header.
+//
+// This is pinned because the alternative is expensive: when a keyed API answers
+// 401, "our runtime is eating the header" is the first theory anyone reaches
+// for, and disproving it by inspection costs an afternoon. The upstream here
+// reports exactly what arrived, so the answer is a test run.
+test('a vendor auth header reaches the upstream with its secret value intact', async () => {
+  let seen: http.IncomingHttpHeaders = {}
+  const server = await upstream((req, res) => {
+    seen = req.headers
+    res.end('ok')
+  })
+  // Shaped like a real APIM key: 32 hex characters, nothing a redactor would
+  // mistake for a placeholder.
+  const KEY = 'abcdef0123456789abcdef0123456789'
+  try {
+    const r = await runInIsolate(
+      perimeter({ hosts: [server.host], allowPrivate: true, env: { SUB_KEY: KEY } }),
+      `const res = await fetch('http://${server.host}/gateway/v5/entities?q=1', {
+         headers: { 'Ocp-Apim-Subscription-Key': env.SUB_KEY, Accept: 'application/json' },
+       })
+       return res.status`,
+      { redact: [KEY] },
+    )
+    assert.equal(r.ok, true, r.error?.message)
+    assert.equal(r.value, 200)
+    // Lowercased on the way out (HTTP header names are case-insensitive), value
+    // untouched. The isolate never saw the value as a local; it came from env.
+    assert.equal(seen['ocp-apim-subscription-key'], KEY)
+    assert.equal(seen['accept'], 'application/json')
+  } finally {
+    await server.close()
+  }
+})
+
 test('fetch follows redirects only when asked, counts hops, and re-gates every hop', async () => {
   const server = await upstream((req, res) => {
     if (req.url === '/a') {

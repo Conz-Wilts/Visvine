@@ -6,6 +6,8 @@
 
 import { splitFrontmatter, extractMarkdownLinks, resolveOkfLink } from './shared/markdown'
 import { INDEX_BASENAME, isIndexPath } from './shared/indexNote'
+import { isFeatureEnabled } from '../featureAccess'
+import type { SpaceFeatureConfig } from '../types'
 
 export type EntityKind =
   | 'person'
@@ -355,6 +357,54 @@ export function agentNameOfPath(path: string): string | null {
 // note turned index — see the "entity folders" note above).
 export function isEntityNamespaceDir(path: string): boolean {
   return Object.values(ENTITY_DIRS).includes(path)
+}
+
+/**
+ * Why a namespace folder can't be renamed, moved or deleted — the sentence the
+ * server throws and the client greys the menu item out with — or null when
+ * `path` is an ordinary folder.
+ *
+ * A namespace is structure, not filing. `agents/`, `connectors/` and `tools/`
+ * are where the runtime LOOKS: the scheduler reads `agents/`, an agent's
+ * `connectors:` line resolves against `connectors/`, a Tool is `tools/<name>/`.
+ * `people/`, `events/` and the rest are the same bargain one step removed —
+ * every entity note's path is derived from its node and every inbound
+ * [[mention]] resolves against it. Deleting one wouldn't remove a folder, it
+ * would trash every note inside and leave a space whose agents and connectors
+ * had silently stopped existing.
+ *
+ * So the folder itself is fixed and its CONTENTS are not: delete an agent,
+ * a connector, a Tool, a person freely — that is one note (or one entity
+ * folder), and the namespace it sat in is still there, empty, ready for the
+ * next one. There is no "delete anyway": nothing about a space wants these
+ * gone, and an empty namespace costs a row.
+ */
+export function namespaceFolderDenial(path: string): string | null {
+  if (!isEntityNamespaceDir(path)) return null
+  return `"${path}" is one of the space's built-in folders — what it holds can be deleted, but the folder itself stays`
+}
+
+/**
+ * The folders a space HAS whether or not anything is in them yet, keyed by the
+ * tool that brings each one: turn Agents on and `agents/` is there, ready, the
+ * same way an empty Inbox is still a folder. `tools` is a core feature key
+ * (lib/featureAccess CORE_FEATURE_KEYS) and so is never off — which is exactly
+ * the rule we want, with no special case to state.
+ *
+ * The entity namespaces (`people/`, `events/`, …) are deliberately NOT here:
+ * they're derived from the directory rather than switched on, so an empty one
+ * is noise. This is about the three folders a person goes LOOKING for.
+ */
+const STRUCTURAL_FOLDER_FEATURES: Record<string, string> = {
+  agents: 'agents',
+  connectors: 'connectors',
+  tools: 'tools',
+}
+
+export function structuralFolders(config: SpaceFeatureConfig | null | undefined): string[] {
+  return Object.entries(STRUCTURAL_FOLDER_FEATURES)
+    .filter(([, feature]) => isFeatureEnabled(config, feature))
+    .map(([dir]) => dir)
 }
 
 // Resolve an entity-note path back to its directory node id via the loaded node
