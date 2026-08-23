@@ -1540,7 +1540,7 @@ export function registerTools(server: McpServer): void {
   //
   // Deliberately NOT on the agent runtime surface (lib/agents/tools.ts): an
   // unattended 3am run has no business rotating credentials, and an agent that
-  // could would be an agent that could lock a space out of its own integrations.
+  // could would be an agent that could lock a space out of its own connectors.
   server.registerTool(
     'set_connector_secret',
     {

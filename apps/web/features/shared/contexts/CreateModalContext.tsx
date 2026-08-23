@@ -37,17 +37,16 @@ export type CreateableType =
   | 'tool';
 
 /**
- * Types that are created on the note-first surface (/directory/new) rather than
- * in the docked panel — which is now everything except an Event (whose detail
- * route redirects to /events/<id>, so the draft has nowhere to land).
+ * Types that are created on the note-first surface (/directory/new). Everything
+ * is, except a Tool — its scaffold writes three notes and a node at once, so it
+ * stays in the docked panel. A connector and an agent are ONLY creatable
+ * here: the docked panel has no form for either.
  *
- * A channel, section and uploaded file used to be panel-only on the grounds that
- * they have no note to open. They do: each writes a context note
- * (channels/<slug>.md, spaces/…) or lands in the context tree,
- * so the draft surface takes a name and a starting body for them just like the
- * rest. The docked panel is still reachable from the places that open it
- * directly (the space switcher, the channel list) — it just isn't the only
- * way to reach these types any more.
+ * A channel, section and uploaded file each write a context note
+ * (channels/<slug>.md, spaces/…) or land in the context tree, so the draft
+ * surface takes a name and a starting body for them like the rest. The docked
+ * panel is still reachable from the places that open it directly (the space
+ * switcher, the channel list).
  */
 const NOTE_FIRST: Partial<Record<CreateableType, string>> = {
   context: 'note',
@@ -66,17 +65,15 @@ const NOTE_FIRST: Partial<Record<CreateableType, string>> = {
   file: 'file',
 };
 
-export interface CreateOpenOptions {
-  /** The folder the new note should land in — for an agent, relative to `agents/`. */
-  folder?: string;
-}
-
 interface CreateModalContextValue {
   isOpen: boolean;
   defaultType: CreateableType | null;
-  defaultFolder: string | null;
-  open: (type?: CreateableType, opts?: CreateOpenOptions) => void;
+  open: (type?: CreateableType) => void;
   close: () => void;
+  /** The "Add connector" catalog — its own centered modal, not the docked panel. */
+  catalogOpen: boolean;
+  openCatalog: () => void;
+  closeCatalog: () => void;
 }
 
 const [CreateModalContext, useCreateModal] = createSafeContext<CreateModalContextValue>('CreateModal');
@@ -85,22 +82,30 @@ export { useCreateModal };
 export function CreateModalProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [defaultType, setDefaultType] = useState<CreateableType | null>(null);
-  const [defaultFolder, setDefaultFolder] = useState<string | null>(null);
+  const [catalogOpen, setCatalogOpen] = useState(false);
 
-  const open = (type?: CreateableType, opts?: CreateOpenOptions) => {
+  const open = (type?: CreateableType) => {
     setDefaultType(type ?? null);
-    setDefaultFolder(opts?.folder ?? null);
     setIsOpen(true);
   };
 
   const close = () => {
     setIsOpen(false);
     setDefaultType(null);
-    setDefaultFolder(null);
   };
 
   return (
-    <CreateModalContext.Provider value={{ isOpen, defaultType, defaultFolder, open, close }}>
+    <CreateModalContext.Provider
+      value={{
+        isOpen,
+        defaultType,
+        open,
+        close,
+        catalogOpen,
+        openCatalog: () => setCatalogOpen(true),
+        closeCatalog: () => setCatalogOpen(false),
+      }}
+    >
       {children}
     </CreateModalContext.Provider>
   );
@@ -116,17 +121,24 @@ export function CreateModalProvider({ children }: { children: React.ReactNode })
  */
 export function useCreateSurface() {
   const router = useRouter();
-  const { open } = useCreateModal();
+  const { open, openCatalog } = useCreateModal();
 
   return useCallback(
     (type?: CreateableType, opts?: { folder?: string }) => {
+      // A connector starts from the catalog — pick a service, fill in its
+      // key. The draft surface is still where a custom one is written, and the
+      // catalog's last row leads there.
+      if (type === 'connector') {
+        openCatalog();
+        return;
+      }
       // With no explicit type the draft opens with the Type row UNSET. The route
       // used to imply one, which meant "Create new" from anywhere under
       // /directory started on Person — a type nobody asked for, on a surface
       // whose whole point is that you say what the thing is.
       const draftType = type ? NOTE_FIRST[type] : null;
       if (type && !draftType) {
-        open(type, opts);
+        open(type);
         return;
       }
       const params = new URLSearchParams();
@@ -135,6 +147,12 @@ export function useCreateSurface() {
       const query = params.toString();
       router.push(`/directory/new${query ? `?${query}` : ''}`);
     },
-    [open, router],
+    [open, openCatalog, router],
   );
+}
+
+/** The catalog modal's own slice of the create state. */
+export function useConnectorCatalog() {
+  const { catalogOpen, openCatalog, closeCatalog } = useCreateModal();
+  return { isOpen: catalogOpen, open: openCatalog, close: closeCatalog };
 }

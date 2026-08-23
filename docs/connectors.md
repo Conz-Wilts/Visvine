@@ -64,6 +64,16 @@ a deep-frozen global — an action is convenience and review, never a wider door
 `^[a-z][a-z0-9_]{0,63}$`; at most 32 actions, 32KB of code each; `params` is not validated against
 `args` at run time.
 
+## Adding one from the catalog
+
+**Create → Connector** opens one searchable list of services, filterable by All / Connected /
+Not connected, with an ⓘ per row. Pick a service, paste the credential
+its form asks for, save. What happens is exactly what an admin would do by hand: the note is
+written at `connectors/<name>.md` with the service's hosts and a body that teaches agents
+its API, and each secret field is stored through the secrets API — never in the note. OAuth
+entries (Google, Microsoft, any MCP server) store the OAuth client; people connect their
+own account afterwards from the connector's page. The recipes are `lib/connectors/catalog.ts`.
+
 ## Who can use one
 
 Access is Visvine's own machinery. There is no separate connector permission system.
@@ -162,7 +172,7 @@ consent, and the scope is necessary but never sufficient — the admin check sit
 
 It is **not** on the agent runtime surface (`lib/agents/tools.ts`). An unattended 3am run has no
 business rotating a credential, and an agent that could would be an agent that could lock a space out
-of its own integrations.
+of its own connectors.
 
 Storing is still one-way. Nothing reads a value back — not the page, not a tool, not an admin. Keep
 the credential wherever you normally keep credentials before you store it here.

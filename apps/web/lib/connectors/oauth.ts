@@ -19,7 +19,7 @@
  *   • DYNAMIC REGISTRATION. Where the server offers it (RFC 7591), Visvine
  *     registers itself at first connect. That is what makes "add an MCP server"
  *     a URL rather than a signup — the per-vendor developer-account tax that
- *     makes integrations expensive simply does not apply.
+ *     makes connectors expensive simply does not apply.
  *   • PKCE ALWAYS, even where a client secret exists. Cheap, and it removes the
  *     authorization-code interception class outright.
  *   • THE SSRF GUARD APPLIES. Every URL reached here is checked, because the

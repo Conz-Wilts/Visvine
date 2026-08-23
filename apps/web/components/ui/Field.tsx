@@ -9,7 +9,7 @@ import { clsx } from 'clsx';
  * picker, …) as children.
  */
 interface FieldProps {
-  label: string;
+  label: React.ReactNode;
   /** Muted helper text shown below the control. */
   hint?: React.ReactNode;
   /** Error text shown below the control; takes visual priority over `hint`. */

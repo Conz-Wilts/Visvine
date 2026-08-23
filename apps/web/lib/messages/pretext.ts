@@ -1,5 +1,5 @@
 /**
- * Pretext integration for message height calculation.
+ * Pretext connector for message height calculation.
  *
  * Uses @chenglou/pretext to calculate message bubble heights without DOM reflow.
  * prepare() runs once per message text (cached), layout() is pure arithmetic on resize.

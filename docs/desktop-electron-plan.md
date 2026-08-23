@@ -36,7 +36,7 @@ Figma all ship the same shape: Chromium window → hosted web app. So:
 | `resources/offline.html` | shown when the server is unreachable; retries automatically |
 | `electron-builder.yml` | NSIS (win), DMG (mac), AppImage/deb (linux) targets |
 
-Security posture: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`,
+Security posture: `contextIsolation: true`, `sandbox: true`, `nodeConnector: false`,
 `webSecurity` on, `setWindowOpenHandler` opens anything off-app in the system browser,
 `will-navigate` blocks navigation to non-app / non-auth origins, permission requests are
 denied by default (except clipboard/fullscreen), and only the `visvineDesktop` bridge is

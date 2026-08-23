@@ -46,13 +46,8 @@ import {
 import { indexPathOf, newIndexContent } from '@/lib/notes/shared/indexNote'
 import { noteHref, sourceHref } from '@/lib/notes/entities'
 import { useContextFolderTree, FolderDropBoard, PathPreview } from '@/features/create/components/ContextDestination'
-import {
-  FileForm,
-  connectorSlug,
-  agentSlug,
-  type FileEntry,
-  type FileFormData,
-} from '@/features/create/components/CreateModalForms'
+import { FileForm, type FileEntry, type FileFormData } from '@/features/create/components/CreateModalForms'
+import { agentSlug, connectorSlug } from '@/lib/create/noteSlug'
 import { newConnectorNote } from '@/lib/connectors/config'
 import { agentBriefPath, newAgentNote } from '@/lib/agents/config'
 import type { ChannelSectionEntry } from '@/lib/messages/types'
@@ -144,6 +139,19 @@ const DRAFT_TYPES: DraftTypeOption[] = [
   { id: 'folder', label: 'Folder', configName: null, color: NOTE_COLOR, creatable: 'folder' },
   { id: 'file', label: 'File', configName: null, color: '#0ea5e9', creatable: 'file' },
 ]
+
+/**
+ * Where a freshly created entity lands. An event opens on its event page and a
+ * person on their profile — the record is what you fill in next, and both pages
+ * carry the context note alongside it. A space or resource has nothing to fill
+ * in beyond what the draft took, so it opens straight on the note.
+ */
+function createdEntityHref(type: DraftType, nodeId: string): string {
+  const id = encodeURIComponent(nodeId)
+  if (type === 'event') return `/events/${id}`
+  if (type === 'person') return `/directory/${id}`
+  return `/directory/${id}?tab=context`
+}
 
 /** Types that commit to a real directory node (and so get a dedupe check).
  *  Keep in sync with CREATABLE_TYPES (lib/directory/createEntity.ts) — that is
@@ -540,7 +548,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     clearContextCache(spaceId)
 
     sessionStorage.removeItem(STASH_KEY)
-    router.replace(`/directory/${encodeURIComponent(node.id)}?tab=context`)
+    router.replace(createdEntityHref(type, node.id))
   }, [spaceId, type, title, alias, selectedIdentityId, pickedSpace, fields, tags, router])
 
   // ── The non-note commits ──────────────────────────────────────────────────

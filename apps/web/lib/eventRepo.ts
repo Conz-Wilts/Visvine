@@ -11,7 +11,7 @@ import { normalizeImageUrl } from './mediaUrl';
 import { findMatchingPerson } from './personDedupe';
 import { generateAttendeeId, normalizeStatus, occupiedSpots, decideRsvpStatus } from './eventUtils';
 import { upsertLink, removeAutoLink } from './notes/context/links';
-import { ensureEntityNote } from './notes/context/entityNodes';
+import { ensureEntityNote, syncEntityNoteFrontmatter } from './notes/context/entityNodes';
 import { logger } from './logger';
 
 /** Thrown by submitRsvp when an event is full and its waitlist is disabled. */
@@ -356,6 +356,16 @@ export async function upsertEvent(spaceId: string, event: NBEvent): Promise<void
     type: 'event',
     name: event.title,
     subtitle: event.description ?? null,
+  });
+  // …but the frontmatter does follow the record: editing the date or venue on
+  // the event page updates events/<slug>.md, leaving the prose alone.
+  await syncEntityNoteFrontmatter({
+    id: event.id,
+    type: 'event',
+    spaceId,
+    name: event.title,
+    location: event.location?.label ?? null,
+    metadata: meta as Record<string, unknown>,
   });
   revalidateTag('context-data-v2', { expire: 0 });
 }

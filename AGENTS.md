@@ -189,6 +189,17 @@ A connector is a note. Two halves, and the split is the security model:
 notes. The `connectors/` folder is admin-only for writes regardless of grants
 (`contextService.writeDenial`).
 
+**Create → Connector opens the catalog** (`lib/connectors/catalog.ts`,
+`features/connectors/components/ConnectorCatalogModal.tsx`): one searchable list of
+known services (All / Connected / Not connected), each a recipe — fields to fill in, the note that comes out.
+Saving writes the ordinary `connectors/<name>.md` and PUTs each secret field
+to `/api/communities/<space>/secrets`; nothing else changes. Connected rows get
+Manage (edit → the connector page, delete → the note). A custom service is
+still written on the draft surface. Logos live in
+`public/images/connectors/`. `tests/connector-catalog.test.ts` runs every
+recipe through the real parsers, so a new entry that would write an invalid
+note fails there.
+
 **Model connectors** (`kind: model`, `provider: gemini|openai|anthropic|custom`;
 `lib/connectors/model.ts`) are the one non-perimeter kind: they represent the
 LLM provider a Space's agents run on, keyed by the reserved `MODEL_KEY_<PROVIDER>`

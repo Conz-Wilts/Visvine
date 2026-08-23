@@ -106,3 +106,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Connector logos (`apps/web/public/images/connectors/`)
+
+Brand marks shown in the "Add connector" catalog, not part of the icon
+system. Monochrome marks are from [Simple Icons](https://simpleicons.org)
+(CC0), filled with each brand's hex. `google.svg`, `googledrive.svg` and
+`microsoft.svg` are the brands' own multi-colour marks redrawn as SVG. The
+two PNGs (`granola.png`, `fireflies.png`) are the vendors' favicons. Logos
+are used to identify the service, under each owner's trademark.

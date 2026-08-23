@@ -11,10 +11,7 @@ import { isSuperAdmin } from '@/lib/session';
 import { isGlobalSpace } from '@/lib/spaces/globalSpace';
 import { GLOBAL_MODE_KEY, syncGlobalRecordSafe } from '@/lib/global/record';
 import { requireApiSession } from '@/lib/api/route';
-import { logger } from '@/lib/logger';
-import { entityNotePath } from '@/lib/notes/entities';
-import { readNoteOrNull, writeNote, SHARED_OWNER_KEY } from '@/lib/notes/store';
-import { parseFrontmatter, splitFrontmatter, joinFrontmatter } from '@/lib/notes/shared/markdown';
+import { syncEntityNoteFrontmatter } from '@/lib/notes/context/entityNodes';
 
 const MAX_NAME_LEN = 120;
 
@@ -22,30 +19,6 @@ const MAX_NAME_LEN = 120;
  *  `userId` is the person-node record key the entity sync finds nodes by —
  *  forging it would let any member re-point a person context at another record. */
 const RESERVED_METADATA_KEYS = ['userId'];
-
-/** Best-effort: keep the entity note's frontmatter `title:` in step with a node
- *  rename. The note path is id-derived (flat, or the folder index once the node's
- *  `metadata.notePath` says it converted); a missing note is fine (the Context
- *  tab stubs it from node.name anyway). */
-async function syncNoteTitle(
-  node: { id: string; type: string; spaceId: string; metadata?: Record<string, unknown> | null },
-  name: string,
-  actor: { id: string; name: string; email: string | null },
-): Promise<void> {
-  const notePath = entityNotePath(node);
-  if (!notePath) return;
-  const context = { spaceId: node.spaceId, ownerKey: SHARED_OWNER_KEY };
-  try {
-    const content = await readNoteOrNull(context, notePath);
-    if (content === null) return;
-    const frontmatter = parseFrontmatter(content);
-    if (frontmatter.title === name) return;
-    const { body } = splitFrontmatter(content);
-    await writeNote(context, notePath, joinFrontmatter({ ...frontmatter, title: name }, body), actor);
-  } catch (err) {
-    logger.error('nodes.rename.noteTitle.failed', { err, nodeId: node.id, notePath });
-  }
-}
 
 type RouteContext = {
   params: Promise<{ nodeId: string }>;
@@ -303,17 +276,21 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   // and a person NODE is one space's card for them, collaborative like every
   // other node in that space's directory. The profile page reads Person; this
   // route writes the node. Neither reaches across.
-  await prisma.node.update({ where: { id: nodeId }, data });
+  const updated = await prisma.node.update({
+    where: { id: nodeId },
+    data,
+    select: { id: true, type: true, spaceId: true, name: true, location: true, metadata: true },
+  });
 
-  if (name !== null && node.spaceId) {
-    await syncNoteTitle(
+  // The note's frontmatter follows the record — a rename, or an event's date
+  // and venue from the property rows — while its body stays whatever was written.
+  if (updated.spaceId) {
+    await syncEntityNoteFrontmatter(
       {
-        id: nodeId,
-        type: node.type,
-        spaceId: node.spaceId,
-        metadata: (node.metadata as Record<string, unknown> | null) ?? null,
+        ...updated,
+        spaceId: updated.spaceId,
+        metadata: (updated.metadata as Record<string, unknown> | null) ?? null,
       },
-      name,
       { id: session.userId, name: session.name, email: session.email ?? null },
     );
   }

@@ -24,8 +24,6 @@ import {
   ChannelForm, type ChannelFormData,
   SpaceForm, type SpaceFormData,
   ContextForm, type ContextFormData,
-  ConnectorForm, type ConnectorFormData, connectorSlug, connectorFormReady,
-  AgentForm, type AgentFormData, agentSlug, agentFormReady, agentConnectorList,
   ToolForm, type ToolFormData, toolSlug, toolFormReady,
   FileForm, type FileFormData, type FileEntry,
   AliasSelector,
@@ -36,11 +34,7 @@ import type { ChannelSectionEntry } from '@/lib/messages/types';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contextPrefetch';
 import { availableNotePath, composeNotePath, newNoteContent } from '@/lib/notes/shared/newContext';
-import { newConnectorNote } from '@/lib/connectors/config';
-import { newModelConnectorNote } from '@/lib/connectors/model';
-import { agentBriefPath, newAgentNote } from '@/lib/agents/config';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
-import { PROVIDERS } from '@/lib/agents/registry';
 import { noteHref, sourceHref } from '@/lib/notes/entities';
 import { createTool as createToolRequest } from '@/features/tools/lib/client';
 
@@ -72,7 +66,7 @@ const EVENT_FINDER_ICON = (
 export default function CreateModal() {
   const router = useRouter();
   const pathname = usePathname();
-  const { isOpen, defaultType, defaultFolder, close } = useCreateModal();
+  const { isOpen, defaultType, close, openCatalog } = useCreateModal();
   const { currentSpace, isAdmin } = useSpace();
   const { reduced } = useSidebar();
 
@@ -115,8 +109,6 @@ export default function CreateModal() {
   const [channelData, setChannelData] = useState<ChannelFormData>({ name: '', description: '', icon: null, viewMode: 'CHAT', sectionId: '', context: '' });
   const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '', context: '' });
   const [contextData, setContextData] = useState<ContextFormData>({ title: '', folder: '', tags: '', body: '' });
-  const [connectorData, setConnectorData] = useState<ConnectorFormData>({ name: '', description: '', kind: 'http', provider: 'gemini', baseUrl: '', hosts: '', secretName: '' });
-  const [agentData, setAgentData] = useState<AgentFormData>({ name: '', folder: '', description: '', model: 'gemini/gemma-4-31b-it', connectors: '', web: false, brief: '' });
   const [toolData, setToolData] = useState<ToolFormData>({ name: '', title: '', description: '', railLabel: '' });
   const [fileData, setFileData] = useState<FileFormData>({ files: [], folder: '' });
   // Where the just-created note/file lives, so the success screen can offer to
@@ -222,7 +214,6 @@ export default function CreateModal() {
     setChannelData({ name: '', description: '', icon: null, viewMode: 'CHAT', sectionId: '', context: '' });
     setSpaceData({ name: '', context: '' });
     setContextData({ title: '', folder: '', tags: '', body: '' });
-    setConnectorData({ name: '', description: '', kind: 'http', provider: 'gemini', baseUrl: '', hosts: '', secretName: '' });
     setToolData({ name: '', title: '', description: '', railLabel: '' });
     setFileData({ files: [], folder: '' });
     setCreatedHref(null);
@@ -248,14 +239,13 @@ export default function CreateModal() {
       if (defaultType) {
         setSelectedType(defaultType);
         setStep(1);
-        if (defaultType === 'agent') setAgentData((d) => ({ ...d, folder: defaultFolder ?? '' }));
       } else {
         setStep(0);
         setSelectedType(null);
       }
       setError(null);
     }
-  }, [isOpen, defaultType, defaultFolder]);
+  }, [isOpen, defaultType]);
 
   // Auto-focus the name field when entering step 1
   useEffect(() => {
@@ -282,6 +272,12 @@ export default function CreateModal() {
   }, [pathname]);
 
   const handleTypeSelect = (t: CreateableType) => {
+    // A connector is picked from the catalog, not typed into a form here.
+    if (t === 'connector') {
+      handleClose();
+      openCatalog();
+      return;
+    }
     setSelectedType(t);
     setStep(1);
   };
@@ -301,10 +297,6 @@ export default function CreateModal() {
       if (selectedType === 'channel') return channelData.name.trim().length > 0;
       if (selectedType === 'section') return spaceData.name.trim().length > 0;
       if (selectedType === 'context') return contextTitle.length > 0;
-      // Mirrors the server's perimeter validation, so Create can't write a note
-      // the connectors layer would immediately call invalid.
-      if (selectedType === 'connector') return connectorFormReady(connectorData);
-      if (selectedType === 'agent') return agentFormReady(agentData);
       if (selectedType === 'tool') return toolFormReady(toolData);
       // Only files that passed the pick-time check can be uploaded.
       if (selectedType === 'file') return fileData.files.some((f) => f.status === 'queued');
@@ -338,12 +330,6 @@ export default function CreateModal() {
         router.push('/channels');
       } else if (selectedType === 'context') {
         await createContextNote();
-        setStep(3);
-      } else if (selectedType === 'connector') {
-        await createConnectorNote();
-        setStep(3);
-      } else if (selectedType === 'agent') {
-        await createAgentNote();
         setStep(3);
       } else if (selectedType === 'tool') {
         await createToolScaffold();
@@ -411,75 +397,6 @@ export default function CreateModal() {
     );
     setCreatedHref(noteHref(path));
     setCreatedDetail(`Saved to ${path}`);
-  };
-
-  // ── Connector ─────────────────────────────────────────────────────────────
-  // A connector is a note whose frontmatter IS its perimeter, so creating one
-  // is just writing that note — same path the MCP tools and the describe agent
-  // take. The secret's VALUE is deliberately not collected here: it's set on
-  // the connector's own page, which is where the success screen points.
-  const createConnectorNote = async () => {
-    if (!currentSpace) throw new Error('Select a space first');
-    const name = connectorSlug(connectorData.name);
-    const path = `connectors/${name}.md`;
-    const isModel = connectorData.kind === 'model';
-    await notesApi.create(
-      currentSpace.id,
-      path,
-      isModel
-        ? newModelConnectorNote({
-            name,
-            provider: connectorData.provider,
-            baseUrl: connectorData.baseUrl.trim(),
-            description: connectorData.description.trim(),
-          })
-        : newConnectorNote({
-            name,
-            description: connectorData.description.trim(),
-            hosts: connectorData.hosts.split('\n').map((l) => l.trim()).filter(Boolean),
-            secretName: connectorData.secretName.trim().toUpperCase(),
-          }),
-    );
-    invalidateContextCache(
-      contextKeys.tree(currentSpace.id),
-      contextKeys.list(currentSpace.id),
-      contextKeys.read(currentSpace.id, path),
-    );
-    setCreatedHref(`/directory/${encodeURIComponent(`connector:${name}`)}`);
-    const pendingSecret = isModel
-      ? `MODEL_KEY_${connectorData.provider.toUpperCase()}`
-      : connectorData.secretName.trim().toUpperCase();
-    setCreatedDetail(pendingSecret ? `Saved to ${path} — set ${pendingSecret} on its page to finish.` : `Saved to ${path}`);
-  };
-
-  // ── Agent ─────────────────────────────────────────────────────────────────
-  // An agent is a note whose frontmatter names its model and reach and whose
-  // body is the brief; any member may write it. It does nothing until an
-  // admin activates it from /agents — which is where the success screen points.
-  const createAgentNote = async () => {
-    if (!currentSpace) throw new Error('Select a space first');
-    const name = agentSlug(agentData.name);
-    const path = agentBriefPath(name, agentData.folder);
-    await notesApi.create(
-      currentSpace.id,
-      path,
-      newAgentNote({
-        name,
-        title: agentData.name.trim(),
-        description: agentData.description.trim(),
-        model: agentData.model.trim(),
-        connectors: agentConnectorList(agentData),
-        tools: agentData.web ? ['web'] : [],
-        body: agentData.brief.trim(),
-      }),
-    );
-    invalidateContextCache(
-      contextKeys.tree(currentSpace.id),
-      contextKeys.list(currentSpace.id),
-      contextKeys.read(currentSpace.id, path),
-    );
-    setCreatedHref(`/directory/${encodeURIComponent(`agent:${name}`)}`);
-    setCreatedDetail(`Saved to ${path} — a space admin activates it from Agents.`);
   };
 
   // ── Tool ──────────────────────────────────────────────────────────────────
@@ -663,10 +580,6 @@ export default function CreateModal() {
       ? eventData.name || 'Event'
       : selectedType === 'context'
       ? contextTitle || 'Note'
-      : selectedType === 'connector'
-      ? connectorSlug(connectorData.name) || 'Connector'
-      : selectedType === 'agent'
-      ? agentSlug(agentData.name) || 'Agent'
       : selectedType === 'tool'
       ? toolSlug(toolData.name) || 'Tool'
       : selectedType === 'file'
@@ -842,17 +755,6 @@ export default function CreateModal() {
                 loading={contextFolderTree.loading}
               />
             )}
-            {step === 1 && selectedType === 'connector' && (
-              <ConnectorForm data={connectorData} onChange={setConnectorData} nameRef={nameRef} />
-            )}
-            {step === 1 && selectedType === 'agent' && (
-              <AgentForm
-                data={agentData}
-                onChange={setAgentData}
-                nameRef={nameRef}
-                models={PROVIDERS.flatMap((p) => p.models.map((m) => ({ value: `${p.id}/${m.id}`, label: `${p.label} — ${m.label}` })))}
-              />
-            )}
             {step === 1 && selectedType === 'tool' && (
               <ToolForm data={toolData} onChange={setToolData} nameRef={nameRef} />
             )}
@@ -885,10 +787,6 @@ export default function CreateModal() {
                   createdHref
                     ? selectedType === 'file'
                       ? 'Open'
-                      : selectedType === 'connector'
-                      ? 'Open connector'
-                      : selectedType === 'agent'
-                      ? 'Open agent'
                       : selectedType === 'tool'
                       ? 'Open preview'
                       : 'Open note'

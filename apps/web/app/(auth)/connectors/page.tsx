@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { PlugIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { Skeleton, Alert, EmptyState } from '@/components/ui';
+import { Skeleton, Alert, Button, EmptyState } from '@/components/ui';
 import { useCreateSurface } from '@/features/shared/contexts/CreateModalContext';
 import { fetchJson } from '@/lib/fetchJson';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
@@ -175,18 +175,25 @@ export default function ConnectorsPage() {
           icon={<PlugIcon />}
           title="No connectors yet"
           description="A connector is a gateway to an external API or a model provider your agents run on."
-          action={{ label: 'Create a connector', onClick: () => openCreate('connector') }}
+          action={{ label: 'Add a connector', onClick: () => openCreate('connector') }}
           size="page"
           actionStyle="solid"
         />
       );
     }
     return (
-      <div className="divide-y divide-border-subtle">
-        {connectors.map(connector => (
-          <ConnectorRowItem key={connector.path} connector={connector} />
-        ))}
-      </div>
+      <>
+        <div className="mb-2 flex justify-end">
+          <Button variant="brand" size="sm" onClick={() => openCreate('connector')}>
+            Add connector
+          </Button>
+        </div>
+        <div className="divide-y divide-border-subtle">
+          {connectors.map(connector => (
+            <ConnectorRowItem key={connector.path} connector={connector} />
+          ))}
+        </div>
+      </>
     );
   };
 

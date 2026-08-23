@@ -190,7 +190,7 @@ const RECIPES: Recipe[] = [
       // "hook up our CRM api" never says the word "connector" and is still
       // unambiguously one — weighted to clear the high-confidence bar on its own.
       { re: /\b(connect|integrat|hook ?up|wire ?up|plug ?in)\w*\b[^.]{0,40}\b(api|service|database|saas|crm|mcp server)\b/, score: 8 },
-      { re: /\b(integration|connector)\b/, score: 2 },
+      { re: /\b(connector|connector)\b/, score: 2 },
       { re: /\b(stripe|hubspot|salesforce|notion|slack|airtable|postgres|snowflake|github)\b/, score: 1 },
     ],
     contract: CONNECTOR_CONTRACT,
@@ -585,7 +585,7 @@ export function scoreRecipes(prompt: string): RecipeMatch[] {
 /**
  * How much to trust the top match. The thresholds are calibrated against the
  * pattern weights: a single "creat* … connector" hit is 10 and is decisive; a
- * bare mention of the word "integration" is 2 and is not.
+ * bare mention of the word "connector" is 2 and is not.
  */
 function confidenceOf(matches: RecipeMatch[]): 'high' | 'medium' | 'low' {
   const top = matches[0]?.score ?? 0

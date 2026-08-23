@@ -27,7 +27,8 @@ import { Prisma } from '@prisma/client'
 import prisma from '../../prisma'
 import { slugify } from '../../eventUtils'
 import { logger } from '../../logger'
-import { createNote, SHARED_OWNER_KEY, type Actor } from '../store'
+import { createNote, readNoteOrNull, writeNote, SHARED_OWNER_KEY, type Actor } from '../store'
+import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '../shared/markdown'
 import { entityDraftContent, entityKindOf, entityNotePath } from '../entities'
 import { spaceNodeId } from '../../types/context'
 import { upsertLink } from './links'
@@ -225,6 +226,68 @@ export async function ensureEntityNote(
     return { notePath, noteError: null, created: false }
   }
   return { notePath, noteError: null, created: true }
+}
+
+/**
+ * The record fields an entity's note mirrors in its frontmatter, beyond
+ * `title:`. Only the schedulable basics of an event: they are what the event
+ * page edits, and what someone reading `events/<slug>.md` needs to know without
+ * opening the page. Event `status` is deliberately absent — it would collide
+ * with the note lifecycle `status:`.
+ */
+function mirroredFields(node: EntityRecord): Record<string, unknown> {
+  const meta = node.metadata ?? {}
+  if (entityKindOf(node.type) !== 'event') return {}
+  return {
+    start_at: meta.start_at ?? null,
+    end_at: meta.end_at ?? null,
+    location: node.location ?? null,
+    capacity: meta.capacity ?? null,
+  }
+}
+
+type EntityRecord = {
+  id: string
+  type: string
+  spaceId: string
+  name?: string | null
+  location?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+/**
+ * Keep an entity note's frontmatter in step with its record: `title:` for
+ * every kind, plus the event schedule. The body is never touched — the note is
+ * what people wrote about the thing, the frontmatter is what the record says
+ * it is. Best-effort: a missing note is fine (the Context tab stubs it), a
+ * failed write is logged and swallowed so the record save still succeeds.
+ */
+export async function syncEntityNoteFrontmatter(
+  node: EntityRecord,
+  actor: Actor = SYSTEM_ACTOR,
+): Promise<void> {
+  const notePath = entityNotePath(node)
+  if (!notePath) return
+  const context = { spaceId: node.spaceId, ownerKey: SHARED_OWNER_KEY }
+  try {
+    const content = await readNoteOrNull(context, notePath)
+    if (content === null) return
+    const frontmatter = parseFrontmatter(content)
+    const next = { ...frontmatter }
+    if (node.name) next.title = node.name
+    for (const [key, value] of Object.entries(mirroredFields(node))) {
+      if (value === null || value === undefined || value === '') delete next[key]
+      else next[key] = value
+    }
+    const changed = Object.keys({ ...frontmatter, ...next }).some(
+      (key) => JSON.stringify(frontmatter[key]) !== JSON.stringify(next[key]),
+    )
+    if (!changed) return
+    const { body } = splitFrontmatter(content)
+    await writeNote(context, notePath, joinFrontmatter(next, body), actor)
+  } catch (err) {
+    logger.error('context.entityNote.sync.failed', { err, nodeId: node.id, notePath })
+  }
 }
 
 /**

@@ -111,7 +111,7 @@ class FakeJobTable {
 // because importing lib/notes/projections.ts pulls in Prisma, the agent hooks,
 // the Tool compiler and the publication sync — a graph that cannot load without
 // a database. What is asserted here is the CONTRACT each function promises; the
-// wiring itself is covered by the store's own integration path.
+// wiring itself is covered by the store's own connector path.
 
 test('write jobs coalesce onto one pending row per path', async () => {
   const jobs = new FakeJobTable()

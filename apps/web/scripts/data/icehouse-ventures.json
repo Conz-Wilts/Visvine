@@ -1409,7 +1409,7 @@
         "Icehouse Portfolio"
       ],
       "metadata": {
-        "bio": "FileInvite is a New Zealand-founded SaaS company that automates secure document and data collection, offering client portals, requests/reminders, e-signatures and CRM integrations. It is focused on banks, credit unions and commercial/complex lenders, generating the large majority of its revenue outside New Zealand (notably Australia and the US). Founded in 2015 by James Sampson, who developed it to solve the document-collection problem at his Auckland web agency, Zyber. The company remains active, launching CRM \"Connected Workflows\" in April 2025 and reporting roughly NZ$22.8M ARR for 2024.",
+        "bio": "FileInvite is a New Zealand-founded SaaS company that automates secure document and data collection, offering client portals, requests/reminders, e-signatures and CRM connectors. It is focused on banks, credit unions and commercial/complex lenders, generating the large majority of its revenue outside New Zealand (notably Australia and the US). Founded in 2015 by James Sampson, who developed it to solve the document-collection problem at his Auckland web agency, Zyber. The company remains active, launching CRM \"Connected Workflows\" in April 2025 and reporting roughly NZ$22.8M ARR for 2024.",
         "industry": "SaaS / Document Workflow Automation",
         "founded": "2015",
         "stage": "Series A",
@@ -2400,12 +2400,12 @@
         "Icehouse Portfolio"
       ],
       "metadata": {
-        "bio": "Preno is a New Zealand cloud-based hotel management software company serving boutique hotels, motels, and lodges. Its platform combines a property management system (PMS), channel manager connecting to OTAs such as Booking.com, Expedia, and Airbnb, and a direct booking engine, with two-way accounting integrations to Xero and MYOB. Co-founded by Amelia Gain (CEO) and Max Podolian (CTO), the product launched to market in late 2015 and is used by independent hoteliers across more than 20 countries. The company remains active and privately held, headquartered in Auckland with a London presence.",
+        "bio": "Preno is a New Zealand cloud-based hotel management software company serving boutique hotels, motels, and lodges. Its platform combines a property management system (PMS), channel manager connecting to OTAs such as Booking.com, Expedia, and Airbnb, and a direct booking engine, with two-way accounting connectors to Xero and MYOB. Co-founded by Amelia Gain (CEO) and Max Podolian (CTO), the product launched to market in late 2015 and is used by independent hoteliers across more than 20 countries. The company remains active and privately held, headquartered in Auckland with a London presence.",
         "industry": "Hospitality / Travel SaaS",
         "founded": "2014",
         "stage": "Seed",
         "status": "active",
-        "statusDetail": "Active and independent; privately held (approx. 22 employees). No acquisition or IPO found. Maintains a technology-partner integration with SiteMinder (a partnership, not an acquisition).",
+        "statusDetail": "Active and independent; privately held (approx. 22 employees). No acquisition or IPO found. Maintains a technology-partner connector with SiteMinder (a partnership, not an acquisition).",
         "fundingNotable": "Third-party aggregators report a 2015-era Seed round; PitchBook cites roughly NZ$1.27M total, while Tracxn lists a much smaller figure — treat amounts as approximate (no primary disclosure found). Investors named across Icehouse Ventures' job board and aggregators (Crunchbase/Tracxn) include Icehouse Ventures, Creative HQ, Lightning Lab, New Zealand Growth Capital Partners (NZGCP), Arc Angels, and Aspire NZ Seed Fund.",
         "icehouseBacked": "confirmed",
         "confidence": "high",
@@ -2792,7 +2792,7 @@
         "stage": "Seed",
         "status": "active",
         "statusDetail": "Active and operating; pivoted from drone fog dispersal to AI \"fog-casting\" forecasting (around 2023), with an Air New Zealand network beta trial and an MOU with BA CityFlyer at London City Airport (its first international customer).",
-        "fundingNotable": "In 2018 Emily Blythe won a NZ$700,000 investment at Icehouse Ventures' \"First Cut\" under-30 pitch challenge. NZ Herald reported Icehouse Ventures holds a 37.33% stake, founder Emily Blythe 39.56%, with ~20 smaller NZ and international investors holding the remainder. Also receives logistical (non-financial) government support via the NZ Airspace Integration Trials Programme (joined April 2022).",
+        "fundingNotable": "In 2018 Emily Blythe won a NZ$700,000 investment at Icehouse Ventures' \"First Cut\" under-30 pitch challenge. NZ Herald reported Icehouse Ventures holds a 37.33% stake, founder Emily Blythe 39.56%, with ~20 smaller NZ and international investors holding the remainder. Also receives logistical (non-financial) government support via the NZ Airspace Connector Trials Programme (joined April 2022).",
         "icehouseBacked": "confirmed",
         "confidence": "high",
         "verifyVerdict": "corrected",
@@ -2807,7 +2807,7 @@
           "https://www.nzherald.co.nz/business/companies/airlines/fog-caster-start-up-pyper-vision-signs-deal-with-british-airways/DDJIE5LKH5CPHLNPR43VFPE5AE/",
           "https://www.stuff.co.nz/life-style/300843284/new-zealander-of-the-year-2023-innovator-of-the-year-emily-blythe-battling-airport-fog-with-drones",
           "https://nzawards.org.nz/winners/emily-blythe/",
-          "https://www.mbie.govt.nz/about/news/pyper-vision-joins-airspace-integration-trials-programme",
+          "https://www.mbie.govt.nz/about/news/pyper-vision-joins-airspace-connector-trials-programme",
           "https://www.companiesnz.com/company/6202227/limpidity-limited",
           "https://www.avenues.net.nz/all-stories/2026/4/23/the-all-clear"
         ]
@@ -4490,7 +4490,7 @@
         "Icehouse Portfolio"
       ],
       "metadata": {
-        "bio": "Re-Leased is a New Zealand-founded, cloud-based commercial property management platform for property managers, owners and landlords, offering lease management, rent collection, trust/client accounting and accounting integrations. Founded by Tom Wallace in Napier (Hawke's Bay), it has expanded globally with offices in Napier, Auckland, Melbourne, London and Dallas, and reports managing 375,000+ leases for roughly 1,400 customers representing about US$7.5 billion in rent roll. In June 2024 it launched an AI tool called Credia to automate repetitive commercial real estate tasks.",
+        "bio": "Re-Leased is a New Zealand-founded, cloud-based commercial property management platform for property managers, owners and landlords, offering lease management, rent collection, trust/client accounting and accounting connectors. Founded by Tom Wallace in Napier (Hawke's Bay), it has expanded globally with offices in Napier, Auckland, Melbourne, London and Dallas, and reports managing 375,000+ leases for roughly 1,400 customers representing about US$7.5 billion in rent roll. In June 2024 it launched an AI tool called Credia to automate repetitive commercial real estate tasks.",
         "industry": "PropTech / SaaS",
         "founded": "2012",
         "stage": "Growth / Late-stage venture",
@@ -9712,7 +9712,7 @@
           "https://www.nzherald.co.nz/business/companies/airlines/fog-caster-start-up-pyper-vision-signs-deal-with-british-airways/DDJIE5LKH5CPHLNPR43VFPE5AE/",
           "https://www.stuff.co.nz/life-style/300843284/new-zealander-of-the-year-2023-innovator-of-the-year-emily-blythe-battling-airport-fog-with-drones",
           "https://nzawards.org.nz/winners/emily-blythe/",
-          "https://www.mbie.govt.nz/about/news/pyper-vision-joins-airspace-integration-trials-programme",
+          "https://www.mbie.govt.nz/about/news/pyper-vision-joins-airspace-connector-trials-programme",
           "https://www.companiesnz.com/company/6202227/limpidity-limited",
           "https://www.avenues.net.nz/all-stories/2026/4/23/the-all-clear"
         ]
@@ -9744,7 +9744,7 @@
           "https://www.nzherald.co.nz/business/companies/airlines/fog-caster-start-up-pyper-vision-signs-deal-with-british-airways/DDJIE5LKH5CPHLNPR43VFPE5AE/",
           "https://www.stuff.co.nz/life-style/300843284/new-zealander-of-the-year-2023-innovator-of-the-year-emily-blythe-battling-airport-fog-with-drones",
           "https://nzawards.org.nz/winners/emily-blythe/",
-          "https://www.mbie.govt.nz/about/news/pyper-vision-joins-airspace-integration-trials-programme",
+          "https://www.mbie.govt.nz/about/news/pyper-vision-joins-airspace-connector-trials-programme",
           "https://www.companiesnz.com/company/6202227/limpidity-limited",
           "https://www.avenues.net.nz/all-stories/2026/4/23/the-all-clear"
         ]

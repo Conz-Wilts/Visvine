@@ -82,7 +82,7 @@ electron-builder.yml packaging targets
 
 ## Security posture
 
-`contextIsolation`, `sandbox`, no `nodeIntegration`, `webSecurity` on. Only same-origin
+`contextIsolation`, `sandbox`, no `nodeConnector`, `webSecurity` on. Only same-origin
 and Google account URLs load in-window; other `http(s)`/`mailto:` links go to the OS
 browser; `javascript:`/`data:` navigations are dropped. The policy is applied to
 `will-navigate`, `will-redirect` (server-side 30x to another origin, e.g. the MCP OAuth
