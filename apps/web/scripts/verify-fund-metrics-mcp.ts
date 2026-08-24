@@ -67,7 +67,6 @@ async function main() {
     { userId: admin.id, name: admin.name ?? '', email: admin.email ?? '' },
     MCP_SCOPES,
     'verify-fund-metrics-mcp',
-    'context',
   );
 
   const client = new Client({ name: 'verify-fund-metrics', version: '1.0.0' });
@@ -77,8 +76,10 @@ async function main() {
   await client.connect(transport);
   console.log(`connected to ${MCP_URL} as ${admin.email}\n`);
 
-  const call = async (name: string, args: Record<string, unknown>) =>
-    payload(await client.callTool({ name, arguments: args }));
+  // One tool, and an action named inside it. `input` is what makes it RUN
+  // rather than hand back the action's manual (lib/mcp/gateway.ts).
+  const call = async (action: string, input: Record<string, unknown>) =>
+    payload(await client.callTool({ name: 'visvine', arguments: { action, input } }));
 
   // discovery
   const tools = await client.listTools();

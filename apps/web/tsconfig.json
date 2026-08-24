@@ -11,7 +11,17 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    // A leading dot hides a directory from the globs above, so the
+    // `.well-known` route handlers Next compiles are invisible to tsc
+    // unless they are named. `pnpm typecheck` missing a route the build
+    // then fails on is a slow way to find a one-line error.
+    "app/.well-known/**/*.ts",
+    ".next/types/**/*.ts"
+  ],
   // scripts/fixtures/** holds Tool SOURCE files (`ui.tsx`, `data.js`) that the
   // verify scripts feed to the server-side Tool compiler, not app code: they
   // import `@visvine/tool-kit`, which only resolves through the frame's import

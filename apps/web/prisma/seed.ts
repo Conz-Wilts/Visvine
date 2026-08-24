@@ -38,6 +38,9 @@ import { Pool } from "pg";
 import { ADMIN_ALIAS, ADMIN_ALIAS_ID, ADMIN_ALIAS_NAME } from "../lib/types/context";
 import { nameKey } from "../lib/identity/normalize";
 import { rebuildGlobalRecords } from "../lib/global/record";
+import { syncActionNotes } from "../lib/actions/sync";
+import { childSpaceNodeId } from "../lib/notes/entities";
+import { provisionSpace } from "../lib/spaces/provision";
 
 assertLocalTarget();
 
@@ -107,6 +110,13 @@ const EDIT = 30;
 const NODE_TYPES = [
   { icon: "👤", name: "Person", color: "#2563eb", shape: "rectangle" },
   { icon: "🏘️", name: "Space", color: "#78d870", shape: "square" },
+  // A portfolio company is a RECORD, not a tenant: it has a directory card and a
+  // context note (communities/<slug>.md, the org namespace — see
+  // lib/notes/entities.ts) but no space of its own. Blackbird's real sub-spaces
+  // are its teams, below. `company` folds onto `space` in TYPE_SYNONYMS, so the
+  // entity machinery keeps working; declaring the type here is what makes the
+  // space's own spelling win in findNodeTypeConfig and paints it its own colour.
+  { icon: "🏢", name: "Company", color: "#0891b2", shape: "square" },
   { icon: "📅", name: "Event", color: "#ef4444", shape: "rectangle" },
   { icon: "📚", name: "Resource", color: "#0d9488", shape: "circle" },
   { icon: "📝", name: "Note", color: "#8b5cf6", shape: "rectangle" },
@@ -145,7 +155,7 @@ interface SeedAlias {
   /** Chip colour in the directory — the same alias, seen from the graph. */
   color: string;
   /** The base node type this alias labels. Only Person aliases grant access. */
-  nodeType: "Person" | "Space";
+  nodeType: "Person" | "Space" | "Company";
   admin: boolean;
   system: boolean;
   /** [resourcePath, level] — '' is the context root. */
@@ -207,7 +217,7 @@ const ALIASES: SeedAlias[] = [
     system: false,
     grants: [["data/fund-roll-up.md", VIEW]],
   },
-  { name: "Portfolio Company", color: "#0891b2", nodeType: "Space", admin: false, system: false, grants: [] },
+  { name: "Portfolio Company", color: "#0891b2", nodeType: "Company", admin: false, system: false, grants: [] },
   { name: "Fund", color: "#0f766e", nodeType: "Space", admin: false, system: false, grants: [] },
 ];
 
@@ -399,6 +409,70 @@ async function createAnchorUsers() {
   }
 }
 
+/**
+ * Blackbird's own sub-spaces (docs/sub-spaces.md) — its teams, not its
+ * portfolio. A portfolio company is a directory record inside Blackbird
+ * (`type: Company`), never a tenant of its own; what genuinely nests is the way
+ * the firm is organised.
+ *
+ * All three go through `provisionSpace`, the same routine the switcher's
+ * "Create space inside…" runs, because a space is not just a row: it is a row
+ * plus seeded access state, an Admin holder, a member node and a ROOT INDEX.
+ * Hand-rolling the row left a space whose context had no `index.md`, so its
+ * sidebar had no folder tree and no Trash — it read as broken rather than empty.
+ *
+ * Each is `inherit` (reached by anyone active in Blackbird) and starts from
+ * `defaultFeatureConfig()`, so every toggleable tool is OFF and the people in
+ * the space opt in — a rail is not something a parent imposes.
+ *
+ * Each is recorded in Blackbird's context as a `subspace:` node pointing at the
+ * real row; its note is a FOLDER at the root of Blackbird's context
+ * (`operations/index.md`), written by db:spaces:records — so the context tree
+ * shows one folder per team beside `deals/` and `data/`.
+ */
+const CHILD_SPACES = [
+  {
+    name: "Investments Team",
+    subtitle: "Blackbird's investing team",
+    description: "The investors: sourcing, diligence, IC and the follow-on decisions behind every cheque.",
+  },
+  {
+    name: "Operations",
+    subtitle: "Blackbird's operations team",
+    description: "Fund operations — LP onboarding, compliance, legal, people and the systems the firm runs on.",
+  },
+  {
+    name: "Building Blackbird",
+    subtitle: "The firm building itself",
+    description: "How Blackbird builds Blackbird — brand, community, platform and the internal projects behind them.",
+  },
+] as const;
+
+async function createChildSpaces() {
+  const admin = ANCHORS[0];
+  for (const child of CHILD_SPACES) {
+    console.log(`Creating ${child.name} (inside Blackbird)…`);
+    const result = await provisionSpace({
+      name: child.name,
+      description: child.description,
+      parentId: SPACE_ID,
+      visibility: "inherit",
+      creator: { id: admin.id, name: admin.name, email: admin.email },
+    });
+    if (!result.ok) throw new Error(`seed: could not create ${child.name} — ${result.error}`);
+    await prisma.node.create({
+      data: {
+        id: childSpaceNodeId(result.space.id),
+        type: "space",
+        name: child.name,
+        subtitle: child.subtitle,
+        spaceId: SPACE_ID,
+        metadata: { spaceRef: result.space.id },
+      },
+    });
+  }
+}
+
 async function main() {
   const t0 = Date.now();
   await wipeData();
@@ -406,9 +480,15 @@ async function main() {
   await createAliases();
   await createAnchorUsers();
   await markAccessSeeded();
+  await createChildSpaces();
   // The Visvine space: one public record per person the seed made public.
   const global = await rebuildGlobalRecords();
   console.log(`Visvine: ${global.records} global record(s) from ${global.identities} identit(ies).`);
+  // One note per action and per recipe, in that same space: what the MCP
+  // gateway reads to tell an agent what Visvine can do, and what an admin edits
+  // to improve it.
+  const synced = await syncActionNotes();
+  console.log(`Visvine Context: ${synced.actions} action note(s), ${synced.recipes} recipe note(s).`);
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`Seed complete in ${elapsed}s.`);
   console.log("Anchor users (sign in via /dev/login):");

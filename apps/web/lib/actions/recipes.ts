@@ -1,32 +1,31 @@
 /**
- * `plan_visvine_query` — the router that turns "what the user asked for" into
- * "which Visvine tools to call, in what order, with what arguments".
+ * The recipes Visvine ships with: how to do the dozen things this platform gets
+ * asked for, written for the model that has to do them.
  *
- * WHY THIS EXISTS. Visvine's surface is note-first: a connector IS a note at
- * connectors/<name>.md, an agent IS a note at agents/<name>.md, a Tool IS three
- * notes under tools/<name>/. Nothing about `list_connectors` or `list_agents`
- * says that, so a client asked to "create a connector" reads a surface of
- * list_/run_ verbs, finds no `create_connector`, and correctly concludes there
- * is no door — when in fact the door is `edit_context` at the right path. The
- * knowledge was written down (lib/mcp/typeCatalog.ts GUIDANCE), but only behind
- * `list_context`, which is not the tool anyone calls when asked to build
- * something. This tool is the missing index: one call, from the prompt, to the
- * recipe.
+ * A RECIPE IS CONTENT, not a branch in a router. `pnpm db:actions:sync` renders
+ * each one into a note in the Visvine space's shared Context (`recipes/<id>.md`), and the
+ * note is what the gateway reads at run time. That is the same bargain
+ * `lib/connectors/catalog.ts` makes: the catalogue in code is the shipped
+ * default, the note is the live thing, and an admin improves the note without
+ * waiting for a deploy.
  *
- * DELIBERATELY DETERMINISTIC. No model call. Intent is scored with weighted
- * patterns over a hand-written catalog, so planning is free, instant, testable,
- * and structurally incapable of inventing a tool that does not exist. When the
- * match is weak the whole catalog comes back and the caller picks — a planner
- * that guesses confidently is worse than one that admits it doesn't know.
+ * DELIBERATELY DETERMINISTIC, still. Matching is a weighted term overlap over
+ * the keywords each recipe declares (lib/actions/shared/match.ts) — free,
+ * instant, testable, and structurally incapable of naming an action that does
+ * not exist, because the gateway resolves every name it returns against the
+ * registry before offering it. Keywords rather than regular expressions
+ * specifically so that a recipe survives the round trip through YAML
+ * frontmatter and an admin can add one by writing a note.
  *
- * The plan is ADVICE, not authorization. Every step it names still runs through
- * the same gates it always did (folder grants, admin checks, the AI freeze), so
- * a wrong plan costs a refusal, never an escape. `blockers` exists to predict
- * those refusals up front rather than discover them three calls in.
+ * A recipe is ADVICE, not authorization. Every step it names still runs through
+ * the same gates (folder grants, admin checks, the AI freeze), so a wrong
+ * recipe costs a refusal, never an escape. `blockers` exists to predict those
+ * refusals up front rather than discover them three calls in.
  */
 import type { SpaceFeatureConfig } from '@/lib/types'
 import { isFeatureEnabled } from '@/lib/featureAccess'
 import { SANDBOX_LIMITS } from '@/lib/connectors/config'
+import { kw, type KeywordRule } from '@/lib/actions/shared/match'
 
 /** One call the client should make, in order. */
 interface PlanStep {
@@ -52,19 +51,19 @@ export interface PlanSpaceFacts {
   agents: string[]
 }
 
-interface RecipeContext {
+export interface RecipeContext {
   space: PlanSpaceFacts | null
   scopes: readonly string[]
 }
 
-interface Recipe {
+export interface Recipe {
   id: string
   /** One line: when this recipe is the right one. Shown in the catalog. */
   when: string
   /** What the client most needs to understand before step 1. */
   summary: string
-  /** Weighted patterns over the lowercased prompt. Highest total wins. */
-  patterns: Array<{ re: RegExp; score: number }>
+  /** Weighted term rules over the lowercased prompt. Highest total wins. */
+  keywords: KeywordRule[]
   steps: (ctx: RecipeContext) => PlanStep[]
   /** The literal contract — frontmatter shape, field names — where one applies. */
   contract?: string
@@ -184,14 +183,12 @@ const RECIPES: Recipe[] = [
       'There is no create_connector tool because a connector is not a record — it IS a note at ' +
       'connectors/<name>.md, and you write it with edit_context. The frontmatter declares the security ' +
       'perimeter; the body is the documentation every future agent reads. Space admins only.',
-    patterns: [
-      { re: /\b(creat|add|build|set ?up|make|register|author|write|new)\w*\b[^.]{0,40}\bconnector/, score: 10 },
-      { re: /\bconnector\b[^.]{0,30}\b(for|to)\b/, score: 4 },
-      // "hook up our CRM api" never says the word "connector" and is still
-      // unambiguously one — weighted to clear the high-confidence bar on its own.
-      { re: /\b(connect|integrat|hook ?up|wire ?up|plug ?in)\w*\b[^.]{0,40}\b(api|service|database|saas|crm|mcp server)\b/, score: 8 },
-      { re: /\b(connector|connector)\b/, score: 2 },
-      { re: /\b(stripe|hubspot|salesforce|notion|slack|airtable|postgres|snowflake|github)\b/, score: 1 },
+    keywords: [
+      ...kw('creat|add|build|set up|setup|make|register|author|write|new', 'connector', 10),
+      ...kw('connect|integrat|hook up|wire up|plug in', 'api|service|database|saas|crm|mcp server', 8),
+      ...kw('connector', 'for|to', 4),
+      ...kw('connector', '', 2),
+      ...kw('stripe|hubspot|salesforce|notion|slack|airtable|postgres|snowflake|github', '', 1),
     ],
     contract: CONNECTOR_CONTRACT,
     steps: (ctx) => [
@@ -270,10 +267,10 @@ const RECIPES: Recipe[] = [
       'Read the connector\'s docs first — its note body is written for exactly this, and tells you the ' +
       'endpoints, the env var names and the gotchas. Then run a declared action if one fits, or write ' +
       'JavaScript against the documented API.',
-    patterns: [
-      { re: /\b(run|call|query|fetch|pull|get|sync|push|post)\b[^.]{0,30}\b(connector|api|from stripe|from hubspot)\b/, score: 7 },
-      { re: /\bconnector\b[^.]{0,20}\b(run|call|use)\b/, score: 6 },
-      { re: /\b(use|via|through)\b[^.]{0,20}\bconnector\b/, score: 5 },
+    keywords: [
+      ...kw('run|call|query|fetch|pull|sync|push|post', 'connector|api', 7),
+      ...kw('connector', 'run|call|use', 6),
+      ...kw('use|via|through', 'connector', 5),
     ],
     steps: (ctx) => [
       {
@@ -312,11 +309,14 @@ const RECIPES: Recipe[] = [
       'edit_context there is refused whatever your permissions, deliberately: an AI that could rewrite a ' +
       'brief could rewrite itself, and a member edit to a live brief silently deactivates it. So you draft, ' +
       'a human authors, an admin activates. Do not promise the user you will create it.',
-    patterns: [
-      { re: /\b(creat|add|build|set ?up|make|write|new|author)\w*\b[^.]{0,40}\bagent/, score: 10 },
-      { re: /\bagent\b[^.]{0,30}\b(that|which|to)\b[^.]{0,40}\b(every|daily|weekly|hourly|schedule)/, score: 8 },
-      { re: /\b(automate|automation|scheduled? (job|task|run))\b/, score: 6 },
-      { re: /\b(every (day|morning|monday|week|hour)|daily|weekly|nightly|on a schedule|cron)\b/, score: 4 },
+    keywords: [
+      ...kw('creat|add|build|set up|setup|make|write|new|author', 'agent', 10),
+      // Weak on purpose. "the weekly-digest agent" is a REFERENCE to one, not a
+      // request to build one, and this rule fires on both — so it may add to a
+      // creation verb's score but must never outrank `run_agent` on its own.
+      ...kw('agent', 'every|daily|weekly|hourly|schedule', 3),
+      ...kw('automate|automation|scheduled job|scheduled task|scheduled run', '', 6),
+      ...kw('every day|every morning|every monday|every week|every hour|daily|weekly|nightly|on a schedule|cron', '', 4),
     ],
     contract: AGENT_CONTRACT,
     steps: (ctx) => [
@@ -367,10 +367,10 @@ const RECIPES: Recipe[] = [
     id: 'run_agent',
     when: 'Trigger an existing agent now, or check when one last ran and how it went.',
     summary: 'The roster is member-visible; running is author-or-admin, and only for an ACTIVE agent.',
-    patterns: [
-      { re: /\b(run|trigger|fire|kick ?off|execute)\b[^.]{0,25}\bagent\b/, score: 9 },
-      { re: /\b(list|show|which|what)\b[^.]{0,20}\bagents?\b/, score: 6 },
-      { re: /\bagent\b[^.]{0,25}\b(last (run|ran)|status|failing|failed|schedule)\b/, score: 6 },
+    keywords: [
+      ...kw('run|trigger|fire|kick off|execute', 'agent', 9),
+      ...kw('list|show|which|what', 'agent', 6),
+      ...kw('agent', 'last run|last ran|status|failing|failed|schedule', 6),
     ],
     steps: (ctx) => [
       {
@@ -399,11 +399,11 @@ const RECIPES: Recipe[] = [
     summary:
       'A Tool is three notes under tools/<name>/ — index.md (config + docs), ui.tsx and data.js (its source). ' +
       'tools/ is frozen for generic AI writes, so you must use the dedicated authoring loop, which writes ' +
-      'under a human origin. That loop lives on the CREATOR server (/api/mcp/creator).',
-    patterns: [
-      { re: /\b(creat|build|make|add|write|new)\w*\b[^.]{0,30}\b(tool|app|dashboard|widget|form|mini[- ]?app)\b/, score: 9 },
-      { re: /\btool\b[^.]{0,20}\b(marketplace|publish|install)\b/, score: 6 },
-      { re: /\b(ui\.tsx|data\.js|tool-kit)\b/, score: 5 },
+      'under a human origin.',
+    keywords: [
+      ...kw('creat|build|make|add|write|new', 'tool|app|dashboard|widget|form|mini app|mini-app', 9),
+      ...kw('tool', 'marketplace|publish|install', 6),
+      ...kw('ui.tsx|data.js|tool-kit', '', 5),
     ],
     steps: (ctx) => [
       { n: 1, tool: 'list_tools', why: 'Extend an existing tool rather than duplicating it; also shows which ones currently compile.', args: { space_id: spaceId(ctx) } },
@@ -414,8 +414,8 @@ const RECIPES: Recipe[] = [
       { n: 6, tool: 'publish_tool', why: 'Submits it to the marketplace for review. Admin-gated underneath.', args: { space_id: spaceId(ctx), name: '<name>' }, optional: true },
     ],
     mustKnow: () => [
-      'create_tool / read_tool / write_tool / check_tool / preview_tool / publish_tool are only registered on the CREATOR server. If you cannot see them, you are connected to /api/mcp — reconnect to /api/mcp/creator.',
-      "Authoring needs the 'tools:author' scope; it deliberately does not ride context:write, because writing executable code into a space is not the same act as summarising notes.",
+      "Authoring needs the 'tools:author' scope. If create_tool refuses you, the connection was never granted it — reconnect asking for it rather than looking for another door; there is one server and every action is on it.",
+      "That scope deliberately does not ride context:write: writing executable code into a space is not the same act as summarising notes.",
       'In ui.tsx only `react`, `react-dom` and `@visvine/tool-kit` are importable — every other import is refused at compile time.',
       'Do NOT try to write tools/**/*.md with edit_context; it is refused with "Tools are frozen for AI".',
     ],
@@ -428,11 +428,11 @@ const RECIPES: Recipe[] = [
     summary:
       'These three types — and only these three — are created with add_context, which makes the typed node ' +
       'AND its canonical context note in one step. The type decides the fields and where the note lives.',
-    patterns: [
-      { re: /\b(add|creat|record|register|new)\w*\b[^.]{0,25}\b(person|people|contact|company|organisation|organization|founder|investor)\b/, score: 9 },
-      { re: /\b(add|save|bookmark|record)\b[^.]{0,25}\b(link|resource|document|article|url)\b/, score: 7 },
-      { re: /\badd_context\b/, score: 8 },
-      { re: /\b(directory|entity|entities)\b/, score: 3 },
+    keywords: [
+      ...kw('add|creat|record|register|new', 'person|people|contact|company|organisation|organization|founder|investor', 9),
+      ...kw('add_context', '', 8),
+      ...kw('add|save|bookmark|record', 'link|resource|document|article|url', 7),
+      ...kw('directory|entity|entities', '', 3),
     ],
     steps: (ctx) => [
       {
@@ -459,19 +459,100 @@ const RECIPES: Recipe[] = [
       'Use the exact field keys — email, companyName, linkedinUrl, url — they are what match an entity to its identity across spaces. An unrecognised key is silently dropped.',
       'A "space" type is a company/collective/investor recorded as a CARD in the directory. It never provisions a new workspace.',
       'Links between entities are never authored directly: a markdown link to an entity\'s note inside a SHARED note body is what creates the edge. Always use the leading-slash form — every tool hands back a ready-made `mention` string; paste it verbatim.',
-      'Events, channels and sections are not creatable here — events come from the events surface, channels/sections from the space\'s admin surfaces.',
+      'Events are not created here — they are records with dates, RSVPs and a page of their own: use create_event (see the `run_event` intent). Channels and sections come from the space\'s admin surfaces.',
     ],
     blockers: (ctx) => scopeBlocker(ctx, 'context:write', 'creating an entity'),
+  },
+
+  {
+    id: 'run_event',
+    when: 'Put on an event — "create an event", "set up the launch night", "make an event from the plan in the drive", "write the marketing for it".',
+    summary:
+      'An event is a record with a date, a page, an RSVP form and a context note at events/<slug>.md. What makes ' +
+      'this worth planning is that the material usually already exists: the poster, the run sheet and the brief ' +
+      "are files in the space's Drive. Read them, then create the event FROM them — the picture becomes the " +
+      'cover, the plan becomes the copy. It is created as a draft; publishing is a separate, deliberate step.',
+    keywords: [
+      ...kw('creat|set up|setup|plan|organis|organiz|run|host|schedul|make', 'event|meetup|launch|workshop|dinner|drinks|summit|conference|webinar', 10),
+      ...kw('create_event', '', 10),
+      ...kw('marketing|promo|invite|announcement', 'copy|material|blurb|post|email', 5),
+      ...kw('rsvp|attendee|guest list|cover image|poster|flyer', '', 4),
+      ...kw('event', '', 2),
+    ],
+    steps: (ctx) => [
+      {
+        n: 1,
+        tool: 'list_drive',
+        why:
+          "The space's files, INCLUDING images — which carry no text and so never appear in list_files or " +
+          'search_context. Note the `resource_id` of the picture and the `readable` path of the plan.',
+        args: { space_id: spaceId(ctx) },
+      },
+      {
+        n: 2,
+        tool: 'read_file',
+        why: "Read the run sheet or brief before writing anything — it is where the date, venue and the event's actual pitch come from.",
+        args: { space_id: spaceId(ctx), path: '<the `readable` path from step 1>', scope: 'shared' },
+        optional: true,
+      },
+      {
+        n: 3,
+        tool: 'create_event',
+        why:
+          'THE STEP THAT CREATES THE EVENT: the record, the page, the RSVP form and events/<slug>.md, in one call. ' +
+          'Pass the picture as `cover_resource_id` and it becomes the poster. Created as a draft.',
+        args: {
+          space_id: spaceId(ctx),
+          title: '<Title>',
+          start_at: '<ISO 8601 instant>',
+          location: { label: '<venue>' },
+          description: '<the summary, drawn from the plan you read>',
+          cover_resource_id: '<resource_id of a Drive image>',
+        },
+      },
+      {
+        n: 4,
+        tool: 'edit_context',
+        why:
+          'Write the marketing copy where it belongs — a sub-note of the event, not a chat reply. Mentions in it ' +
+          'link the event to the people and organisations involved.',
+        args: {
+          space_id: spaceId(ctx),
+          scope: 'shared',
+          path: 'events/<slug>/marketing.md',
+          content: '<the copy — social posts, invite email, blurb>',
+          visibility: 'inherit',
+        },
+      },
+      {
+        n: 5,
+        tool: 'update_event',
+        why: "Publish it once a human has read it back: status:'published'. Until then only its hosts and space admins can see it.",
+        args: { space_id: spaceId(ctx), event_id: '<from step 3>', status: 'published' },
+        optional: true,
+      },
+    ],
+    mustKnow: () => [
+      'A Drive image is used by `resource_id`, never by URL — create_event/update_event copy the bytes inside the space into the event\'s own image variants.',
+      'Only an image can be a cover. A PDF poster has to be exported to PNG/JPEG and uploaded before it can be one.',
+      'The event is a DRAFT until you publish it, and a draft is visible only to its hosts and space admins. Publishing at visibility:"public" puts it on the open web at /e/<slug> — never do that without being asked to.',
+      'You become a host of anything you create, which is what lets you edit it afterwards with update_event.',
+      'The marketing copy is a sub-note of the event folder (events/<slug>/marketing.md). Writing it there is what makes it part of the space\'s context instead of a one-off answer.',
+    ],
+    blockers: (ctx) => [
+      ...featureBlocker(ctx, 'resources', 'reading the Drive'),
+      ...scopeBlocker(ctx, 'context:write', 'creating the event'),
+    ],
   },
 
   {
     id: 'find_context',
     when: 'Answer a question from what the space already knows — find, look up, summarise, "what do we know about X".',
     summary: 'Search is the entry point; read the hits you actually need. Everything reads through the visibility lens, so absence can mean "not visible to you".',
-    patterns: [
-      { re: /\b(what|who|when|where|why|how) (do|does|did|is|are|was|were|much|many)\b/, score: 4 },
-      { re: /\b(find|search|look ?up|show me|tell me about|summar\w+|list)\b/, score: 5 },
-      { re: /\b(what do we know|any notes on|context on|background on)\b/, score: 8 },
+    keywords: [
+      ...kw('what do we know|any notes on|context on|background on', '', 8),
+      ...kw('find|search|look up|show me|tell me about|summar|list', '', 5),
+      ...kw('what|who|when|where|why|how', 'do|does|did|is|are|was|were|much|many', 4),
     ],
     steps: (ctx) => [
       { n: 1, tool: 'list_spaces', why: 'Every other tool needs a space_id.', args: {}, optional: ctx.space !== null },
@@ -491,10 +572,10 @@ const RECIPES: Recipe[] = [
     summary:
       'edit_context replaces a whole note; append_context adds to one. Read before you edit or you will clobber it. ' +
       'Writes go to your PERSONAL space unless you pass scope:"shared".',
-    patterns: [
-      { re: /\b(write|save|record|note|document|capture|log|jot)\b[^.]{0,30}\b(note|down|this|it|meeting|summary)\b/, score: 7 },
-      { re: /\b(update|edit|revise|amend|append|add to)\b[^.]{0,25}\b(note|page|doc|context)\b/, score: 8 },
-      { re: /\bedit_context\b|\bappend_context\b/, score: 8 },
+    keywords: [
+      ...kw('update|edit|revise|amend|append|add to', 'note|page|doc|context', 8),
+      ...kw('edit_context|append_context', '', 8),
+      ...kw('write|save|record|note|document|capture|log|jot', 'note|down|this|meeting|summary', 7),
     ],
     steps: (ctx) => [
       { n: 1, tool: 'read_context', why: 'edit_context is a FULL-CONTENT write. Read first or you overwrite what is there.', args: { space_id: spaceId(ctx), path: '<path>' }, optional: true },
@@ -513,9 +594,9 @@ const RECIPES: Recipe[] = [
     id: 'manage_access',
     when: 'Change who can see or edit something, or work out why something is invisible.',
     summary: "Visibility is per folder, with per-note restriction. list_context reports each folder's audience and your own level in it.",
-    patterns: [
-      { re: /\b(share|unshare|permission|access|visib\w+|private|restrict|who can see|grant)\b/, score: 8 },
-      { re: /\b(cannot see|can't see|not showing|missing|invisible)\b/, score: 4 },
+    keywords: [
+      ...kw('share|unshare|permission|access|visib|private|restrict|who can see|grant', '', 8),
+      ...kw('cannot see|can not see|not showing|missing|invisible', '', 4),
     ],
     steps: (ctx) => [
       { n: 1, tool: 'list_context', why: "Each folder's audience line, your own access level in it, and which folders are frozen for AI.", args: { space_id: spaceId(ctx) } },
@@ -532,9 +613,9 @@ const RECIPES: Recipe[] = [
     id: 'organise_context',
     when: 'Tidy up — find broken links, stale notes, duplicates, missing indexes.',
     summary: 'clean_context analyses read-only by default and can then apply its own fixes. Locked folders and out-of-scope notes are left alone.',
-    patterns: [
-      { re: /\b(clean|tidy|organis|organiz|audit|housekeep|dedupe|de-?duplicate)\w*\b/, score: 8 },
-      { re: /\b(broken links|stale notes|duplicates|missing index)\b/, score: 7 },
+    keywords: [
+      ...kw('clean|tidy|organis|organiz|audit|housekeep|dedupe|deduplicate|de-duplicate', '', 8),
+      ...kw('broken link|stale note|duplicate|missing index', '', 7),
     ],
     steps: (ctx) => [
       { n: 1, tool: 'clean_context', why: 'Run the analysis first and read what it proposes.', args: { space_id: spaceId(ctx) } },
@@ -553,7 +634,7 @@ const ORIENT: Recipe = {
     'No recipe matched the prompt well. Orient first: list_spaces for the space_id, then list_context, whose ' +
     '`types` catalog is the authoritative account of what this space has enabled, what each type is for, and ' +
     'how each is created. Then re-read the `other_intents` list below and pick.',
-  patterns: [],
+  keywords: [],
   steps: (ctx) => [
     { n: 1, tool: 'list_spaces', why: 'Every other tool needs a space_id.', args: {} },
     { n: 2, tool: 'list_context', why: "The space's folders, its entities, and the `types` catalog with per-type creation guidance.", args: { space_id: spaceId(ctx) } },
@@ -564,86 +645,74 @@ const ORIENT: Recipe = {
   ],
 }
 
-// ── Matching ──────────────────────────────────────────────────────────────
+// ── The catalogue ────────────────────────────────────────────────────────
 
-export interface RecipeMatch {
-  recipe: Recipe
-  score: number
+/** Every shipped recipe, in catalogue order. */
+export function allRecipes(): readonly Recipe[] {
+  return RECIPES
 }
 
-/** Score every recipe against the prompt, best first. Exported for tests. */
-export function scoreRecipes(prompt: string): RecipeMatch[] {
-  const text = prompt.toLowerCase()
-  return RECIPES.map((recipe) => ({
-    recipe,
-    score: recipe.patterns.reduce((sum, p) => (p.re.test(text) ? sum + p.score : sum), 0),
-  }))
-    .filter((m) => m.score > 0)
-    .sort((a, b) => b.score - a.score || a.recipe.id.localeCompare(b.recipe.id))
+/** The fallback recipe, offered when nothing matched confidently. */
+export function orientRecipe(): Recipe {
+  return ORIENT
 }
 
-/**
- * How much to trust the top match. The thresholds are calibrated against the
- * pattern weights: a single "creat* … connector" hit is 10 and is decisive; a
- * bare mention of the word "connector" is 2 and is not.
- */
-function confidenceOf(matches: RecipeMatch[]): 'high' | 'medium' | 'low' {
-  const top = matches[0]?.score ?? 0
-  const next = matches[1]?.score ?? 0
-  if (top >= 8 && top > next) return 'high'
-  if (top >= 5) return 'medium'
-  return 'low'
-}
-
-export interface PlanInput {
-  prompt: string
-  space: PlanSpaceFacts | null
-  scopes: readonly string[]
+export function recipeById(id: string): Recipe | null {
+  if (id === ORIENT.id) return ORIENT
+  return RECIPES.find((r) => r.id === id) ?? null
 }
 
 /**
- * The plan itself. Shaped for a model to act on top-to-bottom: what this is,
- * what will stop you, the ordered calls, the literal contract, then the escape
- * hatch if the intent was read wrong.
+ * A recipe rendered as the body of its note in that Context.
+ *
+ * Written against a GENERIC context — no space, every scope — on purpose. What
+ * belongs in a note is what is true of the recipe itself; what is true of the
+ * caller (their role, the space's features, the scopes their token carries) is
+ * computed live by the gateway and shown beside it. Baking either into the note
+ * would make the note wrong for everyone else who reads it.
  */
-export function buildPlan(input: PlanInput): Record<string, unknown> {
-  const matches = scoreRecipes(input.prompt)
-  const confidence = confidenceOf(matches)
-  const chosen = confidence === 'low' || matches.length === 0 ? ORIENT : matches[0].recipe
-  const ctx: RecipeContext = { space: input.space, scopes: input.scopes }
-  const blockers = chosen.blockers?.(ctx) ?? []
-
-  return {
-    planned_for: input.prompt.length > 300 ? `${input.prompt.slice(0, 300)}…` : input.prompt,
-    intent: chosen.id,
-    confidence,
-    summary: chosen.summary,
-    ...(blockers.length ? { blockers } : {}),
-    steps: chosen.steps(ctx),
-    ...(chosen.contract ? { contract: chosen.contract } : {}),
-    must_know: chosen.mustKnow(ctx),
-    ...(input.space
-      ? {
-          space: {
-            id: input.space.id,
-            name: input.space.name,
-            you_are_admin: input.space.you_are_admin,
-            features: input.space.features,
-            connectors: input.space.connectors,
-            agents: input.space.agents,
-          },
-        }
-      : {
-          space: null,
-          space_note: 'No space_id was passed, so this plan is generic. Call list_spaces and plan again with one for a plan that knows your role, the space\'s features, and what it already has.',
-        }),
-    other_intents: RECIPES.filter((r) => r.id !== chosen.id).map((r) => ({ intent: r.id, when: r.when })),
-    if_this_is_wrong:
-      'These steps are advice, not authorization — every one still runs through the same permission gates. ' +
-      'If the intent above is not what was asked, pick from `other_intents` and call plan_visvine_query again ' +
-      'with a more specific prompt.',
+export function renderRecipeBody(recipe: Recipe): string {
+  const ctx: RecipeContext = { space: null, scopes: ALL_SCOPES }
+  const out: string[] = []
+  out.push(recipe.summary, '')
+  out.push('## When this is the right plan', '', recipe.when, '')
+  out.push('## Steps', '')
+  for (const step of recipe.steps(ctx)) {
+    out.push(`${step.n}. **${step.tool}**${step.optional ? ' _(optional)_' : ''} — ${step.why}`)
+    if (Object.keys(step.args).length > 0) {
+      out.push('', '   ```json', ...JSON.stringify(step.args, null, 2).split('\n').map((l) => `   ${l}`), '   ```')
+    }
+    out.push('')
   }
+  const must = recipe.mustKnow(ctx)
+  if (must.length) {
+    out.push('## What decides whether this works', '')
+    for (const line of must) out.push(`- ${line}`)
+    out.push('')
+  }
+  const blockers = recipe.blockers?.(ctx) ?? []
+  if (blockers.length) {
+    out.push('## Refusals to expect', '')
+    for (const line of blockers) out.push(`- ${line}`)
+    out.push('')
+  }
+  if (recipe.contract) {
+    out.push('## The contract', '', '```', recipe.contract, '```', '')
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
+
+/** The scopes a generic rendering assumes: all of them, so a shipped note never
+ *  hard-codes a refusal that only applies to one caller's token. */
+const ALL_SCOPES: readonly string[] = [
+  'context:read',
+  'context:write',
+  'connectors:use',
+  'agents:run',
+  'tools:author',
+  'tools:install',
+  'secrets:write',
+]
 
 /** Read the feature flags the recipes reason about off a space's config. */
 export function planFeatures(config: SpaceFeatureConfig | null | undefined): Record<string, boolean> {

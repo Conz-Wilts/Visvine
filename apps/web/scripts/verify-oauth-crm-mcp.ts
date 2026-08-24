@@ -99,15 +99,16 @@ async function main() {
     { userId: admin.id, name: admin.name ?? '', email: admin.email ?? '' },
     MCP_SCOPES,
     'verify-oauth-crm-mcp',
-    'context',
   );
 
   const client = new Client({ name: 'verify-oauth-crm', version: '1.0.0' });
   await client.connect(new StreamableHTTPClientTransport(MCP_URL, { authProvider: { token: async () => token } }));
   console.log(`connected to ${MCP_URL} as ${admin.email}\n`);
 
-  const call = async (name: string, args: Record<string, unknown>) =>
-    payload(await client.callTool({ name, arguments: args }));
+  // One tool, and an action named inside it. `input` is what makes it RUN
+  // rather than hand back the action's manual (lib/mcp/gateway.ts).
+  const call = async (action: string, input: Record<string, unknown>) =>
+    payload(await client.callTool({ name: 'visvine', arguments: { action, input } }));
 
   const runConnector = (code: string) =>
     call('run_connector', { space_id: SPACE, connector: 'crm', code });

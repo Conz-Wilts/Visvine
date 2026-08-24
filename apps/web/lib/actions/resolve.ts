@@ -1,12 +1,13 @@
 /**
- * Resolving the context + principal an MCP call targets.
+ * Resolving the context + principal an action targets.
  *
- * The MCP layer never re-implements authorization: it calls `resolveContext` and
- * `principalOf` — the exact functions the web routes use — so membership checks,
- * grant seeding and the folder-visibility lens behave identically for an agent
- * and for a browser. The only adaptation is turning `resolveContext`'s
- * ready-to-return error `Response` into a thrown `McpError`, which `withCtx`
- * renders as a tool error.
+ * The action layer never re-implements authorization: it calls `resolveContext`
+ * and `principalOf` — the exact functions the web routes use — so membership
+ * checks, grant seeding and the folder-visibility lens behave identically for
+ * an agent, a mobile client and a browser. The only adaptation is turning
+ * `resolveContext`'s ready-to-return error `Response` into a thrown
+ * `ActionError`, which each door renders in its own idiom: a status on
+ * `/api/actions/*`, a readable tool error over MCP.
  */
 import prisma from '@/lib/prisma'
 import type { SessionPayload } from '@/lib/session'
@@ -21,12 +22,12 @@ import { findAliasByRef, personAliases, type SpaceAlias } from '@/lib/types/cont
 import { personalPrincipal } from '@/lib/notes/principal'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
-import { McpError, type McpContext } from '@/lib/mcp/auth'
+import { ActionError, type ActionCaller } from '@/lib/actions/types'
 
 /** Which context a call targets. */
 export type ContextScope = 'shared' | 'personal'
 
-function sessionOf(ctx: McpContext): SessionPayload {
+function sessionOf(ctx: ActionCaller): SessionPayload {
   return {
     userId: ctx.userId,
     name: ctx.name || ctx.email || ctx.userId,
@@ -52,12 +53,12 @@ async function messageOf(res: Response): Promise<string> {
  * exactly as they would from the HTTP routes.
  */
 export async function requireSpaceContext(
-  ctx: McpContext,
+  ctx: ActionCaller,
   spaceId: string,
 ): Promise<ResolvedContext> {
   const resolved = await resolveContext(sessionOf(ctx), spaceId)
   if (resolved instanceof Response) {
-    throw new McpError(resolved.status, await messageOf(resolved))
+    throw new ActionError(resolved.status, await messageOf(resolved))
   }
   return resolved
 }
@@ -79,7 +80,7 @@ export interface Target {
  * 'personal'` can't be used to skip the tenant boundary.
  */
 export async function resolveTarget(
-  ctx: McpContext,
+  ctx: ActionCaller,
   spaceId: string,
   scope: ContextScope,
 ): Promise<Target> {
@@ -100,11 +101,11 @@ export async function resolveTarget(
 }
 
 /** The spaces the caller can act in. */
-export async function listMySpaces(ctx: McpContext) {
+export async function listMySpaces(ctx: ActionCaller) {
   const rows = await prisma.spaceMember.findMany({
     where: { userId: ctx.userId, status: 'active' },
     select: {
-      space: { select: { id: true, name: true, personalOwnerId: true, aliases: true } },
+      space: { select: { id: true, name: true, personalOwnerId: true, aliases: true, parentId: true } },
     },
   })
   const spaceIds = rows.map((r) => r.space.id)
@@ -133,5 +134,7 @@ export async function listMySpaces(ctx: McpContext) {
     your_aliases: aliasesBySpace.get(r.space.id) ?? [],
     you_manage_it: owns.has(r.space.id),
     is_personal_space: r.space.personalOwnerId !== null,
+    // The space this one lives inside, if any (docs/sub-spaces.md).
+    parent_id: r.space.parentId,
   }))
 }

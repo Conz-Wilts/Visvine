@@ -16,7 +16,7 @@ import { getSession } from '@/lib/session'
 import { isDevAuthEnabled } from '@/lib/dev-auth'
 import { createAuthCode } from '@/lib/mcp/oauth'
 import { resolveClient, ClientResolutionError, type McpClient } from '@/lib/mcp/clients'
-import { oauthIssuer, isCanonicalResource, mcpResourceUrl, resourceKindOf } from '@/lib/mcp/config'
+import { oauthIssuer, isCanonicalResource, mcpResourceUrl } from '@/lib/mcp/config'
 import { negotiateScopes, serializeScopes, SCOPE_DESCRIPTIONS } from '@/lib/mcp/scopes'
 
 export const runtime = 'nodejs'
@@ -95,20 +95,18 @@ export async function GET(req: NextRequest) {
   if (!codeChallenge || sp.get('code_challenge_method') !== 'S256') {
     return redirectError(redirectUri, 'invalid_request', state, 'PKCE with S256 is required')
   }
-  // RFC 8707: the token must be minted for one named resource. We serve exactly
-  // two (the context server and the creator server), so anything else is a
-  // request we cannot honour — and silently issuing a token for the wrong
-  // audience is how confused-deputy attacks start. No `resource` at all means
-  // the context server, the one that predates the split.
+  // RFC 8707: the token must be minted for one named resource. We serve one, so
+  // anything else is a request we cannot honour — and silently issuing a token
+  // for the wrong audience is how confused-deputy attacks start. No `resource`
+  // at all means ours.
   if (resource !== null && !isCanonicalResource(resource)) {
     return redirectError(
       redirectUri,
       'invalid_target',
       state,
-      `This authorization server only issues tokens for ${mcpResourceUrl('context')} or ${mcpResourceUrl('creator')}`,
+      `This authorization server only issues tokens for ${mcpResourceUrl()}`,
     )
   }
-  const resourceKind = resourceKindOf(resource) ?? 'context'
 
   // The user must be signed in to Visvine to grant access as themselves.
   // Locally that means the seeded-user picker rather than Google: /dev/login
@@ -124,12 +122,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(next)
   }
 
-  const scopes = negotiateScopes(sp.get('scope'), client.scope, resourceKind)
+  const scopes = negotiateScopes(sp.get('scope'), client.scope)
   // Nothing survived — the client asked only for scopes this server does not
   // grant (or its registration allows none of them). Say so rather than
   // showing a consent screen that would issue an unusable, empty grant.
   if (scopes.length === 0) {
-    return redirectError(redirectUri, 'invalid_scope', state, `None of the requested scopes are available on ${mcpResourceUrl(resourceKind)}`)
+    return redirectError(redirectUri, 'invalid_scope', state, `None of the requested scopes are available on ${mcpResourceUrl()}`)
   }
   const clientName = client.clientName || clientId
   const hidden = (name: string, value: string) =>
@@ -158,7 +156,7 @@ export async function GET(req: NextRequest) {
 <body style="font-family:system-ui;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#14342b">
   <h1 style="font-size:1.4rem">Authorize access</h1>
   <p><strong>${esc(clientName)}</strong> wants to access
-     <strong>${resourceKind === 'creator' ? 'Visvine Creator (Tool authoring)' : 'Visvine'}</strong> as
+     <strong>Visvine</strong> as
      <strong>${esc(session.email)}</strong>.</p>
   ${switchUser}
   ${provenance}
@@ -209,7 +207,6 @@ export async function POST(req: NextRequest) {
   if (resource !== null && !isCanonicalResource(resource)) {
     return redirectError(redirectUri, 'invalid_target', state)
   }
-  const resourceKind = resourceKindOf(resource) ?? 'context'
 
   const session = await getSession()
   if (!session) return htmlError('Your session expired. Please retry.', 401)
@@ -220,7 +217,7 @@ export async function POST(req: NextRequest) {
 
   // Re-negotiated against the client's registration rather than trusted from the
   // form, so a tampered hidden field can't widen the grant.
-  const scopes = negotiateScopes(get('scope'), client.scope, resourceKind)
+  const scopes = negotiateScopes(get('scope'), client.scope)
   if (scopes.length === 0) return redirectError(redirectUri, 'invalid_scope', state)
   const code = await createAuthCode({
     clientId,
@@ -228,7 +225,11 @@ export async function POST(req: NextRequest) {
     redirectUri,
     scope: serializeScopes(scopes),
     codeChallenge,
-    resource: resourceKind,
+    // One resource, so this is constant. The column and its CHECK constraint
+    // stay (migration 20260818150000) rather than being migrated away: codes
+    // live five minutes, so one issued before the surfaces were one is still in
+    // flight, and re-splitting later would want the binding back.
+    resource: 'context',
   })
 
   const url = new URL(redirectUri)

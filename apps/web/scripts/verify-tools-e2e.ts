@@ -8,7 +8,7 @@
  *   approve → upgrade → uninstall
  *
  * Everything is called the way the app calls it: `appToolHandlers.*` with a
- * synthetic McpContext for the space owner (the transport is the only thing
+ * synthetic ActionCaller for the space owner (the transport is the only thing
  * skipped — `withCtx` adds scope checking and JSON framing, nothing else), the
  * registry and install services directly, `handleBridgeCall` against a
  * `resolveBridgeTarget` result, and plain `fetch` for the three runtime routes
@@ -51,8 +51,8 @@ import { writeGated } from '../lib/notes/contextService';
 import { principalOf, resolveContext } from '../lib/notes/resolve';
 import * as store from '../lib/notes/store';
 import { readSpaceConfig, updateSpaceConfig } from '../lib/spaces/spaceConfig';
-import { McpError, type McpContext } from '../lib/mcp/auth';
-import { appToolHandlers } from '../lib/mcp/appTools';
+import { ActionError, type ActionCaller } from '../lib/actions/types';
+import { appToolHandlers } from '../lib/actions/defs/apps';
 import { handleBridgeCall } from '../lib/tools/bridge';
 import { toolFolderPath, toolIndexPath } from '../lib/tools/config';
 import { mintFrameToken } from '../lib/tools/frameToken';
@@ -117,7 +117,7 @@ async function refusal(
   try {
     return `no refusal — returned ${JSON.stringify(await run()).slice(0, 120)}`;
   } catch (e) {
-    if (e instanceof McpError) return { status: e.status, message: e.message };
+    if (e instanceof ActionError) return { status: e.status, message: e.message };
     return `threw ${e instanceof Error ? e.constructor.name : typeof e}: ${String(e)}`;
   }
 }
@@ -259,7 +259,7 @@ async function main(): Promise<void> {
   // What the MCP transport hands the handlers after verifying a token. The
   // scopes are the real ones for this tool set; the handlers never read them
   // (`withCtx` does), so they are here to keep the object honest.
-  const ctx: McpContext = {
+  const ctx: ActionCaller = {
     userId: owner.id,
     name: owner.name ?? '',
     email: owner.email ?? '',
@@ -366,7 +366,7 @@ async function main(): Promise<void> {
       select: { id: true, name: true, email: true },
     });
     if (!member) throw new Error('member@local.dev is not seeded — the publish refusal cannot be checked');
-    const memberCtx: McpContext = {
+    const memberCtx: ActionCaller = {
       userId: member.id,
       name: member.name ?? '',
       email: member.email ?? '',

@@ -42,7 +42,20 @@ export async function runNightlyMaintenance(): Promise<{ ran: boolean; ms: numbe
   sweeping = true
   const startedAt = Date.now()
   try {
-    // Drain first, and unconditionally: the sweeps below read derived state, so
+    // The action notes, cheaply: ~40 idempotent writes that keep the Visvine
+    // catalogue in step with the actions this release actually has. It lives
+    // here rather than in the release because a scale-to-zero runtime has no
+    // deploy hook to hang it on, and because the surface does not depend on it —
+    // un-synced notes cost the EDITABLE half of the documentation, never the
+    // ability to route or run (lib/actions/notes.ts).
+    try {
+      const { syncActionNotes } = await import('@/lib/actions/sync')
+      const synced = await syncActionNotes()
+      logger.info('notes.nightly.action_notes', { actions: synced.actions, recipes: synced.recipes })
+    } catch (err) {
+      logger.warn('notes.nightly.action_notes_failed', { err })
+    }
+    // Drain before the sweeps, and unconditionally: they read derived state, so
     // running them over projections that were never rebuilt would embed the
     // staleness (an un-synced mention has no edge for the link-reason pass to
     // explain). Unlike the two AI stages this needs no API key.

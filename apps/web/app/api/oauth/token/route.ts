@@ -15,9 +15,8 @@ import {
   consumeAuthCode,
   verifyPkceS256,
   getUserIdentity,
-  kindFromStored,
 } from '@/lib/mcp/oauth'
-import { isCanonicalResource, mcpResourceUrl, resourceKindOf } from '@/lib/mcp/config'
+import { isCanonicalResource, mcpResourceUrl } from '@/lib/mcp/config'
 import { mintAccessToken } from '@/lib/mcp/tokens'
 import { parseScopes, serializeScopes } from '@/lib/mcp/scopes'
 
@@ -52,18 +51,13 @@ async function readParams(req: NextRequest): Promise<Record<string, string>> {
 export async function POST(req: NextRequest) {
   const p = await readParams(req)
 
-  // RFC 8707. Tokens from this server are minted for exactly one of the two MCP
-  // resources (context / creator) — the one the grant was authorized for — so
-  // a request naming anything else is refused rather than quietly satisfied
-  // with a token the client would then send elsewhere. A `resource` here that
-  // names OUR OTHER server is refused too: the user consented to one.
+  // RFC 8707. Tokens from this server are minted for one MCP resource, so a
+  // request naming anything else is refused rather than quietly satisfied with
+  // a token the client would then send elsewhere — silently issuing for the
+  // wrong audience is how confused-deputy attacks start.
   if (p.resource !== undefined && !isCanonicalResource(p.resource)) {
-    return oauthError(
-      'invalid_target',
-      `Tokens are only issued for ${mcpResourceUrl('context')} or ${mcpResourceUrl('creator')}`,
-    )
+    return oauthError('invalid_target', `Tokens are only issued for ${mcpResourceUrl()}`)
   }
-  const requestedKind = p.resource !== undefined ? resourceKindOf(p.resource) : null
 
   if (p.grant_type === 'authorization_code') {
     const row = await consumeAuthCode(p.code ?? '')
@@ -79,13 +73,12 @@ export async function POST(req: NextRequest) {
     const identity = await getUserIdentity(row.userId)
     if (!identity) return oauthError('invalid_grant', 'The authorizing user no longer exists')
 
-    const kind = kindFromStored(row.resource)
-    if (!kind) return oauthError('invalid_grant', 'Authorization code carries an unknown resource')
-    if (requestedKind && requestedKind !== kind) {
-      return oauthError('invalid_target', `This code was authorized for ${mcpResourceUrl(kind)}`)
-    }
+    // `row.resource` is not read: there is one resource, and the check above
+    // has already refused a request naming anything else. The column stays
+    // because a code issued before the surfaces were one is still in flight for
+    // its five-minute life, and because re-splitting later would want it back.
     const scopes = parseScopes(row.scope)
-    const { token, expiresIn } = await mintAccessToken(identity, scopes, row.clientId, kind)
+    const { token, expiresIn } = await mintAccessToken(identity, scopes, row.clientId)
 
     return NextResponse.json(
       {

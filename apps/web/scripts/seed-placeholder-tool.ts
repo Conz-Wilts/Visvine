@@ -37,8 +37,8 @@ import prisma from '../lib/prisma';
 import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { splitFrontmatter } from '../lib/notes/shared/markdown';
 import { resolveContext } from '../lib/notes/resolve';
-import { McpError, type McpContext } from '../lib/mcp/auth';
-import { appToolHandlers } from '../lib/mcp/appTools';
+import { ActionError, type ActionCaller } from '../lib/actions/types';
+import { appToolHandlers } from '../lib/actions/defs/apps';
 import { applyUpgrade, listInstalls } from '../lib/tools/installs';
 import { getVersion, reviewVersion, toolKey, versionHistory } from '../lib/tools/registry';
 
@@ -89,7 +89,7 @@ async function main() {
   const actor = { userId: owner.id, email: owner.email ?? '' };
 
   /** What the MCP transport hands the handlers after verifying a token. */
-  const ctx: McpContext = {
+  const ctx: ActionCaller = {
     userId: owner.id,
     name: owner.name ?? '',
     email: owner.email ?? '',
@@ -112,7 +112,7 @@ async function main() {
     });
     done(`scaffolded ${created.files.join(', ')}`);
   } catch (e) {
-    if (!(e instanceof McpError) || e.status !== 409) throw e;
+    if (!(e instanceof ActionError) || e.status !== 409) throw e;
     done(`tools/${TOOL}/ already exists — writing over it`);
   }
 

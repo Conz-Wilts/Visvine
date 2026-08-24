@@ -2,15 +2,14 @@
  * MCP access-token minting + verification.
  *
  * Access tokens are HS256 JWTs signed with the same `AUTH_SECRET` as web
- * sessions, but with `typ: "mcp_access"`, an `aud` bound to ONE MCP resource
- * URL (the context server or the creator server — lib/mcp/config.ts), and a
- * `scope` claim. The `typ` guard in `verifyAccessToken` is what stops an
- * ordinary `auth_session` cookie JWT from being replayed as an MCP token — do
- * not relax it. The `aud` check is what stops a token minted for one server
- * from being presented to the other.
+ * sessions, but with `typ: "mcp_access"`, an `aud` bound to the MCP resource
+ * URL (lib/mcp/config.ts), and a `scope` claim. The `typ` guard in
+ * `verifyAccessToken` is what stops an ordinary `auth_session` cookie JWT from
+ * being replayed as an MCP token — do not relax it, it is the whole reason a
+ * stolen session cookie is not also an agent credential.
  */
 import { SignJWT, jwtVerify } from 'jose'
-import { mcpResourceUrl, type McpServerKind } from '@/lib/mcp/config'
+import { legacyResourceUrl, mcpResourceUrl } from '@/lib/mcp/config'
 import { serializeScopes } from '@/lib/mcp/scopes'
 
 /**
@@ -47,7 +46,6 @@ export async function mintAccessToken(
   identity: McpIdentity,
   scopes: readonly string[],
   clientId: string,
-  kind: McpServerKind,
 ): Promise<{ token: string; expiresIn: number }> {
   const ttlSeconds = ACCESS_TTL_SECONDS
   const token = await new SignJWT({
@@ -60,7 +58,7 @@ export async function mintAccessToken(
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(identity.userId)
-    .setAudience(mcpResourceUrl(kind))
+    .setAudience(mcpResourceUrl())
     .setIssuedAt()
     .setExpirationTime(`${ttlSeconds}s`)
     .sign(secret())
@@ -77,13 +75,21 @@ export interface VerifiedAccessToken {
   expiresAt?: number
 }
 
-/** Verify a bearer for the server named by `kind` — a token for the other server is null here. */
-export async function verifyAccessToken(
-  token: string,
-  kind: McpServerKind,
-): Promise<VerifiedAccessToken | null> {
+/**
+ * Verify a bearer. Anything not minted for this resource — a web session
+ * cookie, a token for some other audience entirely — is null.
+ *
+ * The legacy identifier is accepted alongside the canonical one so a connection
+ * made before the surfaces were one keeps working on its existing token rather
+ * than failing until someone notices. Both name the same single resource, so
+ * there is no cross-resource confusion to create; the scopes on the token are
+ * what decide what it can do, exactly as before.
+ */
+export async function verifyAccessToken(token: string): Promise<VerifiedAccessToken | null> {
   try {
-    const { payload } = await jwtVerify(token, secret(), { audience: mcpResourceUrl(kind) })
+    const { payload } = await jwtVerify(token, secret(), {
+      audience: [mcpResourceUrl(), legacyResourceUrl()],
+    })
     if (payload.typ !== TOKEN_TYPE) return null
     if (!payload.sub) return null
     const scope = typeof payload.scope === 'string' ? payload.scope : ''

@@ -53,14 +53,16 @@ pnpm mcp:dev                    # Postgres + Next, acting as admin@local.dev
 pnpm mcp:dev --user member      # …as member@local.dev instead
 ```
 
-Then connect. There is no token and no sign-in: both servers are in the
-committed `.mcp.json`, and a request with no `Authorization` header is treated
-as the chosen dev user with every scope.
+Then connect. There is no token and no sign-in: the server is in the committed
+`.mcp.json`, and a request with no `Authorization` header is treated as the
+chosen dev user with every scope.
 
 ```json
-"visvine":         { "type": "http", "url": "http://localhost:3000/api/mcp" }
-"visvine-creator": { "type": "http", "url": "http://localhost:3000/api/mcp/creator" }
+"visvine": { "type": "http", "url": "http://localhost:3000/api/mcp" }
 ```
+
+One server, one tool — `visvine` — and every action behind it. Call it with no
+`action` to get the plan and the catalogue.
 
 Picking the user is the only local decision. `--user` takes a bare name, an
 email or a user id; `DEV_MCP_USER` in `apps/web/.env` does the same thing
@@ -75,11 +77,12 @@ guard, and the same argument, as the rest of `/api/dev`.
 ## MCP in production
 
 Full OAuth 2.1: authorization code + PKCE, our own authorization server
-(`app/api/oauth/*`), per-resource tokens (a token for the creator server is
-refused by the context server), and a consent screen naming the scopes. A
-request without a valid token gets a 401 whose `WWW-Authenticate` points at the
-protected-resource metadata; one whose token lacks a tool's scope gets a 403 it
-can step up from.
+(`app/api/oauth/*`), a token bound to this one resource by its `aud`, and a
+consent screen naming the scopes — which is where it is decided what a
+connection may do, since one server offers everything. A request without a valid
+token gets a 401 whose `WWW-Authenticate` points at the protected-resource
+metadata; one whose token lacks an action's scope gets a 403 it can step up
+from.
 
 An access token lasts **30 days**, and that is the whole life of a grant —
 there is no refresh token, no rotation and no revocation endpoint. Sign in once
@@ -148,6 +151,7 @@ built in layers. `pnpm db:blackbird:full` runs all of them:
 | `db:index-notes:rebuild` | creates any missing folder index and refreshes every index's managed child list |
 | `db:notes:verify` | fails the seed if the context breaks a structural rule |
 | `db:global:rebuild` | rebuilds every Visvine global record from public spaces + profiles (`docs/global-records.md`) |
+| `db:actions:sync` | renders the action and recipe catalogues into the Visvine space — the notes an agent reads to learn what Visvine can do |
 
 Other demo content (the NZ startup ecosystem) loads separately via `pnpm db:nz`.
 

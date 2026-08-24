@@ -18,7 +18,6 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { isDevMcpBypassEnabled } from '@/lib/mcp/devIdentity'
 import { mcpBearerVerifier } from '@/lib/mcp/auth'
-import { MCP_SERVER_KINDS } from '@/lib/mcp/config'
 
 function withEnv(vars: Record<string, string | undefined>, fn: () => void | Promise<void>) {
   const before: Record<string, string | undefined> = {}
@@ -54,18 +53,14 @@ test('the bypass is on for local development', () =>
     assert.equal(isDevMcpBypassEnabled(), true)
   }))
 
-test('a tokenless request is refused on both servers when the bypass is off', () =>
+test('a tokenless request is refused when the bypass is off', () =>
   withEnv({ NODE_ENV: 'production', ENABLE_DEV_AUTH: 'true' }, async () => {
-    for (const kind of MCP_SERVER_KINDS) {
-      const verify = mcpBearerVerifier(kind)
-      assert.equal(await verify(new Request('https://visvine.com/api/mcp')), undefined)
-    }
+    const verify = mcpBearerVerifier()
+    assert.equal(await verify(new Request('https://visvine.com/api/mcp')), undefined)
   }))
 
 test('a bogus token is refused even where the bypass is on', () =>
   withEnv({ NODE_ENV: 'development', ENABLE_DEV_AUTH: 'true', AUTH_SECRET: 'test-secret' }, async () => {
-    for (const kind of MCP_SERVER_KINDS) {
-      const verify = mcpBearerVerifier(kind)
-      assert.equal(await verify(new Request('http://localhost:3000/api/mcp'), 'not-a-jwt'), undefined)
-    }
+    const verify = mcpBearerVerifier()
+    assert.equal(await verify(new Request('http://localhost:3000/api/mcp'), 'not-a-jwt'), undefined)
   }))

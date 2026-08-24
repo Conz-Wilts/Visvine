@@ -45,6 +45,7 @@
     "db:notes:verify": "tsx scripts/verify-notes-rules.ts community:blackbird-ventures",
     "db:embed": "tsx scripts/embed-context.ts",
     "db:global:rebuild": "tsx scripts/rebuild-global-records.ts",
+    "db:actions:sync": "tsx scripts/sync-action-notes.ts",
     "db:secrets:rotate": "tsx scripts/rotate-secrets-key.ts",
     "db:connectors:demo": "tsx scripts/add-connector-demo.ts",
     "db:connectors:migrate": "tsx scripts/migrate-connectors-v2.ts",

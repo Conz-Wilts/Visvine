@@ -18,8 +18,9 @@
  * unauthenticated request — mcp-handler builds that header itself and omits it.
  */
 import type { AuthInfo } from '@modelcontextprotocol/server'
-import { scopeForTool, scopesForKind, serializeScopes } from '@/lib/mcp/scopes'
-import type { McpServerKind } from '@/lib/mcp/config'
+import { MCP_SCOPES, serializeScopes } from '@/lib/mcp/scopes'
+import { scopeForAction } from '@/lib/actions/registry'
+import { TOOL_NAME } from '@/lib/mcp/gateway'
 
 type Handler = (req: Request) => Response | Promise<Response>
 
@@ -36,6 +37,14 @@ function challengeHeader(params: Record<string, string>): string {
  * body? A JSON-RPC batch is a single HTTP request, so all of them are collected
  * and challenged together — the spec is explicit that trickling out one missing
  * scope at a time forces needless round-trips.
+ *
+ * There is one tool now, so the scope being challenged is the ACTION's, read
+ * out of `params.arguments.action`. A call that names no action is the plan or
+ * the catalogue — free, read-only, and never challenged; a call that names one
+ * but supplies no `input` is asking for its manual, which is equally free. Only
+ * a call that would actually RUN something is gated here, which keeps discovery
+ * open to a token that cannot yet do the work and lets the client step up once,
+ * knowing exactly what to ask for.
  */
 export function missingScopesForBody(rawBody: string, granted: readonly string[]): string[] {
   let parsed: unknown
@@ -50,10 +59,16 @@ export function missingScopesForBody(rawBody: string, granted: readonly string[]
     if (typeof message !== 'object' || message === null) continue
     const m = message as { method?: unknown; params?: unknown }
     if (m.method !== 'tools/call') continue
-    const name = (m.params as { name?: unknown } | undefined)?.name
-    if (typeof name !== 'string') continue
-    const required = scopeForTool(name)
-    // An unknown tool name is the handler's error to report, not ours.
+    const params = m.params as { name?: unknown; arguments?: unknown } | undefined
+    if (params?.name !== TOOL_NAME) continue
+    const args = params.arguments
+    if (typeof args !== 'object' || args === null) continue
+    const { action, input, explain } = args as Record<string, unknown>
+    if (typeof action !== 'string') continue
+    // No `input` (or `explain`) means "tell me about it", not "do it".
+    if (input === undefined || input === null || explain === true) continue
+    const required = scopeForAction(action)
+    // An unknown action name is the handler's error to report, not ours.
     if (required && !granted.includes(required)) missing.add(required)
   }
   return [...missing]
@@ -110,7 +125,7 @@ export function withScopeGate(handler: Handler, resourceMetadataUrl: string): Ha
  * `scopes_supported` says, which is a slower path and one more thing to keep in
  * step. Any `scope` the inner layer already set wins.
  */
-export function withScopeHint(handler: Handler, kind: McpServerKind): Handler {
+export function withScopeHint(handler: Handler): Handler {
   return async (req: Request): Promise<Response> => {
     const res = await handler(req)
     if (res.status !== 401 && res.status !== 403) return res
@@ -118,7 +133,7 @@ export function withScopeHint(handler: Handler, kind: McpServerKind): Handler {
     if (!existing || /(^|[\s,])scope=/.test(existing)) return res
 
     const headers = new Headers(res.headers)
-    headers.set('WWW-Authenticate', `${existing}, scope="${serializeScopes(scopesForKind(kind))}"`)
+    headers.set('WWW-Authenticate', `${existing}, scope="${serializeScopes(MCP_SCOPES)}"`)
     return new Response(res.body, { status: res.status, statusText: res.statusText, headers })
   }
 }

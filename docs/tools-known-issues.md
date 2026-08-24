@@ -150,7 +150,7 @@ Kept as a short list so nothing here gets re-reported.
 | `state.set` could lose a genuinely concurrent first write to a new key (unique-constraint violation surfaced to the Tool as an opaque `internal`) | `lib/tools/state.ts` — now an `upsert` |
 | `browseVersions` restarted at page one on a cursor whose key had left the fold, so a paging client looped forever | `lib/tools/registry.ts` — now `pageByCursor`, which ends the listing instead |
 | Every preview a viewer opened shared one `<viewer>:preview` rate bucket, so one chatty draft starved the author's other drafts | `lib/tools/limits.ts` — the bucket is keyed on `targetKey()` |
-| `check_tool` gave no signal that an `agents/**` write glob with no declared agents grants nothing | `lib/mcp/appTools.ts` — now a warning |
+| `check_tool` gave no signal that an `agents/**` write glob with no declared agents grants nothing | `lib/actions/defs/apps.ts` — now a warning |
 | `createTool` could leave a node + index note behind on a denied starter write | `lib/tools/service.ts` |
 | `next.config.ts`'s global CSP set `frame-src 'self'` app-wide — the Tool frame never loaded, making the whole separate-origin design unreachable | `next.config.ts` |
 | `TOOLS_ORIGIN` set to the app's own origin made the proxy 404 the entire site | `lib/tools/origin.ts` |

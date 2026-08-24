@@ -1,17 +1,21 @@
 /**
- * The Visvine CREATOR MCP endpoint (Streamable HTTP): the Tool authoring loop
- * only — list_spaces, get_tool_sdk, create/read/write/check/preview/publish
- * _tool. Its own OAuth protected resource, so a token for the context server
- * (../route.ts) is not accepted here and vice versa; a client connects to
- * this URL when someone is BUILDING a Tool, and to /api/mcp for everything
- * else. Assembly lives in lib/mcp/handler.ts.
+ * Where the Tool authoring loop used to have an endpoint of its own.
+ *
+ * There is one MCP server now, so this redirects to it — permanently, and with
+ * the method and body preserved (308), so a client configured with this URL
+ * keeps working through the redirect rather than failing at connect. Its
+ * existing token also keeps verifying: `verifyAccessToken` accepts the audience
+ * this endpoint used to mint for.
+ *
+ * Deletable once nothing is configured this way.
  */
-import { buildMcpHandler } from '@/lib/mcp/handler'
-import { registerCreatorTools } from '@/lib/mcp/tools'
+import { NextRequest, NextResponse } from 'next/server'
+import { mcpResourceUrl } from '@/lib/mcp/config'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
 
-const authHandler = buildMcpHandler('creator', registerCreatorTools)
+function redirect(_req: NextRequest) {
+  return NextResponse.redirect(mcpResourceUrl(), 308)
+}
 
-export { authHandler as GET, authHandler as POST, authHandler as DELETE }
+export { redirect as GET, redirect as POST, redirect as DELETE }

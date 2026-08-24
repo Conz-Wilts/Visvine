@@ -1,12 +1,12 @@
 'use client';
 
-// Settings → MCP. How someone points Claude at their own Visvine
-// context — and, separately, at the Tool creator.
+// Settings → MCP. How someone points Claude at their own Visvine context.
 //
-// Two servers, two addresses (lib/mcp/config.ts): the everyday one reads,
-// searches and writes context and can discover and install Tools; the creator
-// one carries only the authoring loop that writes a Tool's code. They are
-// separate OAuth resources, so connecting one never grants the other.
+// One server, one address (lib/mcp/config.ts), and one tool behind it: reading,
+// searching and writing context, the Drive, events, connectors, agents, and
+// building Tools. What a connection may actually do is decided at consent, by
+// which scopes it asked for — not by which address it was given, which is why
+// there is only one to copy.
 //
 // This lives in personal settings rather than the space console on purpose:
 // the OAuth token an MCP client holds belongs to the *person*, and every tool
@@ -26,10 +26,7 @@ import { Alert, Button, SettingsSection } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 
 interface McpConnectInfo {
-  /** The context server. */
   url: string;
-  /** The Tool creator server. */
-  creatorUrl: string;
   issuer: string;
   scopes: { scope: string; description: string }[];
 }
@@ -86,16 +83,9 @@ export default function ConnectClaudePanel() {
 
       <SettingsSection
         title="Connect Claude"
-        description="Give Claude access to your Visvine context — the entities, notes and connections in every space you're a member of. Visvine runs the server itself; there is nothing to install."
+        description="One address for everything: your Visvine context — the entities, notes and connections in every space you're a member of — plus the Drive, events, connectors, agents, and building Tools with a coding agent. Visvine runs the server itself; there is nothing to install. What a connection can do is decided when you approve it, not by which address you use."
       >
         <McpServerUrlRow url={info?.url ?? null} />
-      </SettingsSection>
-
-      <SettingsSection
-        title="Connect the Tool creator"
-        description="A separate server for building Tools with a coding agent (Claude Code, Cursor): scaffold, write, compile, preview and publish. It carries only the authoring loop — connect it when you're building a Tool, and use the address above for everything else."
-      >
-        <McpServerUrlRow url={info?.creatorUrl ?? null} label="Tool creator MCP server address" />
       </SettingsSection>
     </div>
   );

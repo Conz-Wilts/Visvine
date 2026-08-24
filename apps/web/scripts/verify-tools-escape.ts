@@ -60,8 +60,8 @@ import { toolRailKey } from '../lib/featureAccess';
 import { resolveContext } from '../lib/notes/resolve';
 import * as store from '../lib/notes/store';
 import { readSpaceConfig, updateSpaceConfig } from '../lib/spaces/spaceConfig';
-import type { McpContext } from '../lib/mcp/auth';
-import { appToolHandlers } from '../lib/mcp/appTools';
+import type { ActionCaller } from '../lib/actions/types';
+import { appToolHandlers } from '../lib/actions/defs/apps';
 import { handleBridgeCall } from '../lib/tools/bridge';
 import { toolFolderPath, toolIndexPath } from '../lib/tools/config';
 import { listInstalls, uninstall } from '../lib/tools/installs';
@@ -358,7 +358,7 @@ async function main(): Promise<void> {
   if (resolved instanceof Response) throw new Error(`resolveContext: ${resolved.status}`);
   const actor = { userId: owner.id, email: owner.email ?? '' };
 
-  const ctx: McpContext = {
+  const ctx: ActionCaller = {
     userId: owner.id,
     name: owner.name ?? '',
     email: owner.email ?? '',

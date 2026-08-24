@@ -206,6 +206,40 @@ To rotate the deploy identity, point `WIF_SERVICE_ACCOUNT` at a new account that
 holds the table above and has `iam.workloadIdentityUser` for the repo's
 principalSet. Reverting is one `gh secret set`.
 
+## The action notes
+
+What an agent reads to learn what Visvine can do — one note per action
+(`actions/<name>.md`) and per recipe (`recipes/<id>.md`) in the `visvine` global
+space. The MCP surface is a single tool; this is everything behind it.
+
+**They are not on the critical path.** With none of them written, the surface
+still routes and runs: the catalogue comes from the registry in code and the
+recipes fall back to the shipped catalogue (`lib/actions/notes.ts`). Un-synced
+notes cost the *editable* half of the documentation, nothing more. So there is no
+deploy step to get wrong and no ordering hazard between a release and a sync.
+
+**Production syncs itself, nightly.** `runNightlyMaintenance` calls
+`syncActionNotes` — around forty idempotent note writes. A release that adds an action is
+therefore fully documented within a day, and immediately usable before that. To
+pull it forward, trigger the sweep by hand:
+
+```bash
+gcloud scheduler jobs run visvine-nightly-maintenance \
+  --location=australia-southeast1 --project=visvine-platform
+```
+
+**Editing them.** The prose in each note is maintained in the app by an admin of
+the Visvine space — in production `connor@visvine.com`, which requires either a
+Person alias flagged `admin` in that space or membership of
+`SUPER_ADMIN_EMAILS`. Everything outside the `<!-- action:contract -->` markers
+survives every sync; everything inside them is regenerated from the Zod schema
+and hand edits there are overwritten by design, because that block is what stops
+the documentation drifting from what an action will actually accept.
+
+Adding or improving a *recipe* needs no deploy at all: write a note under
+`recipes/`, give it `when:` and a `keywords:` list, and it joins the routing on
+the next request.
+
 ## Secrets
 
 Managed in Secret Manager and injected at deploy time (`--set-secrets`). Nothing

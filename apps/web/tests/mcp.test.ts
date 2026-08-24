@@ -12,20 +12,17 @@ import { SignJWT } from 'jose'
 import {
   MCP_SCOPES,
   DEFAULT_SCOPES,
-  TOOL_SCOPES,
-  scopeForTool,
   parseScopes,
   negotiateScopes,
   serializeScopes,
-  scopesForKind,
 } from '@/lib/mcp/scopes'
 import { mintAccessToken, verifyAccessToken } from '@/lib/mcp/tokens'
 import {
   mcpResourceUrl,
+  legacyResourceUrl,
   mcpServerInfo,
   canonicalizeResource,
   isCanonicalResource,
-  resourceKindOf,
 } from '@/lib/mcp/config'
 import {
   isClientIdUrl,
@@ -36,9 +33,9 @@ import {
 } from '@/lib/mcp/clients'
 import { missingScopesForBody, withScopeHint } from '@/lib/mcp/challenge'
 import { authorizationServerMetadata, protectedResourceMetadata } from '@/lib/mcp/metadata'
-import { verifyPkceS256, kindFromStored } from '@/lib/mcp/oauth'
+import { verifyPkceS256 } from '@/lib/mcp/oauth'
 import { CREATABLE_TYPES, isCreatableType } from '@/lib/directory/createEntity'
-import { mentionFor } from '@/lib/mcp/tools'
+import { mentionFor } from '@/lib/actions/defs/context'
 import { canonicalNodeType, nodeTypeSpellings } from '@/lib/types/context'
 import { entityMentionPaths } from '@/lib/notes/entities'
 import { buildTypeCatalog } from '@/lib/mcp/typeCatalog'
@@ -74,36 +71,30 @@ test('parseScopes keeps valid scopes and drops retired ones', () => {
 })
 
 test('negotiateScopes falls back to read-only and honours the client allowlist', () => {
-  assert.deepEqual(negotiateScopes(null, null, 'context'), ['context:read'])
-  assert.deepEqual(negotiateScopes('context:read context:write', null, 'context'), [
-    'context:read',
-    'context:write',
-  ])
+  assert.deepEqual(negotiateScopes(null, null), ['context:read'])
+  assert.deepEqual(negotiateScopes('context:read context:write', null), ['context:read', 'context:write'])
   // A client that only registered for reads cannot request writes.
-  assert.deepEqual(negotiateScopes('context:read context:write', 'context:read', 'context'), ['context:read'])
+  assert.deepEqual(negotiateScopes('context:read context:write', 'context:read'), ['context:read'])
 })
 
-test('the creator server negotiates, advertises and hints only the authoring scopes', async () => {
-  // Consent for a Tool-authoring connection never asks for capabilities the
-  // creator surface cannot exercise, whatever the client requested.
-  assert.deepEqual(negotiateScopes(serializeScopes(MCP_SCOPES), null, 'creator'), ['context:read', 'tools:author'])
-  assert.deepEqual(negotiateScopes('context:write agents:run', null, 'creator'), [])
-  assert.deepEqual(negotiateScopes(null, null, 'creator'), ['context:read'])
-  assert.deepEqual(protectedResourceMetadata('creator').scopes_supported, ['context:read', 'tools:author'])
-  assert.deepEqual(protectedResourceMetadata('context').scopes_supported, [...MCP_SCOPES])
-  // Every scope the creator can grant is one some creator-surface tool needs,
-  // and every creator-surface tool's scope is grantable there.
-  for (const scope of scopesForKind('creator')) assert.ok(MCP_SCOPES.includes(scope))
-  for (const name of ['create_tool', 'write_tool', 'check_tool', 'preview_tool', 'publish_tool', 'read_tool', 'get_tool_sdk', 'list_tools'] as const) {
-    assert.ok(scopesForKind('creator').includes(TOOL_SCOPES[name]), `${name} is not grantable on the creator server`)
-  }
-  // The 401 challenge hints the same list.
+test('consent is the only ceiling, and a client is told the full list to ask from', async () => {
+  // One server offers every action, so nothing above `negotiateScopes` narrows
+  // what a connection may hold. What stops a Tool-authoring agent also holding
+  // write access to someone's notes is that it does not ASK for it — and the
+  // person approving sees, scope by scope, exactly what was asked.
+  assert.deepEqual(negotiateScopes(serializeScopes(MCP_SCOPES), null), [...MCP_SCOPES])
+  assert.deepEqual(negotiateScopes('tools:author', null), ['tools:author'])
+  // A client that asks for nothing gets read-only, never everything.
+  assert.deepEqual(negotiateScopes(null, null), ['context:read'])
+  assert.deepEqual(protectedResourceMetadata().scopes_supported, [...MCP_SCOPES])
+
+  // The 401 challenge hints the same list, so a client with no token knows what
+  // it may request.
   const challenged = withScopeHint(
     async () => new Response(null, { status: 401, headers: { 'WWW-Authenticate': 'Bearer realm="x"' } }),
-    'creator',
   )
-  const res = await challenged(new Request('http://localhost:3000/api/mcp/creator', { method: 'POST' }))
-  assert.match(res.headers.get('WWW-Authenticate') ?? '', /scope="context:read tools:author"/)
+  const res = await challenged(new Request('http://localhost:3000/api/mcp', { method: 'POST' }))
+  assert.match(res.headers.get('WWW-Authenticate') ?? '', /scope="context:read context:write/)
 })
 
 // ── MCP 2026-07-28: resource indicators (RFC 8707) ──
@@ -121,8 +112,8 @@ test('canonicalizeResource normalises exactly what the spec says is insignifican
 })
 
 test('only our own resource identifier is an acceptable audience', () => {
-  assert.equal(isCanonicalResource(mcpResourceUrl('context')), true)
-  assert.equal(isCanonicalResource(`${mcpResourceUrl('context')}/`), true)
+  assert.equal(isCanonicalResource(mcpResourceUrl()), true)
+  assert.equal(isCanonicalResource(`${mcpResourceUrl()}/`), true)
   // Scheme and host may arrive uppercased; the path may NOT — paths are
   // case-sensitive, so an uppercased one names a different resource.
   assert.equal(isCanonicalResource('HTTP://LOCALHOST:3000/api/mcp'), true)
@@ -132,21 +123,21 @@ test('only our own resource identifier is an acceptable audience', () => {
   assert.equal(isCanonicalResource(''), false)
 })
 
-test('the two servers are two resources, and a resource value names exactly one of them', () => {
-  assert.equal(mcpResourceUrl('context'), 'http://localhost:3000/api/mcp')
-  assert.equal(mcpResourceUrl('creator'), 'http://localhost:3000/api/mcp/creator')
-  assert.equal(mcpResourceUrl('context'), mcpResourceUrl('context'))
+test('there is one resource, and the address the creator server used still names it', () => {
+  assert.equal(mcpResourceUrl(), 'http://localhost:3000/api/mcp')
+  assert.equal(legacyResourceUrl(), 'http://localhost:3000/api/mcp/creator')
+  assert.equal(protectedResourceMetadata().resource, mcpResourceUrl())
 
-  assert.equal(resourceKindOf(mcpResourceUrl('creator')), 'creator')
-  assert.equal(resourceKindOf(`${mcpResourceUrl('creator')}/`), 'creator')
-  assert.equal(resourceKindOf(mcpResourceUrl('context')), 'context')
-  assert.equal(resourceKindOf(null), null)
-  assert.equal(resourceKindOf('https://someone-else.example/api/mcp/creator'), null)
-  assert.equal(isCanonicalResource(mcpResourceUrl('creator')), true)
+  // A connection made before the surfaces were one presents the old identifier
+  // as its `resource` and as its token's `aud`. Both keep working — there is
+  // one resource for them to name, so nothing is confused by accepting it.
+  assert.equal(isCanonicalResource(legacyResourceUrl()), true)
+  assert.equal(isCanonicalResource(`${legacyResourceUrl()}/`), true)
+  // Someone else's server never is, whichever suffix it wears.
+  assert.equal(isCanonicalResource('https://someone-else.example/api/mcp/creator'), false)
+  assert.equal(isCanonicalResource(null), false)
 
-  // The two identities clients see are distinct.
-  assert.equal(mcpServerInfo('context').name, 'visvine')
-  assert.equal(mcpServerInfo('creator').name, 'visvine-creator')
+  assert.equal(mcpServerInfo().name, 'visvine')
 })
 
 // ── MCP 2026-07-28: Client ID Metadata Documents ──
@@ -261,76 +252,56 @@ test('an omitted application_type is inferred, not defaulted to web', () => {
 
 // ── MCP 2026-07-28: scope challenges / step-up ──
 
-test('every tool maps to a scope in the catalogue, and reads outnumber writes', () => {
-  const tools = Object.keys(TOOL_SCOPES)
-  // The planner + 17 context/connector/agent tools + the nine Tool-authoring
-  // ones (tests/mcp-scopes.test.ts pins those against what is actually
-  // registered).
-  assert.equal(tools.length, 27)
-  for (const scope of Object.values(TOOL_SCOPES)) {
-    assert.ok(MCP_SCOPES.includes(scope), `${scope} is not in the catalogue`)
-  }
-  assert.equal(scopeForTool('edit_context'), 'context:write')
-  assert.equal(scopeForTool('read_context'), 'context:read')
-  // Reading an uploaded file is the same capability as reading a note about it.
-  assert.equal(scopeForTool('list_files'), 'context:read')
-  assert.equal(scopeForTool('read_file'), 'context:read')
-  // A move rewrites other notes' links, so it is unambiguously a write.
-  assert.equal(scopeForTool('move_context'), 'context:write')
-  // The clean pass mutates in its apply/trash actions, so the whole tool
-  // rides the write scope even though analysis is read-only.
-  assert.equal(scopeForTool('clean_context'), 'context:write')
-  // Editing the alias vocabulary is a write, and its list action rides along.
-  assert.equal(scopeForTool('manage_alias'), 'context:write')
-  // Connector discovery is a read; execution needs the dedicated scope.
-  assert.equal(scopeForTool('list_connectors'), 'context:read')
-  assert.equal(scopeForTool('run_connector'), 'connectors:use')
-  // Storing a credential is a THIRD capability, not a flavour of running one:
-  // a token that may call Stripe must not thereby be able to replace the key.
-  assert.equal(scopeForTool('set_connector_secret'), 'secrets:write')
-  assert.notEqual(scopeForTool('set_connector_secret'), scopeForTool('run_connector'))
-  assert.notEqual(scopeForTool('set_connector_secret'), scopeForTool('edit_context'))
-  // Same split for agents: the roster is a read; triggering a run needs its own scope.
-  assert.equal(scopeForTool('list_agents'), 'context:read')
-  assert.equal(scopeForTool('run_agent'), 'agents:run')
-  // The planner is the index to every other tool, so it must never be behind a
-  // scope the client has not already opened.
-  assert.equal(scopeForTool('plan_visvine_query'), 'context:read')
-  assert.equal(scopeForTool('no_such_tool'), null)
-})
+/** A `tools/call` for the one tool, with whatever arguments. */
+function call(id: number, args: Record<string, unknown>) {
+  return { jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'visvine', arguments: args } }
+}
 
-test('a read-only token calling a write tool is challenged for the missing scope', () => {
-  const body = JSON.stringify({
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'tools/call',
-    params: { name: 'edit_context', arguments: {} },
-  })
+test('a read-only token running a write action is challenged for the missing scope', () => {
+  // The scope being challenged is the ACTION's, read out of the arguments —
+  // there is only one tool, so the tool name can no longer carry it.
+  const body = JSON.stringify(call(1, { action: 'edit_context', input: { space_id: 's', path: 'a.md', content: '' } }))
   assert.deepEqual(missingScopesForBody(body, ['context:read']), ['context:write'])
   assert.deepEqual(missingScopesForBody(body, ['context:read', 'context:write']), [])
 })
 
+test('discovery is never challenged, however little the token carries', () => {
+  // The plan and the catalogue are what a client calls FIRST, before it knows
+  // what to ask for. Gating them would make step-up impossible to discover.
+  assert.deepEqual(missingScopesForBody(JSON.stringify(call(1, {})), []), [])
+  assert.deepEqual(missingScopesForBody(JSON.stringify(call(2, { request: 'add a connector' })), []), [])
+  // Naming an action WITHOUT input is asking for its manual, not running it.
+  assert.deepEqual(missingScopesForBody(JSON.stringify(call(3, { action: 'edit_context' })), []), [])
+  // And `explain` reads the manual even when the arguments are already to hand.
+  assert.deepEqual(
+    missingScopesForBody(JSON.stringify(call(4, { action: 'edit_context', input: {}, explain: true })), []),
+    [],
+  )
+})
+
 test('a batch is challenged once, for the union of what it needs', () => {
   const body = JSON.stringify([
-    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'edit_context' } },
-    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'append_context' } },
-    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'read_context' } },
+    call(1, { action: 'edit_context', input: {} }),
+    call(2, { action: 'append_context', input: {} }),
+    call(3, { action: 'read_context', input: {} }),
   ])
   // Deduped: one challenge, not one per call — the spec is explicit that
   // trickling out scopes forces needless authorization round-trips.
   assert.deepEqual(missingScopesForBody(body, []), ['context:write', 'context:read'])
 })
 
-test('non-tool traffic and unknown tools are never scope-challenged', () => {
+test('non-tool traffic and unknown actions are never scope-challenged', () => {
   // tools/list must stay reachable, or the client cannot discover anything.
   assert.deepEqual(
     missingScopesForBody(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }), []),
     [],
   )
-  // An unknown tool is the handler's error to report, not a scope failure.
+  // An unknown action is the handler's error to report, not a scope failure.
+  assert.deepEqual(missingScopesForBody(JSON.stringify(call(1, { action: 'nope', input: {} })), []), [])
+  // So is a call to some other tool name entirely.
   assert.deepEqual(
     missingScopesForBody(
-      JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'nope' } }),
+      JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'other', arguments: {} } }),
       [],
     ),
     [],
@@ -349,20 +320,14 @@ test('the discovery documents advertise the 2026-07-28 capabilities', () => {
   // DCR stays advertised — deprecated, not removed.
   assert.ok(typeof as.registration_endpoint === 'string')
 
-  const pr = protectedResourceMetadata('context')
-  assert.equal(pr.resource, mcpResourceUrl('context'))
+  const pr = protectedResourceMetadata()
+  assert.equal(pr.resource, mcpResourceUrl())
   assert.deepEqual(pr.authorization_servers, [as.issuer])
   assert.deepEqual(pr.scopes_supported, [...MCP_SCOPES])
-
-  // The creator server publishes its own document naming its own resource,
-  // against the same authorization server.
-  const creator = protectedResourceMetadata('creator')
-  assert.equal(creator.resource, mcpResourceUrl('creator'))
-  assert.deepEqual(creator.authorization_servers, [as.issuer])
 })
 
 test('the server identity carries an absolute logo URL, not a build-hashed one', () => {
-  const info = mcpServerInfo('context')
+  const info = mcpServerInfo()
   assert.equal(info.name, 'visvine')
   assert.equal(info.websiteUrl, 'http://localhost:3000')
 
@@ -377,17 +342,12 @@ test('the server identity carries an absolute logo URL, not a build-hashed one',
 })
 
 test('an access token round-trips with its identity and scopes', async () => {
-  const { token, expiresIn } = await mintAccessToken(
-    IDENTITY,
-    ['context:read', 'context:write'],
-    'mcp_client_1',
-    'context',
-  )
+  const { token, expiresIn } = await mintAccessToken(IDENTITY, ['context:read', 'context:write'], 'mcp_client_1')
   // 30 days: the whole life of a grant, since there is no refresh token behind
   // it. Shortening this means every client re-authorizes sooner.
   assert.equal(expiresIn, 60 * 60 * 24 * 30)
 
-  const verified = await verifyAccessToken(token, 'context')
+  const verified = await verifyAccessToken(token)
   assert.ok(verified)
   assert.equal(verified.userId, 'user_1')
   assert.equal(verified.email, 'test@local.dev')
@@ -400,12 +360,12 @@ test('a web session JWT cannot be replayed as an MCP access token', async () => 
   const sessionJwt = await new SignJWT({ name: 'Test User', email: 'test@local.dev' })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject('user_1')
-    .setAudience(mcpResourceUrl('context'))
+    .setAudience(mcpResourceUrl())
     .setIssuedAt()
     .setExpirationTime('1h')
     .sign(new TextEncoder().encode(process.env.AUTH_SECRET))
 
-  assert.equal(await verifyAccessToken(sessionJwt, 'context'), null)
+  assert.equal(await verifyAccessToken(sessionJwt), null)
 })
 
 test('a token minted for another audience is rejected', async () => {
@@ -417,23 +377,31 @@ test('a token minted for another audience is rejected', async () => {
     .setExpirationTime('1h')
     .sign(new TextEncoder().encode(process.env.AUTH_SECRET))
 
-  assert.equal(await verifyAccessToken(foreign, 'context'), null)
+  assert.equal(await verifyAccessToken(foreign), null)
 })
 
-test('a token for one server is not a token for the other', async () => {
-  const { token: creatorToken } = await mintAccessToken(IDENTITY, ['tools:author'], 'mcp_client_1', 'creator')
-  assert.ok(await verifyAccessToken(creatorToken, 'creator'))
-  assert.equal(await verifyAccessToken(creatorToken, 'context'), null)
+test('a token issued for the creator address still verifies', async () => {
+  // A connection made before the surfaces were one holds a token whose `aud` is
+  // the old identifier. It keeps working rather than failing until someone
+  // notices — and it gains nothing by it: the scopes on the token are still
+  // what decide what it can do.
+  const legacy = await new SignJWT({ typ: 'mcp_access', scope: 'tools:author', client_id: 'mcp_client_1' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject('user_1')
+    .setAudience(legacyResourceUrl())
+    .setIssuedAt()
+    .setExpirationTime('1h')
+    .sign(new TextEncoder().encode(process.env.AUTH_SECRET))
 
-  const { token: contextToken } = await mintAccessToken(IDENTITY, ['context:read'], 'mcp_client_1', 'context')
-  assert.ok(await verifyAccessToken(contextToken, 'context'))
-  assert.equal(await verifyAccessToken(contextToken, 'creator'), null)
+  const verified = await verifyAccessToken(legacy)
+  assert.ok(verified)
+  assert.deepEqual(verified.scopes, ['tools:author'])
 })
 
 test('garbage and tampered tokens verify as null', async () => {
-  assert.equal(await verifyAccessToken('not-a-jwt', 'context'), null)
-  const { token } = await mintAccessToken(IDENTITY, ['context:read'], 'mcp_client_1', 'context')
-  assert.equal(await verifyAccessToken(`${token}x`, 'context'), null)
+  assert.equal(await verifyAccessToken('not-a-jwt'), null)
+  const { token } = await mintAccessToken(IDENTITY, ['context:read'], 'mcp_client_1')
+  assert.equal(await verifyAccessToken(`${token}x`), null)
 })
 
 test('PKCE S256 accepts the matching verifier and nothing else', () => {
@@ -592,13 +560,4 @@ test('type filters canonicalise, so a search for a retired spelling still finds 
   assert.ok(spellings.includes('organization'))
   assert.deepEqual(nodeTypeSpellings('person'), ['person'])
   assert.deepEqual(nodeTypeSpellings(''), [])
-})
-
-test('kindFromStored fails closed on anything but a known server kind', () => {
-  assert.equal(kindFromStored('context'), 'context')
-  assert.equal(kindFromStored('creator'), 'creator')
-  assert.equal(kindFromStored('CREATOR'), null)
-  assert.equal(kindFromStored(''), null)
-  assert.equal(kindFromStored(null), null)
-  assert.equal(kindFromStored(undefined), null)
 })

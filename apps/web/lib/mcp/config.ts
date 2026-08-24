@@ -13,23 +13,22 @@ export function oauthIssuer(): string {
 }
 
 /**
- * The MCP servers this deployment runs. Two, deliberately, because they are for
- * different jobs and are connected by different people at different moments:
+ * ONE MCP server, at `/api/mcp`, and one OAuth protected resource (RFC 8707):
+ * one resource URL, one metadata document, and tokens whose `aud` names it.
  *
- *   context  the Visvine context — read/search/write notes and entities, call
- *            connectors, run agents, discover and install (activate) Tools.
- *   creator  the Tool authoring loop only — scaffold, write, compile, preview
- *            and publish a Tool. What a coding agent (Claude Code, Cursor) is
- *            pointed at when someone is BUILDING a Tool, kept apart so a
- *            "help me with my notes" connection never carries the surface that
- *            writes executable code into a space.
+ * Everything the platform can do is an action behind a single `visvine` tool,
+ * and which action a request needs is answered by the action notes rather than
+ * by which endpoint a client happened to connect to. Separating the surfaces
+ * would only make a client guess at a boundary the catalogue already explains,
+ * and what an action costs is still enforced where it always was: the scope on
+ * its definition, checked before dispatch and again in `runAction`.
  *
- * Each is its own OAuth protected resource (RFC 8707): its own resource URL,
- * its own metadata document, and tokens whose `aud` names exactly one of them.
- * The authorization server (app/api/oauth/*) is shared.
+ * `/api/mcp/creator` answers with a permanent redirect for connections made
+ * before the surfaces were one, and `LEGACY_RESOURCE_PATH` keeps their tokens
+ * and their `resource` parameter verifying. Both are deletable once no client
+ * is configured that way.
  */
-export const MCP_SERVER_KINDS = ['context', 'creator'] as const
-export type McpServerKind = (typeof MCP_SERVER_KINDS)[number]
+const LEGACY_RESOURCE_PATH = '/creator'
 
 /**
  * The identity clients show for each server: name, title, site, and logo.
@@ -45,11 +44,11 @@ export type McpServerKind = (typeof MCP_SERVER_KINDS)[number]
  * the extra fields through TypeScript's excess-property check; at runtime
  * `createMcpHandler` passes the whole object to `new McpServer(...)` untouched.
  */
-export function mcpServerInfo(kind: McpServerKind = 'context'): Implementation {
+export function mcpServerInfo(): Implementation {
   const origin = oauthIssuer()
   return {
-    name: kind === 'creator' ? 'visvine-creator' : 'visvine',
-    title: kind === 'creator' ? 'Visvine Creator' : 'Visvine',
+    name: 'visvine',
+    title: 'Visvine',
     version: '1.0.0',
     websiteUrl: origin,
     icons: [
@@ -64,45 +63,45 @@ export function mcpServerInfo(kind: McpServerKind = 'context'): Implementation {
 
 /**
  * The `instructions` a client receives at initialize — the one piece of text
- * every model reads before it has called anything, and therefore the only place
- * that can correct the wrong first impression this surface gives.
+ * every model reads before it has called anything.
  *
- * The wrong impression is specific and worth naming: the tool list is mostly
- * list_/run_ verbs, so a client asked to create a connector looks for
- * `create_connector`, does not find it, and reports that connectors can only be
- * made in the app. That is false — a connector IS a note, and edit_context
- * writes it. Rather than restate every recipe here (they change; this string is
- * cached by clients), this points at `plan_visvine_query`, which holds them.
+ * It says as little as possible on purpose. This surface has exactly one tool
+ * and the tool's own description teaches how to use it; everything else a
+ * client needs — the catalogue, the recipes, the contracts — is fetched from
+ * the action notes on the first call, where it can change without a deploy.
+ * This string is cached by clients for the life of a connection, so anything
+ * that belongs to the product rather than the protocol does not belong here.
  */
-export function mcpInstructions(kind: McpServerKind = 'context'): string {
-  const shared =
-    'Visvine is NOTE-FIRST. Almost everything in a space is a markdown note at a deterministic path, ' +
-    'and the note IS the thing — not a description of a record stored elsewhere. A connector is ' +
-    'connectors/<name>.md. An agent is agents/<name>.md plus agents/live/<name>.md. A Tool is three ' +
-    'notes under tools/<name>/. An entity is a typed node plus its note (people/<slug>.md). Links are ' +
-    'never authored: a markdown link to an entity note, inside a shared note, IS the edge.\n\n' +
-    'Because of that, this surface has few create_* tools, and their absence does NOT mean the thing ' +
-    "cannot be made. It usually means it is written with edit_context at the right path. Never tell a " +
-    'user something is impossible here because you could not find a tool named for it.\n\n' +
-    'CALL plan_visvine_query FIRST, with the user\'s message verbatim, on every new request. It returns ' +
-    'the ordered tool plan, the exact note contract where one applies, the refusals to expect, and what ' +
-    'the space already has. It is free, read-only, and it is the index to everything else.'
-  return kind === 'creator'
-    ? `${shared}\n\nThis is the CREATOR server: the Tool authoring loop only (create_tool → write_tool → ` +
-        'check_tool → preview_tool → publish_tool). Reading and writing ordinary context, calling connectors ' +
-        'and running agents live on the context server at /api/mcp.'
-    : `${shared}\n\nAuthoring a Tool is not on this server — connect to /api/mcp/creator for that loop.`
+export function mcpInstructions(): string {
+  return (
+    'This server exposes ONE tool, `visvine`. Call it first with no `action` and `request` set to the ' +
+    "user's message verbatim: it returns the plan for that ask plus the catalogue of every action that " +
+    'exists — reading and writing context, calling connectors, running agents, and building Tools. Then ' +
+    'call it again with `action` to read one, and again with `action` + `input` to run it.\n\n' +
+    'Visvine is note-first — most things here are markdown notes at deterministic paths, not records ' +
+    'behind a create_* API — so the absence of an action named for something is not evidence it cannot be ' +
+    'done. The plan will tell you how it is actually done. Never report something as impossible without ' +
+    'having read it.'
+  )
 }
 
 /**
- * The RFC 8707 resource identifier for one MCP server. The access token `aud`
- * must equal this, and that server's protected-resource metadata advertises it.
- * The creator server always hangs off the context server's URL, so a single
- * MCP_RESOURCE_URL override moves both.
+ * The RFC 8707 resource identifier for the MCP server. The access token `aud`
+ * must equal this, and the protected-resource metadata advertises it.
+ * MCP_RESOURCE_URL moves it when the endpoint is reached at another origin.
  */
-export function mcpResourceUrl(kind: McpServerKind = 'context'): string {
-  const base = (process.env.MCP_RESOURCE_URL || `${oauthIssuer()}/api/mcp`).replace(/\/$/, '')
-  return kind === 'creator' ? `${base}/creator` : base
+export function mcpResourceUrl(): string {
+  return (process.env.MCP_RESOURCE_URL || `${oauthIssuer()}/api/mcp`).replace(/\/$/, '')
+}
+
+/**
+ * The resource identifier a connection made before the surfaces were one still
+ * presents — as its token's `aud` and as its `resource` parameter. Accepted as
+ * naming the same single resource, so those clients keep working without being
+ * reconfigured. There is no confusion to guard against: there is one resource.
+ */
+export function legacyResourceUrl(): string {
+  return `${mcpResourceUrl()}${LEGACY_RESOURCE_PATH}`
 }
 
 /**
@@ -130,21 +129,16 @@ export function canonicalizeResource(raw: string | null | undefined): string | n
 }
 
 /**
- * Which of our servers does this `resource` value name, if any? Every
- * authorization and token request must carry one (RFC 8707), and a token
- * minted here is only ever valid for the single MCP resource it was requested
- * for — so the answer is what the token's `aud` becomes.
+ * Does this `resource` parameter name our server? Every authorization and token
+ * request must carry one (RFC 8707), and a token minted here is only ever valid
+ * for the MCP resource it was requested for — so this is what the token's `aud`
+ * becomes. The legacy identifier is accepted and normalised away.
  */
-export function resourceKindOf(raw: string | null | undefined): McpServerKind | null {
-  const given = canonicalizeResource(raw)
-  if (given === null) return null
-  for (const kind of MCP_SERVER_KINDS) {
-    if (given === canonicalizeResource(mcpResourceUrl(kind))) return kind
-  }
-  return null
-}
-
-/** Does this `resource` parameter name one of *our* servers? */
 export function isCanonicalResource(raw: string | null | undefined): boolean {
-  return resourceKindOf(raw) !== null
+  const given = canonicalizeResource(raw)
+  if (given === null) return false
+  return (
+    given === canonicalizeResource(mcpResourceUrl()) ||
+    given === canonicalizeResource(legacyResourceUrl())
+  )
 }

@@ -1,47 +1,32 @@
 /**
- * The gate every MCP tool runs behind: bearer verification for the transport,
- * and `withCtx` — auth + scope check + uniform error mapping — for tool bodies.
+ * The gate the MCP transport runs behind: bearer verification for the
+ * connection, and `withCaller` — identity resolution plus uniform error
+ * mapping — for the one tool's body.
+ *
+ * There is no scope check here: a scope belongs to the ACTION, not to the one
+ * tool that reaches all of them, and `runAction` (lib/actions/run.ts) enforces
+ * it for both doors. The transport challenges before dispatch as well
+ * (lib/mcp/challenge.ts) so a client gets an RFC 6750 `insufficient_scope` it
+ * can step up from; both read the same `scopeForAction`.
  */
 import type { AuthInfo, CallToolResult } from '@modelcontextprotocol/server'
 import { verifyAccessToken } from '@/lib/mcp/tokens'
 import { devMcpAuthInfo, isDevMcpBypassEnabled } from '@/lib/mcp/devIdentity'
-import type { McpServerKind } from '@/lib/mcp/config'
-import { TOOL_SCOPES, type McpToolName } from '@/lib/mcp/scopes'
-
-/** The caller behind a verified token — the identity every tool acts as. */
-export interface McpContext {
-  userId: string
-  name: string
-  email: string
-  personId: string | null
-  scopes: string[]
-}
-
-/** An expected failure with an HTTP-ish status, surfaced as a clean tool error. */
-export class McpError extends Error {
-  status: number
-  constructor(status: number, message: string) {
-    super(message)
-    this.name = 'McpError'
-    this.status = status
-  }
-}
+import type { ActionCaller } from '@/lib/actions/types'
 
 /**
- * The verifier `withMcpAuth` calls on every request, bound to one server: a
- * token minted for the creator server is not a token for the context server,
- * and vice versa (its `aud` says which).
+ * The verifier `withMcpAuth` calls on every request.
  *
  * No token at all is an error everywhere except local development, where it
  * means "act as the seeded dev user" (lib/mcp/devIdentity.ts) so `pnpm mcp:dev`
  * needs no auth setup. A token that IS presented is verified either way.
  */
-export function mcpBearerVerifier(kind: McpServerKind) {
+export function mcpBearerVerifier() {
   return async (_req: Request, bearerToken?: string): Promise<AuthInfo | undefined> => {
     if (!bearerToken) {
-      return isDevMcpBypassEnabled() ? devMcpAuthInfo(kind) : undefined
+      return isDevMcpBypassEnabled() ? devMcpAuthInfo() : undefined
     }
-    const v = await verifyAccessToken(bearerToken, kind)
+    const v = await verifyAccessToken(bearerToken)
     if (!v) return undefined
     return {
       token: bearerToken,
@@ -53,7 +38,7 @@ export function mcpBearerVerifier(kind: McpServerKind) {
   }
 }
 
-function contextFromAuthInfo(info: AuthInfo | undefined): McpContext | null {
+function callerFromAuthInfo(info: AuthInfo | undefined): ActionCaller | null {
   const extra = info?.extra as Record<string, unknown> | undefined
   const userId = typeof extra?.userId === 'string' ? extra.userId : null
   if (!userId) return null
@@ -79,29 +64,19 @@ function toText(value: unknown): string {
 }
 
 /**
- * Auth + scope gate around a tool body. Resolves the caller from the verified
- * token, checks the tool's scope, runs `fn`, and turns any thrown error into a
- * tool error rather than a protocol-level failure — an agent can read and react
- * to "you don't have write access to that folder", but not to a 500.
- *
- * The scope check here is defence in depth: the transport already refused the
- * request with an RFC 6750 `insufficient_scope` challenge (lib/mcp/challenge.ts)
- * before dispatch, which is the form a client can actually step up from. Both
- * read the scope from `TOOL_SCOPES`, so they cannot drift apart.
+ * Resolve the caller from the verified token, run `fn`, and turn any thrown
+ * error into a tool error rather than a protocol-level failure — an agent can
+ * read and react to "you don't have write access to that folder", but not to a
+ * 500.
  */
-export async function withCtx(
+export async function withCaller(
   extra: ToolExtra,
-  tool: McpToolName,
-  fn: (ctx: McpContext) => Promise<unknown>,
+  fn: (caller: ActionCaller) => Promise<unknown>,
 ): Promise<CallToolResult> {
-  const scope = TOOL_SCOPES[tool]
-  const ctx = contextFromAuthInfo(extra.http?.authInfo)
-  if (!ctx) return err('Unauthorized: no valid MCP access token')
-  if (!ctx.scopes.includes(scope)) {
-    return err(`Forbidden: this tool requires the '${scope}' scope`)
-  }
+  const caller = callerFromAuthInfo(extra.http?.authInfo)
+  if (!caller) return err('Unauthorized: no valid MCP access token')
   try {
-    return { content: [{ type: 'text', text: toText(await fn(ctx)) }] }
+    return { content: [{ type: 'text', text: toText(await fn(caller)) }] }
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e))
   }

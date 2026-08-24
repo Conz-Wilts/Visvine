@@ -9,19 +9,6 @@
  */
 import crypto from 'node:crypto'
 import prisma from '@/lib/prisma'
-import { MCP_SERVER_KINDS, type McpServerKind } from '@/lib/mcp/config'
-
-/**
- * A stored `resource` column back to a server kind. Fails CLOSED: an unknown
- * value yields null and the grant is refused (`invalid_grant`) rather than
- * quietly minting a token for the broader context server. The column carries a
- * CHECK constraint (migration 20260818150000), so null here means the schema and
- * MCP_SERVER_KINDS have drifted — a bug to surface, not paper over.
- */
-export function kindFromStored(value: string | null | undefined): McpServerKind | null {
-  return (MCP_SERVER_KINDS as readonly string[]).includes(value ?? '') ? (value as McpServerKind) : null
-}
-
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 function randomToken(bytes = 32): string {
@@ -69,8 +56,13 @@ export async function createAuthCode(input: {
   redirectUri: string
   scope: string
   codeChallenge: string
-  /** Which MCP server the resulting tokens are for (RFC 8707). */
-  resource: McpServerKind
+  /**
+   * The MCP resource the resulting tokens are for (RFC 8707). There is one, so
+   * this is constant today; the column and its CHECK constraint stay because a
+   * code issued before the surfaces were one is still in flight for its
+   * five-minute life.
+   */
+  resource: string
 }): Promise<string> {
   const code = randomToken(32)
   await prisma.oAuthAuthCode.create({

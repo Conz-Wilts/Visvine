@@ -1,16 +1,24 @@
 /**
- * OAuth scope catalogue for the MCP server — one scope per kind of thing the
- * tool surface does: read context, write context, call external systems through
- * admin-configured connectors, run an agent, author a Tool, install a Tool.
+ * OAuth scope catalogue for the MCP servers — one scope per kind of thing the
+ * action surface does: read context, write context, call external systems
+ * through admin-configured connectors, run an agent, author a Tool, install a
+ * Tool, store a credential.
  *
  * Scopes are the COARSE capability gate carried by an access token, enforced
- * per-tool in `withCtx`. They do NOT replace the per-space authorization
- * check: every tool re-derives the caller's membership and context grants live
- * (via `resolveContext`/`principalOf`, the same path the web routes use), so a
- * token carrying `context:write` is still refused on a space where the
+ * per ACTION in `runAction`. They are also the ONLY boundary between reading
+ * someone's notes and writing executable code into their space, now that both
+ * live behind one tool on one server — which is why every one of them has
+ * consent copy, and why the default grant is read-only. They do NOT replace the per-space authorization
+ * check: every action re-derives the caller's membership and context grants
+ * live (via `resolveContext`/`principalOf`, the same path the web routes use),
+ * so a token carrying `context:write` is still refused on a space where the
  * caller has no write access.
+ *
+ * The action → scope map is not here. It lives on each action's definition
+ * (lib/actions/defs/*) and is read through `scopeForAction`, so a new action
+ * cannot be added without declaring one, and no note or caller can influence
+ * which scope applies.
  */
-import type { McpServerKind } from '@/lib/mcp/config'
 
 export const MCP_SCOPES = [
   'context:read',
@@ -23,26 +31,6 @@ export const MCP_SCOPES = [
 ] as const
 
 export type McpScope = (typeof MCP_SCOPES)[number]
-
-/**
- * The scopes each MCP server can actually use — what its `scopes_supported`
- * advertises, what its 401 challenge hints, and the ceiling `negotiateScopes`
- * applies at consent. The creator server exposes only the authoring loop
- * (lib/mcp/appTools.ts `surface === 'creator'`), so a Tool-building
- * connection is never asked to consent to writing notes, calling connectors,
- * running agents or installing Tools — capabilities it could not exercise
- * anyway. tests/mcp.test.ts pins that every creator-surface tool's scope is
- * grantable here, so adding a tool to that surface without widening this list
- * fails the suite.
- */
-const SCOPES_FOR_KIND: Record<McpServerKind, readonly McpScope[]> = {
-  context: MCP_SCOPES,
-  creator: ['context:read', 'tools:author'],
-}
-
-export function scopesForKind(kind: McpServerKind): readonly McpScope[] {
-  return SCOPES_FOR_KIND[kind]
-}
 
 /** Plain-language consent copy — what the user actually sees when approving. */
 export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
@@ -60,81 +48,6 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
     'Install a reviewed tool from the marketplace into a space you administer',
   'secrets:write':
     'Store and rotate connector credentials in spaces you administer — values are write-only and can never be read back, by this client or any other',
-}
-
-/**
- * The scope each tool requires. Declared here rather than inline at each call
- * site so the transport layer can answer "does this token allow this tool?"
- * *before* dispatch, and reply with a real RFC 6750 `insufficient_scope`
- * challenge the client can step up from (lib/mcp/challenge.ts). `withCtx` reads
- * the same map, so the two can never disagree.
- */
-export const TOOL_SCOPES = {
-  // The planner reads nothing a `context:read` token could not already fetch —
-  // the space's role, features, and the connector/agent names list_connectors
-  // and list_agents return anyway. It rides the read scope so that the tool
-  // whose whole job is telling a client which door to use is never itself
-  // behind a door the client has not opened.
-  plan_visvine_query: 'context:read',
-  list_spaces: 'context:read',
-  list_context: 'context:read',
-  search_context: 'context:read',
-  read_context: 'context:read',
-  list_files: 'context:read',
-  read_file: 'context:read',
-  add_context: 'context:write',
-  edit_context: 'context:write',
-  append_context: 'context:write',
-  move_context: 'context:write',
-  // The clean pass analyzes read-only by default, but its apply/trash actions
-  // mutate — one scope for the whole tool keeps step-up simple, and analysis
-  // without write intent is what list_context/search_context are for anyway.
-  clean_context: 'context:write',
-  // Listing the vocabulary rides the same tool as editing it, and editing is
-  // admin-only anyway — one scope keeps step-up simple.
-  manage_alias: 'context:write',
-  // Listing rides context:read — search already surfaces connector note bodies
-  // to read tokens, so discovery isn't the secret; execution is.
-  list_connectors: 'context:read',
-  run_connector: 'connectors:use',
-  // Storing a credential is not "using a connector" and must never ride
-  // `connectors:use`: a token granted to CALL Stripe would otherwise be able to
-  // REPLACE the Stripe key. It is its own scope so that a client asking for it
-  // has to say so at consent, and so a connection that only reads and runs can
-  // never acquire it by accident. Underneath, the tool re-derives space
-  // admin live — the scope is necessary, never sufficient.
-  set_connector_secret: 'secrets:write',
-  // Same split as connectors: the roster is member-visible, execution is the
-  // privilege. Authoring a brief is NOT an MCP tool — agents/ is frozen for
-  // AI origins (agents are written by people).
-  list_agents: 'context:read',
-  run_agent: 'agents:run',
-  // Tools (lib/mcp/appTools.ts). Three splits, each for a different reason:
-  //  • Reading a Tool is reading notes — the roster, the source and the SDK
-  //    docs carry nothing a `context:read` token couldn't already fetch with
-  //    read_context, and get_tool_sdk is a static document.
-  //  • Authoring writes EXECUTABLE code into a space, so it does not ride
-  //    `context:write`: a token granted to summarise notes should not be able
-  //    to add a running app to the sidebar. Publishing rides it too — it is
-  //    the last step of authoring, and it is admin-gated underneath.
-  //  • Installing puts someone ELSE'S code in front of a space's members. It
-  //    is the only act here that runs code nobody in the space wrote, so it
-  //    gets a scope of its own that a purely authoring agent never asks for.
-  list_tools: 'context:read',
-  read_tool: 'context:read',
-  get_tool_sdk: 'context:read',
-  create_tool: 'tools:author',
-  write_tool: 'tools:author',
-  check_tool: 'tools:author',
-  preview_tool: 'tools:author',
-  publish_tool: 'tools:author',
-  install_tool: 'tools:install',
-} as const satisfies Record<string, McpScope>
-
-export type McpToolName = keyof typeof TOOL_SCOPES
-
-export function scopeForTool(name: string): McpScope | null {
-  return (TOOL_SCOPES as Record<string, McpScope>)[name] ?? null
 }
 
 const SCOPE_SET: ReadonlySet<string> = new Set(MCP_SCOPES)
@@ -163,16 +76,20 @@ export function serializeScopes(scopes: readonly string[]): string {
  * Reduce a requested scope string to the subset that (a) is valid and (b) the
  * client registered for. No allowlist on the client means any valid scope may
  * be requested; an empty request falls back to DEFAULT_SCOPES.
+ *
+ * There is no per-server ceiling above this: one server offers every action, so
+ * what a connection may do is decided by what it ASKS for and what the person
+ * approves. A client that never requests `tools:author` can never author — the
+ * same protection a separate endpoint gave, expressed where the consent screen
+ * can actually show it (SCOPE_DESCRIPTIONS).
  */
 export function negotiateScopes(
   requested: string | null | undefined,
   clientAllowlist: string | null | undefined,
-  kind: McpServerKind,
 ): McpScope[] {
   const req = parseScopes(requested)
   const allowed = clientAllowlist ? new Set(parseScopes(clientAllowlist)) : null
-  const forKind = new Set(scopesForKind(kind))
-  const base = (req.length > 0 ? req : DEFAULT_SCOPES).filter((s) => forKind.has(s))
+  const base = req.length > 0 ? req : DEFAULT_SCOPES
   if (!allowed) return base
   return base.filter((s) => allowed.has(s))
 }

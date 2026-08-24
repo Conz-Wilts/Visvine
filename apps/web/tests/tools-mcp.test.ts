@@ -14,21 +14,21 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { McpError, type McpContext } from '@/lib/mcp/auth'
-import { appToolHandlers, type AppToolDeps } from '@/lib/mcp/appTools'
+import { ActionError, type ActionCaller } from '@/lib/actions/types'
+import { appToolHandlers, type AppToolDeps } from '@/lib/actions/defs/apps'
 import type { BuildSummary } from '@/lib/tools/builds'
 import type { ToolConfig } from '@/lib/tools/config'
 import { EMPTY_PERIMETER } from '@/lib/tools/perimeter'
 import type { AuthoredToolDetail } from '@/lib/tools/service'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
-import type { Target } from '@/lib/mcp/context'
+import type { Target } from '@/lib/actions/resolve'
 import type { InstallSummary } from '@/lib/tools/installs'
 import type { ToolVersionSummary } from '@/lib/tools/registry'
 
 const SPACE = 'space_1'
 
-const CTX: McpContext = {
+const CTX: ActionCaller = {
   userId: 'user_1',
   name: 'Ada',
   email: 'ada@local.dev',
@@ -183,12 +183,12 @@ function deps(over: Partial<AppToolDeps> = {}): AppToolDeps {
 }
 
 /** Assert a handler refuses with a given status, and hand back the error. */
-async function refusal(run: Promise<unknown>, status: number): Promise<McpError> {
+async function refusal(run: Promise<unknown>, status: number): Promise<ActionError> {
   const err = await run.then(
     () => null,
     (e: unknown) => e,
   )
-  assert.ok(err instanceof McpError, `expected an McpError, got ${String(err)}`)
+  assert.ok(err instanceof ActionError, `expected an ActionError, got ${String(err)}`)
   assert.equal(err.status, status)
   return err
 }

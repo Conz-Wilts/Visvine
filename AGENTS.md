@@ -35,6 +35,8 @@ apps/web/app/          routes; app/api/* handlers only — no domain logic
 apps/web/features/<domain>/{components,hooks,lib}   domain UI
 apps/web/components/ui/                             the ONLY shared UI
 apps/web/lib/          domain + server logic (the real code lives here)
+apps/web/lib/actions/  every action the platform offers — the one MCP tool's
+                       registry, and POST /api/actions/<name>
 apps/web/tests/        node:test + tsx, one file per concern
 apps/web/prisma/       schema.prisma (52 models), seed, migrations
 scripts/               repo-level db/env tooling (dump, restore, proxy, guards)
@@ -127,14 +129,100 @@ it the response reports `semantic: "no-key"` rather than silently degrading.
 After setting the key run `pnpm db:embed` once to backfill. Directory search
 itself is fuzzy/keyword only — the old semantic directory search was removed.
 
-## MCP surface
+## Actions, and the one MCP tool
 
-Two endpoints, on `mcp-handler` 2 + the official TS SDK v2 (FastMCP was
-evaluated and rejected). `/api/mcp` is the everyday context server — eighteen
-tools: sixteen from `lib/mcp/tools.ts` plus `list_tools`/`install_tool` from
-`lib/mcp/appTools.ts`. `/api/mcp/creator` is the Tool authoring loop — nine
-tools, `list_spaces` plus the rest of `appTools.ts`. Each has its own OAuth
-protected resource, so a token for one is refused by the other.
+**Everything Visvine can be asked to do is an Action.** One definition, two
+doors, and it is the same definition either way:
+
+```
+HTTP   POST /api/actions/<name>       session-authenticated, curl-able
+MCP    the single `visvine` tool      lib/mcp/gateway.ts
+```
+
+Both go through `runAction` (`lib/actions/run.ts`) — same registry lookup, same
+scope gate, same Zod validation, same body — so neither can drift and a
+behaviour proved through one holds through the other. `GET /api/actions` is the
+catalogue; `GET /api/actions/<name>` is that action's manual.
+
+The MCP servers register **one tool each**, and it has three modes:
+
+```
+visvine({ request })                  the plan for that ask, plus the catalogue
+visvine({ action })                   that action's manual
+visvine({ action, input })            run it
+```
+
+**Supplying `input` is what runs something.** That is the safety property worth
+having on a single-tool surface: naming an action to find out what it does
+cannot accidentally do it, and there is no mode flag to get wrong. An action
+taking no arguments is still run with `input: {}`.
+
+### The action notes
+
+The guidance lives in the **Visvine global space** as notes — `actions/<name>.md`
+and `recipes/<id>.md` — read at run time by `lib/actions/notes.ts`. That is the
+point of the shape: this platform's premise is that context notes are how you
+direct an agent, so its own capabilities are declared in notes rather than in a
+protocol. Connecting costs one tool schema whatever the catalogue grows to, and
+the manual is fetched when there is a reason to.
+
+`pnpm --filter @visvine/web db:actions:sync` renders the shipped catalogues
+(`lib/actions/defs/*`, `lib/actions/recipes.ts`) into those notes. It is an
+**enhancement, not a prerequisite**: with none written the guide answers from
+the same content in code, so the order of two deploy steps can never decide whether
+the surface routes at all. Syncing is what makes the content editable in the
+app, by the admin of the Visvine space (`connor@visvine.com` in production).
+
+**A note can describe an action; it can never invent one.** `runAction` resolves
+names against the registry, the required scope is read from the definition, and
+the `params:` an action's note advertises are regenerated from its Zod schema
+into a `<!-- action:contract -->` block on every sync. Prose outside that block
+is the maintainer's and survives untouched. So the half a model relies on to
+make a correct call cannot drift from the code, and the half explaining *when*
+to make it can be improved without a deploy — the same split connectors make
+between frontmatter and body.
+
+Recipes are how a request is routed. Matching is a weighted term
+overlap over each note's `keywords:` (`lib/actions/shared/match.ts`) — pure,
+deterministic, free, and keywords rather than regular expressions so a recipe
+survives the round trip through YAML and nothing ever compiles a pattern
+supplied by content. A recipe is advice, never authorization: every step still
+runs through the same gates, so a wrong recipe costs a refusal, never an escape.
+
+### Adding an action
+
+1. Wrap a `contextService.*` (or other domain) function that already takes a
+   `ContextPrincipal`, as a `defineAction({ … })` in `lib/actions/defs/*`.
+2. Declare its `scope` there. That is the only place it is written — both the
+   `insufficient_scope` challenge and `runAction` read `scopeForAction`.
+3. Give it a `summary` (its catalogue line) and a `description` (the note's
+   default prose), and describe every argument — an undescribed argument in a
+   catalogue is one a caller has to guess at.
+4. Run `db:actions:sync` so the notes say so.
+
+### One server
+
+**One endpoint, `/api/mcp`**, on `mcp-handler` 2 + the official TS SDK v2
+(FastMCP was evaluated and rejected), and one OAuth protected resource. Every
+action is behind the one tool — context, Drive, events, connectors, agents and
+the Tool authoring loop — because which one a request needs is a question the
+action notes answer better than a client picking an endpoint could.
+
+**Scopes carry the boundary**, and they are the only thing that does. What
+separates reading someone's notes from writing executable code into their space
+is that authoring rides `tools:author` and never `context:write`, that a client
+must ASK for a scope, and that the person approving sees each one spelled out
+(`SCOPE_DESCRIPTIONS`). `DEFAULT_SCOPES` is read-only, so a client that requests
+nothing gets nothing but reads. There is no per-server ceiling above
+`negotiateScopes` any more — if a scope is ever widened, nothing else is
+standing behind it.
+
+`/api/mcp/creator` 308s to `/api/mcp`, and `legacyResourceUrl()` keeps the
+tokens and `resource` parameters of connections made before the merge
+verifying. Both are deletable once nothing is configured that way. The
+`oauth_auth_codes.resource` column is now constant (`'context'`) rather than
+migrated away: codes live five minutes, so one issued before the merge is still
+in flight, and re-splitting later would want the binding back.
 
 The identity clients render — name, title, website, logo — is
 `lib/mcp/config.ts#mcpServerInfo`. The logo is the favicon PNG, but served from
@@ -143,9 +231,9 @@ because a client fetches it cross-origin and unauthenticated long after that
 build. Keep the two files identical.
 
 Locally there is no auth at all. `pnpm mcp:dev` (root `scripts/mcp-dev.mjs`) is
-`pnpm dev` plus a banner, the committed `.mcp.json` points at both endpoints with
+`pnpm dev` plus a banner, the committed `.mcp.json` points at the endpoint with
 no token, and `mcpBearerVerifier` turns a request with no bearer token into the
-seeded dev user with every scope that server grants (`lib/mcp/devIdentity.ts`;
+seeded dev user with every scope (`lib/mcp/devIdentity.ts`;
 `--user`/`DEV_MCP_USER` picks which one). The guard is `isDevAuthEnabled()` —
 `ENABLE_DEV_AUTH=true` AND `NODE_ENV=development`, which `next build` cannot
 satisfy. A token that *is* presented is verified normally, so `insufficient_scope`
@@ -156,23 +244,45 @@ grant: an access token is a stateless **30-day** JWT and that is the whole life
 of a grant, so `grant_types_supported` is `['authorization_code']`, there is no
 revocation endpoint (nothing is stored to revoke) and the `oauth_refresh_tokens`
 table is dropped (migration `20260830120000`). The reason that is tolerable is
-that the token carries identity, never authorization — `lib/mcp/context.ts`
+that the token carries identity, never authorization — `lib/actions/resolve.ts`
 re-resolves the principal and their per-space access from the database on every
-tool call, so removing someone bites immediately regardless of what they hold.
+call, so removing someone bites immediately regardless of what they hold.
 `ACCESS_TTL_SECONDS` is the only lever on the window.
+
+Scope challenges are per ACTION, read out of `params.arguments.action`
+(`lib/mcp/challenge.ts`). Discovery — the plan, the catalogue, an action's
+manual — is never challenged, so a token that cannot yet do the work can still
+find out what to ask for and step up once.
+
+### The Drive feeds the record
+
+`list_drive` is the Drive as things to USE, not text to search: it returns a
+`resource_id` per file and, unlike `list_files`/`search_context`, it shows
+IMAGES — which carry no text and so reach retrieval nowhere. That id is the
+currency: `create_event` / `update_event` take `cover_resource_id` and
+`lib/events/cover.ts` copies those bytes into the event's own image variants
+(`mediaPrefixBare('event', …)`, the same prefix `/api/upload` writes and
+`purgeNodeObjects` collects). A file is used by id **inside** the tenant — a
+signed download URL is a bearer capability for the bytes and is never handed to
+a caller, which is why that action queries `Resource` rows directly rather
+than through `listResources`.
+
+An event created this way is a **draft** unless `status: 'published'` is passed:
+publishing is what makes it visible, and at `visibility: 'public'` it is on the
+open web at `/e/<slug>`. The marketing copy belongs in the event's own folder
+(`events/<slug>/marketing.md`), written with `edit_context` — the `run_event`
+recipe in `lib/actions/recipes.ts` is that whole loop, and the composer's "From
+Drive" button is the same cover call for a person
+(`POST /api/events/<id>/cover`). Both doors build the record through
+`lib/events/build.ts`; nothing else may derive an event id or its defaults.
 
 Reads default to the **shared** context, writes to your **personal** one. Notes
 created in a real space's shared context are private by default (author gets FULL,
 then the path is restricted); pass `visibility: 'inherit'` to follow the folder.
 
-Tools call the domain layer directly and **never re-implement authorization** —
-`lib/mcp/context.ts` resolves the context through the same `resolveContext` /
-`principalOf` the web routes use. Adding a tool:
-
-1. Wrap a `contextService.*` function that already takes a `ContextPrincipal`.
-2. Register the name in `TOOL_SCOPES` (`lib/mcp/scopes.ts`) — the single map read
-   by both the `insufficient_scope` challenge and `withCtx`.
-3. Update the count assertion in `tests/mcp.test.ts`.
+Actions call the domain layer directly and **never re-implement authorization** —
+`lib/actions/resolve.ts` resolves the context through the same `resolveContext` /
+`principalOf` the web routes use. A scope is necessary, never sufficient.
 
 ## Connectors
 

@@ -1,6 +1,6 @@
 /**
- * What a person needs in order to point an MCP client at this deployment:
- * the two server addresses (context and creator) and the scope catalogue.
+ * What a person needs in order to point an MCP client at this deployment: the
+ * server address and the scope catalogue.
  *
  * The URLs are derived server-side rather than rebuilt in the browser, because
  * `mcpResourceUrl()` is the same value each protected-resource metadata
@@ -20,9 +20,7 @@ export async function GET() {
   if (session instanceof Response) return session;
 
   return NextResponse.json({
-    /** The context server — kept as `url` so older clients of this route keep working. */
-    url: mcpResourceUrl('context'),
-    creatorUrl: mcpResourceUrl('creator'),
+    url: mcpResourceUrl(),
     issuer: oauthIssuer(),
     scopes: MCP_SCOPES.map((scope) => ({ scope, description: SCOPE_DESCRIPTIONS[scope] })),
   });

@@ -1,45 +1,26 @@
 /**
- * The MCP tool surfaces. Two servers share this file (see registerTools and
- * registerCreatorTools at the bottom):
+ * The Visvine context actions — everything the platform can be asked to do with
+ * a space's context, its Drive, its events, its connectors and its agents.
  *
- *   CONTEXT server (/api/mcp)
- *   plan     plan_visvine_query            (call first — routes an ask to a recipe)
- *   read     list_spaces, list_context, search_context, read_context,
- *            list_files, read_file
- *   write    add_context, edit_context, append_context, move_context
- *   maintain clean_context, manage_alias
- *   connect  list_connectors, run_connector, set_connector_secret (admin)
- *   agents   list_agents, run_agent
- *   tools    list_tools, install_tool          (discover + activate)
+ * Each resolves the caller's principal through `resolveTarget` /
+ * `requireSpaceContext` and calls the domain layer, so authorization behaves
+ * identically for an agent, a mobile client and a browser. They are actions
+ * (lib/actions/types.ts), reached through `POST /api/actions/<name>` and through
+ * the one `visvine` MCP tool.
  *
- *   CREATOR server (/api/mcp/creator)
- *   plan_visvine_query + list_spaces + the Tool authoring loop (lib/mcp/appTools.ts)
- *
- * The shape of this surface follows the shape of the model, deliberately:
- *
- *   • An entity is a typed Node PLUS one canonical context note at a
- *     deterministic path (person:craig → people/craig.md).
- *   • The TYPE decides what you can create and which fields it has.
- *   • Links are DERIVED, not authored. A markdown link to an entity's note,
- *     inside another shared-context note, is what creates a `mentioned` edge —
- *     so there is no create_link tool, because there is no such operation.
- *
- * Tools call the domain layer directly (contextService / store / createEntity)
- * rather than the app's own HTTP routes. Authorization is never re-implemented:
- * lib/mcp/context.ts resolves the context through `resolveContext`/`principalOf`,
- * the same functions the web routes use, and every read goes through the
- * visibility lens while every write goes through the folder gate.
+ * The `description` on each is the prose of that action's note in the Visvine
+ * notes, fetched when someone asks what the action does rather than shipped to
+ * every client on connect. Write it for the model that has to act on it.
  */
-import type { McpServer } from '@modelcontextprotocol/server'
+
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
-import { withCtx, McpError } from '@/lib/mcp/auth'
 import {
   listMySpaces,
   resolveTarget,
   requireSpaceContext,
   type ContextScope,
-} from '@/lib/mcp/context'
+} from '@/lib/actions/resolve'
 import {
   searchContext,
   readVisible,
@@ -94,16 +75,31 @@ import {
   loadConnector,
 } from '@/lib/connectors/service'
 import { setSpaceSecret, storedSecretNames, SECRET_MAX_CHARS } from '@/lib/connectors/secretStore'
+import { listFolders } from '@/lib/resources/folders'
+import { getEvent, getEventsData } from '@/lib/eventRepo'
+import { buildNewEvent } from '@/lib/events/build'
+import { createEventRecord, updateEventRecord } from '@/lib/events/write'
+import { coverUrlFromResource } from '@/lib/events/cover'
+import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth'
+import { eventCreateInputSchema, eventUpdateInputSchema } from '@/lib/schemas/eventSchemas'
 import { canTriggerRun, listAgents } from '@/lib/agents/service'
 import { claimManualRun } from '@/lib/agents/schedule'
 import { featureAccessForbidden } from '@/lib/auth'
-import { registerAppTools } from '@/lib/mcp/appTools'
-import { buildPlan, planFeatures, type PlanSpaceFacts } from '@/lib/mcp/planner'
 import { readNoteOrNull, type Context } from '@/lib/notes/store'
 import { runClean, applyCleanFixes, trashNotes } from '@/lib/notes/clean'
 import type { CleanRole } from '@/lib/notes/shared/clean'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { SpaceFeatureConfig } from '@/lib/types'
+import { defineAction, ActionError, type ActionCaller } from '@/lib/actions/types'
+
+/**
+ * Every action that touches a space takes one, and it is always the same thing.
+ * Declared once so the contract each action's note advertises says so — an
+ * undescribed argument in a catalogue is an argument a caller has to guess at.
+ */
+const spaceArg = z
+  .string()
+  .describe('The space to act in — list_spaces returns the ids you can act in')
 
 const scopeArg = z
   .enum(['shared', 'personal'])
@@ -201,7 +197,7 @@ async function assertAliasExists(spaceId: string, type: string, alias: string): 
   const available =
     canonicalNodeType(type) === 'person' ? personAliases(all) : aliasesForType(all, type)
   if (available.some((a) => a.name.toLowerCase() === alias.trim().toLowerCase())) return
-  throw new McpError(
+  throw new ActionError(
     400,
     available.length
       ? `"${alias}" is not a ${type} alias in this space — use one of: ${available.map((a) => a.name).join(', ')}, or create it with manage_alias`
@@ -211,7 +207,7 @@ async function assertAliasExists(spaceId: string, type: string, alias: string): 
 
 /** Map an apply-or-deny WriteResult into a clean tool error on denial. */
 function unwrapWrite(result: WriteResult): { status: 'applied'; path: string } {
-  if (result.status === 'denied') throw new McpError(403, `Write denied: ${result.reason}`)
+  if (result.status === 'denied') throw new ActionError(403, `Write denied: ${result.reason}`)
   return result
 }
 
@@ -264,8 +260,38 @@ async function makeNotePrivate(
 /** Load a connector or throw a 404 that doesn't reveal whether it exists. */
 async function requireAgentsFeature(principal: ContextPrincipal, spaceId: string): Promise<void> {
   if (await featureAccessForbidden(principal.userId, spaceId, 'agents', principal.email)) {
-    throw new McpError(403, 'The Agents tool is not available to you in this space')
+    throw new ActionError(403, 'The Agents tool is not available to you in this space')
   }
+}
+
+/** The Drive's own gate: a space may switch Resources off, or hold it to admins. */
+async function requireDriveFeature(ctx: ActionCaller, spaceId: string): Promise<void> {
+  if (await featureAccessForbidden(ctx.userId, spaceId, 'resources', ctx.email)) {
+    throw new ActionError(403, 'The Drive is not available to you in this space')
+  }
+}
+
+/**
+ * Validate an event payload through the SAME schema the composer posts to, and
+ * turn a rejection into a tool error naming the field. The MCP argument shapes
+ * are deliberately looser than the record (a date is `z.string()` here) so that
+ * one schema stays the only definition of what a valid event is.
+ */
+function parseEventInput<T>(schema: { safeParse: (v: unknown) => { success: boolean; data?: T; error?: { issues: Array<{ path: PropertyKey[]; message: string }> } } }, value: unknown): T {
+  const parsed = schema.safeParse(value)
+  if (!parsed.success || !parsed.data) {
+    const issue = parsed.error?.issues[0]
+    const where = issue?.path?.length ? `${issue.path.join('.')}: ` : ''
+    throw new ActionError(400, `${where}${issue?.message ?? 'Invalid event'}`)
+  }
+  return parsed.data
+}
+
+/** The event, or a 404 that reads the same whether it is absent or elsewhere. */
+async function requireEvent(spaceId: string, eventId: string) {
+  const event = await getEvent(spaceId, eventId)
+  if (!event) throw new ActionError(404, `No event '${eventId}' in this space`)
+  return event
 }
 
 async function loadConnectorOr404(principal: ContextPrincipal, context: Context, name: string) {
@@ -276,7 +302,7 @@ async function loadConnectorOr404(principal: ContextPrincipal, context: Context,
     throw mapConnectorError(e)
   }
   if (!loaded) {
-    throw new McpError(404, `No connector named '${name}' — list_connectors shows what exists`)
+    throw new ActionError(404, `No connector named '${name}' — list_connectors shows what exists`)
   }
   return loaded
 }
@@ -287,7 +313,7 @@ function mapConnectorError(e: unknown): unknown {
   const status = {
     denied: 403, ssrf: 403, config: 400, missing_secret: 400, timeout: 504, upstream: 502, rate_limited: 429,
   }[e.code]
-  return new McpError(status, e.message)
+  return new ActionError(status, e.message)
 }
 
 function indexLine(m: NoteMeta): string {
@@ -385,112 +411,27 @@ interface WireLifecycle {
   read_instead?: { tool: string; note_path: string }
 }
 
-/**
- * The planner (lib/mcp/planner.ts), registered on BOTH servers because the
- * question it answers — "which tool does this ask actually need?" — is the
- * first question either surface gets, and getting it wrong is what makes a
- * client report that something is impossible when it is merely note-shaped.
- *
- * Space facts are gathered best-effort: a plan that names the caller's role and
- * what the space already has is far more useful than a generic one, but a plan
- * is advice, so nothing here is allowed to fail the call. Each probe that
- * throws (no membership, a feature switched off, a space id that does not
- * resolve) simply narrows the plan.
- */
-function registerPlanner(server: McpServer): void {
-  server.registerTool(
-    'plan_visvine_query',
-    {
-      description:
-        'START HERE on every new request. Give it the user\'s message verbatim and it returns the ordered ' +
-        'plan: which Visvine tools to call, in what order, with what arguments — plus the exact note ' +
-        'contract where one applies, the refusals to expect, and what this space already has. ' +
-        'Visvine is NOTE-FIRST, which is the thing this tool exists to tell you: connectors, agents and ' +
-        'Tools are notes at fixed paths, not records behind a create_* API. There is no create_connector ' +
-        'tool because a connector IS connectors/<name>.md, written with edit_context. If you are about to ' +
-        'tell someone that something cannot be done because you cannot find a tool for it, call this first — ' +
-        'that conclusion is usually wrong. Pass space_id when you have it and the plan is tailored to your ' +
-        'role, the space\'s enabled features, and its existing connectors and agents.',
-      inputSchema: {
-        prompt: z
-          .string()
-          .describe("The user's request, verbatim. Do not summarise or rewrite it — the routing reads its wording."),
-        space_id: z
-          .string()
-          .optional()
-          .describe('The space the work targets, when known (list_spaces). Omit for a generic plan.'),
-      },
-      annotations: { readOnlyHint: true },
-    },
-    (args, extra) =>
-      withCtx(extra, 'plan_visvine_query', async (ctx) => {
-        let space: PlanSpaceFacts | null = null
-        if (args.space_id) {
-          try {
-            const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
-            const row = await prisma.space.findUnique({
-              where: { id: args.space_id },
-              select: { name: true, featureConfig: true },
-            })
-            const [connectors, agents] = await Promise.all([
-              listConnectors(principal, context).catch(() => []),
-              listAgents(principal, context).then((r) => r.agents).catch(() => []),
-            ])
-            space = {
-              id: args.space_id,
-              name: row?.name ?? args.space_id,
-              you_are_admin: principal.spaceAdmin === true,
-              features: planFeatures((row?.featureConfig ?? null) as SpaceFeatureConfig | null),
-              connectors: connectors.map((c) => c.name),
-              agents: agents.map((a) => a.name),
-            }
-          } catch {
-            // An unresolvable or unauthorized space just means a generic plan;
-            // the tool the plan names will report the real error itself.
-            space = null
-          }
-        }
-        return buildPlan({ prompt: args.prompt, space, scopes: ctx.scopes })
-      }),
-  )
-}
-
-function registerListSpaces(server: McpServer): void {
-  server.registerTool(
-    'list_spaces',
-    {
+export const CONTEXT_ACTIONS = [
+    defineAction({
+      name: 'list_spaces',
+      scope: 'context:read',
+      summary:
+        'The spaces you can act in, with your role in each. Every other action needs a space_id.',
       description:
         'List the spaces you can act in, with your role in each and whether it is your own personal space. ' +
         'Start here: every other tool needs a space_id (the wire name for a space id).',
-      inputSchema: {},
+      input: {},
       annotations: { readOnlyHint: true },
-    },
-    (_args, extra) =>
-      withCtx(extra, 'list_spaces', async (ctx) => ({
+      run: async (ctx, _args) => ({
         you: { name: ctx.name, email: ctx.email },
         spaces: await listMySpaces(ctx),
-      })),
-  )
-}
-
-/**
- * The CONTEXT server (/api/mcp): everything above, plus Tool discovery and
- * activation (list_tools, install_tool). Authoring a Tool lives on the creator
- * server — see registerCreatorTools.
- */
-export function registerTools(server: McpServer): void {
-  // ── Plan ────────────────────────────────────────────────────────────────
-  // Registered first because it is meant to be called first.
-
-  registerPlanner(server)
-
-  // ── Read ────────────────────────────────────────────────────────────────
-
-  registerListSpaces(server)
-
-  server.registerTool(
-    'list_context',
-    {
+      }),
+    }),
+    defineAction({
+      name: 'list_context',
+      scope: 'context:read',
+      summary:
+        'Bearings in one space: its entities by type, its note index, the folders you can write to, and the node-type catalog.',
       description:
         "Get your bearings in one space: the entities in its directory grouped by type, the index of its " +
         'context notes (path — title — description), and which folders you can write to. Call this before ' +
@@ -499,8 +440,8 @@ export function registerTools(server: McpServer): void {
         'their exact field keys, live usage, and how each is created), and an `audience` line per writable ' +
         'path summarising who can see notes stored there — use these to pick the right type and the right home ' +
         'for what you write.',
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         scope: scopeArg,
         type: z
           .string()
@@ -510,9 +451,7 @@ export function registerTools(server: McpServer): void {
         limit: z.number().int().min(1).max(500).optional().describe('Max entries per list (default 100)'),
       },
       annotations: { readOnlyHint: true },
-    },
-    (args, extra) =>
-      withCtx(extra, 'list_context', async (ctx) => {
+      run: async (ctx, args) => {
         const scope: ContextScope = args.scope ?? 'shared'
         const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, scope)
         const limit = args.limit ?? 100
@@ -638,12 +577,13 @@ export function registerTools(server: McpServer): void {
           writable_notes: writablePaths.filter(isNotePath).map(describeWritable),
           truncated: entityTotal > limit || notes.length > limit,
         }
-      }),
-  )
-
-  server.registerTool(
-    'search_context',
-    {
+      },
+    }),
+    defineAction({
+      name: 'search_context',
+      scope: 'context:read',
+      summary:
+        'Fused search across notes, uploaded files and entities in one space.',
       description:
         "Search one space's context — both halves at once. Notes and uploaded files are ranked by fused " +
         'retrieval (keyword BM25 + semantic vectors + link context); directory entities are matched by name, ' +
@@ -656,8 +596,8 @@ export function registerTools(server: McpServer): void {
         'rejected, archived) — such notes are ranked below current ones but still returned, because the ' +
         'record of what changed is often the answer. Do not act on one as present truth: read its ' +
         '`superseded_by` note first.',
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         query: z.string().describe('Natural-language or keyword query'),
         scope: scopeArg,
         k: z.number().int().min(1).max(50).optional().describe('Max results per kind (default 10)'),
@@ -671,9 +611,7 @@ export function registerTools(server: McpServer): void {
         updated_before: z.number().optional().describe('Only notes modified at/before this epoch-ms timestamp'),
       },
       annotations: { readOnlyHint: true },
-    },
-    (args, extra) =>
-      withCtx(extra, 'search_context', async (ctx) => {
+      run: async (ctx, args) => {
         const scope: ContextScope = args.scope ?? 'shared'
         const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
         const k = args.k ?? 10
@@ -744,20 +682,21 @@ export function registerTools(server: McpServer): void {
               : { read_with: { tool: 'read_context', note_path: h.path } }),
           })),
         }
-      }),
-  )
-
-  server.registerTool(
-    'read_context',
-    {
+      },
+    }),
+    defineAction({
+      name: 'read_context',
+      scope: 'context:read',
+      summary:
+        'One entity in full: its fields, its note, what it links to and what mentions it.',
       description:
         'Everything about one entity in one call: its type-driven fields, the full markdown of its context note, ' +
         'the entities it is linked to (with where each link came from), and the notes that mention it. ' +
         'Identify it by node_id or by note_path — search_context and list_context give you both. ' +
         "note_path also accepts the folder form (people/<slug>/index.md) and any sub-note in the entity's " +
         'folder (people/<slug>/<note>.md): a sub-note read returns that note with the entity it belongs to.',
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         node_id: z.string().optional().describe("The entity's node id, e.g. 'person:craig-piggott'"),
         note_path: z
           .string()
@@ -768,11 +707,9 @@ export function registerTools(server: McpServer): void {
           ),
       },
       annotations: { readOnlyHint: true },
-    },
-    (args, extra) =>
-      withCtx(extra, 'read_context', async (ctx) => {
+      run: async (ctx, args) => {
         if (!args.node_id && !args.note_path) {
-          throw new McpError(400, 'Pass either node_id or note_path')
+          throw new ActionError(400, 'Pass either node_id or note_path')
         }
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
 
@@ -816,9 +753,9 @@ export function registerTools(server: McpServer): void {
         // rather than a bare "not found".
         if (!row) {
           const path = args.note_path ?? structuralPath
-          if (!path) throw new McpError(404, `No entity '${args.node_id}' in this space`)
+          if (!path) throw new ActionError(404, `No entity '${args.node_id}' in this space`)
           const content = await readVisible(principal, context, path)
-          if (!content) throw new McpError(404, `No accessible note or entity at '${path}'`)
+          if (!content) throw new ActionError(404, `No accessible note or entity at '${path}'`)
           return {
             entity: null,
             note_path: path,
@@ -900,25 +837,24 @@ export function registerTools(server: McpServer): void {
           }),
           mentioned_by: mentionedBy,
         }
-      }),
-  )
-
-  server.registerTool(
-    'list_files',
-    {
+      },
+    }),
+    defineAction({
+      name: 'list_files',
+      scope: 'context:read',
+      summary:
+        'Uploaded files in a space and whether their text has been extracted yet.',
       description:
         'List the uploaded files in this context — PDFs, spreadsheets, documents and the like, which live ' +
         'alongside notes at their own paths and are what search_context returns as `kind: "source"` hits. ' +
         'Each entry reports its extraction status; only `ready` sources are searchable and readable.',
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         scope: scopeArg,
         folder: z.string().optional().describe("Only sources in this top-level folder ('' = the context root)"),
       },
       annotations: { readOnlyHint: true },
-    },
-    (args, extra) =>
-      withCtx(extra, 'list_files', async (ctx) => {
+      run: async (ctx, args) => {
         const scope: ContextScope = args.scope ?? 'shared'
         const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
         const sources = await listVisibleSources(principal, context, args.folder)
@@ -938,18 +874,19 @@ export function registerTools(server: McpServer): void {
             chunk_count: s.chunkCount,
           })),
         }
-      }),
-  )
-
-  server.registerTool(
-    'read_file',
-    {
+      },
+    }),
+    defineAction({
+      name: 'read_file',
+      scope: 'context:read',
+      summary:
+        'A page of an uploaded file\'s extracted text.',
       description:
         "Read the extracted text of an uploaded file — the other half of a search_context `kind: 'source'` hit, " +
         'whose snippet is one chunk of this. Returns plain text (the original binary is not served here), ' +
         'paged: pass offset_chars to continue where the last call stopped, guided by total_chars.',
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         path: z.string().describe("The source's path, exactly as search_context or list_files reported it"),
         scope: scopeArg,
         offset_chars: z.number().int().min(0).optional().describe('Start here in the extracted text (default 0)'),
@@ -962,9 +899,7 @@ export function registerTools(server: McpServer): void {
           .describe('How much to return (default 20000)'),
       },
       annotations: { readOnlyHint: true },
-    },
-    (args, extra) =>
-      withCtx(extra, 'read_file', async (ctx) => {
+      run: async (ctx, args) => {
         const scope: ContextScope = args.scope ?? 'shared'
         const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
         // A trailing '#<seq>' chunk marker names the same file.
@@ -974,7 +909,7 @@ export function registerTools(server: McpServer): void {
           maxChars: args.max_chars,
         })
         // Absent and inaccessible are deliberately indistinguishable.
-        if (!result) throw new McpError(404, `No accessible source at '${path}'`)
+        if (!result) throw new ActionError(404, `No accessible source at '${path}'`)
         const offset = args.offset_chars ?? 0
         return {
           path: result.meta.path,
@@ -987,14 +922,156 @@ export function registerTools(server: McpServer): void {
           has_more: offset + result.text.length < result.totalChars,
           text: result.text,
         }
-      }),
-  )
+      },
+    }),
+    defineAction({
+      name: 'list_drive',
+      scope: 'context:read',
+      summary:
+        'The Drive as things to USE — files and folders including images, each with a resource_id.',
+      description:
+        "The space's Drive: uploaded files and the folders they sit in — including IMAGES, which carry no text " +
+        'and so never appear in list_files or search_context. Each file reports `resource_id` (the handle other ' +
+        'tools take), its folder, its type and, for a document, the `readable` path to pass to read_file. ' +
+        'This is the surface to open when someone points you at "the files for X": read the plan or brief with ' +
+        "read_file, then use the picture with create_event's cover_resource_id. Download URLs are deliberately " +
+        'not returned — a file is used by id, inside the space, never by handing out a link to its bytes.',
+      input: {
+        space_id: spaceArg,
+        folder: z
+          .string()
+          .optional()
+          .describe("Only files in this Drive folder, by name (case-insensitive) — omit for the whole Drive"),
+        kind: z
+          .enum(['all', 'image', 'document'])
+          .optional()
+          .describe("Narrow to pictures or to text-bearing files (default 'all')"),
+        limit: z.number().int().min(1).max(500).optional().describe('Newest first; default 100'),
+      },
+      annotations: { readOnlyHint: true },
+      run: async (ctx, args) => {
+        await requireSpaceContext(ctx, args.space_id)
+        await requireDriveFeature(ctx, args.space_id)
 
-  // ── Write ───────────────────────────────────────────────────────────────
+        const folders = await listFolders(args.space_id)
+        const byId = new Map(folders.map((f) => [f.id, f]))
+        // A folder's path, walked up through its parents. Depth is bounded by
+        // the walk itself so a cycle (which the tree should make impossible)
+        // cannot hang the call.
+        const pathOf = (id: string | null): string => {
+          const parts: string[] = []
+          let cursor = id
+          for (let i = 0; cursor && i < 16; i++) {
+            const folder = byId.get(cursor)
+            if (!folder) break
+            parts.unshift(folder.name)
+            cursor = folder.parentId
+          }
+          return parts.join('/')
+        }
 
-  server.registerTool(
-    'add_context',
-    {
+        const wanted = args.folder?.trim().toLowerCase()
+        const folderIds = wanted
+          ? folders.filter((f) => f.name.toLowerCase() === wanted || pathOf(f.id).toLowerCase() === wanted).map((f) => f.id)
+          : null
+        if (folderIds && folderIds.length === 0) {
+          throw new ActionError(404, `No Drive folder named '${args.folder}'`)
+        }
+
+        const limit = args.limit ?? 100
+        // Queried here rather than through lib/resources/service#listResources
+        // on purpose: that listing signs a download URL per row, and a signed
+        // URL is a bearer capability for the bytes. Tools hand out ids.
+        const rows = await prisma.resource.findMany({
+          where: {
+            spaceId: args.space_id,
+            ...(folderIds ? { folderId: { in: folderIds } } : {}),
+            ...(args.kind === 'image' ? { fileType: 'image' } : {}),
+            ...(args.kind === 'document' ? { NOT: { fileType: 'image' } } : {}),
+          },
+          orderBy: { createdAt: 'desc' },
+          take: limit + 1,
+          select: {
+            id: true, name: true, fileType: true, fileSize: true, folderId: true,
+            sourcePath: true, indexState: true, indexError: true, createdAt: true,
+          },
+        })
+        const page = rows.slice(0, limit)
+
+        return {
+          folders: folders.map((f) => ({ id: f.id, name: f.name, path: pathOf(f.id) })),
+          files: page.map((r) => ({
+            resource_id: r.id,
+            name: r.name,
+            file_type: r.fileType,
+            folder: pathOf(r.folderId) || null,
+            size_bytes: r.fileSize,
+            uploaded_at: r.createdAt.toISOString(),
+            // Where read_file can read this file's extracted text, when it has any.
+            readable: r.indexState === 'indexed' ? r.sourcePath : null,
+            index_state: r.indexState,
+            index_error: r.indexError,
+            usable_as_cover: r.fileType === 'image',
+          })),
+          truncated: rows.length > limit,
+        }
+      },
+    }),
+    defineAction({
+      name: 'list_events',
+      scope: 'context:read',
+      summary:
+        'Events in a space with their RSVP counts.',
+      description:
+        "The space's events, newest start first: id, when and where, status, and how many people are coming. " +
+        'The `event_id` here is what update_event takes; `note_path` is the event\'s context note, where its ' +
+        'briefing and marketing copy belong. Drafts are included and marked — a draft is visible only to its ' +
+        'hosts and admins until it is published.',
+      input: {
+        space_id: spaceArg,
+        when: z.enum(['upcoming', 'past', 'all']).optional().describe("Default 'upcoming'"),
+        limit: z.number().int().min(1).max(200).optional().describe('Default 25'),
+      },
+      annotations: { readOnlyHint: true },
+      run: async (ctx, args) => {
+        await requireSpaceContext(ctx, args.space_id)
+        const { events, attendees } = await getEventsData(args.space_id)
+        const when = args.when ?? 'upcoming'
+        const now = Date.now()
+        const inWindow = (e: (typeof events)[number]) => {
+          if (when === 'all') return true
+          const at = Date.parse(e.endAt ?? e.startAt)
+          if (Number.isNaN(at)) return when === 'upcoming'
+          return when === 'upcoming' ? at >= now : at < now
+        }
+        const chosen = events
+          .filter(inWindow)
+          .sort((a, b) => (a.startAt < b.startAt ? 1 : -1))
+          .slice(0, args.limit ?? 25)
+
+        return {
+          events: chosen.map((e) => ({
+            event_id: e.id,
+            title: e.title,
+            start_at: e.startAt,
+            end_at: e.endAt ?? null,
+            timezone: e.timezone ?? null,
+            location: e.location?.label ?? null,
+            status: e.status,
+            visibility: e.visibility,
+            has_cover: !!e.coverImageUrl,
+            note_path: entityNotePath({ id: e.id, type: 'event' }),
+            public_url: e.visibility === 'public' && e.slug ? `/e/${e.slug}` : null,
+            going: attendees.filter((a) => a.eventId === e.id && a.status === 'going').length,
+          })),
+        }
+      },
+    }),
+    defineAction({
+      name: 'add_context',
+      scope: 'context:write',
+      summary:
+        'Create a directory entity — a person, space, resource or event — and its canonical note.',
       description:
         'Create a directory entity — a typed node plus its context note, in one step. Call list_context first: ' +
         'its `types` catalog shows which types this space has enabled, their exact field keys, and live ' +
@@ -1003,21 +1080,22 @@ export function registerTools(server: McpServer): void {
         '  • person   → people/<slug>.md      fields: subtitle (role), email, companyName, linkedinUrl, location, image_url\n' +
         '  • space    → communities/<slug>.md fields: subtitle (tagline), url (website), location, founded, memberCount, image_url\n' +
         '  • resource → resources/<slug>.md   fields: subtitle (description), url\n' +
-        'A "space" here is a group, organisation or space — a company, collective or investor — recorded as a ' +
-        'card in the directory of the space you are working in. It NEVER provisions a new workspace: the card ' +
-        'points at a real (possibly unclaimed) space via its identity, and the space you are in is not creatable ' +
-        'from here.\n' +
+        'A "space" here is a group, organisation or space — a company, collective or investor. Every space node ' +
+        'stands for a real space: pass `space_id_ref` to link one that already runs here (list_spaces shows the ' +
+        'ones you can see), otherwise a space is created INSIDE the space you are working in — no members, ' +
+        'managed by its admins, visible to its members — and the card is its record. Search first: recording ' +
+        '"Canva" twice makes two spaces.\n' +
         'Use exactly these field keys — email, companyName, linkedinUrl and url/website are what match a person or ' +
         'organisation to their identity across spaces, and an unrecognised key is silently dropped. ' +
-        'Only these three types are creatable; events are made in the events surface, and channels/sections are admin-only. ' +
+        'Only these three types are creatable here; an event is made with create_event (it has dates, RSVPs and a page of its own), and channels/sections are admin-only. ' +
         'If the entity already exists you get an error naming it, so open that one instead of creating a duplicate. ' +
         'The new context note is PRIVATE by default — the directory card (name, fields, mention) stays visible ' +
         "to everyone, but the note's content is readable only by space admins and you until someone shares " +
         "it; pass visibility:'inherit' to let it follow its folder's visibility instead. " +
         `${INDEX_RULE}\n` +
         `To connect it to others, write mentions: ${MENTION_RULE}`,
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         type: z.enum(CREATABLE_TYPES),
         name: z.string().describe('Display name — also the basis of the id and note path'),
         fields: z
@@ -1038,10 +1116,12 @@ export function registerTools(server: McpServer): void {
               'manage_alias first.',
           ),
         visibility: visibilityArg,
+        space_id_ref: z
+          .string()
+          .optional()
+          .describe('type "space" only: the id of an existing space this record stands for. Omit to create one inside `space_id`.'),
       },
-    },
-    (args, extra) =>
-      withCtx(extra, 'add_context', async (ctx) => {
+      run: async (ctx, args) => {
         const context = await requireSpaceContext(ctx, args.space_id)
         if (args.alias) await assertAliasExists(args.space_id, args.type, args.alias)
         const result = await createEntity(context, {
@@ -1051,9 +1131,10 @@ export function registerTools(server: McpServer): void {
           tags: args.tags,
           body: args.body,
           alias: args.alias,
+          spaceRef: args.type === 'space' ? args.space_id_ref ?? null : null,
         })
         if (!result.ok) {
-          throw new McpError(
+          throw new ActionError(
             result.status,
             result.status === 409 && result.existingNodeId
               ? `${result.error} (node_id: ${result.existingNodeId}, note: ${result.existingPath}) — read it with read_context instead of creating a duplicate`
@@ -1085,12 +1166,13 @@ export function registerTools(server: McpServer): void {
                 ...(visibilityError ? { visibility_error: visibilityError } : {}),
               }),
         }
-      }),
-  )
-
-  server.registerTool(
-    'edit_context',
-    {
+      },
+    }),
+    defineAction({
+      name: 'edit_context',
+      scope: 'context:write',
+      summary:
+        'Write a note at a path, replacing its whole content. This is how connectors, agents and briefs are authored.',
       description:
         'Create or overwrite one context note (full-content write; the previous version is kept in history). ' +
         "Writes go to your PERSONAL space by default — pass scope:'shared' to write the space's shared context, " +
@@ -1099,8 +1181,8 @@ export function registerTools(server: McpServer): void {
         'its folder (list_context shows each folder\'s audience). Writes are attributed to the authenticated ' +
         'caller — list_context\'s `you` says who that is here. Read the note first when editing, or you will ' +
         `clobber it; use append_context when you only want to add. ${INDEX_RULE} ${MENTION_RULE} ${LIFECYCLE_RULE}`,
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         path: z.string().describe("Context-relative path ending in .md, e.g. 'people/craig-piggott.md'"),
         content: z.string().describe('The full markdown content of the note, including frontmatter'),
         scope: scopeArg.describe(
@@ -1108,9 +1190,7 @@ export function registerTools(server: McpServer): void {
         ),
         visibility: visibilityArg,
       },
-    },
-    (args, extra) =>
-      withCtx(extra, 'edit_context', async (ctx) => {
+      run: async (ctx, args) => {
         const scope: ContextScope = args.scope ?? 'personal'
         const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, scope)
         // Private-by-default applies only to a note this call CREATES in a real
@@ -1162,39 +1242,39 @@ export function registerTools(server: McpServer): void {
               }
             : {}),
         }
-      }),
-  )
-
-  server.registerTool(
-    'append_context',
-    {
+      },
+    }),
+    defineAction({
+      name: 'append_context',
+      scope: 'context:write',
+      summary:
+        'Append a dated entry to a note\'s ## Log without rewriting the rest of it.',
       description:
         "Append a dated, attributed entry to a note's '## Log' section, creating the section if it is absent. " +
         'The safe way to add one fact to an existing note — nothing else in the note can be lost. The entry is ' +
         "attributed to the authenticated caller (list_context's `you`). " +
         "Defaults to your personal space; pass scope:'shared' for the space's shared context. " +
         `Mentions in the entry create links the same way: ${MENTION_RULE}`,
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         path: z.string().describe('Path of the existing note to append to'),
         entry: z.string().describe('The entry text — one update. The date and your name are added for you.'),
         scope: scopeArg.describe("Target context — defaults to 'personal'; pass 'shared' for the space's shared context"),
       },
-    },
-    (args, extra) =>
-      withCtx(extra, 'append_context', async (ctx) => {
+      run: async (ctx, args) => {
         const scope: ContextScope = args.scope ?? 'personal'
         const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
         const result = unwrapWrite(
           await appendLogGated(principal, context, args.path, args.entry, 'agent', 'mcp'),
         )
         return { status: 'applied', scope, path: result.path }
-      }),
-  )
-
-  server.registerTool(
-    'move_context',
-    {
+      },
+    }),
+    defineAction({
+      name: 'move_context',
+      scope: 'context:write',
+      summary:
+        'Move or rename a note, rewriting every inbound link to it.',
       description:
         'Move or rename one note. Links pointing AT it are rewritten across the context, so the mentions that ' +
         'make up the graph survive the move — which is why this exists instead of write-then-delete. ' +
@@ -1202,8 +1282,8 @@ export function registerTools(server: McpServer): void {
         'type implies (people/<slug>.md and so on) detaches it from that entity, so do not. Moving a note ' +
         'does NOT carry note-level sharing or restriction with it — a private note becomes governed by its ' +
         'new folder; re-apply sharing after moving if it matters.',
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         from: z.string().describe('Current path of the note'),
         to: z
           .string()
@@ -1213,21 +1293,18 @@ export function registerTools(server: McpServer): void {
           ),
         scope: scopeArg.describe("Target context — defaults to 'personal'; pass 'shared' for the space's shared context"),
       },
-    },
-    (args, extra) =>
-      withCtx(extra, 'move_context', async (ctx) => {
+      run: async (ctx, args) => {
         const scope: ContextScope = args.scope ?? 'personal'
         const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
         const result = unwrapWrite(await moveGated(principal, context, args.from, args.to, 'agent'))
         return { status: 'applied', scope, from: args.from, path: result.path, links_rewritten: true }
-      }),
-  )
-
-  // ── Maintain ────────────────────────────────────────────────────────────
-
-  server.registerTool(
-    'clean_context',
-    {
+      },
+    }),
+    defineAction({
+      name: 'clean_context',
+      scope: 'context:write',
+      summary:
+        'Analyze a context for problems, then optionally apply the safe fixes or trash what it names.',
       description:
         'Analyze and clean up context, scoped to your role. The default action (analyze) is READ-ONLY: it ' +
         'returns (a) safe mechanical fixes this tool can apply itself — missing frontmatter, uniquely ' +
@@ -1247,8 +1324,8 @@ export function registerTools(server: McpServer): void {
         'edit access; restorable for 7 days) — use it for confirmed duplicates and empties only, AFTER ' +
         'reading them. While cleaning, also normalise any index note whose prose uses tables/columns to the ' +
         `fixed index layout (H1, short prose, flat link bullets). When fixing orphans, remember: ${MENTION_RULE}`,
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         scope: scopeArg.describe(
           "Which context to clean — defaults to 'shared' (the space's context); 'personal' cleans your own space",
         ),
@@ -1272,9 +1349,7 @@ export function registerTools(server: McpServer): void {
           .describe("For action:'trash': the note paths to soft-delete (max 50)"),
         limit: z.number().int().min(1).max(100).optional().describe('Max items per worklist category (default 20)'),
       },
-    },
-    (args, extra) =>
-      withCtx(extra, 'clean_context', async (ctx) => {
+      run: async (ctx, args) => {
         const scope: ContextScope = args.scope ?? 'shared'
         const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, scope)
         const role: CleanRole =
@@ -1291,7 +1366,7 @@ export function registerTools(server: McpServer): void {
         }
         const action = args.action ?? 'analyze'
         if (action === 'trash') {
-          if (!args.paths?.length) throw new McpError(400, "action:'trash' needs `paths`")
+          if (!args.paths?.length) throw new ActionError(400, "action:'trash' needs `paths`")
           const results = await trashNotes(principal, context, resolved, args.paths)
           return { action, results, restorable_days: 7 }
         }
@@ -1300,12 +1375,13 @@ export function registerTools(server: McpServer): void {
           return { action, ...result }
         }
         return { action, scope, ...(await runClean(principal, context, opts)) }
-      }),
-  )
-
-  server.registerTool(
-    'manage_alias',
-    {
+      },
+    }),
+    defineAction({
+      name: 'manage_alias',
+      scope: 'context:write',
+      summary:
+        'Curate a node type\'s alias vocabulary, or assign an alias chip to one entity.',
       description:
         "Curate a node type's ALIASES — the space's own vocabulary for what a thing is: 'Founder' or " +
         "'Investor' on a Person, 'Portfolio' on a Space. An alias is a coloured chip on the directory card " +
@@ -1323,8 +1399,8 @@ export function registerTools(server: McpServer): void {
         'one, and what it reaches, stay in the app; this tool edits the vocabulary itself. The built-in Admin ' +
         "alias cannot be renamed, recoloured or removed, and a change that would leave the space with nobody " +
         'administering it is refused.',
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         action: z.enum(['list', 'create', 'update', 'delete', 'assign', 'clear']),
         node_type: z
           .string()
@@ -1346,12 +1422,10 @@ export function registerTools(server: McpServer): void {
             "action:'update' on a PERSON alias only — whether holding it means managing the space (admin)",
           ),
       },
-    },
-    (args, extra) =>
-      withCtx(extra, 'manage_alias', async (ctx) => {
+      run: async (ctx, args) => {
         const { principal, resolved } = await resolveTarget(ctx, args.space_id, 'shared')
         if (resolved === null || resolved.isPersonalSpace) {
-          throw new McpError(400, 'A personal space has no aliases')
+          throw new ActionError(400, 'A personal space has no aliases')
         }
         if (args.action === 'list') {
           return { action: 'list', aliases_by_type: await listAliasesByType(args.space_id) }
@@ -1360,9 +1434,9 @@ export function registerTools(server: McpServer): void {
         // Wearing a chip is collaborative card metadata (like tags): any member
         // may assign or clear one; only the vocabulary itself is admin-gated.
         if (args.action === 'assign' || args.action === 'clear') {
-          if (!args.node_id) throw new McpError(400, 'node_id is required')
+          if (!args.node_id) throw new ActionError(400, 'node_id is required')
           if (args.action === 'assign' && !args.name) {
-            throw new McpError(400, "name is required for 'assign' — use 'clear' to remove the chip")
+            throw new ActionError(400, "name is required for 'assign' — use 'clear' to remove the chip")
           }
           try {
             const result = await assignNodeAlias(
@@ -1373,14 +1447,14 @@ export function registerTools(server: McpServer): void {
             )
             return { action: args.action, node_id: result.nodeId, alias: result.alias }
           } catch (e) {
-            throw new McpError(400, e instanceof Error ? e.message : 'Alias change refused')
+            throw new ActionError(400, e instanceof Error ? e.message : 'Alias change refused')
           }
         }
         if (!principal.spaceAdmin) {
-          throw new McpError(403, 'Only a space admin can manage this space\'s aliases')
+          throw new ActionError(403, 'Only a space admin can manage this space\'s aliases')
         }
-        if (!args.node_type) throw new McpError(400, 'node_type is required')
-        if (!args.name) throw new McpError(400, 'name is required')
+        if (!args.node_type) throw new ActionError(400, 'node_type is required')
+        if (!args.name) throw new ActionError(400, 'name is required')
 
         try {
           if (args.action === 'create') {
@@ -1408,22 +1482,15 @@ export function registerTools(server: McpServer): void {
         } catch (e) {
           // The alias layer refuses with plain sentences meant for a person —
           // hand them straight back rather than flattening them into a 500.
-          throw new McpError(400, e instanceof Error ? e.message : 'Alias change refused')
+          throw new ActionError(400, e instanceof Error ? e.message : 'Alias change refused')
         }
-      }),
-  )
-
-  // ── Connectors ──────────────────────────────────────────────────────────
-  // A connector is a note at connectors/<name>.md: frontmatter declares the
-  // perimeter (hosts, env, limits) and the body teaches how to call the
-  // service. Execution is one tool — JavaScript in an isolate whose only way
-  // out is a perimeter-gated fetch/sql/mcp. Secrets resolve server-side into
-  // the isolate's `env` and are redacted from everything that returns; the
-  // model sees names, never values.
-
-  server.registerTool(
-    'list_connectors',
-    {
+      },
+    }),
+    defineAction({
+      name: 'list_connectors',
+      scope: 'context:read',
+      summary:
+        'The connectors a space has, what each reaches, and the docs its note carries.',
       description:
         "List the space's connectors — admin-configured gateways to external APIs, databases and services. " +
         'Each entry carries its docs (what the system is and how to call it), the hosts it may reach, ' +
@@ -1433,21 +1500,20 @@ export function registerTools(server: McpServer): void {
         "is the space's) — they are listed for context but never runnable. Executing needs the 'connectors:use' scope. " +
         'TO CREATE ONE: a connector is a NOTE at connectors/<name>.md, written with edit_context ' +
         "(scope:'shared', visibility:'inherit'), space admins only — there is no create_connector tool because " +
-        'there is nothing to create but the note. Call plan_visvine_query for the frontmatter contract and the ' +
+        'there is nothing to create but the note. Ask the visvine tool with no action for the frontmatter contract and the ' +
         'ordered steps before you write it.',
-      inputSchema: { space_id: z.string() },
+      input: { space_id: z.string() },
       annotations: { readOnlyHint: true },
-    },
-    (args, extra) =>
-      withCtx(extra, 'list_connectors', async (ctx) => {
+      run: async (ctx, args) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
         return { connectors: await listConnectors(principal, context) }
-      }),
-  )
-
-  server.registerTool(
-    'run_connector',
-    {
+      },
+    }),
+    defineAction({
+      name: 'run_connector',
+      scope: 'connectors:use',
+      summary:
+        'Run JavaScript, or a declared action, inside the connector isolate against an external system.',
       description:
         "Run a connector (see list_connectors; the connector's docs say what calls make sense) — either one of " +
         'its named `actions` with `args`, or JavaScript you write in `code` (exactly one of the two). Code is the ' +
@@ -1466,8 +1532,8 @@ export function registerTools(server: McpServer): void {
         "the connector declares — a refused call throws with the reason. Use secrets by name (e.g. " +
         '`{ Authorization: `Bearer ${env.API_KEY}` }`), never ask for or supply credential values; they are ' +
         'redacted from everything that comes back. Output is capped at 256KB; each space has a per-minute run budget (429).',
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         connector: z.string().describe("The connector's name, e.g. 'stripe' for connectors/stripe.md"),
         code: z
           .string()
@@ -1479,14 +1545,12 @@ export function registerTools(server: McpServer): void {
         action: z.string().optional().describe("One of the connector's declared actions (see list_connectors). Omit when passing code."),
         args: z.record(z.string(), z.unknown()).optional().describe('Arguments for the action, per its params'),
       },
-    },
-    (args, extra) =>
-      withCtx(extra, 'run_connector', async (ctx) => {
+      run: async (ctx, args) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
         const hasCode = typeof args.code === 'string' && args.code.trim().length > 0
         const hasAction = typeof args.action === 'string' && args.action.trim().length > 0
         if (hasCode === hasAction) {
-          throw new McpError(400, 'Pass exactly one of `code` (JavaScript) or `action` (a declared action name, with `args`)')
+          throw new ActionError(400, 'Pass exactly one of `code` (JavaScript) or `action` (a declared action name, with `args`)')
         }
         const loaded = await loadConnectorOr404(principal, context, args.connector)
         try {
@@ -1513,37 +1577,13 @@ export function registerTools(server: McpServer): void {
         } catch (e) {
           throw mapConnectorError(e)
         }
-      }),
-  )
-
-  // The one write into the secret store the tool surface has. It exists so that
-  // "build this connector and prove it works" is a single unbroken sequence:
-  // edit_context writes the note, this stores the credential the note REFERENCES,
-  // run_connector proves it. Before it existed the middle step was impossible for
-  // any caller but a human in a browser, so every connector build stopped
-  // half-finished at `missing_secret`.
-  //
-  // Four things keep that convenience from becoming a hole, and none of them is
-  // the scope alone:
-  //
-  //   1. SPACE ADMIN, RE-DERIVED LIVE. Not read off the token — resolved through
-  //      resolveContext on every call, so losing admin takes the capability away
-  //      immediately, exactly as it does in the app.
-  //   2. THE NAME MUST ALREADY BE REFERENCED by a connector note this caller can
-  //      see. You cannot invent a secret name; you can only fill in a blank the
-  //      note declared. That makes the note — reviewable, visible, versioned —
-  //      the thing that decides which credentials may exist.
-  //   3. WRITE-ONLY, STILL. There is no read tool and this one returns no value.
-  //      Storing a secret does not make it fetchable; it only makes runs work.
-  //   4. NO OVERWRITE BY DEFAULT. A rerun of a setup script cannot silently
-  //      replace a working credential with a stale one.
-  //
-  // Deliberately NOT on the agent runtime surface (lib/agents/tools.ts): an
-  // unattended 3am run has no business rotating credentials, and an agent that
-  // could would be an agent that could lock a space out of its own connectors.
-  server.registerTool(
-    'set_connector_secret',
-    {
+      },
+    }),
+    defineAction({
+      name: 'set_connector_secret',
+      scope: 'secrets:write',
+      summary:
+        'Store a credential a connector note references. Write-only, admins only.',
       description:
         'Store the value of a credential a connector note references as `{{secret:NAME}}` — the step between ' +
         'writing the note and running it. SPACE ADMINS ONLY. `name` must be a secret the named connector ' +
@@ -1554,8 +1594,8 @@ export function registerTools(server: McpServer): void {
         'you for comparison. Returns which of the connector\'s secrets are still unset, so you know when it is ' +
         'ready for run_connector. NEVER write the value into the note itself, and do not echo it back to the ' +
         'user afterwards.',
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         connector: z.string().describe("The connector whose secret this is, e.g. 'stripe' for connectors/stripe.md"),
         name: z
           .string()
@@ -1571,17 +1611,15 @@ export function registerTools(server: McpServer): void {
           .describe('Replace an existing value (a rotation). Defaults to false, which refuses rather than clobbers.'),
       },
       annotations: { destructiveHint: true },
-    },
-    (args, extra) =>
-      withCtx(extra, 'set_connector_secret', async (ctx) => {
+      run: async (ctx, args) => {
         const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, 'shared')
         if (!resolved?.isAdmin) {
-          throw new McpError(403, "Only a space admin can store this space's connector secrets")
+          throw new ActionError(403, "Only a space admin can store this space's connector secrets")
         }
         const connector = await describeConnector(principal, context, args.connector)
-        if (!connector) throw new McpError(404, `No connector named '${args.connector}' in this space`)
+        if (!connector) throw new ActionError(404, `No connector named '${args.connector}' in this space`)
         if (connector.invalid) {
-          throw new McpError(
+          throw new ActionError(
             400,
             `connectors/${connector.name}.md does not parse, so its secret references cannot be trusted: ${connector.invalid}`,
           )
@@ -1589,7 +1627,7 @@ export function registerTools(server: McpServer): void {
 
         const name = args.name.trim()
         if (!connector.secrets.includes(name)) {
-          throw new McpError(
+          throw new ActionError(
             400,
             connector.secrets.length === 0
               ? `${connector.name} references no secrets. Add \`{{secret:${name}}}\` to its \`env:\` first, then store the value.`
@@ -1603,7 +1641,7 @@ export function registerTools(server: McpServer): void {
           { userId: ctx.userId, name: ctx.name || ctx.email, email: ctx.email },
           { name, value: args.value, overwrite: args.overwrite === true },
         )
-        if (!result.ok) throw new McpError(result.code === 'already_set' ? 409 : 400, result.error)
+        if (!result.ok) throw new ActionError(result.code === 'already_set' ? 409 : 400, result.error)
 
         const stored = await storedSecretNames(args.space_id, connector.secrets)
         const missing = connector.secrets.filter((s) => !stored.has(s))
@@ -1618,33 +1656,182 @@ export function registerTools(server: McpServer): void {
               ? `${connector.name} has every secret it references. Probe it with run_connector.`
               : `Still unset: ${missing.join(', ')}. run_connector will fail with missing_secret until they are stored.`,
         }
-      }),
-  )
+      },
+    }),
+    defineAction({
+      name: 'create_event',
+      scope: 'context:write',
+      summary:
+        'Create an event: the record, its public page, its RSVP list and its context note.',
+      description:
+        'Create an event in this space — the record, its page, its RSVP form and its context note at ' +
+        'events/<slug>.md, in one call. This is the step that turns material already in the space into ' +
+        'something people can turn up to.\n' +
+        'The intended shape of the job: list_drive to see what the space has, read_file the run sheet or plan, ' +
+        'create_event with the picture as `cover_resource_id`, then write the marketing copy as a sub-note of ' +
+        "the event — edit_context, scope:'shared', path 'events/<slug>/marketing.md' — so the copy sits with " +
+        'the event rather than in a chat log. Mentions there link it to the people and organisations involved.\n' +
+        'It is created as a DRAFT unless you pass status:"published": publishing is what makes it visible to ' +
+        'the space (or to the world, at visibility:"public"), and that stays a decision someone takes ' +
+        'deliberately. You become a host, so you can edit it afterwards with update_event.',
+      input: {
+        space_id: spaceArg,
+        title: z.string(),
+        start_at: z.string().describe('ISO 8601 instant, e.g. 2026-09-14T18:00:00.000Z'),
+        end_at: z.string().optional().describe('ISO 8601 instant'),
+        timezone: z.string().optional().describe("IANA zone the event is read in, e.g. 'Pacific/Auckland'"),
+        description: z.string().optional().describe('The summary shown on the event card and page'),
+        location: z
+          .object({ label: z.string(), address: z.string().optional() })
+          .optional()
+          .describe('Where it happens — label is what people read'),
+        capacity: z.number().int().positive().optional().describe('Adds a waitlist once it is full'),
+        visibility: z
+          .enum(['public', 'space', 'private'])
+          .optional()
+          .describe("Who can see it once published — default 'space'"),
+        status: z.enum(['draft', 'published']).optional().describe("Default 'draft'"),
+        cover_resource_id: z
+          .string()
+          .optional()
+          .describe("A Drive image (list_drive, usable_as_cover: true) to use as the event's poster"),
+        hosts: z
+          .array(z.string())
+          .optional()
+          .describe("Person node ids who can manage it, e.g. 'person:craig-piggott'. You are added regardless."),
+      },
+      run: async (ctx, args) => {
+        // Membership of the space is the gate, exactly as it is in the composer:
+        // any member may create an event.
+        await requireSpaceContext(ctx, args.space_id)
 
-  // ── Agents ──────────────────────────────────────────────────────────────
-  // An agent is two notes — agents/<name>.md (the brief, member-writable) and
-  // agents/live/<name>.md (activation, admin-only) — plus a scheduler row.
-  // The roster is member-visible; running is author-or-admin and only for
-  // ACTIVE agents (activation is the review point). Authoring is deliberately
-  // NOT exposed: agents/ is frozen for AI origins, so add_context/edit_context
-  // refuse it — agents are written by people.
+        const input = parseEventInput<import('@/lib/schemas/eventSchemas').EventCreateInput>(eventCreateInputSchema, {
+          spaceId: args.space_id,
+          title: args.title,
+          startAt: args.start_at,
+          endAt: args.end_at,
+          timezone: args.timezone,
+          description: args.description,
+          location: args.location,
+          capacity: args.capacity,
+          visibility: args.visibility ?? 'space',
+          status: args.status ?? 'draft',
+          hosts: args.hosts ?? [],
+        })
 
-  server.registerTool(
-    'list_agents',
-    {
+        // The cover is minted against the id the record will get, so the bytes
+        // and the row cannot disagree about which event they belong to.
+        const eventId = buildNewEvent(input, { personId: ctx.personId }).id
+        const coverImageUrl = args.cover_resource_id
+          ? await coverUrlFromResource({
+              spaceId: args.space_id,
+              eventId,
+              resourceId: args.cover_resource_id,
+            })
+          : undefined
+
+        const event = await createEventRecord({ ...input, id: eventId, coverImageUrl }, { personId: ctx.personId })
+        const notePath = entityNotePath({ id: event.id, type: 'event' })
+        return {
+          event_id: event.id,
+          title: event.title,
+          status: event.status,
+          visibility: event.visibility,
+          start_at: event.startAt,
+          note_path: notePath,
+          cover_image_set: !!event.coverImageUrl,
+          public_url: event.visibility === 'public' ? `/e/${event.slug}` : null,
+          next: notePath
+            ? `Write the marketing copy as a sub-note: edit_context path '${notePath.replace(/\.md$/, '')}/marketing.md', scope 'shared'.`
+            : null,
+          ...(event.status === 'draft'
+            ? { publish_with: "update_event with status:'published' — nobody else can see a draft" }
+            : {}),
+        }
+      },
+    }),
+    defineAction({
+      name: 'update_event',
+      scope: 'context:write',
+      summary:
+        'Edit an event, or publish a draft. Hosts and space admins only.',
+      description:
+        'Edit an event that already exists — publish a draft, move the date, add the poster, change the venue. ' +
+        'Only the fields you pass are touched. A Drive image can be attached at any time with ' +
+        '`cover_resource_id`. Hosts and space admins only (list_events shows what is there).',
+      input: {
+        space_id: spaceArg,
+        event_id: z.string().describe("The event's id, e.g. 'event:launch-night-20260914'"),
+        title: z.string().optional(),
+        start_at: z.string().optional().describe('ISO 8601 instant'),
+        end_at: z.string().optional().describe('ISO 8601 instant'),
+        timezone: z.string().optional(),
+        description: z.string().optional(),
+        location: z.object({ label: z.string(), address: z.string().optional() }).optional(),
+        capacity: z.number().int().positive().optional(),
+        visibility: z.enum(['public', 'space', 'private']).optional(),
+        status: z.enum(['draft', 'published']).optional(),
+        cover_resource_id: z.string().optional().describe('A Drive image to use as the poster (list_drive)'),
+        hosts: z.array(z.string()).optional().describe('Replaces the host list — include the existing hosts to keep them'),
+      },
+      run: async (ctx, args) => {
+        await requireSpaceContext(ctx, args.space_id)
+        const existing = await requireEvent(args.space_id, args.event_id)
+        if (!(await isEventManager(ctx, args.space_id, existing))) {
+          throw new ActionError(403, EVENT_MANAGER_DENIAL)
+        }
+
+        const coverImageUrl = args.cover_resource_id
+          ? await coverUrlFromResource({
+              spaceId: args.space_id,
+              eventId: existing.id,
+              resourceId: args.cover_resource_id,
+            })
+          : undefined
+
+        const updates = parseEventInput<import('@/lib/schemas/eventSchemas').EventUpdateInput>(eventUpdateInputSchema, {
+          ...(args.title === undefined ? {} : { title: args.title }),
+          ...(args.start_at === undefined ? {} : { startAt: args.start_at }),
+          ...(args.end_at === undefined ? {} : { endAt: args.end_at }),
+          ...(args.timezone === undefined ? {} : { timezone: args.timezone }),
+          ...(args.description === undefined ? {} : { description: args.description }),
+          ...(args.location === undefined ? {} : { location: args.location }),
+          ...(args.capacity === undefined ? {} : { capacity: args.capacity }),
+          ...(args.visibility === undefined ? {} : { visibility: args.visibility }),
+          ...(args.status === undefined ? {} : { status: args.status }),
+          ...(args.hosts === undefined ? {} : { hosts: args.hosts }),
+          ...(coverImageUrl === undefined ? {} : { coverImageUrl }),
+        })
+
+        const event = await updateEventRecord(args.space_id, existing, updates)
+        return {
+          event_id: event.id,
+          title: event.title,
+          status: event.status,
+          visibility: event.visibility,
+          start_at: event.startAt,
+          cover_image_set: !!event.coverImageUrl,
+          note_path: entityNotePath({ id: event.id, type: 'event' }),
+          public_url: event.visibility === 'public' ? `/e/${event.slug}` : null,
+        }
+      },
+    }),
+    defineAction({
+      name: 'list_agents',
+      scope: 'context:read',
+      summary:
+        'The agent roster in a space with each one’s schedule and last run.',
       description:
         "List the space's scheduled agents: name, brief summary, model, declared connectors, whether it is active, " +
         'its schedule, next run and last run outcome. Spend is not included (admins see it in the app). ' +
         "Trigger one with run_agent (needs the 'agents:run' scope; the agent must be active). " +
         'AUTHORING IS CLOSED TO YOU: an agent is a brief at agents/<name>.md plus an admin activation at ' +
         'agents/live/<name>.md, and agents/ is structurally frozen against AI writes — edit_context there is ' +
-        'refused whatever your permissions. Draft the brief and hand it to a human. plan_visvine_query has the ' +
+        'refused whatever your permissions. Draft the brief and hand it to a human. The create_agent recipe has the ' +
         'brief contract and the hand-off steps.',
-      inputSchema: { space_id: z.string() },
+      input: { space_id: z.string() },
       annotations: { readOnlyHint: true },
-    },
-    (args, extra) =>
-      withCtx(extra, 'list_agents', async (ctx) => {
+      run: async (ctx, args) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
         await requireAgentsFeature(principal, args.space_id)
         const { agents, heartbeatAt } = await listAgents(principal, context)
@@ -1670,57 +1857,35 @@ export function registerTools(server: McpServer): void {
             brief_path: a.path,
           })),
         }
-      }),
-  )
-
-  server.registerTool(
-    'run_agent',
-    {
+      },
+    }),
+    defineAction({
+      name: 'run_agent',
+      scope: 'agents:run',
+      summary:
+        'Trigger an agent run now.',
       description:
         "Trigger a run of an ACTIVE agent now (see list_agents). Only the agent's author or a space admin may; an inactive " +
         'agent is refused — activation is the review point. Shares the scheduler\'s claim path so it cannot double-fire, and ' +
         "does not advance the schedule. Returns the run id and, when the run completes within this call, its outcome.",
-      inputSchema: {
-        space_id: z.string(),
+      input: {
+        space_id: spaceArg,
         agent: z.string().describe("The agent's name, e.g. 'weekly-digest' for agents/weekly-digest.md"),
       },
-    },
-    (args, extra) =>
-      withCtx(extra, 'run_agent', async (ctx) => {
+      run: async (ctx, args) => {
         const { principal } = await resolveTarget(ctx, args.space_id, 'shared')
         await requireAgentsFeature(principal, args.space_id)
         if (!(await canTriggerRun(principal, args.space_id, args.agent))) {
-          throw new McpError(403, "Only the agent's author or a space admin can run it")
+          throw new ActionError(403, "Only the agent's author or a space admin can run it")
         }
         const claimed = await claimManualRun(args.space_id, args.agent, principal.userId)
-        if (!claimed.ok) throw new McpError(claimed.code === 'unknown' ? 404 : 409, claimed.message)
+        if (!claimed.ok) throw new ActionError(claimed.code === 'unknown' ? 404 : 409, claimed.message)
         const result = await claimed.dispatch
         return {
           run_id: claimed.runId,
           outcome: result?.ok ? result.outcome : null,
           error: result && !result.ok ? result.error : null,
         }
-      }),
-  )
-
-  // ── Tools (the authoring loop) ──────────────────────────────────────────
-  // create/read/write/check the three notes a user-built Tool is made of, plus
-  // the SDK, a preview link, and the marketplace's publish and install.
-  // lib/mcp/appTools.ts — its own file because it is nine tools and a service
-  // seam, not because it is a different kind of surface.
-  registerAppTools(server, 'context')
-}
-
-/**
- * The CREATOR server (/api/mcp/creator): the Tool authoring loop and nothing
- * else — list_spaces to find where to build, then get_tool_sdk → create_tool →
- * write_tool → check_tool → preview_tool → publish_tool (lib/mcp/appTools.ts).
- * A coding agent pointed here can build a Tool without also holding the
- * context read/write surface, and a context connection never carries the
- * tools that write executable code into a space.
- */
-export function registerCreatorTools(server: McpServer): void {
-  registerPlanner(server)
-  registerListSpaces(server)
-  registerAppTools(server, 'creator')
-}
+      },
+    }),
+]

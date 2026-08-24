@@ -19,8 +19,7 @@
 import type { AuthInfo } from '@modelcontextprotocol/server'
 import prisma from '@/lib/prisma'
 import { isDevAuthEnabled } from '@/lib/dev-auth'
-import type { McpServerKind } from '@/lib/mcp/config'
-import { scopesForKind } from '@/lib/mcp/scopes'
+import { MCP_SCOPES } from '@/lib/mcp/scopes'
 
 /** Recorded as `clientId`, so a bypassed request is identifiable in logs. */
 const DEV_MCP_CLIENT_ID = 'visvine-local-dev'
@@ -58,7 +57,7 @@ async function resolveDevUser() {
  * no seeded user to be (an unseeded database) — which surfaces as the ordinary
  * 401 rather than a confusing half-authenticated state.
  */
-export async function devMcpAuthInfo(kind: McpServerKind): Promise<AuthInfo | undefined> {
+export async function devMcpAuthInfo(): Promise<AuthInfo | undefined> {
   const user = await resolveDevUser()
   if (!user) return undefined
   return {
@@ -66,7 +65,7 @@ export async function devMcpAuthInfo(kind: McpServerKind): Promise<AuthInfo | un
     // this identity never came from one.
     token: 'local-dev',
     clientId: DEV_MCP_CLIENT_ID,
-    scopes: [...scopesForKind(kind)],
+    scopes: [...MCP_SCOPES],
     extra: {
       userId: user.id,
       name: user.name ?? '',

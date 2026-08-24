@@ -1,16 +1,20 @@
 /**
- * The Visvine MCP endpoint (Streamable HTTP) — the CONTEXT server: read,
- * search and write context, call connectors, run agents, discover and install
- * Tools. Building a Tool is the creator server's job (./creator/route.ts).
- * Assembly (bearer verification bound to this server's resource URL, scope
- * challenges) lives in lib/mcp/handler.ts.
+ * The Visvine MCP endpoint (Streamable HTTP).
+ *
+ * One tool, `visvine`, and every action behind it: reading, searching and
+ * writing context, calling connectors, running agents, and building and
+ * installing Tools. Which of them a request needs is answered by the action
+ * notes, not by which endpoint a client connected to.
+ *
+ * Assembly — bearer verification bound to this resource URL, and scope
+ * challenges — lives in lib/mcp/handler.ts.
  */
 import { buildMcpHandler } from '@/lib/mcp/handler'
-import { registerTools } from '@/lib/mcp/tools'
+import { registerTools } from '@/lib/mcp/register'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-const authHandler = buildMcpHandler('context', registerTools)
+const authHandler = buildMcpHandler(registerTools)
 
 export { authHandler as GET, authHandler as POST, authHandler as DELETE }
