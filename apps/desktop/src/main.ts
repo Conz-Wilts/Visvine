@@ -145,7 +145,7 @@ function createWindow(): BrowserWindow {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       sandbox: true,
-      nodeConnector: false,
+      nodeIntegration: false,
       webSecurity: true,
       spellcheck: true,
       additionalArguments: [`--visvine-desktop-version=${app.getVersion()}`],
