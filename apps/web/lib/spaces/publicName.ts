@@ -17,18 +17,9 @@
 // check-then-write race this cannot).
 
 import prisma from '@/lib/prisma';
+import { normalizePublicName } from './hierarchy';
 
-/**
- * The comparison key: case- and whitespace-insensitive, so "Blackbird  VC"
- * can't sit next to "blackbird vc".
- *
- * MUST stay identical to the SQL index expression
- * `lower(regexp_replace(btrim(name), '\s+', ' ', 'g'))`, or the app check and
- * the database backstop will disagree.
- */
-export function normalizePublicName(name: string): string {
-  return name.trim().replace(/\s+/g, ' ').toLowerCase();
-}
+export { normalizePublicName };
 
 /** The one wording for this conflict, shared by every route that can raise it. */
 export function publicNameTakenMessage(existingName: string): string {

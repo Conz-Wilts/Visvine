@@ -101,3 +101,6 @@ export const eventUpdateInputSchema = eventCreateInputSchema
       .optional(),
   });
 
+
+export type EventCreateInput = z.infer<typeof eventCreateInputSchema>;
+export type EventUpdateInput = z.infer<typeof eventUpdateInputSchema>;

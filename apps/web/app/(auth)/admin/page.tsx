@@ -9,6 +9,7 @@ import InvitePanel from '@/features/admin/components/people/InvitePanel';
 import SpaceSettingsPanel from '@/features/admin/components/SpaceSettingsPanel';
 import TypesPanel from '@/features/admin/components/TypesPanel';
 import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
+import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
 import ToolReviewPanel, { useToolReviewQueue } from '@/features/admin/components/ToolReviewPanel';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import { useSession } from '@/features/auth/lib/auth-client';
@@ -16,7 +17,8 @@ import { LoadingText, Alert } from '@/components/ui';
 import { Space } from '@/lib/types';
 
 // Each section owns one job: General is the space's own record, Tools decides
-// which surfaces exist and how the sidebar is ordered, Types describes what kinds
+// which surfaces exist and how the sidebar is ordered, Connectors is the space's
+// gateways to the outside world, Types describes what kinds
 // of thing the space records, and Members owns every permission — people, aliases
 // and their grants, which tools members can open, and both request queues. Types,
 // Members and Invite share a single data load (PeopleDataProvider; Types still
@@ -45,6 +47,9 @@ function AdminConsole({ space, onSaved }: {
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', width: 'form' },
     { id: 'tools', label: 'Tools', width: 'form' },
+    // Connectors has no rail row of its own — it is admins-only by nature, so
+    // this console IS its surface (lib/featureAccess NAV_HIDDEN_FEATURE_KEYS).
+    { id: 'connectors', label: 'Connectors', width: 'form' },
     { id: 'types', label: 'Types', width: 'form' },
     // No Agents section: an agent's schedule and the zone it runs in are its
     // own activation note, written from /agents. There is nothing space-wide
@@ -78,6 +83,8 @@ function AdminConsole({ space, onSaved }: {
             // toggle would throw you back to its first sub-tab.
             case 'tools':
               return <SpaceToolsPanel key={configKey} space={space} onSaved={onSaved} />;
+            case 'connectors':
+              return <ConnectorsPanel key={space.id} />;
             case 'members':
               return <MembersPanel key={space.id} space={space} onSaved={onSaved} />;
             case 'invite':

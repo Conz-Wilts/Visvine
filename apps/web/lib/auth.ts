@@ -3,6 +3,8 @@ import { getSession, isSuperAdmin, type SessionPayload } from '@/lib/session';
 import { isForeignPersonalSpace } from '@/lib/spaces/personalSpaceAccess';
 import { isGlobalSpace } from '@/lib/spaces/globalSpace';
 import { canAccessFeature } from '@/lib/featureAccess';
+import { ancestorIdsOf, isActiveMemberOf } from '@/lib/spaces/tree';
+import { canSeeSpace } from '@/lib/spaces/hierarchy';
 import { personAliases, type SpaceAlias } from '@/lib/types/context';
 import type { SpaceFeatureConfig } from '@/lib/types';
 
@@ -43,13 +45,27 @@ export async function isAdmin(
   email?: string | null,
 ): Promise<boolean> {
   if (isSuperAdmin(email)) return true;
-  const [owningBySpace, held] = await Promise.all([
-    adminAliasIds([spaceId]),
-    prisma.userAlias.findMany({ where: { userId, spaceId }, select: { aliasId: true } }),
+  return (await adminSpaceIds(userId, [spaceId])).has(spaceId);
+}
+
+/**
+ * Which of `spaceIds` the user holds an admin alias in directly — before
+ * ancestry is applied.
+ */
+async function directlyAdministered(userId: string, spaceIds: string[]): Promise<Set<string>> {
+  if (spaceIds.length === 0) return new Set();
+  const [owning, held] = await Promise.all([
+    adminAliasIds(spaceIds),
+    prisma.userAlias.findMany({
+      where: { userId, spaceId: { in: spaceIds } },
+      select: { spaceId: true, aliasId: true },
+    }),
   ]);
-  const owning = owningBySpace.get(spaceId);
-  if (!owning || owning.size === 0) return false;
-  return held.some((h) => owning.has(h.aliasId));
+  const out = new Set<string>();
+  for (const h of held) {
+    if (owning.get(h.spaceId)?.has(h.aliasId)) out.add(h.spaceId);
+  }
+  return out;
 }
 
 /**
@@ -64,14 +80,16 @@ export async function adminSpaceIds(
 ): Promise<Set<string>> {
   if (isSuperAdmin(email)) return new Set(spaceIds);
   if (spaceIds.length === 0) return new Set();
-  const owning = await adminAliasIds(spaceIds);
-  const held = await prisma.userAlias.findMany({
-    where: { userId, spaceId: { in: spaceIds } },
-    select: { spaceId: true, aliasId: true },
-  });
+  // Admin of a space is admin of everything inside it (docs/sub-spaces.md):
+  // a child with no members of its own is still somebody's to manage, and
+  // losing the parent must not leave a foothold below. So the check runs over
+  // each space's whole ancestry.
+  const ancestors = await ancestorIdsOf(spaceIds);
+  const lookup = [...new Set([...spaceIds, ...[...ancestors.values()].flat()])];
+  const direct = await directlyAdministered(userId, lookup);
   const out = new Set<string>();
-  for (const h of held) {
-    if (owning.get(h.spaceId)?.has(h.aliasId)) out.add(h.spaceId);
+  for (const id of spaceIds) {
+    if (direct.has(id) || (ancestors.get(id) ?? []).some((a) => direct.has(a))) out.add(id);
   }
   return out;
 }
@@ -140,7 +158,10 @@ export async function spaceMemberForbidden(
   email?: string | null,
 ): Promise<boolean> {
   const [space, activeMember] = await Promise.all([
-    prisma.space.findUnique({ where: { id: spaceId }, select: { personalOwnerId: true } }),
+    prisma.space.findUnique({
+      where: { id: spaceId },
+      select: { personalOwnerId: true, visibility: true, parentId: true },
+    }),
     isActiveMember(userId, spaceId),
   ]);
   if (!space) return false;
@@ -149,9 +170,28 @@ export async function spaceMemberForbidden(
   if (isGlobalSpace(spaceId)) return false;
   // Personal space: only its admin may read or write it.
   if (space.personalOwnerId != null) return space.personalOwnerId !== userId;
-  // Normal space: an active member or an admin passes.
+  // Normal space: an active member passes; so does the parent's member when the
+  // space inherits its visibility (docs/sub-spaces.md); so does an admin, of
+  // this space or of one above it.
   if (activeMember) return false;
+  if (
+    space.visibility === 'inherit' &&
+    space.parentId &&
+    canSeeSpace(space.visibility, { member: false, parentMember: await isActiveMemberOf(userId, space.parentId) })
+  ) {
+    return false;
+  }
   return !(await isAdmin(userId, spaceId, email));
+}
+
+/**
+ * Reads: is this space open to the caller at all — member, parent's member of
+ * an inheriting child, admin above it — as one boolean. The notes resolver
+ * uses it so a Finance sub-space's context opens for exactly who the switcher
+ * shows it to.
+ */
+export async function canReadSpace(userId: string, spaceId: string, email?: string | null): Promise<boolean> {
+  return !(await spaceMemberForbidden(userId, spaceId, email));
 }
 
 /**

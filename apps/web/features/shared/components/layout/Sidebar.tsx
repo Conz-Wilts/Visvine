@@ -12,7 +12,6 @@ import { railFeatures, moreFeatures, canAccessFeature } from "@/features/shared/
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
 import CreateModal from "@/features/create/components/CreateModal";
-import ConnectorCatalogModal from '@/features/connectors/components/ConnectorCatalogModal';
 import type { SpaceFeatureConfig } from "@/lib/types";
 
 /*
@@ -421,7 +420,6 @@ export default function Sidebar() {
             style={{ width: createW }}
           >
             <CreateModal />
-            <ConnectorCatalogModal />
           </div>
         </div>
       </div>

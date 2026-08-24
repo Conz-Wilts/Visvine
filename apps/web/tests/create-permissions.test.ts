@@ -46,12 +46,13 @@ test('an uploaded file follows the notes feature', () => {
   assert.equal(canCreateType('file', off('notes')), true)
 })
 
-test('connectors need the connectors tool AND admin', () => {
+test('connectors need admin, and cannot be switched off', () => {
   assert.equal(canCreateType('connector', ADMIN), true)
   // connectors/ is admin-write in contextService.writeDenial — don't offer the form.
   assert.equal(canCreateType('connector', MEMBER), false)
-  // Removing the tool takes the Connector type with it, for an admin too.
-  assert.equal(canCreateType('connector', off('connectors')), false)
+  // connectors is core: the surface is a console section admins always have, so
+  // a stored `connectors: false` (from before the key became core) hides nothing.
+  assert.equal(canCreateType('connector', off('connectors')), true)
   assert.equal(canCreateType('connector', off('notes')), true)
 })
 

@@ -117,6 +117,16 @@ async function main() {
       where: { spaceId: context.spaceId },
       select: { id: true, type: true, metadata: true },
     });
+
+    // A `space` node stands for a real space (docs/sub-spaces.md): its
+    // metadata.spaceRef names a spaces row, and its note says the same.
+    for (const n of nodes) {
+      if (n.type !== 'space') continue;
+      const ref = (n.metadata as Record<string, unknown> | null)?.spaceRef;
+      if (typeof ref !== 'string' || !(await prisma.space.findUnique({ where: { id: ref }, select: { id: true } }))) {
+        violations.push(`${label} ${n.id}: space node has no spaceRef to an existing space (run db:spaces:records)`);
+      }
+    }
     const nodeByIndexPath = new Map<string, { id: string; type: string; pointer: string | null }>();
     for (const n of nodes) {
       const idx = entityIndexPathOf({ id: n.id, type: n.type });

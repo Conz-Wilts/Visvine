@@ -43,16 +43,23 @@ describe('isFeatureEnabled', () => {
     assert.equal(isFeatureEnabled({ enabled: { directory: false } }, 'directory'), true);
   });
 
-  it('lists directory, notes, events and tools as the core features', () => {
+  it('lists directory, notes, events, connectors and tools as the core features', () => {
     // tools is core: the marketplace has no switch — what a space runs is
-    // decided by review + install. See tools-feature-keys.test.ts.
-    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'notes', 'events', 'tools']);
+    // decided by review + install. See tools-feature-keys.test.ts. connectors is
+    // core for the same reason: its surface is a console section, admins only.
+    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'notes', 'events', 'connectors', 'tools']);
   });
 
-  it('hides notes, events and tools from the nav rail and console toggles', () => {
-    // All three are core and nav-hidden: notes and events live in the top bar,
-    // tools behind the marketplace icon and per-install `tool:<slug>` rows.
-    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['notes', 'events', 'tools']);
+  it('hides notes, events, connectors and tools from the nav rail and console toggles', () => {
+    // All four are core and nav-hidden: notes and events live in the top bar,
+    // connectors in the Space Console, tools behind the marketplace icon and
+    // per-install `tool:<slug>` rows.
+    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['notes', 'events', 'connectors', 'tools']);
+    // connectors is core: a stale `enabled.connectors: false` from before the
+    // move must not switch it off — but it stays admins only.
+    assert.equal(isFeatureEnabled({ enabled: { connectors: false } }, 'connectors'), true);
+    assert.equal(canAccessFeature({ enabled: { connectors: false } }, 'connectors', true), true);
+    assert.equal(canAccessFeature(null, 'connectors', false), false);
     // notes ("Context") is core: surfaced as the Context tab under the
     // Directory, always on, and can never be persisted off.
     assert.equal(isFeatureEnabled({ enabled: {} }, 'notes'), true);
@@ -255,12 +262,13 @@ describe('isNodeTypeEnabled', () => {
     }
   });
 
-  it('hides Connector when the connectors tool is off', () => {
-    assert.equal(nodeTypeFeatureKey('Connector'), 'connectors');
-    assert.equal(isNodeTypeEnabled({ enabled: { connectors: false } }, 'Connector'), false);
+  it('never hides Connector — connectors is core', () => {
+    // The surface is a console section admins always have, so there is no
+    // switch to take the type away with it.
+    assert.equal(nodeTypeFeatureKey('Connector'), null);
+    assert.equal(isNodeTypeEnabled({ enabled: { connectors: false } }, 'Connector'), true);
     // Stored `node.type` for a connector is lower-case — see notes/entities.ts.
-    assert.equal(isNodeTypeEnabled({ enabled: { connectors: false } }, 'connector'), false);
-    assert.equal(isNodeTypeEnabled({ enabled: { connectors: true } }, 'Connector'), true);
+    assert.equal(isNodeTypeEnabled({ enabled: { connectors: false } }, 'connector'), true);
     assert.equal(isNodeTypeEnabled(null, 'Connector'), true);
   });
 
@@ -369,11 +377,13 @@ describe('featureNodeTypeNames', () => {
   it('names the types a tool carries in and out with it', () => {
     assert.deepEqual(featureNodeTypeNames('channels'), ['Section', 'Channel']);
     assert.deepEqual(featureNodeTypeNames('resources'), ['Resource']);
-    assert.deepEqual(featureNodeTypeNames('connectors'), ['Connector']);
+
   });
 
   it('is empty for tools that own no node type', () => {
     assert.deepEqual(featureNodeTypeNames('events'), []);
+    // Connectors is core and nav-hidden: it has no console row to name a type on.
+    assert.deepEqual(featureNodeTypeNames('connectors'), []);
     assert.deepEqual(featureNodeTypeNames('directory'), []);
   });
 });

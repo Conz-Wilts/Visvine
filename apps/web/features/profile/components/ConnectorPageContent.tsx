@@ -33,6 +33,7 @@ import { CheckIcon, CopyIcon, KeyRoundIcon, PencilIcon, PlayIcon, PlusIcon, Refr
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
+import ConnectorLogo from '@/features/connectors/components/ConnectorLogo';
 import { timeAgo } from '@/lib/date';
 import { SANDBOX_LIMITS, type AllowRule, type ConnectorPerimeter } from '@/lib/connectors/config';
 import { PROVIDERS } from '@/lib/agents/registry';
@@ -65,6 +66,8 @@ interface ConnectorDetail {
   alias: string | null;
   hosts: string[];
   allow: string[];
+  /** `enabled: false` in the note — switched off in the console; every run is refused. */
+  enabled: boolean;
   invalid: string | null;
   warnings: string[];
   secrets: SecretStatus[];
@@ -1228,7 +1231,16 @@ function CallLog({ calls }: { calls: ConnectorCall[] }) {
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 /** The one-line verdict in the header: what an agent can do through this today. */
-function statusOf(connector: ConnectorDetail): { label: string; tone: 'ok' | 'warn' | 'bad'; hint: string } {
+function statusOf(connector: ConnectorDetail): { label: string; tone: 'ok' | 'warn' | 'bad' | 'muted'; hint: string } {
+  // Off first: what the frontmatter or the secrets say is beside the point
+  // while nothing may run at all. The switch is in the Space Console.
+  if (!connector.enabled) {
+    return {
+      label: 'Off',
+      tone: 'muted',
+      hint: 'Turned off in the Space Console — the note and its secrets are untouched, but every run is refused.',
+    };
+  }
   if (connector.invalid) {
     return { label: 'Not usable', tone: 'bad', hint: 'The frontmatter does not parse, so every run is refused.' };
   }
@@ -1388,7 +1400,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
 
   const status = statusOf(connector);
   const missingSecrets = connector.secrets.filter((s) => !s.set);
-  const runnable = !connector.invalid && missingSecrets.length === 0;
+  const runnable = connector.enabled && !connector.invalid && missingSecrets.length === 0;
   const env = connector.perimeter?.env ?? {};
   const pickedSecretStatus = connector.secrets.find((s) => s.name === pickedSecret) ?? null;
 
@@ -1397,6 +1409,9 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
       {/* ══ HEADER — the name, what it is, whether it works ══ */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {/* The same mark the console's Connectors list shows for this row —
+              the service's logo, or the plug for one the space wrote itself. */}
+          <ConnectorLogo name={connector.name} provider={connector.model?.provider} size="lg" />
           <h1 className="truncate font-title text-xl font-semibold text-text-primary">
             {connector.name}
           </h1>

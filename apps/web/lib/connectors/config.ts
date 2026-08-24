@@ -528,6 +528,23 @@ export function allowPrivateHosts(): boolean {
   return true
 }
 
+/**
+ * Is this connector switched on? `enabled: false` in the frontmatter is the
+ * off switch an admin flips from the console's Connectors section — the note,
+ * its secrets and its perimeter all stay exactly as they were, and every run
+ * is refused until it comes back on.
+ *
+ * The key is absent on almost every note, and absent means on: turning a
+ * connector on deletes it rather than writing `true`, so the frontmatter only
+ * ever carries the surprising state. Accepts the string form too, since a
+ * hand-written note may quote it.
+ */
+export function isConnectorEnabled(fm: NoteFrontmatter): boolean {
+  const raw = (fm as Record<string, unknown>).enabled
+  if (raw === false) return false
+  return !(typeof raw === 'string' && raw.trim().toLowerCase() === 'false')
+}
+
 // Connectors v2 — the perimeter (AGENTS.md#connectors)
 //
 // A v2 connector's frontmatter no longer picks an executor; it declares a

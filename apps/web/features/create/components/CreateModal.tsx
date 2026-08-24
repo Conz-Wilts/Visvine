@@ -66,7 +66,7 @@ const EVENT_FINDER_ICON = (
 export default function CreateModal() {
   const router = useRouter();
   const pathname = usePathname();
-  const { isOpen, defaultType, close, openCatalog } = useCreateModal();
+  const { isOpen, defaultType, close } = useCreateModal();
   const { currentSpace, isAdmin } = useSpace();
   const { reduced } = useSidebar();
 
@@ -272,12 +272,6 @@ export default function CreateModal() {
   }, [pathname]);
 
   const handleTypeSelect = (t: CreateableType) => {
-    // A connector is picked from the catalog, not typed into a form here.
-    if (t === 'connector') {
-      handleClose();
-      openCatalog();
-      return;
-    }
     setSelectedType(t);
     setStep(1);
   };

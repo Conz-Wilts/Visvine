@@ -16,9 +16,10 @@ import { useRouter } from 'next/navigation';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
 import type { NBEvent, EventVisibility, FormField } from '@/lib/types';
 import { CustomDateTimePicker } from './CustomDateTimePicker';
+import { DriveCoverPicker } from './DriveCoverPicker';
 import Select from '@/components/ui/Select';
 import { fetchJsonBody } from '@/lib/fetchJson';
-import { ArrowLeftIcon, CalendarPlusIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, ExternalLinkIcon, GlobeIcon, ImagePlusIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PlusIcon, SparklesIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
+import { ArrowLeftIcon, CalendarPlusIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, ExternalLinkIcon, FolderIcon, GlobeIcon, ImagePlusIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PlusIcon, SparklesIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
 
 type EventType = 'in-person' | 'virtual' | 'hybrid';
 
@@ -136,6 +137,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shareEvent, setShareEvent] = useState<NBEvent | null>(null);
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const buildBody = useCallback(
@@ -255,6 +257,26 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
     }
   };
 
+  /**
+   * The Drive picker posts to the event's cover route, so the event has to
+   * exist first — the same reason the file upload waits for the draft to be
+   * created. Saving here is what makes "From Drive" work on a brand-new draft.
+   */
+  const openDrivePicker = async () => {
+    setError(null);
+    if (!title.trim()) { setError('Add a title first, then pick a cover'); return; }
+    setUploading(true);
+    try {
+      await persist();
+      setSaveState('saved');
+      setDrivePickerOpen(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the draft');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handlePublish = async () => {
     setError(null);
     if (!title.trim()) { setError('Please add a title'); return; }
@@ -305,31 +327,49 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
         className="hidden"
         onChange={(e) => onPickCover(e.target.files?.[0])}
       />
-      <button
-        type="button"
-        onClick={() => fileInputRef.current?.click()}
-        className="group relative w-full aspect-[16/9] rounded-lg overflow-hidden flex items-center justify-center text-white"
-        style={coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)` }}
-      >
-        {coverImageUrl ? (
-          <img src={coverImageUrl} alt="Event cover" className="w-full h-full object-cover" />
-        ) : (
-          <div className="flex flex-col items-center gap-2 px-6 text-center">
-            <ImagePlusIcon className="w-8 h-8 opacity-90" />
-            <span className="text-sm font-semibold drop-shadow">{title.trim() || 'Add a cover'}</span>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+      <div className="group relative w-full aspect-[16/9] rounded-lg overflow-hidden">
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="absolute inset-0 w-full h-full flex items-center justify-center text-white"
+          style={coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)` }}
+        >
+          {coverImageUrl ? (
+            <img src={coverImageUrl} alt="Event cover" className="w-full h-full object-cover" />
+          ) : (
+            <div className="flex flex-col items-center gap-2 px-6 text-center">
+              <ImagePlusIcon className="w-8 h-8 opacity-90" />
+              <span className="text-sm font-semibold drop-shadow">{title.trim() || 'Add a cover'}</span>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+        </button>
         {uploading && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
             <LoaderCircleIcon className="w-6 h-6 animate-spin text-white" />
           </div>
         )}
-        <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/40 backdrop-blur text-xs font-semibold">
-          <ImagePlusIcon className="w-3.5 h-3.5" />
-          {coverImageUrl ? 'Change cover' : 'Upload'}
-        </span>
-      </button>
+        {/* Two ways to a poster: bytes from this machine, or a picture the
+            space already holds in its Drive. */}
+        <div className="absolute bottom-3 right-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={openDrivePicker}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/40 backdrop-blur text-xs font-semibold text-white"
+          >
+            <FolderIcon className="w-3.5 h-3.5" />
+            From Drive
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/40 backdrop-blur text-xs font-semibold text-white"
+          >
+            <ImagePlusIcon className="w-3.5 h-3.5" />
+            {coverImageUrl ? 'Change cover' : 'Upload'}
+          </button>
+        </div>
+      </div>
 
       {/* theme swatches when no cover image */}
       {!coverImageUrl && (
@@ -605,6 +645,20 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
           </button>
         </div>
       </div>
+
+      {drivePickerOpen && (
+        <DriveCoverPicker
+          spaceId={spaceId}
+          eventId={draftIdRef.current}
+          onClose={() => setDrivePickerOpen(false)}
+          onPicked={(ev) => {
+            // The route has already stored the cover on the record; mirroring it
+            // into state keeps the next autosave from posting the old value back.
+            setCoverImageUrl(ev.coverImageUrl ?? '');
+            setSaveState('saved');
+          }}
+        />
+      )}
 
       {shareEvent && (
         <ShareSheet

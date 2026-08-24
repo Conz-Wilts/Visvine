@@ -34,12 +34,11 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'file':
       return isFeatureEnabled(featureConfig, 'notes')
 
-    // A connector note only exists because the Connectors tool does — same rule
-    // the console's Types tab and the directory filters follow. It's
-    // additionally admin-only to write: the real gate is server-side in
+    // Connectors is core (there is no switch — the surface is a console
+    // section), and admin-only to write: the real gate is server-side in
     // contextService.writeDenial, this just stops us offering a form that 403s.
     case 'connector':
-      return isFeatureEnabled(featureConfig, 'connectors') && isAdmin
+      return isAdmin
 
     // An agent brief is member-writable by design (lib/agents): only activating
     // it is admin-gated, and that gate is on a different path (agents/live/).

@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import {
   CATALOG_CATEGORIES,
   CONNECTOR_CATALOG,
+  catalogEntryFor,
   connectorFromCatalog,
   searchCatalog,
 } from '@/lib/connectors/catalog'
@@ -88,3 +89,20 @@ for (const entry of CONNECTOR_CATALOG) {
     if (entry.shape === 'oauth') assert.ok(parsed.perimeter.auth, `${entry.id} has an auth block`)
   })
 }
+
+test('catalogEntryFor finds a note\'s logo by name, then by model provider', () => {
+  const first = CONNECTOR_CATALOG[0]
+  assert.equal(catalogEntryFor(first.id)?.id, first.id)
+  // The name is a slug, so casing and stray space must not lose the mark.
+  assert.equal(catalogEntryFor(` ${first.id.toUpperCase()} `)?.id, first.id)
+
+  // A model connector renamed at connect time still keeps its provider's mark.
+  const model = CONNECTOR_CATALOG.find((e) => e.shape === 'model' && e.provider)
+  if (model) {
+    assert.equal(catalogEntryFor('our-house-model', model.provider)?.id, model.id)
+  }
+
+  // A connector the space wrote itself matches nothing — the caller draws a plug.
+  assert.equal(catalogEntryFor('appdb'), null)
+  assert.equal(catalogEntryFor('appdb', null), null)
+})

@@ -27,7 +27,9 @@ model Space {
   // Filtered out of Discover / other users' space lists.
   personalOwnerId String?                @map("personal_owner_id")
   // "public" = discoverable & self-joinable from Discover; "private" = hidden from
-  // Discover / non-members' lists, joinable only via invite link or admin add.
+  // Discover / non-members' lists, joinable only via invite link or admin add;
+  // "inherit" (children only) = every active member of the parent can see and
+  // read it. The rules between the three live in lib/spaces/hierarchy.ts.
   // Private by default: a space someone forgot to set visibility on must err
   // toward hidden, never toward discoverable (demo seeds opt into public).
   visibility      String                 @default("private")
@@ -38,6 +40,15 @@ model Space {
   // its own (lib/agents/config.ts). Null = UTC. The only other agent-wide
   // setting, the custom model endpoint, is a connector note (lib/connectors/model.ts).
   timezone        String?
+  // Set = this space lives INSIDE another one (docs/sub-spaces.md). A child is a
+  // full tenant — its own context, members, aliases, tool rail — that the
+  // parent's members reach through the switcher, and that the parent's context
+  // records as a `space` node + `communities/<slug>.md`. Restrict, not cascade:
+  // deleting a parent with children is a tenant wipe, so the caller deletes
+  // depth-first on purpose. Depth is capped in lib/spaces/hierarchy.ts.
+  parentId        String?                @map("parent_id")
+  parent          Space?                 @relation("SpaceChildren", fields: [parentId], references: [id], onDelete: Restrict)
+  children        Space[]                @relation("SpaceChildren")
   links           Link[]
   nodes           Node[]
   members         SpaceMember[]
@@ -73,6 +84,7 @@ model Space {
   projectionJobs  NoteProjectionJob[]
 
   @@index([personalOwnerId])
+  @@index([parentId])
   @@map("spaces")
 }
 

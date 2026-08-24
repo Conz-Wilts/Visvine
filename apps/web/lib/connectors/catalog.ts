@@ -845,6 +845,25 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
 ]
 
 /** Entries matching a search by name, description or category; all of them when empty. */
+/**
+ * The recipe a connector note came from, for display only — its logo, in the
+ * console list and on the connector's own page.
+ *
+ * Matched on the note NAME, which is the recipe id for anything connected from
+ * the catalog, and then on the model provider, so a `kind: model` note keeps
+ * the provider's mark whatever it was called. Nothing is stamped into the note
+ * to make this exact: a miss is a plug icon, never a broken page, and no
+ * behaviour hangs off the answer.
+ */
+export function catalogEntryFor(name: string, provider?: string | null): CatalogEntry | null {
+  const slug = name.trim().toLowerCase()
+  const byId = CONNECTOR_CATALOG.find((e) => e.id === slug)
+  if (byId) return byId
+  if (!provider) return null
+  const key = provider.trim().toLowerCase()
+  return CONNECTOR_CATALOG.find((e) => e.shape === 'model' && e.provider === key) ?? null
+}
+
 export function searchCatalog(query: string): CatalogEntry[] {
   const q = query.trim().toLowerCase()
   if (!q) return [...CONNECTOR_CATALOG]

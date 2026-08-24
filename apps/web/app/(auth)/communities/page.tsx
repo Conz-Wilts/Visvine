@@ -7,7 +7,11 @@ import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { Button, EmptyState } from '@/components/ui';
 
 export default function SpacesPage() {
-  const { joinedSpaces, currentSpace, setCurrentSpace, leaveSpace } = useSpace();
+  const { joinedSpaces: allJoined, currentSpace, setCurrentSpace, leaveSpace } = useSpace();
+  // Root spaces only: the ones inside them are reached through the switcher
+  // (docs/sub-spaces.md), and a member of a big space would otherwise see
+  // every one of its records listed as a space of their own.
+  const joinedSpaces = allJoined.filter(s => !s.parentId);
   const [leaving, setLeaving] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
 

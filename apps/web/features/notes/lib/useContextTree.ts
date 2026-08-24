@@ -96,9 +96,45 @@ export function deleteFolderDenial(path: string): string | null {
   return namespaceFolderDenial(path)
 }
 
+/** The node at `path` in this tree, or null. Used to read a folder's own
+ *  metadata (a sub-space record carries `space`) before acting on it. */
+function findNode(root: TreeNode, path: string): TreeNode | null {
+  if (root.path === path) return root
+  for (const child of root.children ?? []) {
+    const hit = findNode(child, path)
+    if (hit) return hit
+  }
+  return null
+}
+
 /** Whether a drop on `destFolder` would do anything (legal AND a real change). */
 export function canMoveInto(from: string, kind: 'note' | 'folder', destFolder: string): boolean {
   return moveDenial(from, kind, destFolder) === null && destFolder !== parentFolderOf(from)
+}
+
+/** A destructive action the tree has asked about but not yet performed. */
+interface PendingConfirm {
+  title: string
+  body?: string
+  confirmLabel: string
+  /** Typed-name gate, for the deletes that take something bigger than a note. */
+  confirmText?: string
+  /** What to say if the request fails — the dialog stays open showing it. */
+  failure: string
+  run: () => Promise<void>
+}
+
+/** Exactly the props ConfirmDialog takes: the host surface spreads this. */
+export interface ContextConfirmProps {
+  open: boolean
+  title: string
+  body?: string
+  confirmLabel: string
+  destructive: true
+  confirmText?: string
+  error?: string
+  onConfirm: () => Promise<void>
+  onClose: () => void
 }
 
 export interface ContextTreeOptions {
@@ -128,6 +164,12 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
   // a save from the note panel, a create, a share. Separate from treeVersion so
   // an ordinary save doesn't also re-fetch the trash.
   const [listVersion, setListVersion] = useState(0)
+  // The destructive action awaiting confirmation, and the failure of the last
+  // attempt. Every delete in the tree runs through here so the question is an
+  // in-app dialog (ConfirmDialog, rendered by the host surface) rather than a
+  // browser `confirm` pinned to the top of the window.
+  const [pending, setPending] = useState<PendingConfirm | null>(null)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
 
   const active = enabled && !!spaceId
 
@@ -288,17 +330,19 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     (path: string) => {
       if (!spaceId) return
       const title = notes.find((n) => n.path === path)?.title ?? path
-      if (!window.confirm(`Delete “${title}”? It moves to Trash and can be restored for 7 days.`)) return
-      notesApi
-        .remove(spaceId, path)
-        .then(() => {
+      setConfirmError(null)
+      setPending({
+        title: `Delete “${title}”?`,
+        body: 'It moves to Trash and can be restored for 7 days.',
+        confirmLabel: 'Delete note',
+        failure: 'Failed to delete the note',
+        run: async () => {
+          await notesApi.remove(spaceId, path)
           invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
           setTreeVersion((v) => v + 1)
           if (path === currentPath) router.push(CONTEXT_HOME)
-        })
-        .catch((e: unknown) => {
-          window.alert(e instanceof Error ? e.message : 'Failed to delete the note')
-        })
+        },
+      })
     },
     [spaceId, notes, currentPath, router],
   )
@@ -321,23 +365,54 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
       }
       const name = label?.trim() || folderPath.split('/').pop() || folderPath
       const count = notes.filter((n) => n.path.startsWith(`${folderPath}/`)).length
+      const notesPhrase = count === 1 ? 'the note' : `all ${count} notes`
       const contents =
         count === 0
           ? 'It is empty.'
-          : `This will also delete the ${count === 1 ? 'note' : `${count} notes`} inside it (moved to Trash, restorable for 7 days).`
-      if (!window.confirm(`Delete the folder “${name}”? ${contents}`)) return
-      notesApi
-        .deleteFolder(spaceId, folderPath)
-        .then(() => {
-          invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
-          setTreeVersion((v) => v + 1)
-          if (currentPath?.startsWith(`${folderPath}/`)) router.push(CONTEXT_HOME)
-        })
-        .catch((e: unknown) => {
-          window.alert(e instanceof Error ? e.message : 'Failed to delete the folder')
-        })
+          : `This also deletes ${notesPhrase} inside it (moved to Trash, restorable for 7 days).`
+      // A sub-space's record folder is not an ordinary folder: it is where that
+      // space's own tree is federated in (docs/sub-spaces.md), so deleting it
+      // takes the record — and the parent's whole view of the child — with it.
+      // The child space itself is a separate tenant and survives, which is the
+      // part that has to be said out loud, and the name is typed to confirm.
+      const childSpace = findNode(tree, folderPath)?.space ?? null
+      setConfirmError(null)
+      setPending(
+        childSpace
+          ? {
+              title: `Delete the subspace record “${name}”?`,
+              body:
+                `“${name}” is a subspace of this space, and this folder is its record here — ` +
+                `its own context is shown inside it. Deleting the folder removes the record and ` +
+                `${count === 0 ? 'everything this space wrote in it' : notesPhrase} (moved to Trash, restorable for 7 days), ` +
+                `and this space stops showing the subspace's context. The subspace itself — its ` +
+                `members, its context and everything in it — is NOT deleted, and it stays in the ` +
+                `space switcher; delete it from its own Space console.`,
+              confirmLabel: 'Delete record',
+              confirmText: name,
+              failure: 'Failed to delete the folder',
+              run: async () => {
+                await notesApi.deleteFolder(spaceId, folderPath)
+                invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
+                setTreeVersion((v) => v + 1)
+                if (currentPath?.startsWith(`${folderPath}/`)) router.push(CONTEXT_HOME)
+              },
+            }
+          : {
+              title: `Delete the folder “${name}”?`,
+              body: contents,
+              confirmLabel: 'Delete folder',
+              failure: 'Failed to delete the folder',
+              run: async () => {
+                await notesApi.deleteFolder(spaceId, folderPath)
+                invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
+                setTreeVersion((v) => v + 1)
+                if (currentPath?.startsWith(`${folderPath}/`)) router.push(CONTEXT_HOME)
+              },
+            },
+      )
     },
-    [spaceId, notes, currentPath, router],
+    [spaceId, notes, tree, currentPath, router],
   )
 
   // Moving a note = a rename to the same filename under another folder. The
@@ -416,13 +491,17 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     (id: string) => {
       if (!spaceId) return
       const name = trash.find((t) => t.id === id)?.name ?? 'this note'
-      if (!window.confirm(`Permanently delete “${name}”? This cannot be undone.`)) return
-      notesApi
-        .purgeTrash(spaceId, id)
-        .then(() => setTreeVersion((v) => v + 1))
-        .catch((e: unknown) => {
-          window.alert(e instanceof Error ? e.message : 'Failed to delete the note')
-        })
+      setConfirmError(null)
+      setPending({
+        title: `Permanently delete “${name}”?`,
+        body: 'This cannot be undone.',
+        confirmLabel: 'Delete forever',
+        failure: 'Failed to delete the note',
+        run: async () => {
+          await notesApi.purgeTrash(spaceId, id)
+          setTreeVersion((v) => v + 1)
+        },
+      })
     },
     [spaceId, trash],
   )
@@ -430,14 +509,48 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
   const handleEmptyTrash = useCallback(() => {
     if (!spaceId) return
     const count = trash.length
-    if (!window.confirm(`Permanently delete ${count === 1 ? 'the note' : `all ${count} notes`} in the trash? This cannot be undone.`)) return
-    notesApi
-      .emptyTrash(spaceId)
-      .then(() => setTreeVersion((v) => v + 1))
-      .catch((e: unknown) => {
-        window.alert(e instanceof Error ? e.message : 'Failed to empty the trash')
-      })
+    setConfirmError(null)
+    setPending({
+      title: `Permanently delete ${count === 1 ? 'the note' : `all ${count} notes`} in the trash?`,
+      body: 'This cannot be undone.',
+      confirmLabel: 'Empty trash',
+      failure: 'Failed to empty the trash',
+      run: async () => {
+        await notesApi.emptyTrash(spaceId)
+        setTreeVersion((v) => v + 1)
+      },
+    })
   }, [spaceId, trash])
+
+  // The dialog itself is the host surface's to render; the tree owns the
+  // question. A failed request keeps the dialog open with the reason, so the
+  // action can be retried without re-opening the menu.
+  const confirm = useMemo<ContextConfirmProps>(
+    () => ({
+      open: pending !== null,
+      title: pending?.title ?? '',
+      body: pending?.body,
+      confirmLabel: pending?.confirmLabel ?? 'Delete',
+      destructive: true,
+      confirmText: pending?.confirmText,
+      error: confirmError ?? undefined,
+      onConfirm: async () => {
+        if (!pending) return
+        try {
+          await pending.run()
+          setPending(null)
+          setConfirmError(null)
+        } catch (e: unknown) {
+          setConfirmError(e instanceof Error ? e.message : pending.failure)
+        }
+      },
+      onClose: () => {
+        setPending(null)
+        setConfirmError(null)
+      },
+    }),
+    [pending, confirmError],
+  )
 
   return {
     tree,
@@ -458,5 +571,6 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     handleRestoreTrash,
     handlePurgeTrash,
     handleEmptyTrash,
+    confirm,
   }
 }

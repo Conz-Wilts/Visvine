@@ -20,6 +20,7 @@ import {
   parseConnectorPerimeter,
   perimeterSecretRefs,
   type AllowRule,
+  isConnectorEnabled,
 } from '@/lib/connectors/config'
 import { connectorKind, modelConnectorInfo, newModelConnectorNote, parseModelBaseUrl, parseModelConnector } from '@/lib/connectors/model'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
@@ -617,4 +618,19 @@ test('actions validation: bad names, missing code, oversize code, too many, wron
   // No actions at all is the ordinary case.
   const none = parseConnectorPerimeter(parseFrontmatter(`---\ntype: connector\nhosts: []\n---`))
   assert.ok(none.ok && Object.keys(none.perimeter.actions).length === 0)
+})
+
+test('the off switch is `enabled: false`, and absent means on', () => {
+  const fm = (body: string) => parseFrontmatter(`---\ntype: connector\nhosts: []\n${body}---`)
+  // Almost every note carries no `enabled:` at all — that is on.
+  assert.equal(isConnectorEnabled(fm('')), true)
+  assert.equal(isConnectorEnabled(fm('enabled: true\n')), true)
+  assert.equal(isConnectorEnabled(fm('enabled: false\n')), false)
+  // Quoted by hand, or written by a YAML dialect that keeps it a string.
+  assert.equal(isConnectorEnabled(fm('enabled: "false"\n')), false)
+  assert.equal(isConnectorEnabled(fm('enabled: "False"\n')), false)
+  assert.equal(isConnectorEnabled(fm('enabled: "true"\n')), true)
+  // Off is orthogonal to the perimeter: the note still parses, it just refuses.
+  const parsed = parseConnectorPerimeter(fm('enabled: false\n'))
+  assert.equal(parsed.ok, true)
 })

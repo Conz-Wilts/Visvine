@@ -4,13 +4,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { eventCreateInputSchema } from '@/lib/schemas/eventSchemas';
-import { generateEventId, slugify, normalizeStatus } from '@/lib/eventUtils';
-import { getEventsData, upsertEvent } from '@/lib/eventRepo';
-import { upsertLink } from '@/lib/notes/context/links';
+import { normalizeStatus } from '@/lib/eventUtils';
+import { getEventsData } from '@/lib/eventRepo';
+import { createEventRecord } from '@/lib/events/write';
 import { requireSpaceMember } from '@/lib/eventAuth';
 import { handleApiError } from '@/lib/api/route';
-import prisma from '@/lib/prisma';
-import type { NBEvent } from '@/lib/types';
 
 /**
  * POST /api/events - Create a new event (any space member; creator becomes a host)
@@ -32,74 +30,10 @@ export async function POST(request: NextRequest) {
     // Must be a member (or admin) of the target space.
     const auth = await requireSpaceMember(input.spaceId);
     if (auth instanceof Response) return auth;
-    const session = auth;
 
-    // Honor a client-supplied draft id (stable across autosaves); else derive one.
-    const eventId = (input.id ?? generateEventId(input.title, input.startAt)) as `event:${string}`;
-    const slug = eventId.slice('event:'.length); // unique, reversible public URL segment
-
-    // Generate form slug if a form schema is present
-    const formSlug = input.form?.schema ? slugify(input.title) : '';
-
-    // The creator is always a host so they can manage the event afterwards.
-    const hosts = Array.from(
-      new Set([...(input.hosts || []), ...(session.personId ? [session.personId] : [])]),
-    );
-
-    const now = new Date().toISOString();
-    const event: NBEvent = {
-      id: eventId,
-      spaceId: input.spaceId,
-      title: input.title,
-      description: input.description,
-      startAt: input.startAt,
-      endAt: input.endAt,
-      timezone: input.timezone,
-      location: input.location,
-      hosts,
-      organizerEmail: input.organizerEmail,
-      capacity: input.capacity,
-      visibility: input.visibility || 'space',
-      coverImageUrl: input.coverImageUrl,
-      theme: input.theme,
-      status: input.status ?? 'published',
-      slug,
-      waitlistEnabled: input.waitlistEnabled ?? input.capacity != null,
-      guestListVisible: input.guestListVisible ?? true,
-      allowPlusOnes: input.allowPlusOnes ?? 0,
-      allowedResponses: input.allowedResponses ?? ['going', 'maybe', 'declined'],
-      form: {
-        enabled: input.form?.enabled ?? true,
-        slug: formSlug,
-        schema: input.form?.schema || [],
-        domainAllowlist: input.form?.domainAllowlist,
-        requireApproval: input.form?.requireApproval,
-      },
-      analytics: { views: 0, rsvpCount: 0, checkinCount: 0, createdAt: now, updatedAt: now },
-      metadata: input.metadata,
-    };
-
-    await upsertEvent(input.spaceId, event);
-
-    // Connect each host that exists in this space to the event (idempotent upsert).
-    const hostNodes = await prisma.node.findMany({
-      where: { id: { in: event.hosts }, spaceId: input.spaceId },
-      select: { id: true },
-    });
-    await Promise.all(
-      hostNodes.map((host) =>
-        upsertLink({
-          spaceId: input.spaceId,
-          sourceId: host.id,
-          targetId: eventId,
-          relationship: 'hosting',
-          origin: 'event_hosting',
-          originRef: eventId,
-          since: event.analytics.createdAt,
-          metadata: { role: 'host' },
-        }),
-      ),
-    );
+    // Building the record, its hosts and its links is lib/events/write.ts — the
+    // same call the MCP create_event tool makes, so the two doors agree.
+    const event = await createEventRecord(input, { personId: auth.personId });
 
     return NextResponse.json(event, { status: 201 });
   } catch (error) {

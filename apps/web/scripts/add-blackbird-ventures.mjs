@@ -43,6 +43,12 @@ const COMM_DESC =
 
 const NODE_TYPES = [
   { icon: '🏘️', name: 'Space', color: '#78d870', shape: 'square' },
+  // A portfolio company is a RECORD inside Blackbird, not a tenant of its own —
+  // Blackbird's sub-spaces are its teams (prisma/seed.ts). `company` folds onto
+  // `space` in TYPE_SYNONYMS so the entity machinery is unchanged (the note
+  // still lives at communities/<slug>.md); declaring the type here is what
+  // makes this spelling win in findNodeTypeConfig and paints it its own colour.
+  { icon: '🏢', name: 'Company', color: '#0891b2', shape: 'square' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 
@@ -66,7 +72,7 @@ const SPACE_ALIASES = [
   { id: 'al_seed_investor', name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
   { id: 'al_seed_employee', name: 'Employee', color: '#db2777', nodeType: 'Person' },
   { id: 'al_seed_lp', name: 'LP', color: '#d97706', nodeType: 'Person' },
-  { id: 'al_seed_portfolio-company', name: 'Portfolio Company', color: '#0891b2', nodeType: 'Space' },
+  { id: 'al_seed_portfolio-company', name: 'Portfolio Company', color: '#0891b2', nodeType: 'Company' },
   { id: 'al_seed_fund', name: 'Fund', color: '#0f766e', nodeType: 'Space' },
 ];
 
@@ -152,7 +158,7 @@ for (const c of RAW) {
     while (orgSlugSeen.has(slug)) { slug = base + '-' + suf + '-' + n; n++; }
   }
   orgSlugSeen.add(slug);
-  const id = 'space:' + slug;
+  const id = 'company:' + slug;
   if (c.foundedYear) foundedYearByOrg.set(id, String(c.foundedYear));
 
   const snappedSector = snapSector(c);
@@ -187,7 +193,7 @@ for (const o of orgs) {
     let base = slugify(f.name) || ('founder-' + personByKey.size);
     let slug = base;
     if (personSlugSeen.has(slug) && personSlugSeen.get(slug) !== key) {
-      const suf = o.id.replace(/^space:/, '');
+      const suf = o.id.replace(/^company:/, '');
       slug = base + '-' + suf;
       let n = 2;
       while (personSlugSeen.has(slug) && personSlugSeen.get(slug) !== key) { slug = base + '-' + suf + '-' + n; n++; }
@@ -277,7 +283,9 @@ try {
   // dev users' own person nodes and are left alone — they have Person rows
   // pointing at them, so deleting them would strand a profile.
   const cleared = await client.query(
-    `DELETE FROM nodes WHERE space_id = $1 AND COALESCE(metadata->>'anchor', 'false') <> 'true'`,
+    `DELETE FROM nodes WHERE space_id = $1
+       AND COALESCE(metadata->>'anchor', 'false') <> 'true'
+       AND metadata->>'spaceRef' IS NULL`,
     [COMM],
   );
   console.log(`\n--- Cleared ${cleared.rowCount} existing node(s) for a clean rebuild ---`);
@@ -310,8 +318,8 @@ try {
     };
     await client.query(
       `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, image_url, metadata, space_id, alias, created_at, updated_at)
-       VALUES ($1, 'space', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
-       ON CONFLICT (id) DO UPDATE SET type = 'space', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
+       VALUES ($1, 'company', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
+       ON CONFLICT (id) DO UPDATE SET type = 'company', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
          location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, image_url = EXCLUDED.image_url,
          metadata = EXCLUDED.metadata, space_id = EXCLUDED.space_id, alias = EXCLUDED.alias, updated_at = NOW()`,
       [o.id, c.name, c.subtitle ?? null, c.hqLocation ?? null, c.website ?? null, tags, null, JSON.stringify(metadata), COMM],
@@ -361,7 +369,7 @@ try {
   console.log('\n--- Company status breakdown ---');
   console.table((await client.query(
     `SELECT metadata->>'status' AS status, COUNT(*)::int AS count FROM nodes
-     WHERE space_id = $1 AND type = 'space' GROUP BY 1 ORDER BY 1`, [COMM],
+     WHERE space_id = $1 AND type = 'company' GROUP BY 1 ORDER BY 1`, [COMM],
   )).rows);
 
   console.log('\n--- Link breakdown ---');

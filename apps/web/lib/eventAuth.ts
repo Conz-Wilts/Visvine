@@ -37,6 +37,26 @@ export async function requireSpaceMember(
   return session;
 }
 
+/**
+ * Whether this identity may manage `event`: a space admin, or one of its hosts.
+ *
+ * Split out from `requireEventManager` because the MCP tools hold an identity
+ * rather than a cookie session, and the one rule that decides who can edit an
+ * event must not be written twice.
+ */
+export async function isEventManager(
+  identity: Pick<SessionPayload, 'userId' | 'email' | 'personId'>,
+  spaceId: string,
+  event: NBEvent | null,
+): Promise<boolean> {
+  if (await isAdmin(identity.userId, spaceId, identity.email)) return true;
+  const hosts = event?.hosts ?? [];
+  return !!identity.personId && hosts.includes(identity.personId);
+}
+
+/** The message a failed manager check gives, in both transports. */
+export const EVENT_MANAGER_DENIAL = 'Only the event hosts or a space admin can manage this event';
+
 /** Session + (space admin OR a host of `event`). */
 export async function requireEventManager(
   spaceId: string,
@@ -44,9 +64,6 @@ export async function requireEventManager(
 ): Promise<SessionPayload | Response> {
   const session = await getSession();
   if (!session) return deny(401, 'Unauthorized');
-  if (await isAdmin(session.userId, spaceId, session.email)) return session;
-
-  const hosts = event?.hosts ?? [];
-  if (session.personId && hosts.includes(session.personId)) return session;
-  return deny(403, 'Only the event hosts or a space admin can manage this event');
+  if (await isEventManager(session, spaceId, event)) return session;
+  return deny(403, EVENT_MANAGER_DENIAL);
 }

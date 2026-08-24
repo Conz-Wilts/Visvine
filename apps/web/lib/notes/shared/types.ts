@@ -50,6 +50,15 @@ export interface TreeNode {
   path: string // context-relative POSIX path
   kind: 'folder' | 'note'
   title?: string // display title for notes
+  // A folder that is a sub-space's record — its index declares `space: <id>`.
+  // The tree route federates that space's own tree in under this folder, so the
+  // parent shows what the child actually holds (docs/sub-spaces.md).
+  space?: string
+  // Set on every node grafted in from another space: where the node really
+  // lives. Its `path` above is rebased under the record folder so it is unique
+  // in THIS tree; `foreign.path` is the path in `foreign.spaceId`. A foreign
+  // node is read-only here — opening one switches space.
+  foreign?: { spaceId: string; path: string }
   children?: TreeNode[]
 }
 

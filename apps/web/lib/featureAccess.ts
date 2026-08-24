@@ -10,13 +10,18 @@ import type { SpaceFeatureConfig } from '@/lib/types';
  * Feature keys that are always on and can never be persisted off. Must stay in
  * sync with the `core: true` entries in features/shared/lib/features.tsx#FEATURES.
  *
+ * `connectors` is core because it has no rail row to switch off: it is a
+ * section of the Space Console, reachable only by an admin (see
+ * ADMIN_ONLY_FEATURE_KEYS), and a space that never connects anything simply
+ * has an empty list.
+ *
  * `tools` is core because the marketplace needs no switch: what a space runs
  * is already decided by two explicit human acts — a Visvine reviewer approving
  * a version, and a space admin installing it (members can only ASK — see the
  * install-request flow in app/api/communities/[spaceId]/tools/requests). A
  * third toggle on top of that pipeline gated nothing anyone needed gated.
  */
-export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events', 'tools'];
+export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events', 'connectors', 'tools'];
 
 /**
  * Every key in the registry, in its default (registry) order. Must stay in sync
@@ -87,7 +92,9 @@ function isPersistableFeatureKey(key: unknown): key is string {
  * in unconditionally and the console renders their switch locked on.
  *
  * Connectors is the only one today: the list route 403s every non-admin, and
- * writing to `connectors/` is admin-gated in contextService.writeDenial.
+ * writing to `connectors/` is admin-gated in contextService.writeDenial. It is
+ * also nav-hidden — the surface is a console section, not a rail row — so the
+ * switch it would have had is gone either way.
  * Agents deliberately is NOT here: any member may author an agent brief; only
  * activation (`agents/live/`) is admin-gated. A space may still restrict the
  * tool to admins with the ordinary per-space switch. Tools is the same story —
@@ -101,12 +108,14 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
  *   the Directory page, so it has no rail item and is not a toggleable tool.
  * - `events` is always on (core) and reached from the calendar button in the top
  *   navbar, so it has no rail item either.
+ * - `connectors` is a section of the Space Console (`/admin?section=connectors`),
+ *   admins only by nature, so it has neither a rail row nor a toggle.
  * - `tools` is reached from the marketplace icon in the top navbar, and each
  *   INSTALLED Tool gets its own rail row keyed `tool:<slug>` — so the tool
  *   vocabulary itself never wants a "Tools" row. Those per-install keys are not
  *   nav-hidden: they are the rail rows.
  */
-export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['notes', 'events', 'tools'];
+export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['notes', 'events', 'connectors', 'tools'];
 
 /**
  * Is `key` enabled for a space? Core features are always enabled; any other
@@ -126,8 +135,9 @@ export function isFeatureEnabled(config: SpaceFeatureConfig | null | undefined, 
  * drifts — 'section' vs 'Section'), valued by the feature slug that owns them.
  *
  * Person and Space (the org type) belong to the always-on
- * directory, Event to the always-on navbar Events surface, and Tool to the
- * always-on marketplace — none of them appears here, so they're never hidden.
+ * directory, Event to the always-on navbar Events surface, Connector to the
+ * always-on console section, and Tool to the always-on marketplace — none of
+ * them appears here, so they're never hidden.
  * In particular 'space' must NOT be added: it would hide every org record
  * whenever the Channels tool is off.
  */
@@ -135,7 +145,6 @@ const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   resource: 'resources',
   section: 'channels',
   channel: 'channels',
-  connector: 'connectors',
   agent: 'agents',
 };
 
@@ -174,6 +183,7 @@ const NODE_TYPE_TOOL_KEYS: Record<string, string> = {
   space: 'directory',
   index: 'notes',
   event: 'events',
+  connector: 'connectors',
 };
 
 /** The tool a built-in node type comes from, or null if no tool owns it. */

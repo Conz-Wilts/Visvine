@@ -553,7 +553,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       spec: {
         name: 'create_node',
         description:
-          'Add a directory entity — a person, space (organisation), resource or event — with its context note. Refuses duplicates (the error names the existing node). Search first.',
+          'Add a directory entity — a person, space (organisation), resource or event — with its context note. A "space" creates a real space inside this one (its record is the card), so search first. Refuses duplicates (the error names the existing node).',
         parameters: {
           type: 'object',
           properties: {

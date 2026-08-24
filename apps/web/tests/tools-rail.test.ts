@@ -97,8 +97,9 @@ test('rows keep the order the space DTO gave them, and a degraded install says s
 test('with no installs the rail is exactly the built-in rows', () => {
   assert.deepEqual(nav(null, false).rail, BUILT_IN_RAIL)
   assert.deepEqual(nav(null, false).more, [])
-  // `connectors` is admins-only by nature, so it is a rail row for an admin only.
-  assert.equal(nav(null, true).rail.includes('connectors'), true)
+  // `connectors` is nav-hidden — a console section, not a rail row — so it is
+  // absent even for an admin.
+  assert.equal(nav(null, true).rail.includes('connectors'), false)
 })
 
 test('an unplaced tool falls in after the built-in rows, not in front of them', () => {

@@ -1,26 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
-import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
-import { slugify } from '@/lib/eventUtils';
 import { handleApiError } from '@/lib/api/route';
-import { ADMIN_ALIAS_ID, ADMIN_ALIAS_NAME } from '@/lib/types/context';
-import { defaultFeatureConfig } from '@/lib/featureAccess';
-import { markAccessSeeded } from '@/lib/notes/access';
-import { findPublicNameConflict, publicNameTakenMessage } from '@/lib/spaces/publicName';
-import { ensureMemberNode } from '@/lib/spaces/memberNode';
-import { isReservedSpaceId } from '@/lib/spaces/globalSpace';
-import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
-import { logger } from '@/lib/logger';
+import { provisionSpace } from '@/lib/spaces/provision';
+import { isSpaceVisibility } from '@/lib/spaces/hierarchy';
+import { resolveContext, principalOf } from '@/lib/notes/resolve';
+import { writeDenial } from '@/lib/notes/contextService';
+import { childSpaceNodeId, entityNotePath } from '@/lib/notes/entities';
+import { slugify } from '@/lib/eventUtils';
+import { recordChildSpace } from '@/lib/spaces/childRecord';
 
 /**
  * POST /api/communities — user-facing space creation.
  *
  * Any signed-in user may create a brand-new top-level space and becomes its
- * admin. (This is distinct from POST /api/data/communities, the super-admin-only
- * bulk-create path that trusts a client-supplied id.) The server derives the id
- * from the name and guarantees uniqueness, so a caller can't collide with or
- * hijack an existing space.
+ * admin. With `parentId` the space is created INSIDE that one (docs/sub-spaces.md):
+ * the caller must be able to write the parent's `communities/` folder — the
+ * same standing it takes to record an organisation there — and the new space
+ * starts `inherit`, visible to the parent's members. (POST /api/data/communities
+ * is the super-admin-only bulk path that trusts a client-supplied id.)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -31,112 +28,60 @@ export async function POST(request: NextRequest) {
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     const description = typeof body.description === 'string' ? body.description.trim() : '';
     const location = typeof body.location === 'string' ? body.location.trim() : '';
-    // Private unless the caller explicitly opts into public — a fresh space
+    const parentId = typeof body.parentId === 'string' && body.parentId ? body.parentId : null;
+    // Private unless the caller explicitly says otherwise — a fresh space
     // shouldn't be discoverable before its creator has put anything in it.
-    const visibility = body.visibility === 'public' ? 'public' : 'private';
+    // A child left unsaid inherits (provisionSpace picks the default).
+    const visibility = isSpaceVisibility(body.visibility) ? body.visibility : undefined;
 
     if (!name) {
       return NextResponse.json({ error: 'Space name is required' }, { status: 400 });
     }
 
-    // Only public names have to be unique — the default private create can be
-    // called anything (lib/spaces/publicName.ts).
-    if (visibility === 'public') {
-      const clash = await findPublicNameConflict(name);
-      if (clash) {
-        return NextResponse.json(
-          { error: publicNameTakenMessage(clash.name), code: 'name_taken' },
-          { status: 409 }
-        );
-      }
+    if (parentId) {
+      const context = await resolveContext(session, parentId);
+      if (context instanceof Response) return context;
+      // Gate on the path the record will really take: a sub-space's note is a
+      // folder at the ROOT of the parent's context, not a note in communities/
+      // (lib/notes/entities.ts). createEntity re-checks it against the id that
+      // wins; this is the early refusal, before a tenant is provisioned.
+      const recordPath =
+        entityNotePath({ id: childSpaceNodeId(slugify(name)), type: 'space' }) ?? '';
+      const denied = writeDenial(await principalOf(context), context, recordPath);
+      if (denied) return NextResponse.json({ error: denied }, { status: 403 });
     }
 
-    // Derive a unique id from the name. slugify never yields "me:"-prefixed ids,
-    // so this can't collide with a personal-space id.
-    const base = slugify(name) || 'space';
-    let id = isReservedSpaceId(base) ? `${base}-2` : base;
-    for (let n = 2; await prisma.space.findUnique({ where: { id }, select: { id: true } }); n++) {
-      id = `${base}-${n}`;
-    }
-
-    const created = await prisma.$transaction(async (tx) => {
-      const space = await tx.space.create({
-        data: {
-          id,
-          name,
-          description,
-          location: location || null,
-          visibility,
-          inviteToken: randomUUID(),
-          // Most toggleable tools start off, opted in from the console — except
-          // the DEFAULT_ON set (Tools: the marketplace and community-built
-          // Tools are on from day one). Core keys — directory, notes, events —
-          // are always on and never persisted here.
-          featureConfig: defaultFeatureConfig() as object,
-        },
-      });
-      await tx.spaceMember.create({
-        data: { userId: session.userId, spaceId: id, status: 'active' },
-      });
-      // Every space's Person aliases start with the built-in Admin one
-      // (the aliases column default). The creator holds it — otherwise
-      // nobody could ever manage the space (lib/auth.ts#isAdmin).
-      await tx.userAlias.create({
-        data: {
-          spaceId: id,
-          userId: session.userId,
-          aliasId: ADMIN_ALIAS_ID,
-          addedBy: session.userId,
-        },
-      });
-      return space;
+    const result = await provisionSpace({
+      name,
+      description,
+      location,
+      visibility,
+      parentId,
+      creator: { id: session.userId, name: session.name, email: session.email },
     });
-
-    // Access here is decided by aliases from the start, so there is nothing to
-    // grandfather — without this, the first context touch would hand a root grant
-    // to every member and swamp the alias grants (lib/notes/access.ts).
-    await markAccessSeeded(id);
-
-    // A new space deliberately gets NO node for itself: it would put a card for
-    // the space in its own directory and a `communities/<slug>.md` page in its
-    // own context, neither of which anyone asked for — the space IS the
-    // container, not an entity inside it. Structural code already copes with the
-    // missing `community:<id>` node: syncEntityNode skips a parent edge whose
-    // node doesn't exist, and reparentEntityNode does the same. A space created
-    // by hand from the Directory (lib/directory/createEntity.ts) still gets one.
-    //
-    // So the creator's person node is the ONLY node a fresh space starts with —
-    // the first member belongs in the directory they just made. It carries the
-    // Admin alias, matching the UserAlias row written above, so the card reads
-    // "Admin" rather than a bare "Person"; and it is connected to their account
-    // through the identity bridge (ensureMemberNode), which is what makes it
-    // their profile rather than a loose card with their name on it. It stays
-    // node-only: the Context tab stubs a missing profile note locally and the
-    // first real save creates it. Best-effort — a member without a node is
-    // recoverable (the backfill script fixes it); a failed create is not.
-    const actor = { id: session.userId, name: session.name, email: session.email };
-    await ensureMemberNode(id, session.userId, actor, ADMIN_ALIAS_NAME);
-
-    // Seed the context's root index — the space's home page, which the
-    // Directory's Context tab routes to. Best-effort for the same reason as
-    // the context node above.
-    try {
-      await ensureRootIndex({ spaceId: id, ownerKey: SHARED_OWNER_KEY }, name, actor);
-    } catch (err) {
-      logger.warn('spaces.root_index_failed', { spaceId: id, err });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error, ...(result.code ? { code: result.code } : {}) }, { status: result.status });
     }
 
+    // Inside a parent, the new space is also a record of the parent's: the
+    // `space` node + `communities/<slug>.md` every space node must have.
+    if (parentId) {
+      await recordChildSpace(parentId, result.space.id, name, session);
+    }
+
+    const s = result.space;
     return NextResponse.json(
       {
         space: {
-          id: created.id,
-          name: created.name,
-          description: created.description ?? '',
-          location: created.location ?? undefined,
-          tags: created.tags,
+          id: s.id,
+          name: s.name,
+          description: s.description ?? '',
+          location: s.location ?? undefined,
+          tags: s.tags,
           memberCount: 1,
-          createdAt: created.createdAt.toISOString(),
-          visibility: created.visibility,
+          createdAt: s.createdAt.toISOString(),
+          visibility: s.visibility,
+          parentId: s.parentId,
         },
       },
       { status: 201 }

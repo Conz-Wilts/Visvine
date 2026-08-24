@@ -243,7 +243,7 @@ const PERSON_TABS: PaneTabItem[] = [
 
 // Every person node has a Profile tab, connected to a member or not. A node
 // with no member behind it has no profile to show, so the tab becomes the place
-// you connect one (ProfileConnectPrompt, inside ProfilePageContent) — the link
+// you connect one (ProfileConnectBar, inside ProfilePageContent) — the link
 // is the most consequential thing about a person context, so it gets the tab
 // rather than a row under the note header.
 //
@@ -977,7 +977,10 @@ function NodeRoute() {
   if (nodeId.startsWith('event:')) {
     return <EventRoute nodeId={nodeId} />;
   }
-  if (nodeId.startsWith('space:')) {
+  // `subspace:` is a space nested inside this one (lib/notes/entities.ts); it is
+  // a Space page like any other — SpaceRoute redirects it to the space it
+  // stands for, which is exactly what its `spaceRef` guarantees.
+  if (nodeId.startsWith('space:') || nodeId.startsWith('subspace:')) {
     return <SpaceRoute nodeId={nodeId} />;
   }
   if (nodeId.startsWith('person:')) {

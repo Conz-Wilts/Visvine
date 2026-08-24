@@ -882,6 +882,17 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         )}
       </div>
 
+      {/* A space record IS a space (docs/sub-spaces.md): linked to one picked
+          above, or made inside this one on save. Said once, here, so the
+          save is no surprise. */}
+      {type === 'space' && currentSpace && (
+        <p className="mb-3 text-xs text-text-muted">
+          {pickedSpace && pickedSpace.name.trim() === title.trim()
+            ? `Links to the space “${pickedSpace.name}”.`
+            : `Creates a space inside ${currentSpace.name}, visible to its members.`}
+        </p>
+      )}
+
       {/* Type and Tags ONLY. `type={null}` withholds the per-type field rows
           (email, location, photo…): those describe a thing that exists, and
           they are right there on the entity's own page the moment it does.

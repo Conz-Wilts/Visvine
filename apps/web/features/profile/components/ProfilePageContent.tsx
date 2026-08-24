@@ -15,7 +15,7 @@ import { getNodeTypeConfig, findAlias } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
 import Chip, { chipClass } from '@/components/ui/Chip';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
-import ProfileConnectPrompt from './ProfileConnectPrompt';
+import ProfileConnectBar from './ProfileConnectBar';
 import {
   getExperience, sortExperience,
   formatYearMonth, formatDuration, type ExperienceEntry,
@@ -75,18 +75,18 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
     ));
   }, [nodeId]);
 
-  // The member link. A person node with no member behind it has no profile to
-  // show, so this tab becomes the connect surface instead (ProfileConnectPrompt).
-  // Connecting has to move two caches on its way out: the cached node carries
+  // The member link. A person node with no member behind it still shows its
+  // profile; the bind action rides above it (ProfileConnectBar).
+  // Changing it moves two caches on its way out: the cached node carries
   // `connected_user_id` (what the route and a later mount read), and the profile
-  // itself flips from a node-synthesized stand-in to the member's real record.
-  const spaceId = currentSpace?.id ?? null;
-  const isPersonalSpace = spaceId?.startsWith(PERSONAL_ID_PREFIX) ?? false;
+  // itself flips between the member's real record and a node-synthesized
+  // stand-in.
+  const isPersonalSpace = currentSpace?.id?.startsWith(PERSONAL_ID_PREFIX) ?? false;
   const onConnectionChange = useCallback((userId: string | null) => {
     patchCachedNodeProfile(nodeId, { connected_user_id: userId });
     void reload();
   }, [nodeId, reload]);
-  const memberConnection = useMemberConnection({ nodeId, spaceId, onChange: onConnectionChange });
+  const memberConnection = useMemberConnection({ nodeId, onChange: onConnectionChange });
 
   // Ownership follows the member connection (profile.userId resolves through
   // Node.identityId → Identity.userId), not node-id equality — a member's node
@@ -146,28 +146,13 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
   // Live connection state wins once it resolves; until then the cached node's
   // `connected_user_id` stands in, so a connected profile doesn't flash the
-  // prompt on arrival. When the connection endpoint could not answer at all —
-  // no Node row behind this id, a space it won't read for us, a network
+  // connect bar on arrival. When the connection endpoint could not answer at
+  // all — no Node row behind this id, a space it won't read for us, a network
   // blip — fall back to the profile's own `connected`, which resolves through
-  // the Person row as well. Only a definite "no member" shows the prompt: the
-  // prompt is a dead end (its own PUT hits the same endpoint), so guessing it
-  // from a failed request locks the owner out of their profile.
+  // the Person row as well.
   const connected = memberConnection.connection !== undefined
     ? (memberConnection.unavailable ? !!profile.connected : !!memberConnection.connection)
     : !!(nodeData?.node?.connected_user_id ?? profile.connected);
-
-  if (!connected) {
-    return (
-      <ProfileConnectPrompt
-        nodeId={nodeId}
-        name={nodeData?.node?.name ?? profile.name}
-        theme={theme}
-        readOnly={isPersonalSpace}
-        connection={memberConnection}
-        onBindingChange={() => void reload()}
-      />
-    );
-  }
 
   // Prefer the profile-visible space list; fall back to the shared-count
   // for context-only people with no linked user.
@@ -189,6 +174,17 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
   return (
     <div className="profile-content-fade flex flex-col gap-5">
+      {/* ══ CONNECT BAR — the profile stands in for a person nobody has claimed ══ */}
+      {!connected && (
+        <ProfileConnectBar
+          nodeId={nodeId}
+          name={nodeData?.node?.name ?? profile.name}
+          theme={theme}
+          readOnly={isPersonalSpace}
+          onBindingChange={() => void reload()}
+        />
+      )}
+
       {/* ══ IDENTITY HERO — avatar beside the identity block, both on the page ══ */}
       <div className="flex flex-col sm:flex-row gap-5 items-stretch">
         {/* avatar card */}

@@ -22,6 +22,7 @@ import {
   allowPrivateHosts,
   ConnectorError,
   interpolateSecrets,
+  isConnectorEnabled,
   parseConnectorPerimeter,
   perimeterSecretRefs,
   type ConnectorAction,
@@ -54,6 +55,8 @@ export interface ConnectorSummary {
   hosts: string[]
   /** Human-readable method+path rules; empty = host-gated only. */
   allow: string[]
+  /** `enabled: false` in the note — switched off from the console; every run is refused. */
+  enabled: boolean
   /** Parse failure, so admins (and agents) can see a broken connector. */
   invalid: string | null
   /** Caveats worth surfacing (mostly legacy notes the migration hasn't rewritten). */
@@ -106,6 +109,7 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
     path,
     alias: typeof fm.alias === 'string' ? fm.alias : null,
     description: typeof fm.description === 'string' ? fm.description : null,
+    enabled: isConnectorEnabled(fm),
     docs,
   }
   if (connectorKind(fm) === 'model') {
@@ -253,6 +257,14 @@ export async function loadConnector(
     throw new ConnectorError(
       'config',
       `${name} is a model connector — it names the provider agents run on and is not runnable. Set an agent's \`model:\` to use it.`,
+    )
+  }
+  // Off is a refusal, not a not-found: the note is there and the caller named
+  // it correctly, so say so rather than letting them hunt for a typo.
+  if (!isConnectorEnabled(fm)) {
+    throw new ConnectorError(
+      'config',
+      `${name} is turned off — an admin can switch it back on in the Space Console under Connectors.`,
     )
   }
   const parsed = parseConnectorPerimeter(fm)

@@ -8,6 +8,8 @@ import { removeMemberAccess } from '@/lib/notes/access';
 import { aliasesForType, findAliasByRef, type SpaceAlias } from '@/lib/types';
 import { ensureMemberNode } from '@/lib/spaces/memberNode';
 import { isGlobalSpace } from '@/lib/spaces/globalSpace';
+import { joinChildDenial } from '@/lib/spaces/hierarchy';
+import { isActiveMemberOf, removeFromDescendants } from '@/lib/spaces/tree';
 
 /**
  * POST: Current user joins a space (self-service)
@@ -26,9 +28,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
   try {
     const space = await prisma.space.findUnique({
       where: { id: spaceId },
-      select: { id: true, aliases: true, personalOwnerId: true, visibility: true },
+      select: {
+        id: true, aliases: true, personalOwnerId: true, visibility: true,
+        parent: { select: { id: true, name: true, visibility: true } },
+      },
     });
     if (!space) return NextResponse.json({ error: 'Space not found' }, { status: 404 });
+
+    // A member of a child is a member of its parent (docs/sub-spaces.md). A
+    // public parent is joined on the way in; a private one has to have been.
+    if (space.parent) {
+      const parentMember = await isActiveMemberOf(session.userId, space.parent.id);
+      const denied = joinChildDenial(space.parent, parentMember);
+      if (denied) return NextResponse.json({ error: denied }, { status: 403 });
+      if (!parentMember) {
+        await prisma.spaceMember.upsert({
+          where: { userId_spaceId: { userId: session.userId, spaceId: space.parent.id } },
+          create: { userId: session.userId, spaceId: space.parent.id },
+          update: {},
+        });
+        await ensureMemberNode(space.parent.id, session.userId, {
+          id: session.userId, name: session.name, email: session.email ?? null,
+        });
+      }
+    }
 
     // Personal spaces (me:<userId>) are private single-member spaces —
     // nobody but the owner may join one.
@@ -42,6 +65,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
 
     // Private spaces are not self-joinable — entry is via an invite link
     // (which creates a pending request) or an admin adding the user directly.
+    // An inheriting child is already open to the parent's members, who may
+    // step in and become members proper.
     if (space.visibility === 'private') {
       const existing = await prisma.spaceMember.findUnique({
         where: { userId_spaceId: { userId: session.userId, spaceId } },
@@ -111,8 +136,11 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       where: { userId: session.userId, spaceId },
     });
 
-    // Context access leaves with them: direct grants + team memberships here.
+    // Context access leaves with them: direct grants + team memberships here —
+    // and membership of every space inside this one, which was only ever held
+    // through this one (docs/sub-spaces.md).
     await removeMemberAccess(spaceId, session.userId);
+    await removeFromDescendants(spaceId, session.userId);
 
     // Note: intentionally leaving the user's node in the space context when they leave.
 

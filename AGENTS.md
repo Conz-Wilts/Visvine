@@ -65,6 +65,59 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 - Tests: `node --import tsx --test tests/*.test.ts`. Prefer testing the pure
   layer (`lib/notes/shared/*`, `lib/connectors/perimeter.ts`) over routes.
 
+## Spaces nest
+
+`docs/sub-spaces.md` is the model. The parts that constrain code:
+
+- A child is a full `Space` row with `parentId` — its own context, members,
+  aliases, tool rail. Nothing is keyed by folder. Depth ≤ 3
+  (`lib/spaces/hierarchy.ts`, pure; `lib/spaces/tree.ts`, DB).
+- `visibility` is `public | private | inherit`; `inherit` (children only) means
+  the parent's active members. A root can't inherit; a public child needs a
+  public parent; sibling names are unique (partial index
+  `prisma/sql/sibling-space-name-unique.sql`).
+- **A child's member is a member of its parent.** Every join path enforces it
+  and removal from a parent removes from every descendant
+  (`removeFromDescendants`). Admin of a space is admin of everything below it
+  (`adminSpaceIds` walks ancestors).
+- **Every `space` node carries `metadata.spaceRef` to a real space.** Create →
+  Space links an existing one or provisions a child of the current space
+  (`createEntity`); its note carries `space: <id>`. `db:spaces:records` is the
+  idempotent backfill, `db:notes:verify` asserts it. Creating a space always
+  goes through `lib/spaces/provision.ts`.
+- **A record is not a tenant.** An organisation you only track — a portfolio
+  company, say — is a directory record of its own type (`Company` in the
+  Blackbird seed) whose note still lives in `communities/`; `company` folds onto
+  `space` in `TYPE_SYNONYMS`, so the entity machinery is unchanged while
+  `db:spaces:records` leaves it alone. Reserve `type: space` for the things that
+  really nest: in the seed, Blackbird's three teams.
+- **A sub-space's record is a folder at the ROOT of the parent's context** —
+  `operations/index.md`, beside `deals/` and `data/`, so the tree shows one
+  folder per team. The discriminator is the node id: `subspace:<slug>` is a
+  space nested inside this one, anything else (`space:`, `community:`, `org:`) is
+  a record of the outside world and stays in `communities/`. It is the id and
+  not `metadata` because every surface deriving a path holds `{ id, type }` and
+  many are client components that never load metadata
+  (`lib/notes/entities.ts#isChildSpaceNode`).
+- **That record folder carries the child's OWN tree, federated in.** The child
+  is a separate context, so the folder would otherwise sit empty and read as
+  broken. `GET /api/notes/tree` resolves each folder whose index declares
+  `space: <id>` through the ordinary `resolveContext` for that session — a
+  viewer who can't see the child gets its 403 and the folder stays empty — and
+  grafts its tree under the record (`lib/notes/shared/federation.ts`, pure and
+  tested). Grafted nodes are rebased under the record folder so their paths are
+  unique in THIS tree, and carry `foreign: { spaceId, path }`: they are
+  read-only here (no move, delete, share or drop target, and never a Move
+  destination) and opening one switches space rather than navigating in this
+  one. The child's own `index.md` is dropped — the parent's record note is that
+  folder's home page — and a note the parent wrote under the record folder wins
+  its path.
+- **A new space starts with every toggleable tool off** — `defaultFeatureConfig()`,
+  never the parent's rail. Both create routes, `provisionSpace` and the seed
+  write it; the people in the space opt in from the console.
+- Listings (Discover, `/communities`) show roots; children are reached through
+  the switcher tree.
+
 ## Auth and permissions
 
 - Sessions are 30-day HS256 JWTs (`lib/session.ts`). Web sends cookie
@@ -299,16 +352,36 @@ A connector is a note. Two halves, and the split is the security model:
 notes. The `connectors/` folder is admin-only for writes regardless of grants
 (`contextService.writeDenial`).
 
-**Create → Connector opens the catalog** (`lib/connectors/catalog.ts`,
-`features/connectors/components/ConnectorCatalogModal.tsx`): one searchable list of
-known services (All / Connected / Not connected), each a recipe — fields to fill in, the note that comes out.
-Saving writes the ordinary `connectors/<name>.md` and PUTs each secret field
-to `/api/communities/<space>/secrets`; nothing else changes. Connected rows get
-Manage (edit → the connector page, delete → the note). A custom service is
-still written on the draft surface. Logos live in
-`public/images/connectors/`. `tests/connector-catalog.test.ts` runs every
-recipe through the real parsers, so a new entry that would write an invalid
-note fails there.
+**Connectors is a section of the Space Console**, not a sidebar tool: it is
+admins-only by nature, so `/admin?section=connectors` IS the surface
+(`features/connectors/components/ConnectorsPanel.tsx`). The key is core and
+nav-hidden (`lib/featureAccess.ts`) — there is no rail row and no on/off
+switch. The section is the catalog (`lib/connectors/catalog.ts`): one
+searchable list of known services (All / Connected / Not connected), each a
+recipe — fields to fill in, the note that comes out. Saving writes the ordinary
+`connectors/<name>.md` and PUTs each secret field to
+`/api/communities/<space>/secrets`; nothing else changes. Connected rows get
+Manage — what it reaches, which secrets it names, where the note is, plus
+**Turn off** and **Delete**. The row itself goes to the connector's page: the
+note IS the connector, so that is where it is read and edited. A connector the
+space wrote itself is a row too, under a plug rather than a logo, and is still
+authored on the draft surface.
+
+**Off is `enabled: false` in the frontmatter** (`isConnectorEnabled`), written
+by `PATCH …/connectors/<name>`; turning one back on deletes the key rather than
+writing the default. The note, its secrets and its perimeter are untouched —
+`loadConnector` refuses every run, and a disabled `provider: custom` model
+connector stops being the Space's endpoint (`lib/agents/providers.ts`). It is
+configuration held in reserve, not a thing to delete and rebuild.
+
+A connector's mark is one component on both surfaces
+(`ConnectorLogo` — the list row and the connector's own page header): the
+recipe's logo, resolved by `catalogEntryFor` on the note name and then the
+model provider, and the plug for a connector the space wrote itself. Nothing is
+stamped into the note to make that exact — a miss is a plug, and no behaviour
+hangs off it. Logos live in `public/images/connectors/`. `tests/connector-catalog.test.ts`
+runs every recipe through the real parsers, so a new entry that would write an
+invalid note fails there.
 
 **Model connectors** (`kind: model`, `provider: gemini|openai|anthropic|custom`;
 `lib/connectors/model.ts`) are the one non-perimeter kind: they represent the

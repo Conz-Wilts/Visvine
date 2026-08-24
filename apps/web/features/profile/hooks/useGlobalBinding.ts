@@ -2,7 +2,7 @@
 
 // A person node's binding to its Visvine global record — read, bind (follow
 // or fork), detach, unbind — over /api/nodes/[nodeId]/global. State and
-// permissions only; ProfileConnectPrompt renders it.
+// permissions only; ProfileConnectBar renders it.
 
 import { useCallback, useEffect, useState } from 'react'
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson'

@@ -65,6 +65,13 @@ const nextConfig: NextConfig = {
         destination: "/context",
         permanent: false,
       },
+      // Connectors moved into the Space Console. Notifications written before
+      // the move still carry the old path (lib/connectors/connections.ts).
+      {
+        source: "/connectors",
+        destination: "/admin?section=connectors",
+        permanent: false,
+      },
     ];
   },
   images: {

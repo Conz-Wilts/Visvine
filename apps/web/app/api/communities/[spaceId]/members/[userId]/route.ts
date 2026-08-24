@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { removeMemberAccess } from '@/lib/notes/access';
+import { removeFromDescendants } from '@/lib/spaces/tree';
 import { ensureMemberNode } from '@/lib/spaces/memberNode';
 import { assertMembersCanLeave } from '@/lib/notes/aliases';
 
@@ -89,8 +90,10 @@ export async function DELETE(
     where: { userId_spaceId: { userId, spaceId } },
   });
 
-  // Context access leaves with them: direct grants + the aliases they held here.
+  // Context access leaves with them: direct grants + the aliases they held here,
+  // and membership of every space inside this one (docs/sub-spaces.md).
   await removeMemberAccess(spaceId, userId);
+  await removeFromDescendants(spaceId, userId);
 
   return NextResponse.json({ success: true });
 }

@@ -10,6 +10,7 @@ import { assertPubliclyRoutable } from '@/lib/net/ssrf'
 import { classifyModelStatus, type ChatConfig } from '@/lib/notes/ai'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { connectorKind, parseModelBaseUrl, parseModelConnector } from '@/lib/connectors/model'
+import { isConnectorEnabled } from '@/lib/connectors/config'
 import { parseModelRef, type ModelRef, type ProviderEntry } from './registry'
 
 export * from './registry'
@@ -40,6 +41,10 @@ async function findCustomModelEndpoint(spaceId: string): Promise<CustomEndpointR
   for (const row of rows) {
     const fm = parseFrontmatter(row.content)
     if (fm.type !== 'connector' || connectorKind(fm) !== 'model') continue
+    // A connector switched off in the console is not an endpoint: skipping it
+    // here is what makes "turn off" mean the same thing for a model connector
+    // as loadConnector makes it mean for a runnable one.
+    if (!isConnectorEnabled(fm)) continue
     if (typeof fm.provider !== 'string' || fm.provider.trim().toLowerCase() !== 'custom') continue
     const parsed = parseModelConnector(fm)
     if (!parsed.ok) return { ok: false, message: `The custom model connector ${row.path} is invalid: ${parsed.error}` }

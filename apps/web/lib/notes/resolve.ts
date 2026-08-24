@@ -10,7 +10,7 @@
 
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { isAdmin } from '@/lib/auth'
+import { isAdmin, canReadSpace } from '@/lib/auth'
 import type { SessionPayload } from '@/lib/session'
 import { provisionPersonalSpace, personalSpaceId } from '@/lib/spaces/personalSpace'
 import { SHARED_OWNER_KEY, type Context, type Actor } from './store'
@@ -66,7 +66,9 @@ export async function resolveContext(
   const admin =
     space.personalOwnerId === session.userId ||
     (await isAdmin(session.userId, spaceId, session.email))
-  const member = admin || (await isMember(session.userId, spaceId))
+  // Membership, or — for a space that inherits its visibility — membership of
+  // the parent; the same door the switcher and the API gates use.
+  const member = admin || (await isMember(session.userId, spaceId)) || (await canReadSpace(session.userId, spaceId, session.email))
   if (!member) {
     return NextResponse.json({ error: 'Not a member of this space' }, { status: 403 })
   }

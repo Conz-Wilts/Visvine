@@ -65,7 +65,11 @@ export interface Space {
   linkTypes?: LinkTypeConfig[]; // Customizable relationship (edge) types for this space
   designConfig?: SpaceDesignConfig;
   featureConfig?: SpaceFeatureConfig; // Which optional surfaces are enabled
-  visibility?: 'public' | 'private'; // 'public' = discoverable & self-joinable; 'private' = invite/admin-add only
+  // 'public' = discoverable & self-joinable; 'private' = invite/admin-add only;
+  // 'inherit' (children only) = open to the parent's members. lib/spaces/hierarchy.ts.
+  visibility?: 'public' | 'private' | 'inherit';
+  // The space this one lives inside, or null for a root space (docs/sub-spaces.md).
+  parentId?: string | null;
   timezone?: string | null; // IANA zone the space's scheduled agents run in (null = UTC)
   // The Tools this space runs, enabled ones only. Rides the space DTO because
   // the sidebar rail, the `/t/<slug>` page and the type-page dispatch all need

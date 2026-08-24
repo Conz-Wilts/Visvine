@@ -16,7 +16,7 @@ import type { ResolvedContext } from '@/lib/notes/resolve'
 import { principalOf } from '@/lib/notes/resolve'
 import { lockedDenial, writeDenial } from '@/lib/notes/contextService'
 import { createNote, readNoteOrNull, type WriteStamp } from '@/lib/notes/store'
-import { entityDraftContent, entityIndexPathOf, entityNotePath } from '@/lib/notes/entities'
+import { childSpaceNodeId, entityDraftContent, entityIndexPathOf, entityNotePath } from '@/lib/notes/entities'
 import { applyFields } from '@/lib/create/typeFields'
 import { attachIdentity } from '@/lib/identity/attachIdentity'
 import { followGlobalSafe } from '@/lib/global/binding'
@@ -26,6 +26,7 @@ import { normalizeImageUrl } from '@/lib/mediaUrl'
 import { logger } from '@/lib/logger'
 import type { NBNode } from '@/lib/types'
 import { findAliasByRef, type SpaceAlias } from '@/lib/types/context'
+import { provisionSpace } from '@/lib/spaces/provision'
 
 /**
  * The types the context layer can create. The node TYPE is what decides
@@ -42,10 +43,10 @@ import { findAliasByRef, type SpaceAlias } from '@/lib/types/context'
  * is a real, valid event that hasn't been scheduled yet (the Events page files
  * those under "Date to be set").
  *
- * A `space` here is a group, organisation or space — recorded as a card in
- * the directory. Recording one never provisions a real space: those are only
- * ever created deliberately, from the switcher. When the name resolves to one
- * that already runs here, `spaceRef` links the card to it.
+ * A `space` here is a group, organisation or space — and it is always a real
+ * one (docs/sub-spaces.md). When the name resolved to a space that already runs
+ * here, `spaceRef` links the card to it; otherwise a space is provisioned
+ * INSIDE the one being written to, and the card is its record.
  */
 export const CREATABLE_TYPES = ['person', 'space', 'resource', 'event'] as const
 export type CreatableType = (typeof CREATABLE_TYPES)[number]
@@ -66,8 +67,9 @@ export interface CreateEntityInput {
   followGlobal?: boolean
   /**
    * For `space` only: the space row this card refers to, set when the user
-   * picked one that already runs here out of the match list. Null for an org
-   * that's only a directory record — nothing is provisioned for those.
+   * picked one that already runs here out of the match list. Null means
+   * "make one": a space is provisioned inside `context.spaceId` and the card
+   * points at it. There is no such thing as a `space` card with no space.
    */
   spaceRef?: string | null
   /** Flat `{ fieldKey: value }`, split into columns + metadata by `applyFields`. */
@@ -176,10 +178,26 @@ export async function createEntity(
       )
     : undefined
 
+  // A `space` card is one of two things, and they live in different places. A
+  // record of an organisation out in the world belongs in `communities/` with
+  // the rest of the directory; a SUB-SPACE — one nested inside this one — is
+  // part of how THIS space is organised, so its note is a folder at the root of
+  // the context and the tree shows one folder per team (lib/notes/entities.ts).
+  // Deciding here, ahead of the path, is what lets the write gate and the
+  // collision check below run against the path the note will really take.
+  const linkedRef = rawType === 'space' ? input.spaceRef?.trim() || null : null
+  const childSpace =
+    rawType === 'space' &&
+    (!linkedRef ||
+      (
+        await prisma.space.findUnique({ where: { id: linkedRef }, select: { parentId: true } })
+      )?.parentId === context.spaceId)
+  const baseId = childSpace ? childSpaceNodeId(slug) : `${rawType}:${slug}`
+
   // The note path depends only on the entity KIND, not on the id suffix we may
   // end up with, so it's known before the insert — which is what lets the write
   // gate and the collision check run first.
-  const basePath = entityNotePath({ id: `${rawType}:${slug}`, type: rawType })
+  const basePath = entityNotePath({ id: baseId, type: rawType })
   if (!basePath) {
     return { ok: false, status: 400, error: `"${rawType}" has no context-note namespace` }
   }
@@ -201,7 +219,7 @@ export async function createEntity(
   // expressible in SQL (entityNotePath is applied in JS over real nodes), and a
   // null just means the caller offers the note rather than the profile.
   // Either form of the note counts — the entity may already have become a folder.
-  const indexPath = entityIndexPathOf({ id: `${rawType}:${slug}`, type: rawType })
+  const indexPath = entityIndexPathOf({ id: baseId, type: rawType })
   if (
     (await readNoteOrNull(context, basePath)) ||
     (indexPath && (await readNoteOrNull(context, indexPath)))
@@ -219,8 +237,29 @@ export async function createEntity(
     }
   }
 
+  // A space node stands for a real space. Linked to one the caller picked, or
+  // — the everyday case, "met with Canva" — a space provisioned inside this
+  // one: no members, managed by this space's admins, visible to its members.
+  // The record is checked above and provisioned here, after the collision
+  // check and before the insert, so a refused create leaves no stray tenant.
+  let spaceRef = linkedRef
+  if (rawType === 'space' && !spaceRef) {
+    const provisioned = await provisionSpace({
+      name,
+      description: columns.subtitle ?? '',
+      location: columns.location ?? null,
+      parentId: context.spaceId,
+      creator: context.actor,
+      joinCreator: false,
+    })
+    if (!provisioned.ok) return { ok: false, status: provisioned.status, error: provisioned.error }
+    spaceRef = provisioned.space.id
+  } else if (spaceRef) {
+    const exists = await prisma.space.findUnique({ where: { id: spaceRef }, select: { id: true } })
+    if (!exists) return { ok: false, status: 400, error: 'That space no longer exists' }
+  }
+
   // ── Race-free id: the uniqueness check IS the insert ──────────────────────
-  const baseId = `${rawType}:${slug}`
   let row: NodeRow | null = null
   for (let attempt = 1; attempt <= MAX_ID_ATTEMPTS; attempt++) {
     const id = attempt === 1 ? baseId : `${baseId}-${attempt}`
@@ -239,7 +278,7 @@ export async function createEntity(
           url: columns.url ?? null,
           imageUrl: columns.image_url ?? null,
           tags,
-          metadata: metadata as Prisma.InputJsonObject,
+          metadata: { ...metadata, ...(spaceRef ? { spaceRef } : {}) } as Prisma.InputJsonObject,
           spaceId: context.spaceId,
         },
         select: NODE_SELECT,
@@ -269,26 +308,23 @@ export async function createEntity(
     await prisma.node.update({ where: { id: row.id }, data: { identityId } })
   }
 
-  // An organisation the user RESOLVED to a space that already runs here
-  // keeps a pointer to it, so the card and the real thing are the same thing.
-  // Nothing is provisioned when it doesn't resolve: recording that Movac exists
-  // is a note in your directory, and real spaces are only ever created
-  // deliberately, from the switcher. An unresolved card is just a card.
-  const spaceRef = rawType === 'space' ? input.spaceRef?.trim() : null
-  if (spaceRef) {
-    row = await prisma.node.update({
-      where: { id: row.id },
-      data: { metadata: { ...metadata, spaceRef } as Prisma.InputJsonObject },
-      select: NODE_SELECT,
-    })
-  }
-
   // The note path follows the id that won, so a suffixed `person:jane-2` gets
   // people/jane-2.md rather than colliding on people/jane.md.
   const notePath = entityNotePath({ id: row.id, type: rawType }) ?? basePath
+  // A sub-space's note IS its folder from the first write, so the pointer every
+  // entity folder carries is recorded now rather than earned by a later
+  // conversion (scripts/verify-notes-rules.ts checks the two agree).
+  if (childSpace) {
+    await prisma.node.update({
+      where: { id: row.id },
+      data: {
+        metadata: { ...((row.metadata as Record<string, unknown> | null) ?? {}), notePath } as Prisma.InputJsonObject,
+      },
+    })
+  }
   const content = entityDraftContent(
     { id: row.id, type: rawType, name, subtitle: columns.subtitle ?? null },
-    { tags, body: input.body ?? '' },
+    { tags, body: input.body ?? '', spaceRef },
   )
 
   let noteError: string | null = null

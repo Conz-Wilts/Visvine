@@ -99,6 +99,8 @@ export async function GET(
 }
 
 interface PatchBody {
+  /** The console's off switch — false writes `enabled: false`, true deletes the key. */
+  enabled?: unknown;
   description?: unknown;
   hosts?: unknown;
   allow?: unknown;
@@ -134,6 +136,16 @@ export async function PATCH(
   if (content === null) return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
 
   const fm = parseFrontmatter(content);
+
+  // Applies to both kinds, and before the model branch returns: turning a
+  // connector off must mean the same thing whether it is runnable or names the
+  // provider agents run on. Absent means on, so `true` deletes the key rather
+  // than writing the default back into the note.
+  if (body.enabled !== undefined) {
+    if (typeof body.enabled !== 'boolean') return bad('Enabled must be true or false');
+    if (body.enabled) delete fm.enabled;
+    else fm.enabled = false;
+  }
 
   if (body.description !== undefined) {
     const description = typeof body.description === 'string' ? body.description.trim() : '';

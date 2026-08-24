@@ -70,10 +70,6 @@ interface CreateModalContextValue {
   defaultType: CreateableType | null;
   open: (type?: CreateableType) => void;
   close: () => void;
-  /** The "Add connector" catalog — its own centered modal, not the docked panel. */
-  catalogOpen: boolean;
-  openCatalog: () => void;
-  closeCatalog: () => void;
 }
 
 const [CreateModalContext, useCreateModal] = createSafeContext<CreateModalContextValue>('CreateModal');
@@ -82,7 +78,6 @@ export { useCreateModal };
 export function CreateModalProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [defaultType, setDefaultType] = useState<CreateableType | null>(null);
-  const [catalogOpen, setCatalogOpen] = useState(false);
 
   const open = (type?: CreateableType) => {
     setDefaultType(type ?? null);
@@ -101,9 +96,6 @@ export function CreateModalProvider({ children }: { children: React.ReactNode })
         defaultType,
         open,
         close,
-        catalogOpen,
-        openCatalog: () => setCatalogOpen(true),
-        closeCatalog: () => setCatalogOpen(false),
       }}
     >
       {children}
@@ -121,17 +113,10 @@ export function CreateModalProvider({ children }: { children: React.ReactNode })
  */
 export function useCreateSurface() {
   const router = useRouter();
-  const { open, openCatalog } = useCreateModal();
+  const { open } = useCreateModal();
 
   return useCallback(
     (type?: CreateableType, opts?: { folder?: string }) => {
-      // A connector starts from the catalog — pick a service, fill in its
-      // key. The draft surface is still where a custom one is written, and the
-      // catalog's last row leads there.
-      if (type === 'connector') {
-        openCatalog();
-        return;
-      }
       // With no explicit type the draft opens with the Type row UNSET. The route
       // used to imply one, which meant "Create new" from anywhere under
       // /directory started on Person — a type nobody asked for, on a surface
@@ -147,12 +132,6 @@ export function useCreateSurface() {
       const query = params.toString();
       router.push(`/directory/new${query ? `?${query}` : ''}`);
     },
-    [open, openCatalog, router],
+    [open, router],
   );
-}
-
-/** The catalog modal's own slice of the create state. */
-export function useConnectorCatalog() {
-  const { catalogOpen, openCatalog, closeCatalog } = useCreateModal();
-  return { isOpen: catalogOpen, open: openCatalog, close: closeCatalog };
 }

@@ -126,9 +126,10 @@ async function markBroken(id: string, reason: string): Promise<void> {
       kind: 'connection_broken',
       title: `${row.provider} connection broken`,
       body: `The ${row.provider} connection${row.accountLabel ? ` (${row.accountLabel})` : ''} needs reconnecting: ${reason.slice(0, 500)}`,
-      // The connectors page: `provider` names a SERVICE (notion, linear), not a
-      // connector note, so there is no single connector page to send them to.
-      href: '/connectors',
+      // The console's Connectors section: `provider` names a SERVICE (notion,
+      // linear), not a connector note, so there is no single connector page to
+      // send them to.
+      href: '/admin?section=connectors',
       dedupeKey: `connection:${row.id}:broken`,
     })
   })().catch(() => {})

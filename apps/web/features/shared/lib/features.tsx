@@ -95,8 +95,12 @@ export const FEATURES: FeatureDef[] = [
   {
     key: 'connectors',
     label: 'Connectors',
-    href: '/connectors',
+    href: '/admin?section=connectors',
     description: 'Gateways to external APIs and databases that agents can call.',
+    // Always on and nav-less: connectors are a section of the Space Console,
+    // admins only by nature, so there is no rail row and nothing to toggle or
+    // reorder per space. See NAV_HIDDEN_FEATURE_KEYS.
+    core: true,
     icon: <NavConnectorsIcon className={iconClass} />,
   },
   {

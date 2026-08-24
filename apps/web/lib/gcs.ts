@@ -99,6 +99,21 @@ export async function uploadResourceFile(
   return objectPath;
 }
 
+/**
+ * Read a Drive object back into memory.
+ *
+ * The one way bytes already in the resources bucket become bytes this process
+ * can re-process — reusing a stored image as an entity's picture, say. The path
+ * comes from a `Resource` row the caller has already authorized, never from a
+ * client: this function signs nothing and checks nothing, so whoever calls it
+ * owns the tenant check.
+ */
+export async function downloadResourceFile(objectPath: string): Promise<Buffer> {
+  const storage = getStorage();
+  const [contents] = await storage.bucket(RESOURCES_BUCKET()).file(objectPath).download();
+  return contents;
+}
+
 // Bulk object lifecycle.
 //
 // Every eager delete in the app removes ONE object because it removes one row

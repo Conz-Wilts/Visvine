@@ -394,7 +394,7 @@ for (const o of orgs) {
   note(shared, `communities/${o.slug}.md`, {
     type: 'Company', title: c.name,
     description: c.subtitle || null,
-    node: `org:${o.slug}`,
+    node: `company:${o.slug}`,
     tags: [slugify(o.sector), o.statusGroup, 'portfolio', 'company'],
   }, sections.join('\n'));
 }

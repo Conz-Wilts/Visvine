@@ -232,6 +232,10 @@ interface NoteSidebarProps {
   onShareNote?: (path: string) => void
   /** â‹¯ menu action on folder rows: delete the folder (and the notes inside). */
   onDeleteFolder?: (folderPath: string, label?: string) => void
+  /** Open a note belonging to a sub-space federated into this tree — it lives
+   *  in another context, so the host switches space rather than navigating
+   *  here. Omit and those rows are inert. */
+  onOpenForeign?: (spaceId: string, path: string) => void
   /** File a note into another folder ('' = the context root). Passing both move
    *  handlers turns on dragging and the rows' "Move to..." action; omit them for
    *  a read-only tree. Authority stays server-side - a rejected move surfaces
@@ -281,6 +285,7 @@ export function NoteSidebar({
   onFolderAccess,
   onShareNote,
   onDeleteFolder,
+  onOpenForeign,
   onMoveNote,
   onMoveFolder,
   trash = null,
@@ -457,6 +462,7 @@ export function NoteSidebar({
               onFolderAccess={onFolderAccess}
               onShareNote={onShareNote}
               onDeleteFolder={onDeleteFolder}
+              openForeign={onOpenForeign}
             />
           ) : (
             <Tree
@@ -475,6 +481,7 @@ export function NoteSidebar({
               onFolderAccess={onFolderAccess}
               onShareNote={onShareNote}
               onDeleteFolder={onDeleteFolder}
+              openForeign={onOpenForeign}
             />
           )}
 
@@ -664,6 +671,27 @@ function TrashRow({
   )
 }
 
+/**
+ * A subtree grafted in from another space (the tree route federates a
+ * sub-space's own tree under its record folder). `prefix` is what rebasing
+ * added to every path in it, so a row can hand back the path as that space
+ * knows it.
+ */
+interface ForeignScope {
+  spaceId: string
+  prefix: string
+}
+
+/** The scope a child row inherits: the one we're already in, or the one it starts. */
+function foreignScopeOf(child: TreeNode, inherited?: ForeignScope): ForeignScope | undefined {
+  if (inherited) return inherited
+  if (!child.foreign) return undefined
+  return {
+    spaceId: child.foreign.spaceId,
+    prefix: child.path.slice(0, child.path.length - child.foreign.path.length),
+  }
+}
+
 function Tree({
   node,
   openPaths,
@@ -680,6 +708,8 @@ function Tree({
   onFolderAccess,
   onShareNote,
   onDeleteFolder,
+  openForeign,
+  foreign,
 }: {
   node: TreeNode
   openPaths: Set<string>
@@ -696,6 +726,10 @@ function Tree({
   onFolderAccess?: (folderId: string) => void
   onShareNote?: (path: string) => void
   onDeleteFolder?: (folderPath: string, label?: string) => void
+  /** Open a note that lives in another space — switches space, then navigates. */
+  openForeign?: (spaceId: string, path: string) => void
+  /** Set while rendering inside a federated subtree. */
+  foreign?: ForeignScope
 }) {
   // A folder's own index.md never renders as a child row â€” the folder row IS
   // the index (clicking the folder name opens it; see FolderRow). The context
@@ -707,8 +741,9 @@ function Tree({
   )
   return (
     <>
-      {children.map((child, i) =>
-        child.kind === 'folder' ? (
+      {children.map((child, i) => {
+        const childForeign = foreignScopeOf(child, foreign)
+        return child.kind === 'folder' ? (
           <FolderRow
             key={child.path}
             node={child}
@@ -728,6 +763,8 @@ function Tree({
             onFolderAccess={onFolderAccess}
             onShareNote={onShareNote}
             onDeleteFolder={onDeleteFolder}
+            openForeign={openForeign}
+            foreign={childForeign}
           />
         ) : (
           <NoteRow
@@ -745,9 +782,11 @@ function Tree({
             onToggleStar={onToggleStar}
             onDelete={onDeleteNote}
             onShare={onShareNote}
+            openForeign={openForeign}
+            foreign={childForeign}
           />
-        ),
-      )}
+        )
+      })}
     </>
   )
 }
@@ -776,6 +815,9 @@ function FolderRow(props: {
   onFolderAccess?: (folderId: string) => void
   onShareNote?: (path: string) => void
   onDeleteFolder?: (folderPath: string, label?: string) => void
+  openForeign?: (spaceId: string, path: string) => void
+  /** Set when this row is a federated subtree's root, or lives inside one. */
+  foreign?: ForeignScope
 }) {
   // Expansion is owned by NoteSidebar (persisted, and revealed by selection) â€”
   // this row only reads it and reports toggles.
@@ -784,7 +826,16 @@ function FolderRow(props: {
   // Grants live at any depth now, so every folder row can carry a badge and a
   // Share affordance (keyed by the folder's full path).
   const badge = props.folderBadges?.get(props.node.path)
-  const showAccess = !!props.onFolderAccess
+  // A folder federated in from a sub-space is that space's, not this one's:
+  // every path here is rebased, so a move, a delete or a grant aimed at it
+  // would land on a path this context doesn't have. It is shown, and opened —
+  // in the space it belongs to — and nothing else.
+  const foreign = props.foreign
+  const openPath = (path: string) =>
+    foreign
+      ? props.openForeign?.(foreign.spaceId, path.slice(foreign.prefix.length))
+      : props.onSelect(path)
+  const showAccess = !foreign && !!props.onFolderAccess
   // Folder-note behaviour: when the folder has an index.md (hidden as a child
   // row by Tree), the folder row IS that note â€” clicking the name opens it and
   // selection highlights here. The chevron keeps expand/collapse to itself.
@@ -803,9 +854,9 @@ function FolderRow(props: {
   // level"; it is never a source.
   const drag = useContext(TreeDrag)
   const item: MovableItem = { path: props.node.path, kind: 'folder', label: folderLabel }
-  const draggable = !!drag && !!props.node.path && isMovable(props.node.path, 'folder')
+  const draggable = !foreign && !!drag && !!props.node.path && isMovable(props.node.path, 'folder')
   const isDragged = drag?.dragging?.path === props.node.path
-  const accepts = !!drag?.dragging && canMoveInto(drag.dragging.path, drag.dragging.kind, props.node.path)
+  const accepts = !foreign && !!drag?.dragging && canMoveInto(drag.dragging.path, drag.dragging.kind, props.node.path)
   const isDropTarget = accepts && drag?.dropFolder === props.node.path
   // Hovering a shut folder mid-drag springs it open, so a note can be dropped
   // into a nested folder without letting go first.
@@ -898,6 +949,9 @@ function FolderRow(props: {
               }`}
             />
           )}
+          {/* A sub-space's record is a folder like any other — it opens, it
+              holds notes, and it sits in the same tree. Marking it with its own
+              glyph made the one folder you enter MOST look like a control. */}
           {props.icon ?? <FolderIcon open={open} />}
         </button>
         <button
@@ -917,7 +971,7 @@ function FolderRow(props: {
             // folder's own note moves the reveal off whatever child chain was
             // holding it — and only a hand-opened entry survives that.
             props.onOpenFolder(props.node.path)
-            props.onSelect(indexPath)
+            openPath(indexPath)
           }}
           className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] ${
             selected ? 'text-text-primary' : 'text-text-secondary'
@@ -953,7 +1007,7 @@ function FolderRow(props: {
             // built-in folder: agents/, connectors/, tools/, people/ and the
             // rest are structure the runtime resolves against, so the row
             // offers no way to remove one (deleteFolderDenial).
-            ...(props.onDeleteFolder && !deleteFolderDenial(props.node.path)
+            ...(!foreign && props.onDeleteFolder && !deleteFolderDenial(props.node.path)
               ? [
                   {
                     label: 'Delete',
@@ -995,6 +1049,8 @@ function FolderRow(props: {
               onDeleteNote={props.onDeleteNote}
               folderBadges={props.folderBadges}
               onFolderAccess={props.onFolderAccess}
+              openForeign={props.openForeign}
+              foreign={foreign}
               onShareNote={props.onShareNote}
               onDeleteFolder={props.onDeleteFolder}
             />
@@ -1136,6 +1192,8 @@ function NoteRow({
   onToggleStar,
   onDelete,
   onShare,
+  openForeign,
+  foreign,
 }: {
   title: string
   path: string
@@ -1152,10 +1210,15 @@ function NoteRow({
   onToggleStar: (path: string, starred: boolean) => void
   onDelete: (path: string) => void
   onShare?: (path: string) => void
+  openForeign?: (spaceId: string, path: string) => void
+  /** Set when the note lives in a sub-space federated into this tree. */
+  foreign?: ForeignScope
 }) {
   const drag = useContext(TreeDrag)
   const item: MovableItem = { path, kind: 'note', label: title }
-  const draggable = !!drag && isMovable(path, 'note')
+  // Read-only for the same reason a federated folder is: the path is rebased,
+  // and the note is another space's to change.
+  const draggable = !foreign && !!drag && isMovable(path, 'note')
   const isDragged = drag?.dragging?.path === path
   return (
     <div
@@ -1177,7 +1240,9 @@ function NoteRow({
       {guide && <GuideLine guide={guide} active={guideActive} />}
       <button
         type="button"
-        onClick={() => onSelect(path)}
+        onClick={() =>
+          foreign ? openForeign?.(foreign.spaceId, path.slice(foreign.prefix.length)) : onSelect(path)
+        }
         className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] ${
           // Notes carry no chevron, so the icon is padded across to sit under
           // the folder icons above it.
@@ -1201,7 +1266,7 @@ function NoteRow({
       </button>
       <RowMenu
         selected={selected}
-        items={[
+        items={foreign ? [] : [
           ...(onShare
             ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => onShare(path) }]
             : []),
@@ -1237,6 +1302,10 @@ interface FolderChoice {
 function collectFolders(node: TreeNode, out: FolderChoice[], depth = 0): void {
   for (const child of node.children ?? []) {
     if (child.kind !== 'folder') continue
+    // A folder federated in from a sub-space is not a destination: its path
+    // here is rebased, and the move would be aimed at another context. The
+    // whole subtree drops out with it.
+    if (child.foreign) continue
     out.push({ path: child.path, label: child.title ?? child.name, depth })
     collectFolders(child, out, depth + 1)
   }

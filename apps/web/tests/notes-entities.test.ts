@@ -449,15 +449,14 @@ test('structuralFolders follows the tools a space runs', () => {
     structuralFolders({ enabled: { agents: false } }).sort(),
     ['connectors', 'tools'],
   );
+  // connectors and tools are core feature keys, so they survive even an
+  // explicit false — "they are always there" needs no special case.
   assert.deepEqual(
     structuralFolders({ enabled: { connectors: false } }).sort(),
-    ['agents', 'tools'],
+    ['agents', 'connectors', 'tools'],
   );
-
-  // tools is a core feature key, so it survives even an explicit false —
-  // "tools is always there" needs no special case.
   assert.deepEqual(
-    structuralFolders({ enabled: { agents: false, connectors: false, tools: false } }),
-    ['tools'],
+    structuralFolders({ enabled: { agents: false, connectors: false, tools: false } }).sort(),
+    ['connectors', 'tools'],
   );
 });

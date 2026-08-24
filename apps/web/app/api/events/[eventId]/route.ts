@@ -4,7 +4,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { eventUpdateInputSchema } from '@/lib/schemas/eventSchemas';
-import { getEvent, upsertEvent, getAttendees, deleteEvent } from '@/lib/eventRepo';
+import { getEvent, getAttendees, deleteEvent } from '@/lib/eventRepo';
+import { updateEventRecord } from '@/lib/events/write';
 import { requireEventManager, requireSpaceMember } from '@/lib/eventAuth';
 import { normalizeStatus, occupiedSpots } from '@/lib/eventUtils';
 import prisma from '@/lib/prisma';
@@ -199,20 +200,9 @@ export async function PATCH(
       );
     }
 
-    const updates = parsed.data;
-
-    // Merge updates with existing event
-    const updatedEvent = {
-      ...event,
-      ...updates,
-      form: updates.form ? { ...event.form, ...updates.form } : event.form,
-      analytics: {
-        ...event.analytics,
-        updatedAt: new Date().toISOString(),
-      },
-    };
-
-    await upsertEvent(spaceId, updatedEvent);
+    // The merge lives in lib/events/write.ts, shared with the MCP update_event
+    // tool: absent keys stay absent and the form merges rather than replaces.
+    const updatedEvent = await updateEventRecord(spaceId, event, parsed.data);
 
     return NextResponse.json(updatedEvent);
   } catch (error) {

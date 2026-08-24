@@ -13,8 +13,9 @@ import { DELAYED_AFTER_MS } from '@/lib/agents/limits';
  * notes) holding briefs — each agent with its activation, last run and next
  * run; admins additionally see spend. Clicking an agent opens its node page
  * (brief, activation, runs). Model keys are not here: a model is a connector
- * note, keyed on its own page under /connectors. Sits beside /connectors as a
- * plain page — the pane shell belongs to /directory/*.
+ * note, keyed on its own page — the space's connectors live in the console
+ * (/admin?section=connectors). A plain page: the pane shell belongs to
+ * /directory/*.
  */
 interface RosterResponse {
   agents: AgentSummary[];

@@ -97,6 +97,43 @@ const ENTITY_DIRS: Record<EntityKind, string> = {
  */
 const FOLDER_ONLY_ENTITY_KINDS: ReadonlySet<EntityKind> = new Set(['tool'])
 
+/**
+ * The id prefix of a SUB-SPACE record: the card a space keeps for a space
+ * nested inside it (docs/sub-spaces.md).
+ *
+ * Every other `space` node is a directory record of some organisation — a
+ * portfolio company, a firm you met — and lives in `communities/` beside the
+ * rest. A sub-space is not a record of the outside world: it is part of how
+ * THIS space is organised, so its note is a folder at the ROOT of the parent's
+ * context (`operations/index.md`) and the parent's context tree shows one
+ * folder per team.
+ *
+ * The signal is the ID rather than `metadata`, and deliberately: every surface
+ * that derives a path holds `{ id, type }`, and half of them are client
+ * components that never load metadata. Putting it in the id makes the
+ * derivation total — `isOwnSpaceNode` already reads an id the same way.
+ */
+const CHILD_SPACE_ID_PREFIX = 'subspace:'
+
+/** The node id a space's record inside its parent is minted with. */
+export function childSpaceNodeId(slug: string): string {
+  return `${CHILD_SPACE_ID_PREFIX}${slug}`
+}
+
+/** Does this node stand for a space nested inside the one it lives in? */
+export function isChildSpaceNode(node: { id: string }): boolean {
+  return node.id.startsWith(CHILD_SPACE_ID_PREFIX)
+}
+
+/**
+ * Is this node's entity note ALWAYS the folder index? True for a folder-only
+ * KIND (a Tool) and for a sub-space record, which is a folder from the moment
+ * it exists — the folder is the point.
+ */
+function isFolderOnlyEntity(node: EntityNodeLike, kind: EntityKind): boolean {
+  return FOLDER_ONLY_ENTITY_KINDS.has(kind) || (kind === 'space' && isChildSpaceNode(node))
+}
+
 // Map a node `type` to an entity kind (null for non-entity types). Liberal so it
 // copes with 'person'/'people' and with every spelling organisations have worn:
 // 'organization'/'org'/'group'/'company'/'community' all mean 'space' now, and
@@ -163,6 +200,9 @@ export function entityFlatPath(node: EntityNodeLike): string | null {
   const kind = entityKindOf(node.type)
   const slug = idSlug(node.id)
   if (!kind || !slug) return null
+  // A sub-space sits at the root of its parent's context, in no namespace —
+  // this is the derivation base its folder is cut from, never a live note.
+  if (kind === 'space' && isChildSpaceNode(node)) return `${slug}.md`
   return `${ENTITY_DIRS[kind]}/${slug}.md`
 }
 
@@ -190,7 +230,7 @@ export function entityNotePath(node: EntityNodeLike): string | null {
   const flat = entityFlatPath(node)
   if (!kind || !flat) return null
   const index = entityIndexPathOf(node)
-  if (FOLDER_ONLY_ENTITY_KINDS.has(kind)) return index
+  if (isFolderOnlyEntity(node, kind)) return index
   const pointer = node.metadata?.notePath
   return typeof pointer === 'string' && index && pointer === index ? index : flat
 }
@@ -205,7 +245,7 @@ export function entityNotePaths(node: EntityNodeLike): string[] {
   const flat = entityFlatPath(node)
   const index = entityIndexPathOf(node)
   if (!kind || !flat || !index) return []
-  return FOLDER_ONLY_ENTITY_KINDS.has(kind) ? [index] : [flat, index]
+  return isFolderOnlyEntity(node, kind) ? [index] : [flat, index]
 }
 
 // Namespaces whose entity note may take EITHER form — '<ns>/<slug>.md' or
@@ -511,7 +551,7 @@ export function entityStub(node: EntityNodeLike): string {
  */
 export function entityDraftContent(
   node: EntityNodeLike,
-  opts: { tags?: string[]; body?: string },
+  opts: { tags?: string[]; body?: string; spaceRef?: string | null },
 ): string {
   const kind = entityKindOf(node.type) ?? 'person'
   const title = (node.name ?? idSlug(node.id)).trim()
@@ -537,6 +577,9 @@ export function entityDraftContent(
     `type: ${ENTITY_TYPE_LABEL[kind]}\n` +
     `title: ${JSON.stringify(title)}\n` +
     `node: ${JSON.stringify(node.id)}\n` +
+    // A space node's note names the space it stands for, so the note is
+    // self-describing without the node row (docs/sub-spaces.md).
+    (opts.spaceRef ? `space: ${JSON.stringify(opts.spaceRef)}\n` : '') +
     `tags: [${tags.join(', ')}]\n` +
     `---\n\n` +
     `${subtitle}` +

@@ -4,16 +4,20 @@
 // built over the visibility-filtered vault, and explicitly-created empty
 // folders are grafted only when the caller may see them (a grant reaches the
 // folder or starts inside it — restricted subtrees stay fully hidden).
+//
+// A sub-space's record folder additionally carries that space's OWN tree,
+// federated in — see federate() below.
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireContext } from '@/lib/notes/api'
-import { principalOf } from '@/lib/notes/resolve'
+import { requireSession } from '@/lib/session'
+import { principalOf, resolveContext, type ResolvedContext } from '@/lib/notes/resolve'
 import { visibleVault } from '@/lib/notes/contextService'
 import { listFolders } from '@/lib/notes/store'
 import { structuralFolders } from '@/lib/notes/entities'
 import type { SpaceFeatureConfig } from '@/lib/types'
 import { buildTree, sortTree } from '@/lib/notes/shared/context'
+import { graftForeign, spaceFolders } from '@/lib/notes/shared/federation'
 import { principalSeesFolder } from '@/lib/notes/shared/permissions'
 import type { TreeNode } from '@/lib/notes/shared/types'
 
@@ -37,9 +41,8 @@ function ensureFolderPath(root: TreeNode, folderPath: string): void {
   }
 }
 
-export async function GET(req: NextRequest) {
-  const context = await requireContext(req)
-  if (context instanceof Response) return context
+/** One context's own tree: its visible notes, its empty folders, its tools' folders. */
+async function treeFor(context: ResolvedContext): Promise<TreeNode> {
   const p = await principalOf(context)
   const [{ metas }, folders, space] = await Promise.all([
     visibleVault(p, context),
@@ -63,6 +66,52 @@ export async function GET(req: NextRequest) {
     if (context.scope === 'shared' && !context.isPersonalSpace && !principalSeesFolder(p, folder)) continue
     ensureFolderPath(root, folder)
   }
+  return root
+}
+
+/**
+ * The child's own tree, under its record folder: expand "Building Blackbird" in
+ * the parent and you see what that space actually holds. What comes across, and
+ * how its paths are rebased, is lib/notes/shared/federation.ts.
+ *
+ * Access is not weakened to do it. Every child is resolved through the ordinary
+ * `resolveContext` for THIS session (a viewer who is not in the child space gets
+ * its 403 and the folder stays empty) and its tree is built through the same
+ * visibility lens as any other, so a restricted subtree of the child is as
+ * hidden here as it is there.
+ *
+ * `seen` and the depth cap are belt and braces against a cycle in the data — a
+ * record folder pointing at an ancestor — which the hierarchy rules forbid but
+ * this walk must survive regardless.
+ */
+async function federate(
+  root: TreeNode,
+  session: Awaited<ReturnType<typeof requireSession>>,
+  seen: Set<string>,
+  depth = 0,
+): Promise<void> {
+  if (session instanceof Response || depth >= 3) return
+  for (const folder of spaceFolders(root)) {
+    const childId = folder.space!
+    if (seen.has(childId)) continue
+    seen.add(childId)
+    const context = await resolveContext(session, childId)
+    if (context instanceof Response) continue
+    const childRoot = await treeFor(context)
+    await federate(childRoot, session, seen, depth + 1)
+    graftForeign(folder, childRoot, childId)
+  }
+}
+
+export async function GET(req: NextRequest) {
+  const session = await requireSession()
+  if (session instanceof Response) return session
+  const url = new URL(req.url)
+  const context = await resolveContext(session, url.searchParams.get('spaceId'), url.searchParams.get('scope'))
+  if (context instanceof Response) return context
+
+  const root = await treeFor(context)
+  await federate(root, session, new Set([context.spaceId]))
   sortTree(root)
   return NextResponse.json({ tree: root })
 }
