@@ -14,8 +14,13 @@ interface ViewToggleProps<T extends string> {
   onChange: (id: T) => void
   /** Extra classes for the outer container (e.g. to override height). */
   className?: string
-  /** 'sm' fits compact chrome rows (profile tab header); 'md' is the page-level default. */
-  size?: 'md' | 'sm'
+  /**
+   * 'sm' fits compact chrome rows (profile tab header); 'md' is the page-level
+   * default; 'lg' is the page's own top nav, drawn to the pane tab bar's
+   * metrics (48px row, 3px underline) so a page outside the pane shell reads
+   * with the same nav line as one inside it.
+   */
+  size?: 'md' | 'sm' | 'lg'
 }
 
 function measureBtn(btn: HTMLButtonElement, container: HTMLDivElement) {
@@ -61,13 +66,13 @@ export default function ViewToggle<T extends string>({ options, value, onChange,
   return (
     <div
       ref={containerRef}
-      className={`relative flex items-center gap-1 ${
+      className={`relative flex items-center ${size === 'lg' ? '' : 'gap-1'} ${
         size === 'sm' ? 'h-9' : 'h-12'
       } ${className}`}
     >
       {pillStyle && (
         <span
-          className="absolute bottom-0 h-0.5 rounded-full bg-brand-green"
+          className={`absolute bottom-0 rounded-full bg-brand-green ${size === 'lg' ? 'h-[3px]' : 'h-0.5'}`}
 
           style={{
             left: pillStyle.left,
@@ -86,8 +91,12 @@ export default function ViewToggle<T extends string>({ options, value, onChange,
             buttonRefs.current[i] = el
           }}
           onClick={() => onChange(o.id)}
-          className={`relative z-10 flex h-full items-center gap-1.5 font-semibold transition-colors duration-200 ${
-            size === 'sm' ? 'px-2.5 text-[11px]' : 'px-3 text-xs'
+          className={`relative z-10 flex h-full items-center gap-1.5 transition-colors duration-200 ${
+            size === 'sm'
+              ? 'px-2.5 text-[11px] font-semibold'
+              : size === 'lg'
+                ? 'px-4 text-sm font-medium'
+                : 'px-3 text-xs font-semibold'
           } ${value === o.id ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}
         >
           {o.icon}

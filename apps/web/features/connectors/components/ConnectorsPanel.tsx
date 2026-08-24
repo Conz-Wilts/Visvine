@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, ConfirmDialog, Field, Input, Modal, SearchInput, Skeleton, Alert } from '@/components/ui';
 import { ArrowLeftIcon, CircleCheckIcon, InfoIcon } from '@/features/shared/icons';
@@ -42,7 +42,12 @@ import {
  * lists and connects, it does not author prose.
  */
 
-type Filter = 'all' | 'connected' | 'not-connected';
+/**
+ * The list is one of two halves — what the space has, and what it could add.
+ * There is no combined view: the two are different questions, and a row's
+ * answer ("Manage" or "Connect") is what the reader came for.
+ */
+type Filter = 'connected' | 'not-connected';
 
 /** What the space already has, by note name — one row of GET …/connectors. */
 interface ExistingConnector {
@@ -102,7 +107,6 @@ function statusColor(tone: Tone): string {
 }
 
 const FILTERS: Array<{ id: Filter; label: string }> = [
-  { id: 'all', label: 'All' },
   { id: 'connected', label: 'Connected' },
   { id: 'not-connected', label: 'Not connected' },
 ];
@@ -114,7 +118,7 @@ export default function ConnectorsPanel() {
   const spaceId = currentSpace?.id ?? null;
 
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>('connected');
   const [entry, setEntry] = useState<CatalogEntry | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [existing, setExisting] = useState<ExistingConnector[]>([]);
@@ -132,6 +136,8 @@ export default function ConnectorsPanel() {
 
   // Re-read what's connected on mount, on a space switch, and after a delete.
   const [reloadKey, setReloadKey] = useState(0);
+  // The space whose first load has already chosen a tab.
+  const landedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!spaceId) return;
     let cancelled = false;
@@ -141,6 +147,14 @@ export default function ConnectorsPanel() {
         if (cancelled) return;
         setExisting(data.connectors);
         setError(null);
+        // Connected is the question an admin usually has, but a space with
+        // nothing connected would open on an empty list — so land on the
+        // catalog instead. Once per space: a later reload (a delete, a toggle)
+        // must not move the tab out from under whoever chose it.
+        if (landedRef.current !== spaceId) {
+          landedRef.current = spaceId;
+          setFilter(data.connectors.length > 0 ? 'connected' : 'not-connected');
+        }
       })
       .catch((e: Error) => {
         if (!cancelled) setError(e.message);
@@ -154,11 +168,13 @@ export default function ConnectorsPanel() {
   const byName = useMemo(() => new Map(existing.map((e) => [e.name, e])), [existing]);
   const catalogIds = useMemo(() => new Set(CONNECTOR_CATALOG.map((e) => e.id)), []);
 
-  const results = useMemo(() => {
-    const all = searchCatalog(query);
-    if (filter === 'all') return all;
-    return all.filter((e) => (byName.has(e.id) ? filter === 'connected' : filter === 'not-connected'));
-  }, [query, filter, byName]);
+  const results = useMemo(
+    () =>
+      searchCatalog(query).filter((e) =>
+        byName.has(e.id) ? filter === 'connected' : filter === 'not-connected',
+      ),
+    [query, filter, byName],
+  );
 
   // Connectors the space wrote itself — a note under connectors/ that no recipe
   // owns. Always "connected": the note IS the connector.

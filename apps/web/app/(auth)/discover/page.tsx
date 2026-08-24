@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
-import { Space, aliasesForType } from '@/lib/types';
+import { Space, selfJoinAliases } from '@/lib/types';
 import { Button, EmptyState, Modal, SearchInput } from '@/components/ui';
 
 function formatMemberCount(count: number): string {
@@ -74,7 +74,7 @@ export default function DiscoverPage() {
   const handleJoin = (space: Space) => {
     // Only Person-scoped aliases are selectable when joining (a user is a person),
     // so skip the picker entirely when none exist.
-    const aliases = aliasesForType(space.aliases, 'Person');
+    const aliases = selfJoinAliases(space.aliases);
     if (aliases.length > 0) {
       setPendingSpace(space);
       setSelectedAlias('');
@@ -109,8 +109,9 @@ export default function DiscoverPage() {
   }, [spaces, search]);
 
   // A user joins as a person, so only offer Person-scoped aliases (e.g. "Founder").
-  // Org-scoped aliases like "Portfolio Company" must never be selectable here.
-  const aliases = aliasesForType(pendingSpace?.aliases, 'Person');
+  // Org-scoped aliases like "Portfolio Company" must never be selectable here, and
+  // neither may an admin alias — you never make yourself an admin by joining.
+  const aliases = selfJoinAliases(pendingSpace?.aliases);
 
   return (
     <div className="w-full">

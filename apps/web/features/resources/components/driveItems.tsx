@@ -131,12 +131,12 @@ export function FolderTile({
       onDoubleClick={onOpen}
       onClick={onOpen}
       {...handlers}
-      className={`group flex h-12 cursor-pointer select-none items-center gap-3 rounded-xl bg-surface-2 pl-4 pr-1 transition-colors hover:bg-surface-3 ${
+      className={`group flex h-16 cursor-pointer select-none items-center gap-3.5 rounded-xl border border-brand-green/40 bg-surface-2 pl-5 pr-1 transition-colors hover:border-brand-green/60 hover:bg-surface-3 ${
         over ? 'ring-2 ring-brand-green ring-inset bg-brand-green/10' : ''
       }`}
     >
-      <FolderIcon className="h-5 w-5 shrink-0 text-text-secondary" />
-      <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-text-primary">{folder.name}</span>
+      <FolderIcon className="h-6 w-6 shrink-0 text-text-secondary" />
+      <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-text-primary">{folder.name}</span>
       <ItemMenu actions={actions} className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100" />
     </div>
   );
@@ -237,16 +237,16 @@ function Row({
       onClick={onOpen}
       {...dragProps}
       {...dropProps}
-      className={`group grid h-12 cursor-pointer select-none grid-cols-[minmax(0,1fr)_140px_100px_40px] items-center gap-4 border-b border-border-subtle px-3 text-sm transition-colors ${
+      className={`group grid h-14 cursor-pointer select-none grid-cols-[minmax(0,1fr)_140px_100px_40px] items-center gap-4 border-b border-border-default px-3 text-[15px] transition-colors ${
         selected ? 'bg-brand-green/10' : 'hover:bg-surface-2'
       } ${over ? 'ring-2 ring-inset ring-brand-green bg-brand-green/10' : ''}`}
     >
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3.5">
         {icon}
         <span className="truncate font-medium text-text-primary">{name}</span>
       </div>
-      <span className="truncate text-xs text-text-muted">{meta}</span>
-      <span className="truncate text-xs text-text-muted">{trailing}</span>
+      <span className="truncate text-[13px] text-text-muted">{meta}</span>
+      <span className="truncate text-[13px] text-text-muted">{trailing}</span>
       <ItemMenu actions={actions} className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100" />
     </div>
   );
@@ -260,7 +260,7 @@ export function FolderRow({
   const { over, handlers } = useDropTarget(onDropItem);
   return (
     <Row
-      icon={<FolderIcon className="h-5 w-5 shrink-0 text-text-secondary" />}
+      icon={<FolderIcon className="h-6 w-6 shrink-0 text-text-secondary" />}
       name={folder.name}
       meta={fileDate(folder.createdAt)}
       trailing="—"
@@ -282,7 +282,7 @@ export function FileRow({
 }) {
   return (
     <Row
-      icon={<FileTypeIcon type={resource.fileType} className="h-6 w-6 shrink-0 rounded-md [&>svg]:h-4 [&>svg]:w-4" />}
+      icon={<FileTypeIcon type={resource.fileType} className="h-7 w-7 shrink-0 rounded-md [&>svg]:h-[18px] [&>svg]:w-[18px]" />}
       name={resource.name}
       meta={location ?? fileDate(resource.createdAt)}
       trailing={

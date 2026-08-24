@@ -5,7 +5,7 @@ import { isForeignPersonalSpace } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { removeMemberAccess } from '@/lib/notes/access';
-import { aliasesForType, findAliasByRef, type SpaceAlias } from '@/lib/types';
+import { findAliasByRef, selfJoinAliases, type SpaceAlias } from '@/lib/types';
 import { ensureMemberNode } from '@/lib/spaces/memberNode';
 import { isGlobalSpace } from '@/lib/spaces/globalSpace';
 import { joinChildDenial } from '@/lib/spaces/hierarchy';
@@ -81,10 +81,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
     }
 
     // A user joins as a Person node, so they may only identify with a
-    // Person-type alias. Anything else (an Organization alias, or an unknown
-    // string) is ignored rather than trusted from the client.
+    // Person-type alias — and never an admin one: self-join is the public door,
+    // so nobody walks through it declaring themselves an admin of the space.
+    // Anything else (an Organization alias, an admin alias, an unknown string)
+    // is ignored rather than trusted from the client.
     const resolvedAlias = findAliasByRef(
-      aliasesForType((space.aliases ?? []) as unknown as SpaceAlias[], 'Person'),
+      selfJoinAliases((space.aliases ?? []) as unknown as SpaceAlias[]),
       requestedAlias,
     );
 

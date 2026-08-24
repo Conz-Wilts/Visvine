@@ -16,15 +16,13 @@ import { childFolders, folderPathLabel, folderTrail, subtree } from '@/features/
 import { ConfirmDialog, EmptyState, SearchInput, ViewToggle } from '@/components/ui';
 import Dropdown, { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
-import { ArrowUpIcon, ChevronRightIcon, FolderIcon, ListIcon, PlusIcon, ToolGridIcon, UploadIcon } from '@/features/shared/icons';
+import { ChevronRightIcon, FolderIcon, PlusIcon, UploadIcon } from '@/features/shared/icons';
 import type { Resource, ResourceFolder } from '@/lib/types';
 
 type View = 'grid' | 'list';
-type Show = 'all' | 'pinned' | 'new';
 type TypeFilter = 'all' | 'docs' | 'sheets' | 'pdf' | 'image' | 'other';
-type Sort = 'name' | 'modified';
-
-const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+/** Field and direction in one choice — the menu says what the order IS. */
+type Sort = 'name-asc' | 'name-desc' | 'newest' | 'oldest';
 
 const TYPE_GROUP: Record<TypeFilter, (t: string) => boolean> = {
   all: () => true,
@@ -58,8 +56,8 @@ function Crumb({
       type="button"
       onClick={onClick}
       {...handlers}
-      className={`max-w-[220px] truncate rounded-lg px-2 py-1 text-[22px] font-semibold leading-tight transition-colors ${
-        active ? 'text-text-primary' : 'text-text-primary hover:bg-surface-3'
+      className={`max-w-[220px] truncate rounded-lg px-2 py-1 text-sm font-medium leading-tight transition-colors ${
+        active ? 'text-text-primary' : 'text-text-secondary hover:bg-surface-3 hover:text-text-primary'
       } ${over ? 'bg-brand-green/10 text-text-primary ring-2 ring-brand-green' : ''}`}
     >
       {label}
@@ -107,10 +105,8 @@ export default function ResourcesPage() {
 
   const [folderId, setFolderId] = useState<string | null>(null);
   const [view, setView] = useState<View>('grid');
-  const [show, setShow] = useState<Show>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [sort, setSort] = useState<Sort>('name');
-  const [sortAsc, setSortAsc] = useState(true);
+  const [sort, setSort] = useState<Sort>('name-asc');
   const [search, setSearch] = useState('');
   const [pinned, setPinned] = useState<string[]>([]);
   const [selected, setSelected] = useState<Resource | null>(null);
@@ -148,18 +144,20 @@ export default function ResourcesPage() {
   const searching = search.trim().length > 0;
   const needle = search.trim().toLowerCase();
 
-  const matchesFilters = useCallback((r: Resource) => {
-    if (show === 'pinned' && !pinned.includes(r.id)) return false;
-    if (show === 'new' && Date.now() - new Date(r.createdAt).getTime() >= ONE_WEEK_MS) return false;
-    return TYPE_GROUP[typeFilter](r.fileType);
-  }, [show, pinned, typeFilter]);
+  // A folder shows everything it holds; Type is the only thing that narrows it.
+  const matchesFilters = useCallback(
+    (r: Resource) => TYPE_GROUP[typeFilter](r.fileType),
+    [typeFilter],
+  );
 
   const compare = useCallback((a: Resource, b: Resource) => {
-    const v = sort === 'name'
-      ? a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-      : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    return sortAsc ? v : -v;
-  }, [sort, sortAsc]);
+    if (sort === 'name-asc' || sort === 'name-desc') {
+      const v = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      return sort === 'name-asc' ? v : -v;
+    }
+    const v = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return sort === 'oldest' ? v : -v;
+  }, [sort]);
 
   const visibleFolders = useMemo(() => {
     if (searching) return folders.filter(f => f.name.toLowerCase().includes(needle));
@@ -258,14 +256,47 @@ export default function ResourcesPage() {
       onDragLeave={e => { if (e.currentTarget === e.target) setOsDrop(false); }}
       onDrop={onPageDrop}
     >
-      <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
+      {/* ── Nav line ──────────────────────────────────────────────────
+          The Directory's chrome, to the pixel: `-mt-4 -ml-6` cancels
+          <main>'s own pt-4 / 24px gutter so the nav sits flush in the
+          surface's top-left corner, and it sticks at -top-4 the way the
+          pane tab bar does, so the row comes to rest with its bottom at
+          32px — which is what the toolbar below sticks to. There is no page
+          title: the sidebar says where you are, the breadcrumb says where
+          you are inside it. */}
+      <div className="sticky -top-4 z-20 -mt-4 -ml-6 flex items-center bg-glass pr-6">
+        <ViewToggle<View>
+          size="lg"
+          value={view}
+          onChange={setView}
+          options={[
+            { id: 'grid', label: 'Grid' },
+            { id: 'list', label: 'List' },
+          ]}
+        />
+        <div className="ml-auto">
+          <NewButton
+            onFolder={() => setDialog({ kind: 'newFolder' })}
+            onUpload={() => setDialog({ kind: 'upload' })}
+          />
+        </div>
+      </div>
 
-        {/* ── Title row: breadcrumb, New, view toggle ───────────────────── */}
-        <div className="flex flex-wrap items-center gap-3 pt-3">
-          <nav aria-label="Folder" className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
+      {/* ── Toolbar: breadcrumb, search, filters, count ────────────────
+          Welded under the nav line at top-8 with the same -ml-6 bleed and
+          pl-12 inset the Directory's toolbar uses, so search starts on the
+          same vertical as the Directory's. Opaque: the grid scrolls under it.
+          Nothing here may get overflow-hidden or the filter menus clip. */}
+      <div className="sticky top-8 z-10 -ml-6 bg-glass py-3 pl-12 pr-6">
+
+        {/* Breadcrumb only once there is somewhere to go back to — at the root
+            it would be a one-word title of the page you can see you are on.
+            The root crumb is a drop target, so a file can be dragged up. */}
+        {(trail.length > 0 || searching) && (
+          <nav aria-label="Folder" className="flex min-w-0 flex-wrap items-center gap-0.5 pb-2">
             <Crumb
               label="Resources"
-              active={!trail.length && !searching}
+              active={false}
               onClick={() => { setSearch(''); setFolderId(null); }}
               onDropItem={item => moveItem(item, null)}
             />
@@ -283,28 +314,21 @@ export default function ResourcesPage() {
             {searching && (
               <span className="flex items-center gap-0.5">
                 <ChevronRightIcon className="h-4 w-4 text-text-muted" />
-                <span className="px-2 text-[22px] font-semibold text-text-primary">Search results</span>
+                <span className="px-2 text-sm font-medium text-text-primary">Search results</span>
               </span>
             )}
           </nav>
-          <NewButton
-            onFolder={() => setDialog({ kind: 'newFolder' })}
-            onUpload={() => setDialog({ kind: 'upload' })}
-          />
-          <ViewToggle<View>
-            size="sm"
-            value={view}
-            onChange={setView}
-            options={[
-              { id: 'grid', label: 'Grid', icon: <ToolGridIcon className="h-3.5 w-3.5" /> },
-              { id: 'list', label: 'List', icon: <ListIcon className="h-3.5 w-3.5" /> },
-            ]}
-          />
-        </div>
+        )}
 
-        {/* ── Filter row ────────────────────────────────────────────────── */}
-        <div className="flex flex-wrap items-center gap-1 pt-2 pb-1">
-          <SearchInput value={search} onChange={setSearch} placeholder="Search all resources…" className="w-full max-w-xs" />
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search all resources…"
+            size="lg"
+            className="w-full max-w-[420px] flex-1 sm:min-w-[280px]"
+          />
+          <div className="hidden h-6 w-px shrink-0 bg-border-subtle sm:block" />
           <Dropdown<TypeFilter>
             label="Type"
             value={typeFilter}
@@ -319,34 +343,18 @@ export default function ResourcesPage() {
               { value: 'other', label: 'Other' },
             ]}
           />
-          <Dropdown<Show>
-            label="Show"
-            value={show}
-            onChange={setShow}
-            active={show !== 'all'}
-            options={[
-              { value: 'all', label: 'Everything' },
-              { value: 'pinned', label: 'Pinned' },
-              { value: 'new', label: 'New this week' },
-            ]}
-          />
           <Dropdown<Sort>
             label="Sort"
             value={sort}
             onChange={setSort}
+            menuWidthClass="min-w-[180px]"
             options={[
-              { value: 'name', label: 'Name' },
-              { value: 'modified', label: 'Date added' },
+              { value: 'name-asc', label: 'Name A–Z' },
+              { value: 'name-desc', label: 'Name Z–A' },
+              { value: 'newest', label: 'Newest first' },
+              { value: 'oldest', label: 'Oldest first' },
             ]}
           />
-          <button
-            type="button"
-            onClick={() => setSortAsc(a => !a)}
-            title={sortAsc ? 'Ascending' : 'Descending'}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
-          >
-            <ArrowUpIcon className={`h-4 w-4 transition-transform ${sortAsc ? '' : 'rotate-180'}`} />
-          </button>
           {!loading && (
             <span className="ml-auto text-xs text-text-muted">
               {visibleFolders.length ? `${visibleFolders.length} ${visibleFolders.length === 1 ? 'folder' : 'folders'} · ` : ''}
@@ -355,94 +363,94 @@ export default function ResourcesPage() {
             </span>
           )}
         </div>
+      </div>
 
-        {actionError && (
-          <p className="pb-2 text-xs text-red-600">{actionError}</p>
+      {actionError && (
+        <p className="px-6 pb-2 text-xs text-red-600">{actionError}</p>
+      )}
+
+      {/* ── Contents ──────────────────────────────────────────────────── */}
+      <div className="px-6 pt-7 pb-8">
+        {loading ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-surface-2" />)}
+            </div>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {Array.from({ length: 8 }).map((_, i) => <div key={i} className="aspect-[4/4.2] animate-pulse rounded-xl bg-surface-2" />)}
+            </div>
+          </div>
+        ) : empty ? (
+          <EmptyState
+            title={searching ? 'Nothing matches' : 'This folder is empty'}
+            description={searching ? 'Try another name or clear the filters.' : 'Drop files anywhere on this page, or use New.'}
+          />
+        ) : view === 'grid' ? (
+          <>
+            {/* No "Folders" / "Files" headings: a folder pill and a file card
+                are already nothing alike, so the words only added chrome. */}
+            {visibleFolders.length > 0 && (
+              <section className="mb-6">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {visibleFolders.map(f => (
+                    <FolderTile
+                      key={f.id}
+                      folder={f}
+                      actions={folderActions(f)}
+                      onOpen={() => { setSearch(''); setFolderId(f.id); }}
+                      onDropItem={item => moveItem(item, f.id)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+            {visibleFiles.length > 0 && (
+              <section>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {visibleFiles.map(r => (
+                    <FileCard
+                      key={r.id}
+                      resource={r}
+                      selected={selected?.id === r.id}
+                      pinned={pinned.includes(r.id)}
+                      actions={fileActions(r)}
+                      onOpen={() => setSelected(r)}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
+        ) : (
+          <div role="table">
+            <div className="grid h-10 grid-cols-[minmax(0,1fr)_140px_100px_40px] items-center gap-4 border-b border-border-default px-3 text-xs font-semibold text-text-muted">
+              <span>Name</span>
+              <span>{searching ? 'Location' : 'Added'}</span>
+              <span>Size</span>
+              <span />
+            </div>
+            {visibleFolders.map(f => (
+              <FolderRow
+                key={f.id}
+                folder={f}
+                actions={folderActions(f)}
+                onOpen={() => { setSearch(''); setFolderId(f.id); }}
+                onDropItem={item => moveItem(item, f.id)}
+              />
+            ))}
+            {visibleFiles.map(r => (
+              <FileRow
+                key={r.id}
+                resource={r}
+                selected={selected?.id === r.id}
+                pinned={pinned.includes(r.id)}
+                actions={fileActions(r)}
+                onOpen={() => setSelected(r)}
+                location={searching ? folderPathLabel(folders, r.folderId) : undefined}
+              />
+            ))}
+          </div>
         )}
-
-        {/* ── Contents ──────────────────────────────────────────────────── */}
-        <div className="pt-3 pb-10">
-          {loading ? (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-surface-2" />)}
-              </div>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {Array.from({ length: 8 }).map((_, i) => <div key={i} className="aspect-[4/4.2] animate-pulse rounded-xl bg-surface-2" />)}
-              </div>
-            </div>
-          ) : empty ? (
-            <EmptyState
-              title={searching ? 'Nothing matches' : 'This folder is empty'}
-              description={searching ? 'Try another name or clear the filters.' : 'Drop files anywhere on this page, or use New.'}
-            />
-          ) : view === 'grid' ? (
-            <>
-              {visibleFolders.length > 0 && (
-                <section className="mb-6">
-                  <h2 className="mb-2 px-1 text-xs font-semibold text-text-muted">Folders</h2>
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                    {visibleFolders.map(f => (
-                      <FolderTile
-                        key={f.id}
-                        folder={f}
-                        actions={folderActions(f)}
-                        onOpen={() => { setSearch(''); setFolderId(f.id); }}
-                        onDropItem={item => moveItem(item, f.id)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-              {visibleFiles.length > 0 && (
-                <section>
-                  {visibleFolders.length > 0 && <h2 className="mb-2 px-1 text-xs font-semibold text-text-muted">Files</h2>}
-                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                    {visibleFiles.map(r => (
-                      <FileCard
-                        key={r.id}
-                        resource={r}
-                        selected={selected?.id === r.id}
-                        pinned={pinned.includes(r.id)}
-                        actions={fileActions(r)}
-                        onOpen={() => setSelected(r)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-            </>
-          ) : (
-            <div role="table">
-              <div className="grid h-9 grid-cols-[minmax(0,1fr)_140px_100px_40px] items-center gap-4 border-b border-border-subtle px-3 text-xs font-semibold text-text-muted">
-                <span>Name</span>
-                <span>{searching ? 'Location' : 'Added'}</span>
-                <span>Size</span>
-                <span />
-              </div>
-              {visibleFolders.map(f => (
-                <FolderRow
-                  key={f.id}
-                  folder={f}
-                  actions={folderActions(f)}
-                  onOpen={() => { setSearch(''); setFolderId(f.id); }}
-                  onDropItem={item => moveItem(item, f.id)}
-                />
-              ))}
-              {visibleFiles.map(r => (
-                <FileRow
-                  key={r.id}
-                  resource={r}
-                  selected={selected?.id === r.id}
-                  pinned={pinned.includes(r.id)}
-                  actions={fileActions(r)}
-                  onOpen={() => setSelected(r)}
-                  location={searching ? folderPathLabel(folders, r.folderId) : undefined}
-                />
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* ── Desktop-drop overlay ─────────────────────────────────────────── */}

@@ -23,6 +23,7 @@ import {
 import {
   findAliasByRef,
   personAliases,
+  selfJoinAliases,
   ADMIN_ALIAS_ID,
   type SpaceAlias,
 } from '../lib/types/context'
@@ -292,4 +293,21 @@ test('personAliases pins Admin to its reserved id even if storage says otherwise
     { id: 'al_wrong', name: 'Admin', color: '#b4881b', nodeType: 'Person', admin: true, system: true },
   ])
   assert.equal(grafted[0].id, ADMIN_ALIAS_ID)
+})
+
+test('selfJoinAliases never offers an admin alias', () => {
+  const offered = selfJoinAliases([
+    ...VOCABULARY,
+    { id: 'al_3', name: 'Owner', color: '#b4881b', nodeType: 'Person', admin: true },
+  ]).map((a) => a.name)
+  // Founder only: the built-in Admin, the space's own admin alias and the
+  // Space-scoped one are all out.
+  assert.deepEqual(offered, ['Founder'])
+})
+
+test('selfJoinAliases is empty when the space only administers', () => {
+  // personAliases grafts Admin in, so the naive Person list is never empty —
+  // this is what makes the join picker skip itself rather than show Admin.
+  assert.deepEqual(selfJoinAliases([]), [])
+  assert.deepEqual(selfJoinAliases(undefined), [])
 })
