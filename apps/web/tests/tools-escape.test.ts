@@ -103,7 +103,6 @@ function deps(over: Partial<BridgeDeps> = {}): BridgeDeps {
     appendLogGated: forbidden('appendLogGated'),
     loadConnector: forbidden('loadConnector'),
     executeConnectorScript: forbidden('executeConnectorScript'),
-    featureAccessForbidden: forbidden('featureAccessForbidden'),
     canTriggerRun: forbidden('canTriggerRun'),
     claimManualRun: forbidden('claimManualRun'),
     getToolState: forbidden('getToolState'),

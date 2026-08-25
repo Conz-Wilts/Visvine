@@ -1,8 +1,9 @@
 // The context-source stage of the fused search — the chunk-level sibling of
 // vectorStage.ts. Chunks are embedded at ingest time (no lazy re-embed here;
 // stale-model chunks simply don't rank until reingest), so the semantic half is
-// one cosine ranking in Postgres against the query vector the caller already
-// embedded, over the caller's VISIBLE source paths.
+// one cosine ranking in Postgres against the query vectors the caller already
+// embedded (one per phrasing in the plan, looked up by text), over the caller's
+// VISIBLE source paths.
 //
 // The keyword half exists because BM25 upstream only sees notes: without it an
 // upload that was never embedded (no key at ingest, or an embed failure —
@@ -24,13 +25,14 @@ const SNIPPET_CHARS = 240
 export function createSourceStage(
   context: Context,
   visiblePaths: string[],
-  queryVector: number[] | null,
+  queryVectors: ReadonlyMap<string, number[]>,
   report: SemanticReport = {},
 ): SourceStage {
   return {
-    async rank(): Promise<SourceStageHit[]> {
+    async rank(query): Promise<SourceStageHit[]> {
       try {
         const config = embeddingsConfig()
+        const queryVector = queryVectors.get(query)
         if (!config || !queryVector || visiblePaths.length === 0) return []
 
         const rows = await prisma.$queryRaw<

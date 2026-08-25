@@ -239,7 +239,7 @@ export default function NotificationBell() {
         {unread > 0 && (
           <span
             aria-hidden
-            className="absolute top-2 right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-green text-[10px] font-semibold leading-[18px] text-center text-black"
+            className="absolute top-2 right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-brand-green text-[10px] font-semibold leading-[18px] text-center text-white"
           >
             {badge}
           </span>

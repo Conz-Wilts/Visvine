@@ -24,6 +24,10 @@ import type { RetrievalNote } from '../../lib/notes/shared/retrieval'
 import type { RawNote } from '../../lib/notes/shared/types'
 import type { EvalQuery } from '../../lib/notes/shared/evalRetrieval'
 
+/** Every query is asked on this day (a Tuesday), so relative dates are fixed. */
+const EVAL_NOW = Date.UTC(2026, 7, 25, 12)
+const at = (iso: string): number => Date.parse(`${iso}T09:00:00Z`)
+
 const md = (frontmatter: Record<string, string>, body: string): string => {
   const fm = Object.entries(frontmatter)
     .map(([k, v]) => `${k}: ${v}`)
@@ -39,7 +43,7 @@ const md = (frontmatter: Record<string, string>, body: string): string => {
 const CORPUS: RawNote[] = [
   {
     path: 'decisions/pricing-v2.md',
-    mtime: 3_000,
+    mtime: at('2026-08-20'),
     content: md(
       { title: 'Pricing model v2', type: 'decision', status: 'accepted', supersedes: '/decisions/pricing-v1.md' },
       `We charge per seat at $18 per month, billed annually.
@@ -51,7 +55,7 @@ customer.`,
   },
   {
     path: 'decisions/pricing-v1.md',
-    mtime: 1_000,
+    mtime: at('2026-02-01'),
     content: md(
       { title: 'Pricing model v1', type: 'decision', status: 'superseded', superseded_by: '/decisions/pricing-v2.md' },
       `We charge a flat $200 per month per company, billed monthly.
@@ -61,7 +65,7 @@ The trial is 30 days and requires a card up front.`,
   },
   {
     path: 'runbooks/onboarding.md',
-    mtime: 2_500,
+    mtime: at('2026-08-10'),
     content: md(
       { title: 'Onboarding runbook', type: 'runbook' },
       `How a new customer gets set up in their first week.
@@ -72,7 +76,7 @@ Day five they invite their own team.`,
   },
   {
     path: 'customers/northwind.md',
-    mtime: 2_000,
+    mtime: at('2026-04-10'),
     content: md(
       { title: 'Northwind Traders', type: 'customer', tags: '[logistics, enterprise]' },
       `Signed in March on the annual plan. Their main contact is in Auckland.
@@ -82,7 +86,7 @@ They asked repeatedly for a shared inbox before they signed.`,
   },
   {
     path: 'customers/contoso.md',
-    mtime: 2_100,
+    mtime: at('2026-06-15'),
     content: md(
       { title: 'Contoso Freight', type: 'customer', tags: '[logistics, smb]' },
       `Trialling since June. Two seats. Evaluating us against a spreadsheet.`,
@@ -90,7 +94,7 @@ They asked repeatedly for a shared inbox before they signed.`,
   },
   {
     path: 'notes/shared-inbox-research.md',
-    mtime: 2_200,
+    mtime: at('2026-07-01'),
     content: md(
       { title: 'Shared inbox research', type: 'note' },
       `Three of our logistics customers have asked for a shared inbox.
@@ -100,7 +104,7 @@ The ask is really about not losing a reply when someone is away.`,
   },
   {
     path: 'notes/standup-2026-02-11.md',
-    mtime: 1_500,
+    mtime: at('2026-02-11'),
     content: md(
       { title: 'Standup 11 Feb', type: 'note' },
       `Talked about pricing briefly. Nothing decided. Someone mentioned a trial.`,
@@ -108,7 +112,7 @@ The ask is really about not losing a reply when someone is away.`,
   },
   {
     path: 'notes/expired-promo.md',
-    mtime: 1_800,
+    mtime: at('2026-03-01'),
     content: md(
       { title: 'Launch promo', type: 'note', status: 'expired' },
       `Fifty percent off the first year for anyone who signs up before launch day.`,
@@ -187,6 +191,30 @@ export const QUERIES: EvalQuery[] = [
     relevant: ['runbooks/onboarding.md'],
     intent:
       'When no document contains every term, the AND relaxes to OR rather than returning nothing — an unanswerable term must not erase an answerable one.',
+  },
+  {
+    id: 'temporal-only',
+    query: 'what happened last week',
+    now: EVAL_NOW,
+    relevant: ['decisions/pricing-v2.md'],
+    intent:
+      'A question that is only about a time has no words worth ranking on ("happened" is in nothing). It is answered by the date range — the previous calendar week, Mon 17 – Sun 23 Aug — newest first. Asked on Tue 25 Aug, that is the pricing decision of the 20th and nothing else.',
+  },
+  {
+    id: 'temporal-filter-with-topic',
+    query: 'seats in June',
+    now: EVAL_NOW,
+    relevant: ['customers/contoso.md'],
+    intent:
+      'Time words become a filter and the rest of the query still ranks: "in June" cuts to that month (Contoso, 15 June), and "seats" then finds it. The v2 pricing note also says "seat" but is from August — excluded by the date, not by score.',
+  },
+  {
+    id: 'history-intent',
+    query: 'why did we stop charging per company',
+    relevant: ['decisions/pricing-v1.md', 'decisions/pricing-v2.md'],
+    order: ['decisions/pricing-v1.md', 'decisions/pricing-v2.md'],
+    intent:
+      'A history question wants the retired note. The lifecycle multiplier would otherwise drop the superseded decision below its replacement even though the query is uniquely about the OLD policy — the plan reads the intent and ranks it at full weight.',
   },
 ]
 

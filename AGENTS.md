@@ -177,6 +177,40 @@ full-text, and link-context neighbours of the top BM25 hits (recall net, weight
 0.4). Cosine hits must clear both a relative floor (85% of top) and 0.55
 absolute.
 
+**A query is planned before any stage runs** (`lib/notes/shared/queryPlan.ts`,
+pure and deterministic): time words ("last week", "in June 2024", "since March",
+"2026-03-15") become the `updatedAfter/Before` filter and are stripped from the
+text the stages rank on; a query with nothing topical left ("what happened
+yesterday") is *temporal-only* and is answered by recency inside the range with
+no text stage at all; a history phrasing ("why did we stop…", "used to") turns
+the lifecycle down-ranking off, because the retired note IS the answer. The
+server widens the plan with one structured LLM call (`lib/notes/queryRewrite.ts`,
+GEMINI_API_KEY, skipped for ≤3-word queries and temporal-only asks): up to three
+alternate phrasings, each run through BM25 and the vector stages as its own
+stage at weight 0.7, and a date range used only when the parser found none. The
+rewrite is untrusted output (`coerceQueryRewrite`) and can only add phrasings
+and bounds; a caller's explicit time bound disables inference entirely. Every
+result reports its `plan` — phrasings, range, `temporal_only`, `intent`, and
+whether the rewrite ran — the way `semantic` reports the vector half.
+
+**Derived memories are the answer-sized tier.** The nightly sweep
+(`lib/notes/memorySweep.ts`, also `pnpm db:memories`, 50 notes a run) asks the
+chat model for the one-sentence claims a note states — self-contained, subject
+named — and stores them in `context_memories` keyed like the note vectors
+(`(space, owner, path)`, `mtime` of the save they came from, no foreign key,
+pruned on delete/rename in `projections.ts#dropEmbedding`, reconciled by the
+sweep). Which notes yield them and what an extraction may become is the pure
+half, `lib/notes/shared/memories.ts`. `lib/notes/memoryStage.ts` ranks claims
+(cosine + Postgres full text) for the visible notes **at their current mtime**
+only, and `fusedSearch` folds every hit onto its note at weight 1 — a memory is
+evidence for a note, never a result of its own — keeping the best claim as the
+hit's `claim`. That field is what an agent reads instead of the note.
+
+An optional rerank of the over-fetched head (3×k, at most 30) sits after fusion
+behind the injected `Reranker`; `lib/notes/rerank.ts` is a listwise LLM judge,
+on only with `CONTEXT_RERANK=llm`, and its scores are lifecycle-weighted like
+fused ones. `pnpm eval:retrieval` is the regression gate for all of it.
+
 Vector stages need `OPENAI_API_KEY` (`text-embedding-3-small`, 768 dims). Without
 it the response reports `semantic: "no-key"` rather than silently degrading.
 After setting the key run `pnpm db:embed` once to backfill. Directory search
@@ -428,6 +462,29 @@ timeout/memory/leak, 25-sequential-calls regression). Live, against `pnpm dev`:
 `pnpm --filter @visvine/web connectors:verify:funds` / `:oauth` through the real
 MCP server. The OAuth suite is the one that matters — token expiry + refresh, 429
 backoff, cursor pagination, i.e. many host calls in one run.
+
+## Tools
+
+A Tool is three notes (`tools/<name>/{index.md,ui.tsx,data.js}`) compiled on
+write, run in a sandboxed iframe on a cookie-less origin. `docs/tools.md` is the
+guide. The one invariant to hold before touching any of it:
+
+- **A Tool belongs to the space that wrote it.** Publishing a version ships it
+  to that space and NOWHERE else. `AppToolVersion` carries two independent
+  verdicts and both are asked, in order (`registry.ts#installability`, pure):
+  `status` is the source space's admin — `approved` makes it installable in that
+  space and its descendants — and `marketplaceStatus` is Visvine's, **null until
+  an admin explicitly submits it**, and only `approved` there lists it or lets an
+  unrelated space install it. Never widen a query over versions without deciding
+  which verdict it is asking about.
+- **Publishing is a member act; approving is the admin's.** An admin's publish
+  lands approved (they are the approver); a member's lands pending and notifies
+  the space's admins — that is the update queue, on `/tools?tab=approvals`. A
+  re-publish supersedes the author's earlier pending submission rather than
+  being refused.
+- The working copy renders live at `/tools/preview/<name>` for anyone who can
+  read the note. That path is load-bearing: `create_tool`, `write_tool` and
+  `preview_tool` all hand it back, and the desktop deep link resolves to it.
 
 ## Production
 

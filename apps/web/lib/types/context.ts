@@ -433,7 +433,7 @@ export function getNodeTypeConfig(
  */
 export function getNodeGlyph(
   type: string | null | undefined
-): 'person' | 'group' | 'event' | 'resource' | 'connector' | null {
+): 'person' | 'group' | 'event' | 'resource' | 'connector' | 'agent' | null {
   if (!type) return null;
   const normalized = type.toLowerCase();
   const canonical = TYPE_SYNONYMS[normalized] ?? normalized;
@@ -445,6 +445,9 @@ export function getNodeGlyph(
   // 'group' — it is the shape's name, not a node type.
   if (canonical === 'space' || canonical === 'section' || canonical === 'channel') return 'group';
   if (canonical === 'connector') return 'connector';
+  // An agent brief is not a document: it is the thing that runs. Its own glyph
+  // is what separates it from the notes it reads and writes.
+  if (canonical === 'agent') return 'agent';
   return null;
 }
 

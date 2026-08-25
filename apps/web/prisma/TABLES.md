@@ -29,6 +29,7 @@ in the shared context of a personal Space, so any other value is legacy.)
 | `context_folders` | Folders that exist even when empty, plus the two folder flags: `restricted` (cuts permission inheritance at that boundary) and `locked` (frozen for AI). |
 | `context_state` | Control-plane sidecar files — folder registry, read-audit log, join requests, enrichment ledger. JSON/JSONL blobs, one row per named file. |
 | `context_note_embeddings` | Cached vector for each whole note, for semantic search. Re-computed when the note changes. |
+| `context_memories` | One-sentence claims extracted from each note by the nightly sweep, with a vector each. Search ranks over them and folds each hit onto its note, so a result can carry the sentence that answered. Rows from an older save of the note are never served. |
 | `context_publications` | A live publish link: a note in one Space is mirrored into another Space's context and rewritten on every save. Turning it off leaves the copy behind as a plain note. |
 | `context_sources` | A non-note file attached to the context (CSV, markdown, text). Original lives in GCS; this row is the metadata + extraction status. Never appears as a Node or in the Directory. |
 | `context_source_chunks` | The extracted text, split into chunks, each with a vector. This is what source-level search actually reads. |

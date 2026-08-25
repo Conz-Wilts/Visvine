@@ -129,3 +129,26 @@ export function fmtCents(cents: number | null | undefined): string {
   if (cents > 0 && cents < 1) return '<$0.01';
   return `$${(cents / 100).toFixed(2)}`;
 }
+
+/**
+ * What stands between an off agent and its switch, as one sentence — or
+ * nothing, when the only thing missing is the switch itself. The three
+ * labelled steps this replaced said "Brief ✓ / Model key ✓ / When it runs" on
+ * an agent whose real state was "not on yet"; a connector row says nothing
+ * when it is healthy and names the one failure when it is not, and an agent
+ * has the same two answers.
+ */
+export function setupBlocker(a: AgentSummary, isAdmin: boolean): { text: string; fix: 'brief' | 'key' } | null {
+  // The message itself is already on the page as an alert; this line is the
+  // way out of it, not a second copy.
+  if (a.invalid) return { text: 'The brief has a problem', fix: 'brief' };
+  if (!a.keyStored) {
+    const provider = a.model?.split('/')[0] ?? '';
+    const key = provider ? `MODEL_KEY_${provider.toUpperCase()}` : 'the model key';
+    return {
+      text: isAdmin ? `Needs ${key}` : `No ${provider || 'model'} key yet — an admin adds ${key}`,
+      fix: 'key',
+    };
+  }
+  return null;
+}

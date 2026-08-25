@@ -316,3 +316,114 @@ test('fusedSearch never filters a retired note out of the results', async () => 
   assert.equal(hits[0].path, 'why.md') // the record of a reversal is often the answer
   assert.equal(hits[0].status, 'deprecated')
 })
+
+// the query plan in the fusion
+
+const NOW = Date.UTC(2026, 7, 25, 12)
+const at = (iso: string) => Date.parse(`${iso}T09:00:00Z`)
+
+test('fusedSearch: a temporal-only query answers by recency inside the range, no text stage', async () => {
+  const notes = toRetrieval([
+    note('a.md', '---\ntitle: Monday\n---\nnothing in common', at('2026-08-17')),
+    note('b.md', '---\ntitle: Friday\n---\nalso nothing', at('2026-08-21')),
+    note('c.md', '---\ntitle: Too old\n---\nwhat happened happened', at('2026-08-01')),
+    note('d.md', '---\ntitle: Retired\nstatus: superseded\n---\nlast week', at('2026-08-22')),
+  ])
+  const vector: VectorStage = { rank: async () => assert.fail('the vector stage must not run') }
+  const hits = await fusedSearch(notes, 'what happened last week', {}, { now: NOW, vector })
+  // Newest first, the retired one weighted down behind the current ones, the
+  // note that merely SAYS "what happened" excluded by date.
+  assert.deepEqual(hits.map((h) => h.path), ['b.md', 'a.md', 'd.md'])
+  assert.equal(hits[2].status, 'superseded')
+  assert.ok(hits.every((h) => h.snippet))
+})
+
+test('fusedSearch: time words become a filter and the topic still ranks', async () => {
+  const notes = toRetrieval([
+    note('june.md', '---\ntitle: June call\n---\ndiscussed seats with contoso', at('2026-06-15')),
+    note('aug.md', '---\ntitle: August call\n---\ndiscussed seats with northwind', at('2026-08-15')),
+  ])
+  const hits = await fusedSearch(notes, 'seats in June', {}, { now: NOW })
+  assert.deepEqual(hits.map((h) => h.path), ['june.md'])
+  // An explicit filter wins over the inferred one.
+  const explicit = await fusedSearch(notes, 'seats in June', { updatedAfter: at('2026-08-01') }, { now: NOW })
+  assert.deepEqual(explicit.map((h) => h.path), ['aug.md'])
+})
+
+test('fusedSearch: the date filter reads a frontmatter date before mtime', async () => {
+  const notes = toRetrieval([
+    note('standup.md', '---\ntitle: Standup\ndate: 2026-06-03\n---\nseats', at('2026-08-24')),
+  ])
+  assert.equal((await fusedSearch(notes, 'seats in June', {}, { now: NOW })).length, 1)
+  assert.equal((await fusedSearch(notes, 'seats in August', {}, { now: NOW })).length, 0)
+})
+
+test('fusedSearch: a history question ranks the retired note at full weight', async () => {
+  const notes = toRetrieval([
+    note('v2.md', '---\ntitle: Pricing v2\n---\nwe charge per seat', 2),
+    note('v1.md', '---\ntitle: Pricing v1\nstatus: superseded\n---\nwe charge per company, a flat fee', 1),
+  ])
+  const current = await fusedSearch(notes, 'charge per company', {}, { now: NOW })
+  const history = await fusedSearch(notes, 'why did we stop charging per company', {}, { now: NOW })
+  assert.equal(history[0].path, 'v1.md')
+  assert.equal(history[0].status, 'superseded')
+  // The same two notes, and v1 scores higher when the question is about the past.
+  const v1Current = current.find((h) => h.path === 'v1.md')!.score
+  assert.ok(history[0].score > v1Current)
+})
+
+test('fusedSearch: alternate phrasings reach the fusion as discounted stages', async () => {
+  const notes = toRetrieval([
+    note('hq.md', '---\ntitle: Office\n---\nour headquarters is in Auckland', 1),
+    note('other.md', '---\ntitle: Other\n---\nunrelated words here', 1),
+  ])
+  const plan = {
+    queries: ['where is the company based', 'headquarters location'],
+    topic: 'where is the company based',
+    dateRange: null,
+    temporalOnly: false,
+    intent: 'current' as const,
+  }
+  // The original wording matches nothing; the alternate finds it.
+  const seen: string[] = []
+  const vector: VectorStage = {
+    rank: async (q) => {
+      seen.push(q)
+      return []
+    },
+  }
+  const hits = await fusedSearch(notes, plan.queries[0], {}, { plan, vector })
+  assert.deepEqual(hits.map((h) => h.path), ['hq.md'])
+  assert.deepEqual(seen, plan.queries) // every phrasing was offered to the vector stage
+  // …and the direct match by the ORIGINAL outranks one found only through an alternate.
+  const both = toRetrieval([
+    note('direct.md', '---\ntitle: A\n---\nwhere the company is based', 1),
+    note('alt.md', '---\ntitle: B\n---\nheadquarters location', 1),
+  ])
+  const ranked = await fusedSearch(both, plan.queries[0], {}, { plan })
+  assert.deepEqual(ranked.map((h) => h.path), ['direct.md', 'alt.md'])
+})
+
+test('fusedSearch: the reranker reorders the head; unscored and failed stay fused', async () => {
+  const notes = toRetrieval([
+    note('a.md', '---\ntitle: Alpha seats\n---\nseats seats seats', 1),
+    note('b.md', '---\ntitle: Beta\n---\nseats', 1),
+    note('c.md', '---\ntitle: Gamma\n---\nseats once', 1),
+    note('r.md', '---\ntitle: Retired seats\nstatus: superseded\n---\nseats', 1),
+  ])
+  // Scores the fused order [a, b, c, r] in reverse: r highest of all.
+  const flip = { rerank: async (_q: string, c: { key: string }[]) => c.map((x, i) => ({ key: x.key, score: 0.7 + i / 10 })) }
+  const hits = await fusedSearch(notes, 'seats', {}, { rerank: flip, k: 4 })
+  // Reversed by the reranker — except the retired note, whose 1.0 is lifecycle-weighted to 0.35 and lands last.
+  assert.deepEqual(hits.map((h) => h.path), ['c.md', 'b.md', 'a.md', 'r.md'])
+
+  const silent = { rerank: async () => [] }
+  const plain = await fusedSearch(notes, 'seats', {}, { k: 4 })
+  const same = await fusedSearch(notes, 'seats', {}, { rerank: silent, k: 4 })
+  assert.deepEqual(same.map((h) => h.path), plain.map((h) => h.path))
+
+  const partial = { rerank: async (_q: string, c: { key: string }[]) => [{ key: c[2].key, score: 1 }] }
+  const one = await fusedSearch(notes, 'seats', {}, { rerank: partial, k: 4 })
+  assert.equal(one[0].path, plain[2].path)
+  assert.deepEqual(one.slice(1).map((h) => h.path), plain.filter((h) => h.path !== plain[2].path).map((h) => h.path))
+})

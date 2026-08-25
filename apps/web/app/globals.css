@@ -454,8 +454,8 @@ html {
    so <main>'s scroll track starts behind it — and on a long page the thumb is
    short enough to hide entirely behind the bar at rest. A track margin moves
    the thumb's travel range to start below the bar, so the scrollbar genuinely
-   begins after the tab row instead of being masked over. PaneTabBar owns the
-   variable (set while a bar is mounted, removed with it). WebKit-only: Firefox's
+   begins after the tab row instead of being masked over. PaneTopScrollbarMask
+   owns the variable (set while a bar is mounted, removed with it). WebKit-only: Firefox's
    standard scrollbar props have no track-margin equivalent, so it keeps the
    masked behaviour. */
 main::-webkit-scrollbar-track {

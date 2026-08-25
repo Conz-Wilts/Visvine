@@ -14,6 +14,8 @@
  */
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson'
 import type {
+  ApprovalDecisionResponse,
+  ApprovalQueueResponse,
   AuthoredToolsResponse,
   AuthoredToolView,
   BrowseResponse,
@@ -22,6 +24,7 @@ import type {
   InstallCreatedResponse,
   InstallUpdatedResponse,
   InstallsResponse,
+  ListingResponse,
   PublishResponse,
   ToolIconResponse,
   VersionResponse,
@@ -167,8 +170,14 @@ export function deleteAuthoredTool(spaceId: string, name: string): Promise<{ ok:
   )
 }
 
-/** Publish the working copy as the next version, pending review (admin). A
- *  working copy that does not compile comes back 409 with its diagnostics. */
+/**
+ * Publish the working copy as the next version, INTO THIS SPACE.
+ *
+ * An admin's publish is approved as it lands; a member's waits for one of their
+ * admins in the Approvals tab. Neither offers it to anyone else — that is
+ * `listOnMarketplace`. A working copy that does not compile comes back 409 with
+ * its diagnostics.
+ */
 export function publishTool(
   spaceId: string,
   name: string,
@@ -180,6 +189,52 @@ export function publishTool(
     'POST',
     { action: 'publish', ...(note ? { note } : {}), ...(releaseNotes ? { releaseNotes } : {}) },
   )
+}
+
+// ── approvals and listings (a version, not a working copy) ───────────────────
+
+/** This space's own queue: versions its members published, awaiting an admin. */
+export function fetchApprovalQueue(
+  spaceId: string,
+  signal?: AbortSignal,
+): Promise<ApprovalQueueResponse> {
+  return fetchJson<ApprovalQueueResponse>(versionsUrl(spaceId), { signal })
+}
+
+/** A space admin's verdict on a member's publish — the update queue's decision. */
+export function reviewSpaceVersion(
+  spaceId: string,
+  versionId: string,
+  decision: 'approved' | 'rejected',
+  note?: string,
+): Promise<ApprovalDecisionResponse> {
+  return fetchJsonBody<ApprovalDecisionResponse>(versionsUrl(spaceId, versionId), 'POST', {
+    action: 'review',
+    decision,
+    ...(note ? { note } : {}),
+  })
+}
+
+/** Offer an approved version to every other space — Visvine reviews it. */
+export function listOnMarketplace(
+  spaceId: string,
+  versionId: string,
+  note?: string,
+): Promise<ListingResponse> {
+  return fetchJsonBody<ListingResponse>(versionsUrl(spaceId, versionId), 'POST', {
+    action: 'list',
+    ...(note ? { note } : {}),
+  })
+}
+
+/** Take a listing request back out of Visvine's queue. */
+export function unlistFromMarketplace(spaceId: string, versionId: string): Promise<ListingResponse> {
+  return fetchJsonBody<ListingResponse>(versionsUrl(spaceId, versionId), 'POST', { action: 'unlist' })
+}
+
+function versionsUrl(spaceId: string, versionId?: string): string {
+  const base = `/api/communities/${encodeURIComponent(spaceId)}/tools/versions`
+  return versionId ? `${base}/${encodeURIComponent(versionId)}` : base
 }
 
 /**

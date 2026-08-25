@@ -142,6 +142,10 @@ function version(over: Partial<ToolVersionSummary> = {}): ToolVersionSummary {
     submittedAt: '2026-08-18T00:00:00.000Z',
     reviewedAt: null,
     reviewNote: null,
+    marketplaceStatus: null,
+    marketplaceSubmittedAt: null,
+    marketplaceReviewedAt: null,
+    marketplaceReviewNote: null,
     sizeBytes: 412,
     sourceSpaceId: SPACE,
     author: { userId: 'user_1', name: 'Ada' },
@@ -562,10 +566,15 @@ test('publish_tool explains the review gate and passes the note through', async 
   assert.deepEqual(notes, [['board', 'Adds the archive column']])
   assert.equal(result.status, 'pending')
   assert.equal(result.version, 3)
-  // An author told only "published" would sit waiting for a marketplace entry
-  // that is not coming until a super-admin looks at it.
-  assert.match(result.review, /PENDING review/)
-  assert.match(result.review, /super-admin/)
+  // A member's publish waits on their own admins, and the answer has to say so
+  // — an author told only "published" assumes it is live.
+  assert.equal(result.scope, 'space')
+  assert.match(result.published, /waiting on an admin of this space/)
+  assert.match(result.published, /NOT on the marketplace/)
+  // …and that publishing never lists anything is the sentence this whole
+  // surface exists to make unmissable.
+  assert.match(result.marketplace, /separate act/)
+  assert.ok(result.preview_url.endsWith('/tools/preview/board'))
   assert.ok(result.perimeter.length > 0)
 })
 
@@ -828,19 +837,20 @@ test('publish_tool passes release_notes through and echoes tags and notes back',
   assert.equal(result.release_notes, 'Adds the archive column')
 })
 
-test('publish_tool explains an auto-approved version instead of promising a review', async () => {
+test("publish_tool says an admin's publish is live here — and still not public", async () => {
   const result = await appToolHandlers.publishTool(
     CTX,
     { space_id: SPACE, name: 'board' },
     deps({
       publishTool: async () => ({
         ok: true,
-        version: version({ status: 'approved', reviewNote: 'auto-approved: trusted publisher, unchanged perimeter' }),
+        version: version({ status: 'approved', reviewNote: 'published by an admin' }),
         warning: null,
       }),
     }),
   )
   assert.equal(result.status, 'approved')
-  assert.match(result.review, /AUTO-APPROVED/)
-  assert.doesNotMatch(result.review, /PENDING/)
+  assert.match(result.published, /APPROVED in this space/)
+  // Approved in a space is still not public, and the wording may never blur it.
+  assert.match(result.published, /NOT on the marketplace/)
 })

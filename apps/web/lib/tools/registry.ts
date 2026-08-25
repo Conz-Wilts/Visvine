@@ -1,35 +1,55 @@
 /**
- * The Tool marketplace registry — publish, review, browse.
+ * The Tool version registry — publish, approve, list, browse.
  *
  * One row per published version (`AppToolVersion`), keyed `<spaceId>/<name>` and
  * numbered from 1. Publishing snapshots EVERYTHING the running Tool is made of
- * (config, perimeter, the three sources, both compiled bundles) into that row
- * and queues it for a Visvine super-admin. Once approved a version never
- * changes: an upgrade is a new row, and an install pins the id it chose, so code
- * can never change under a space silently. That immutability is the whole point
- * of the table, which is why nothing here updates a snapshot field — only
- * `status` and the three review columns beside it ever move.
+ * (config, perimeter, the three sources, both compiled bundles) into that row.
+ * Once written a version never changes: an upgrade is a new row, and an install
+ * pins the id it chose, so code can never change under a space silently. That
+ * immutability is the whole point of the table, which is why nothing here
+ * updates a snapshot field — only the two verdicts and their review columns
+ * ever move.
+ *
+ * TWO VERDICTS, because a Tool being ready and a Tool being public are two
+ * different questions and only the first one is asked by default:
+ *
+ *   status              the SOURCE SPACE's. An admin publishing approves as they
+ *                       publish; a member publishing queues for their admins
+ *                       (`reviewSpaceVersion`). `approved` is what makes a
+ *                       version installable — inside that space's own lineage
+ *                       and nowhere else.
+ *   marketplaceStatus   VISVINE's, and NULL until an admin explicitly calls
+ *                       `submitToMarketplace`. Only `approved` there lists a
+ *                       version on the global shelf or lets an unrelated space
+ *                       install it (`reviewVersion`, super-admin).
+ *
+ * So a Tool written in a private space stays in it. Publishing ships it to the
+ * people who wrote it; going public is a second act, taken deliberately, and
+ * reviewed by someone else.
  *
  * Where the boundaries are:
- *   • Publishing is a SPACE admin act, over that space's own working copy
- *     (`AppToolBuild`, written by the compile-on-write hook).
- *   • Reviewing is a VISVINE super-admin act (`isSuperAdmin` — env-driven), and
- *     the queue is global: this is the one table in the app that is not
- *     space-scoped.
+ *   • Publishing is a MEMBER act over that space's own working copy
+ *     (`AppToolBuild`, written by the compile-on-write hook); approving it is
+ *     the space admin's.
+ *   • Marketplace review is a VISVINE super-admin act (`isSuperAdmin` —
+ *     env-driven), and that queue is the one global surface here.
  *   • Installing is a space admin act and lives next door in ./installs.ts,
  *     which reads versions through here.
  *
- * The decision logic worth testing without a database is `nextVersionNumber`;
- * everything else is a thin read or write. Refusals come back as
- * `{ ok: false, status, error }` rather than exceptions, matching
- * lib/agents/service.ts — a route can hand the pair straight to the client.
+ * The decision logic worth testing without a database is `nextVersionNumber`,
+ * `installability` and `shouldAutoApprove`; everything else is a thin read or
+ * write. Refusals come back as `{ ok: false, status, error }` rather than
+ * exceptions, matching lib/agents/service.ts — a route can hand the pair
+ * straight to the client.
  */
 import prisma from '@/lib/prisma'
+import { spaceAdminUserIds } from '@/lib/auth'
 import { isSuperAdmin } from '@/lib/session'
 import { logAudit } from '@/lib/notes/audit'
 import { notify } from '@/lib/notifications/service'
+import { descendantsOf } from '@/lib/spaces/tree'
 import { writeGated } from '@/lib/notes/contextService'
-import { principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
+import { principalCanWrite, principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
@@ -57,14 +77,21 @@ import {
 } from './perimeter'
 
 /**
- * Where a version stands. `pending` is in the queue, `approved` is installable,
- * `rejected` was refused by a reviewer and `withdrawn` was taken back by its
- * author before anyone looked. Only `approved` is ever installed, and a
- * rejection is kept rather than deleted so the author can read the note.
+ * Where a verdict stands. `pending` is in a queue, `approved` is the yes,
+ * `rejected` was refused and `withdrawn` was taken back before anyone looked.
+ * Both verdicts use it: `status` is the source space's, `marketplaceStatus` is
+ * Visvine's. A rejection is kept rather than deleted so the author can read the
+ * note that came with it.
  */
 export type ToolVersionStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn'
 
 const STATUSES: readonly ToolVersionStatus[] = ['pending', 'approved', 'rejected', 'withdrawn']
+
+/**
+ * Visvine's verdict on a global listing, or null while nobody has asked for
+ * one. Null is the state every version starts in and most versions stay in.
+ */
+export type MarketplaceStatus = ToolVersionStatus | null
 
 /** A refusal, carrying the HTTP status the REST layer should answer with. */
 export interface RegistryError {
@@ -83,10 +110,16 @@ export interface ToolVersionSummary {
   version: number
   title: string
   description: string | null
+  /** The source space's verdict — what decides whether this can be installed. */
   status: ToolVersionStatus
   submittedAt: string
   reviewedAt: string | null
   reviewNote: string | null
+  /** Visvine's verdict on a global listing; null = never submitted for one. */
+  marketplaceStatus: MarketplaceStatus
+  marketplaceSubmittedAt: string | null
+  marketplaceReviewedAt: string | null
+  marketplaceReviewNote: string | null
   sizeBytes: number
   sourceSpaceId: string
   /** Display name of whoever published it; null if the account is gone. */
@@ -218,9 +251,13 @@ export function decodeToolConfig(raw: unknown, name: string): ToolConfig {
   }
 }
 
-function decodeStatus(raw: string): ToolVersionStatus {
+/** A stored verdict string → a verdict. An unknown value reads as `pending`:
+ *  the state that grants nothing. */
+export function decodeVersionStatus(raw: string): ToolVersionStatus {
   return (STATUSES as readonly string[]).includes(raw) ? (raw as ToolVersionStatus) : 'pending'
 }
+
+const decodeStatus = decodeVersionStatus
 
 // ── row → DTO ────────────────────────────────────────────────────────────────
 
@@ -236,6 +273,10 @@ const SUMMARY_SELECT = {
   submittedAt: true,
   reviewedAt: true,
   reviewNote: true,
+  marketplaceStatus: true,
+  marketplaceSubmittedAt: true,
+  marketplaceReviewedAt: true,
+  marketplaceReviewNote: true,
   sizeBytes: true,
   sourceSpaceId: true,
   authorUserId: true,
@@ -266,6 +307,10 @@ type SummaryRow = {
   submittedAt: Date
   reviewedAt: Date | null
   reviewNote: string | null
+  marketplaceStatus: string | null
+  marketplaceSubmittedAt: Date | null
+  marketplaceReviewedAt: Date | null
+  marketplaceReviewNote: string | null
   sizeBytes: number
   sourceSpaceId: string
   authorUserId: string | null
@@ -293,6 +338,10 @@ function toSummary(row: SummaryRow): ToolVersionSummary {
     submittedAt: row.submittedAt.toISOString(),
     reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
     reviewNote: row.reviewNote,
+    marketplaceStatus: row.marketplaceStatus ? decodeStatus(row.marketplaceStatus) : null,
+    marketplaceSubmittedAt: row.marketplaceSubmittedAt ? row.marketplaceSubmittedAt.toISOString() : null,
+    marketplaceReviewedAt: row.marketplaceReviewedAt ? row.marketplaceReviewedAt.toISOString() : null,
+    marketplaceReviewNote: row.marketplaceReviewNote,
     sizeBytes: row.sizeBytes,
     sourceSpaceId: row.sourceSpaceId,
     author: { userId: row.authorUserId, name: row.author?.name ?? null },
@@ -334,6 +383,49 @@ export function nextVersionNumber(existing: readonly number[]): number {
     if (Number.isInteger(version) && version > highest) highest = version
   }
   return highest + 1
+}
+
+/**
+ * A space and everything nested under it — how far that space's own verdict on
+ * a Tool reaches. A version approved in a parent is installable in a child,
+ * because a child's members are the parent's.
+ */
+async function subtreeSpaceIds(spaceId: string): Promise<string[]> {
+  const below = await descendantsOf(spaceId)
+  return [spaceId, ...below.map((row) => row.id)]
+}
+
+/**
+ * Whether one space may install one version — the rule the two verdicts exist
+ * to express, pure so it can be read and tested in one sitting.
+ *
+ * `lineage` is the installing space and its ancestors (nearest first), which is
+ * where a source space's own approval reaches: a Tool approved in a parent is
+ * installable in a child, because a child's members are the parent's. Anywhere
+ * else, only a marketplace listing will do.
+ */
+export function installability(input: {
+  status: ToolVersionStatus
+  marketplaceStatus: MarketplaceStatus
+  sourceSpaceId: string
+  /** The installing space, then each ancestor above it. */
+  lineage: readonly string[]
+}): { ok: true } | { ok: false; error: string } {
+  if (input.status !== 'approved') {
+    return {
+      ok: false,
+      error:
+        input.status === 'pending'
+          ? 'This version is still waiting on an admin of the space that wrote it.'
+          : `This version was ${input.status} by the space that wrote it.`,
+    }
+  }
+  if (input.lineage.includes(input.sourceSpaceId)) return { ok: true }
+  if (input.marketplaceStatus === 'approved') return { ok: true }
+  return {
+    ok: false,
+    error: 'This tool is private to the space that wrote it — it is not listed on the marketplace.',
+  }
 }
 
 /** `<spaceId>/<name>` — the marketplace identity of a Tool, across versions. */
@@ -442,14 +534,27 @@ function bumpIndexVersion(markdown: string, version: number): string | null {
 }
 
 /**
- * Publish the space's working copy of one Tool as the next version, pending
- * review.
+ * Publish the space's working copy of one Tool as the next version — INTO ITS
+ * OWN SPACE, and nowhere else.
+ *
+ * Who may, and what it costs them:
+ *   • A space ADMIN publishes and approves in the same act — they are the
+ *     approver, so asking them to press a second button would be theatre.
+ *   • A MEMBER who can write the Tool's note publishes it PENDING, and their
+ *     space's admins get it in the bell. That is the update queue: a member
+ *     edits a Tool that is already installed, publishes, and the admin decides
+ *     whether the installs move (`reviewSpaceVersion`).
+ *
+ * Neither reaches the marketplace. Nothing here writes `marketplaceStatus`, so
+ * a Tool written in a private space is published to the people who wrote it and
+ * is invisible everywhere else until an admin calls `submitToMarketplace`.
  *
  * Refuses unless the working copy compiles: the registry stores bundles, and a
- * broken snapshot would be a Tool that installs and then renders an error card
- * in somebody else's space. Refuses a second pending version for the same key —
- * a reviewer looking at two snapshots of "the same" Tool is being asked the
- * wrong question, and the author can withdraw the first.
+ * broken snapshot would be a Tool that installs and then renders an error card.
+ * A previous submission of the same Tool still waiting on an admin is
+ * SUPERSEDED rather than blocking this one — the newer snapshot is what the
+ * author means, and an admin asked to choose between two drafts of the same
+ * Tool is being asked the wrong question.
  *
  * The `version:` bump in the index note is a courtesy write, not part of the
  * publish: the registry row is authoritative, and a denied write (a frozen
@@ -465,10 +570,15 @@ export async function publishTool(
   name: string,
   opts: { note?: string; releaseNotes?: string } = {},
 ): Promise<PublishResult> {
-  if (!principalIsSuperAdmin(p)) {
-    return { ok: false, status: 403, error: 'Only space admins can publish a tool.' }
-  }
   if (!TOOL_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad tool name.' }
+  const isSpaceAdmin = principalIsSuperAdmin(p)
+  if (!isSpaceAdmin && !principalCanWrite(p, toolIndexPath(name))) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'You can only publish a tool you can edit — ask for edit access, or ask an admin to publish it.',
+    }
+  }
 
   const spaceId = context.spaceId
   const buildRow = await getBuild(spaceId, name)
@@ -523,21 +633,33 @@ export async function publishTool(
   const config = build.config
   const key = toolKey(spaceId, name)
   const created = await prisma.$transaction(async (tx) => {
-    // Serialize publishes of one key: the pending check and the number it picks
-    // are one decision, and two concurrent publishes would otherwise both pass
-    // the check and queue two snapshots. Same advisory-lock pattern as
+    // Serialize publishes of one key: superseding, the number it picks and the
+    // row it writes are one decision, and two concurrent publishes would
+    // otherwise both take the same number. Same advisory-lock pattern as
     // lib/spaces/spaceConfig.ts#updateSpaceConfig.
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`app_tool:${key}`})::bigint)::text`
     const existing = await tx.appToolVersion.findMany({
       where: { key },
       select: { version: true, status: true },
     })
-    if (existing.some((row) => row.status === 'pending')) return null
+    const nextVersion = nextVersionNumber(existing.map((row) => row.version))
+    // Supersede whatever the author left in their admins' queue. Only rows
+    // nobody outside the space is looking at: a version already submitted to
+    // the marketplace is a separate conversation with a separate reviewer, and
+    // a newer draft here does not end it.
+    await tx.appToolVersion.updateMany({
+      where: { key, status: 'pending', marketplaceStatus: null },
+      data: {
+        status: 'withdrawn',
+        reviewedAt: new Date(),
+        reviewNote: `Superseded by v${nextVersion}.`,
+      },
+    })
     const row = await tx.appToolVersion.create({
       data: {
         key,
         name,
-        version: nextVersionNumber(existing.map((row) => row.version)),
+        version: nextVersion,
         title: config.title,
         description: config.description || null,
         authorUserId: p.userId,
@@ -553,6 +675,11 @@ export async function publishTool(
         uiBundle: buildRow.uiBundle ?? '',
         dataBundle: buildRow.dataBundle ?? '',
         sizeBytes: build.sizeBytes,
+        // An admin publishing IS the space's approval; a member's publish waits
+        // for one. Nothing marketplace-facing is set either way.
+        status: isSpaceAdmin ? 'approved' : 'pending',
+        reviewedBy: isSpaceAdmin ? p.userId : null,
+        reviewedAt: isSpaceAdmin ? new Date() : null,
         reviewNote: opts.note?.trim() ? opts.note.trim() : null,
         // Marketplace metadata: the author's release notes (clipped, never
         // refused — a long changelog is not a reason to fail a publish) and
@@ -565,54 +692,31 @@ export async function publishTool(
     })
     return row
   })
-  if (!created) {
-    return {
-      ok: false,
-      status: 409,
-      error: `${name} already has a version awaiting review — withdraw it before publishing again.`,
-    }
-  }
   void logAudit(spaceId, {
     userId: p.userId,
     name: p.name,
     action: 'tool',
     path: indexPath,
-    detail: `published v${created.version}`,
+    detail: isSpaceAdmin
+      ? `published and approved v${created.version} in this space`
+      : `published v${created.version} — awaiting a space admin`,
   })
 
-  // The trusted-publisher fast path (see shouldAutoApprove). Decided AFTER the
-  // row exists so the diff is computed exactly the way a human reviewer's
-  // screen computes it — against the same previousApprovedVersion.
-  let published = created
-  const diffed = await perimeterDiffForVersion(created.id)
-  if (
-    diffed &&
-    shouldAutoApprove({
-      trustedPublishers: trustedPublishers(),
-      sourceSpaceId: spaceId,
-      previous: diffed.previous,
-      diff: diffed.diff,
-      surfaces: config.surfaces,
+  if (isSpaceAdmin) {
+    // Installs of this Tool pinned to an older version are offered this one.
+    // Only inside the lineage, because that is the whole reach of a space
+    // verdict — anywhere else is waiting on the marketplace.
+    await flagStaleInstalls(created.key, created.id, created.version, { withinSubtreeOf: spaceId })
+  } else {
+    // The update queue. A member cannot approve their own work, so the admins
+    // are told there is something to look at — the bell is the queue's door,
+    // the same way an install request reaches them.
+    await notifySpaceAdmins(spaceId, p.userId, {
+      kind: 'tool_approval_request',
+      title: `${p.name || 'A member'} published ${created.title} v${created.version}`,
+      body: opts.releaseNotes?.trim() || opts.note?.trim() || null,
+      dedupeKey: `tool-approval:${created.id}`,
     })
-  ) {
-    published = await prisma.appToolVersion.update({
-      where: { id: created.id },
-      data: {
-        status: 'approved',
-        reviewedBy: AUTO_REVIEWER,
-        reviewedAt: new Date(),
-        reviewNote: AUTO_APPROVE_NOTE,
-      },
-      select: SUMMARY_SELECT,
-    })
-    void logAudit(spaceId, {
-      userId: p.userId,
-      name: p.name,
-      action: 'tool',
-      path: indexPath,
-      detail: `approved v${created.version} by ${AUTO_REVIEWER} — ${AUTO_APPROVE_NOTE}`,
-    })
-    await flagStaleInstalls(created.key, created.id, created.version)
   }
 
   // Human origin on purpose: a person pressed Publish. 'agent'/'maintenance'
@@ -627,7 +731,247 @@ export async function publishTool(
       warning = `Published as version ${created.version}, but ${indexPath} could not be updated: ${written.reason}`
     }
   }
-  return { ok: true, version: toSummary(published), warning }
+  return { ok: true, version: toSummary(created), warning }
+}
+
+/**
+ * Tell every admin of a space except the person who caused it. Used by the two
+ * places a Tool needs a decision from someone with the authority to make it:
+ * a member's publish, and a member asking for a marketplace listing.
+ *
+ * Silent when the space has no other admin. A member who is themselves the only
+ * admin never reaches here (they publish approved), and a notification with
+ * nobody to act on it is noise pretending to be a queue.
+ */
+async function notifySpaceAdmins(
+  spaceId: string,
+  actorUserId: string,
+  input: { kind: 'tool_approval_request'; title: string; body: string | null; dedupeKey: string },
+): Promise<void> {
+  const admins = (await spaceAdminUserIds(spaceId)).filter((id) => id !== actorUserId)
+  if (admins.length === 0) return
+  void notify(admins, {
+    spaceId,
+    kind: input.kind,
+    title: input.title,
+    body: input.body,
+    href: '/tools?tab=approvals',
+    dedupeKey: input.dedupeKey,
+  })
+}
+
+/**
+ * A space admin's verdict on a version one of their members published — the
+ * update queue's decision.
+ *
+ * Approving is what puts the code within reach: only then can it be installed,
+ * and only then are the space's existing installs of the same Tool offered it
+ * as an upgrade. Applying that upgrade is still a separate act
+ * (lib/tools/installs.ts#applyUpgrade), so approving never changes what is
+ * running under anyone by itself.
+ *
+ * Scoped to the SOURCE space on purpose: an admin of some other space has no
+ * standing over code they did not host, whatever their own rail says.
+ */
+export async function reviewSpaceVersion(
+  versionId: string,
+  decision: 'approved' | 'rejected',
+  actor: { userId: string; email: string; spaceId: string; isAdmin: boolean },
+  note?: string,
+): Promise<ReviewResult> {
+  if (decision !== 'approved' && decision !== 'rejected') {
+    return { ok: false, status: 400, error: 'A review is either approved or rejected.' }
+  }
+  const row = await prisma.appToolVersion.findUnique({
+    where: { id: versionId },
+    select: { id: true, key: true, name: true, title: true, version: true, status: true, sourceSpaceId: true, authorUserId: true },
+  })
+  if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
+  if (row.sourceSpaceId !== actor.spaceId) {
+    return { ok: false, status: 403, error: 'This tool was published in another space — its admins decide.' }
+  }
+  if (!actor.isAdmin) {
+    return { ok: false, status: 403, error: 'Only space admins can approve a tool.' }
+  }
+  if (row.status !== 'pending') {
+    return { ok: false, status: 409, error: `This version is already ${row.status}.` }
+  }
+
+  const updated = await prisma.appToolVersion.update({
+    where: { id: versionId },
+    data: {
+      status: decision,
+      reviewedBy: actor.userId,
+      reviewedAt: new Date(),
+      reviewNote: note?.trim() ? note.trim() : null,
+    },
+    select: SUMMARY_SELECT,
+  })
+  void logAudit(row.sourceSpaceId, {
+    userId: actor.userId,
+    name: actor.email,
+    action: 'tool',
+    path: toolIndexPath(row.name),
+    detail: `${decision} v${row.version} for this space by ${actor.email}${note?.trim() ? ` — ${note.trim()}` : ''}`,
+  })
+  if (row.authorUserId && row.authorUserId !== actor.userId) {
+    void notify([row.authorUserId], {
+      spaceId: row.sourceSpaceId,
+      kind: 'tool_review',
+      title: `${row.title} v${row.version} was ${decision}`,
+      body: note?.trim() ? note.trim() : null,
+      href: '/tools',
+    })
+  }
+
+  const upgraded =
+    decision === 'approved'
+      ? await flagStaleInstalls(row.key, versionId, row.version, { withinSubtreeOf: row.sourceSpaceId })
+      : 0
+  return { ok: true, version: toSummary(updated), upgraded }
+}
+
+/**
+ * A space admin asking Visvine to list one of their approved versions publicly
+ * — the ONLY thing that puts a Tool in front of other spaces.
+ *
+ * Only an approved version can be offered: the space has to have said yes to
+ * its own code before asking the world to run it. The trusted-publisher fast
+ * path is decided here rather than at publish, because it is a question about a
+ * LISTING — does this ask for anything the last listed version didn't.
+ */
+export async function submitToMarketplace(
+  versionId: string,
+  actor: { userId: string; email: string; spaceId: string; isAdmin: boolean },
+  opts: { note?: string } = {},
+): Promise<VersionResult> {
+  const row = await prisma.appToolVersion.findUnique({
+    where: { id: versionId },
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      version: true,
+      status: true,
+      config: true,
+      sourceSpaceId: true,
+      marketplaceStatus: true,
+    },
+  })
+  if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
+  if (row.sourceSpaceId !== actor.spaceId) {
+    return { ok: false, status: 403, error: 'Only the space that wrote a tool can list it.' }
+  }
+  if (!actor.isAdmin) {
+    return { ok: false, status: 403, error: 'Only space admins can submit a tool to the marketplace.' }
+  }
+  if (row.status !== 'approved') {
+    return {
+      ok: false,
+      status: 409,
+      error: 'Approve this version in your own space before offering it to anyone else.',
+    }
+  }
+  if (row.marketplaceStatus === 'pending') {
+    return { ok: false, status: 409, error: 'This version is already awaiting review.' }
+  }
+  if (row.marketplaceStatus === 'approved') {
+    return { ok: false, status: 409, error: 'This version is already listed.' }
+  }
+  const queued = await prisma.appToolVersion.count({
+    where: { key: row.key, marketplaceStatus: 'pending' },
+  })
+  if (queued > 0) {
+    return {
+      ok: false,
+      status: 409,
+      error: 'Another version of this tool is already in the review queue — withdraw it first.',
+    }
+  }
+
+  const submitted = await prisma.appToolVersion.update({
+    where: { id: versionId },
+    data: {
+      marketplaceStatus: 'pending',
+      marketplaceSubmittedAt: new Date(),
+      marketplaceReviewNote: opts.note?.trim() ? opts.note.trim() : null,
+    },
+    select: SUMMARY_SELECT,
+  })
+  void logAudit(row.sourceSpaceId, {
+    userId: actor.userId,
+    name: actor.email,
+    action: 'tool',
+    path: toolIndexPath(row.name),
+    detail: `submitted v${row.version} to the marketplace`,
+  })
+
+  // The trusted-publisher fast path (see shouldAutoApprove), computed exactly
+  // the way a human reviewer's screen computes it.
+  const config = decodeToolConfig(row.config, row.name)
+  const diffed = await perimeterDiffForVersion(versionId)
+  if (
+    diffed &&
+    shouldAutoApprove({
+      trustedPublishers: trustedPublishers(),
+      sourceSpaceId: row.sourceSpaceId,
+      previous: diffed.previous,
+      diff: diffed.diff,
+      surfaces: config.surfaces,
+    })
+  ) {
+    const approved = await prisma.appToolVersion.update({
+      where: { id: versionId },
+      data: {
+        marketplaceStatus: 'approved',
+        marketplaceReviewedBy: AUTO_REVIEWER,
+        marketplaceReviewedAt: new Date(),
+        marketplaceReviewNote: AUTO_APPROVE_NOTE,
+      },
+      select: SUMMARY_SELECT,
+    })
+    void logAudit(row.sourceSpaceId, {
+      userId: actor.userId,
+      name: actor.email,
+      action: 'tool',
+      path: toolIndexPath(row.name),
+      detail: `listed v${row.version} by ${AUTO_REVIEWER} — ${AUTO_APPROVE_NOTE}`,
+    })
+    await flagStaleInstalls(row.key, versionId, row.version)
+    return { ok: true, version: toSummary(approved) }
+  }
+  return { ok: true, version: toSummary(submitted) }
+}
+
+/** An admin taking a listing request back out of Visvine's queue. */
+export async function withdrawFromMarketplace(
+  versionId: string,
+  actor: { userId: string; email: string; spaceId: string; isAdmin: boolean },
+): Promise<VersionResult> {
+  const row = await prisma.appToolVersion.findUnique({
+    where: { id: versionId },
+    select: { id: true, name: true, version: true, sourceSpaceId: true, marketplaceStatus: true },
+  })
+  if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
+  if (row.sourceSpaceId !== actor.spaceId || !actor.isAdmin) {
+    return { ok: false, status: 403, error: 'Only an admin of the space that wrote it can withdraw a listing.' }
+  }
+  if (row.marketplaceStatus !== 'pending') {
+    return { ok: false, status: 409, error: 'This version is not awaiting review.' }
+  }
+  const updated = await prisma.appToolVersion.update({
+    where: { id: versionId },
+    data: { marketplaceStatus: 'withdrawn', marketplaceReviewedAt: new Date() },
+    select: SUMMARY_SELECT,
+  })
+  void logAudit(row.sourceSpaceId, {
+    userId: actor.userId,
+    name: actor.email,
+    action: 'tool',
+    path: toolIndexPath(row.name),
+    detail: `withdrew v${row.version} from the marketplace queue`,
+  })
+  return { ok: true, version: toSummary(updated) }
 }
 
 /** An author taking back a version nobody has reviewed yet. */
@@ -712,11 +1056,28 @@ export async function deleteVersion(
 
 // ── review (super-admin) ─────────────────────────────────────────────────────
 
-/** Everything awaiting review, oldest submission first — a queue, not a feed. */
+/**
+ * One space's own approval queue: versions its members published that nobody
+ * with the authority to say yes has looked at yet, oldest first.
+ *
+ * Keyed on `sourceSpaceId` rather than on the key prefix, because that column
+ * is what the row was stamped with and a key is a string an admin could not
+ * change anyway.
+ */
+export async function listSpaceApprovalQueue(spaceId: string): Promise<ToolVersionSummary[]> {
+  const rows = await prisma.appToolVersion.findMany({
+    where: { sourceSpaceId: spaceId, status: 'pending' },
+    orderBy: { submittedAt: 'asc' },
+    select: SUMMARY_SELECT,
+  })
+  return rows.map(toSummary)
+}
+
+/** Every LISTING awaiting Visvine, oldest submission first — a queue, not a feed. */
 export async function listReviewQueue(): Promise<ToolVersionSummary[]> {
   const rows = await prisma.appToolVersion.findMany({
-    where: { status: 'pending' },
-    orderBy: { submittedAt: 'asc' },
+    where: { marketplaceStatus: 'pending' },
+    orderBy: { marketplaceSubmittedAt: 'asc' },
     select: SUMMARY_SELECT,
   })
   return rows.map(toSummary)
@@ -745,20 +1106,26 @@ export async function reviewVersion(
   }
   const row = await prisma.appToolVersion.findUnique({
     where: { id: versionId },
-    select: { id: true, key: true, name: true, title: true, version: true, status: true, sourceSpaceId: true, authorUserId: true },
+    select: { id: true, key: true, name: true, title: true, version: true, marketplaceStatus: true, sourceSpaceId: true, authorUserId: true },
   })
   if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
-  if (row.status !== 'pending') {
-    return { ok: false, status: 409, error: `This version is already ${row.status}.` }
+  if (row.marketplaceStatus !== 'pending') {
+    return {
+      ok: false,
+      status: 409,
+      error: row.marketplaceStatus
+        ? `This version's listing is already ${row.marketplaceStatus}.`
+        : 'This version was never submitted to the marketplace.',
+    }
   }
 
   const updated = await prisma.appToolVersion.update({
     where: { id: versionId },
     data: {
-      status: decision,
-      reviewedBy: reviewer.userId,
-      reviewedAt: new Date(),
-      reviewNote: note?.trim() ? note.trim() : null,
+      marketplaceStatus: decision,
+      marketplaceReviewedBy: reviewer.userId,
+      marketplaceReviewedAt: new Date(),
+      marketplaceReviewNote: note?.trim() ? note.trim() : null,
     },
     select: SUMMARY_SELECT,
   })
@@ -767,7 +1134,7 @@ export async function reviewVersion(
     name: reviewer.email,
     action: 'tool',
     path: toolIndexPath(row.name),
-    detail: `${decision} v${row.version} by ${reviewer.email}${note?.trim() ? ` — ${note.trim()}` : ''}`,
+    detail: `${decision} the marketplace listing of v${row.version} by ${reviewer.email}${note?.trim() ? ` — ${note.trim()}` : ''}`,
   })
   // Tell the author. The review queue is the one super-admin surface, so this is
   // the only way a submitter hears back without polling /tools.
@@ -775,7 +1142,7 @@ export async function reviewVersion(
     void notify([row.authorUserId], {
       spaceId: row.sourceSpaceId,
       kind: 'tool_review',
-      title: `Your Tool ${row.title} v${row.version} was ${decision}`,
+      title: `The marketplace listing of ${row.title} v${row.version} was ${decision}`,
       body: note?.trim() ? note.trim() : null,
       href: '/tools',
     })
@@ -790,10 +1157,22 @@ export async function reviewVersion(
  * OLDER one, by setting `pendingVersionId`. AppToolInstall pins a version by
  * id, not by number, so "older than this" is a question about the joined row.
  * Returns how many installs were flagged.
+ *
+ * `withinSubtreeOf` is what keeps a space verdict inside its own subtree: a
+ * space approving its own code may offer that upgrade to itself and its
+ * children, and an install anywhere else is waiting on Visvine instead. Omit it
+ * — a marketplace approval — and every install is offered the version, which is
+ * what a global listing means.
  */
-async function flagStaleInstalls(key: string, versionId: string, version: number): Promise<number> {
+async function flagStaleInstalls(
+  key: string,
+  versionId: string,
+  version: number,
+  opts: { withinSubtreeOf?: string } = {},
+): Promise<number> {
+  const subtree = opts.withinSubtreeOf ? await subtreeSpaceIds(opts.withinSubtreeOf) : null
   const installs = await prisma.appToolInstall.findMany({
-    where: { key },
+    where: { key, ...(subtree ? { spaceId: { in: subtree } } : {}) },
     select: { id: true, version: { select: { version: true } } },
   })
   const stale = installs.filter((install) => install.version.version < version).map((i) => i.id)
@@ -838,8 +1217,13 @@ export function pageByCursor<T extends { key: string }>(
 
 
 /**
- * The marketplace listing: the newest APPROVED version of each Tool, newest
+ * The marketplace listing: the newest LISTED version of each Tool, newest
  * publication first, with the author's name and how many spaces run it.
+ *
+ * Listed means both verdicts said yes — its own space approved the code and
+ * Visvine approved the listing. A version its space merely published is not
+ * here, which is the whole reason a Tool written in a private space is invisible
+ * to everyone outside it.
  *
  * Folded in memory rather than with a `DISTINCT ON` query. The registry is
  * review-gated and free, so "every approved version ever" is a small set, and
@@ -854,6 +1238,7 @@ export async function browseVersions(
   const rows = await prisma.appToolVersion.findMany({
     where: {
       status: 'approved',
+      marketplaceStatus: 'approved',
       ...(q
         ? {
             OR: [
@@ -875,7 +1260,11 @@ export async function browseVersions(
     seen.add(row.key)
     latest.push(row)
   }
-  latest.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime() || a.key.localeCompare(b.key))
+  latest.sort(
+    (a, b) =>
+      (b.marketplaceSubmittedAt ?? b.submittedAt).getTime() -
+        (a.marketplaceSubmittedAt ?? a.submittedAt).getTime() || a.key.localeCompare(b.key),
+  )
 
   const { page, nextCursor } = pageByCursor(latest, opts.cursor ?? null, opts.limit)
 
@@ -919,6 +1308,9 @@ export interface ToolPublicationSummary {
   reviewNote: string | null
   submittedAt: string
   reviewedAt: string | null
+  /** Null until someone asked Visvine to list it — the usual case. */
+  marketplaceStatus: MarketplaceStatus
+  marketplaceReviewNote: string | null
 }
 
 const PUBLICATION_SELECT = {
@@ -929,6 +1321,8 @@ const PUBLICATION_SELECT = {
   reviewNote: true,
   submittedAt: true,
   reviewedAt: true,
+  marketplaceStatus: true,
+  marketplaceReviewNote: true,
 } as const
 
 /**
@@ -957,23 +1351,34 @@ export async function latestPublications(
       reviewNote: row.reviewNote,
       submittedAt: row.submittedAt.toISOString(),
       reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
+      marketplaceStatus: row.marketplaceStatus ? decodeStatus(row.marketplaceStatus) : null,
+      marketplaceReviewNote: row.marketplaceReviewNote,
     })
   }
   return out
 }
 
 /**
- * The approved version a reviewer should diff against: the highest approved one
- * BELOW this number. Null for a first submission, and null when every earlier
- * version was rejected — a reviewer comparing against something nobody approved
- * would be reading a diff of two unshipped things.
+ * The version a reviewer should diff against: the highest one BELOW this number
+ * that their own verdict has already passed. Null for a first submission, and
+ * null when every earlier version was refused — a reviewer comparing against
+ * something nobody shipped would be reading a diff of two unshipped things.
+ *
+ * `scope` picks whose yes counts. A space admin diffs against the last version
+ * THEIR space approved; Visvine diffs against the last one it LISTED, which is
+ * the only version other spaces could be running.
  */
 export async function previousApprovedVersion(
   key: string,
   before: number,
+  scope: 'space' | 'marketplace' = 'space',
 ): Promise<ToolVersionDetail | null> {
   const row = await prisma.appToolVersion.findFirst({
-    where: { key, status: 'approved', version: { lt: before } },
+    where: {
+      key,
+      version: { lt: before },
+      ...(scope === 'marketplace' ? { marketplaceStatus: 'approved' } : { status: 'approved' }),
+    },
     orderBy: { version: 'desc' },
     select: DETAIL_SELECT,
   })
@@ -985,7 +1390,10 @@ export async function previousApprovedVersion(
  * one — the question a reviewer is really being asked. A first submission diffs
  * against EMPTY_PERIMETER, so everything it wants reads as added.
  */
-export async function perimeterDiffForVersion(versionId: string): Promise<{
+export async function perimeterDiffForVersion(
+  versionId: string,
+  scope: 'space' | 'marketplace' = 'marketplace',
+): Promise<{
   previous: { id: string; version: number; surfaces: ToolConfig['surfaces'] } | null
   diff: PerimeterDiff
 } | null> {
@@ -994,7 +1402,7 @@ export async function perimeterDiffForVersion(versionId: string): Promise<{
     select: { key: true, version: true, perimeter: true },
   })
   if (!row) return null
-  const previous = await previousApprovedVersion(row.key, row.version)
+  const previous = await previousApprovedVersion(row.key, row.version, scope)
   return {
     previous: previous ? { id: previous.id, version: previous.version, surfaces: previous.config.surfaces } : null,
     diff: diffPerimeter(previous?.perimeter ?? EMPTY_PERIMETER, decodeToolPerimeter(row.perimeter)),

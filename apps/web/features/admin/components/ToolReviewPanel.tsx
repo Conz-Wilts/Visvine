@@ -253,7 +253,10 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
   }
 
   const version = detail?.version;
-  const pendingDecision = version?.status === 'pending';
+  // The verdict this panel decides is the LISTING one. A version's own space
+  // approved the code before it could be offered here at all; what is open is
+  // whether every other space may install it.
+  const pendingDecision = version?.marketplaceStatus === 'pending';
 
   return (
     <div className="w-full">
@@ -314,8 +317,13 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                     </span>
                   )}
                   <h2 className="text-base font-semibold text-text-primary">{version.title}</h2>
-                  <Chip tone="solid" size="sm" color={STATUS_COLOR[version.status]}>
-                    {version.status}
+                  {version.marketplaceStatus && (
+                    <Chip tone="solid" size="sm" color={STATUS_COLOR[version.marketplaceStatus]}>
+                      listing {version.marketplaceStatus}
+                    </Chip>
+                  )}
+                  <Chip tone="muted" size="sm">
+                    {version.status === 'approved' ? 'approved in its space' : `${version.status} in its space`}
                   </Chip>
                   {version.iconSvg && (
                     <Chip tone="muted" size="sm">
@@ -444,10 +452,14 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                   </div>
                 </section>
               ) : (
-                <Alert variant={version.status === 'approved' ? 'success' : 'info'}>
-                  {version.status === 'approved' ? 'Approved' : `Marked ${version.status}`}
-                  {version.reviewedAt ? ` ${timeAgo(version.reviewedAt)}` : ''}
-                  {version.reviewNote ? ` — “${version.reviewNote}”` : '.'}
+                <Alert variant={version.marketplaceStatus === 'approved' ? 'success' : 'info'}>
+                  {version.marketplaceStatus === 'approved'
+                    ? 'Listed'
+                    : version.marketplaceStatus
+                      ? `Listing marked ${version.marketplaceStatus}`
+                      : 'Never submitted for a listing'}
+                  {version.marketplaceReviewedAt ? ` ${timeAgo(version.marketplaceReviewedAt)}` : ''}
+                  {version.marketplaceReviewNote ? ` — “${version.marketplaceReviewNote}”` : '.'}
                 </Alert>
               )}
             </div>

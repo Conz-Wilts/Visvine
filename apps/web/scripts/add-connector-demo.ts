@@ -185,9 +185,9 @@ return await sql(
 
 ## What not to read
 
-\`connector_secrets\` holds connector secret ciphertext and \`users.password_hash\`
-holds password hashes. Neither is useful to you and both are off limits — the
-read-only transaction does not make them any less sensitive.
+\`connector_secrets\` holds connector secret ciphertext and \`oauth_auth_codes\`
+holds live authorization codes. Neither is useful to you and both are off
+limits — the read-only transaction does not make them any less sensitive.
 `;
 
 // Every folder carries an index note — the index IS the folder (see

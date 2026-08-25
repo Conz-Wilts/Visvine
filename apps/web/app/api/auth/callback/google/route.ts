@@ -155,14 +155,8 @@ export async function GET(req: NextRequest) {
   }
 
   // Step 7: Active user found by email — link Google to it. Google has just
-  // proven the person signing in controls this inbox.
-  //
-  // If that account was created by password signup and never verified its email
-  // (`emailVerified` false), the password may have been set by someone who does
-  // NOT own the address (email squatting / account pre-hijacking). Google's proof
-  // of ownership wins: mark the email verified and REVOKE the unverified password
-  // so a squatter can't keep access via /api/auth/login. A genuine user who set a
-  // password and then signed in with Google simply uses Google from now on.
+  // proven the person signing in controls this inbox, so the email is verified
+  // from here on.
   if (!userByEmail.googleId) {
     await prisma.user.update({
       where: { id: userByEmail.id },
@@ -172,7 +166,6 @@ export async function GET(req: NextRequest) {
         name: googleName,
         image: googlePicture || userByEmail.image,
         emailVerified: true,
-        ...(userByEmail.emailVerified ? {} : { passwordHash: null }),
       },
     });
   }

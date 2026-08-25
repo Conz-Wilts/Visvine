@@ -1,7 +1,7 @@
 // POST /api/notes/search
-//   { spaceId, scope, query, k?, filters? } → { results: FusedResult[], semantic }
-// Fused retrieval (frontmatter filter → BM25 → pgvector → chunks → link context,
-// weighted RRF) over
+//   { spaceId, scope, query, k?, filters?, rewrite? } → { results: FusedResult[], semantic, plan }
+// Fused retrieval (query plan → frontmatter/date filter → BM25 → pgvector →
+// chunks → link context, weighted RRF) over
 // everything the caller can read in the context; the visibility lens and the
 // private-folder read audit are applied inside contextService.searchContext.
 
@@ -32,10 +32,14 @@ export async function POST(req: NextRequest) {
   const k = typeof body.k === 'number' ? body.k : undefined
   const p = await principalOf(context)
   try {
-    const { hits, semantic } = await searchContext(p, context, query, parseFilters(body.filters), k)
+    const rewrite = typeof body.rewrite === 'boolean' ? body.rewrite : undefined
+    const { hits, semantic, plan } = await searchContext(p, context, query, parseFilters(body.filters), k, {
+      rewrite,
+    })
     // `semantic` says whether the embedding stages actually ran — 'no-key' means
-    // these results are keyword + link context only.
-    return NextResponse.json({ results: hits, semantic })
+    // these results are keyword + link context only; `plan` says what the query
+    // was read as (phrasings, date range, history intent).
+    return NextResponse.json({ results: hits, semantic, plan })
   } catch (err) {
     return failFromError(err)
   }

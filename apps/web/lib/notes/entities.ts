@@ -330,6 +330,12 @@ export function hrefForNotePath(
   return owner ? entityContextHref(owner.id, owner.subPath) : noteHref(path)
 }
 
+// The app route showing a trashed note read-only: it is soft-deleted, so there
+// is no live path to link to — the trash entry's id is the whole address.
+export function trashHref(id: string): string {
+  return `/directory/trash/${encodeURIComponent(id)}`
+}
+
 // The app route previewing an uploaded Context Source (csv/xlsx/docx/md/txt…).
 // Sources live in the same context-path namespace as notes but are never .md, so
 // they get their own viewer — same encoding rule as noteHref.

@@ -18,6 +18,10 @@ import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from '@/featu
  * serves draw no seam, so neither does it; `border` exists for a bar that
  * does and wants its line carried across the gutter.
  *
+ * It also insets <main>'s scroll track by its own height (see globals.css,
+ * `--scrollbar-track-inset`), because the strip alone hides a short thumb
+ * completely at rest — the thumb's travel has to start below the bar too.
+ *
  * Render it from any bar pinned flush under the navbar; it mounts and unmounts
  * with that bar.
  */
@@ -42,10 +46,20 @@ export default function PaneTopScrollbarMask({
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  if (!mounted) return null;
 
   const top = 64 + SHELL_FRAME_GAP;
   const resolvedHeight = bottom != null ? Math.max(0, bottom - top) : height;
+
+  // Set on <main> itself so Chromium re-resolves the scrollbar style when it
+  // changes.
+  useEffect(() => {
+    const main = document.querySelector('main');
+    if (!main) return;
+    main.style.setProperty('--scrollbar-track-inset', `${resolvedHeight}px`);
+    return () => { main.style.removeProperty('--scrollbar-track-inset'); };
+  }, [resolvedHeight]);
+
+  if (!mounted) return null;
 
   // A fixed strip always paints over <main>'s native scrollbar — nothing can
   // put the thumb back in front of it. So the seam-only variant stops short of

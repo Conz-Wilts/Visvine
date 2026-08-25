@@ -7,9 +7,9 @@ import prisma from '@/lib/prisma'
 
 const deleteSchema = z.object({
   /**
-   * The account's own email, typed by the person. A password would prove more,
-   * but Google accounts have no `passwordHash` to check, so the confirmation is
-   * the same for everyone: retype the address on the account.
+   * The account's own email, typed by the person. Sign-in is Google-only, so
+   * there is no password to re-enter: the confirmation is retyping the address
+   * on the account.
    */
   confirmEmail: z.string().min(1),
 })

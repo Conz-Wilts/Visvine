@@ -2,10 +2,12 @@
 // (ContextNoteEmbedding). Whole-note vectors are cached per context path and
 // invalidated by the note's updatedAt (mtime); stale notes are embedded lazily
 // at query time, bounded per call. Cosine ranking runs in Postgres. The QUERY
-// vector is embedded once by the caller (contextService.searchContext) and shared
-// with the source-chunk stage. A null query vector (no key) or any failure
-// returns [] and fusion degrades to keyword + context — recorded on the report
-// so the caller can say so instead of returning a silently worse result.
+// vectors — one per phrasing in the plan — are embedded in one batch by the
+// caller (contextService.searchContext) and shared with the source-chunk stage;
+// `rank` looks its phrasing up by text. A phrasing with no vector (no key, or
+// the embed failed) or any failure returns [] and fusion degrades to keyword +
+// context — recorded on the report so the caller can say so instead of
+// returning a silently worse result.
 
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
@@ -45,13 +47,14 @@ export function aboveFloors<T extends { score: number }>(rows: T[]): T[] {
 
 export function createVectorStage(
   context: Context,
-  queryVector: number[] | null,
+  queryVectors: ReadonlyMap<string, number[]>,
   report: SemanticReport = {},
 ): VectorStage {
   return {
-    async rank(_query, docs) {
+    async rank(query, docs) {
       try {
         const config = embeddingsConfig()
+        const queryVector = queryVectors.get(query)
         if (!config || !queryVector || docs.length === 0) return []
 
         const cached = await prisma.contextNoteEmbedding.findMany({

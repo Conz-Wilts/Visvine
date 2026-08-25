@@ -33,6 +33,7 @@ test('kinds: every writer is present and nothing else passes', () => {
       'agent_question',
       'tool_review',
       'tool_install_request',
+      'tool_approval_request',
       'access_request',
       'space_invite',
       'space_invite_answered',

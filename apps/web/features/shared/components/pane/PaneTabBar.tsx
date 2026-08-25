@@ -212,18 +212,6 @@ function PaneTabBarInner({
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // While this bar is pinned over <main>'s top, inset the scroll track by the
-  // tab row so the thumb's travel starts below the bar (see globals.css,
-  // `--scrollbar-track-inset`) — the mask strip alone hides a short thumb
-  // completely at rest. Set on <main> itself so Chromium re-resolves the
-  // scrollbar style when it changes.
-  useEffect(() => {
-    const main = document.querySelector('main');
-    if (!main) return;
-    main.style.setProperty('--scrollbar-track-inset', `${TAB_ROW_H}px`);
-    return () => { main.style.removeProperty('--scrollbar-track-inset'); };
-  }, []);
-
   const onSelect = (id: string) => {
     if (live) select(id);
   };

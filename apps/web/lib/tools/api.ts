@@ -76,6 +76,36 @@ export interface VersionResponse {
   version: VersionDetail
 }
 
+// ── approvals (space admin) ──────────────────────────────────────────────────
+
+/**
+ * A row of a space's OWN queue: a version one of its members published, and
+ * what it reaches that the last version this space approved didn't.
+ *
+ * The same shape as a marketplace queue row, and deliberately so — the two
+ * reviews ask the same question of different people about different things
+ * (this one about code, that one about a listing), so one screen renders both.
+ */
+export interface ApprovalQueueItem extends ToolVersionSummary {
+  perimeterDiff: PerimeterDiff
+  previousVersion: { id: string; version: number } | null
+}
+
+export interface ApprovalQueueResponse {
+  queue: ApprovalQueueItem[]
+}
+
+export interface ApprovalDecisionResponse {
+  version: ToolVersionSummary
+  /** Installs in this space's subtree now offered this version as an upgrade. */
+  upgraded: number
+}
+
+/** What a marketplace submit or withdraw answers with: the version, re-read. */
+export interface ListingResponse {
+  version: ToolVersionSummary
+}
+
 // ── review (super-admin) ─────────────────────────────────────────────────────
 
 /** A queue row: the submission, and what it wants that the last one didn't. */
@@ -188,6 +218,7 @@ export interface PublishResponse {
   /** Set when the registry row landed but the note's `version:` bump didn't. */
   warning: string | null
 }
+
 
 /**
  * The 409 a publish gets when the working copy does not compile. The build

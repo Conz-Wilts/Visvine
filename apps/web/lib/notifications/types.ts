@@ -16,6 +16,10 @@ export const NOTIFICATION_KINDS = [
   // A member asked their space admins to install a marketplace Tool — the
   // member-facing half of "only admins install".
   'tool_install_request',
+  // A member published a Tool in a space they are not an admin of — the update
+  // queue. Publishing is a member act; approving it is the admin's, and this is
+  // how they hear there is one to make.
+  'tool_approval_request',
   'access_request',
   // An admin asked someone to join their space. The only notification that is
   // itself the decision: nothing has been granted when it arrives, and the

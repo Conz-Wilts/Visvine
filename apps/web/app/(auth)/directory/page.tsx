@@ -99,7 +99,10 @@ function DirectoryPane() {
   if (noSpace) return null;
 
   return (
-    <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }}>
+    // The surface fills the pane exactly, so a short grid has nothing to
+    // scroll: 64px navbar + <main>'s pt-4/pb-6 is 104px, plus the 32px the
+    // pane tab bar takes in flow (48px row, 16px of it pulled back by -mt-4).
+    <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 136px)' }}>
       {/* Search, filters, sort and count ride one sticky toolbar welded under
           the pane tab bar; the cards scroll beneath it. */}
       <div id="panel-grid" role="tabpanel">

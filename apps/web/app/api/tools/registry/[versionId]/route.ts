@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSuperAdmin, requireSession } from '@/lib/session'
+import { isActiveMemberOf } from '@/lib/spaces/tree'
 import { getVersion, perimeterDiffForVersion, versionHistory } from '@/lib/tools/registry'
 import { EMPTY_PERIMETER, diffPerimeter } from '@/lib/tools/perimeter'
 import type { VersionDetail, VersionHistoryEntry, VersionResponse } from '@/lib/tools/api'
@@ -10,13 +11,14 @@ import type { VersionDetail, VersionHistoryEntry, VersionResponse } from '@/lib/
  *
  * Two visibility rules, both narrower than the browse listing:
  *
- *  • A version that is not approved (pending, rejected, withdrawn) is only
- *    readable by its author or a Visvine super admin. Nobody else has a reason
- *    to read a snapshot the registry has not shipped, and a rejection note is
- *    between the reviewer and the author.
- *  • The two code sources ride along only for those same two. An approved
- *    Tool's declared reach is public — installing it is a decision a stranger
- *    may need to make — but its source is the author's.
+ *  • Only a LISTED version is readable by a stranger. A version its own space
+ *    approved but never offered to anyone is that space's business, and a
+ *    signed-in session is not a membership — so this route asks for one, and a
+ *    version nobody outside the space may install is not readable outside it
+ *    either. Its author and a Visvine super admin always read it.
+ *  • The two code sources ride along only for those last two. A listed Tool's
+ *    declared reach is public — installing it is a decision a stranger may need
+ *    to make — but its source is the author's.
  *
  * `indexSource` is the Tool's docs, not code, so it is always present: the
  * detail drawer renders it as the long description.
@@ -30,8 +32,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ver
   if (!version) return NextResponse.json({ error: 'No such tool version.' }, { status: 404 })
 
   const privileged = isSuperAdmin(session.email) || version.author.userId === session.userId
-  if (version.status !== 'approved' && !privileged) {
-    // 404 rather than 403: an unshipped snapshot should not be discoverable by
+  const listed = version.status === 'approved' && version.marketplaceStatus === 'approved'
+  const readable =
+    privileged || listed || (await isActiveMemberOf(session.userId, version.sourceSpaceId))
+  if (!readable) {
+    // 404 rather than 403: an unlisted snapshot should not be discoverable by
     // the shape of the refusal either.
     return NextResponse.json({ error: 'No such tool version.' }, { status: 404 })
   }

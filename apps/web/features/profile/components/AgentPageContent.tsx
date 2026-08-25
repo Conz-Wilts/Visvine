@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ChevronDownIcon, PlayIcon } from '@/features/shared/icons';
 import { Alert, Button, Input, Skeleton } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
@@ -8,15 +10,18 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ActivateAgentDialog from '@/features/agents/components/ActivateAgentDialog';
+import AgentSettingsPanel from '@/features/agents/components/AgentSettingsPanel';
 import RunTranscript from '@/features/agents/components/RunTranscript';
 import StatusDot from '@/features/agents/components/StatusDot';
-import { fmtAgo, fmtCents, statusLine, terminalLabel } from '@/features/agents/lib/rowState';
+import { fmtAgo, fmtCents, setupBlocker, statusLine, terminalLabel } from '@/features/agents/lib/rowState';
 
 /**
  * The first tab of an agent's node page: what the note alone can't say. The
  * brief itself is the note (Context / Raw tabs); this tab is the status line
- * with its switch and play control, a line of facts, spend (admins), and the
- * run history with live transcripts.
+ * with its switch and play control, then one line for when it runs — the
+ * schedule with a Change beside it, or, while it is off, the one thing
+ * standing in the way with the switch beside that; the brief's settings,
+ * folded; spend (admins); and the run history with live transcripts.
  */
 type AgentDetail = AgentSummary & { brief: string; activationNote: string | null; heartbeatAt: string | null };
 
@@ -33,6 +38,7 @@ function runTone(r: SerializedRun): 'live' | 'bad' | 'ok' {
 
 export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const name = nodeId.startsWith('agent:') ? nodeId.slice('agent:'.length) : nodeId;
+  const router = useRouter();
   const { currentSpace, loading: spaceLoading } = useSpace();
   const spaceId = currentSpace?.id;
 
@@ -44,6 +50,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [openRun, setOpenRun] = useState<string | null>(null);
   const [editingBudget, setEditingBudget] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [budgetInput, setBudgetInput] = useState<string>('');
 
   const reload = useCallback(async () => {
@@ -82,8 +89,9 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
 
   const { agent, runs, isAdmin, canRun } = data;
   const line = statusLine(agent);
+  const blocker = agent.activation.active ? null : setupBlocker(agent, isAdmin);
   const runnable = canRun && agent.activation.active && agent.state.status !== 'running' && !agent.invalid;
-  const facts = [agent.model, ...agent.connectors, ...agent.tools].filter(Boolean) as string[];
+  const editBrief = () => router.replace(`/directory/${encodeURIComponent(nodeId)}?tab=context`);
 
   const deactivate = async () => {
     if (!spaceId) return;
@@ -173,7 +181,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
             onChange={(next) => (next ? setActivating(true) : deactivate())}
           />
         </div>
-        {facts.length > 0 && <p className="truncate pl-5 font-mono text-[12px] text-text-muted">{facts.join(' · ')}</p>}
+        {agent.description && <p className="pl-5 text-[13px] text-text-muted">{agent.description}</p>}
         {notice && (
           <Alert inline variant="warning" className="ml-5">
             {notice}
@@ -190,6 +198,84 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
           </Alert>
         )}
       </section>
+
+      <section className="flex flex-col gap-2 border-t border-border-subtle pt-5 text-[13px]">
+        <div className="flex items-center gap-3">
+          <p className={`min-w-0 flex-1 ${blocker ? 'text-amber-700' : 'text-text-primary'}`}>
+            {agent.activation.active ? (
+              <>
+                Runs {agent.activation.scheduleLabel.replace(/^No schedule$/, 'on triggers only')}
+                {agent.activation.triggersLabel ? ` · ${agent.activation.triggersLabel}` : ''}
+              </>
+            ) : blocker ? (
+              <>
+                {blocker.text}
+                {blocker.fix === 'brief' ? (
+                  <>
+                    {' — '}
+                    <button type="button" className="font-semibold text-brand-dark-green hover:underline" onClick={editBrief}>
+                      edit the brief
+                    </button>
+                  </>
+                ) : (
+                  isAdmin && (
+                    <>
+                      {' — '}
+                      <Link href="/admin?section=connectors" className="font-semibold text-brand-dark-green hover:underline">
+                        add it under Connectors
+                      </Link>
+                    </>
+                  )
+                )}
+              </>
+            ) : isAdmin ? (
+              'Not on yet — turning it on is where the schedule is picked.'
+            ) : (
+              'Not on yet — a space admin turns it on and picks when it runs.'
+            )}
+          </p>
+          {isAdmin &&
+            (agent.activation.active ? (
+              <button type="button" className="shrink-0 font-semibold text-brand-dark-green hover:underline" onClick={() => setActivating(true)}>
+                Change
+              </button>
+            ) : (
+              <Button variant="brand" size="sm" onClick={() => setActivating(true)} disabled={!!blocker}>
+                Turn on
+              </Button>
+            ))}
+        </div>
+        <p className="font-mono text-[12px] text-text-muted">
+          {[agent.model, ...agent.connectors, ...agent.tools].filter(Boolean).join(' · ')}
+        </p>
+      </section>
+
+      {canRun && spaceId && (
+        <section className="border-t border-border-subtle pt-5">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 text-left text-[13px] font-semibold text-text-primary"
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen((o) => !o)}
+          >
+            <ChevronDownIcon className={`h-3.5 w-3.5 text-text-muted transition-transform ${settingsOpen ? 'rotate-180' : ''}`} />
+            Settings
+            <span className="font-normal text-text-muted">— model, tools, connectors</span>
+          </button>
+          {settingsOpen && (
+            <div className="mt-4 pl-5">
+              <AgentSettingsPanel spaceId={spaceId} agent={agent} isAdmin={isAdmin} onSaved={() => void reload()} />
+              <p className="mt-3 text-[13px] text-text-muted">
+                The brief itself — what it reads, produces and writes — is the note:{' '}
+                <button type="button" className="font-semibold text-brand-dark-green hover:underline" onClick={editBrief}>
+                  edit it on the Context tab
+                </button>
+                .
+              </p>
+            </div>
+          )}
+        </section>
+      )}
 
       {isAdmin && (
         <section className="flex items-center gap-3 border-t border-border-subtle pt-5 text-[13px]">

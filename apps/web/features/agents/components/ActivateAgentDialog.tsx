@@ -7,6 +7,8 @@ import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary } from '@/lib/agents/service';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'));
+const MINUTES = ['00', '15', '30', '45'];
 
 /** The zone this browser is in, or '' when the runtime won't say. */
 function browserTimeZone(): string {
@@ -46,6 +48,7 @@ export default function ActivateAgentDialog({
       ? `${String(initial.hour).padStart(2, '0')}:${String(initial.minute).padStart(2, '0')}`
       : '07:00',
   );
+  const [atHour = '07', atMinute = '00'] = at.split(':');
   const [on, setOn] = useState(initial?.kind === 'weekly' ? WEEKDAYS[(initial.weekday + 6) % 7] : 'monday');
   const [every, setEvery] = useState(agent.activation.every ?? '15m');
   // Seeded from the note, then from the browser — the admin turning an agent on
@@ -159,8 +162,27 @@ export default function ActivateAgentDialog({
 
         {(kind === 'daily' || kind === 'weekly') && (
           <div className="grid grid-cols-2 gap-3">
+            {/* Two selects rather than a native time input: the browser's
+                picker is a foreign popover with its own colours and a 12-hour
+                clock, and the note stores 24-hour "HH:MM" anyway. */}
             <Field label="At">
-              <Input type="time" value={at} onChange={(e) => setAt(e.target.value)} />
+              <div className="flex items-center gap-1.5">
+                <Select value={atHour} onChange={(e) => setAt(`${e.target.value}:${atMinute}`)} aria-label="Hour" className="flex-1">
+                  {HOURS.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </Select>
+                <span className="text-text-muted">:</span>
+                <Select value={atMinute} onChange={(e) => setAt(`${atHour}:${e.target.value}`)} aria-label="Minute" className="flex-1">
+                  {(MINUTES.includes(atMinute) ? MINUTES : [...MINUTES, atMinute].sort()).map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </Field>
             {kind === 'weekly' && (
               <Field label="On">

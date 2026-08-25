@@ -170,9 +170,14 @@ const liveDeps: AppToolDeps = {
   installVersion: installVersionService,
   listInstalls: listInstallsService,
   latestApprovedVersion: async (key) => {
-    // versionHistory is newest-first, so the first approved row is the newest.
+    // versionHistory is newest-first, so the first listed row is the newest.
+    // LISTED, not merely approved: `install_tool { key }` names a tool by its
+    // marketplace identity, and a version its own space approved but never
+    // offered to anyone is not something a key lookup may hand out. Installing
+    // a space's own unlisted version is done by id, where the install gate
+    // re-asks the same question against the caller's lineage.
     const history = await versionHistoryService(key)
-    return history.find((v) => v.status === 'approved') ?? null
+    return history.find((v) => v.status === 'approved' && v.marketplaceStatus === 'approved') ?? null
   },
   spaceFacts: spaceFactsService,
   appOrigin: liveAppOrigin,
@@ -411,6 +416,10 @@ async function writeTool(ctx: ActionCaller, args: WriteToolArgs, deps: AppToolDe
     status: 'applied',
     path: result.path,
     file: args.file,
+    // On every write, not only on create: the person you are working for asked
+    // for something they can LOOK at, and a link they already have is one they
+    // do not have to ask for again.
+    ...previewLinks(args.name, deps.appOrigin()),
     // The point of this tool: the write and its compile result are one answer,
     // so an author iterates on diagnostics without a second call.
     build: report,
@@ -618,6 +627,7 @@ async function publishTool(ctx: ActionCaller, args: PublishToolArgs, deps: AppTo
     releaseNotes: args.release_notes,
   })
   if (!result.ok) refuse(result)
+  const approved = result.version.status === 'approved'
   return {
     version_id: result.version.id,
     key: result.version.key,
@@ -627,14 +637,17 @@ async function publishTool(ctx: ActionCaller, args: PublishToolArgs, deps: AppTo
     perimeter: describePerimeter(result.version.perimeter),
     tags: result.version.tags,
     release_notes: result.version.releaseNotes,
-    // The review gate, stated because an author will otherwise wait for a
-    // marketplace entry that is not coming yet — unless the trusted-publisher
-    // fast path already approved it (same perimeter as the last approved
-    // version, from a space the operator trusts).
-    review:
-      result.version.status === 'approved'
-        ? 'This snapshot is immutable and was AUTO-APPROVED: this space is a trusted publisher and the declared perimeter is unchanged from the last approved version. It is installable now; spaces running an older version are offered the upgrade.'
-        : 'This snapshot is immutable and now PENDING review by a Visvine super-admin, who sees the declared perimeter and a diff of the code against the last approved version. It is not installable by anyone until it is approved, and publishing again is refused while this one is in the queue.',
+    ...previewLinks(args.name, deps.appOrigin()),
+    // Where it went, said plainly, because the single most confusing thing an
+    // author can believe is that publishing made their tool public. It did not:
+    // this space is the whole audience until somebody lists it.
+    scope: 'space',
+    published:
+      approved
+        ? 'This snapshot is immutable and is APPROVED in this space: an admin published it, and an admin publishing is the approval. It can be installed here (and in any space nested under this one), and installs of an older version are offered the upgrade. It is NOT on the marketplace and no other space can see it.'
+        : 'This snapshot is immutable and is now waiting on an admin of this space, who has been notified. Nothing installs until they approve it. It is NOT on the marketplace and no other space can see it.',
+    marketplace:
+      'Listing this on the marketplace is a separate act, by a space admin, in the app: Tools → Mine → Submit to marketplace. A Visvine super-admin then reviews the declared perimeter and a code diff. Nothing you do here makes a tool public.',
     ...(result.warning ? { warning: result.warning } : {}),
   }
 }
@@ -796,7 +809,9 @@ export const APP_ACTIONS = [
       'runs when the config parses AND `ui.tsx` compiles; a broken `data.js` also takes the build down. ' +
       "In `ui.tsx` only `react`, `react-dom` and `@visvine/tool-kit` are importable — every other import " +
       'is refused at compile time. In `data.js` assign each operation to `handlers.<name>`. ' +
-      'Writes obey your own note permissions, so this is refused wherever an ordinary note write would be.',
+      'Writes obey your own note permissions, so this is refused wherever an ordinary note write would be. ' +
+      'Every write also returns the preview link — hand it to the person you are working for so they can ' +
+      'watch the tool take shape.',
     input: {
       space_id: spaceArg,
       name: nameArg,
@@ -872,19 +887,21 @@ export const APP_ACTIONS = [
   defineAction({
     name: 'publish_tool',
     scope: 'tools:author',
-    summary: 'Publish the working copy as an immutable version and queue it for review. Space admins only.',
+    summary: 'Publish the working copy as an immutable version into ITS OWN SPACE. Never the marketplace.',
     description:
-      'Publish the working copy as an immutable version and queue it for review. SPACE ADMINS ONLY, and ' +
-      'only when the tool compiles. It does NOT go live: a Visvine super-admin reviews the declared ' +
-      'perimeter and a code diff first, and only an approved version can be installed anywhere. One ' +
-      'pending version per tool — withdraw it in the app before publishing again. Run check_tool first. ' +
-      'The marketplace card also shows `tags:` and `preview:` from index.md and the release notes you pass ' +
-      'here. Exception to the queue: a space listed as a trusted publisher whose new version declares the ' +
-      'SAME perimeter as its last approved one is auto-approved.',
+      'Publish the working copy as an immutable version, INTO THE SPACE IT WAS WRITTEN IN and nowhere ' +
+      'else. This does NOT put the tool on the marketplace and does not make it visible to any other ' +
+      'space — a tool written in a private space stays private. Only when it compiles; run check_tool ' +
+      'first. If you are a space admin the version is approved as it lands and can be installed here (and ' +
+      'in spaces nested under this one); if you are a member it waits for one of your admins, who is ' +
+      'notified — that is how an UPDATE to an already-installed tool is queued, and re-publishing simply ' +
+      'supersedes your earlier submission. Installs of an older version in this space are offered the ' +
+      'upgrade, which an admin still applies by hand. Listing on the marketplace is a separate, ' +
+      'deliberate act by a space admin in the app, reviewed by a Visvine super-admin.',
     input: {
       space_id: spaceArg,
       name: nameArg,
-      note: z.string().optional().describe('A note for the reviewer — what changed and why'),
+      note: z.string().optional().describe('A note for whoever approves it — what changed and why'),
       release_notes: z
         .string()
         .max(2048)

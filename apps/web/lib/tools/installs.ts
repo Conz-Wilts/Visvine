@@ -35,6 +35,7 @@ import { logAudit } from '@/lib/notes/audit'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { readSpaceConfig, updateSpaceConfig, UnknownSpaceError } from '@/lib/spaces/spaceConfig'
+import { ancestorsOf } from '@/lib/spaces/tree'
 import {
   ALL_FEATURE_KEYS,
   mergeFeatureConfig,
@@ -45,7 +46,14 @@ import { DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types/context'
 import type { SpaceFeatureConfig } from '@/lib/types/space'
 import { TOOL_NAME_RE, type ToolTypeSurface } from './config'
 import { diffPerimeter, type PerimeterDiff } from './perimeter'
-import { decodeToolConfig, decodeToolPerimeter, toolKey, type RegistryError } from './registry'
+import {
+  decodeToolConfig,
+  decodeToolPerimeter,
+  decodeVersionStatus,
+  installability,
+  toolKey,
+  type RegistryError,
+} from './registry'
 import {
   computeRequirements,
   isDegraded,
@@ -537,12 +545,28 @@ export async function installVersion(
 
   const version = await prisma.appToolVersion.findUnique({
     where: { id: versionId },
-    select: { id: true, key: true, name: true, status: true, config: true, perimeter: true },
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      status: true,
+      marketplaceStatus: true,
+      sourceSpaceId: true,
+      config: true,
+      perimeter: true,
+    },
   })
   if (!version) return { ok: false, status: 404, error: 'No such tool version.' }
-  if (version.status !== 'approved') {
-    return { ok: false, status: 400, error: 'Only an approved version can be installed.' }
-  }
+  // The two verdicts, applied. A space's own approval reaches its own subtree;
+  // outside it, only a marketplace listing will do — which is what keeps a Tool
+  // written in a private space out of everyone else's reach.
+  const allowed = installability({
+    status: decodeVersionStatus(version.status),
+    marketplaceStatus: version.marketplaceStatus ? decodeVersionStatus(version.marketplaceStatus) : null,
+    sourceSpaceId: version.sourceSpaceId,
+    lineage: (await ancestorsOf(spaceId)).map((row) => row.id),
+  })
+  if (!allowed.ok) return { ok: false, status: 403, error: allowed.error }
 
   const config = decodeToolConfig(version.config, version.name)
   const facts = await spaceFactsForActor(spaceId, actor.userId)
@@ -849,11 +873,33 @@ export async function applyUpgrade(
 
   const next = await prisma.appToolVersion.findUnique({
     where: { id: install.pendingVersionId },
-    select: { id: true, key: true, name: true, version: true, status: true, config: true, perimeter: true },
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      version: true,
+      status: true,
+      marketplaceStatus: true,
+      sourceSpaceId: true,
+      config: true,
+      perimeter: true,
+    },
   })
-  if (!next || next.status !== 'approved' || next.key !== install.key) {
-    // The offer went away (withdrawn, or a key that isn't this Tool's). Clear it
-    // rather than leaving an upgrade button that always fails.
+  // Re-asked rather than trusted: the offer was written when the version was
+  // approved, and a listing can be rejected or a space verdict reversed in
+  // between. The same rule as a fresh install, because that is what this is.
+  const offered =
+    next && next.key === install.key
+      ? installability({
+          status: decodeVersionStatus(next.status),
+          marketplaceStatus: next.marketplaceStatus ? decodeVersionStatus(next.marketplaceStatus) : null,
+          sourceSpaceId: next.sourceSpaceId,
+          lineage: (await ancestorsOf(spaceId)).map((row) => row.id),
+        })
+      : { ok: false as const }
+  if (!next || !offered.ok) {
+    // The offer went away (withdrawn, delisted, or a key that isn't this
+    // Tool's). Clear it rather than leaving a button that always fails.
     await prisma.appToolInstall.update({ where: { id: installId }, data: { pendingVersionId: null } })
     return { ok: false, status: 409, error: 'That upgrade is no longer available.' }
   }

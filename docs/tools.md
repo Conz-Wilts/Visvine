@@ -2,8 +2,10 @@
 
 User-built mini-apps that run inside a Visvine space: a member (or a vibe-coding
 agent working on their behalf) authors a Tool as a note, it renders in the main
-content area over the space's own context, and — once published and reviewed —
-other spaces can install it. This page is the author, operator and admin guide;
+content area over the space's own context, and publishing it makes it
+installable **in that space**. A Tool goes no further than the space that wrote
+it unless one of its admins deliberately submits it to the marketplace, where a
+Visvine super-admin reviews it before any other space can install it. This page is the author, operator and admin guide;
 the design decisions it records were made in the Tools planning map (2026-08-18).
 
 **The quotable security property.** A Tool's UI runs in a sandboxed iframe on a
@@ -158,7 +160,7 @@ The marketplace's **Mine** tab can also delete a working copy:
 `tool:<name>` node and build, and (admin) uninstalls it from the space. Held to
 the note store's removal bar — admin, the author, or a full-access member.
 Published `AppToolVersion` rows survive on purpose: they are immutable
-snapshots other spaces may be running.
+snapshots this space — or, if it was ever listed, another one — may be running.
 
 The other deletion door lands in the same place: trashing
 `tools/<name>/index.md` from ANY note surface (trash menu, folder delete, MCP)
@@ -190,10 +192,10 @@ other action uses — so a Tool's notes obey the caller's real grants.
 | `list_tools` | `context:read` | Authored Tools in the space (with build status) plus installed Tools. |
 | `read_tool` | `context:read` | One Tool's `index.md`/`ui.tsx`/`data.js` (unwrapped) + parsed config + build diagnostics. |
 | `create_tool` | `tools:author` | Creates the entity folder + scaffolds (`lib/tools/service.ts#createTool`); returns the file list, the preview deep link and web URL, and a pointer to `get_tool_sdk`. |
-| `write_tool` | `tools:author` | Writes one of the three files (`writeToolFile`); the response **always** carries the fresh build result. |
+| `write_tool` | `tools:author` | Writes one of the three files (`writeToolFile`); the response **always** carries the fresh build result, and the preview links. |
 | `check_tool` | `tools:author` | Rebuilds and returns a lint report: config errors, compile diagnostics, `describePerimeter`, `computeRequirements` against this space, and warnings (empty perimeter, a downgraded page claim, a missing description). `render: true` also mounts the working copy headlessly and folds its console errors into the warnings (`runtime` block, no image). |
 | `preview_tool` | `tools:author` | The two preview URLs plus current build status. `screenshot: true` renders the preview headlessly as the caller and returns the image + console errors — see [Preview](#preview). |
-| `publish_tool` | `tools:author` | `publishTool` — admin-only; accepts `release_notes` (≤2KB); explains the review gate — or the trusted-publisher auto-approval — in its response. |
+| `publish_tool` | `tools:author` | `publishTool` — publishes into the tool's OWN space and never the marketplace; an admin's is approved as it lands, a member's queues for one. Accepts `release_notes` (≤2KB); the response carries the preview links and says where the version went. |
 | `install_tool` | `tools:install` | `installVersion` — admin-only; returns the install plus any type-claim conflicts and unmet requirements. |
 
 **The scope is the boundary**, and with one server it is the only one. Each is
@@ -278,52 +280,85 @@ installed, or **production without `TOOLS_SCREENSHOT=on`** (a browser per call
 is a cost an operator opts into; dev is always allowed). The import is dynamic
 through a variable so a production image built without the package still boots.
 
-### Publish → review → install → upgrade
+### Publish → approve → (list → review) → install → upgrade
 
-1. **Publish** (`publish_tool` / `lib/tools/registry.ts#publishTool`, space admin
-   only) snapshots the working copy — config, perimeter, all three sources, both
-   compiled bundles, plus the marketplace metadata: `tags`/`preview` from the
-   config and the author's **release notes** (`release_notes` over MCP, the
-   "Release notes" box in the publish dialog; ≤2 KB, clipped not refused) —
-   into an immutable `AppToolVersion` row and queues it `pending`. Refuses a
-   working copy that doesn't compile, and refuses a second pending version for
-   the same Tool (withdraw the first). Version numbers count from 1 and never
-   repeat, even across a rejection. Release notes are the author's channel
-   *forward* (the card, `ToolDetail`'s version history, the review panel);
-   `reviewNote` stays the reviewer's channel *back*.
-2. **Review** is a **Visvine super-admin** act (`isSuperAdmin`, env-driven —
-   this is the one queue in the app that is not space-scoped). They see the
-   declared perimeter, the release notes, and a code diff against the last
-   approved version (`lib/tools/registry.ts#perimeterDiffForVersion`) and
-   approve or reject. Approving flags every install pinned to an older version
-   with an offered upgrade; it never changes what's running anywhere.
+**A Tool belongs to the space that wrote it.** Publishing ships it to the people
+there and to nobody else; putting it on the marketplace is a second, deliberate
+act with a second reviewer. That split is carried by two independent columns on
+`AppToolVersion` (migration
+`20260903120000_tool_version_space_and_marketplace_verdicts`):
+
+| column | whose verdict | what `approved` grants |
+| --- | --- | --- |
+| `status` | the **source space**'s admin | installable in that space and everything nested under it |
+| `marketplaceStatus` | **Visvine**'s super-admin, and **NULL until someone asks** | listed in Browse; installable by any space |
+
+1. **Publish** (`publish_tool` / `lib/tools/registry.ts#publishTool`) snapshots
+   the working copy — config, perimeter, all three sources, both compiled
+   bundles, plus the marketplace metadata: `tags`/`preview` from the config and
+   the author's **release notes** (`release_notes` over MCP, the "Release notes"
+   box in the publish dialog; ≤2 KB, clipped not refused) — into an immutable
+   `AppToolVersion` row, **into its own space**. It is a MEMBER act, gated on
+   being able to write the Tool's note:
+   - an **admin**'s publish lands `status: approved` (an admin publishing *is*
+     the approval) and flags this space's older installs with the upgrade;
+   - a **member**'s lands `status: pending`, and the space's admins get a
+     `tool_approval_request` notification pointing at `/tools?tab=approvals`.
+     **That is the update queue**: edit an installed Tool, publish, an admin
+     decides whether the installs move.
+
+   Nothing here writes `marketplaceStatus`, so a Tool written in a private space
+   is invisible outside it. Re-publishing **supersedes** an earlier submission
+   still waiting on an admin (marked `withdrawn`, note `Superseded by vN`) rather
+   than being refused — the newer snapshot is what the author means. Refuses a
+   working copy that doesn't compile. Version numbers count from 1 and never
+   repeat, even across a rejection.
+2. **Approve** (`reviewSpaceVersion`, `POST …/tools/versions/<id>` with
+   `action: 'review'`) is the space admin's verdict, on the **Approvals** tab of
+   `/tools` (admins only, badged with the count). They read the declared
+   perimeter diffed against the last version *this space* approved, then approve
+   or reject with a note the author reads. Approving flags every install **in
+   this space's subtree** pinned to an older version with an offered upgrade; it
+   never changes what is running anywhere.
+3. **List** (`submitToMarketplace`, `action: 'list'`; Mine → "Submit to
+   marketplace…") is the only thing that offers a Tool to other spaces, and it
+   is a space admin acting on a version their space has **already approved**.
+   It sets `marketplaceStatus: 'pending'`. `withdrawFromMarketplace`
+   (`action: 'unlist'`) takes it back out of the queue.
+4. **Review** is a **Visvine super-admin** act (`isSuperAdmin`, env-driven —
+   the one queue in the app that is not space-scoped), over `marketplaceStatus`
+   only. They see the declared perimeter, the release notes, and a code diff
+   against the last **listed** version (`perimeterDiffForVersion(id,
+   'marketplace')`). Approving flags every install of an older version anywhere.
 
    **The one exception — trusted publishers.** `TOOLS_TRUSTED_PUBLISHERS` (env,
-   comma-separated space ids) names spaces whose *re*-publishes may skip the
-   queue: `publishTool` runs the pure `shouldAutoApprove` right after the row
-   lands and, when the space is trusted **and** an earlier approved version
-   exists **and** the perimeter diff against it is empty, marks the version
-   `approved` with `reviewedBy: 'auto'` and the note
-   `auto-approved: trusted publisher, unchanged perimeter and surfaces`, audits
-   it, and flags stale installs exactly as a human approval would. The
-   `surfaces` block (rail label/icon, type page/tab claims — `surfacesUnchanged`,
-   compared after normalising, claim order aside) must match the last approved
-   version too: a new rail entry or a claim on a node type's page is new real
-   estate in every installing space even when the reach is the same. A first
-   version, any perimeter or surfaces change, or any untrusted space stays
-   super-admin. Code changes are
-   not inspected — what an install can do is bounded by the perimeter and the
-   viewer's grants, and that bound is what the check proves has not moved.
-3. **Install** (`install_tool` / `lib/tools/installs.ts#installVersion`, space
-   admin only) pins the approved version, picks a free slug
-   (`deals` → `deals-2` on a clash), and resolves the declared type surfaces
-   against the space (see [Type pages](#type-pages)). **Unmet requirements never
-   block an install** — the Tool installs degraded behind a checklist; see
-   [Degraded mode](#degraded-mode).
-4. **Upgrade** (`applyUpgrade`, space admin only) moves an install onto the
-   version a review approved, after the admin reads the perimeter diff. This is
-   the *only* way a space's Tool code ever changes — publishing a new version
-   never touches an install by itself.
+   comma-separated space ids) names spaces whose *re*-listings may skip the
+   queue: `submitToMarketplace` runs the pure `shouldAutoApprove` right after the
+   submission lands and, when the space is trusted **and** an earlier listed
+   version exists **and** the perimeter diff against it is empty, marks the
+   listing `approved` with `marketplaceReviewedBy: 'auto'`. The `surfaces` block
+   (rail label/icon, type page/tab claims — `surfacesUnchanged`, compared after
+   normalising, claim order aside) must match too: a new rail entry or a claim on
+   a node type's page is new real estate in every installing space even when the
+   reach is the same. A first listing, any perimeter or surfaces change, or any
+   untrusted space stays super-admin. Code changes are not inspected — what an
+   install can do is bounded by the perimeter and the viewer's grants, and that
+   bound is what the check proves has not moved.
+5. **Install** (`install_tool` / `lib/tools/installs.ts#installVersion`, space
+   admin only) pins the version, picks a free slug (`deals` → `deals-2` on a
+   clash), and resolves the declared type surfaces against the space (see
+   [Type pages](#type-pages)). The gate is the pure
+   `registry.ts#installability`: the source space's verdict must be `approved`,
+   and then either the installing space's **lineage includes the source space**
+   or the version is **listed**. `install_tool { key }` resolves to the newest
+   **listed** version only — a key is a marketplace identity. **Unmet
+   requirements never block an install** — the Tool installs degraded behind a
+   checklist; see [Degraded mode](#degraded-mode).
+6. **Upgrade** (`applyUpgrade`, space admin only) moves an install onto the
+   offered version, after the admin reads the perimeter diff, and **re-asks
+   `installability`** rather than trusting the offer — a listing can be rejected
+   between the flag and the click. This is the *only* way a space's Tool code
+   ever changes — publishing a new version never touches an install by itself.
 
 ## Runtime architecture
 
@@ -589,9 +624,11 @@ resolved against the installing space by `lib/tools/installs.ts#resolveTypeClaim
 | Act | Who |
 |---|---|
 | Author (`create_tool`, `write_tool`, edit any of the three notes) | Any member with normal grants — no admin gate on `tools/` |
-| Publish (`publish_tool`) | Space admins (`isAdmin`) |
+| Publish into the space (`publish_tool`) | Any member who can write the Tool's note. An admin's publish is approved as it lands; a member's queues for one |
+| Approve a member's version (Approvals tab) | Space admins (`isAdmin`) of the space that wrote it |
+| Submit to / withdraw from the marketplace | Space admins (`isAdmin`) of the space that wrote it, on a version that space already approved |
 | Install / upgrade / enable / uninstall / type claims | Space admins (`isAdmin`) |
-| Review a pending version | Visvine **super-admins** only (`isSuperAdmin`, env-driven `SUPER_ADMIN_EMAILS`) — the one queue in the app that is not space-scoped. Exception: an unchanged-perimeter re-publish from a `TOOLS_TRUSTED_PUBLISHERS` space is auto-approved (`shouldAutoApprove`) |
+| Review a marketplace listing | Visvine **super-admins** only (`isSuperAdmin`, env-driven `SUPER_ADMIN_EMAILS`) — the one queue in the app that is not space-scoped. Exception: an unchanged-perimeter re-listing from a `TOOLS_TRUSTED_PUBLISHERS` space is auto-approved (`shouldAutoApprove`) |
 
 This mirrors agents: member-writable brief, admin-gated activation.
 

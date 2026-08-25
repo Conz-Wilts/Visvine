@@ -19,15 +19,13 @@ import { usePaneChromeState } from '@/features/shared/contexts/PaneShellContext'
 import { TRAY_ROW_H } from '@/features/shared/components/pane/PaneTabBar'
 import { isFeatureEnabled } from '@/lib/featureAccess'
 import type { SpaceFeatureConfig } from '@/lib/types'
-import type { TrashEntry } from '@/lib/notes/shared/types'
-import { entityContextHref, noteHref, resolveEntityOwner } from '@/lib/notes/entities'
+import { entityContextHref, noteHref, resolveEntityOwner, trashHref } from '@/lib/notes/entities'
 import { prefetchNoteContext } from '../lib/contextPrefetch'
 import { useContextTree } from '../lib/useContextTree'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { NoteSidebar } from './NoteSidebar'
 import { SharePanel } from './SharePanel'
-import { TrashPreview } from './TrashPreview'
 
 /** Width of the tree column. The pane tab bars inset their toolbar tray by the
  *  same amount so the tray centres over the note, not the whole pane. */
@@ -82,9 +80,6 @@ export function ContextSidebar({
   const { entityByPath } = useDirectoryEntities()
   const ctx = useContextTree({ spaceId, enabled: notesEnabled, currentPath })
   const { notes, trash, loading, error, shareTarget, setShareTarget } = ctx
-  // The trashed note whose preview is open. Local to the sidebar: a preview is
-  // a look at a row, not a piece of the tree's state.
-  const [trashPreview, setTrashPreview] = useState<TrashEntry | null>(null)
 
   const [selectedPath, setSelectedPath] = useState<string | null>(currentPath)
 
@@ -192,7 +187,9 @@ export function ContextSidebar({
               onMoveNote={ctx.handleMoveNote}
               onMoveFolder={ctx.handleMoveFolder}
               trash={trash}
-              onOpenTrash={setTrashPreview}
+              // A trashed note reads in the main content area, like any other
+              // note — its own route, not a dialog over the tree.
+              onOpenTrash={(entry) => router.push(trashHref(entry.id))}
               onRestoreTrash={ctx.handleRestoreTrash}
               onPurgeTrash={ctx.handlePurgeTrash}
               onEmptyTrash={ctx.handleEmptyTrash}
@@ -203,15 +200,6 @@ export function ContextSidebar({
                 path={shareTarget.path}
                 kind={shareTarget.kind}
                 onClose={() => setShareTarget(null)}
-              />
-            )}
-            {trashPreview !== null && (
-              <TrashPreview
-                spaceId={spaceId}
-                entry={trashPreview}
-                onRestore={ctx.handleRestoreTrash}
-                onPurge={ctx.handlePurgeTrash}
-                onClose={() => setTrashPreview(null)}
               />
             )}
           </>

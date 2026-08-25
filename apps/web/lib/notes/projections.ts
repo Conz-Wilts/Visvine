@@ -172,9 +172,11 @@ async function liveContent(context: Context, path: string): Promise<string | nul
  * nightly sweep's orphan pass (lib/notes/embedSweep.ts) rather than lost.
  */
 async function dropEmbedding(context: Context, path: string): Promise<void> {
-  await prisma.contextNoteEmbedding.deleteMany({
-    where: { spaceId: context.spaceId, ownerKey: context.ownerKey, path },
-  })
+  const where = { spaceId: context.spaceId, ownerKey: context.ownerKey, path }
+  await prisma.contextNoteEmbedding.deleteMany({ where })
+  // The derived memories are keyed the same way and die with the note for the
+  // same reason; the nightly sweep (lib/notes/memorySweep.ts) reconciles misses.
+  await prisma.contextMemory.deleteMany({ where })
 }
 
 /**

@@ -22,8 +22,8 @@ import { corpusNotes, QUERIES } from './fixtures/retrievalCorpus'
  */
 const FLOOR = {
   recall: 0.95,
-  mrr: 0.85,
-  ndcg: 0.85,
+  mrr: 0.9,
+  ndcg: 0.9,
   orderAccuracy: 1,
 }
 

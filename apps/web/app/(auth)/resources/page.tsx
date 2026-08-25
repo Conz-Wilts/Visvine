@@ -14,6 +14,7 @@ import { MoveDialog, NameDialog } from '@/features/resources/components/driveDia
 import { driveApi } from '@/features/resources/lib/driveApi';
 import { childFolders, folderPathLabel, folderTrail, subtree } from '@/features/resources/lib/tree';
 import { ConfirmDialog, EmptyState, SearchInput, ViewToggle } from '@/components/ui';
+import PaneTopScrollbarMask from '@/features/shared/components/pane/PaneTopScrollbarMask';
 import Dropdown, { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
 import { ChevronRightIcon, FolderIcon, PlusIcon, UploadIcon } from '@/features/shared/icons';
@@ -251,7 +252,11 @@ export default function ResourcesPage() {
   return (
     <div
       className="relative w-full"
-      style={{ minHeight: 'calc(100dvh - 56px)' }}
+      // The drop surface fills the pane exactly, so a page holding three
+      // folders has nothing to scroll: 64px navbar + <main>'s pt-4/pb-6 is
+      // 104px, less the 16px the nav line's -mt-4 collapses back out of this
+      // box's top.
+      style={{ minHeight: 'calc(100dvh - 88px)' }}
       onDragOver={onPageDragOver}
       onDragLeave={e => { if (e.currentTarget === e.target) setOsDrop(false); }}
       onDrop={onPageDrop}
@@ -265,6 +270,8 @@ export default function ResourcesPage() {
           title: the sidebar says where you are, the breadcrumb says where
           you are inside it. */}
       <div className="sticky -top-4 z-20 -mt-4 -ml-6 flex items-center bg-glass pr-6">
+        {/* Keeps the page scrollbar from running up beside the pinned bar. */}
+        <PaneTopScrollbarMask />
         <ViewToggle<View>
           size="lg"
           value={view}
@@ -283,11 +290,12 @@ export default function ResourcesPage() {
       </div>
 
       {/* ── Toolbar: breadcrumb, search, filters, count ────────────────
-          Welded under the nav line at top-8 with the same -ml-6 bleed and
-          pl-12 inset the Directory's toolbar uses, so search starts on the
-          same vertical as the Directory's. Opaque: the grid scrolls under it.
+          Welded under the nav line at top-8 with the same -ml-6 bleed, pl-12
+          inset and pt-9 / pb-2 rhythm the Directory's toolbar uses, so the row
+          starts on the same vertical and sits the same 36px clear of the nav
+          line above and the content below. Opaque: the grid scrolls under it.
           Nothing here may get overflow-hidden or the filter menus clip. */}
-      <div className="sticky top-8 z-10 -ml-6 bg-glass py-3 pl-12 pr-6">
+      <div className="sticky top-8 z-10 -ml-6 bg-glass pt-9 pb-2 pl-12 pr-6">
 
         {/* Breadcrumb only once there is somewhere to go back to — at the root
             it would be a one-word title of the page you can see you are on.

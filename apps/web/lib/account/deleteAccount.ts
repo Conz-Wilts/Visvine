@@ -136,6 +136,7 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     await tx.contextFolder.deleteMany({ where: { ownerKey: userId } })
     await tx.contextState.deleteMany({ where: { ownerKey: userId } })
     await tx.contextNoteEmbedding.deleteMany({ where: { ownerKey: userId } })
+    await tx.contextMemory.deleteMany({ where: { ownerKey: userId } })
     await tx.contextSourceChunk.deleteMany({ where: { ownerKey: userId } })
     await tx.contextSource.deleteMany({ where: { ownerKey: userId } })
     // Outbox rows for the personal context above. Deleted rather than redacted:

@@ -8,8 +8,15 @@
  * external coding agent over Visvine's MCP server (`get_tool_sdk` → `create_tool`
  * → `write_tool`), which is why the first card on this tab explains that flow
  * instead of offering a text area. What this screen owns is the part the agent
- * cannot do: reading the build, opening the Tool's note, previewing it, and — for
- * an admin — publishing it into the review queue.
+ * cannot do: reading the build, opening the Tool's note, previewing it, and
+ * shipping it.
+ *
+ * Shipping is TWO steps here, and keeping them apart is the point. Publish
+ * snapshots a version into THIS space — an admin's publish is approved as it
+ * lands, a member's waits in Approvals — and that is where most Tools stop. Only
+ * "Submit to marketplace" offers one to other spaces, and only a Visvine
+ * super-admin can grant it. A Tool written in a private space is nobody else's
+ * until somebody in that space decides otherwise.
  *
  * The roster is narrowed by the caller's own grants server-side, so "mine" means
  * the Tools in this space you can see. A Tool whose config does not parse is
@@ -27,7 +34,12 @@ import Button from '@/components/ui/Button';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import { toolDiagnosticLine } from '@/features/tools/components/BuildDiagnostics';
 import ToolIconPicker from '@/features/tools/components/marketplace/ToolIconPicker';
-import { deleteAuthoredTool, publishTool } from '@/features/tools/lib/client';
+import {
+  deleteAuthoredTool,
+  listOnMarketplace,
+  publishTool,
+  unlistFromMarketplace,
+} from '@/features/tools/lib/client';
 import type { AuthoredToolSummary } from '@/lib/tools/api';
 import type { ToolVersionStatus } from '@/lib/tools/registry';
 
@@ -53,6 +65,7 @@ export default function MineTab({
   onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
 }) {
   const [publishing, setPublishing] = useState<AuthoredToolSummary | null>(null);
+  const [listing, setListing] = useState<AuthoredToolSummary | null>(null);
   const [removing, setRemoving] = useState<AuthoredToolSummary | null>(null);
 
   return (
@@ -83,6 +96,17 @@ export default function MineTab({
             tool={tool}
             isAdmin={isAdmin}
             onPublish={() => setPublishing(tool)}
+            onList={() => setListing(tool)}
+            onUnlist={async () => {
+              if (!spaceId || !tool.publication) return;
+              try {
+                await unlistFromMarketplace(spaceId, tool.publication.versionId);
+                onToast('success', `${tool.title || tool.name} withdrawn from the review queue.`);
+                onChanged();
+              } catch (err) {
+                onToast('error', err instanceof Error ? err.message : 'The withdrawal did not go through.');
+              }
+            }}
             onRemove={() => setRemoving(tool)}
             onChanged={onChanged}
             onToast={onToast}
@@ -94,13 +118,39 @@ export default function MineTab({
         <PublishDialog
           spaceId={spaceId}
           tool={publishing}
+          isAdmin={isAdmin}
           onClose={() => setPublishing(null)}
-          onPublished={(version) => {
+          onPublished={(version, status) => {
             setPublishing(null);
-            onToast('success', `${publishing.title} v${version} submitted for review.`);
+            onToast(
+              'success',
+              status === 'approved'
+                ? `${publishing.title} v${version} is live in this space.`
+                : `${publishing.title} v${version} sent to your admins for approval.`,
+            );
             onChanged();
           }}
           onToast={onToast}
+        />
+      )}
+
+      {listing && spaceId && listing.publication && (
+        <ListingDialog
+          spaceId={spaceId}
+          tool={listing}
+          versionId={listing.publication.versionId}
+          version={listing.publication.version}
+          onClose={() => setListing(null)}
+          onListed={(status) => {
+            setListing(null);
+            onToast(
+              'success',
+              status === 'approved'
+                ? `${listing.title} is on the marketplace.`
+                : `${listing.title} submitted to Visvine for review.`,
+            );
+            onChanged();
+          }}
         />
       )}
 
@@ -134,25 +184,50 @@ export default function MineTab({
   );
 }
 
-/** Beside the build chip: what a Tool's newest submission stands at, if any. */
+const VERDICT_COLOR: Record<ToolVersionStatus, string> = {
+  pending: '#d97706',
+  approved: '#16a34a',
+  rejected: '#dc2626',
+  withdrawn: '#6b7280',
+};
+
+/**
+ * Beside the build chip: where a Tool's newest version stands — in ITS OWN
+ * SPACE first, and then, only if somebody asked, with Visvine.
+ *
+ * Two chips rather than one because they are two verdicts, and collapsing them
+ * is exactly the confusion this surface exists to end: "approved" here means
+ * this space runs it, and says nothing about whether anyone else can see it.
+ */
 function PublicationChip({ publication }: { publication: AuthoredToolSummary['publication'] }) {
   if (!publication) return null;
   const label: Record<ToolVersionStatus, string> = {
-    pending: 'In review',
-    approved: 'Approved',
-    rejected: 'Rejected',
-    withdrawn: 'Withdrawn',
+    pending: 'Waiting on an admin',
+    approved: 'Live in this space',
+    rejected: 'Rejected here',
+    withdrawn: 'Superseded',
   };
-  const color: Record<ToolVersionStatus, string> = {
-    pending: '#d97706',
-    approved: '#16a34a',
-    rejected: '#dc2626',
-    withdrawn: '#6b7280',
+  const listing: Record<ToolVersionStatus, string> = {
+    pending: 'Marketplace: in review',
+    approved: 'On the marketplace',
+    rejected: 'Marketplace: rejected',
+    withdrawn: 'Marketplace: withdrawn',
   };
   return (
-    <Chip tone="solid" size="sm" color={color[publication.status]}>
-      v{publication.version} · {label[publication.status]}
-    </Chip>
+    <>
+      <Chip tone="solid" size="sm" color={VERDICT_COLOR[publication.status]}>
+        v{publication.version} · {label[publication.status]}
+      </Chip>
+      {publication.marketplaceStatus ? (
+        <Chip tone="solid" size="sm" color={VERDICT_COLOR[publication.marketplaceStatus]}>
+          {listing[publication.marketplaceStatus]}
+        </Chip>
+      ) : (
+        <Chip tone="muted" size="sm">
+          Private to this space
+        </Chip>
+      )}
+    </>
   );
 }
 
@@ -161,6 +236,8 @@ function AuthoredRow({
   tool,
   isAdmin,
   onPublish,
+  onList,
+  onUnlist,
   onRemove,
   onChanged,
   onToast,
@@ -169,13 +246,23 @@ function AuthoredRow({
   tool: AuthoredToolSummary;
   isAdmin: boolean;
   onPublish: () => void;
+  onList: () => void;
+  onUnlist: () => void;
   onRemove: () => void;
   onChanged: () => void;
   onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
 }) {
   const build = tool.build;
   const errors = build?.errors ?? [];
-  const publishable = isAdmin && build !== null && build.ok && tool.invalid === null;
+  // Publishing is a member act now: an admin's lands approved, a member's lands
+  // in Approvals. What still stops either is a tool that does not compile.
+  const publishable = build !== null && build.ok && tool.invalid === null;
+  const publication = tool.publication;
+  // Only a version this space has already approved may be offered to anyone
+  // else, and only an admin may offer it.
+  const listable =
+    isAdmin && publication?.status === 'approved' && publication.marketplaceStatus === null;
+  const unlistable = isAdmin && publication?.marketplaceStatus === 'pending';
 
   return (
     <section className="border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
@@ -222,6 +309,7 @@ function AuthoredRow({
             <EyeIcon className="h-3.5 w-3.5" aria-hidden />
             Preview
           </Link>
+          <CopyPreviewLink name={tool.name} onToast={onToast} />
           {/* Always offered: the server holds the delete to the note store's
               removal bar (admin, the author, or edit access), and its refusal
               sentence lands in the toast. */}
@@ -233,17 +321,31 @@ function AuthoredRow({
             <Trash2Icon className="h-3.5 w-3.5" aria-hidden />
             Delete
           </button>
-          {isAdmin && (
-            <Button variant="brand" size="sm" onClick={onPublish} disabled={!publishable}>
-              Publish
+          {listable && (
+            <Button variant="ghost" size="sm" onClick={onList}>
+              Submit to marketplace…
             </Button>
           )}
+          {unlistable && (
+            <Button variant="ghost" size="sm" onClick={onUnlist}>
+              Withdraw listing
+            </Button>
+          )}
+          <Button variant="brand" size="sm" onClick={onPublish} disabled={!publishable}>
+            {isAdmin ? 'Publish' : 'Publish for approval'}
+          </Button>
         </div>
       </header>
 
-      {tool.publication?.reviewNote && (
+      {publication?.reviewNote && (
         <p className="mt-3 border-l-2 border-border-default pl-3 text-sm text-text-secondary">
-          <span className="font-medium text-text-primary">Reviewer note</span> — {tool.publication.reviewNote}
+          <span className="font-medium text-text-primary">From your admin</span> — {publication.reviewNote}
+        </p>
+      )}
+      {publication?.marketplaceReviewNote && (
+        <p className="mt-2 border-l-2 border-border-default pl-3 text-sm text-text-secondary">
+          <span className="font-medium text-text-primary">From the Visvine reviewer</span> —{' '}
+          {publication.marketplaceReviewNote}
         </p>
       )}
 
@@ -272,7 +374,8 @@ function AuthoredRow({
 
       {!isAdmin && build?.ok && (
         <p className="mt-3 text-xs text-text-muted">
-          Members write tools; a space admin publishes them. Ask one to ship this when it&rsquo;s ready.
+          Publishing snapshots this version for your space&rsquo;s admins to approve. It stays in this space
+          either way — nothing here puts a tool on the marketplace.
         </p>
       )}
     </section>
@@ -280,20 +383,22 @@ function AuthoredRow({
 }
 
 /**
- * Publishing snapshots an immutable version and queues it for a Visvine
- * super-admin, so the confirm restates the reach that reviewer will see — the
- * perimeter is the thing being submitted, and an author should not learn what
- * they declared from the rejection.
+ * Publishing snapshots an immutable version INTO THIS SPACE, so the confirm
+ * says exactly that and restates the reach — the perimeter is the thing being
+ * decided on, and neither an author nor whoever approves it should learn what
+ * was declared from the rejection.
  */
 function PublishDialog({
   spaceId,
   tool,
+  isAdmin,
   onClose,
   onPublished,
   onToast,
 }: {
   spaceId: string;
   tool: AuthoredToolSummary;
+  isAdmin: boolean;
   onClose: () => void;
   onPublished: (version: number, status: ToolVersionStatus) => void;
   onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
@@ -330,7 +435,7 @@ function PublishDialog({
             Cancel
           </Button>
           <Button variant="brand" onClick={confirm} loading={busy} loadingText="Publishing…">
-            Publish for review
+            {isAdmin ? 'Publish to this space' : 'Send for approval'}
           </Button>
         </div>
       }
@@ -339,13 +444,17 @@ function PublishDialog({
         {failure && <Alert variant="error">{failure}</Alert>}
 
         <p className="text-sm text-text-secondary">
-          This snapshots the tool as v{tool.version + 1} and sends it to a Visvine reviewer. The snapshot is
-          immutable — later edits here don&rsquo;t change what anyone installed.
+          This snapshots the tool as v{tool.version + 1} for <strong>this space only</strong>.{' '}
+          {isAdmin
+            ? 'You are an admin, so it is approved as it lands and can be installed here straight away.'
+            : 'Your space’s admins get it in Approvals; nothing installs until one of them says yes.'}{' '}
+          The snapshot is immutable — later edits here don&rsquo;t change what anyone installed. Putting it
+          on the marketplace is a separate step, afterwards.
         </p>
 
         <section>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
-            Reach the reviewer will see
+            Reach this version declares
           </h3>
           {perimeter ? (
             <PerimeterSummary perimeter={perimeter} />
@@ -366,7 +475,9 @@ function PublishDialog({
         </label>
 
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium text-text-primary">Note for the reviewer</span>
+          <span className="mb-1.5 block text-sm font-medium text-text-primary">
+            {isAdmin ? 'Note on this version' : 'Note for your admin'}
+          </span>
           <Textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
@@ -376,6 +487,133 @@ function PublishDialog({
         </label>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * The second, deliberate step: offering an approved version to every other
+ * space.
+ *
+ * Separate from Publish on purpose, and worded to make the consequence
+ * unmissable — this is the only control in the app that takes a Tool out of the
+ * space that wrote it. A Visvine super-admin reads the perimeter and a code
+ * diff before anything lists; the answer comes back through the bell.
+ */
+function ListingDialog({
+  spaceId,
+  tool,
+  versionId,
+  version,
+  onClose,
+  onListed,
+}: {
+  spaceId: string;
+  tool: AuthoredToolSummary;
+  versionId: string;
+  version: number;
+  onClose: () => void;
+  onListed: (status: ToolVersionStatus) => void;
+}) {
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const perimeter = tool.build?.config?.perimeter ?? null;
+
+  const confirm = async () => {
+    setBusy(true);
+    setFailure(null);
+    try {
+      const body = await listOnMarketplace(spaceId, versionId, note.trim() || undefined);
+      onListed(body.version.marketplaceStatus ?? 'pending');
+    } catch (err) {
+      setFailure(err instanceof Error ? err.message : 'The submission did not go through.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      onClose={busy ? () => {} : onClose}
+      size="md"
+      title={`Submit ${tool.title || tool.name} v${version} to the marketplace?`}
+      footer={
+        <div className="flex items-center justify-end gap-2 border-t border-border-subtle px-5 py-3">
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button variant="brand" onClick={confirm} loading={busy} loadingText="Submitting…">
+            Submit for review
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4 px-5 py-4">
+        {failure && <Alert variant="error">{failure}</Alert>}
+
+        <Alert variant="warning">
+          This offers the tool to <strong>every other space on Visvine</strong>. Its source, its declared
+          reach and your name go to a Visvine reviewer, and once approved any space can install it. If this
+          tool is only for the people here, it already works — leave it unlisted.
+        </Alert>
+
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
+            Reach the reviewer will see
+          </h3>
+          {perimeter ? (
+            <PerimeterSummary perimeter={perimeter} />
+          ) : (
+            <p className="text-sm text-text-muted">This tool hasn&rsquo;t built, so it declares nothing yet.</p>
+          )}
+        </section>
+
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-text-primary">Note for the reviewer</span>
+          <Textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            rows={3}
+            placeholder="Optional — what it is for, and why it needs this reach."
+          />
+        </label>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * The preview URL, on the clipboard.
+ *
+ * The link beside it opens the preview here; this is the one you paste into a
+ * chat with the agent that is building the tool, or send to someone whose
+ * opinion you want. Same page either way — a working copy renders live, so the
+ * link stays right as the tool changes under it.
+ */
+function CopyPreviewLink({
+  name,
+  onToast,
+}: {
+  name: string;
+  onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
+}) {
+  const [copied, copy] = useCopied(2000);
+  const href = `/tools/preview/${encodeURIComponent(name)}`;
+
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        // Absolute, because the point of copying it is to paste it somewhere
+        // that is not this app.
+        const url = typeof window === 'undefined' ? href : new URL(href, window.location.origin).toString();
+        if (!(await copy(url))) onToast('error', `Could not copy — the link is ${href}.`);
+      }}
+      className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-3 hover:text-text-primary"
+    >
+      {copied ? <CheckIcon className="h-3.5 w-3.5" aria-hidden /> : <CopyIcon className="h-3.5 w-3.5" aria-hidden />}
+      {copied ? 'Copied' : 'Copy link'}
+    </button>
   );
 }
 

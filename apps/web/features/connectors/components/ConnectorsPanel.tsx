@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, ConfirmDialog, Field, Input, Modal, SearchInput, Skeleton, Alert } from '@/components/ui';
-import { ArrowLeftIcon, CircleCheckIcon, InfoIcon } from '@/features/shared/icons';
+import { ArrowLeftIcon, InfoIcon } from '@/features/shared/icons';
 import ConnectorLogo from './ConnectorLogo';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useCreateSurface } from '@/features/shared/contexts/CreateModalContext';
@@ -77,33 +77,15 @@ type Tone = 'ok' | 'warn' | 'bad' | 'muted';
  * is sent. A healthy connector says nothing — the chip flags the ways one
  * fails, it doesn't congratulate the working ones.
  */
-function statusOf(connector: ExistingConnector): { label: string; detail: string; tone: Tone } | null {
+function statusOf(connector: ExistingConnector): { label: string; tone: Tone } | null {
   // Off comes first: a connector nobody can run has no interesting second
   // opinion about its secrets.
-  if (!connector.enabled) return { label: 'Off', detail: 'Turned off — every run is refused', tone: 'muted' };
-  if (connector.invalid) return { label: 'Invalid', detail: connector.invalid, tone: 'bad' };
-  if (connector.missingSecrets.length > 0) {
-    const names = connector.missingSecrets.join(', ');
-    return {
-      label: 'Missing secrets',
-      detail: `${names} ${connector.missingSecrets.length === 1 ? 'is' : 'are'} not stored yet`,
-      tone: 'warn',
-    };
-  }
-  if (connector.warnings.length > 0) {
-    return { label: 'Needs migration', detail: connector.warnings[0], tone: 'warn' };
-  }
-  if (connector.kind !== 'model' && connector.hosts.length === 0) {
-    return { label: 'No network', detail: 'No hosts declared yet', tone: 'warn' };
-  }
+  if (!connector.enabled) return { label: 'Off', tone: 'muted' };
+  if (connector.invalid) return { label: 'Invalid', tone: 'bad' };
+  if (connector.missingSecrets.length > 0) return { label: 'Missing secrets', tone: 'warn' };
+  if (connector.warnings.length > 0) return { label: 'Needs migration', tone: 'warn' };
+  if (connector.kind !== 'model' && connector.hosts.length === 0) return { label: 'No network', tone: 'warn' };
   return null;
-}
-
-/** The status line's colour — the chip beside it carries the same tone. */
-function statusColor(tone: Tone): string {
-  if (tone === 'bad') return 'text-red-600';
-  if (tone === 'warn') return 'text-amber-700';
-  return 'text-text-muted';
 }
 
 const FILTERS: Array<{ id: Filter; label: string }> = [
@@ -257,9 +239,6 @@ export default function ConnectorsPanel() {
   ) =>
     connected ? (
       <>
-        {connected.enabled && (
-          <CircleCheckIcon className="h-4 w-4 shrink-0 text-brand-dark-green" aria-label="Connected" />
-        )}
         <Button
           variant="neutral"
           size="sm"
@@ -417,11 +396,6 @@ export default function ConnectorsPanel() {
                       <ConnectorLogo entry={e} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-text-primary">{e.name}</p>
-                        {status && (
-                          <p className={`truncate text-[13px] ${statusColor(status.tone)}`}>
-                            {status.detail}
-                          </p>
-                        )}
                       </div>
                     </button>
                     {/* Only where there is nothing to manage yet: for a
@@ -469,20 +443,7 @@ export default function ConnectorsPanel() {
                     >
                       <ConnectorLogo name={c.name} provider={c.model?.provider} />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline gap-2">
-                          <p className="truncate text-sm font-semibold text-text-primary">{c.name}</p>
-                          <p className="truncate font-mono text-[11px] text-text-muted">{c.alias ?? 'no alias'}</p>
-                        </div>
-                        <p className="truncate text-[13px] text-text-muted">
-                          {status ? (
-                            <span className={statusColor(status.tone)}>{status.detail}</span>
-                          ) : (
-                            c.description ??
-                            (c.kind === 'model'
-                              ? `${c.model?.providerLabel ?? 'Model'} provider`
-                              : c.hosts.join(', '))
-                          )}
-                        </p>
+                        <p className="truncate text-sm font-semibold text-text-primary">{c.name}</p>
                       </div>
                     </button>
                     {status && (

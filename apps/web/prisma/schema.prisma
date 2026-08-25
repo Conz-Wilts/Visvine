@@ -61,6 +61,7 @@ model Space {
   connections     ConnectorConnection[]
   connectorState  ConnectorState[]
   noteEmbeddings  ContextNoteEmbedding[]
+  memories        ContextMemory[]
   contextSources  ContextSource[]
   userAliases     UserAlias[]
   contextGrants   ContextGrant[]
@@ -466,13 +467,23 @@ model AppToolBuild {
   @@map("app_tool_builds")
 }
 
-/// The global, IMMUTABLE marketplace registry: one row per published Tool
-/// version, keyed `<sourceSpaceId>/<name>` + `version`. Publishing snapshots the
-/// author's current AppToolBuild here for super-admin review (`status`); once
-/// approved a version never changes — an upgrade is a new row, never an update
-/// to this one. `sourceSpaceId` is a plain string, NOT a foreign key: a
-/// published version must survive its authoring space being deleted, since
-/// other spaces may already have it installed.
+/// The IMMUTABLE version registry: one row per published Tool version, keyed
+/// `<sourceSpaceId>/<name>` + `version`. Publishing snapshots the author's
+/// current AppToolBuild here; once approved a version never changes — an
+/// upgrade is a new row, never an update to this one. `sourceSpaceId` is a
+/// plain string, NOT a foreign key: a published version must survive its
+/// authoring space being deleted, since other spaces may already have it
+/// installed.
+///
+/// TWO INDEPENDENT VERDICTS, because publishing and listing are two decisions:
+///   • `status` is the SOURCE SPACE's — its admin approving code written in it.
+///     `approved` is what makes a version installable, and it never reaches
+///     beyond that space's own subtree.
+///   • `marketplaceStatus` is VISVINE's, and it is NULL until someone asks for
+///     it. Only `approved` there puts a version on the global shelf or lets a
+///     space outside the author's lineage install it.
+/// A Tool written in a private space therefore stays in it: nothing is offered
+/// to the world without a second, explicit act.
 model AppToolVersion {
   id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   key           String // `<sourceSpaceId>/<name>`
@@ -493,11 +504,21 @@ model AppToolVersion {
   uiBundle      String    @map("ui_bundle") // compiled ESM
   dataBundle    String    @map("data_bundle") // compiled ESM
   sizeBytes     Int       @map("size_bytes")
+  /// The source space's own verdict: pending | approved | rejected | withdrawn.
+  /// An admin publishing approves as they publish; a member publishing queues.
   status        String    @default("pending") // pending | approved | rejected | withdrawn
   submittedAt   DateTime  @default(now()) @map("submitted_at")
   reviewedBy    String?   @map("reviewed_by")
   reviewedAt    DateTime? @map("reviewed_at")
   reviewNote    String?   @map("review_note")
+  /// Visvine's verdict on a global listing, and NULL while nobody has asked for
+  /// one — the column that keeps a private space's Tool private. Same four
+  /// values as `status`, decided by a super-admin in the review queue.
+  marketplaceStatus      String?   @map("marketplace_status")
+  marketplaceSubmittedAt DateTime? @map("marketplace_submitted_at")
+  marketplaceReviewedBy  String?   @map("marketplace_reviewed_by")
+  marketplaceReviewedAt  DateTime? @map("marketplace_reviewed_at")
+  marketplaceReviewNote  String?   @map("marketplace_review_note")
   /// Marketplace metadata, snapshotted at publish (migration 20260821130000):
   /// the author's own "what changed" text, the index.md `tags:` list and the
   /// `preview:` image URL. Immutable like every other snapshot column.
@@ -510,6 +531,7 @@ model AppToolVersion {
 
   @@unique([key, version], name: "app_tool_version_identity")
   @@index([status, submittedAt])
+  @@index([marketplaceStatus, marketplaceSubmittedAt], map: "app_tool_versions_marketplace_status_idx")
   @@map("app_tool_versions")
 }
 
@@ -759,6 +781,34 @@ model ContextNoteEmbedding {
   @@map("context_note_embeddings")
 }
 
+/// One derived memory: a single self-contained claim extracted from a context
+/// note by the memory sweep (lib/notes/memorySweep.ts). Search ranks over these
+/// as a stage of its own (lib/notes/memoryStage.ts) and folds each hit onto its
+/// source note, so a result can carry the ~50-token sentence that answered
+/// rather than a 1 KB excerpt. Keyed like `context_note_embeddings` — no foreign
+/// key, pruned on delete/rename by the write path and reconciled nightly — and
+/// `mtime` is the note's when the claims were extracted: a row whose mtime no
+/// longer matches its note is from an older version and is never served. A
+/// note that yielded no claims keeps one row with `text = ''` (seq 0) so the
+/// sweep knows it was read; the stage skips it.
+model ContextMemory {
+  id         String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId    String                      @map("space_id")
+  ownerKey   String                      @map("owner_key")
+  path       String
+  seq        Int // 0-based order within the note
+  text       String
+  model      String // chat model that extracted the claim
+  mtime      BigInt // note updatedAt (epoch ms) when extracted
+  embedModel String?                     @map("embed_model") // embedding model; null = stored without a vector
+  embedding  Unsupported("vector(768)")?
+  updatedAt  DateTime                    @updatedAt @map("updated_at")
+  space      Space                       @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, ownerKey, path, seq], name: "memory_identity")
+  @@map("context_memories")
+}
+
 /// A non-note source (uploaded file/table) attached to a context. Lives ONLY in
 /// the Context — never a Node, never in the workspace/directory. Keyed
 /// (spaceId, ownerKey, path) exactly like ContextNote so the folder gate
@@ -951,7 +1001,6 @@ model User {
   updatedAt     DateTime      @updatedAt @map("updated_at")
   claimNonce    String?       @unique @map("claim_nonce")
   googleId      String?       @unique @map("google_id")
-  passwordHash  String?       @map("password_hash")
   isActive      Boolean       @default(true) @map("is_active")
   oauthProvider String?       @map("oauth_provider")
   publicMeta    Json          @default("{}") @map("public_meta")

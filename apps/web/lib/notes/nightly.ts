@@ -21,6 +21,7 @@ import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { aiConfigured } from '@/lib/notes/ai'
 import { embedSweep } from '@/lib/notes/embedSweep'
+import { memorySweep } from '@/lib/notes/memorySweep'
 import { generateLinkReasons } from '@/lib/notes/linkReasons'
 import { drainProjections, projectionBacklog } from '@/lib/notes/projections'
 import { pruneRateLimits } from '@/lib/rateLimit'
@@ -76,6 +77,24 @@ export async function runNightlyMaintenance(): Promise<{ ran: boolean; ms: numbe
         chunks: embedded.chunks,
         pruned: embedded.pruned,
       })
+    }
+    // The derived memories, after the note vectors: bounded to 50 extractions
+    // a night, so a large backlog catches up over nights. Its orphan prune runs
+    // regardless of a key, like embedSweep's.
+    try {
+      const memories = await memorySweep()
+      if (memories.notes || memories.embedded || memories.pruned || memories.remaining) {
+        logger.info('notes.nightly.memories', {
+          configured: memories.configured,
+          notes: memories.notes,
+          claims: memories.claims,
+          embedded: memories.embedded,
+          remaining: memories.remaining,
+          pruned: memories.pruned,
+        })
+      }
+    } catch (err) {
+      logger.error('notes.nightly.memories_failed', { err })
     }
     // Reconcile object storage against the database — REPORT ONLY, never
     // deleting. The eager purge (lib/storage/purge.ts) cannot be a guarantee:

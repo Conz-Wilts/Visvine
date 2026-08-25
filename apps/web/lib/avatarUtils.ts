@@ -50,6 +50,14 @@ const RESOURCE_SILHOUETTE_PATH =
 const CONNECTOR_SILHOUETTE_PATH =
   'M16.01 7 16 3h-2v4h-4V3H8v4h-.01C7 6.99 6 7.99 6 8.99v5.49L9.5 18v3h5v-3l3.5-3.51v-5.5c0-1-1-2-1.99-1.99z';
 
+/**
+ * SVG path for the agent avatar fallback (24×24 viewBox): a small robot head —
+ * an agent is the one node type that acts on its own, and a brief reading as a
+ * plain document was the thing that hid that in the Context tree.
+ */
+const AGENT_SILHOUETTE_PATH =
+  'M20 9V7c0-1.1-.9-2-2-2h-3c0-1.66-1.34-3-3-3S9 3.34 9 5H6c-1.1 0-2 .9-2 2v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v4c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-4c1.66 0 3-1.34 3-3s-1.34-3-3-3zM7.5 11.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S9.83 13 9 13s-1.5-.67-1.5-1.5zM16 17H8v-2h8v2zm-1-4c-.83 0-1.5-.67-1.5-1.5S14.17 10 15 10s1.5.67 1.5 1.5S15.83 13 15 13z';
+
 /** Node-type glyph → its 24×24 silhouette path (the getNodeGlyph value space). */
 export const NODE_GLYPH_PATHS = {
   person: PERSON_SILHOUETTE_PATH,
@@ -57,6 +65,7 @@ export const NODE_GLYPH_PATHS = {
   event: EVENT_SILHOUETTE_PATH,
   resource: RESOURCE_SILHOUETTE_PATH,
   connector: CONNECTOR_SILHOUETTE_PATH,
+  agent: AGENT_SILHOUETTE_PATH,
 } as const;
 
 export type NodeGlyph = keyof typeof NODE_GLYPH_PATHS;

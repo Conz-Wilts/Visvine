@@ -442,9 +442,25 @@ Three design choices worth keeping:
   vector stage is injected and absent, so a semantic harness against a live model
   is still owed. Two things it surfaced immediately, both worth knowing:
   the stemmer handles plurals but not verb inflection (`signed`/`signing` do not
-  match), and the lifecycle multiplier can push a superseded note to rank 3 even
-  when the query is uniquely about the OLD policy — down-ranking is right, but
-  the multiplier does not know the query is asking for history.
+  match), and the lifecycle multiplier could push a superseded note to rank 3
+  even when the query was uniquely about the OLD policy. The second is fixed:
+  the query plan (`lib/notes/shared/queryPlan.ts`) reads a history intent out of
+  the phrasing and ranks retired notes at full weight for it — the
+  `history-intent` case grades exactly that. The same plan turns time words into
+  the date filter (`temporal-filter-with-topic`) and answers a purely temporal
+  ask by recency (`temporal-only`). Baseline is now recall 100%, MRR 0.949,
+  nDCG 0.953 over 13 cases.
+- ~~**The derived memory tier is not built.**~~ **Built.** `context_memories`
+  holds the one-sentence claims the nightly sweep extracts from each note
+  (`lib/notes/memorySweep.ts`; `lib/notes/shared/memories.ts` is the pure half).
+  Search ranks over them (`lib/notes/memoryStage.ts`) and folds each hit onto
+  its note, so a result carries `claim` — the sentence that answered — and an
+  agent can stop there. Two things follow from keying them to the note rather
+  than making them results: a claim inherits the note's lifecycle and
+  visibility for free, and a claim from an older save is never served (the
+  stage matches `(path, mtime)`), so the note's own text is always the truth
+  the claim is measured against. Extraction is a chat call per note, bounded
+  to 50 a night, so a large space catches up over nights.
 - **No cross-space memory.** A lesson learned in one space cannot reach another
   except by a human copying it. That is the correct default for a multi-tenant
   product and should stay a deliberate, granted act if it is ever built.

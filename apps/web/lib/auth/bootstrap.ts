@@ -4,9 +4,9 @@ import prisma from "@/lib/prisma";
 import { COOKIE_NAME, MAX_AGE } from "@/lib/session";
 
 /**
- * Shared post-authentication plumbing for every sign-in entry point
- * (Google OAuth callback, email/password signup + login). Keeps Person
- * creation and the session cookie identical across all of them.
+ * Shared post-authentication plumbing for every sign-in entry point (the
+ * Google OAuth callback, the claim flow, dev login). Keeps Person creation and
+ * the session cookie identical across all of them.
  */
 
 export type SessionableUser = {

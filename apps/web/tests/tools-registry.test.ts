@@ -18,12 +18,16 @@ import {
   decodeToolConfig,
   decodeToolPerimeter,
   getVersion,
+  installability,
   listReviewQueue,
+  listSpaceApprovalQueue,
   nextVersionNumber,
   pageByCursor,
   perimeterDiffForVersion,
   publishTool,
+  reviewSpaceVersion,
   reviewVersion,
+  submitToMarketplace,
   toolKey,
   versionHistory,
   previousApprovedVersion,
@@ -33,6 +37,7 @@ import {
   trustedPublishers,
   AUTO_APPROVE_NOTE,
   AUTO_REVIEWER,
+  withdrawFromMarketplace,
   withdrawVersion,
   type BrowseEntry,
   type BrowsePage,
@@ -90,6 +95,83 @@ test('nextVersionNumber ignores anything that is not a version', () => {
 
 test('toolKey is the space and the name, which is what an install pins', () => {
   assert.equal(toolKey('community:acme', 'deal-pipeline'), 'community:acme/deal-pipeline')
+})
+
+// ── who may install what (the two verdicts) ──
+
+const OWN = 'community:acme'
+const CHILD_LINEAGE = ['community:acme:ops', OWN]
+const STRANGER = ['community:other']
+
+test('a version its own space approved installs in that space', () => {
+  assert.deepEqual(
+    installability({
+      status: 'approved',
+      marketplaceStatus: null,
+      sourceSpaceId: OWN,
+      lineage: [OWN],
+    }),
+    { ok: true },
+  )
+})
+
+test('...and in a space nested under it, because a child’s members are the parent’s', () => {
+  assert.equal(
+    installability({
+      status: 'approved',
+      marketplaceStatus: null,
+      sourceSpaceId: OWN,
+      lineage: CHILD_LINEAGE,
+    }).ok,
+    true,
+  )
+})
+
+test('an unlisted version is refused everywhere else — the private-space rule', () => {
+  const verdict = installability({
+    status: 'approved',
+    marketplaceStatus: null,
+    sourceSpaceId: OWN,
+    lineage: STRANGER,
+  })
+  assert.equal(verdict.ok, false)
+  assert.match(verdict.ok === false ? verdict.error : '', /private to the space that wrote it/)
+})
+
+test('a LISTED version installs anywhere — that is what listing means', () => {
+  assert.equal(
+    installability({
+      status: 'approved',
+      marketplaceStatus: 'approved',
+      sourceSpaceId: OWN,
+      lineage: STRANGER,
+    }).ok,
+    true,
+  )
+})
+
+test('a listing cannot rescue a version its own space never approved', () => {
+  // The order matters: the space's verdict is asked first, so a rejected or
+  // still-queued version is refused even in the space that wrote it.
+  for (const status of ['pending', 'rejected', 'withdrawn'] as const) {
+    const verdict = installability({
+      status,
+      marketplaceStatus: 'approved',
+      sourceSpaceId: OWN,
+      lineage: [OWN],
+    })
+    assert.equal(verdict.ok, false, status)
+  }
+})
+
+test('a version waiting on an admin says so, rather than “not approved”', () => {
+  const verdict = installability({
+    status: 'pending',
+    marketplaceStatus: null,
+    sourceSpaceId: OWN,
+    lineage: [OWN],
+  })
+  assert.match(verdict.ok === false ? verdict.error : '', /waiting on an admin/)
 })
 
 // ── slugs ──
@@ -299,6 +381,10 @@ test('the registry library exposes the marketplace lifecycle', () => {
   for (const fn of [
     publishTool,
     withdrawVersion,
+    listSpaceApprovalQueue,
+    reviewSpaceVersion,
+    submitToMarketplace,
+    withdrawFromMarketplace,
     listReviewQueue,
     reviewVersion,
     browseVersions,
@@ -338,6 +424,10 @@ test('the published shapes are what the routes and the space DTO carry', () => {
     submittedAt: '2026-08-18T00:00:00.000Z',
     reviewedAt: null,
     reviewNote: null,
+    marketplaceStatus: null,
+    marketplaceSubmittedAt: null,
+    marketplaceReviewedAt: null,
+    marketplaceReviewNote: null,
     sizeBytes: 2048,
     sourceSpaceId: 'community:acme',
     author: { userId: 'u1', name: 'Ana' },

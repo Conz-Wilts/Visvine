@@ -1,10 +1,12 @@
 'use client';
 
 /**
- * `/tools` — the one marketplace destination: Browse, Installed, Mine.
+ * `/tools` — the one Tools destination: Browse, Installed, Mine, and (for an
+ * admin) Approvals.
  *
- * Three questions about the same thing, which is why they are tabs and not three
- * pages: what exists, what this space runs, and what I have written. The active
+ * Four questions about the same thing, which is why they are tabs and not four
+ * pages: what exists, what this space runs, what I have written, and what is
+ * waiting on me. The active
  * one lives in the URL (`?tab=installed`) so a link into the right screen works —
  * the degraded banner over a running Tool points straight at Installed, and
  * `/t/<slug>`'s not-found does too.
@@ -28,11 +30,12 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { UnderlineTabs, type UnderlineTab } from '@/components/ui';
 import PaneTopScrollbarMask from '@/features/shared/components/pane/PaneTopScrollbarMask';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { fetchAuthoredTools, fetchInstalls } from '@/features/tools/lib/client';
+import { fetchApprovalQueue, fetchAuthoredTools, fetchInstalls } from '@/features/tools/lib/client';
 import type { AuthoredToolSummary, BrowseItem, InstallSummary } from '@/lib/tools/api';
 import type { NodeTypeConfig } from '@/lib/types/context';
 import BrowseTab from './BrowseTab';
 import InstalledTab from './InstalledTab';
+import ApprovalsTab from './ApprovalsTab';
 import MineTab from './MineTab';
 import ToolDetail from './ToolDetail';
 import { ToastHost, useToasts, type ToastTone } from './Toasts';
@@ -40,18 +43,19 @@ import { ToastHost, useToasts, type ToastTone } from './Toasts';
 /** Handoff key shared with the other pane-top bars — see tabIndicatorHandoff. */
 const HANDOFF_KEY = 'pane-top';
 
-type TabId = 'browse' | 'installed' | 'mine';
+type TabId = 'browse' | 'installed' | 'mine' | 'approvals';
 
-const TABS: UnderlineTab<TabId>[] = [
+const BASE_TABS: UnderlineTab<TabId>[] = [
   { id: 'browse', label: 'Browse' },
   { id: 'installed', label: 'Installed' },
   { id: 'mine', label: 'Mine' },
 ];
 
 const BLURB: Record<TabId, string> = {
-  browse: 'Tools published by members of any space. Installing pins a version — code never changes under you.',
+  browse: 'Tools their spaces chose to list publicly. Installing pins a version — code never changes under you.',
   installed: 'What this space runs, where each one appears, and the upgrades waiting for an admin.',
-  mine: 'The tools written in this space. Build them with a coding agent over MCP, then publish for review.',
+  mine: 'The tools written in this space. Publishing ships one to THIS space; listing it publicly is a separate step.',
+  approvals: 'Versions your members published, waiting on you. Nothing installs here until you approve it.',
 };
 
 export default function Marketplace() {
@@ -61,13 +65,6 @@ export default function Marketplace() {
   const { currentSpace, isAdmin: spaceAdmin, refreshSpace } = useSpace();
   const spaceId = currentSpace?.id ?? null;
   const nodeTypes = (currentSpace?.nodeTypes ?? []) as NodeTypeConfig[];
-
-  const requested = searchParams.get('tab');
-  const tab: TabId = TABS.some((entry) => entry.id === requested) ? (requested as TabId) : 'browse';
-  const select = useCallback(
-    (id: TabId) => router.replace(`${pathname}?tab=${id}`, { scroll: false }),
-    [router, pathname],
-  );
 
   const { toasts, push, dismiss } = useToasts();
   const toast = useCallback((tone: ToastTone, message: string) => push(tone, message), [push]);
@@ -83,6 +80,20 @@ export default function Marketplace() {
   const [browseKey, setBrowseKey] = useState(0);
 
   const isAdmin = installAdmin ?? spaceAdmin;
+
+  /** How many of this space's own versions are waiting on an admin. */
+  const [waiting, setWaiting] = useState(0);
+
+  const tabs: UnderlineTab<TabId>[] = isAdmin
+    ? [...BASE_TABS, { id: 'approvals', label: waiting > 0 ? `Approvals (${waiting})` : 'Approvals' }]
+    : BASE_TABS;
+
+  const requested = searchParams.get('tab');
+  const tab: TabId = tabs.some((entry) => entry.id === requested) ? (requested as TabId) : 'browse';
+  const select = useCallback(
+    (id: TabId) => router.replace(`${pathname}?tab=${id}`, { scroll: false }),
+    [router, pathname],
+  );
 
   /**
    * Only the newest load of each list is allowed to land.
@@ -133,12 +144,36 @@ export default function Marketplace() {
     }
   }, [spaceId, onError]);
 
+  /**
+   * The Approvals badge. Read for admins only and separately from the tab's own
+   * content, because the count is what tells an admin the tab is worth opening
+   * — a queue nobody knows about is not a queue.
+   */
+  const loadWaiting = useCallback(async () => {
+    if (!spaceId || !isAdmin) {
+      setWaiting(0);
+      return;
+    }
+    try {
+      const body = await fetchApprovalQueue(spaceId);
+      setWaiting(body.queue.length);
+    } catch {
+      // A count is decoration; a toast for one would be noise over a screen the
+      // admin did not ask for.
+      setWaiting(0);
+    }
+  }, [spaceId, isAdmin]);
+
   useEffect(() => {
     setInstalls(null);
     setInstallAdmin(null);
     setAuthored(null);
     void loadInstalls();
   }, [loadInstalls]);
+
+  useEffect(() => {
+    void loadWaiting();
+  }, [loadWaiting]);
 
   // Mine's roster walks the space's visible vault, so it is read when somebody
   // actually opens the tab rather than on every visit to Browse.
@@ -155,7 +190,7 @@ export default function Marketplace() {
         <PaneTopScrollbarMask />
         <div className="flex w-full items-center bg-glass px-1">
           <UnderlineTabs
-            tabs={TABS}
+            tabs={tabs}
             value={tab}
             onChange={select}
             ariaLabel="Tools"
@@ -207,7 +242,25 @@ export default function Marketplace() {
               tools={authored ?? []}
               isAdmin={isAdmin}
               loading={authored === null}
-              onChanged={() => void loadAuthored()}
+              onChanged={() => {
+                void loadAuthored();
+                // A member's publish lands in the admin queue, so the badge is
+                // stale the moment this list changes.
+                void loadWaiting();
+              }}
+              onToast={toast}
+            />
+          )}
+
+          {tab === 'approvals' && isAdmin && (
+            <ApprovalsTab
+              spaceId={spaceId}
+              onReviewed={() => {
+                void loadWaiting();
+                void loadAuthored();
+                // An approval offers this space's installs the upgrade.
+                void loadInstalls();
+              }}
               onToast={toast}
             />
           )}

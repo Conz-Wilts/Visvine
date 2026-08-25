@@ -56,13 +56,19 @@ const actionSchema = z.object({
 })
 
 /**
- * Publish the working copy as the next version, pending review (admin).
+ * Publish the working copy as the next version — into THIS SPACE.
+ *
+ * Not admin-gated here, and that is the change the whole surface turns on: a
+ * member publishing queues the version for their space's admins (the update
+ * queue), an admin publishing approves as they publish, and neither reaches the
+ * marketplace. Offering it to other spaces is a separate call on the version
+ * itself (`…/tools/versions/<id>` with `action: 'list'`).
  *
  * A Tool that does not compile is refused HERE, with the build attached, rather
  * than after `publishTool` has read the same row again: the author asked to ship
  * something broken and the diagnostics are the answer, not a sentence about
- * them. Everything else — no build at all, a second pending version, a denied
- * `version:` bump — is the library's to decide.
+ * them. Everything else — who may publish, superseding an earlier submission, a
+ * denied `version:` bump — is the library's to decide.
  */
 export async function POST(
   req: NextRequest,
@@ -72,7 +78,6 @@ export async function POST(
   const name = decodeURIComponent(raw)
   const ctx = await requireToolsAccess(spaceId)
   if (ctx instanceof Response) return ctx
-  if (!ctx.resolved.isAdmin) return bad('Only space admins can publish a tool.', 403)
 
   const body = await parseBody(req, actionSchema)
   if (body instanceof NextResponse) return body

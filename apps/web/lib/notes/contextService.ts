@@ -15,11 +15,15 @@ import { configNoteKindOf, isSettingsPath, adminAliasDenial, parseConfigNote } f
 import { readSpaceConfig } from '@/lib/spaces/spaceConfig'
 import { createVectorStage, type SemanticReport } from './vectorStage'
 import { createSourceStage } from './sourceStage'
+import { createMemoryStage } from './memoryStage'
 import { embedTexts, semanticConfigured, type SemanticStatus } from './embeddings'
 import { getVault, vaultFor } from './vaultCache'
 import { splitFrontmatter } from './shared/markdown'
 import { rewriteLinks } from './shared/linkRewrite'
 import { fusedSearch, type FusedResult, type SearchFilters } from './shared/retrieval'
+import { planSearch, type RewriteStatus } from './queryRewrite'
+import { createReranker } from './rerank'
+import type { QueryPlan } from './shared/queryPlan'
 import { computeReferences, redactReferences } from './shared/references'
 import { pathVisibleTo } from './shared/visibility'
 import { folderIdOfPath } from './shared/placement'
@@ -177,12 +181,25 @@ export interface BrainSearchResult {
    * found nothing.
    */
   semantic: SemanticStatus
+  /**
+   * What the search decided the query was asking — the phrasings it ran, the
+   * date range it read out of the words, whether it answered by recency alone,
+   * and whether it treated the ask as a history question. Reported so a caller
+   * can see why "last week" returned what it did, and whether the LLM rewrite
+   * ran ('on'), was unconfigured ('off'), was not worth it ('skipped') or failed.
+   */
+  plan: QueryPlan & { rewrite: RewriteStatus }
+}
+
+export interface SearchOptions {
+  /** Widen the plan with an LLM rewrite when one is configured (default true). */
+  rewrite?: boolean
 }
 
 /**
- * Fused search (frontmatter filter → BM25 → pgvector → source chunks → link
- * context, weighted RRF) over everything the principal can read in this context.
- * Private-folder hits are audited.
+ * Fused search (query plan → frontmatter/date filter → BM25 → pgvector → derived
+ * memories → source chunks → link context, weighted RRF → optional rerank) over everything the
+ * principal can read in this context. Private-folder hits are audited.
  */
 export async function searchContext(
   p: ContextPrincipal,
@@ -190,6 +207,7 @@ export async function searchContext(
   query: string,
   filters: SearchFilters = {},
   k?: number,
+  opts: SearchOptions = {},
 ): Promise<BrainSearchResult> {
   const { raws, metas } = await visibleVault(p, context)
   const bodyByPath = new Map(raws.map((r) => [r.path, splitFrontmatter(r.content).body]))
@@ -203,13 +221,20 @@ export async function searchContext(
     .filter((s) => filters.folderId === undefined || folderIdOfPath(s.path) === filters.folderId)
     .map((s) => s.path)
 
-  // One query embed shared by both vector stages.
+  const now = Date.now()
+  const { plan, rewrite } = await planSearch(query, now, { rewrite: opts.rewrite ?? true })
+
+  // One batched embed of every phrasing, shared by both vector stages. The
+  // text stages rank on the topic (time words stripped), so that is what is
+  // embedded for the original — the alternates are embedded as written.
   const report: SemanticReport = {}
   const configured = semanticConfigured()
-  let queryVector: number[] | null = null
-  if (configured) {
+  const queryVectors = new Map<string, number[]>()
+  const phrasings = [plan.topic || query, ...plan.queries.slice(1)]
+  if (configured && !plan.temporalOnly) {
     try {
-      ;[queryVector] = await embedTexts([query])
+      const vectors = await embedTexts(phrasings)
+      phrasings.forEach((q, i) => queryVectors.set(q, vectors[i]))
     } catch (err) {
       report.error = err instanceof Error ? err.message : String(err)
       logger.error('notes.search.embed_failed', { err })
@@ -218,8 +243,13 @@ export async function searchContext(
 
   const hits = await fusedSearch(notes, query, filters, {
     k,
-    vector: createVectorStage(context, queryVector, report),
-    sources: createSourceStage(context, sourcePaths, queryVector, report),
+    plan,
+    now,
+    vector: createVectorStage(context, queryVectors, report),
+    sources: createSourceStage(context, sourcePaths, queryVectors, report),
+    // Claims rank only for the visible notes at their CURRENT mtime.
+    memories: createMemoryStage(context, new Map(metas.map((m) => [m.path, m.mtime])), queryVectors, report),
+    rerank: createReranker(),
   })
   for (const h of hits) {
     if (isAuditedRead(p, context, h.path)) {
@@ -227,7 +257,7 @@ export async function searchContext(
     }
   }
   const semantic: SemanticStatus = !configured ? 'no-key' : report.error ? 'error' : 'on'
-  return { hits, semantic }
+  return { hits, semantic, plan: { ...plan, rewrite } }
 }
 
 // write gate

@@ -44,6 +44,7 @@
     "db:root-index:backfill": "tsx scripts/backfill-root-index.ts",
     "db:notes:verify": "tsx scripts/verify-notes-rules.ts community:blackbird-ventures",
     "db:embed": "tsx scripts/embed-context.ts",
+    "db:memories": "tsx scripts/derive-memories.ts",
     "db:global:rebuild": "tsx scripts/rebuild-global-records.ts",
     "db:spaces:records": "tsx scripts/migrate-space-records.ts",
     "db:secrets:rotate": "tsx scripts/rotate-secrets-key.ts",

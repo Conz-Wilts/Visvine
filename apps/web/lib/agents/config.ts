@@ -53,8 +53,22 @@ const AGENT_TYPE = 'agent'
 const ACTIVATION_TYPE = 'agent-activation'
 const DEFAULT_MAX_TURNS = 16
 const MAX_MAX_TURNS = 40
-const AGENT_TOOL_EXTRAS = ['web', 'sandbox', 'messages', 'directory'] as const
-type AgentToolExtra = (typeof AGENT_TOOL_EXTRAS)[number]
+export const AGENT_TOOL_EXTRAS = ['web', 'sandbox', 'messages', 'directory'] as const
+export type AgentToolExtra = (typeof AGENT_TOOL_EXTRAS)[number]
+
+/**
+ * What each `tools:` extra adds, in the words the create surface and the
+ * agent's settings show beside its checkbox. Context reads and writes are
+ * always available and are not listed — an agent with no extras still reads
+ * and writes notes.
+ */
+export const AGENT_TOOL_OPTIONS: ReadonlyArray<{ id: AgentToolExtra; label: string; description: string }> = [
+  { id: 'web', label: 'Web', description: 'Fetch public web pages (fetch_url).' },
+  { id: 'sandbox', label: 'Sandbox', description: 'Run JavaScript in an isolated sandbox (run_code).' },
+  { id: 'messages', label: 'Messages', description: 'Post to a channel in this space (notify).' },
+  { id: 'directory', label: 'Directory', description: 'Create records and link them (create_node, link_nodes).' },
+]
+export const DEFAULT_AGENT_MODEL = 'gemini/gemma-4-31b-it'
 
 /**
  * Where a NEW brief goes: `agents/<name>.md`, or inside a folder of agents
@@ -778,7 +792,7 @@ export function newAgentNote(input: {
     `type: ${AGENT_TYPE}`,
     `title: ${yamlString(title)}`,
     ...(input.description?.trim() ? [`description: ${yamlString(input.description.trim())}`] : []),
-    `model: ${input.model?.trim() || 'gemini/gemma-4-31b-it'}`,
+    `model: ${input.model?.trim() || DEFAULT_AGENT_MODEL}`,
     `connectors: [${(input.connectors ?? []).join(', ')}]`,
     ...(input.tools?.length ? [`tools: [${input.tools.join(', ')}]`] : []),
     `max_turns: ${DEFAULT_MAX_TURNS}`,

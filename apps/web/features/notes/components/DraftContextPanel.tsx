@@ -49,7 +49,10 @@ import { useContextFolderTree, FolderDropBoard, PathPreview } from '@/features/c
 import { FileForm, type FileEntry, type FileFormData } from '@/features/create/components/CreateModalForms'
 import { agentSlug, connectorSlug } from '@/lib/create/noteSlug'
 import { newConnectorNote } from '@/lib/connectors/config'
-import { agentBriefPath, newAgentNote } from '@/lib/agents/config'
+import { agentBriefPath, DEFAULT_AGENT_MODEL, newAgentNote } from '@/lib/agents/config'
+import type { BriefSettings } from '@/lib/agents/briefEdit'
+import type { AgentTemplate } from '@/lib/agents/templates'
+import AgentDraftSetup from '@/features/agents/components/AgentDraftSetup'
 import type { ChannelSectionEntry } from '@/lib/messages/types'
 import { useNodeSearch, type NodeSearchResult } from '@/features/shared/hooks/useNodeSearch'
 import MatchPanel from '@/features/create/components/MatchPanel'
@@ -200,17 +203,39 @@ interface Extras {
   /** channel */
   viewMode: 'CHAT' | 'FEED'
   sectionId: string
+  /**
+   * agent — the frontmatter the brief is scaffolded with: the model the space
+   * already holds a key for, and the tools a starter brief declared. Not a
+   * control on this surface; every one of them is edited under Settings on the
+   * agent's own page.
+   */
+  agent: BriefSettings
+  /** The starter brief the body came from, until it is edited. */
+  agentTemplate: string | null
 }
 
 const EMPTY_EXTRAS: Extras = {
   viewMode: 'CHAT',
   sectionId: '',
+  agent: { model: DEFAULT_AGENT_MODEL, description: '', connectors: [], tools: [], dryRun: false, maxTurns: null },
+  agentTemplate: null,
 }
 
-function readStash(): Partial<Stash> {
+/**
+ * The draft stashed by an earlier visit — unless this visit asked for a type
+ * explicitly. "New agent" on the roster must open an agent, not whatever was
+ * abandoned last week; a stash of the SAME type is still recovered, so a
+ * reload mid-brief costs nothing.
+ */
+function readStash(initialType: DraftType | null): Partial<Stash> {
   if (typeof sessionStorage === 'undefined') return {}
   try {
-    return JSON.parse(sessionStorage.getItem(STASH_KEY) ?? '{}') as Partial<Stash>
+    const stash = JSON.parse(sessionStorage.getItem(STASH_KEY) ?? '{}') as Partial<Stash>
+    if (initialType && stash.type && stash.type !== initialType) {
+      sessionStorage.removeItem(STASH_KEY)
+      return {}
+    }
+    return stash
   } catch {
     return {}
   }
@@ -222,7 +247,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const spaceId = currentSpace?.id ?? null
   const { entities, entityByPath, allTags } = useDirectoryEntities()
 
-  const stash = useRef<Partial<Stash>>(readStash()).current
+  const stash = useRef<Partial<Stash>>(readStash(initialType)).current
 
   const [title, setTitle] = useState(stash.title ?? '')
   const [type, setType] = useState<DraftType | null>(stash.type ?? initialType)
@@ -239,7 +264,10 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const [destOpen, setDestOpen] = useState(false)
   const [fields, setFields] = useState<Record<string, string>>(stash.fields ?? {})
   const [tags, setTags] = useState<string[]>(stash.tags ?? [])
-  const [extras, setExtras] = useState<Extras>({ ...EMPTY_EXTRAS, ...(stash.extras ?? {}) })
+  const [extras, setExtras] = useState<Extras>({ ...EMPTY_EXTRAS, ...(stash.extras ?? {}), agent: { ...EMPTY_EXTRAS.agent, ...(stash.extras?.agent ?? {}) } })
+  // Bumped when something outside the editor replaces the body (a starter
+  // brief): the editor owns its buffer and only reads initialContent on mount.
+  const [editorKey, setEditorKey] = useState(0)
   // An agent's `?folder=` names a folder of AGENTS — the roster row it was
   // pressed on — not a folder in the context tree, so it is kept apart from the
   // destination picker and only ever used to build the brief's path.
@@ -592,10 +620,19 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     if (!spaceId) return
     const name = agentSlug(title)
     const path = agentBriefPath(name, agentFolder)
+    const a = extras.agent
     await notesApi.create(
       spaceId,
       path,
-      newAgentNote({ name, title: title.trim(), body: bodyRef.current.trim() }),
+      newAgentNote({
+        name,
+        title: title.trim(),
+        description: a.description,
+        model: a.model,
+        connectors: a.connectors,
+        tools: a.tools,
+        body: bodyRef.current.trim(),
+      }),
     )
     invalidateContextCache(
       contextKeys.tree(spaceId),
@@ -607,7 +644,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     // Its own page rather than the bare note: the write synced an `agent:<name>`
     // node, and that page is where the schedule and activation live.
     router.replace(`/directory/${encodeURIComponent(`agent:${name}`)}`)
-  }, [spaceId, title, agentFolder, router])
+  }, [spaceId, title, agentFolder, extras.agent, router])
 
   const commitChannel = useCallback(async () => {
     if (!spaceId) return
@@ -700,6 +737,20 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     ready, committing, spaceId, type, folder,
     commitNote, commitFolder, commitEntity, commitConnector, commitAgent, commitChannel, commitSpace, commitFiles,
   ])
+
+  // A starter brief fills the draft in one go — title (if none yet), the body,
+  // the tools and the roster line — and the editor is remounted to show it.
+  // Blank clears only the body; the settings stay as they were.
+  const applyAgentTemplate = useCallback((template: AgentTemplate | null) => {
+    bodyRef.current = template ? template.body : ''
+    setEditorKey((k) => k + 1)
+    if (template && !title.trim()) setTitle(template.title)
+    setExtras((prev) => ({
+      ...prev,
+      agentTemplate: template?.id ?? null,
+      agent: template ? { ...prev.agent, tools: template.tools, description: template.description } : prev.agent,
+    }))
+  }, [title])
 
   // Pressing Create on a note or a folder asks WHERE first, in a popup over the
   // draft. The destination used to be a row in the header, which put a filing
@@ -931,10 +982,21 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         </div>
       )}
 
-      {type === 'agent' && agentSlug(title) && (
-        <div className="mt-4">
-          <PathPreview path={agentBriefPath(agentSlug(title), agentFolder)} />
-        </div>
+      {type === 'agent' && (
+        <>
+          <AgentDraftSetup
+            spaceId={spaceId}
+            templateId={extras.agentTemplate}
+            onApplyTemplate={applyAgentTemplate}
+            onDefaultModel={(model) => setExtras((prev) => ({ ...prev, agent: { ...prev.agent, model } }))}
+            accent={theme.base}
+          />
+          {agentSlug(title) && (
+            <div className="mt-4">
+              <PathPreview path={agentBriefPath(agentSlug(title), agentFolder)} />
+            </div>
+          )}
+        </>
       )}
 
       {type === 'channel' && (
@@ -973,6 +1035,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   return (
     <div className="pb-10">
       <NoteEditor
+        key={editorKey}
         variant="embedded"
         headerSlot={headerSlot}
         toolbarTrailSlot={createButton}

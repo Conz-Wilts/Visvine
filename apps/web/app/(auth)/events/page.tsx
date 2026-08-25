@@ -164,8 +164,11 @@ function EventsPageInner() {
         <EventsScopeSelector scope={scope} onScopeChange={setScope} className="w-full overflow-x-auto px-1" />
       </div>
 
-      {/* One toolbar row: search, filters, and the view at the far end */}
-      <div className="flex flex-wrap items-center gap-3 px-1 pt-3 pb-1">
+      {/* One toolbar row: search, filters, and the view at the far end. pt-5 /
+          pb-2 against the content's pt-3 leaves 20px above the row and 20px
+          below it, so it reads centred between the scope tabs and the events
+          rather than tucked under the tabs. */}
+      <div className="flex flex-wrap items-center gap-3 px-1 pt-5 pb-2">
         <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search events…" className="w-full max-w-xs" />
         <EventsToolbar
           currentFilter={timeFilter}
@@ -177,7 +180,7 @@ function EventsPageInner() {
       </div>
 
       {/* View Content */}
-      <div className="px-1 pt-5 pb-8">
+      <div className="px-1 pt-3 pb-8">
         {currentView === 'calendar' && (
           <EventsCalendarView events={filteredEvents} onEventClick={handleEventClick} loading={loading} />
         )}

@@ -257,13 +257,6 @@ async function makeNotePrivate(
   }
 }
 
-/** Load a connector or throw a 404 that doesn't reveal whether it exists. */
-async function requireAgentsFeature(principal: ContextPrincipal, spaceId: string): Promise<void> {
-  if (await featureAccessForbidden(principal.userId, spaceId, 'agents', principal.email)) {
-    throw new ActionError(403, 'The Agents tool is not available to you in this space')
-  }
-}
-
 /** The Drive's own gate: a space may switch Resources off, or hold it to admins. */
 async function requireDriveFeature(ctx: ActionCaller, spaceId: string): Promise<void> {
   if (await featureAccessForbidden(ctx.userId, spaceId, 'resources', ctx.email)) {
@@ -595,7 +588,13 @@ export const CONTEXT_ACTIONS = [
         'A note hit carries `status` when it is NOT current (superseded, expired, stale, deprecated, ' +
         'rejected, archived) — such notes are ranked below current ones but still returned, because the ' +
         'record of what changed is often the answer. Do not act on one as present truth: read its ' +
-        '`superseded_by` note first.',
+        '`superseded_by` note first. A note hit carries `claim` when one of its derived memories — a single ' +
+        'sentence the note states — matched: that sentence is usually the answer, and reading the note is only ' +
+        'needed for what surrounds it. Time words in the query are understood ("last week", "in June 2024", ' +
+        '"since March", "2026-03-15") and become a date filter; a query that is ONLY about a time ' +
+        '("what happened yesterday") returns that period newest-first. A history question ("why did we stop…", ' +
+        '"what did we use to…") ranks retired notes at full weight. The `plan` field reports all of this — ' +
+        'the phrasings searched, the date range read, and whether the query rewrite ran.',
       input: {
         space_id: spaceArg,
         query: z.string().describe('Natural-language or keyword query'),
@@ -609,6 +608,10 @@ export const CONTEXT_ACTIONS = [
           .describe("Only this top-level folder, e.g. 'people' ('' = the context root)"),
         updated_after: z.number().optional().describe('Only notes modified at/after this epoch-ms timestamp'),
         updated_before: z.number().optional().describe('Only notes modified at/before this epoch-ms timestamp'),
+        rewrite: z
+          .boolean()
+          .optional()
+          .describe('Widen the search with LLM-proposed phrasings (default true; pass false for an exact, faster search)'),
       },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
@@ -616,7 +619,7 @@ export const CONTEXT_ACTIONS = [
         const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
         const k = args.k ?? 10
 
-        const { hits, semantic } = await searchContext(
+        const { hits, semantic, plan } = await searchContext(
           principal,
           context,
           args.query,
@@ -628,6 +631,7 @@ export const CONTEXT_ACTIONS = [
             updatedBefore: args.updated_before,
           },
           k,
+          { rewrite: args.rewrite },
         )
 
         const entities =
@@ -666,6 +670,15 @@ export const CONTEXT_ACTIONS = [
 
         return {
           semantic,
+          plan: {
+            queries: plan.queries,
+            date_range: plan.dateRange
+              ? { start: plan.dateRange.start, end: plan.dateRange.end }
+              : null,
+            temporal_only: plan.temporalOnly,
+            intent: plan.intent,
+            rewrite: plan.rewrite,
+          },
           entities,
           // A source hit is a chunk of an uploaded file: it has no note to read,
           // so it says how to open it (read_file) rather than handing back a
@@ -675,6 +688,7 @@ export const CONTEXT_ACTIONS = [
             path: h.path,
             title: h.title,
             snippet: h.snippet ?? null,
+            ...(h.claim ? { claim: h.claim } : {}),
             // Present only when the note is not current — see shared/lifecycle.ts.
             ...(h.status ? { status: h.status } : {}),
             ...(h.kind === 'source'
@@ -1833,7 +1847,6 @@ export const CONTEXT_ACTIONS = [
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
-        await requireAgentsFeature(principal, args.space_id)
         const { agents, heartbeatAt } = await listAgents(principal, context)
         return {
           scheduler_last_tick_at: heartbeatAt,
@@ -1874,7 +1887,6 @@ export const CONTEXT_ACTIONS = [
       },
       run: async (ctx, args) => {
         const { principal } = await resolveTarget(ctx, args.space_id, 'shared')
-        await requireAgentsFeature(principal, args.space_id)
         if (!(await canTriggerRun(principal, args.space_id, args.agent))) {
           throw new ActionError(403, "Only the agent's author or a space admin can run it")
         }

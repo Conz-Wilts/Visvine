@@ -16,7 +16,7 @@ import type { SpaceAlias, Space, NodeTypeConfig } from '@/lib/types';
 import { isNodeTypeEnabled, nodeTypeToolKey } from '@/lib/featureAccess';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { FEATURES } from '@/features/shared/lib/features';
-import { Alert, Chip, ColorPicker, chipClass } from '@/components/ui';
+import { Alert, Chip, ColorPicker, SearchInput, chipClass } from '@/components/ui';
 import Select from '@/components/ui/Select';
 import { patchInstall } from '@/features/tools/lib/client';
 import { pageClaimantsFor } from '@/lib/tools/typePages';
@@ -413,6 +413,7 @@ export default function TypesPanel() {
   const [aliases, setAliases] = useState<SpaceAlias[]>(
     (currentSpace?.aliases as SpaceAlias[]) ?? []
   );
+  const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { report } = useConsoleSave();
@@ -509,7 +510,21 @@ export default function TypesPanel() {
   const toolLabels = new Map(FEATURES.map(f => [f.key, f.label]));
   const toolTypes: { type: NodeTypeConfig; toolLabel: string }[] = [];
   const customTypes: NodeTypeConfig[] = [];
+  // Search reaches a type's aliases as well as its name: an alias is the word a
+  // member actually has in mind ("Founder"), and the type it hangs off
+  // ("Person") is what they're looking for. Person's aliases live on the
+  // permission snapshot, so they're matched from there.
+  const term = query.trim().toLowerCase();
+  const matches = (type: NodeTypeConfig) => {
+    if (!term) return true;
+    if (type.name.toLowerCase().includes(term)) return true;
+    const named = type.name.toLowerCase() === PERMISSION_TYPE
+      ? (data?.aliases ?? [])
+      : aliasesForType(aliases, type.name);
+    return named.some(a => a.name.toLowerCase().includes(term));
+  };
   for (const type of listedTypes) {
+    if (!matches(type)) continue;
     const key = nodeTypeToolKey(type.name);
     const label = key ? toolLabels.get(key) : undefined;
     if (label) toolTypes.push({ type, toolLabel: label });
@@ -574,13 +589,23 @@ export default function TypesPanel() {
           then containers) and the directory and graph still read it that way. A
           list you scan to find one type wants names in the order you'd look
           them up. */}
+      <SearchInput
+        value={query}
+        onChange={setQuery}
+        placeholder="Search types and aliases…"
+      />
+
       <section>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
           Tool types
         </h3>
-        <div className="mt-1 divide-y divide-border-subtle">
-          {toolTypes.map(({ type, toolLabel }) => renderType(type, toolLabel))}
-        </div>
+        {toolTypes.length > 0 ? (
+          <div className="mt-1 divide-y divide-border-subtle">
+            {toolTypes.map(({ type, toolLabel }) => renderType(type, toolLabel))}
+          </div>
+        ) : (
+          <p className="py-4 text-sm text-text-muted">No matches.</p>
+        )}
       </section>
 
       {/* Member-made types. Rendered even when empty — an empty list is the
@@ -594,7 +619,7 @@ export default function TypesPanel() {
             {customTypes.map(type => renderType(type))}
           </div>
         ) : (
-          <p className="py-4 text-sm text-text-muted">None yet.</p>
+          <p className="py-4 text-sm text-text-muted">{term ? 'No matches.' : 'None yet.'}</p>
         )}
       </section>
     </div>

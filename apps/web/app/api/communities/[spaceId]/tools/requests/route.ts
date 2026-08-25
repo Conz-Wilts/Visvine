@@ -3,7 +3,8 @@ import { z } from 'zod'
 import { parseBody } from '@/lib/api/route'
 import { spaceAdminUserIds } from '@/lib/auth'
 import { notify } from '@/lib/notifications/service'
-import { getVersion } from '@/lib/tools/registry'
+import { getVersion, installability } from '@/lib/tools/registry'
+import { ancestorsOf } from '@/lib/spaces/tree'
 import { bad, requireToolsAccess } from '@/lib/tools/route'
 import prisma from '@/lib/prisma'
 
@@ -38,7 +39,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
 
   const version = await getVersion(body.versionId)
   if (!version) return bad('No such tool version.', 404)
-  if (version.status !== 'approved') return bad('Only an approved version can be requested.', 409)
+  // The same question the install itself will ask, asked early: there is no
+  // point notifying an admin about a version they would be refused.
+  const installable = installability({
+    status: version.status,
+    marketplaceStatus: version.marketplaceStatus,
+    sourceSpaceId: version.sourceSpaceId,
+    lineage: (await ancestorsOf(ctx.resolved.spaceId)).map((row) => row.id),
+  })
+  if (!installable.ok) return bad(installable.error, 409)
 
   const installed = await prisma.appToolInstall.findFirst({
     where: { spaceId: ctx.resolved.spaceId, key: version.key },

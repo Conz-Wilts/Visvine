@@ -33,7 +33,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { FileCode2Icon, RotateCwIcon, TriangleAlertIcon } from '@/features/shared/icons';
+import { CheckIcon, CopyIcon, FileCode2Icon, RotateCwIcon, TriangleAlertIcon } from '@/features/shared/icons';
+import { useCopied } from '@/features/shared/hooks/useCopied';
 import { Skeleton } from '@/components/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { FetchJsonError } from '@/lib/fetchJson';
@@ -47,6 +48,24 @@ import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 
 const STRIP_BUTTON =
   'inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2';
+
+/**
+ * Where this Tool stands with the people who decide about it, in one phrase.
+ *
+ * On the preview above all, because the preview is the link an author hands
+ * around: whoever opens it should be able to see at a glance that they are
+ * looking at something private to this space, and not assume the tool is out in
+ * the world because it renders.
+ */
+function reachLabel(tool: AuthoredToolDetail): string {
+  const publication = tool.publication;
+  if (!publication) return 'unpublished · this space only';
+  if (publication.marketplaceStatus === 'approved') return `v${publication.version} · on the marketplace`;
+  if (publication.marketplaceStatus === 'pending') return `v${publication.version} · listing in review`;
+  if (publication.status === 'pending') return `v${publication.version} · waiting on an admin`;
+  if (publication.status === 'approved') return `v${publication.version} · live in this space only`;
+  return `v${publication.version} · ${publication.status}`;
+}
 
 function buildStatus(tool: AuthoredToolDetail): { label: string; tone: keyof typeof TONE_CLASSES } {
   if (tool.invalid) return { label: 'Config error', tone: 'bad' };
@@ -66,6 +85,14 @@ export default function ToolPreview({ name }: { name: string }) {
   // iframe from scratch — a fresh token, a fresh bundle fetch, a fresh mount —
   // rather than asking a Tool that may be wedged to re-render itself.
   const [attempt, setAttempt] = useState(0);
+  const [copied, copy] = useCopied(2000);
+
+  /** This page's own address, absolute — the point of copying it is to paste it
+   *  somewhere that is not this app. */
+  const copyLink = useCallback(
+    () => copy(typeof window === 'undefined' ? '' : window.location.href),
+    [copy],
+  );
 
   const reload = useCallback(() => {
     setAttempt((n) => n + 1);
@@ -133,8 +160,18 @@ export default function ToolPreview({ name }: { name: string }) {
             {status.label}
           </span>
           <span className="text-[12px] text-text-muted">preview · working copy</span>
+          <span className="text-[12px] text-text-muted">{reachLabel(tool)}</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void copyLink()}
+            className={STRIP_BUTTON}
+            title="Copy this page's address — the link to send to whoever is building or reviewing this tool"
+          >
+            {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
+            {copied ? 'Copied' : 'Copy link'}
+          </button>
           <button type="button" onClick={reload} className={STRIP_BUTTON}>
             <RotateCwIcon className="h-3.5 w-3.5" />
             Reload

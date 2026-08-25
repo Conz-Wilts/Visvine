@@ -34,6 +34,8 @@ export interface EvalQuery {
   id: string
   query: string
   filters?: SearchFilters
+  /** Epoch ms the query is asked at — relative dates in it resolve against this. */
+  now?: number
   /** Paths that are genuine hits for this query. */
   relevant: string[]
   /**
@@ -144,7 +146,7 @@ export async function evaluateRetrieval(
 ): Promise<EvalReport> {
   const scores: QueryScore[] = []
   for (const q of queries) {
-    const hits = await fusedSearch(notes, q.query, q.filters ?? {}, { k })
+    const hits = await fusedSearch(notes, q.query, q.filters ?? {}, { k, now: q.now })
     scores.push(scoreQuery(q, hits, k))
   }
   return {

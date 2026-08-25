@@ -73,7 +73,14 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
     // gutter so the opaque white runs edge to edge. That background is
     // load-bearing (cards scroll under it), and nothing here may get
     // overflow-hidden or the filter menus clip.
-    <div className="sticky top-8 z-10 -ml-6 bg-glass py-3 pl-12 pr-6">
+    //
+    // pt-9 / pb-2 is the vertical rhythm, not a guess: the row sits 36px below
+    // the tab bar, and the 8px here plus the grid's pt-7 puts it 36px above the
+    // first card — the search line reads centred between the nav and the
+    // content instead of hanging off the nav. The split is lopsided because the
+    // gap below is shared: the card's hover glow reaches ~24px past its top
+    // edge, so the toolbar's opaque edge has to stay clear of it.
+    <div className="sticky top-8 z-10 -ml-6 bg-glass pt-9 pb-2 pl-12 pr-6">
       <div className="flex flex-wrap items-center gap-2">
         <SearchInput
           value={searchTerm}
