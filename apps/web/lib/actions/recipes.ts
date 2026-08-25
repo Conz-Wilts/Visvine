@@ -357,10 +357,7 @@ const RECIPES: Recipe[] = [
       'Once it exists and is active, you CAN trigger it with run_agent — authoring is the only part that is closed to you.',
       ...(ctx.space?.agents.length ? [`Already in this space: ${ctx.space.agents.join(', ')}.`] : []),
     ],
-    blockers: (ctx) => [
-      'agents/ is frozen for AI origins — you cannot create the agent yourself, only draft it.',
-      ...featureBlocker(ctx, 'agents', 'agents'),
-    ],
+    blockers: () => ['agents/ is frozen for AI origins — you cannot create the agent yourself, only draft it.'],
   },
 
   {
@@ -390,7 +387,7 @@ const RECIPES: Recipe[] = [
       'An inactive agent is refused — activation is the review point, and only an admin can flip it.',
       "Only the agent's author or a space admin may trigger a run.",
     ],
-    blockers: (ctx) => [...scopeBlocker(ctx, 'agents:run', 'triggering an agent'), ...featureBlocker(ctx, 'agents', 'agents')],
+    blockers: (ctx) => scopeBlocker(ctx, 'agents:run', 'triggering an agent'),
   },
 
   {
@@ -717,7 +714,7 @@ const ALL_SCOPES: readonly string[] = [
 /** Read the feature flags the recipes reason about off a space's config. */
 export function planFeatures(config: SpaceFeatureConfig | null | undefined): Record<string, boolean> {
   return Object.fromEntries(
-    ['directory', 'notes', 'connectors', 'agents', 'tools', 'events', 'resources', 'channels'].map((key) => [
+    ['directory', 'notes', 'connectors', 'tools', 'events', 'resources', 'channels'].map((key) => [
       key,
       isFeatureEnabled(config, key),
     ]),

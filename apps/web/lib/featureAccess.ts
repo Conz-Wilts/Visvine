@@ -29,7 +29,7 @@ export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events', 'con
  * reject unknown keys from a client-submitted `order`, alongside the dynamic
  * `tool:<slug>` rail keys below (see isPersistableFeatureKey).
  */
-export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'connectors', 'agents', 'tools'];
+export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'connectors', 'tools'];
 
 /**
  * The `featureConfig` a freshly created space is stored with: core keys
@@ -95,10 +95,8 @@ function isPersistableFeatureKey(key: unknown): key is string {
  * writing to `connectors/` is admin-gated in contextService.writeDenial. It is
  * also nav-hidden — the surface is a console section, not a rail row — so the
  * switch it would have had is gone either way.
- * Agents deliberately is NOT here: any member may author an agent brief; only
- * activation (`agents/live/`) is admin-gated. A space may still restrict the
- * tool to admins with the ordinary per-space switch. Tools is the same story —
- * members author under `tools/`; only installing and publishing are admin acts.
+ * Tools is not here either: members author under `tools/`; only installing
+ * and publishing are admin acts.
  */
 export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
 
@@ -136,8 +134,10 @@ export function isFeatureEnabled(config: SpaceFeatureConfig | null | undefined, 
  *
  * Person and Space (the org type) belong to the always-on
  * directory, Event to the always-on navbar Events surface, Connector to the
- * always-on console section, and Tool to the always-on marketplace — none of
- * them appears here, so they're never hidden.
+ * always-on console section, Tool to the always-on marketplace, and Agent to
+ * Context itself — an agent is a brief note under `agents/`, browsed in the
+ * tree like any other folder, with no surface of its own to switch off — so
+ * none of them appears here and they're never hidden.
  * In particular 'space' must NOT be added: it would hide every org record
  * whenever the Channels tool is off.
  */
@@ -145,7 +145,6 @@ const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   resource: 'resources',
   section: 'channels',
   channel: 'channels',
-  agent: 'agents',
 };
 
 /** The feature slug a node type belongs to, or null if it isn't feature-gated. */
@@ -170,7 +169,7 @@ export function featureNodeTypeNames(featureKey: string): string[] {
  * Deliberately separate from NODE_TYPE_FEATURE_KEYS above: that map decides what
  * gets HIDDEN when a tool is off, so it may only ever hold types a space can
  * afford to lose. This one names the owning tool for every built-in, including
- * the always-on ones (Person and Space are the directory's, Index the context
+ * the always-on ones (Person and Space are the directory's, Agent the context
  * surface's, Event the navbar calendar's) — naming a type's tool is safe where
  * gating on it would not be.
  *
@@ -181,7 +180,7 @@ const NODE_TYPE_TOOL_KEYS: Record<string, string> = {
   ...NODE_TYPE_FEATURE_KEYS,
   person: 'directory',
   space: 'directory',
-  index: 'notes',
+  agent: 'notes',
   event: 'events',
   connector: 'connectors',
 };

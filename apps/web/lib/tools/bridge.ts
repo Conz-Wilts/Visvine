@@ -33,7 +33,6 @@
  * named.
  */
 import { z } from 'zod'
-import { featureAccessForbidden } from '@/lib/auth'
 import { logAudit } from '@/lib/notes/audit'
 import {
   appendLogGated,
@@ -75,7 +74,6 @@ export interface BridgeDeps {
   appendLogGated: typeof appendLogGated
   loadConnector: typeof loadConnector
   executeConnectorScript: typeof executeConnectorScript
-  featureAccessForbidden: typeof featureAccessForbidden
   canTriggerRun: typeof canTriggerRun
   claimManualRun: typeof claimManualRun
   getToolState: typeof getToolState
@@ -94,7 +92,6 @@ const REAL_DEPS: BridgeDeps = {
   appendLogGated,
   loadConnector,
   executeConnectorScript,
-  featureAccessForbidden,
   canTriggerRun,
   claimManualRun,
   getToolState,
@@ -608,11 +605,8 @@ async function agentsRun(t: ResolvedTarget, params: unknown, deps: BridgeDeps): 
   if (missingHere(t.degraded?.missing.agents, name)) {
     return err('degraded', `This space has no "${name}" agent — the tool is running degraded.`)
   }
-  // The same two checks run_agent applies, in the same order: the feature must
-  // be available to this viewer, and running is author-or-admin.
-  if (await deps.featureAccessForbidden(t.principal.userId, t.spaceId, 'agents', t.principal.email)) {
-    return err('forbidden', 'The Agents tool is not available to you in this space.')
-  }
+  // The same check run_agent applies: running is author-or-admin. There is no
+  // feature gate — agents are Context, and Context is always on.
   if (!(await deps.canTriggerRun(t.principal, t.spaceId, name))) {
     return err('forbidden', "Only the agent's author or a space admin can run it.")
   }

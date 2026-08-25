@@ -11,9 +11,9 @@ import { AGENT_NAME_RE } from '@/lib/agents/config'
  *
  * The transcript is author-or-admin only. A run executes as the brief's AUTHOR
  * (an admin's runs bypass grants), so its `events` carry whatever the agent
- * read — notes the viewing member may hold no grant on. Members with the
- * Agents tool still see the run's metadata (status, cost, summary, error) —
- * the same fields the roster and history list already show — but not the
+ * read — notes the viewing member may hold no grant on. Other members still
+ * see the run's metadata (status, cost, summary, error) — the same fields the
+ * agent's page and history list already show — but not the
  * trace; `transcriptHidden` tells the UI why the events are empty.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ spaceId: string; name: string; runId: string }> }) {

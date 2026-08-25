@@ -186,7 +186,7 @@ timezone: Pacific/Auckland # required to activate anything with a clock
 - Failure policy: 401/403 from the provider → `key_rejected`, deactivated; 429/402/5xx → wait for
   the next occurrence; three consecutive failures → deactivated; budget reached → paused (not
   deactivated), resumes next month or when the cap is raised.
-- Tick liveness: `agent_heartbeat` is written every tick; `/agents` shows a "scheduler delayed"
+- Tick liveness: `agent_heartbeat` is written every tick; an agent's page shows a "scheduler delayed"
   banner when it is > 10 min old.
 
 ## Tools an agent gets
@@ -263,15 +263,34 @@ deadline, UTC) was already correct and was left untouched.
 
 ## Surfaces
 
-- `/agents` — roster (members see everything but spend), activation toggle + dialog (admins; the
-  dialog's "Also run when…" section sets `on.context` globs, the `on.webhook` connector, `every` and
-  `debounce`), Run now (author/admin), Model keys (admins), scheduler banner.
-- `/directory/agent:<name>` — Agent tab (status, activation, spend + budget, runs with live
-  transcripts) beside the Context/Raw note tabs.
+- **Where they live** — there is no Agents tool. An agent is a note under `agents/` in the space's
+  Context, so the roster IS that folder in the context tree: folders of agents are ordinary folders
+  with an `index.md`, and a brief opens as the agent's page. Nothing about agents is switchable per
+  space — the `agent` type belongs to Context, which is always on — and nothing is nav-hidden
+  because there was never a rail row to hide.
+- **Creating one** — "Create → Agent" (offered first while browsing `agents/`) opens the note-first draft (`/directory/new?type=agent`)
+  with the agent half filled in (`features/agents/components/AgentDraftSetup.tsx`): a row of starter
+  briefs (`lib/agents/templates.ts` — each fills the title, body, tools and roster line, and must
+  round-trip through `parseAgentBrief`), then the settings the frontmatter will carry — provider and
+  model (the picker shows which providers hold a key), tool extras, connectors, the roster line.
+  Those come from `GET /api/communities/[spaceId]/agents/options` (`lib/agents/options.ts`:
+  providers + `keyStored`, connectors, sibling agents, `defaultModel` = the first provider with a
+  key). The body is the brief; Create writes `agents/<name>.md` through `newAgentNote` and lands on
+  the agent's page. An explicit `?type=` always wins over a draft stashed by an earlier visit.
+- `/directory/agent:<name>` — Agent tab beside the Context/Raw note tabs: the status line with its
+  switch (the activation dialog's "Also run when…" section sets `on.context` globs, the `on.webhook`
+  connector, `every` and `debounce`), Run now (author/admin), scheduler banner; while the agent is **off**, the setup checklist (`AgentSetupChecklist`: brief parses →
+  model key stored → when it runs → Turn on, each line naming who does what next; members see "an
+  admin turns it on"); while **on**, when it fires with a Change control (the activation dialog);
+  **Settings** (`AgentSettingsPanel`, author or admin) — the same fields as the draft plus dry run
+  and the turn cap, saved by rewriting only those frontmatter keys (`lib/agents/briefEdit.ts`) and
+  writing the note through the ordinary notes API, so a member's save turns a live agent off exactly
+  as editing the note would, and the form says so; spend + budget (admins); runs with live
+  transcripts.
 - Console → Agents: **gone.** Everything it held now lives on the agent: the run timezone is part of
   the activation note (required to turn a scheduled agent on), models and keys are connectors, and
-  activation was always per agent on `/agents`.
-- API: `GET/PATCH /api/communities/[spaceId]/agents[/[name]]`, `POST …/[name]/run`,
+  activation was always per agent, on the agent's page.
+- API: `GET/PATCH /api/communities/[spaceId]/agents/[name]`, `POST …/[name]/run`,
   `GET …/[name]/runs[/[runId]]`, `GET/PUT …/[name]/budget`.
 - MCP: `list_agents` (`context:read`; includes `schedule`, `every` and `triggers` so a trigger-only
   agent does not read "No schedule"), `run_agent` (`agents:run`). Authoring is not an MCP tool.
@@ -280,14 +299,13 @@ deadline, UTC) was already correct and was left untouched.
 
 ## Code map
 
-`lib/agents/{registry,providers,config,hooks,principal,tools,sandbox,budget,runs,runner,schedule,dispatch,internalAuth,service,route,limits,events}.ts`
+`lib/agents/{registry,providers,config,hooks,principal,tools,sandbox,budget,runs,runner,schedule,dispatch,internalAuth,service,route,limits,events,options,templates,briefEdit}.ts`
 (`events.ts` is the mailbox: `enqueueAgentEvent`, `claimEvents`, `matchNoteTriggers`,
 `fireNoteTriggers`, `webhookRecipients`, `rearmIfPending`, `pruneEvents`),
 the shared loop `lib/notes/toolLoop.ts` (also under the connector-creation agent), the entity sync
-points (`lib/notes/entities.ts`, `entityLinks.ts`, `context/entityNodes.ts`), feature key `agents`
-(`lib/featureAccess.ts` + `features/shared/lib/features.tsx`), UI in `features/agents/*` and
+points (`lib/notes/entities.ts`, `entityLinks.ts`, `context/entityNodes.ts`), UI in `features/agents/*` and
 `features/profile/components/AgentPageContent.tsx`. Tests: `tests/agents-config.test.ts` (grammar, globs, cron, interval math),
 `tests/agents-tick.test.ts` (claim / reclaim / release / events, against the local Docker DB),
 `tests/agents-tools.test.ts` (tool surface, caps, depth guard, dry run, write collector — against fakes),
-`tests/agents-budget.test.ts`, `tests/tool-loop.test.ts`, plus the gate cases in
+`tests/agents-budget.test.ts`, `tests/agents-templates.test.ts` (starter briefs + settings rewrite), `tests/agents-options.test.ts` (against the local Docker DB), `tests/tool-loop.test.ts`, plus the gate cases in
 `tests/clean-context.test.ts`.

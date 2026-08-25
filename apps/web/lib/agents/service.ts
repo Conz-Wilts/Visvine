@@ -7,7 +7,6 @@ import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/notes/audit'
 import { readVisible, visibleVault, writeGated } from '@/lib/notes/contextService'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
-import { folderOfIndexPath, humanizeFolderName, isIndexPath } from '@/lib/notes/shared/indexNote'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
@@ -220,41 +219,16 @@ async function summarise(
   return summary
 }
 
-/**
- * A folder of agents — `agents/<path>/index.md`, which is what makes the
- * folder exist. `path` is relative to `agents/`; `title` is the index note's.
- */
-export interface AgentFolder {
-  path: string
-  indexPath: string
-  title: string
-  description: string | null
-}
-
 export interface AgentRoster {
   agents: AgentSummary[]
-  folders: AgentFolder[]
   heartbeatAt: string | null
 }
 
-function folderOf(indexPath: string, content: string): AgentFolder | null {
-  const folder = folderOfIndexPath(indexPath)
-  if (!folder.startsWith('agents/')) return null
-  const rel = folder.slice('agents/'.length)
-  if (!rel || rel === 'live' || rel.startsWith('live/')) return null
-  const fm = parseFrontmatter(content)
-  return {
-    path: rel,
-    indexPath,
-    title: (typeof fm.title === 'string' && fm.title.trim()) || humanizeFolderName(rel.split('/').pop()!),
-    description: typeof fm.description === 'string' && fm.description.trim() ? fm.description.trim() : null,
-  }
-}
-
 /**
- * Every agent brief the principal can see — valid or broken — and every
- * folder of agents. Two briefs with one leaf name are one agent: the
- * canonical path is summarised as it, the rest list as invalid duplicates.
+ * Every agent brief the principal can see — valid or broken. Two briefs with
+ * one leaf name are one agent: the canonical path is summarised as it, the
+ * rest list as invalid duplicates. The folders they sit in are not part of
+ * the roster: they are ordinary Context folders, browsed in the tree.
  */
 export async function listAgents(
   p: ContextPrincipal,
@@ -263,28 +237,10 @@ export async function listAgents(
 ): Promise<AgentRoster> {
   const now = new Date()
   const [heartbeatAt, { raws }] = await Promise.all([lastHeartbeat(), visibleVault(p, context)])
-  const folders = new Map<string, AgentFolder>()
   const briefs: { name: string; path: string; content: string }[] = []
   for (const raw of raws) {
-    if (isIndexPath(raw.path)) {
-      const f = folderOf(raw.path, raw.content)
-      if (f) folders.set(f.path, f)
-      continue
-    }
     const name = isAgentBriefPath(raw.path) ? agentNameOfPath(raw.path) : null
     if (name) briefs.push({ name, path: raw.path, content: raw.content })
-  }
-  // A brief in a folder whose index the viewer cannot see still needs a row
-  // to hang from.
-  for (const b of briefs) {
-    const rel = agentFolderOfPath(b.path)
-    const segments = rel ? rel.split('/') : []
-    for (let i = 1; i <= segments.length; i++) {
-      const path = segments.slice(0, i).join('/')
-      if (!folders.has(path)) {
-        folders.set(path, { path, indexPath: `agents/${path}/index.md`, title: humanizeFolderName(segments[i - 1]), description: null })
-      }
-    }
   }
   briefs.sort((a, b) => canonicalBriefOrder(a.path, b.path))
   const canonical = new Map<string, string>()
@@ -302,7 +258,6 @@ export async function listAgents(
   )
   return {
     agents: out.sort((a, b) => a.path.localeCompare(b.path)),
-    folders: [...folders.values()].sort((a, b) => a.path.localeCompare(b.path)),
     heartbeatAt: heartbeatAt?.toISOString() ?? null,
   }
 }

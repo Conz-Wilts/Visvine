@@ -11,7 +11,6 @@ import {
   NavEventsIcon,
   NavResourcesIcon,
   NavConnectorsIcon,
-  NavAgentsIcon,
   NavToolsIcon,
 } from '@/features/shared/icons';
 
@@ -102,13 +101,6 @@ export const FEATURES: FeatureDef[] = [
     // reorder per space. See NAV_HIDDEN_FEATURE_KEYS.
     core: true,
     icon: <NavConnectorsIcon className={iconClass} />,
-  },
-  {
-    key: 'agents',
-    label: 'Agents',
-    href: '/agents',
-    description: 'Scheduled agents that run from your context, call connectors, and write notes back.',
-    icon: <NavAgentsIcon className={iconClass} />,
   },
   {
     key: 'tools',

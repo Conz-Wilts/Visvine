@@ -17,13 +17,13 @@ export interface CreateSuggestion {
  * rather than falling through to the bare `/directory` → person entry.
  */
 const ROUTE_SUGGESTIONS: Array<{ prefix: string; suggestion: CreateSuggestion }> = [
+  { prefix: '/directory/note/agents', suggestion: { types: ['agent'], reason: "You're in agents/" } },
   { prefix: '/directory/note', suggestion: { types: ['context', 'file'], reason: "You're in Context" } },
   { prefix: '/directory/source', suggestion: { types: ['context', 'file'], reason: "You're in Context" } },
   { prefix: '/directory', suggestion: { types: ['person'], reason: "You're in the Directory" } },
   { prefix: '/events', suggestion: { types: ['event'], reason: "You're on Events" } },
   { prefix: '/resources', suggestion: { types: ['resource'], reason: "You're on Resources" } },
   { prefix: '/channels', suggestion: { types: ['channel', 'section'], reason: "You're on Channels" } },
-  { prefix: '/agents', suggestion: { types: ['agent'], reason: "You're on Agents" } },
 ];
 
 /**

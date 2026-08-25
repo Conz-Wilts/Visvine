@@ -35,6 +35,16 @@ import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { SessionPayload } from '@/lib/session'
 import type { ResolvedContext } from '@/lib/notes/resolve'
 
+/** The plan a stubbed search reports: the query as asked, nothing inferred. */
+const PLAN = {
+  queries: ['q'],
+  topic: 'q',
+  dateRange: null,
+  temporalOnly: false,
+  intent: 'current' as const,
+  rewrite: 'off' as const,
+}
+
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
 const VIEWER: ContextPrincipal = {
@@ -90,7 +100,6 @@ function deps(over: Partial<BridgeDeps> = {}): BridgeDeps {
     appendLogGated: forbidden('appendLogGated'),
     loadConnector: forbidden('loadConnector'),
     executeConnectorScript: forbidden('executeConnectorScript'),
-    featureAccessForbidden: forbidden('featureAccessForbidden'),
     canTriggerRun: forbidden('canTriggerRun'),
     claimManualRun: forbidden('claimManualRun'),
     getToolState: forbidden('getToolState'),
@@ -389,7 +398,7 @@ test('search asks for the full cap, filters to the perimeter, then honours k', a
     deps({
       searchContext: async (_p, _c, _q, _f, k) => {
         askedFor = k
-        return { hits, semantic: 'no-key' }
+        return { hits, semantic: 'no-key', plan: PLAN }
       },
     }),
   )
@@ -476,7 +485,6 @@ test('agents.run returns the run id without waiting for the run', async () => {
   const t = target({ perimeter: perimeter({ agents: ['nightly'] }) })
   let dispatched = false
   const response = await handleBridgeCall(t, 'agents.run', { name: 'nightly' }, deps({
-    featureAccessForbidden: async () => false,
     canTriggerRun: async () => true,
     claimManualRun: async () => ({
       ok: true,
@@ -494,7 +502,6 @@ test('agents.run returns the run id without waiting for the run', async () => {
 test('an inactive agent is forbidden and a busy one is rate_limited', async () => {
   const t = target({ perimeter: perimeter({ agents: ['nightly'] }) })
   const base = {
-    featureAccessForbidden: async () => false,
     canTriggerRun: async () => true,
   }
   const inactive = errorOf(
@@ -512,14 +519,6 @@ test('an inactive agent is forbidden and a busy one is rate_limited', async () =
     })),
   )
   assert.equal(busy.code, 'rate_limited')
-})
-
-test('the agents feature being closed to the viewer stops the run', async () => {
-  const t = target({ perimeter: perimeter({ agents: ['*'] }) })
-  const error = errorOf(
-    await handleBridgeCall(t, 'agents.run', { name: 'nightly' }, deps({ featureAccessForbidden: async () => true })),
-  )
-  assert.equal(error.code, 'forbidden')
 })
 
 // ── state ─────────────────────────────────────────────────────────────────────
@@ -707,11 +706,11 @@ test('a handler that throws is the author’s error, reported verbatim', async (
 // ── resolveBridgeTarget: the `tools` feature key ──────────────────────────────
 //
 // `tools` is a real feature key (lib/featureAccess.ts) an admin can switch off
-// for a space, exactly like `agents` (see the agents.run tests above). These
-// prove resolveBridgeTarget asks that question itself — for BOTH target kinds —
-// rather than leaving it to a caller, and that it runs before the read that a
-// disabled space has no business making (readVisible is a trap here, same as
-// featureAccessForbidden is a trap in the UNDECLARED perimeter tests above).
+// for a space. These prove resolveBridgeTarget asks that question itself — for
+// BOTH target kinds — rather than leaving it to a caller, and that it runs
+// before the read that a disabled space has no business making (readVisible is
+// a trap here, the same way the UNDECLARED perimeter tests above trap every
+// dep a refused call must never reach).
 
 const SESSION: SessionPayload = { userId: 'user-1', name: 'Viewer', email: 'viewer@local.dev' }
 
@@ -913,7 +912,7 @@ test('context.search pages by rank: k is the page size and the cursor is the off
     snippet: '',
   }))
   const t = target({ perimeter: perimeter({ read: ['deals/**'] }) })
-  const d = deps({ searchContext: async () => ({ hits, semantic: 'no-key' }) })
+  const d = deps({ searchContext: async () => ({ hits, semantic: 'no-key', plan: PLAN }) })
 
   const first = valueOf(await handleBridgeCall(t, 'context.search', { query: 'd', k: 3, page: true }, d)) as {
     items: Array<{ path: string }>

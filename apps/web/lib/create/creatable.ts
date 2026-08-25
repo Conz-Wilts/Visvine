@@ -40,10 +40,11 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'connector':
       return isAdmin
 
-    // An agent brief is member-writable by design (lib/agents): only activating
+    // An agent brief is a note under agents/, so it follows Context, which is
+    // always on. It is member-writable by design (lib/agents): only activating
     // it is admin-gated, and that gate is on a different path (agents/live/).
     case 'agent':
-      return isFeatureEnabled(featureConfig, 'agents')
+      return isFeatureEnabled(featureConfig, 'notes')
 
     // A resource node only exists because the Resources tool does — same rule
     // the console's Types tab and the directory filters follow.

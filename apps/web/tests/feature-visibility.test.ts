@@ -19,6 +19,7 @@ const ALL: NBNode[] = [
   node('connector:e', 'connector'),
   node('channel:f', 'channel'),
   node('space:g', 'section'),
+  // Agent belongs to Context, which is always on, so it is never hidden either.
   node('agent:h', 'agent'),
 ];
 
@@ -31,10 +32,10 @@ describe('visibleNodes', () => {
   });
 
   it('drops the node types a switched-off tool owns', () => {
-    const config: SpaceFeatureConfig = { enabled: { agents: false } };
+    const config: SpaceFeatureConfig = { enabled: { resources: false } };
     assert.deepEqual(
       names(visibleNodes(ALL, config)),
-      ['channel:f', 'community:b', 'connector:e', 'event:c', 'person:a', 'resource:d', 'space:g'],
+      ['agent:h', 'channel:f', 'community:b', 'connector:e', 'event:c', 'person:a', 'space:g'],
     );
   });
 
@@ -47,13 +48,13 @@ describe('visibleNodes', () => {
   });
 
   it('never hides the types core surfaces own', () => {
-    // Every toggleable tool off at once — person, Space, event and connector stay.
+    // Every toggleable tool off at once — person, Space, event, connector and agent stay.
     const config: SpaceFeatureConfig = {
-      enabled: { agents: false, resources: false, channels: false },
+      enabled: { resources: false, channels: false },
     };
     assert.deepEqual(
       names(visibleNodes(ALL, config)),
-      ['community:b', 'connector:e', 'event:c', 'person:a'],
+      ['agent:h', 'community:b', 'connector:e', 'event:c', 'person:a'],
     );
   });
 
@@ -66,11 +67,11 @@ describe('visibleNodes', () => {
 
 describe('visibleGraph', () => {
   it('drops links whose far end was hidden, and keeps the rest', () => {
-    const config: SpaceFeatureConfig = { enabled: { agents: false } };
+    const config: SpaceFeatureConfig = { enabled: { resources: false } };
     const links = [
       link('person:a', 'community:b'), // both survive
-      link('person:a', 'agent:h'), // target hidden
-      link('agent:h', 'person:a'), // source hidden
+      link('person:a', 'resource:d'), // target hidden
+      link('resource:d', 'person:a'), // source hidden
     ];
     const graph = visibleGraph(ALL, links, config);
     assert.equal(graph.links.length, 1);
@@ -78,7 +79,7 @@ describe('visibleGraph', () => {
   });
 
   it('leaves the graph whole when nothing is switched off', () => {
-    const links = [link('person:a', 'agent:h')];
+    const links = [link('person:a', 'resource:d')];
     const graph = visibleGraph(ALL, links, null);
     assert.equal(graph.nodes.length, ALL.length);
     assert.equal(graph.links.length, 1);
@@ -86,8 +87,8 @@ describe('visibleGraph', () => {
 
   it('resolves object-shaped link endpoints, not just id strings', () => {
     // d3 mutates links in place, so source/target can arrive as node objects.
-    const config: SpaceFeatureConfig = { enabled: { agents: false } };
-    const objectLink = { source: 'person:a', target: 'agent:h', relationship: 'related' };
+    const config: SpaceFeatureConfig = { enabled: { resources: false } };
+    const objectLink = { source: 'person:a', target: 'resource:d', relationship: 'related' };
     assert.equal(visibleGraph(ALL, [objectLink as NBLink], config).links.length, 0);
   });
 });

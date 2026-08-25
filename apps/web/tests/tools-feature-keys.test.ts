@@ -167,11 +167,11 @@ describe('mergeFeatureConfig keeps tool rail keys', () => {
   };
 
   it('inherits the tool rows when the patch only sends enabled', () => {
-    const merged = mergeFeatureConfig(stored, { enabled: { agents: true } });
+    const merged = mergeFeatureConfig(stored, { enabled: { resources: true } });
     assert.deepEqual(merged.order, ['directory', 'tool:kanban', 'resources']);
     assert.deepEqual(merged.more, ['tool:kanban']);
     assert.deepEqual(merged.adminOnly, ['tool:kanban']);
-    assert.deepEqual(merged.enabled, { channels: false, agents: true });
+    assert.deepEqual(merged.enabled, { channels: false, resources: true });
   });
 
   it('inherits the tool lock when the patch only sends the layout', () => {
