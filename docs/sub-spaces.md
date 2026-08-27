@@ -114,7 +114,7 @@ and the discriminator is the **node id**:
 
 | Node id | What it is | Note |
 | --- | --- | --- |
-| `space:<slug>` (or legacy `community:`/`org:`/`group:`) | a record of an organisation out in the world — a portfolio company, a firm you met | `communities/<slug>.md`, converting to `communities/<slug>/index.md` like any entity |
+| `space:<slug>` (or legacy `community:`/`org:`/`group:`) | a record of an organisation out in the world — a portfolio company, a firm you met | `communities/<slug>/index.md`, a folder in the org namespace like any entity |
 | `subspace:<slug>` | a space nested inside this one — one of its teams | `<slug>/index.md`, a folder at the **root** of the parent's context, from the moment it exists |
 
 ```yaml
@@ -128,8 +128,9 @@ A record of the outside world belongs in the directory namespace with the rest
 of the directory. A sub-space is not a record of the outside world: it is part
 of how *this* space is organised, so it sits beside `deals/` and `data/` and the
 context tree shows one folder per team. `lib/notes/entities.ts` owns the
-derivation (`isChildSpaceNode`, `childSpaceNodeId`); a sub-space is
-folder-only, like a Tool, so it never has a flat form. The signal is the id
+derivation (`isChildSpaceNode`, `childSpaceNodeId`); every directory entity is
+folder-only now, and a sub-space is the one with no flat alias at all — at the
+root, `<slug>.md` would be an ordinary note. The signal is the id
 rather than `metadata` deliberately — every surface that derives a path holds
 `{ id, type }`, and half of them are client components that never load metadata,
 so reading the id keeps the derivation total. `isOwnSpaceNode` already reads an

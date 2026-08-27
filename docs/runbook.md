@@ -34,6 +34,28 @@ A failure at any step leaves production on the previous revision. The
 `Roll back on failure` step re-pins traffic explicitly, for the one case
 `--no-traffic` does not already cover (a partially-applied traffic update).
 
+### Data backfills a release depends on
+
+A schema migration replays on deploy; a *data* shape change does not. When a
+release changes where the app expects data to live, the backfill is a one-off
+run **after** traffic is routed, through the proxy, with the local-DB guard's
+override — the way `db:spaces:records` was run. The app reads the old shape in
+between, so the order is deploy first, then backfill.
+
+The one outstanding: entity notes became folders (`people/<slug>/index.md`,
+not `people/<slug>.md`). After that release ships:
+
+```
+pnpm --filter @visvine/web db:entities:folders --dry-run   # counts, moves nothing
+pnpm --filter @visvine/web db:entities:folders             # moves every flat entity note
+pnpm --filter @visvine/web db:index-notes:rebuild
+pnpm --filter @visvine/web db:global:rebuild
+```
+
+Reads through the old flat path keep answering throughout (the alias), so the
+window costs nothing but stale child lists. A node it reports as *ambiguous*
+holds both forms; merge that one by hand before re-running.
+
 ### Requiring an approval
 
 `deploy.yml` names the `Production` GitHub environment, which gives the deploy a
