@@ -194,7 +194,9 @@ async function main() {
   step('3. install');
   let install = (await listInstalls(SPACE)).find((row) => row.key === key) ?? null;
   if (!install) {
-    const installed = await appToolHandlers.installTool(ctx, { space_id: SPACE, key });
+    // By id, not key: a key lookup hands out only marketplace-listed versions,
+    // and this one is the space's own, approved here and listed nowhere.
+    const installed = await appToolHandlers.installTool(ctx, { space_id: SPACE, version_id: versionId });
     done(`installed ${installed.slug} v${installed.version}`);
     install = (await listInstalls(SPACE)).find((row) => row.key === key) ?? null;
   } else if (install.pendingVersion) {
