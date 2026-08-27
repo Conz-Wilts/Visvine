@@ -34,7 +34,7 @@ import {
   type TreeGuideKind as Guide,
 } from '@/components/ui/TreeChrome'
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
-import { entityKindOf } from '@/lib/notes/entities'
+import { entityKindOf, isEntityFolderIndex } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { TRASH_PATH, useContextTreeState } from '@/features/notes/hooks/useContextTreeState'
 import { canMoveInto, deleteFolderDenial, moveDenial, parentFolderOf } from '../lib/useContextTree'
@@ -733,6 +733,16 @@ function FolderRow(props: {
   const indexPath = props.node.path ? `${props.node.path}/index.md` : 'index.md'
   const hasIndex = (props.node.children ?? []).some((c) => c.kind === 'note' && c.path === indexPath)
   const selected = hasIndex && props.selectedPath === indexPath
+  // A directory entity is a folder from its first write, so most people and
+  // organisations hold nothing but their own index. Showing each as an
+  // expandable folder with nothing inside made the tree a wall of empty
+  // chevrons — so an entity folder holding only its note reads as that note: the
+  // entity's glyph, no expander, one click opens it. It is still a folder to
+  // the drag machinery (a note dropped on Connor is filed under him), and it
+  // grows back into a folder row the moment a sub-note lands.
+  const entityIndex = hasIndex && isEntityFolderIndex(indexPath)
+  const leaf = entityIndex && (props.node.children ?? []).every((c) => c.kind === 'note' && c.path === indexPath)
+  const entityGlyph = entityIndex ? (props.glyphFor.get(indexPath) ?? null) : null
 
   // Moving: a folder row is both a drag source (its whole subtree travels with
   // it) and the tree's only drop target - notes and folders are filed INTO
@@ -810,6 +820,15 @@ function FolderRow(props: {
             items-center leaves a ~3px dead strip above and below it where clicks
             land on the row div and nothing expands. Stretching makes the target
             the full row height. */}
+        {leaf ? (
+          <span
+            className={`flex shrink-0 items-center self-stretch pl-1.5 pr-1.5 ${
+              selected ? 'text-brand-green' : 'text-text-muted'
+            }`}
+          >
+            {entityGlyph ? <GlyphIcon glyph={entityGlyph} /> : <FileIcon />}
+          </span>
+        ) : (
         <button
           type="button"
           aria-label={open ? 'Collapse folder' : 'Expand folder'}
@@ -831,9 +850,12 @@ function FolderRow(props: {
               glyph made the one folder you enter MOST look like a control. */}
           {props.icon ?? <FolderIcon open={open} />}
         </button>
+        )}
         <button
           type="button"
           onClick={() => {
+            // A leaf entity has nothing to expand: the name IS the note.
+            if (leaf) return openPath(indexPath)
             // Opening a folder's home note expands the folder too — and does it
             // HERE, on the click, rather than waiting for the reveal that the
             // new route feeds back down. That round trip is a navigation long,
@@ -875,8 +897,16 @@ function FolderRow(props: {
             ...(showAccess
               ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => props.onFolderAccess!(props.node.path) }]
               : []),
-            // No Star: a folder IS its index note, and index notes aren't
-            // starrable â€” Starred is a shortcut list of notes, not folders.
+            // No Star on a plain folder: it IS its index note, and Starred is a
+            // shortcut list of notes, not folders. An entity's index is the
+            // exception — starring Connor is exactly what people mean.
+            ...(entityIndex && !foreign
+              ? [{
+                  label: props.starredSet.has(indexPath) ? 'Unstar' : 'Star',
+                  icon: <StarIcon filled={props.starredSet.has(indexPath)} />,
+                  onClick: () => props.onToggleStar(indexPath, !props.starredSet.has(indexPath)),
+                }]
+              : []),
             ...(draggable
               ? [{ label: 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
               : []),
@@ -897,7 +927,7 @@ function FolderRow(props: {
           ]}
         />
       </div>
-      <Branch open={open}>
+      {!leaf && <Branch open={open}>
         {/* Indented child container; each child row draws its own guide. The
             wrapper continues THIS row's own guide down past the subtree:
             without it the parent level's line breaks every time a folder is
@@ -926,7 +956,7 @@ function FolderRow(props: {
             />
           </div>
         </div>
-      </Branch>
+      </Branch>}
     </div>
   )
 }
@@ -1140,8 +1170,9 @@ function NoteRow({
           ...(onShare
             ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => onShare(path) }]
             : []),
-          // Index notes are folders, and folders aren't starrable.
-          ...(isIndexPath(path)
+          // Index notes are folders, and folders aren't starrable — except an
+          // entity's own index, which is the entity (the Starred list holds it).
+          ...(isIndexPath(path) && !isEntityFolderIndex(path)
             ? []
             : [{
                 label: starred ? 'Unstar' : 'Star',
