@@ -14,6 +14,7 @@ const ALL: NBNode[] = [
   // Legacy id prefixes survive the renames — only the type column migrates.
   node('community:b', 'Space'),
   node('event:c', 'event'),
+  // Resource belongs to the Directory's Resources tab — always on, never hidden.
   node('resource:d', 'resource'),
   // Connector is core (the console section), so it is never hidden.
   node('connector:e', 'connector'),
@@ -32,10 +33,10 @@ describe('visibleNodes', () => {
   });
 
   it('drops the node types a switched-off tool owns', () => {
-    const config: SpaceFeatureConfig = { enabled: { resources: false } };
+    const config: SpaceFeatureConfig = { enabled: { channels: false } };
     assert.deepEqual(
       names(visibleNodes(ALL, config)),
-      ['agent:h', 'channel:f', 'community:b', 'connector:e', 'event:c', 'person:a', 'space:g'],
+      ['agent:h', 'community:b', 'connector:e', 'event:c', 'person:a', 'resource:d'],
     );
   });
 
@@ -48,30 +49,32 @@ describe('visibleNodes', () => {
   });
 
   it('never hides the types core surfaces own', () => {
-    // Every toggleable tool off at once — person, Space, event, connector and agent stay.
+    // Every toggleable tool off at once (and a stale resources: false from
+    // when Resources was a tool) — person, Space, event, resource, connector
+    // and agent stay.
     const config: SpaceFeatureConfig = {
       enabled: { resources: false, channels: false },
     };
     assert.deepEqual(
       names(visibleNodes(ALL, config)),
-      ['agent:h', 'community:b', 'connector:e', 'event:c', 'person:a'],
+      ['agent:h', 'community:b', 'connector:e', 'event:c', 'person:a', 'resource:d'],
     );
   });
 
   it('matches type names case-insensitively, as stored casing drifts', () => {
-    const config: SpaceFeatureConfig = { enabled: { resources: false } };
-    const mixed = [node('r:1', 'Resource'), node('r:2', 'resource')];
+    const config: SpaceFeatureConfig = { enabled: { channels: false } };
+    const mixed = [node('c:1', 'Channel'), node('c:2', 'channel')];
     assert.deepEqual(visibleNodes(mixed, config), []);
   });
 });
 
 describe('visibleGraph', () => {
   it('drops links whose far end was hidden, and keeps the rest', () => {
-    const config: SpaceFeatureConfig = { enabled: { resources: false } };
+    const config: SpaceFeatureConfig = { enabled: { channels: false } };
     const links = [
       link('person:a', 'community:b'), // both survive
-      link('person:a', 'resource:d'), // target hidden
-      link('resource:d', 'person:a'), // source hidden
+      link('person:a', 'channel:f'), // target hidden
+      link('channel:f', 'person:a'), // source hidden
     ];
     const graph = visibleGraph(ALL, links, config);
     assert.equal(graph.links.length, 1);
@@ -87,8 +90,8 @@ describe('visibleGraph', () => {
 
   it('resolves object-shaped link endpoints, not just id strings', () => {
     // d3 mutates links in place, so source/target can arrive as node objects.
-    const config: SpaceFeatureConfig = { enabled: { resources: false } };
-    const objectLink = { source: 'person:a', target: 'resource:d', relationship: 'related' };
+    const config: SpaceFeatureConfig = { enabled: { channels: false } };
+    const objectLink = { source: 'person:a', target: 'channel:f', relationship: 'related' };
     assert.equal(visibleGraph(ALL, [objectLink as NBLink], config).links.length, 0);
   });
 });

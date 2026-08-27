@@ -87,8 +87,11 @@ export const FEATURES: FeatureDef[] = [
   {
     key: 'resources',
     label: 'Resources',
-    href: '/resources',
+    href: '/directory?view=resources',
     description: 'A library of shared documents, links and materials.',
+    // Always on and nav-less: Resources is a tab of the Directory beside Grid
+    // and Context, not a tool with a rail row. See NAV_HIDDEN_FEATURE_KEYS.
+    core: true,
     icon: <NavResourcesIcon className={iconClass} />,
   },
   {
@@ -120,7 +123,7 @@ export const FEATURES: FeatureDef[] = [
  * An installed Tool's rail row as a `FeatureDef` — the same shape a built-in
  * produces, which is the whole trick: the rail, the "More" popup and the
  * console's order editor need no special case for Tools at all, and a
- * `tool:<slug>` key sorts, tucks away and locks exactly like `resources`.
+ * `tool:<slug>` key sorts, tucks away and locks exactly like `channels`.
  *
  * Which installs get a row is `toolRailRows`' decision; this only adds the icon
  * and the sentence the console's picker shows.

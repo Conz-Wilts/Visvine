@@ -15,13 +15,17 @@ import type { SpaceFeatureConfig } from '@/lib/types';
  * ADMIN_ONLY_FEATURE_KEYS), and a space that never connects anything simply
  * has an empty list.
  *
+ * `resources` is core because it is a tab of the Directory — Grid, Context,
+ * Resources — not a tool of its own: the directory is always on, so its tabs
+ * are, and a space that never uploads anything simply has an empty Drive.
+ *
  * `tools` is core because the marketplace needs no switch: what a space runs
  * is already decided by two explicit human acts — a Visvine reviewer approving
  * a version, and a space admin installing it (members can only ASK — see the
  * install-request flow in app/api/communities/[spaceId]/tools/requests). A
  * third toggle on top of that pipeline gated nothing anyone needed gated.
  */
-export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events', 'connectors', 'tools'];
+export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events', 'resources', 'connectors', 'tools'];
 
 /**
  * Every key in the registry, in its default (registry) order. Must stay in sync
@@ -106,6 +110,8 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
  *   the Directory page, so it has no rail item and is not a toggleable tool.
  * - `events` is always on (core) and reached from the calendar button in the top
  *   navbar, so it has no rail item either.
+ * - `resources` is always on (core) and is the Resources tab of the Directory
+ *   page (`/directory?view=resources`), beside Grid and Context.
  * - `connectors` is a section of the Space Console (`/admin?section=connectors`),
  *   admins only by nature, so it has neither a rail row nor a toggle.
  * - `tools` is reached from the marketplace icon in the top navbar, and each
@@ -113,7 +119,7 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
  *   vocabulary itself never wants a "Tools" row. Those per-install keys are not
  *   nav-hidden: they are the rail rows.
  */
-export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['notes', 'events', 'connectors', 'tools'];
+export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['notes', 'events', 'resources', 'connectors', 'tools'];
 
 /**
  * Is `key` enabled for a space? Core features are always enabled; any other
@@ -132,8 +138,8 @@ export function isFeatureEnabled(config: SpaceFeatureConfig | null | undefined, 
  * `nodeTypes` name (matched case-insensitively, since stored `node.type` casing
  * drifts — 'section' vs 'Section'), valued by the feature slug that owns them.
  *
- * Person and Space (the org type) belong to the always-on
- * directory, Event to the always-on navbar Events surface, Connector to the
+ * Person, Space (the org type) and Resource belong to the always-on
+ * directory (Resources is one of its tabs), Event to the always-on navbar Events surface, Connector to the
  * always-on console section, Tool to the always-on marketplace, and Agent to
  * Context itself — an agent is a brief note under `agents/`, browsed in the
  * tree like any other folder, with no surface of its own to switch off — so
@@ -142,7 +148,6 @@ export function isFeatureEnabled(config: SpaceFeatureConfig | null | undefined, 
  * whenever the Channels tool is off.
  */
 const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
-  resource: 'resources',
   section: 'channels',
   channel: 'channels',
 };
@@ -180,6 +185,7 @@ const NODE_TYPE_TOOL_KEYS: Record<string, string> = {
   ...NODE_TYPE_FEATURE_KEYS,
   person: 'directory',
   space: 'directory',
+  resource: 'resources',
   agent: 'notes',
   event: 'events',
   connector: 'connectors',

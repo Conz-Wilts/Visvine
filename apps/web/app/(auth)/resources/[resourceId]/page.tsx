@@ -130,7 +130,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
   const handleDelete = async () => {
     if (!resource || !confirm(`Delete "${resource.name}"? This can't be undone.`)) return;
     await fetch(`/api/resources?id=${encodeURIComponent(resourceId)}`, { method: 'DELETE' });
-    router.push('/resources');
+    router.push('/directory?view=resources');
   };
 
   const reviewChange = async (changeId: string, status: 'approved' | 'rejected') => {
@@ -154,7 +154,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
         <div className="text-5xl">📄</div>
         <p className="text-base font-semibold text-text-primary">Resource not found</p>
         <p className="text-sm text-text-muted">It may have been deleted, or you don&apos;t have access.</p>
-        <Link href="/resources" className="mt-2 text-sm font-bold hover:underline text-brand-dark-green">Back to resources</Link>
+        <Link href="/directory?view=resources" className="mt-2 text-sm font-bold hover:underline text-brand-dark-green">Back to resources</Link>
       </div>
     );
   }
@@ -167,7 +167,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
       {/* ── sticky header bar ── */}
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-border-subtle bg-surface-1/85 backdrop-blur">
         <div className="flex min-w-0 items-center gap-1.5 text-sm">
-          <Link href="/resources" className="inline-flex items-center gap-0.5 font-semibold text-text-muted hover:text-text-primary transition flex-none">
+          <Link href="/directory?view=resources" className="inline-flex items-center gap-0.5 font-semibold text-text-muted hover:text-text-primary transition flex-none">
             <ChevronLeftIcon className="w-4 h-4" /> Resources
           </Link>
           <span className="text-text-muted flex-none">/</span>

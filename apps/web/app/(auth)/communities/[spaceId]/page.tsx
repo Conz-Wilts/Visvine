@@ -306,7 +306,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
           {isMember && (
             <SectionCard id="resources" title="Resources" scrollMargin="scroll-mt-20"
                          badge={resources.length > 0 ? counts.resources : undefined}
-                         action={resources.length > 0 ? <Link href="/resources" className="text-[13px] font-semibold hover:underline" style={{ color: theme.dark }}>View all</Link> : undefined}>
+                         action={resources.length > 0 ? <Link href="/directory?view=resources" className="text-[13px] font-semibold hover:underline" style={{ color: theme.dark }}>View all</Link> : undefined}>
               {resources.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
                   {resources.map((r) => (
@@ -326,7 +326,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
               ) : (
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
                   <span className="text-text-muted">Nothing shared yet.</span>
-                  <Link href="/resources" className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
+                  <Link href="/directory?view=resources" className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
                     <PlusIcon className="w-4 h-4" /> Upload the first resource
                   </Link>
                 </div>

@@ -50,7 +50,7 @@ function nav(
 }
 
 /** The built-in rail keys, in registry order — what a member of a fresh space sees. */
-const BUILT_IN_RAIL = ['directory', 'channels', 'resources']
+const BUILT_IN_RAIL = ['directory', 'channels']
 
 // ── which installs earn a row ────────────────────────────────────────────────
 
@@ -118,8 +118,8 @@ test('featureConfig.order places a tool exactly like a built-in', () => {
   const config: SpaceFeatureConfig = { order: ['tool:deals', 'directory', 'channels'] }
   const { rail } = nav(config, false, [install('deals')])
   assert.deepEqual(rail.slice(0, 3), ['tool:deals', 'directory', 'channels'])
-  // The rest fall in behind, in registry order — sortFeatureKeys' rule, unchanged.
-  assert.deepEqual(rail.slice(3), ['resources'])
+  // Nothing else is left to fall in behind — those are the only built-in rows.
+  assert.deepEqual(rail.slice(3), [])
 })
 
 test('a tool key in `more` is tucked into the popup and off the rail', () => {

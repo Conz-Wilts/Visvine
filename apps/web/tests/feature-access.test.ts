@@ -35,26 +35,30 @@ describe('isFeatureEnabled', () => {
   });
 
   it('turns a non-core feature off when explicitly false', () => {
-    assert.equal(isFeatureEnabled({ enabled: { resources: false } }, 'resources'), false);
-    assert.equal(isFeatureEnabled({ enabled: { resources: true } }, 'resources'), true);
+    assert.equal(isFeatureEnabled({ enabled: { channels: false } }, 'channels'), false);
+    assert.equal(isFeatureEnabled({ enabled: { channels: true } }, 'channels'), true);
   });
 
   it('keeps the directory on even when the config says false', () => {
     assert.equal(isFeatureEnabled({ enabled: { directory: false } }, 'directory'), true);
   });
 
-  it('lists directory, notes, events, connectors and tools as the core features', () => {
+  it('lists directory, notes, events, resources, connectors and tools as the core features', () => {
     // tools is core: the marketplace has no switch — what a space runs is
     // decided by review + install. See tools-feature-keys.test.ts. connectors is
     // core for the same reason: its surface is a console section, admins only.
-    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'notes', 'events', 'connectors', 'tools']);
+    // resources is core too: it is a tab of the Directory, not a tool.
+    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'notes', 'events', 'resources', 'connectors', 'tools']);
   });
 
-  it('hides notes, events, connectors and tools from the nav rail and console toggles', () => {
+  it('hides notes, events, resources, connectors and tools from the nav rail and console toggles', () => {
     // All four are core and nav-hidden: notes and events live in the top bar,
     // connectors in the Space Console, tools behind the marketplace icon and
     // per-install `tool:<slug>` rows.
-    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['notes', 'events', 'connectors', 'tools']);
+    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['notes', 'events', 'resources', 'connectors', 'tools']);
+    // resources is core: a space that switched the old Resources tool off keeps
+    // its Drive — it is a Directory tab now.
+    assert.equal(isFeatureEnabled({ enabled: { resources: false } }, 'resources'), true);
     // connectors is core: a stale `enabled.connectors: false` from before the
     // move must not switch it off — but it stays admins only.
     assert.equal(isFeatureEnabled({ enabled: { connectors: false } }, 'connectors'), true);
@@ -83,9 +87,9 @@ describe('isDirectoryPrivate', () => {
 
 describe('canAccessFeature', () => {
   it('blocks a disabled feature for everyone', () => {
-    const config = { enabled: { resources: false } };
-    assert.equal(canAccessFeature(config, 'resources', false), false);
-    assert.equal(canAccessFeature(config, 'resources', true), false);
+    const config = { enabled: { channels: false } };
+    assert.equal(canAccessFeature(config, 'channels', false), false);
+    assert.equal(canAccessFeature(config, 'channels', true), false);
   });
 
   it('hides a private directory from members but not admins', () => {
@@ -118,7 +122,10 @@ describe('canAccessFeature', () => {
 });
 
 describe('sortFeatureKeys', () => {
-  const NAV = ['directory', 'channels', 'resources'];
+  // An installed Tool's row stands in as the second placeable row: channels is
+  // the only toggleable built-in left, so a tool key is what a rail with more
+  // than two rows really holds.
+  const NAV = ['directory', 'channels', 'tool:kanban'];
 
   it('leaves the registry order alone when no order is configured', () => {
     assert.deepEqual(sortFeatureKeys(null, NAV), NAV);
@@ -127,34 +134,34 @@ describe('sortFeatureKeys', () => {
   });
 
   it('applies a full configured order', () => {
-    const order = ['resources', 'directory', 'channels'];
+    const order = ['tool:kanban', 'directory', 'channels'];
     assert.deepEqual(sortFeatureKeys({ order }, NAV), order);
   });
 
   it('puts listed keys first and keeps the rest in registry order behind them', () => {
-    assert.deepEqual(sortFeatureKeys({ order: ['resources'] }, NAV), [
-      'resources', 'directory', 'channels',
+    assert.deepEqual(sortFeatureKeys({ order: ['tool:kanban'] }, NAV), [
+      'tool:kanban', 'directory', 'channels',
     ]);
   });
 
   it('ignores ordered keys the caller did not ask for', () => {
     // `notes` is a real key but not in this (already-filtered) nav list, and
     // `bogus` is not a key at all — neither may appear in the output.
-    assert.deepEqual(sortFeatureKeys({ order: ['notes', 'bogus', 'resources'] }, NAV), [
-      'resources', 'directory', 'channels',
+    assert.deepEqual(sortFeatureKeys({ order: ['notes', 'bogus', 'tool:kanban'] }, NAV), [
+      'tool:kanban', 'directory', 'channels',
     ]);
   });
 
   it('does not mutate the input list', () => {
     const keys = [...NAV];
-    sortFeatureKeys({ order: ['resources'] }, keys);
+    sortFeatureKeys({ order: ['tool:kanban'] }, keys);
     assert.deepEqual(keys, NAV);
   });
 
   it('drops a key from the output when it is filtered out upstream', () => {
     // A disabled feature never reaches sortFeatureKeys, so a stale order entry
     // for it must not resurrect it.
-    assert.deepEqual(sortFeatureKeys({ order: ['resources', 'directory'] }, ['directory', 'channels']), [
+    assert.deepEqual(sortFeatureKeys({ order: ['tool:kanban', 'directory'] }, ['directory', 'channels']), [
       'directory', 'channels',
     ]);
   });
@@ -162,8 +169,8 @@ describe('sortFeatureKeys', () => {
 
 describe('sanitizeFeatureConfig', () => {
   it('strips core features from enabled so directory can never be persisted off', () => {
-    const out = sanitizeFeatureConfig({ enabled: { directory: false, resources: false, notes: true } });
-    assert.deepEqual(out.enabled, { resources: false });
+    const out = sanitizeFeatureConfig({ enabled: { directory: false, channels: false, notes: true } });
+    assert.deepEqual(out.enabled, { channels: false });
   });
 
   it('keeps directoryPrivate only when it is a boolean', () => {
@@ -174,25 +181,25 @@ describe('sanitizeFeatureConfig', () => {
   });
 
   it('drops unknown top-level keys', () => {
-    const out = sanitizeFeatureConfig({ enabled: { resources: true }, extra: 1 } as never);
+    const out = sanitizeFeatureConfig({ enabled: { channels: true }, extra: 1 } as never);
     assert.deepEqual(Object.keys(out).sort(), ['enabled']);
   });
 
   it('keeps a valid order', () => {
-    const order = ['resources', 'directory', 'channels'];
+    const order = ['tool:kanban', 'directory', 'channels'];
     assert.deepEqual(sanitizeFeatureConfig({ order }).order, order);
   });
 
   it('strips unknown and duplicate keys from order, keeping first occurrence', () => {
     assert.deepEqual(
-      sanitizeFeatureConfig({ order: ['resources', 'bogus', 'resources', 'directory'] }).order,
-      ['resources', 'directory'],
+      sanitizeFeatureConfig({ order: ['tool:kanban', 'bogus', 'tool:kanban', 'directory'] }).order,
+      ['tool:kanban', 'directory'],
     );
   });
 
   it('omits order when it is absent, not an array, or has nothing usable left', () => {
     assert.equal('order' in sanitizeFeatureConfig({}), false);
-    assert.equal('order' in sanitizeFeatureConfig({ order: 'resources' }), false);
+    assert.equal('order' in sanitizeFeatureConfig({ order: 'channels' }), false);
     assert.equal('order' in sanitizeFeatureConfig({ order: {} }), false);
     assert.equal('order' in sanitizeFeatureConfig({ order: [] }), false);
     assert.equal('order' in sanitizeFeatureConfig({ order: [1, null, 'bogus'] }), false);
@@ -208,14 +215,14 @@ describe('sanitizeFeatureConfig', () => {
 
   it('keeps a valid more list, dropping unknowns, duplicates and nav-hidden keys', () => {
     assert.deepEqual(
-      sanitizeFeatureConfig({ more: ['resources', 'bogus', 'resources', 'notes', 'channels'] }).more,
-      ['resources', 'channels'],
+      sanitizeFeatureConfig({ more: ['tool:kanban', 'bogus', 'tool:kanban', 'notes', 'channels'] }).more,
+      ['tool:kanban', 'channels'],
     );
   });
 
   it('omits more when it is absent, not an array, or has nothing usable left', () => {
     assert.equal('more' in sanitizeFeatureConfig({}), false);
-    assert.equal('more' in sanitizeFeatureConfig({ more: 'resources' }), false);
+    assert.equal('more' in sanitizeFeatureConfig({ more: 'channels' }), false);
     assert.equal('more' in sanitizeFeatureConfig({ more: [] }), false);
     assert.equal('more' in sanitizeFeatureConfig({ more: [1, null, 'bogus', 'notes'] }), false);
   });
@@ -224,8 +231,8 @@ describe('sanitizeFeatureConfig', () => {
     // A disabled tool keeps its More slot for when it's re-enabled, and core
     // `directory` may be tucked away just like any other rail item.
     assert.deepEqual(
-      sanitizeFeatureConfig({ enabled: { resources: false }, more: ['resources', 'directory'] }).more,
-      ['resources', 'directory'],
+      sanitizeFeatureConfig({ enabled: { channels: false }, more: ['channels', 'directory'] }).more,
+      ['channels', 'directory'],
     );
   });
 });
@@ -240,15 +247,15 @@ describe('moreFeatureKeys', () => {
   it('returns the configured keys, dropping unknowns, duplicates and nav-hidden keys', () => {
     // events and notes are nav-hidden, so neither can live in "More".
     assert.deepEqual(
-      moreFeatureKeys({ more: ['resources', 'bogus', 'resources', 'events', 'notes'] }),
-      ['resources'],
+      moreFeatureKeys({ more: ['channels', 'bogus', 'channels', 'events', 'notes'] }),
+      ['channels'],
     );
   });
 
   it('keeps a disabled feature key — enablement is filtered by the caller', () => {
     assert.deepEqual(
-      moreFeatureKeys({ enabled: { resources: false }, more: ['resources'] }),
-      ['resources'],
+      moreFeatureKeys({ enabled: { channels: false }, more: ['channels'] }),
+      ['channels'],
     );
   });
 });
@@ -258,7 +265,7 @@ describe('isNodeTypeEnabled', () => {
     // 'Space' is the org type — always on, like Person.
     for (const type of ['Person', 'Space', 'space', 'Event']) {
       assert.equal(nodeTypeFeatureKey(type), null);
-      assert.equal(isNodeTypeEnabled({ enabled: { channels: false, resources: false } }, type), true);
+      assert.equal(isNodeTypeEnabled({ enabled: { channels: false } }, type), true);
     }
   });
 
@@ -281,8 +288,9 @@ describe('isNodeTypeEnabled', () => {
     assert.equal(isNodeTypeEnabled({ enabled: { channels: true } }, 'Channel'), true);
   });
 
-  it('hides Resource when the resources tool is off, and defaults everything on', () => {
-    assert.equal(isNodeTypeEnabled({ enabled: { resources: false } }, 'Resource'), false);
+  it('never hides Resource — Resources is a tab of the always-on Directory', () => {
+    assert.equal(nodeTypeFeatureKey('Resource'), null);
+    assert.equal(isNodeTypeEnabled({ enabled: { resources: false } }, 'Resource'), true);
     assert.equal(isNodeTypeEnabled(null, 'Resource'), true);
     assert.equal(isNodeTypeEnabled({}, 'Channel'), true);
   });
@@ -298,30 +306,30 @@ describe('adminOnlyFeatureKeys', () => {
 
   it('drops unknown, nav-hidden and repeated keys', () => {
     assert.deepEqual(
-      adminOnlyFeatureKeys({ adminOnly: ['resources', 'resources', 'notes', 'nope', 42 as never] }),
-      ['resources', 'connectors'],
+      adminOnlyFeatureKeys({ adminOnly: ['channels', 'channels', 'notes', 'nope', 42 as never] }),
+      ['channels', 'connectors'],
     );
   });
 
   it('hides an admins-only tool from members, not from admins', () => {
-    const config = { adminOnly: ['resources'] };
-    assert.equal(isFeatureAdminOnly(config, 'resources'), true);
-    assert.equal(canAccessFeature(config, 'resources', false), false);
-    assert.equal(canAccessFeature(config, 'resources', true), true);
-    assert.equal(canAccessFeature(config, 'channels', false), true);
+    const config = { adminOnly: ['channels'] };
+    assert.equal(isFeatureAdminOnly(config, 'channels'), true);
+    assert.equal(canAccessFeature(config, 'channels', false), false);
+    assert.equal(canAccessFeature(config, 'channels', true), true);
+    assert.equal(canAccessFeature(config, 'directory', false), true);
   });
 });
 
 describe('sanitizeFeatureConfig adminOnly', () => {
   it('keeps directoryPrivate in step with adminOnly', () => {
     assert.equal(sanitizeFeatureConfig({ adminOnly: ['directory'] }).directoryPrivate, true);
-    assert.equal(sanitizeFeatureConfig({ adminOnly: ['resources'] }).directoryPrivate, false);
+    assert.equal(sanitizeFeatureConfig({ adminOnly: ['channels'] }).directoryPrivate, false);
     // An adminOnly-less save leaves the legacy flag exactly as it was sent.
     assert.equal(sanitizeFeatureConfig({ directoryPrivate: true }).directoryPrivate, true);
   });
 
   it('reduces adminOnly to known, nav-bearing keys', () => {
-    assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['resources', 'events', 'bogus'] }).adminOnly, ['resources']);
+    assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['channels', 'events', 'bogus'] }).adminOnly, ['channels']);
     assert.equal('adminOnly' in sanitizeFeatureConfig({}), false);
     // The always-admins-only keys are implicit — never written back to the row.
     assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['connectors'] }).adminOnly, []);
@@ -334,18 +342,18 @@ describe('sanitizeFeatureConfig adminOnly', () => {
 describe('mergeFeatureConfig', () => {
   const stored = {
     enabled: { channels: false },
-    adminOnly: ['resources'],
+    adminOnly: ['tool:kanban'],
     directoryPrivate: false,
-    order: ['resources', 'channels', 'directory'],
-    more: ['resources'],
+    order: ['tool:kanban', 'channels', 'directory'],
+    more: ['tool:kanban'],
   };
 
   it('keeps the sidebar layout when only adminOnly is sent', () => {
-    const merged = mergeFeatureConfig(stored, { adminOnly: ['resources', 'directory'] });
+    const merged = mergeFeatureConfig(stored, { adminOnly: ['tool:kanban', 'directory'] });
     assert.deepEqual(merged.enabled, { channels: false });
-    assert.deepEqual(merged.order, ['resources', 'channels', 'directory']);
-    assert.deepEqual(merged.more, ['resources']);
-    assert.deepEqual(merged.adminOnly, ['resources', 'directory']);
+    assert.deepEqual(merged.order, ['tool:kanban', 'channels', 'directory']);
+    assert.deepEqual(merged.more, ['tool:kanban']);
+    assert.deepEqual(merged.adminOnly, ['tool:kanban', 'directory']);
     // The legacy flag is re-derived whenever the patch carries adminOnly.
     assert.equal(merged.directoryPrivate, true);
   });
@@ -362,7 +370,7 @@ describe('mergeFeatureConfig', () => {
   });
 
   it('treats a missing stored config as empty', () => {
-    assert.deepEqual(mergeFeatureConfig(null, { adminOnly: ['resources'] }).adminOnly, ['resources']);
+    assert.deepEqual(mergeFeatureConfig(null, { adminOnly: ['channels'] }).adminOnly, ['channels']);
     assert.deepEqual(mergeFeatureConfig(undefined, {}), {});
   });
 
@@ -376,7 +384,8 @@ describe('mergeFeatureConfig', () => {
 describe('featureNodeTypeNames', () => {
   it('names the types a tool carries in and out with it', () => {
     assert.deepEqual(featureNodeTypeNames('channels'), ['Section', 'Channel']);
-    assert.deepEqual(featureNodeTypeNames('resources'), ['Resource']);
+    // Resource belongs to the Directory's Resources tab: nothing switches it off.
+    assert.deepEqual(featureNodeTypeNames('resources'), []);
 
   });
 

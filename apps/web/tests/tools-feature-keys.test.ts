@@ -79,34 +79,34 @@ describe('toolRailKey / isToolRailKey', () => {
     assert.equal(isToolRailKey('tool:a/b'), false);
     assert.equal(isToolRailKey('tool:a b'), false);
     assert.equal(isToolRailKey('tool:a:b'), false);
-    assert.equal(isToolRailKey('resources'), false);
+    assert.equal(isToolRailKey('channels'), false);
     assert.equal(isToolRailKey(42), false);
     assert.equal(isToolRailKey(null), false);
   });
 });
 
 describe('sortFeatureKeys with tool rail keys', () => {
-  const NAV = ['directory', toolRailKey('kanban'), 'resources'];
+  const NAV = ['directory', toolRailKey('kanban'), 'channels'];
 
   it('leaves them in registry order when nothing is configured', () => {
     assert.deepEqual(sortFeatureKeys(null, NAV), NAV);
   });
 
   it('orders a tool row among the registry rows', () => {
-    const order = [toolRailKey('kanban'), 'resources', 'directory'];
+    const order = [toolRailKey('kanban'), 'channels', 'directory'];
     assert.deepEqual(sortFeatureKeys({ order }, NAV), order);
   });
 
   it('puts a listed tool row first and keeps the rest behind it', () => {
     assert.deepEqual(sortFeatureKeys({ order: [toolRailKey('kanban')] }, NAV), [
-      'tool:kanban', 'directory', 'resources',
+      'tool:kanban', 'directory', 'channels',
     ]);
   });
 
   it('never resurrects a tool the caller filtered out (uninstalled, disabled)', () => {
     assert.deepEqual(
-      sortFeatureKeys({ order: [toolRailKey('gone'), 'directory'] }, ['directory', 'resources']),
-      ['directory', 'resources'],
+      sortFeatureKeys({ order: [toolRailKey('gone'), 'directory'] }, ['directory', 'channels']),
+      ['directory', 'channels'],
     );
   });
 });
@@ -115,8 +115,8 @@ describe('moreFeatureKeys with tool rail keys', () => {
   it('tucks a tool row into More like any other rail row', () => {
     assert.deepEqual(moreFeatureKeys({ more: [toolRailKey('kanban')] }), ['tool:kanban']);
     assert.deepEqual(
-      moreFeatureKeys({ more: ['resources', toolRailKey('kanban'), toolRailKey('kanban')] }),
-      ['resources', 'tool:kanban'],
+      moreFeatureKeys({ more: ['channels', toolRailKey('kanban'), toolRailKey('kanban')] }),
+      ['channels', 'tool:kanban'],
     );
   });
 
@@ -130,21 +130,21 @@ describe('moreFeatureKeys with tool rail keys', () => {
 describe('sanitizeFeatureConfig with tool rail keys', () => {
   it('persists tool rows in order, more and adminOnly', () => {
     const out = sanitizeFeatureConfig({
-      order: ['directory', toolRailKey('kanban'), 'resources'],
+      order: ['directory', toolRailKey('kanban'), 'channels'],
       more: [toolRailKey('kanban')],
       adminOnly: [toolRailKey('kanban')],
     });
-    assert.deepEqual(out.order, ['directory', 'tool:kanban', 'resources']);
+    assert.deepEqual(out.order, ['directory', 'tool:kanban', 'channels']);
     assert.deepEqual(out.more, ['tool:kanban']);
     assert.deepEqual(out.adminOnly, ['tool:kanban']);
   });
 
   it('drops unknown non-tool keys, duplicates and malformed tool keys', () => {
     const out = sanitizeFeatureConfig({
-      order: ['bogus', toolRailKey('kanban'), 'tool:', toolRailKey('kanban'), 'resources'],
+      order: ['bogus', toolRailKey('kanban'), 'tool:', toolRailKey('kanban'), 'channels'],
       more: ['nope', 'tool:a/b', toolRailKey('kanban')],
     });
-    assert.deepEqual(out.order, ['tool:kanban', 'resources']);
+    assert.deepEqual(out.order, ['tool:kanban', 'channels']);
     assert.deepEqual(out.more, ['tool:kanban']);
   });
 
@@ -161,17 +161,17 @@ describe('sanitizeFeatureConfig with tool rail keys', () => {
 describe('mergeFeatureConfig keeps tool rail keys', () => {
   const stored = {
     enabled: { channels: false },
-    order: ['directory', 'tool:kanban', 'resources'],
+    order: ['directory', 'tool:kanban', 'channels'],
     more: ['tool:kanban'],
     adminOnly: ['tool:kanban'],
   };
 
   it('inherits the tool rows when the patch only sends enabled', () => {
-    const merged = mergeFeatureConfig(stored, { enabled: { resources: true } });
-    assert.deepEqual(merged.order, ['directory', 'tool:kanban', 'resources']);
+    const merged = mergeFeatureConfig(stored, { enabled: { 'tool:kanban': true } });
+    assert.deepEqual(merged.order, ['directory', 'tool:kanban', 'channels']);
     assert.deepEqual(merged.more, ['tool:kanban']);
     assert.deepEqual(merged.adminOnly, ['tool:kanban']);
-    assert.deepEqual(merged.enabled, { channels: false, resources: true });
+    assert.deepEqual(merged.enabled, { channels: false, 'tool:kanban': true });
   });
 
   it('inherits the tool lock when the patch only sends the layout', () => {
@@ -188,7 +188,7 @@ describe('mergeFeatureConfig keeps tool rail keys', () => {
     const merged = mergeFeatureConfig(stored, {
       order: [...stored.order, toolRailKey('wayfinder')],
     });
-    assert.deepEqual(merged.order, ['directory', 'tool:kanban', 'resources', 'tool:wayfinder']);
+    assert.deepEqual(merged.order, ['directory', 'tool:kanban', 'channels', 'tool:wayfinder']);
   });
 
   it('treats a missing stored config as empty', () => {

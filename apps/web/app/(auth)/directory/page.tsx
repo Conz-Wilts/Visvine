@@ -4,6 +4,7 @@ import React, { Suspense, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import NodeGrid from '@/features/directory/components/NodeGrid';
 import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
+import ResourcesBrowser from '@/features/resources/components/ResourcesBrowser';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
@@ -16,14 +17,19 @@ import type { SpaceAlias } from '@/lib/types';
 const DIRECTORY_TABS: PaneTabItem[] = [
   { id: 'grid', label: 'Grid' },
   { id: 'context', label: 'Context' },
+  { id: 'resources', label: 'Resources' },
 ];
 
+/** The views this page renders itself; Context is a navigation, not a view. */
+type DirectoryView = 'grid' | 'resources';
+
 /**
- * The Directory: a searchable, filterable card grid of everyone and everything.
- * The Context tab in the pane bar isn't a view of this page — it navigates to
- * the context's top-level index note (`index.md`, the space's home page).
- * The bar itself lives in the persistent pane shell (directory/layout.tsx) —
- * this page just registers its tabs.
+ * The Directory: a searchable, filterable card grid of everyone and everything
+ * (Grid), and the space's Drive (Resources, `?view=resources`). The Context tab
+ * in the pane bar isn't a view of this page — it navigates to the context's
+ * top-level index note (`index.md`, the space's home page). The bar itself
+ * lives in the persistent pane shell (directory/layout.tsx) — this page just
+ * registers its tabs.
  */
 export default function DashboardPage() {
   // useSearchParams needs a Suspense boundary above it.
@@ -53,9 +59,12 @@ function DirectoryPane() {
     void ensureRootIndexNote(spaceId, spaceName).then(() => router.push(noteHref(ROOT_INDEX_PATH)));
   }, [spaceId, spaceName, router]);
 
+  // The view is the URL, so a tab survives reload and a link can name it.
   // ?view=context has no standalone browser behind it: such links land on the
   // grid and hop straight to the index note.
-  const wantsContext = useSearchParams().get('view') === 'context';
+  const viewParam = useSearchParams().get('view');
+  const view: DirectoryView = viewParam === 'resources' ? 'resources' : 'grid';
+  const wantsContext = viewParam === 'context';
   const redirected = useRef(false);
   useEffect(() => {
     if (!wantsContext || redirected.current || !spaceId) return;
@@ -70,17 +79,18 @@ function DirectoryPane() {
   // the note page re-claims it, and the release grace bridges the swap.
   const handleSelect = useCallback(
     (id: string) => {
-      if (id === 'grid') {
+      if (id === 'grid' || id === 'resources') {
         releaseDockNow();
+        router.replace(id === 'grid' ? '/directory' : '/directory?view=resources');
         return;
       }
       openContext();
     },
-    [releaseDockNow, openContext],
+    [releaseDockNow, openContext, router],
   );
   usePaneChrome({
     tabs: noSpace ? null : DIRECTORY_TABS,
-    activeId: 'grid',
+    activeId: view,
     onSelect: handleSelect,
     attachedOpen: false,
     ariaLabel: 'Directory views',
@@ -97,6 +107,16 @@ function DirectoryPane() {
   // rendered at all — a min-height filler here would overflow <main>'s own
   // padded height and leave a scrollbar on an empty page.
   if (noSpace) return null;
+
+  if (view === 'resources') {
+    return (
+      <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 136px)' }}>
+        <div id="panel-resources" role="tabpanel">
+          <ResourcesBrowser />
+        </div>
+      </div>
+    );
+  }
 
   return (
     // The surface fills the pane exactly, so a short grid has nothing to

@@ -16,7 +16,7 @@ never widen it. Two members with different grants running the same Tool see
 different data, and that is correct.
 
 Users say "Tool"; code says `AppTool` / `tools/` to disambiguate from built-in
-tools (Channels, Resources, …) and from MCP tools.
+tools (Channels, installed Tools, …) and from MCP tools.
 
 ## A Tool is a folder of notes
 
