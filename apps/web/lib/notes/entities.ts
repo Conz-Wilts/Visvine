@@ -42,13 +42,12 @@ export type EntityKind =
 // entity note — entityKindOfPath / parseEntityHref match only the top level
 // of agents/, so activation notes never sync nodes or resolve [[mentions]].
 //
-// tool is note-first too, and the one kind that is FOLDER-ONLY: a Tool is
+// tool is note-first too, and folder-only in the strictest sense: a Tool is
 // several notes by construction — tools/<name>/index.md (frontmatter = config,
 // body = docs) beside tools/<name>/ui.md and tools/<name>/data.md, which hold
-// its source (lib/tools). So the entity note is always the folder index and the
-// flat form tools/<name>.md is NOT an entity path at all; the source files are
-// ordinary sub-notes owned by the tool node, exactly like any entity sub-note.
-// See FOLDER_ONLY_ENTITY_KINDS below.
+// its source (lib/tools). The flat form tools/<name>.md is NOT an entity path
+// at all; the source files are ordinary sub-notes owned by the tool node,
+// exactly like any entity sub-note. See FOLDER_ONLY_ENTITY_KINDS below.
 
 // The minimal shape we need off a directory node (NBNode-compatible).
 export interface EntityNodeLike {
@@ -89,13 +88,41 @@ const ENTITY_DIRS: Record<EntityKind, string> = {
 }
 
 /**
- * Kinds whose entity note is ALWAYS the folder index (`<dir>/<slug>/index.md`).
- * Everything else starts life as one flat note and converts to a folder only
- * when it needs a second note (see "entity folders" below); a Tool is several
- * notes from the moment it exists, so it never has the flat form — and the flat
- * path is therefore not an entity path (parseEntityHref rejects it).
+ * Kinds whose entity note is ALWAYS the folder index (`<dir>/<slug>/index.md`):
+ * the things a space writes context ABOUT. A person, an organisation, an
+ * event, a resource or a channel is a folder from its first write — the index
+ * is the entity note (`type: Person`, `node:`) and everything else in the
+ * folder is a sub-note about it — so the tree shows one folder per thing and
+ * nothing ever converts underneath a link.
+ *
+ * The config kinds (connector, agent, section) are the ones that stay flat:
+ * their note is read by NAME by the runtime (`loadConnector`, `agents/live/`),
+ * not written under, so they keep the lazy shape — one note until a sub-note
+ * turns it into a folder (see "entity folders" below).
  */
-const FOLDER_ONLY_ENTITY_KINDS: ReadonlySet<EntityKind> = new Set(['tool'])
+const FOLDER_ONLY_ENTITY_KINDS: ReadonlySet<EntityKind> = new Set([
+  'person',
+  'space',
+  'event',
+  'resource',
+  'channel',
+  'tool',
+])
+
+/**
+ * Folder-only kinds whose FLAT form (`people/<slug>.md`) still names the
+ * entity: an alias that a link written before the folder era, or a client
+ * holding the old path, resolves through — never where the note lives. A
+ * Tool is the one folder-only kind with no alias: `tools/<name>.md` is an
+ * ordinary note path that must never resolve to the tool.
+ */
+const FLAT_ALIAS_ENTITY_KINDS: ReadonlySet<EntityKind> = new Set([
+  'person',
+  'space',
+  'event',
+  'resource',
+  'channel',
+])
 
 /**
  * The id prefix of a SUB-SPACE record: the card a space keeps for a space
@@ -125,13 +152,9 @@ export function isChildSpaceNode(node: { id: string }): boolean {
   return node.id.startsWith(CHILD_SPACE_ID_PREFIX)
 }
 
-/**
- * Is this node's entity note ALWAYS the folder index? True for a folder-only
- * KIND (a Tool) and for a sub-space record, which is a folder from the moment
- * it exists — the folder is the point.
- */
-function isFolderOnlyEntity(node: EntityNodeLike, kind: EntityKind): boolean {
-  return FOLDER_ONLY_ENTITY_KINDS.has(kind) || (kind === 'space' && isChildSpaceNode(node))
+/** Is this kind's entity note ALWAYS the folder index? */
+export function isFolderOnlyEntityKind(kind: EntityKind | null | undefined): boolean {
+  return kind != null && FOLDER_ONLY_ENTITY_KINDS.has(kind)
 }
 
 // Map a node `type` to an entity kind (null for non-entity types). Liberal so it
@@ -175,27 +198,30 @@ function idSlug(id: string): string {
 
 // entity folders
 //
-// A node's context is ONE note until somebody needs more than one — "Sam's
-// comms with Connor" beside "Phoebe's comms with Connor". Then the entity note
-// becomes an index: people/connor.md moves to people/connor/index.md,
-// people/connor/ becomes the node's context folder, and the extra notes are its
-// sub-notes (people/connor/<anything>.md). The index keeps its entity type
+// A node's context is a FOLDER: people/connor/index.md is Connor's note and
+// people/connor/ is where everything else about Connor goes — "Sam's comms
+// with Connor" beside "Phoebe's comms with Connor" as sub-notes
+// (people/connor/<anything>.md). The index keeps its entity type
 // (`type: Person`, `node:`) — index-ness comes from the path, exactly as the
 // store treats every index — so the one note is both the person and the folder.
+// That is the shape from the first write for every FOLDER_ONLY_ENTITY_KINDS
+// kind (store.ensureEntityFolder builds it); the config kinds keep the lazy
+// shape, one flat note until a sub-note converts it.
 //
-// Which form a node currently uses is recorded on the node as
-// `metadata.notePath` (the pointer connectors and agents already carry), set by
-// the store the moment the note converts (store.ensureEntityFolder). Both forms
-// are canonical entity paths as far as links are concerned (parseEntityHref
-// accepts either; reverse maps register both); a sub-note is NOT an entity path
-// — it belongs to the folder's node (entityOwnerPathOf / resolveEntityOwner).
+// For the lazy kinds, which form a node currently uses is recorded on the node
+// as `metadata.notePath` (the pointer connectors and agents already carry),
+// set by the store the moment the note converts. Both forms are entity paths
+// as far as links are concerned (parseEntityHref accepts either; reverse maps
+// register both, so a link written to people/connor.md before the folder era
+// still resolves); a sub-note is NOT an entity path — it belongs to the
+// folder's node (entityOwnerPathOf / resolveEntityOwner).
 
 // The flat form: person → people/<slug>.md, space → communities/<slug>.md,
 // resource → resources/<slug>.md. Null if the node isn't an entity kind.
 //
-// For a FOLDER-ONLY kind (a tool) this path is only the derivation base the
-// folder and index paths are cut from — it is never where the note lives and
-// never an entity path (parseEntityHref rejects it).
+// For a FOLDER-ONLY kind this path is the derivation base the folder and index
+// paths are cut from, and (for every such kind but tool) the alias a stale link
+// or client reaches the note through — never where the note lives.
 export function entityFlatPath(node: EntityNodeLike): string | null {
   const kind = entityKindOf(node.type)
   const slug = idSlug(node.id)
@@ -220,39 +246,59 @@ export function entityIndexPathOf(node: EntityNodeLike): string | null {
 }
 
 // The canonical note path for a directory entity, or null if the node isn't an
-// entity kind: the folder form when the node's `metadata.notePath` says its
-// note has become an entity folder, else the flat form. The pointer is only
-// honoured when it names this node's own index — a stray value can't redirect
-// a person's context to some other note. A folder-only kind (a tool) has no
-// flat form to point away from, so it is always the index.
+// entity kind: always the folder index for a folder-only kind; for a lazy kind,
+// the folder form when the node's `metadata.notePath` says its note has become
+// an entity folder, else the flat form. The pointer is only honoured when it
+// names this node's own index — a stray value can't redirect a connector's
+// context to some other note.
 export function entityNotePath(node: EntityNodeLike): string | null {
   const kind = entityKindOf(node.type)
   const flat = entityFlatPath(node)
   if (!kind || !flat) return null
   const index = entityIndexPathOf(node)
-  if (isFolderOnlyEntity(node, kind)) return index
+  if (isFolderOnlyEntityKind(kind)) return index
   const pointer = node.metadata?.notePath
   return typeof pointer === 'string' && index && pointer === index ? index : flat
 }
 
-/** Every path that names this node's note — the flat form and the folder form.
- *  Reverse maps register both, so a link written before a conversion and one
- *  written after both resolve to the node. A folder-only kind (a tool) registers
- *  the index alone: its flat path is an ordinary note path that must never
- *  resolve to the tool. Empty for a non-entity node. */
+/** Every path that names this node's note — the folder form and, where the
+ *  flat form is an alias or a lazy kind's live shape, that too. Reverse maps
+ *  register all of them, so a link written to people/connor.md and one written
+ *  to people/connor/index.md both resolve to the node. A tool registers the
+ *  index alone: its flat path is an ordinary note path that must never resolve
+ *  to the tool. Empty for a non-entity node. */
 export function entityNotePaths(node: EntityNodeLike): string[] {
   const kind = entityKindOf(node.type)
   const flat = entityFlatPath(node)
   const index = entityIndexPathOf(node)
   if (!kind || !flat || !index) return []
-  return isFolderOnlyEntity(node, kind) ? [index] : [flat, index]
+  // A sub-space record sits at the root of its parent's context, where the flat
+  // form (`operations.md`) would be an ordinary note — no alias there either.
+  if (kind === 'space' && isChildSpaceNode(node)) return [index]
+  if (!isFolderOnlyEntityKind(kind) || FLAT_ALIAS_ENTITY_KINDS.has(kind)) return [flat, index]
+  return [index]
 }
 
-// Namespaces whose entity note may take EITHER form — '<ns>/<slug>.md' or
-// '<ns>/<slug>/index.md' once it has converted to a folder.
+/**
+ * Where a write or read addressed at an entity path really lands: the folder
+ * index when the path is a folder-only kind's flat alias (`people/connor.md` →
+ * `people/connor/index.md`), else the path as given. Pure — a lazy kind's
+ * current shape is the store's to know (store.canonicalEntityWritePath).
+ */
+export function canonicalEntityPath(path: string): string {
+  const raw = path.startsWith('/') ? path.slice(1) : path
+  if (isIndexPath(raw) || !parseEntityHref(raw)) return raw
+  const kind = entityKindOfDir(raw)
+  if (!isFolderOnlyEntityKind(kind) || !kind || !FLAT_ALIAS_ENTITY_KINDS.has(kind)) return raw
+  return `${raw.replace(/\.md$/i, '')}/${INDEX_BASENAME}`
+}
+
+// Namespaces where EITHER form names the entity — '<ns>/<slug>/index.md', the
+// folder, or '<ns>/<slug>.md': the flat alias of a folder-only kind, or a lazy
+// kind's note before it converts (see FOLDER_ONLY_ENTITY_KINDS).
 const FLAT_ENTITY_NS_RE = 'people|resources|events|communities|spaces|channels|connectors'
-// Folder-only namespaces: only '<ns>/<slug>/index.md' names the entity (see
-// FOLDER_ONLY_ENTITY_KINDS).
+// Namespaces where only '<ns>/<slug>/index.md' names the entity: a tool's flat
+// path is an ordinary note.
 const FOLDER_ENTITY_NS_RE = 'tools'
 // Every namespace whose '<ns>/<slug>/' folder holds an entity's sub-notes,
 // whichever form the entity note itself takes.
@@ -280,10 +326,11 @@ export function isEntityFolderIndex(path: string): boolean {
   return isIndexPath(path) && parseEntityHref(path) !== null
 }
 
-// Normalize a link href to a canonical entity-note path, or null if it isn't one.
+// Normalize a link href to an entity-note path, or null if it isn't one.
 // Tolerant of a leading slash; requires an entity namespace + a slug, in either
 // form: '<dir>/<slug>.md' or '<dir>/<slug>/index.md' (an entity folder) — the
-// folder form only for a folder-only namespace like tools/. The namespace's own
+// folder form only under tools/. The href is returned as written, alias or
+// not: canonicalEntityPath is the one that says where the note lives. The namespace's own
 // index ('people/index.md') has no slug and stays an ordinary note link (see
 // lib/notes/shared/indexNote.ts); a sub-note ('people/connor/notes.md',
 // 'tools/kanban/ui.md') is not an entity either — see entityOwnerPathOf.

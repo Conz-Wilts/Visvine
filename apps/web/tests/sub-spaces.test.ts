@@ -114,6 +114,6 @@ test('a sub-space record is a folder at the root; an org record stays in communi
   // A record of an organisation out in the world is untouched by any of this.
   const canva = { id: 'space:canva', type: 'space' }
   assert.ok(!isChildSpaceNode(canva))
-  assert.equal(entityNotePath(canva), 'communities/canva.md')
+  assert.equal(entityNotePath(canva), 'communities/canva/index.md')
   assert.deepEqual(entityNotePaths(canva), ['communities/canva.md', 'communities/canva/index.md'])
 })

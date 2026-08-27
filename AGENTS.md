@@ -141,7 +141,16 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 ## The notes/context model
 
 - An **entity** = a typed `Node` + one canonical context note at a deterministic
-  path (`person:craig` → `people/craig.md`).
+  path, and **the entity is a folder**: `person:craig` → `people/craig/index.md`,
+  where the index IS the person (`type: Person`, `node:`) and everything else in
+  `people/craig/` is a sub-note about them. Person, organisation (`space`), event,
+  resource, channel and tool are folder-only from the first write
+  (`lib/notes/entities.ts#FOLDER_ONLY_ENTITY_KINDS`); the flat path
+  `people/craig.md` is an alias a stale link or client reaches the note through
+  (`canonicalEntityPath`), never where it lives. The config kinds — connector,
+  agent, section — are read by name by the runtime and stay one flat note until
+  a sub-note converts them. Never add a separate "general info" note beside an
+  index: the index is that note.
 - **Links are derived, not authored.** A markdown link to an entity's note,
   inside another shared-context note, is what creates a `mentioned` edge. There is
   no create-link operation anywhere in the system.
@@ -157,7 +166,7 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 - Folders marked **"Freeze for AI"** bind the write gate for autonomous origins
   (`agent`, `ai-enrich`, `maintenance`); human edits still pass.
 - **The Visvine space (`visvine`) is the global record.** One person node +
-  `people/<slug>.md` per `Identity` that is public anywhere, gathered from public
+  `people/<slug>/index.md` per `Identity` that is public anywhere, gathered from public
   spaces and claimed profiles (`lib/global/*`, `docs/global-records.md`).
   Everyone reads it; a person writes only their own record; nothing is created
   there by hand. Spaces bind person nodes to the record (`metadata.globalMode`

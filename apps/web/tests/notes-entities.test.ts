@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  canonicalEntityPath,
   entityKindOf,
   entityNotePath,
+  isFolderOnlyEntityKind,
   parseEntityHref,
   entityKindOfPath,
   entityDraftContent,
@@ -57,9 +59,10 @@ test('entityKindOf classifies the container kinds', () => {
 });
 
 test('container kinds get their own note namespaces (dirs kept their old names)', () => {
-  assert.equal(entityNotePath({ id: 'community:blackbird', type: 'space' }), 'communities/blackbird.md');
+  // An organisation and a channel are folder-only; a section is config and stays flat.
+  assert.equal(entityNotePath({ id: 'community:blackbird', type: 'space' }), 'communities/blackbird/index.md');
   assert.equal(entityNotePath({ id: 'space:engineering', type: 'section' }), 'spaces/engineering.md');
-  assert.equal(entityNotePath({ id: 'channel:general', type: 'channel' }), 'channels/general.md');
+  assert.equal(entityNotePath({ id: 'channel:general', type: 'channel' }), 'channels/general/index.md');
   assert.equal(entityKindOfPath('communities/blackbird.md'), 'space');
   assert.equal(entityKindOfPath('spaces/engineering.md'), 'section');
   assert.equal(entityKindOfPath('channels/general.md'), 'channel');
@@ -167,16 +170,16 @@ test('entityDraftContent labels and tags the container kinds', () => {
   assert.ok(md.includes('Where announcements land.'));
 });
 
-test('entityNotePath derives people/ and communities/ paths from the node id', () => {
-  assert.equal(entityNotePath({ id: 'person:craig-piggott', type: 'person' }), 'people/craig-piggott.md');
-  assert.equal(entityNotePath({ id: 'community:halter', type: 'space' }), 'communities/halter.md');
+test('entityNotePath derives people/ and communities/ folders from the node id', () => {
+  assert.equal(entityNotePath({ id: 'person:craig-piggott', type: 'person' }), 'people/craig-piggott/index.md');
+  assert.equal(entityNotePath({ id: 'community:halter', type: 'space' }), 'communities/halter/index.md');
   // …and every retired organisation spelling lands in the same namespace.
-  assert.equal(entityNotePath({ id: 'org:halter', type: 'organization' }), 'communities/halter.md');
-  assert.equal(entityNotePath({ id: 'group:halter', type: 'Group' }), 'communities/halter.md');
-  assert.equal(entityNotePath({ id: 'resource:founder-playbook', type: 'resource' }), 'resources/founder-playbook.md');
-  assert.equal(entityNotePath({ id: 'event:summit', type: 'event' }), 'events/summit.md');
+  assert.equal(entityNotePath({ id: 'org:halter', type: 'organization' }), 'communities/halter/index.md');
+  assert.equal(entityNotePath({ id: 'group:halter', type: 'Group' }), 'communities/halter/index.md');
+  assert.equal(entityNotePath({ id: 'resource:founder-playbook', type: 'resource' }), 'resources/founder-playbook/index.md');
+  assert.equal(entityNotePath({ id: 'event:summit', type: 'event' }), 'events/summit/index.md');
   // slug comes from the id, not the name (collision-proof)
-  assert.equal(entityNotePath({ id: 'person:jane-doe-acme', type: 'person', name: 'Jane Doe' }), 'people/jane-doe-acme.md');
+  assert.equal(entityNotePath({ id: 'person:jane-doe-acme', type: 'person', name: 'Jane Doe' }), 'people/jane-doe-acme/index.md');
   // non-entity nodes return null
   assert.equal(entityNotePath({ id: 'note:welcome', type: 'note' }), null);
 });
@@ -226,21 +229,58 @@ test('entityOwnerPathOf names the entity folder a sub-note sits in', () => {
   assert.equal(entityOwnerPathOf('notes/connor/x.md'), null);
 });
 
-test('entityNotePath honours a node-recorded entity folder', () => {
+test('a person is a folder from the first write, and the flat path is its alias', () => {
   const node = { id: 'person:connor', type: 'person' };
   assert.equal(entityFlatPath(node), 'people/connor.md');
   assert.equal(entityFolderPathOf(node), 'people/connor');
   assert.equal(entityIndexPathOf(node), 'people/connor/index.md');
+  assert.equal(entityNotePath(node), 'people/connor/index.md');
+  // Both forms resolve to the node — a link written to people/connor.md still lands.
   assert.deepEqual(entityNotePaths(node), ['people/connor.md', 'people/connor/index.md']);
-  assert.equal(entityNotePath(node), 'people/connor.md');
+  // No pointer can move it: the index is the note whatever metadata says.
+  assert.equal(entityNotePath({ ...node, metadata: { notePath: 'people/connor.md' } }), 'people/connor/index.md');
+  assert.equal(entityNotePath({ ...node, metadata: { notePath: 42 } }), 'people/connor/index.md');
+  for (const [id, type, index] of [
+    ['event:launch', 'event', 'events/launch/index.md'],
+    ['resource:deck', 'resource', 'resources/deck/index.md'],
+    ['channel:general', 'channel', 'channels/general/index.md'],
+    ['company:halter', 'company', 'communities/halter/index.md'],
+  ] as const) {
+    assert.equal(entityNotePath({ id, type }), index);
+    assert.equal(isFolderOnlyEntityKind(entityKindOf(type)), true);
+  }
+  assert.deepEqual(entityNotePaths({ id: 'note:x', type: 'note' }), []);
+});
+
+test('the config kinds stay flat until a sub-note converts them', () => {
+  const node = { id: 'connector:sandbox', type: 'connector' };
+  assert.equal(isFolderOnlyEntityKind('connector'), false);
+  assert.equal(isFolderOnlyEntityKind('agent'), false);
+  assert.equal(isFolderOnlyEntityKind('section'), false);
+  assert.equal(isFolderOnlyEntityKind(null), false);
+  assert.equal(entityNotePath(node), 'connectors/sandbox.md');
+  assert.deepEqual(entityNotePaths(node), ['connectors/sandbox.md', 'connectors/sandbox/index.md']);
   assert.equal(
-    entityNotePath({ ...node, metadata: { notePath: 'people/connor/index.md' } }),
-    'people/connor/index.md',
+    entityNotePath({ ...node, metadata: { notePath: 'connectors/sandbox/index.md' } }),
+    'connectors/sandbox/index.md',
   );
   // A pointer at some other note is ignored — it can only name this node's own index.
-  assert.equal(entityNotePath({ ...node, metadata: { notePath: 'people/other/index.md' } }), 'people/connor.md');
-  assert.equal(entityNotePath({ ...node, metadata: { notePath: 42 } }), 'people/connor.md');
-  assert.deepEqual(entityNotePaths({ id: 'note:x', type: 'note' }), []);
+  assert.equal(entityNotePath({ ...node, metadata: { notePath: 'connectors/other/index.md' } }), 'connectors/sandbox.md');
+});
+
+test('canonicalEntityPath sends a folder-only alias to the index and leaves everything else alone', () => {
+  assert.equal(canonicalEntityPath('people/connor.md'), 'people/connor/index.md');
+  assert.equal(canonicalEntityPath('/events/launch.md'), 'events/launch/index.md');
+  assert.equal(canonicalEntityPath('people/connor/index.md'), 'people/connor/index.md');
+  // A sub-note, a namespace root and an ordinary note are not aliases of anything.
+  assert.equal(canonicalEntityPath('people/connor/comms.md'), 'people/connor/comms.md');
+  assert.equal(canonicalEntityPath('people/index.md'), 'people/index.md');
+  assert.equal(canonicalEntityPath('deals/halter.md'), 'deals/halter.md');
+  // A lazy kind's flat path is where its note may really be — the store decides.
+  assert.equal(canonicalEntityPath('connectors/sandbox.md'), 'connectors/sandbox.md');
+  assert.equal(canonicalEntityPath('spaces/engineering.md'), 'spaces/engineering.md');
+  // A tool has no alias: tools/<name>.md is an ordinary note.
+  assert.equal(canonicalEntityPath('tools/deal-pipeline.md'), 'tools/deal-pipeline.md');
 });
 
 test('resolveEntityOwner maps entity notes and sub-notes to their node', () => {
@@ -396,13 +436,13 @@ test('resolveEntityNode resolves through the node map, never by string surgery',
   // — only the map (built by entityNotePath over real nodes) can invert it.
   const legacyOrg = { id: 'org:halter', type: 'organization' };
   const currentOrg = { id: 'community:halter', type: 'Space' };
-  assert.equal(entityNotePath(legacyOrg), 'communities/halter.md');
-  assert.equal(entityNotePath(currentOrg), 'communities/halter.md');
+  assert.equal(entityNotePath(legacyOrg), 'communities/halter/index.md');
+  assert.equal(entityNotePath(currentOrg), 'communities/halter/index.md');
 
   const viaLegacy = new Map([[entityNotePath(legacyOrg)!, { id: legacyOrg.id }]]);
   const viaCurrent = new Map([[entityNotePath(currentOrg)!, { id: currentOrg.id }]]);
-  assert.equal(resolveEntityNode('communities/halter.md', viaLegacy), 'org:halter');
-  assert.equal(resolveEntityNode('communities/halter.md', viaCurrent), 'community:halter');
+  assert.equal(resolveEntityNode('communities/halter/index.md', viaLegacy), 'org:halter');
+  assert.equal(resolveEntityNode('communities/halter/index.md', viaCurrent), 'community:halter');
 
   const people = new Map([['people/craig-piggott.md', { id: 'person:craig-piggott' }]]);
   assert.equal(resolveEntityNode('people/craig-piggott.md', people), 'person:craig-piggott');

@@ -32,6 +32,7 @@ import {
   type ProjectionInput,
 } from './projections'
 import {
+  canonicalEntityPath,
   entityFlatPath,
   entityIndexPathOf,
   entityOwnerPathOf,
@@ -1233,6 +1234,10 @@ async function enforceIndexContract(context: Context, p: string, content: string
 export async function canonicalEntityWritePath(context: Context, path: string): Promise<string> {
   const p = sanitizePath(path)
   if (!parseEntityHref(p) || isIndexPath(p)) return p
+  // A folder-only kind's flat path is an alias: the index is the note, live or
+  // not yet written — a create addressed at people/x.md builds the folder.
+  const canonical = canonicalEntityPath(p)
+  if (canonical !== p) return canonical
   const index = indexPathOf(indexFolderPathOf(p))
   return (await findLive(context, index)) ? index : p
 }
