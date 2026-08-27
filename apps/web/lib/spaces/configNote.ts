@@ -30,6 +30,7 @@
 
 import { joinFrontmatter, parseFrontmatter } from '@/lib/notes/shared/markdown'
 import type { NodeTypeConfig, SpaceAlias, LinkTypeConfig } from '@/lib/types/context'
+import { coerceTrackedFields } from '@/lib/directory/table'
 import type { SpaceDesignConfig, SpaceFeatureConfig } from '@/lib/types/space'
 import type { SpaceConfig, SpaceConfigPatch } from './spaceConfig'
 
@@ -183,11 +184,14 @@ function parseNodeTypes(items: Record<string, unknown>[], errors: string[]): Nod
     if (!shape || !SHAPES.has(shape)) {
       return errors.push(`nodeTypes[${i}] (${name}): shape must be one of ${[...SHAPES].join(', ')}`)
     }
+    const fields = item.fields === undefined ? undefined : coerceTrackedFields(item.fields)
+    if (fields && 'error' in fields) return errors.push(`nodeTypes[${i}] (${name}): ${fields.error}`)
     out.push({
       name,
       color,
       shape: shape as NodeTypeConfig['shape'],
       ...(item.scope === 'note' ? { scope: 'note' as const } : {}),
+      ...(fields && fields.length > 0 ? { fields } : {}),
     })
   })
   return out

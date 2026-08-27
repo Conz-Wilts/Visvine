@@ -21,6 +21,29 @@ export interface NodeTypeConfig {
    * tool claims and turns into real directory entities.
    */
   scope?: 'note';
+  /**
+   * What this type TRACKS, beyond the rows every entity of it already carries
+   * (lib/create/typeFields.ts): the columns the Directory's table shows for
+   * it, and the properties an agent can read off its entity note. Each
+   * field's value lives at `node.metadata[key]` and is mirrored into the
+   * entity note's frontmatter under the same key. Admin-authored
+   * (lib/directory/table.ts#addTrackedField); absent on a type nobody has
+   * extended.
+   */
+  fields?: TrackedField[];
+}
+
+/** The value shapes a tracked field can take — what the cell editor renders. */
+export type TrackedFieldKind = 'text' | 'number' | 'date' | 'url' | 'email' | 'select' | 'checkbox';
+
+/** One thing a space decided to track about a type. */
+export interface TrackedField {
+  /** Metadata key: `[a-z][a-z0-9_]*`, unique within the type, never a key the platform owns. */
+  key: string;
+  label: string;
+  kind: TrackedFieldKind;
+  /** The choices of a `select` field. */
+  options?: string[];
 }
 
 export interface NBNode {

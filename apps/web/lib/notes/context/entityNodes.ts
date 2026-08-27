@@ -30,7 +30,8 @@ import { logger } from '../../logger'
 import { createNote, readNoteOrNull, writeNote, SHARED_OWNER_KEY, type Actor } from '../store'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '../shared/markdown'
 import { entityDraftContent, entityKindOf, entityNotePath } from '../entities'
-import { spaceNodeId } from '../../types/context'
+import { findNodeTypeConfig, spaceNodeId } from '../../types/context'
+import { readSpaceConfig } from '../../spaces/spaceConfig'
 import { upsertLink } from './links'
 
 /** The node `type` values this module knows how to place in the graph. */
@@ -230,20 +231,32 @@ export async function ensureEntityNote(
 
 /**
  * The record fields an entity's note mirrors in its frontmatter, beyond
- * `title:`. Only the schedulable basics of an event: they are what the event
- * page edits, and what someone reading `events/<slug>.md` needs to know without
- * opening the page. Event `status` is deliberately absent — it would collide
- * with the note lifecycle `status:`.
+ * `title:`. Two sources. The schedulable basics of an event — what the event
+ * page edits, and what someone reading `events/<slug>.md` needs to know
+ * without opening the page; event `status` is deliberately absent, it would
+ * collide with the note lifecycle `status:`. And the fields the SPACE tracks
+ * about the type (NodeTypeConfig.fields, lib/directory/table.ts): a value
+ * typed into the Directory's table lands in the note under the same key, so
+ * the note says what the record says and an agent reads it there. A field a
+ * space stops tracking is left in the frontmatter as it was — removing the
+ * column never rewrites notes.
  */
-function mirroredFields(node: EntityRecord): Record<string, unknown> {
+async function mirroredFields(node: EntityRecord): Promise<Record<string, unknown>> {
   const meta = node.metadata ?? {}
-  if (entityKindOf(node.type) !== 'event') return {}
-  return {
-    start_at: meta.start_at ?? null,
-    end_at: meta.end_at ?? null,
-    location: node.location ?? null,
-    capacity: meta.capacity ?? null,
+  const out: Record<string, unknown> = {}
+  if (entityKindOf(node.type) === 'event') {
+    out.start_at = meta.start_at ?? null
+    out.end_at = meta.end_at ?? null
+    out.location = node.location ?? null
+    out.capacity = meta.capacity ?? null
   }
+  const config = await readSpaceConfig(node.spaceId)
+  const type = findNodeTypeConfig(node.type, config?.nodeTypes ?? undefined)
+  for (const field of type?.fields ?? []) {
+    if (field.key in out) continue
+    out[field.key] = meta[field.key] ?? null
+  }
+  return out
 }
 
 type EntityRecord = {
@@ -275,7 +288,7 @@ export async function syncEntityNoteFrontmatter(
     const frontmatter = parseFrontmatter(content)
     const next = { ...frontmatter }
     if (node.name) next.title = node.name
-    for (const [key, value] of Object.entries(mirroredFields(node))) {
+    for (const [key, value] of Object.entries(await mirroredFields(node))) {
       if (value === null || value === undefined || value === '') delete next[key]
       else next[key] = value
     }

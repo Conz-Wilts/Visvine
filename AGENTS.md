@@ -177,6 +177,39 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 - Context-tree UI invariants (2026-08 redesign): shared expansion hook, no
   global graphs.
 
+## The Directory
+
+`/directory` is one page with four tabs — Grid · Table · Context · Resources —
+and the view rides the URL (`?view=table&type=person`). Grid and Table share
+`useDirectoryBrowse` (search, alias and tag filters, the nodes-only
+`/api/communities/<id>/directory` feed); Table is per TYPE, because the
+columns are.
+
+- **A type's columns come from three places, in order**
+  (`lib/directory/table.ts#columnsForType`, pure and tested): the core every
+  entity has (name, alias, tags, added), the property rows the type already
+  shows on its note (`lib/create/typeFields.ts` — a Person's role, company,
+  location…), and the **tracked fields** the space added to the type.
+- **A tracked field is space config, its values are node data.**
+  `NodeTypeConfig.fields[]` (`{ key, label, kind, options? }`) rides the
+  space's type vocabulary — saved by the same whole-record PUT the console
+  uses, round-tripped by the `settings/types.md` config note — and the value
+  is `node.metadata[key]`, written through the existing
+  `PATCH /api/nodes/<id>` merge and **mirrored into the entity note's
+  frontmatter** under the same key (`entityNodes.ts#mirroredFields`), so an
+  agent reading `people/craig/index.md` sees what the space tracks. Adding a
+  field touches no node; removing one leaves the values in place, unlisted.
+  Only admins add or remove fields (`useTrackedFields`); the key is minted from
+  the label and may never be a column the type has or a key the platform owns.
+- **A viewer's arrangement is theirs.** Column order, hidden columns, widths
+  and sort live in `localStorage` per space and type (`useTableView`), never on
+  the space record. A column the viewer has never met appears at its canonical
+  place, so a field an admin just added shows up without being switched on.
+- Cells edit in place with an editor matching the column's kind; a refused
+  value (a number that isn't one) is never stored as text. Edits are held
+  optimistically over the fetched rows because the directory response is
+  cached for 30 seconds.
+
 ## Search
 
 `contextService.searchContext` → `lib/notes/shared/retrieval.ts#fusedSearch`. Five

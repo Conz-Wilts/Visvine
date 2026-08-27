@@ -20,4 +20,7 @@ export interface DirectoryItem {
   twitterUrl?: string
   phone?: string
   pronouns?: string
+  /** The node's whole metadata blob — the tracked fields read from it. */
+  metadata?: Record<string, unknown>
+  createdAt?: string
 }

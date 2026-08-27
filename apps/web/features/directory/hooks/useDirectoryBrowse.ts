@@ -30,12 +30,14 @@ function toDirectoryItem(node: NBNode): DirectoryItem {
     twitterUrl: node.metadata?.twitterUrl as string | undefined,
     phone: node.metadata?.phone as string | undefined,
     pronouns: node.metadata?.pronouns as string | undefined,
+    metadata: node.metadata,
+    createdAt: node.createdAt,
   };
 }
 
 /**
  * Shared search/filter/sort plumbing over the space directory, used by both
- * the Directory grid (/directory) and the Table tool (/table) so the two pages
+ * the Directory's Grid and Table views so the two
  * stay behaviourally identical without duplicating the pipeline.
  */
 export function useDirectoryBrowse() {

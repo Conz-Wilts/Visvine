@@ -4,6 +4,7 @@ import React, { Suspense, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import NodeGrid from '@/features/directory/components/NodeGrid';
 import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
+import DirectoryTableView from '@/features/directory/components/table/DirectoryTableView';
 import ResourcesBrowser from '@/features/resources/components/ResourcesBrowser';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
@@ -16,16 +17,25 @@ import type { SpaceAlias } from '@/lib/types';
 
 const DIRECTORY_TABS: PaneTabItem[] = [
   { id: 'grid', label: 'Grid' },
+  { id: 'table', label: 'Table' },
   { id: 'context', label: 'Context' },
   { id: 'resources', label: 'Resources' },
 ];
 
 /** The views this page renders itself; Context is a navigation, not a view. */
-type DirectoryView = 'grid' | 'resources';
+type DirectoryView = 'grid' | 'table' | 'resources';
+
+const VIEW_HREF: Record<DirectoryView, string> = {
+  grid: '/directory',
+  table: '/directory?view=table',
+  resources: '/directory?view=resources',
+};
 
 /**
  * The Directory: a searchable, filterable card grid of everyone and everything
- * (Grid), and the space's Drive (Resources, `?view=resources`). The Context tab
+ * (Grid), the same entries as rows with a column per thing their type tracks
+ * (Table, `?view=table&type=<type>`), and the space's Drive (Resources,
+ * `?view=resources`). The Context tab
  * in the pane bar isn't a view of this page — it navigates to the context's
  * top-level index note (`index.md`, the space's home page). The bar itself
  * lives in the persistent pane shell (directory/layout.tsx) — this page just
@@ -62,8 +72,10 @@ function DirectoryPane() {
   // The view is the URL, so a tab survives reload and a link can name it.
   // ?view=context has no standalone browser behind it: such links land on the
   // grid and hop straight to the index note.
-  const viewParam = useSearchParams().get('view');
-  const view: DirectoryView = viewParam === 'resources' ? 'resources' : 'grid';
+  const searchParams = useSearchParams();
+  const viewParam = searchParams.get('view');
+  const view: DirectoryView = viewParam === 'resources' || viewParam === 'table' ? viewParam : 'grid';
+  const typeParam = searchParams.get('type');
   const wantsContext = viewParam === 'context';
   const redirected = useRef(false);
   useEffect(() => {
@@ -79,9 +91,9 @@ function DirectoryPane() {
   // the note page re-claims it, and the release grace bridges the swap.
   const handleSelect = useCallback(
     (id: string) => {
-      if (id === 'grid' || id === 'resources') {
+      if (id === 'grid' || id === 'table' || id === 'resources') {
         releaseDockNow();
-        router.replace(id === 'grid' ? '/directory' : '/directory?view=resources');
+        router.replace(VIEW_HREF[id]);
         return;
       }
       openContext();
@@ -100,6 +112,13 @@ function DirectoryPane() {
   const browse = useDirectoryBrowse();
   const { space, loading, error, filteredItems, handleItemClick } = browse;
 
+  // The table's type rides the URL beside the view, so a link can name
+  // "the events table" and a reload lands back on it.
+  const handleTypeChange = useCallback(
+    (type: string) => router.replace(`/directory?view=table&type=${encodeURIComponent(type)}`),
+    [router],
+  );
+
   // No space selected (zero memberships): the sidebar rail is already empty,
   // so the directory chrome — tab bar, toolbar, grid — hides too. The centre
   // stays blank on purpose; Discover is reachable from the navbar and the
@@ -107,6 +126,18 @@ function DirectoryPane() {
   // rendered at all — a min-height filler here would overflow <main>'s own
   // padded height and leave a scrollbar on an empty page.
   if (noSpace) return null;
+
+  if (view === 'table') {
+    return (
+      // A fixed height, not a minimum: the table is its own scroll box and
+      // has to know where the pane ends (DirectoryTableView).
+      <div className="relative w-full" style={{ height: 'calc(100dvh - 136px)' }}>
+        <div id="panel-table" role="tabpanel" className="h-full">
+          <DirectoryTableView browse={browse} type={typeParam} onTypeChange={handleTypeChange} />
+        </div>
+      </div>
+    );
+  }
 
   if (view === 'resources') {
     return (

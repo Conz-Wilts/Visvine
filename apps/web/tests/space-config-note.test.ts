@@ -147,3 +147,35 @@ test('patchIsNoOp ignores key order and only weighs the keys the patch mentions'
     !patchIsNoOp({ featureConfig: { enabled: { directory: true, notes: true } }, designConfig: {} }, config),
   )
 })
+
+// tracked fields (lib/directory/table.ts) ride the types note
+
+test('a type\'s tracked fields round-trip through the types note', () => {
+  const withFields: SpaceConfig = {
+    ...config,
+    nodeTypes: [
+      {
+        name: 'Person',
+        color: '#2563eb',
+        shape: 'rectangle',
+        fields: [
+          { key: 'deal_stage', label: 'Deal stage', kind: 'select', options: ['Lead', 'Won'] },
+          { key: 'net_worth', label: 'Net worth', kind: 'number' },
+        ],
+      },
+    ],
+  }
+  const { patch, errors } = parseConfigNote('types', serializeConfigNote('types', withFields))
+  assert.deepEqual(errors, [])
+  assert.deepEqual(patch.nodeTypes?.[0].fields, withFields.nodeTypes![0].fields)
+  assert.ok(patchIsNoOp(patch, withFields))
+})
+
+test('an invalid tracked field is an error on the note, not a silent drop', () => {
+  const { errors } = parseConfigNote(
+    'types',
+    '---\ntitle: Types\nnodeTypes:\n  - name: Person\n    color: "#2563eb"\n    shape: rectangle\n    fields:\n      - key: Deal Stage\n        label: Deal stage\n        kind: text\n---\n\nx\n',
+  )
+  assert.equal(errors.length, 1)
+  assert.match(errors[0], /fields\[0\]/)
+})
