@@ -287,7 +287,7 @@ if (FOUNDER_NOTE_MODE !== 'none') {
   for (const p of personByKey.values()) if (p.companies.size > 1) noteworthy.add(p.key);
 }
 
-// key → its people/<slug>.md slug (== the person's directory node id slug).
+// key → its people/<slug>/ slug (== the person's directory node id slug).
 const founderSlugByKey = new Map();
 for (const key of noteworthy) founderSlugByKey.set(key, personByKey.get(key).slug);
 
@@ -296,7 +296,7 @@ for (const key of noteworthy) founderSlugByKey.set(key, personByKey.get(key).slu
 const sectorPath = (label) => `/sectors/${slugify(label)}.md`;
 const sectorLink = (label) =>
   companiesBySector.has(label) ? link(label, sectorPath(label)) : label;
-const companyPath = (org) => `/communities/${org.slug}.md`;
+const companyPath = (org) => `/communities/${org.slug}/index.md`;
 const companyLink = (org) => link(org.c.name, companyPath(org));
 // Reference a company by display name (plain text if it isn't in the portfolio).
 function coLink(name) {
@@ -380,7 +380,7 @@ for (const o of orgs) {
     for (const fr of o.founders) {
       const role = fr.role || 'Founder';
       sections.push(founderSlugByKey.has(fr.key)
-        ? `- ${link(fr.name, `/people/${founderSlugByKey.get(fr.key)}.md`)} — ${role}`
+        ? `- ${link(fr.name, `/people/${founderSlugByKey.get(fr.key)}/index.md`)} — ${role}`
         : `- **${fr.name}** — ${role}`);
     }
   }
@@ -391,7 +391,8 @@ for (const o of orgs) {
   const exited = c.status === 'Exited' || c.status === 'IPO';
   sections.push('', '---', `Part of ${link('Portfolio', '/communities/index.md')} · ${sectorLink(o.sector)}${exited ? ` · ${link('Exits', '/communities/exits.md')}` : ''}${c.status === 'Written Off' ? ` · ${link('Graveyard', '/communities/graveyard.md')}` : ''}`);
 
-  note(shared, `communities/${o.slug}.md`, {
+  // An organisation is a folder: its record is the folder's index.
+  note(shared, `communities/${o.slug}/index.md`, {
     type: 'Company', title: c.name,
     description: c.subtitle || null,
     node: `company:${o.slug}`,
@@ -475,7 +476,7 @@ if (FOUNDER_NOTE_MODE !== 'none' && founderSlugByKey.size) {
 
 The people building the portfolio (${founderNotes.length} profiled).
 
-${founderNotes.map(({ p, slug }) => `- ${link(p.name, `/people/${slug}.md`)}${p.role ? ` — ${p.role}` : ''}`).join('\n')}
+${founderNotes.map(({ p, slug }) => `- ${link(p.name, `/people/${slug}/index.md`)}${p.role ? ` — ${p.role}` : ''}`).join('\n')}
 `);
 
   for (const { p, slug } of founderNotes) {
@@ -491,7 +492,8 @@ ${founderNotes.map(({ p, slug }) => `- ${link(p.name, `/people/${slug}.md`)}${p.
     sections.push('## Companies', cos.map((o) => `- ${companyLink(o)}`).join('\n'));
     if (links.length) sections.push('', '## Links', `- ${links.join('  ·  ')}`);
     sections.push('', `Back to ${link('Founders', '/people/index.md')}`);
-    note(shared, `people/${slug}.md`, {
+    // A person is a folder: the note is its index, sub-notes go beside it.
+    note(shared, `people/${slug}/index.md`, {
       type: 'Person', title: p.name,
       description: p.role || null,
       node: `person:${slug}`,

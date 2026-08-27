@@ -105,10 +105,14 @@ export function nextIndexTitle(
  * path — so a write carrying it is stripped rather than obeyed.
  *
  * `entity` is passed when the folder is a directory entity's own context folder
- * (`people/<slug>/`). Then the index IS the entity's note, so it must carry the
- * entity's type label and its `node:` back-pointer — and a write that dropped
- * either (an agent following the plain folder rule) gets them put back. A title
- * the writer chose is always kept.
+ * (`people/<slug>/`). Then the index IS the entity's note, so it must carry a
+ * type naming the entity and its `node:` back-pointer — and a write that
+ * dropped either (an agent following the plain folder rule) gets them put
+ * back. Which spellings name it is the entity's `acceptsType` (a `Company`
+ * record is an organisation, and keeps the word the space chose); without one,
+ * only `typeLabel` itself does — the config kinds, whose lower-case type is
+ * what the runtime matches on. `typeLabel` is what gets written when the
+ * declared type doesn't qualify. A title the writer chose is always kept.
  *
  * Returns `content` unchanged when it already conforms, so callers can apply
  * this unconditionally on every index-path write.
@@ -116,7 +120,7 @@ export function nextIndexTitle(
 export function enforceIndexFrontmatter(
   content: string,
   folderPath: string,
-  entity?: { typeLabel: string; nodeId: string; name: string },
+  entity?: { typeLabel: string; nodeId: string; name: string; acceptsType?: (declared: string) => boolean },
 ): string {
   const fm = parseFrontmatter(content)
   const declaredType = typeof fm.type === 'string' ? fm.type.trim() : ''
@@ -124,7 +128,8 @@ export function enforceIndexFrontmatter(
   const declaredNode = typeof fm.node === 'string' ? fm.node.trim() : ''
   const claimsShape = declaredType.toLowerCase() === 'index'
   const typeOk = entity
-    ? declaredType.toLowerCase() === entity.typeLabel.toLowerCase()
+    ? declaredType.toLowerCase() === entity.typeLabel.toLowerCase() ||
+      (!claimsShape && declaredType !== '' && (entity.acceptsType?.(declaredType) ?? false))
     : !claimsShape
   const nodeOk = !entity || declaredNode === entity.nodeId
   if (typeOk && nodeOk && declaredTitle) return content

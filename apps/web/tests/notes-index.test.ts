@@ -295,6 +295,26 @@ test('an entity folder index gets its entity type back over Index', () => {
   assert.ok(splitFrontmatter(fixed).body.includes('body'))
 })
 
+test('an entity folder index keeps a spelling its entity accepts, and rewrites one it does not', () => {
+  const halter = {
+    typeLabel: 'Space',
+    nodeId: 'company:halter',
+    name: 'Halter',
+    acceptsType: (declared: string) => ['space', 'company'].includes(declared.toLowerCase()),
+  }
+  // A Company record is an organisation — the word the space chose survives.
+  const company = '---\ntype: Company\ntitle: Halter\nnode: company:halter\n---\n\nbody\n'
+  assert.equal(enforceIndexFrontmatter(company, 'communities/halter', halter), company)
+  // A type naming something else is put back to the entity label.
+  const fm = parseFrontmatter(enforceIndexFrontmatter(company.replace('Company', 'Deal'), 'communities/halter', halter))
+  assert.equal(fm.type, 'Space')
+  // Index never qualifies, whatever acceptsType would say.
+  const shape = parseFrontmatter(
+    enforceIndexFrontmatter(company.replace('Company', 'Index'), 'communities/halter', { ...halter, acceptsType: () => true }),
+  )
+  assert.equal(shape.type, 'Space')
+})
+
 test('an entity folder index is a byte no-op on conforming content', () => {
   const ok = '---\ntype: Person\ntitle: Connor W\nnode: person:connor\n---\n\nbody\n'
   assert.equal(enforceIndexFrontmatter(ok, 'people/connor', CONNOR), ok)

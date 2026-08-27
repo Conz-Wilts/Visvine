@@ -149,6 +149,22 @@ test('a sub-note written under an entity with no note yet stubs the folder index
   }
 })
 
+test('an ordinary note in an entity namespace stays where it was written', async (t) => {
+  const skip = await probe()
+  if (skip) return t.skip(skip)
+  await setup()
+  try {
+    const s = store!
+    // No organisation called "exits" — this is a page about exits, not a record.
+    const note = await s.createNote(shared, 'communities/exits.md', '---\ntitle: Exits\n---\n\nThe realised ones.\n', actor)
+    assert.equal(note.path, 'communities/exits.md')
+    assert.equal(await s.canonicalEntityWritePath(shared, 'communities/exits.md'), 'communities/exits.md')
+    assert.ok(!(await livePaths()).includes('communities/exits/index.md'))
+  } finally {
+    await teardown()
+  }
+})
+
 test('a sub-note under a namespace with no entity behind it is refused', async (t) => {
   const skip = await probe()
   if (skip) return t.skip(skip)

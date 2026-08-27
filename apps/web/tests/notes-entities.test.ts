@@ -4,6 +4,7 @@ import {
   canonicalEntityPath,
   entityKindOf,
   entityNotePath,
+  entityTypeNamesKind,
   isFolderOnlyEntityKind,
   parseEntityHref,
   entityKindOfPath,
@@ -266,6 +267,20 @@ test('the config kinds stay flat until a sub-note converts them', () => {
   );
   // A pointer at some other note is ignored — it can only name this node's own index.
   assert.equal(entityNotePath({ ...node, metadata: { notePath: 'connectors/other/index.md' } }), 'connectors/sandbox.md');
+});
+
+test('entityTypeNamesKind accepts any spelling of a directory kind, exact for config kinds', () => {
+  assert.equal(entityTypeNamesKind('Company', 'company'), true);
+  assert.equal(entityTypeNamesKind('Space', 'company'), true);
+  assert.equal(entityTypeNamesKind('Organisation', 'space'), true);
+  assert.equal(entityTypeNamesKind('Person', 'person'), true);
+  assert.equal(entityTypeNamesKind('People', 'person'), true);
+  assert.equal(entityTypeNamesKind('Deal', 'company'), false);
+  assert.equal(entityTypeNamesKind('', 'person'), false);
+  assert.equal(entityTypeNamesKind('tool', 'tool'), true);
+  assert.equal(entityTypeNamesKind('Tools', 'tool'), false);
+  assert.equal(entityTypeNamesKind('Connectors', 'connector'), false);
+  assert.equal(entityTypeNamesKind('Person', 'note'), false);
 });
 
 test('canonicalEntityPath sends a folder-only alias to the index and leaves everything else alone', () => {

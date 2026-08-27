@@ -26,6 +26,7 @@ import { toolNoteDeleted, toolNoteRenamed } from '@/lib/tools/hooks'
 // owes IN THE SAME TRANSACTION as the write, then settles it inline — see
 // lib/notes/projections.ts for why the fan-out moved there and what it buys.
 import {
+  dropEmbedding,
   enqueueProjection,
   settleBatch,
   settleProjection,
@@ -38,6 +39,7 @@ import {
   entityOwnerPathOf,
   entityStub,
   entityTypeLabelOf,
+  entityTypeNamesKind,
   isEntityFolderIndex,
   namespaceFolderDenial,
   parseEntityHref,
@@ -1022,7 +1024,7 @@ async function nodeForEntityPath(
  * The node pointer is shared-context state (there is one node); a personal
  * context converting its own copy just moves the note.
  */
-async function ensureEntityFolder(
+export async function ensureEntityFolder(
   context: Context,
   node: EntityNodeLike,
   actor: Actor,
@@ -1121,6 +1123,10 @@ async function ensureEntityFolder(
   if (moved.renamedFrom) {
     await syncContextLinksBulk(context, [moved.renamedFrom], [[dest, moved.content]])
     await syncPublicationsOnRename(context, moved.renamedFrom, dest)
+    // The vectors and derived memories are keyed by path; the ones at the old
+    // path would otherwise sit there forever, ranking for a note that is gone
+    // — the same rule a rename projection applies.
+    await dropEmbedding(context, moved.renamedFrom)
   }
   if (moved.pointerMoved) bustContextData()
   await refreshFolderIndex(context, folder)
@@ -1130,11 +1136,17 @@ async function ensureEntityFolder(
   return dest
 }
 
-function entityContractOf(node: EntityNodeLike): { typeLabel: string; nodeId: string; name: string } {
+function entityContractOf(node: EntityNodeLike): {
+  typeLabel: string
+  nodeId: string
+  name: string
+  acceptsType: (declared: string) => boolean
+} {
   return {
     typeLabel: entityTypeLabelOf(node.type) ?? 'Note',
     nodeId: node.id,
     name: (node.name ?? node.id.split(':').pop() ?? node.id).trim(),
+    acceptsType: (declared) => entityTypeNamesKind(declared, node.type),
   }
 }
 
@@ -1235,9 +1247,12 @@ export async function canonicalEntityWritePath(context: Context, path: string): 
   const p = sanitizePath(path)
   if (!parseEntityHref(p) || isIndexPath(p)) return p
   // A folder-only kind's flat path is an alias: the index is the note, live or
-  // not yet written — a create addressed at people/x.md builds the folder.
+  // not yet written — a create addressed at people/x.md builds the folder. Only
+  // when a node stands behind it, though: `communities/exits.md` with no
+  // organisation called "exits" is an ordinary note that happens to live in an
+  // entity namespace, and it stays where it was written.
   const canonical = canonicalEntityPath(p)
-  if (canonical !== p) return canonical
+  if (canonical !== p && (await nodeForEntityPath(context.spaceId, p))) return canonical
   const index = indexPathOf(indexFolderPathOf(p))
   return (await findLive(context, index)) ? index : p
 }

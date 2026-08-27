@@ -46,7 +46,7 @@ const NODE_TYPES = [
   // A portfolio company is a RECORD inside Blackbird, not a tenant of its own —
   // Blackbird's sub-spaces are its teams (prisma/seed.ts). `company` folds onto
   // `space` in TYPE_SYNONYMS so the entity machinery is unchanged (the note
-  // still lives at communities/<slug>.md); declaring the type here is what
+  // still lives at communities/<slug>/index.md); declaring the type here is what
   // makes this spelling win in findNodeTypeConfig and paints it its own colour.
   { icon: '🏢', name: 'Company', color: '#0891b2', shape: 'square' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },

@@ -44,8 +44,11 @@ import { extractMarkdownLinks, parseFrontmatter, splitFrontmatter } from '../lib
 import {
   entityFlatPath,
   entityIndexPathOf,
+  entityKindOf,
   entityTypeLabelOf,
+  entityTypeNamesKind,
   isEntityFolderIndex,
+  isFolderOnlyEntityKind,
   parseEntityHref,
 } from '../lib/notes/entities';
 
@@ -160,7 +163,7 @@ async function main() {
           const fm = parseFrontmatter(note.content);
           const wantType = entityTypeLabelOf(owner.type) ?? '';
           const gotType = typeof fm.type === 'string' ? fm.type.trim() : '';
-          if (gotType.toLowerCase() !== wantType.toLowerCase()) {
+          if (!entityTypeNamesKind(gotType, owner.type)) {
             violations.push(
               `${label} ${note.path}: an entity folder's index must keep the entity type "${wantType}" (found "${gotType || 'nothing'}")`,
             );
@@ -192,10 +195,22 @@ async function main() {
       }
     }
 
-    // 6: the node pointer and the entity-folder index agree (shared context only —
-    // the pointer is node state, and there is one node).
+    // 6: a folder-only entity's note is its folder — the flat path may hold
+    // nothing (any context, the alias never lives anywhere).
+    for (const owner of nodeByIndexPath.values()) {
+      if (!isFolderOnlyEntityKind(entityKindOf(owner.type))) continue;
+      const flat = entityFlatPath({ id: owner.id, type: owner.type });
+      if (flat && live.has(flat)) {
+        violations.push(`${label} ${owner.id}: ${flat} is live but a ${owner.type} is a folder (run db:entities:folders)`);
+      }
+    }
+
+    // 6b: for the kinds that convert lazily, the node pointer and the
+    // entity-folder index agree (shared context only — the pointer is node
+    // state, and there is one node).
     if (context.ownerKey === SHARED_OWNER_KEY) {
       for (const [idx, owner] of nodeByIndexPath) {
+        if (isFolderOnlyEntityKind(entityKindOf(owner.type))) continue;
         const indexLive = live.has(idx);
         const flat = entityFlatPath({ id: owner.id, type: owner.type });
         if (owner.pointer === idx && !indexLive) {

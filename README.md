@@ -147,6 +147,7 @@ built in layers. `pnpm db:blackbird:full` runs all of them:
 | `db:blackbird:notes` | the shared context (companies, sectors, people, team, deals, data) + the admin's personal context |
 | `db:blackbird:extras` | events + attendees, the resource library, channels + messages + a DM, feed posts |
 | `db:connectors:demo` | two working connectors in the shared context |
+| `db:entities:folders` | moves any entity note still at its flat path (`people/<slug>.md`) into its folder (`people/<slug>/index.md`) — idempotent; the seed writes the folder form already |
 | `db:context-links` | directory links derived from the shared-context entity notes |
 | `db:index-notes:rebuild` | creates any missing folder index and refreshes every index's managed child list |
 | `db:notes:verify` | fails the seed if the context breaks a structural rule |
@@ -165,7 +166,9 @@ about, so a person's context folder is `type: Person` and a folder that just
 groups notes carries no type at all; `Index` is not a type and no note may
 declare it. You make a folder by writing a note inside it — add `a/b/c.md` and
 `a/b.md` becomes `a/b/index.md`, still the same note, now also the folder's home
-page. `db:notes:verify` is what keeps the seeded data honest about all of that;
+page. A directory entity — a person, an organisation, an event, a resource, a
+channel — is a folder from the start: `people/<slug>/index.md` IS the person,
+and anything else written under `people/<slug>/` is a note about them. `db:notes:verify` is what keeps the seeded data honest about all of that;
 run it any time you hand-edit a seed layer. The rules live in
 `apps/web/lib/notes/shared/indexNote.ts`.
 

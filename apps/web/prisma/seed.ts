@@ -111,7 +111,7 @@ const NODE_TYPES = [
   { icon: "👤", name: "Person", color: "#2563eb", shape: "rectangle" },
   { icon: "🏘️", name: "Space", color: "#78d870", shape: "square" },
   // A portfolio company is a RECORD, not a tenant: it has a directory card and a
-  // context note (communities/<slug>.md, the org namespace — see
+  // context note (communities/<slug>/index.md, the org namespace — see
   // lib/notes/entities.ts) but no space of its own. Blackbird's real sub-spaces
   // are its teams, below. `company` folds onto `space` in TYPE_SYNONYMS, so the
   // entity machinery keeps working; declaring the type here is what makes the

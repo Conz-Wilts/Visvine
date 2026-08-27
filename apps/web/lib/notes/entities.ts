@@ -574,6 +574,33 @@ export function entityTypeLabelOf(type: string | null | undefined): string | nul
   return kind ? ENTITY_TYPE_LABEL[kind] : null
 }
 
+/**
+ * The kinds whose note may carry any spelling of the kind as its `type:` — a
+ * `Company` record is an organisation and keeps the word the space chose for
+ * it. The config kinds are excluded: `type: connector` / `agent` / `tool` are
+ * what their runtimes match on, exactly.
+ */
+const KIND_SPELLING_IS_FREE: ReadonlySet<EntityKind> = new Set([
+  'person',
+  'space',
+  'event',
+  'resource',
+  'channel',
+  'section',
+])
+
+/**
+ * Does a note's declared `type:` name the same entity as this node? True for
+ * the kind's own label and, for the directory kinds, any spelling that folds
+ * onto the kind (`Company`, `Organisation` → space).
+ */
+export function entityTypeNamesKind(declared: string, nodeType: string): boolean {
+  const kind = entityKindOf(nodeType)
+  if (!kind) return false
+  if (declared.trim().toLowerCase() === ENTITY_TYPE_LABEL[kind].toLowerCase()) return true
+  return KIND_SPELLING_IS_FREE.has(kind) && entityKindOf(declared) === kind
+}
+
 const ENTITY_TAG: Record<EntityKind, string> = {
   person: 'person',
   resource: 'resource',

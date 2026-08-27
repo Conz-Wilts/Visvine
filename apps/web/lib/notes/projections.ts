@@ -171,7 +171,7 @@ async function liveContent(context: Context, path: string): Promise<string | nul
  * is already gone is a no-op, and a delete that never ran is repaired by the
  * nightly sweep's orphan pass (lib/notes/embedSweep.ts) rather than lost.
  */
-async function dropEmbedding(context: Context, path: string): Promise<void> {
+export async function dropEmbedding(context: Context, path: string): Promise<void> {
   const where = { spaceId: context.spaceId, ownerKey: context.ownerKey, path }
   await prisma.contextNoteEmbedding.deleteMany({ where })
   // The derived memories are keyed the same way and die with the note for the

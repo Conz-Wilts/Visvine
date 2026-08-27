@@ -342,10 +342,10 @@ async function seedAgents() {
       id: 'agev_bb_003',
       agentName: 'dealflow-digest',
       kind: 'note_written',
-      source: 'communities/halter.md',
+      source: 'communities/halter/index.md',
       summary: 'Series D close added to the company note',
-      payload: { path: 'communities/halter.md', actor: 'Dev Admin', changed: true },
-      dedupeKey: 'note_written:communities/halter.md',
+      payload: { path: 'communities/halter/index.md', actor: 'Dev Admin', changed: true },
+      dedupeKey: 'note_written:communities/halter/index.md',
       createdAt: ago(9),
       consumedBy: null,
     },
@@ -592,8 +592,8 @@ async function seedGovernance() {
   // A publication is a live link plus a REAL replica note in the target space.
   // Seeding the link without the replica would describe a sync that never ran.
   const publications = [
-    { sourcePath: 'communities/halter.md', targetPath: 'partners/blackbird/halter.md', active: true },
-    { sourcePath: 'communities/canva.md', targetPath: 'partners/blackbird/canva.md', active: true },
+    { sourcePath: 'communities/halter/index.md', targetPath: 'partners/blackbird/halter.md', active: true },
+    { sourcePath: 'communities/canva/index.md', targetPath: 'partners/blackbird/canva.md', active: true },
     // Unlinked: the replica stays behind as a plain editable copy.
     { sourcePath: 'sectors/climate-energy.md', targetPath: 'partners/blackbird/climate-energy.md', active: false },
   ];
@@ -983,7 +983,7 @@ async function seedMachinery() {
     {
       id: 'npj_bb_001',
       ownerKey: SHARED,
-      path: 'communities/halter.md',
+      path: 'communities/halter/index.md',
       kind: 'write',
       fromPath: null as string | null,
       origin: 'edit',
