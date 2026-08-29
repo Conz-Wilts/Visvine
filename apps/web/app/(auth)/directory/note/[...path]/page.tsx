@@ -35,24 +35,24 @@ import type { NoteMeta } from '@/lib/notes/shared/types';
 import type { ToolSubject } from '@/lib/tools/protocol';
 import {
   entityContextHref,
+  entityKindOfDir,
   entityOwnerPathOf,
   parseEntityHref,
   resolveEntityOwner,
 } from '@/lib/notes/entities';
-import { INDEX_BASENAME } from '@/lib/notes/shared/indexNote';
+import { directoryTabs, directoryViewHref, isDirectoryView } from '@/lib/directory/views';
 
-// A non-entity note is still a Context note — same "Context / Raw" top nav an
-// entity profile's Context tab gets. The tabs ARE the editor mode.
-const NOTE_TABS: PaneTabItem[] = [
-  { id: 'context', label: 'Context' },
-  { id: 'raw', label: 'Raw' },
-];
+// A non-entity note is still a Context note. Raw is not a tab here — it is the
+// bar's trailing Raw toggle (PaneTabBar, `rawToggle`), sitting beside
+// Connections, and flipping it swaps the editor's mode in place.
+const NOTE_TABS: PaneTabItem[] = [{ id: 'context', label: 'Context' }];
 
-// The context-root index is where the Directory's Context tab lands, so it keeps
-// the Directory's own Grid tab in the bar — Context still reads as a sibling
-// view of the grid rather than a place you left it for. Any other note drops
-// Grid and shows the plain note bar above.
-const ROOT_INDEX_TABS: PaneTabItem[] = [{ id: 'grid', label: 'Grid' }, ...NOTE_TABS];
+// A context note keeps the Directory's FULL tab set in the bar — Grid, Table
+// and Resources stay one click away wherever you are in the tree, and Context
+// reads as a sibling view of the grid rather than a place you left it for.
+// Only a Tool-owned type page drops them: its own tab is the page, and the
+// note is the tab beside it.
+const DIRECTORY_TABS: PaneTabItem[] = directoryTabs();
 
 /** The Tool's page, when one owns this type — the first tab, like Profile. */
 const TOOL_TAB_ID = 'tool';
@@ -108,7 +108,6 @@ function NoteViewerRoute() {
   const raw = params.path;
   const segments = Array.isArray(raw) ? raw : raw ? [raw] : [];
   const notePath = segments.map((s) => decodeURIComponent(String(s))).join('/');
-  const isRootIndex = notePath === INDEX_BASENAME;
   const [tab, setTab] = useState<NoteTab | null>(null);
 
   // An entity note (either form) or a sub-note in an entity folder belongs
@@ -152,36 +151,49 @@ function NoteViewerRoute() {
 
   const activeTab: NoteTab = tab ?? (toolPage ? TOOL_TAB_ID : 'context');
   const mode: NoteMode = activeTab === 'raw' ? 'raw' : 'wysiwyg';
+
+  // What crossing to the Table opens: the namespace this note sits in, so
+  // leaving `people/craig/index.md` — or the `people/` index itself — for the
+  // Table lands on the People table. A note outside any entity namespace
+  // (`deals/q1.md`) names no type and the Table picks its own.
+  const carriedType = useMemo(() => entityKindOfDir(notePath), [notePath]);
+
   const handleSelect = useCallback(
     (id: string) => {
-      if (id === 'grid') {
-        // Same immediate dock release the Directory's own Grid tab does: Grid
-        // is a terminal state for the docked tree, so the grace would only hold
-        // the closing panel over cards already animating in.
+      if (isDirectoryView(id)) {
+        // Same immediate dock release the Directory's own view tabs do: these
+        // are terminal states for the docked tree, so the grace would only hold
+        // the closing panel over content already animating in.
         releaseDockNow();
-        router.push('/directory');
+        router.push(directoryViewHref(id, carriedType));
         return;
       }
-      setTab(id === TOOL_TAB_ID ? TOOL_TAB_ID : id === 'raw' ? 'raw' : 'context');
+      if (id === 'raw') {
+        // The bar's trailing Raw toggle, not a tab: flip the editor mode.
+        setTab((prev) => ((prev ?? 'context') === 'raw' ? 'context' : 'raw'));
+        return;
+      }
+      setTab(id === TOOL_TAB_ID ? TOOL_TAB_ID : 'context');
     },
-    [releaseDockNow, router],
+    [releaseDockNow, router, carriedType],
   );
 
   // The tab is named after the TYPE, not the Tool: this is the page for a deal,
   // the way the first tab on a person is "Profile" rather than the name of
   // whatever renders it.
   const typeLabel = noteType ? getNodeTypeConfig(noteType, currentSpace?.nodeTypes).name : '';
-  const tabs = toolPage
-    ? [{ id: TOOL_TAB_ID, label: typeLabel }, ...NOTE_TABS]
-    : isRootIndex
-      ? ROOT_INDEX_TABS
-      : NOTE_TABS;
+  const tabs = toolPage ? [{ id: TOOL_TAB_ID, label: typeLabel }, ...NOTE_TABS] : DIRECTORY_TABS;
 
   const onToolTab = !pending && activeTab === TOOL_TAB_ID && toolPage !== null;
   usePaneChrome({
     tabs: redirecting ? null : tabs,
-    activeId: redirecting ? null : pending ? 'context' : activeTab,
+    // Raw is a mode, not a tab, so the Context tab stays the selected one while
+    // raw is on — the trailing toggle carries its own underline.
+    activeId: redirecting ? null : pending || activeTab === 'raw' ? 'context' : activeTab,
     onSelect: handleSelect,
+    // The Raw toggle rides the bar only while the note editor is the surface —
+    // a Tool's page has no editor mode to flip.
+    rawToggle: !redirecting && !pending && !onToolTab,
     // Only the wysiwyg editor portals a toolbar into the bar's attached region —
     // Raw is a plain textarea with nothing to put there, and a Tool's page is
     // the Tool's.

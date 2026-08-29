@@ -87,7 +87,7 @@ export default function TableCell({ column, value, aliasColor, tagColors, onSave
   if (column.kind === 'checkbox') {
     const checked = value === true || value === 'true';
     return (
-      <div className="flex h-full items-center px-3">
+      <div className="flex h-full items-center px-3.5">
         <input
           type="checkbox"
           checked={checked}
@@ -170,7 +170,9 @@ export default function TableCell({ column, value, aliasColor, tagColors, onSave
       </span>
     );
   } else if (column.kind === 'select' && text) {
-    body = <Chip size="xs">{text}</Chip>;
+    // A select option wears a steady colour the way a tag does — hashed from
+    // its own text, so every row's "Won" is the same pill.
+    body = <Chip color={tagPalette(text, null).base} size="xs">{text}</Chip>;
   } else if (href) {
     body = (
       <a
@@ -196,7 +198,7 @@ export default function TableCell({ column, value, aliasColor, tagColors, onSave
       onKeyDown={editable ? (e) => { if (e.key === 'Enter') begin(); } : undefined}
       title={error ?? (editable ? undefined : text || undefined)}
       className={clsx(
-        'flex h-full min-w-0 items-center px-3 text-sm text-text-primary',
+        'flex h-full min-w-0 items-center px-3.5 text-sm text-text-primary',
         column.kind === 'number' && 'justify-end',
         editable && 'cursor-text rounded-md outline-none focus-visible:ring-1 focus-visible:ring-border-default',
         saving && 'opacity-60',

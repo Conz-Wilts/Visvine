@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJsonBody } from '@/lib/fetchJson';
-import { addTrackedField, removeTrackedField, type TrackedFieldResult } from '@/lib/directory/table';
+import { addTrackedField, removeTrackedField, updateTrackedField, type TrackedFieldResult } from '@/lib/directory/table';
 import {
   findNodeTypeConfig,
   mergeNodeTypeList,
@@ -73,6 +73,18 @@ export function useTrackedFields() {
     [configFor, commit],
   );
 
+  const update = useCallback(
+    (type: string, key: string, patch: { label?: string; options?: string[] }) => {
+      const config = configFor(type);
+      if (!config) {
+        setError('Unknown type');
+        return Promise.resolve(false);
+      }
+      return commit(updateTrackedField(config, key, patch));
+    },
+    [configFor, commit],
+  );
+
   const remove = useCallback(
     (type: string, key: string) => {
       const config = configFor(type);
@@ -84,5 +96,5 @@ export function useTrackedFields() {
 
   const clearError = useCallback(() => setError(null), []);
 
-  return { canEdit: isAdmin, saving, error, clearError, add, remove };
+  return { canEdit: isAdmin, saving, error, clearError, add, update, remove };
 }

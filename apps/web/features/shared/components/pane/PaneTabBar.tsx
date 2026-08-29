@@ -96,6 +96,9 @@ function PaneTabBarInner({
   const { connectionsOpen, setConnectionsOpen, setTabTrailHost } = useContextPanel();
   const surfaceKind = chrome.surface?.kind;
   const showConnections = surfaceKind === 'note' || surfaceKind === 'entity';
+  const rawOn =
+    (chrome.surface?.kind === 'note' || chrome.surface?.kind === 'entity') &&
+    chrome.surface.mode === 'raw';
   const trayInset = useContextTreeVisible() && !!surfaceKind ? CONTEXT_PANEL_W : 0;
   const trayInsetRight = useConnectionsRailVisible() ? CONNECTIONS_RAIL_W : 0;
   // The Connections rail toggle rides the bar's right edge whenever a note or
@@ -300,11 +303,28 @@ function PaneTabBarInner({
         </div>
 
         {/* Trailing chrome, read as part of the tab row rather than as buttons
-            floating beside it: same type, colour and height as a tab, and
-            Connections carries the tabs' green underline while its rail is open
-            so "on" reads the same way "selected" does. It isn't wired to the
-            sliding indicator — that belongs to the tab set, and this is a
-            toggle, not a fourth tab. */}
+            floating beside it: same type, colour and height as a tab, and each
+            toggle carries the tabs' green underline while it is on so "on"
+            reads the same way "selected" does. Neither is wired to the sliding
+            indicator — that belongs to the tab set, and these are toggles, not
+            extra tabs. */}
+        {chrome.rawToggle && (
+          <button
+            type="button"
+            onClick={() => onSelect('raw')}
+            aria-pressed={rawOn}
+            title="Edit the raw markdown"
+            className="relative flex h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none text-brand-black"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+            Raw
+            {rawOn && (
+              <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] bg-brand-green" />
+            )}
+          </button>
+        )}
         {showConnections && (
           <button
             type="button"

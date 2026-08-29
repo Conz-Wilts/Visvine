@@ -13,16 +13,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
-import {
-  DROPDOWN_TRIGGER_CLASS,
-  DROPDOWN_MENU_CLASS,
-  DROPDOWN_TRIGGER_IDLE_STYLE,
-} from '@/components/ui/Dropdown';
-import { Alert, Button, ConfirmDialog, Input } from '@/components/ui';
-import Select from '@/components/ui/Select';
+import { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown';
+import { TABLE_TOOLBAR_BTN } from './TableToolbar';
+import { ConfirmDialog } from '@/components/ui';
+import AddFieldForm, { type FieldOps } from './AddFieldForm';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, XIcon } from '@/features/shared/icons';
-import { TRACKED_FIELD_KINDS, isHidden, type TableColumn, type TableView } from '@/lib/directory/table';
-import type { TrackedFieldKind } from '@/lib/types';
+import { isHidden, type TableColumn, type TableView } from '@/lib/directory/table';
 
 interface ColumnsMenuProps {
   /** The type's display name, for the add form ("Add a Person field"). */
@@ -33,13 +29,7 @@ interface ColumnsMenuProps {
   onMove: (key: string, dir: -1 | 1) => void;
   onReset: () => void;
   /** Present for admins: the field editor. */
-  fields?: {
-    saving: boolean;
-    error: string | null;
-    clearError: () => void;
-    add: (input: { label: string; kind: TrackedFieldKind; options?: string[] }) => Promise<boolean>;
-    remove: (key: string) => Promise<boolean>;
-  };
+  fields?: FieldOps;
 }
 
 export default function ColumnsMenu({ typeName, arranged, view, onToggle, onMove, onReset, fields }: ColumnsMenuProps) {
@@ -69,12 +59,11 @@ export default function ColumnsMenu({ typeName, arranged, view, onToggle, onMove
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={DROPDOWN_TRIGGER_CLASS}
-        style={DROPDOWN_TRIGGER_IDLE_STYLE}
+        className={TABLE_TOOLBAR_BTN}
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <ChevronDownIcon className={clsx('h-4 w-4 transition-transform duration-200', open && 'rotate-180')} />
+        <ChevronDownIcon className={clsx('h-3.5 w-3.5 transition-transform duration-200', open && 'rotate-180')} />
         <span>Columns</span>
         {hiddenCount > 0 && <span className="text-text-muted">{hiddenCount} hidden</span>}
       </button>
@@ -159,7 +148,7 @@ export default function ColumnsMenu({ typeName, arranged, view, onToggle, onMove
                 saving={fields.saving}
                 error={fields.error}
                 onCancel={() => { setAdding(false); fields.clearError(); }}
-                onAdd={async (input) => {
+                onSubmit={async (input) => {
                   const ok = await fields.add(input);
                   if (ok) setAdding(false);
                 }}
@@ -216,70 +205,3 @@ export default function ColumnsMenu({ typeName, arranged, view, onToggle, onMove
   );
 }
 
-function AddFieldForm({
-  typeName,
-  saving,
-  error,
-  onAdd,
-  onCancel,
-}: {
-  typeName: string;
-  saving: boolean;
-  error: string | null;
-  onAdd: (input: { label: string; kind: TrackedFieldKind; options?: string[] }) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const [label, setLabel] = useState('');
-  const [kind, setKind] = useState<TrackedFieldKind>('text');
-  const [options, setOptions] = useState('');
-  const labelRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    labelRef.current?.focus();
-  }, []);
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    void onAdd({
-      label,
-      kind,
-      ...(kind === 'select' ? { options: options.split(/[,\n]/) } : {}),
-    });
-  };
-
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-2 py-1">
-      <p className="text-[12px] text-text-muted">
-        A new column for every {typeName}, kept on each record and in its note.
-      </p>
-      <Input
-        ref={labelRef}
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        placeholder="Field name, e.g. Deal stage"
-        maxLength={40}
-        className="h-9 px-3 py-0 text-sm"
-        aria-label="Field name"
-      />
-      <Select value={kind} onChange={(e) => setKind(e.target.value as TrackedFieldKind)} aria-label="Field kind">
-        {TRACKED_FIELD_KINDS.map((k) => (
-          <option key={k.value} value={k.value}>{k.label}</option>
-        ))}
-      </Select>
-      {kind === 'select' && (
-        <Input
-          value={options}
-          onChange={(e) => setOptions(e.target.value)}
-          placeholder="Options, comma separated"
-          className="h-9 px-3 py-0 text-sm"
-          aria-label="Options"
-        />
-      )}
-      {error && <Alert variant="error" inline>{error}</Alert>}
-      <div className="flex items-center justify-end gap-2 pt-1">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={saving}>Cancel</Button>
-        <Button type="submit" variant="brand" loading={saving} disabled={!label.trim()}>Add</Button>
-      </div>
-    </form>
-  );
-}

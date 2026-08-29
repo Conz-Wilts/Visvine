@@ -375,6 +375,17 @@ export function ExternalLinkIcon(props: IconProps) {
   );
 }
 
+export function EyeOffIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" />
+      <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+      <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" />
+      <path d="m2 2 20 20" />
+    </IconBase>
+  );
+}
+
 export function EyeIcon(props: IconProps) {
   return (
     <IconBase strokeWidth={2} {...props}>
@@ -1323,6 +1334,16 @@ export function TwitterIcon(props: IconProps) {
   return (
     <IconBase strokeWidth={2} {...props}>
       <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
+    </IconBase>
+  );
+}
+
+export function TypeIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <polyline points="4 7 4 4 20 4 20 7" />
+      <line x1="9" x2="15" y1="20" y2="20" />
+      <line x1="12" x2="12" y1="4" y2="20" />
     </IconBase>
   );
 }

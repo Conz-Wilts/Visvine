@@ -17,7 +17,7 @@ introduced; the geometry is unchanged from what shipped there.
 | `nav-context` | `tool-calendar` | `tool-list` |  |
 | `nav-directory` | `tool-chart` | `tool-note` |  |
 
-## Derived from Lucide (128)
+## Derived from Lucide (130)
 
 Copied verbatim from `lucide-react` 0.545.0 — the version the app depended on
 before it owned its icons — then normalised into this directory's file shape
@@ -62,6 +62,7 @@ the upstream art.
 | `clock` | `link-2` | `rotate-cw` | `x` |
 | `code` | `linkedin` | `search` | `zoom-in` |
 | `coffee` | `list-ordered` | `send` | `zoom-out` |
+| `eye-off` | `type` |  |  |
 
 ### Licence — Lucide (ISC, with portions from Feather under MIT)
 
@@ -113,5 +114,7 @@ Brand marks shown in the "Add connector" catalog, not part of the icon
 system. Monochrome marks are from [Simple Icons](https://simpleicons.org)
 (CC0), filled with each brand's hex. `google.svg`, `googledrive.svg` and
 `microsoft.svg` are the brands' own multi-colour marks redrawn as SVG. The
-two PNGs (`granola.png`, `fireflies.png`) are the vendors' favicons. Logos
-are used to identify the service, under each owner's trademark.
+two PNGs (`granola.png`, `fireflies.png`) are the vendors' favicons.
+`openrouter.svg` is ours — a routing glyph drawn for this catalog, not the
+vendor's mark. Logos are used to identify the service, under each owner's
+trademark.

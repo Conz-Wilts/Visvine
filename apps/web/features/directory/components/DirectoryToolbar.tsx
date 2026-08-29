@@ -10,14 +10,11 @@
 // value go without reopening a menu. It exists only while something is active,
 // so the resting state stays a single line.
 //
-// The Table view shares the bar with two differences: the type is a tab there,
-// so the Type menu gives way to an Alias menu for the current type; and the
-// header sorts, so the A→Z toggle gives way to whatever the view puts on the
-// right (its Columns menu).
+// The Table view has its own, slimmer bar (table/TableToolbar.tsx): the type
+// is a tab there and the header sorts, so this one belongs to the grid alone.
 //
 // All state lives in the passed-in useDirectoryBrowse() instance.
 
-import type { ReactNode } from 'react';
 import { FilterDropdown, SortToggle } from '@/features/directory/components/FilterDropdown';
 import Chip from '@/components/ui/Chip';
 import SearchInput from '@/components/ui/SearchInput';
@@ -28,11 +25,6 @@ import type { useDirectoryBrowse } from '@/features/directory/hooks/useDirectory
 
 interface DirectoryToolbarProps {
   browse: ReturnType<typeof useDirectoryBrowse>;
-  mode?: 'grid' | 'table';
-  /** Table mode: the type whose aliases the Alias menu offers. */
-  aliasType?: string;
-  /** Table mode: what sits at the right end of the row. */
-  trailing?: ReactNode;
 }
 
 /** One active filter, coloured by the thing it filters on. */
@@ -48,7 +40,7 @@ function FilterChip({ label, color, onRemove }: {
   );
 }
 
-export default function DirectoryToolbar({ browse, mode = 'grid', aliasType, trailing }: DirectoryToolbarProps) {
+export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
   const {
     nodes, space,
     searchTerm, setSearchTerm,
@@ -61,13 +53,8 @@ export default function DirectoryToolbar({ browse, mode = 'grid', aliasType, tra
 
   const aliases = (space?.aliases ?? []) as SpaceAlias[];
   const tagColors = space?.designConfig?.tagColors ?? null;
-  const table = mode === 'table';
-  const typeAliases = table
-    ? aliases.filter(a => a.nodeType.toLowerCase() === (aliasType ?? '').toLowerCase())
-    : [];
 
-  // The type filter belongs to the grid; in the table it is the tab.
-  const activeCount = (table ? 0 : filterTypes.size) + filterAliases.size + filterTags.size;
+  const activeCount = filterTypes.size + filterAliases.size + filterTags.size;
 
   const without = (set: Set<string>, value: string) => {
     const next = new Set(set);
@@ -108,44 +95,28 @@ export default function DirectoryToolbar({ browse, mode = 'grid', aliasType, tra
 
         <div className="hidden h-6 w-px shrink-0 bg-border-subtle sm:block" />
 
-        {!table && (
-          <FilterDropdown
-            label="Type"
-            options={presentTypes.map(t => {
-              const forType = aliases.filter(a => a.nodeType.toLowerCase() === t.toLowerCase());
-              return {
-                value: t,
-                label: t,
-                count: nodes.filter(n => n.type.toLowerCase() === t.toLowerCase()).length,
-                subOptions: forType.length > 0 ? forType.map(a => ({
-                  value: a.name,
-                  label: a.name,
-                  color: a.color,
-                  count: nodes.filter(n => n.type.toLowerCase() === t.toLowerCase() && n.alias === a.name).length,
-                })) : undefined,
-              };
-            })}
-            selected={filterTypes}
-            onChange={next => { setFilterTypes(next); if (next.size === 0) setFilterAliases(new Set()); }}
-            selectedSub={filterAliases}
-            onChangeSub={setFilterAliases}
-            getColor={t => getNodeTypeConfig(t, space?.nodeTypes).color}
-          />
-        )}
-
-        {table && typeAliases.length > 0 && (
-          <FilterDropdown
-            label="Alias"
-            options={typeAliases.map(a => ({
-              value: a.name,
-              label: a.name,
-              count: nodes.filter(n => n.alias === a.name).length,
-            }))}
-            selected={filterAliases}
-            onChange={setFilterAliases}
-            getColor={name => typeAliases.find(a => a.name === name)?.color ?? 'var(--color-brand-green)'}
-          />
-        )}
+        <FilterDropdown
+          label="Type"
+          options={presentTypes.map(t => {
+            const forType = aliases.filter(a => a.nodeType.toLowerCase() === t.toLowerCase());
+            return {
+              value: t,
+              label: t,
+              count: nodes.filter(n => n.type.toLowerCase() === t.toLowerCase()).length,
+              subOptions: forType.length > 0 ? forType.map(a => ({
+                value: a.name,
+                label: a.name,
+                color: a.color,
+                count: nodes.filter(n => n.type.toLowerCase() === t.toLowerCase() && n.alias === a.name).length,
+              })) : undefined,
+            };
+          })}
+          selected={filterTypes}
+          onChange={next => { setFilterTypes(next); if (next.size === 0) setFilterAliases(new Set()); }}
+          selectedSub={filterAliases}
+          onChangeSub={setFilterAliases}
+          getColor={t => getNodeTypeConfig(t, space?.nodeTypes).color}
+        />
 
         <FilterDropdown
           label="Tag"
@@ -160,13 +131,13 @@ export default function DirectoryToolbar({ browse, mode = 'grid', aliasType, tra
         />
 
         <div className="ml-auto">
-          {table ? trailing : <SortToggle value={sortOrder} onChange={setSortOrder} />}
+          <SortToggle value={sortOrder} onChange={setSortOrder} />
         </div>
       </div>
 
       {activeCount > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {!table && [...filterTypes].map(type => (
+          {[...filterTypes].map(type => (
             <FilterChip
               key={`type-${type}`}
               label={type}

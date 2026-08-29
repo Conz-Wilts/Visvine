@@ -1,21 +1,31 @@
 'use client';
 
 // The Directory as rows: one type at a time, one row per entry, one column
-// per thing the type tracks. The header sorts on click, resizes on its edge
-// and reorders on drag; the cells edit in place. It renders every row it is
-// given — the grid virtualises because a card is heavy, a row is not.
+// per thing the type tracks. The shape is the data-grid one (Attio): each
+// header wears its kind's glyph and opens a menu of what can be done to the
+// column — sort, step, hide, and an admin's edit — a drag reorders it, its
+// right edge resizes it, and the "+" past the last column shows a hidden
+// column or mints a new field without leaving the table. It renders every
+// row it is given — the grid virtualises because a card is heavy, a row is
+// not.
 //
 // The table is its own scroll box (the view sizes it to the pane): the head
 // sticks to its top and the name column to its left, so a wide table keeps
-// the entry's name in view while its fields scroll.
+// the entry's name in view while its fields scroll. The header menus portal
+// out of the scroll box (HeaderPopover) for the same reason.
 
 import { useCallback, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import Avatar from '@/components/ui/Avatar';
-import { EmptyState, Skeleton } from '@/components/ui';
-import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon, PencilIcon } from '@/features/shared/icons';
+import { ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
+import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon } from '@/features/shared/icons';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
+import AddColumnMenu from './AddColumnMenu';
+import ColumnHeaderMenu from './ColumnHeaderMenu';
+import HeaderPopover from './HeaderPopover';
 import TableCell from './TableCell';
+import { ColumnKindIcon } from './columnKindIcon';
+import { type FieldOps } from './AddFieldForm';
 import {
   cellValue,
   defaultWidth,
@@ -29,29 +39,37 @@ import type { DirectoryItem, NodeTypeConfig, SpaceAlias } from '@/lib/types';
 interface DirectoryTableProps {
   items: DirectoryItem[];
   columns: TableColumn[];
+  /** The type's columns this view hides — the "+" menu's stock. */
+  hiddenColumns: TableColumn[];
+  typeName: string;
   sort: TableSort | null;
   widths: Record<string, number>;
   loading?: boolean;
   nodeTypes?: NodeTypeConfig[];
   aliases?: SpaceAlias[];
   tagColors?: Record<string, string> | null;
-  onSort: (key: string) => void;
+  /** Absent for non-admins: the tracked-field editor behind "+" and "Edit field". */
+  fields?: FieldOps;
+  onSortChange: (sort: TableSort | null) => void;
   onResize: (key: string, width: number) => void;
   onReorder: (key: string, before: string | null) => void;
+  onShowColumn: (key: string) => void;
+  onHideColumn: (key: string) => void;
   onOpen: (item: DirectoryItem) => void;
   /** Absent when nothing here may be edited. */
   onSaveCell?: (item: DirectoryItem, column: TableColumn, value: unknown) => Promise<void>;
 }
 
-const ROW_CLASS = 'group h-11 border-b border-border-subtle transition-colors hover:bg-surface-2';
+/** The width of the "+" header cell at the row's end. */
+const ADD_COLUMN_WIDTH = 44;
 
 export default function DirectoryTable({
-  items, columns, sort, widths, loading = false,
-  nodeTypes, aliases, tagColors,
-  onSort, onResize, onReorder, onOpen, onSaveCell,
+  items, columns, hiddenColumns, typeName, sort, widths, loading = false,
+  nodeTypes, aliases, tagColors, fields,
+  onSortChange, onResize, onReorder, onShowColumn, onHideColumn, onOpen, onSaveCell,
 }: DirectoryTableProps) {
   const widthOf = (c: TableColumn) => widths[c.key] ?? defaultWidth(c);
-  const totalWidth = columns.reduce((sum, c) => sum + widthOf(c), 0);
+  const totalWidth = columns.reduce((sum, c) => sum + widthOf(c), 0) + ADD_COLUMN_WIDTH;
 
   // ── resizing: a pointer drag on the header's right edge ────────────────
   const resizing = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
@@ -79,15 +97,27 @@ export default function DirectoryTable({
 
   // ── reordering: native drag of a header onto another ───────────────────
   const [dragKey, setDragKey] = useState<string | null>(null);
-  const [dropKey, setDropKey] = useState<string | null>(null);
+  // The column dropped in front of, or 'end' for the strip past the last one.
+  const [dropKey, setDropKey] = useState<string | 'end' | null>(null);
+
+  // ── the header menus, portalled past the scroll box ─────────────────────
+  const [menu, setMenu] = useState<{ key: string; anchor: HTMLElement } | null>(null);
+  const [addAnchor, setAddAnchor] = useState<HTMLElement | null>(null);
+  const [removing, setRemoving] = useState<TableColumn | null>(null);
+  const closeMenus = useCallback(() => {
+    setMenu(null);
+    setAddAnchor(null);
+  }, []);
 
   const effectiveWidth = (c: TableColumn) => (liveWidth?.key === c.key ? liveWidth.width : widthOf(c));
+  const menuColumn = menu ? columns.find((c) => c.key === menu.key) ?? null : null;
+  const menuIndex = menuColumn ? columns.indexOf(menuColumn) : -1;
 
   if (loading) {
     return (
       <div className="flex flex-col divide-y divide-border-subtle">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="flex h-11 items-center gap-6 px-3">
+          <div key={i} className="flex h-12 items-center gap-6 px-3">
             <Skeleton className="h-7 w-7 rounded-lg" />
             <Skeleton className="h-3.5 w-40" />
             <Skeleton className="h-3.5 w-28" />
@@ -112,10 +142,14 @@ export default function DirectoryTable({
           {columns.map((c) => (
             <col key={c.key} style={{ width: effectiveWidth(c) }} />
           ))}
+          <col style={{ width: ADD_COLUMN_WIDTH }} />
+          {/* The filler absorbs any pane width past the columns, so the
+              gridlines end where the data does rather than stretching. */}
+          <col />
         </colgroup>
         <thead className="sticky top-0 z-20 bg-surface-1">
           <tr className="h-10 border-b border-border-default">
-            {columns.map((column, index) => {
+            {columns.map((column) => {
               const active = sort?.key === column.key;
               const isName = column.source === 'name';
               return (
@@ -143,7 +177,7 @@ export default function DirectoryTable({
                   }}
                   onDragEnd={() => { setDragKey(null); setDropKey(null); }}
                   className={clsx(
-                    'group/th relative bg-surface-1 px-0 text-left align-middle text-xs font-semibold text-text-muted select-none',
+                    'group/th relative border-r border-border-subtle bg-surface-1 px-0 text-left align-middle text-xs font-medium text-text-muted select-none',
                     isName && 'sticky left-0 z-10',
                     dragKey === column.key && 'opacity-40',
                     dropKey === column.key && 'shadow-[inset_2px_0_0_var(--color-brand-green)]',
@@ -151,21 +185,25 @@ export default function DirectoryTable({
                 >
                   <button
                     type="button"
-                    onClick={() => onSort(column.key)}
+                    onClick={(e) => {
+                      setAddAnchor(null);
+                      setMenu((m) => (m?.key === column.key ? null : { key: column.key, anchor: e.currentTarget }));
+                    }}
+                    aria-haspopup="menu"
+                    aria-expanded={menu?.key === column.key}
                     className={clsx(
-                      'flex h-10 w-full min-w-0 items-center gap-1.5 px-3 transition-colors hover:text-text-primary',
+                      'flex h-10 w-full min-w-0 items-center gap-1.5 px-3.5 transition-colors hover:text-text-primary',
                       column.kind === 'number' && 'justify-end',
-                      active && 'text-text-primary',
+                      (active || menu?.key === column.key) && 'text-text-primary',
                     )}
-                    title={`Sort by ${column.label}`}
+                    title={`${column.label} column`}
                   >
+                    <ColumnKindIcon column={column} className="h-3.5 w-3.5 shrink-0 opacity-70" />
                     <span className="truncate">{column.label}</span>
-                    {active ? (
+                    {active && (
                       sort!.dir === 'asc'
                         ? <ArrowUpIcon className="h-3 w-3 shrink-0" />
                         : <ArrowDownIcon className="h-3 w-3 shrink-0" />
-                    ) : (
-                      <ChevronsUpDownIcon className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover/th:opacity-60" />
                     )}
                   </button>
                   {/* The resize grip: the last 6px of every header. */}
@@ -181,12 +219,49 @@ export default function DirectoryTable({
                     className={clsx(
                       'absolute inset-y-2 right-0 w-1.5 cursor-col-resize rounded-full transition-colors hover:bg-border-default',
                       liveWidth?.key === column.key && 'bg-brand-green',
-                      index === columns.length - 1 && 'right-0.5',
                     )}
                   />
                 </th>
               );
             })}
+            <th
+              scope="col"
+              onDragOver={(e) => {
+                if (!dragKey) return;
+                e.preventDefault();
+                setDropKey('end');
+              }}
+              onDragLeave={() => setDropKey((k) => (k === 'end' ? null : k))}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragKey) onReorder(dragKey, null);
+                setDragKey(null);
+                setDropKey(null);
+              }}
+              className={clsx(
+                'bg-surface-1 p-0 align-middle',
+                dropKey === 'end' && 'shadow-[inset_2px_0_0_var(--color-brand-green)]',
+              )}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  setMenu(null);
+                  setAddAnchor((a) => (a ? null : e.currentTarget));
+                }}
+                aria-haspopup="menu"
+                aria-expanded={addAnchor !== null}
+                aria-label="Add a column"
+                title="Add a column"
+                className={clsx(
+                  'flex h-10 w-full items-center justify-center text-text-muted transition-colors hover:text-text-primary',
+                  addAnchor && 'text-text-primary',
+                )}
+              >
+                <PlusIcon className="h-4 w-4" />
+              </button>
+            </th>
+            <th aria-hidden className="bg-surface-1 p-0" />
           </tr>
         </thead>
         <tbody>
@@ -194,16 +269,16 @@ export default function DirectoryTable({
             const typeColor = getTypeColor(item.type, nodeTypes);
             const alias = item.alias ? aliases?.find((a) => a.name === item.alias) : undefined;
             return (
-              <tr key={item.id} className={ROW_CLASS}>
+              <tr key={item.id} className="group h-12 border-b border-border-subtle transition-colors hover:bg-surface-2">
                 {columns.map((column) => {
                   const value = cellValue(item, column);
                   if (column.source === 'name') {
                     return (
                       <td
                         key={column.key}
-                        className="sticky left-0 z-10 bg-surface-1 p-0 align-middle transition-colors group-hover:bg-surface-2"
+                        className="sticky left-0 z-10 border-r border-border-subtle bg-surface-1 p-0 align-middle transition-colors group-hover:bg-surface-2"
                       >
-                        <div className="flex h-11 min-w-0 items-center gap-2.5 pl-3 pr-1">
+                        <div className="flex h-12 min-w-0 items-center gap-2.5 pl-3.5 pr-1">
                           <button
                             type="button"
                             onClick={() => onOpen(item)}
@@ -232,7 +307,7 @@ export default function DirectoryTable({
                     );
                   }
                   return (
-                    <td key={column.key} className="h-11 p-0 align-middle">
+                    <td key={column.key} className="h-12 border-r border-border-subtle p-0 align-middle">
                       <TableCell
                         column={column}
                         value={value}
@@ -243,11 +318,65 @@ export default function DirectoryTable({
                     </td>
                   );
                 })}
+                <td aria-hidden colSpan={2} className="p-0" />
               </tr>
             );
           })}
         </tbody>
       </table>
+
+      <HeaderPopover anchor={menu?.anchor ?? null} onClose={closeMenus}>
+        {menuColumn && (
+          <ColumnHeaderMenu
+            column={menuColumn}
+            typeName={typeName}
+            sort={sort}
+            canMoveLeft={menuIndex > 0}
+            canMoveRight={menuIndex >= 0 && menuIndex < columns.length - 1}
+            fields={fields}
+            onSort={onSortChange}
+            onMove={(dir) => {
+              // Step over the visible neighbour, whatever hidden columns sit
+              // between: land in front of it (left) or past it (right).
+              const target = dir === -1 ? columns[menuIndex - 1] : columns[menuIndex + 2];
+              onReorder(menuColumn.key, target?.key ?? null);
+            }}
+            onHide={() => onHideColumn(menuColumn.key)}
+            onRemove={() => setRemoving(menuColumn)}
+            onClose={closeMenus}
+          />
+        )}
+      </HeaderPopover>
+
+      <HeaderPopover anchor={addAnchor} onClose={closeMenus}>
+        <AddColumnMenu
+          typeName={typeName}
+          hiddenColumns={hiddenColumns}
+          fields={fields}
+          onShow={onShowColumn}
+          onClose={closeMenus}
+        />
+      </HeaderPopover>
+
+      <ConfirmDialog
+        open={removing !== null}
+        title={removing ? `Stop tracking “${removing.label}”?` : ''}
+        body={
+          <>
+            The column goes for everyone in the space. Values already entered stay on each entry&apos;s record and
+            note — nothing is deleted — but nobody sees or edits them here until the field is tracked again.
+          </>
+        }
+        confirmLabel="Stop tracking"
+        destructive
+        error={fields?.error ?? undefined}
+        onConfirm={async () => {
+          if (!removing || !fields) return;
+          const ok = await fields.remove(removing.key);
+          if (ok) setRemoving(null);
+        }}
+        onClose={() => { setRemoving(null); fields?.clearError(); }}
+      />
     </div>
   );
 }

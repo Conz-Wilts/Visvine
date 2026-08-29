@@ -13,23 +13,11 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { prefetchNoteContext } from '@/features/notes/lib/contextPrefetch';
 import { ensureRootIndexNote, ROOT_INDEX_PATH } from '@/features/notes/lib/rootIndex';
 import { noteHref } from '@/lib/notes/entities';
+import { directoryTabs, directoryViewHref, isDirectoryView, type DirectoryView } from '@/lib/directory/views';
 import type { SpaceAlias } from '@/lib/types';
 
-const DIRECTORY_TABS: PaneTabItem[] = [
-  { id: 'grid', label: 'Grid' },
-  { id: 'table', label: 'Table' },
-  { id: 'context', label: 'Context' },
-  { id: 'resources', label: 'Resources' },
-];
-
-/** The views this page renders itself; Context is a navigation, not a view. */
-type DirectoryView = 'grid' | 'table' | 'resources';
-
-const VIEW_HREF: Record<DirectoryView, string> = {
-  grid: '/directory',
-  table: '/directory?view=table',
-  resources: '/directory?view=resources',
-};
+/** The tab set and the hrefs behind it are shared with the note route. */
+const DIRECTORY_TABS: PaneTabItem[] = directoryTabs();
 
 /**
  * The Directory: a searchable, filterable card grid of everyone and everything
@@ -89,16 +77,20 @@ function DirectoryPane() {
   // but Grid is a terminal state — waiting just holds the closing panel over
   // cards that are already animating in. The dock is NOT released for Context —
   // the note page re-claims it, and the release grace bridges the swap.
+  //
+  // The type carries across the switch: leaving the Events table for the grid
+  // and coming back lands on the events table again, rather than on whichever
+  // type happens to sort first.
   const handleSelect = useCallback(
     (id: string) => {
-      if (id === 'grid' || id === 'table' || id === 'resources') {
+      if (isDirectoryView(id)) {
         releaseDockNow();
-        router.replace(VIEW_HREF[id]);
+        router.replace(directoryViewHref(id, typeParam));
         return;
       }
       openContext();
     },
-    [releaseDockNow, openContext, router],
+    [releaseDockNow, openContext, router, typeParam],
   );
   usePaneChrome({
     tabs: noSpace ? null : DIRECTORY_TABS,
@@ -115,7 +107,7 @@ function DirectoryPane() {
   // The table's type rides the URL beside the view, so a link can name
   // "the events table" and a reload lands back on it.
   const handleTypeChange = useCallback(
-    (type: string) => router.replace(`/directory?view=table&type=${encodeURIComponent(type)}`),
+    (type: string) => router.replace(directoryViewHref('table', type)),
     [router],
   );
 

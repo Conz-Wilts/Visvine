@@ -13,6 +13,7 @@ import {
   visibleColumns,
   arrangeColumns,
   type TableColumn,
+  type TableSort,
   type TableView,
 } from '@/lib/directory/table';
 
@@ -63,6 +64,7 @@ export function useTableView(spaceId: string | null, typeKey: string, columns: T
     visible,
     arranged,
     sortBy: useCallback((key: string) => update((v) => ({ ...v, sort: cycleSort(v.sort, key) })), [update]),
+    setSort: useCallback((sort: TableSort | null) => update((v) => ({ ...v, sort })), [update]),
     toggle: useCallback((key: string) => update((v) => toggleColumn(v, columns, key)), [update, columns]),
     move: useCallback((key: string, dir: -1 | 1) => update((v) => moveColumn(v, columns, key, dir)), [update, columns]),
     placeBefore: useCallback(

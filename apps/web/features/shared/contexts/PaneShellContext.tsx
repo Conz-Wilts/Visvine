@@ -55,6 +55,10 @@ export interface PaneChromeConfig {
   onSelect: (id: string) => void;
   /** The toolbar tray region under the tab row (0fr↔1fr) is open. */
   attachedOpen: boolean;
+  /** Show the Raw editor-mode toggle in the bar's trailing chrome (beside
+   *  Connections). Clicks dispatch select('raw'); the on state is read off the
+   *  surface's mode, so the registrant owns the actual toggle. */
+  rawToggle?: boolean;
   ariaLabel?: string;
   surface: PaneSurface;
 }
@@ -87,6 +91,7 @@ function sameChrome(a: PaneChromeState | null, b: PaneChromeState): boolean {
     a.pathname === b.pathname &&
     a.activeId === b.activeId &&
     a.attachedOpen === b.attachedOpen &&
+    (a.rawToggle ?? false) === (b.rawToggle ?? false) &&
     a.ariaLabel === b.ariaLabel &&
     paneSurfaceKey(a.surface) === paneSurfaceKey(b.surface) &&
     tabsKeyOf(a.tabs) === tabsKeyOf(b.tabs)
