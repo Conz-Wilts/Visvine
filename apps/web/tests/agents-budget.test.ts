@@ -5,7 +5,17 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { costMicros, formatUsd, MAX_RUN_COST_CENTS, monthBounds, perTurnStop, preRunStop } from '@/lib/agents/budget'
+import {
+  costMicros,
+  formatUsd,
+  MAX_RUN_COST_CENTS,
+  MAX_RUN_TOKENS,
+  monthBounds,
+  perTurnStop,
+  preRunStop,
+  type BudgetState,
+} from '@/lib/agents/budget'
+import { parseModelPricing } from '@/lib/connectors/model'
 import { capEvents, RUN_EVENTS_BYTES_CAP, type AgentRunEvent } from '@/lib/agents/runs'
 
 const pricing = { inputPerM: 3, outputPerM: 15 } // Sonnet-ish
@@ -54,4 +64,47 @@ test('capEvents keeps the transcript under the byte cap', () => {
   const capped = capEvents(events)
   assert.ok(JSON.stringify(capped).length <= RUN_EVENTS_BYTES_CAP)
   assert.ok(capped.length > 0)
+})
+
+// ── the ceiling that does not need prices ──
+
+test('a run on an unpriced model still stops — tokens are the backstop', () => {
+  // The ordinary case for a gateway or a self-hosted endpoint: no pricing, so
+  // every dollar ceiling is unenforceable. Without a token ceiling the only
+  // limit left is max_turns, and a loop whose context grows each turn is
+  // exactly what the cap exists to stop.
+  const unpriced: BudgetState = { spentThisMonthMicros: BigInt(0), monthlyCapCents: 500, pricing: null }
+  assert.equal(perTurnStop(unpriced, { promptTokens: 1_000, completionTokens: 500 }), null)
+  assert.equal(
+    perTurnStop(unpriced, { promptTokens: MAX_RUN_TOKENS - 10, completionTokens: 10 }),
+    'run_cap',
+  )
+})
+
+test('the token backstop binds on a priced model too', () => {
+  const priced: BudgetState = {
+    spentThisMonthMicros: BigInt(0),
+    monthlyCapCents: null,
+    pricing: { inputPerM: 0.0001, outputPerM: 0.0001 },
+  }
+  // Cheap enough that no dollar ceiling would ever trip; the token one still does.
+  assert.equal(perTurnStop(priced, { promptTokens: MAX_RUN_TOKENS, completionTokens: 0 }), 'run_cap')
+})
+
+test('a model connector may declare what its endpoint charges', () => {
+  const ok = parseModelPricing({ 'z-ai/glm-5.3-flash': { input_per_m: 0.05, output_per_m: 0.2 } })
+  assert.ok(ok.ok)
+  if (ok.ok) assert.deepEqual(ok.pricing['z-ai/glm-5.3-flash'], { inputPerM: 0.05, outputPerM: 0.2 })
+  assert.ok(parseModelPricing(undefined).ok, 'pricing is optional')
+
+  // Refused rather than coerced: a guessed price is a cap nobody can predict.
+  for (const bad of [
+    { 'a/b': { input_per_m: 1 } },
+    { 'a/b': { input_per_m: 'free', output_per_m: 1 } },
+    { 'a/b': { input_per_m: -1, output_per_m: 1 } },
+    { 'a/b': [0.1, 0.2] },
+    ['a/b'],
+  ]) {
+    assert.equal(parseModelPricing(bad).ok, false, JSON.stringify(bad))
+  }
 })

@@ -11,6 +11,9 @@ import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ActivateAgentDialog from '@/features/agents/components/ActivateAgentDialog';
 import AgentSettingsPanel from '@/features/agents/components/AgentSettingsPanel';
+import MachineWindow from '@/features/agents/components/MachineWindow';
+import MessageAgent from '@/features/agents/components/MessageAgent';
+import SkillsPanel from '@/features/agents/components/SkillsPanel';
 import RunTranscript from '@/features/agents/components/RunTranscript';
 import StatusDot from '@/features/agents/components/StatusDot';
 import { fmtAgo, fmtCents, setupBlocker, statusLine, terminalLabel } from '@/features/agents/lib/rowState';
@@ -21,7 +24,9 @@ import { fmtAgo, fmtCents, setupBlocker, statusLine, terminalLabel } from '@/fea
  * with its switch and play control, then one line for when it runs — the
  * schedule with a Change beside it, or, while it is off, the one thing
  * standing in the way with the switch beside that; the brief's settings,
- * folded; spend (admins); and the run history with live transcripts.
+ * folded; spend (admins); the machine's window and timeline (admins); what the
+ * agent has been taught; a box to say something to it; and the run history with
+ * live transcripts.
  */
 type AgentDetail = AgentSummary & { brief: string; activationNote: string | null; heartbeatAt: string | null };
 
@@ -307,6 +312,24 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
               {agent.spend?.budgetMonthlyCents != null ? `cap ${fmtCents(agent.spend.budgetMonthlyCents)}` : 'no cap'}
             </button>
           )}
+        </section>
+      )}
+
+      {isAdmin && spaceId && (
+        <section className="border-t border-border-subtle pt-5">
+          <MachineWindow spaceId={spaceId} agentName={name} />
+        </section>
+      )}
+
+      {spaceId && agent.activation.active && (
+        <section className="border-t border-border-subtle pt-5">
+          <MessageAgent spaceId={spaceId} agentName={name} />
+        </section>
+      )}
+
+      {spaceId && (
+        <section className="border-t border-border-subtle pt-5">
+          <SkillsPanel spaceId={spaceId} agentName={name} isAdmin={isAdmin} />
         </section>
       )}
 

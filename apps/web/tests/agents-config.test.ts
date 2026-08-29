@@ -47,6 +47,21 @@ test('parseModelRef accepts provider/model and rejects the rest', () => {
   }
 })
 
+test('a gateway model id keeps its own namespace', () => {
+  // Only the first slash separates provider from model. A gateway namespaces
+  // its models by vendor, and the rest of the id belongs to the model — it is
+  // sent in the request body, never in a URL path.
+  const gateway = parseModelRef('custom/z-ai/glm-5.3-flash')
+  assert.ok(gateway.ok)
+  if (gateway.ok) {
+    assert.equal(gateway.ref.provider.id, 'custom')
+    assert.equal(gateway.ref.modelId, 'z-ai/glm-5.3-flash')
+  }
+  for (const bad of ['custom//model', 'custom/vendor/', 'custom/vendor//model']) {
+    assert.equal(parseModelRef(bad).ok, false, bad)
+  }
+})
+
 test('the mirrored Gemini literals in registry.ts and ai.ts stay identical', () => {
   // lib/agents/registry.ts hand-copies these from lib/notes/ai.ts because it
   // must stay pure; nothing else ties them together, so this does.

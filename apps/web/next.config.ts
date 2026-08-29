@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Workspace packages shipped as TypeScript source, so one implementation can
+  // be compiled by both bundlers that need it. @visvine/vm-policy is compiled
+  // here and again by wrangler for the edge — the egress decision has to be the
+  // same code in both places or it is two decisions.
+  transpilePackages: ["@visvine/vm-policy"],
   // Native/CJS packages the bundler must leave alone. The QuickJS build is the
   // load-bearing one: the singlefile variant base64-inlines its wasm into a CJS
   // module precisely so `output: "standalone"` has a file to trace. Bundling it

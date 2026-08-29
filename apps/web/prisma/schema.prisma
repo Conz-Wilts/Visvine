@@ -73,6 +73,10 @@ model Space {
   agentStates     AgentState[]
   agentRuns       AgentRun[]
   agentEvents     AgentEvent[]
+  agentEgressLog  AgentEgressLog[]
+  agentVms        AgentVm[]
+  agentVmEvents   AgentVmEvent[]
+  agentVmUsage    AgentVmUsage[]
 
   channels        Conversation[]
   channelSections ChannelSection[]
@@ -432,6 +436,126 @@ model AgentHeartbeat {
   lastTickAt DateTime @map("last_tick_at")
 
   @@map("agent_heartbeat")
+}
+
+/// One agent's machine: the lease, not the machine itself.
+///
+/// The runtime scales to zero and is N processes, so nothing may hold a handle
+/// to a container across requests. This row is the handle: every request
+/// re-derives the machine from it, and the substrate is addressed by
+/// `substrateName` rather than by anything we hold in memory.
+///
+/// The container's disk is ephemeral — it is thrown away whenever the machine
+/// sleeps — so `workspaceKey` (an R2 prefix belonging to the SPACE) is where
+/// anything durable lives. `policyHash` is the compiled egress policy the
+/// current session was started under, so a machine can be checked against what
+/// it was booted with rather than what the space happens to permit now.
+model AgentVm {
+  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId       String    @map("space_id")
+  agentName     String    @map("agent_name")
+  substrate     String    @default("cloudflare")
+  substrateName String    @map("substrate_name")
+  instanceType  String    @default("standard-3") @map("instance_type")
+  imageDigest   String?   @map("image_digest")
+  /// provisioning | running | asleep | reaping | unavailable | dead
+  state         String    @default("provisioning")
+  policyHash    String?   @map("policy_hash")
+  /// R2 prefix for the space's shared volume — outlives every agent that touches it.
+  workspaceKey  String    @map("workspace_key")
+  lastActiveAt  DateTime? @map("last_active_at")
+  expiresAt     DateTime? @map("expires_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  space         Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, agentName], name: "vm_identity")
+  @@index([state, lastActiveAt])
+  @@map("agent_vms")
+}
+
+/// How much machine a space has used this month.
+///
+/// Awake seconds are what a machine costs, so they are what a quota counts. The
+/// tick adds its own interval for every machine it finds awake — the platform's
+/// timer is what bills, so the platform's timer is what meters. One row per
+/// space per month, because a cap that resets is the only kind anyone can plan
+/// against.
+model AgentVmUsage {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String   @map("space_id")
+  /// First instant of the UTC month this counts.
+  month     DateTime
+  seconds   Int      @default(0)
+  /// Commands run, for a bill that says what the seconds were spent on.
+  execs     Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, month], name: "usage_identity")
+  @@map("agent_vm_usage")
+}
+
+/// What an agent's machine did, in order — the window's durable half.
+///
+/// The screen is ephemeral and the terminal is a stream; this is the record
+/// that outlives both, so a run nobody watched is still reviewable afterwards
+/// from what it decided, ran and got back. Events arrive in batches from the
+/// edge, which owns no rows: `seq` is assigned there so the order survives a
+/// batch arriving late, and `at` is the machine's own clock.
+///
+/// Output is clipped per event and the stream is capped per run — a timeline
+/// that grows without bound stops being a record and becomes a cost.
+model AgentVmEvent {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String   @map("space_id")
+  agentName String   @map("agent_name")
+  runId     String?  @map("run_id")
+  seq       Int
+  /// boot | wake | exec | output | exit | sleep | error | egress_denied
+  kind      String
+  payload   Json     @default("{}")
+  at        DateTime
+  createdAt DateTime @default(now()) @map("created_at")
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, agentName, at])
+  @@index([runId, seq])
+  @@map("agent_vm_events")
+}
+
+/// Every request an agent's machine made, and what the edge did about it.
+///
+/// This is the detection surface for a compromised or injected agent: anomalous
+/// destinations, exfil-shaped payloads and repeated denials all read from here.
+/// A denial is the system working as designed, so it is written at `warn` and
+/// never at `error` — routing policy denials to error reporting is how real
+/// failures get buried.
+///
+/// Records arrive in batches from apps/agent-edge, which owns no rows of its
+/// own. There is no foreign key to a run: a machine can be awake between runs,
+/// and a record that could not be attributed is still evidence.
+model AgentEgressLog {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String   @map("space_id")
+  agentName String   @map("agent_name")
+  runId     String?  @map("run_id")
+  method    String
+  host      String
+  path      String
+  /// allow | deny | approval
+  verdict   String
+  /// Why it was refused, in the words the agent was given.
+  reason    String?
+  status    Int?
+  bytes     Int?
+  at        DateTime
+  createdAt DateTime @default(now()) @map("created_at")
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, at])
+  @@index([spaceId, agentName, verdict])
+  @@map("agent_egress_log")
 }
 
 /// A space's own compiled snapshot of one `tools/<name>/` Tool note (lib/tools).

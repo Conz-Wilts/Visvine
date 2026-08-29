@@ -34,6 +34,7 @@ import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_M
 import { principalForUser } from './principal'
 import { resolveAgentChatConfig } from './providers'
 import { clipEventText, finishRun, flushRunEvents, recordRunInput, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
+import { skillsForRun, skillsMessage } from './skills'
 import { agentTools } from './tools'
 
 const PREAMBLE = `You are an unattended agent (scheduled, or woken by events) running inside Visvine, a shared knowledge space ("the context") of markdown notes. You run unattended: nobody is watching this run and nobody can answer within it, so act on your brief, use the tools to read and write notes, and finish with a short plain-text summary of what you did. If you need a person — to tell them something, use notify; to ask them something, use ask_human and finish (the answer wakes a later run as a "reply" event).
@@ -259,6 +260,21 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     const triggerMessage = eventsMessage(triggerEvents)
     if (triggerMessage) events.push({ at: Date.now(), type: 'system', text: `Triggered by ${triggerEvents.length} event(s): ${triggerEvents.map((e) => `[${e.kind}] ${e.source}`).join(', ')}` })
 
+    // What this agent has been taught (lib/agents/skills.ts). Chosen by keyword
+    // overlap over the brief and whatever triggered the run — deterministic, so
+    // which skills a run had is answerable afterwards without replaying it. Only
+    // approved skills are offered; the agent can still read any other with the
+    // ordinary note tools, because reading a note is not running one.
+    const chosenSkills = await skillsForRun(spaceId, name, `${brief.title} ${brief.body} ${triggerMessage ?? ''}`)
+    const skillsPrompt = skillsMessage(chosenSkills)
+    if (skillsPrompt) {
+      events.push({
+        at: Date.now(),
+        type: 'system',
+        text: `Using ${chosenSkills.length} learned skill(s): ${chosenSkills.map((s) => s.title).join(', ')}`,
+      })
+    }
+
     let lastFlush = Date.now()
     let sinceFlush = 0
     let turns = 0
@@ -281,6 +297,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
+        ...(skillsPrompt ? [{ role: 'system' as const, content: skillsPrompt }] : []),
         ...(triggerMessage ? [{ role: 'user' as const, content: triggerMessage }] : []),
       ],
       tools: agentTools({

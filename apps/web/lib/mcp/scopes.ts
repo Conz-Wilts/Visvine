@@ -28,6 +28,7 @@ export const MCP_SCOPES = [
   'tools:author',
   'tools:install',
   'secrets:write',
+  'vm:run',
 ] as const
 
 export type McpScope = (typeof MCP_SCOPES)[number]
@@ -48,6 +49,8 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
     'Install a reviewed tool from the marketplace into a space you administer',
   'secrets:write':
     'Store and rotate connector credentials in spaces you administer — values are write-only and can never be read back, by this client or any other',
+  'vm:run':
+    "Run commands on an agent's machine — a real computer in the space, reaching only the hosts its egress policy allows",
 }
 
 const SCOPE_SET: ReadonlySet<string> = new Set(MCP_SCOPES)

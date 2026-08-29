@@ -159,8 +159,8 @@ jobs:
             --platform=managed \
             --service-account=visvine-cloudrun@${{ env.PROJECT }}.iam.gserviceaccount.com \
             --add-cloudsql-instances=${{ env.SQL_INSTANCE }} \
-            --set-secrets=DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,SUPER_ADMIN_EMAILS=SUPER_ADMIN_EMAILS:latest,GCS_MEDIA_BUCKET=GCS_MEDIA_BUCKET:latest,GCS_RESOURCES_BUCKET=GCS_RESOURCES_BUCKET:latest,SECRETS_KEY=SECRETS_KEY:latest \
-            --set-env-vars=NEXT_PUBLIC_APP_URL=https://visvine.com,GCS_CDN_BASE_URL=https://storage.googleapis.com/visvine-media,ENABLE_DEV_AUTH=false,TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }},AGENT_TICK_SERVICE_ACCOUNT=${{ vars.AGENT_TICK_SERVICE_ACCOUNT }},GOOGLE_CLOUD_PROJECT=${{ env.PROJECT }},GIT_SHA=${{ github.sha }} \
+            --set-secrets=DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,SUPER_ADMIN_EMAILS=SUPER_ADMIN_EMAILS:latest,GCS_MEDIA_BUCKET=GCS_MEDIA_BUCKET:latest,GCS_RESOURCES_BUCKET=GCS_RESOURCES_BUCKET:latest,SECRETS_KEY=SECRETS_KEY:latest,EDGE_SERVICE_TOKEN=EDGE_SERVICE_TOKEN:latest \
+            --set-env-vars=NEXT_PUBLIC_APP_URL=https://visvine.com,GCS_CDN_BASE_URL=https://storage.googleapis.com/visvine-media,ENABLE_DEV_AUTH=false,TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }},AGENT_TICK_SERVICE_ACCOUNT=${{ vars.AGENT_TICK_SERVICE_ACCOUNT }},AGENT_EDGE_URL=${{ vars.AGENT_EDGE_URL }},GOOGLE_CLOUD_PROJECT=${{ env.PROJECT }},GIT_SHA=${{ github.sha }} \
             --startup-probe=httpGet.path=/api/health,initialDelaySeconds=5,timeoutSeconds=4,periodSeconds=5,failureThreshold=12 \
             --liveness-probe=httpGet.path=/api/health,timeoutSeconds=4,periodSeconds=30,failureThreshold=3 \
             --min-instances=0 \

@@ -133,7 +133,15 @@ export function parseModelRef(raw: unknown): { ok: true; ref: ModelRef } | { ok:
       error: `unknown model provider "${providerId}" — one of ${PROVIDERS.map((p) => p.id).join(', ')}`,
     }
   }
-  if (!/^[A-Za-z0-9._:-]{1,128}$/.test(modelId)) return { ok: false, error: 'model id has unexpected characters' }
+  // A model id may carry interior slashes, because a gateway namespaces its
+  // models by vendor (`custom/z-ai/glm-5.3-flash` on OpenRouter). Only the
+  // FIRST slash separates provider from model, so the rest belong to the id.
+  // The id is sent in the request body and never in a URL path, so a slash here
+  // cannot steer a request anywhere — the endpoint is the connector's
+  // `base_url:`, pinned and SSRF-checked on save and on every resolve.
+  if (!/^[A-Za-z0-9._:-]+(\/[A-Za-z0-9._:-]+)*$/.test(modelId) || modelId.length > 128) {
+    return { ok: false, error: 'model id has unexpected characters' }
+  }
   const known = provider.models.find((m) => m.id === modelId)
   return { ok: true, ref: { provider, modelId, pricing: known?.pricing ?? null } }
 }

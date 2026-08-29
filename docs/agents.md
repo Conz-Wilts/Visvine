@@ -227,6 +227,72 @@ run (shown as "Triggered by …"), the chain parent/depth, and at run end the no
 `runs_as` + admins, deduped per agent; a failed run → author only, deduped per
 agent per day; a human's own act (admin switch, rename, delete) tells nobody.
 
+## Machines (the VM runtime)
+
+An agent can also be given a **machine** — a container in Cloudflare with a
+filesystem, Node, Python and `uv`, reached through the `vm_exec` action behind
+the `vm:run` scope. `docs/agent-vm-plan.md` is the design; the parts an operator
+needs:
+
+- **Two deployment targets.** The control plane is this app on Cloud Run; the
+  edge is `apps/agent-edge`, a Worker plus one Durable Object per agent, shipped
+  with `pnpm edge:deploy`. The edge decides nothing — it boots what it is told to
+  boot and enforces the policy it is handed.
+- **What it may reach** is compiled from the space's own connector `hosts:`
+  (`lib/vm/policy.ts`), handed down on every lease, and enforced by our Worker on
+  the egress path. `GET /api/communities/<id>/vm/policy` shows an admin the
+  compiled list. A host the grammar cannot enforce — an IP, `localhost` — is
+  dropped from the machine's reach with a warn; the isolate still reaches it.
+- **The disk does not survive a sleep.** `/workspace` is archived to R2 before
+  the machine sleeps and unpacked on the next boot; everything else is scratch.
+- **Configuration.** `AGENT_EDGE_URL` and `EDGE_SERVICE_TOKEN` on the app,
+  the same token as `wrangler secret put EDGE_SERVICE_TOKEN` on the edge, and
+  `CONTROL_PLANE_URL` on the edge so egress records reach
+  `/api/internal/vm/egress`. With any of them unset there are no machines and
+  `vm_exec` says so — nothing else degrades.
+- **The browser.** `vm_browse` opens a page in a headful Chromium on the
+  machine's display, with its profile in `/workspace/.browser` — so a service a
+  human logged into during a takeover is still logged in on the next run. One
+  browser per machine; the page loads only if the egress policy allows its host.
+- **The window.** An admin sees the machine's timeline on the agent's page, and
+  can Watch it live — the screen included, and Take control to click and type on
+  it — a socket to the machine's Durable Object, opened with a
+  ticket good for sixty seconds and that machine alone. Every event is stored
+  (`agent_vm_events`) whether or not anyone was watching, so a run nobody saw is
+  still reviewable, and refusals from the egress boundary appear beside it.
+- **Channels.** An agent can be messaged from inside the app (the box on its
+  page), by email at `<agent>@<space>.<domain>` (`AGENT_EMAIL_DOMAIN` +
+  `EMAIL_INBOUND_SECRET`, `POST /api/internal/channels/email`), or by another
+  agent through the `send_to_agent` action. All three land in the same mailbox
+  and are read by the same run as a schedule — there is one loop behind them.
+  The sender must be a member of the space; a stranger is refused, and a retried
+  delivery is deduped rather than run twice.
+- **Delegation.** `delegate` hands a task and a workspace path to another agent,
+  which does the work as itself — its own brief, grants and machine. Capped at
+  two hands from a person, refused deeper by the same chain counter that stops a
+  trigger loop.
+- **Skills.** An agent is taught by demonstration: an admin takes control of the
+  machine, does the task once, gives control back, and presses Learn. The agent
+  writes the skill from the recorded trace — never from what was typed — into
+  `agents/<name>/skills/<slug>/{index.md,steps.md}`, where it waits for an admin
+  to approve it. Only approved skills are selected into a run (keyword overlap
+  over `keywords:`, the same mechanism recipes use); the agent can still read any
+  of them with the ordinary note tools, because reading a note is not running
+  one. A skill is advice, never authorization: every step it suggests still goes
+  through `runAction`, the space's grants and the machine's egress policy.
+- **Cost and caps.** A machine is ~$0.10 an awake hour and sleeps after ten idle
+  minutes; the lease row (`agent_vms`) is reaped after fourteen days of nothing,
+  and the space's workspace outlives it. A space gets **120 machine-hours a
+  month** by default — `vmMonthlyHours` in its feature config, `null` for
+  uncapped — metered by the tick, refused at the lease, and shown in hours and
+  dollars at `GET /api/communities/<id>/vm/usage`. Past the cap, running
+  machines are stopped rather than left costing.
+- **Watching the boundary.** The tick sweeps the last hour of `agent_egress_log`
+  for a run of refusals, a bulk copy through an allowed host, or one machine
+  touching everything, and warns — none is proof, all are worth a look. The log
+  prunes at 90 days; the timeline is kept. `pnpm --filter @visvine/web
+  vm:redteam` runs the live escape battery against a real machine.
+
 ## One-time production setup
 
 ```sh

@@ -35,7 +35,7 @@
  * Pure module: no prisma, no fetch.
  */
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
-import { PROVIDERS, type ProviderEntry } from '@/lib/agents/registry'
+import { PROVIDERS, type ModelPricing, type ProviderEntry } from '@/lib/agents/registry'
 
 export type ConnectorKind = 'http' | 'model'
 
@@ -48,6 +48,17 @@ export interface ModelConnectorConfig {
   provider: ProviderEntry
   /** Where requests go: the registry's pinned URL, or the note's `base_url:` for `custom`. */
   baseURL: string
+  /**
+   * What the endpoint charges, per model id, in USD per million tokens.
+   *
+   * Registry providers carry their own prices in code. A custom endpoint cannot
+   * — nobody but the admin knows what their gateway bills — so without this a
+   * space's monthly cap has nothing to compare against and never binds. Prices
+   * are declared, not discovered: a wrong number here means a wrong cap, which
+   * is why the run's token backstop (lib/agents/budget.ts) does not depend on
+   * it.
+   */
+  pricing: Readonly<Record<string, ModelPricing>>
 }
 
 export type ParseModelConnectorResult =
@@ -98,6 +109,9 @@ export function parseModelConnector(fm: NoteFrontmatter): ParseModelConnectorRes
       }
     }
   }
+  const pricing = parseModelPricing(fm.pricing)
+  if (!pricing.ok) return pricing
+
   if (provider.baseURL) {
     if (fm.base_url !== undefined) {
       return {
@@ -105,11 +119,47 @@ export function parseModelConnector(fm: NoteFrontmatter): ParseModelConnectorRes
         error: `A ${provider.label} connector must not declare \`base_url:\` — its endpoint is pinned by Visvine. Use \`provider: custom\` for your own endpoint`,
       }
     }
-    return { ok: true, config: { provider, baseURL: provider.baseURL } }
+    return { ok: true, config: { provider, baseURL: provider.baseURL, pricing: pricing.pricing } }
   }
   const base = parseModelBaseUrl(fm.base_url)
   if (!base.ok) return base
-  return { ok: true, config: { provider, baseURL: base.url } }
+  return { ok: true, config: { provider, baseURL: base.url, pricing: pricing.pricing } }
+}
+
+/**
+ * `pricing:` — a map of model id to USD per million tokens:
+ *
+ *     pricing:
+ *       z-ai/glm-5.3-flash: { input_per_m: 0.05, output_per_m: 0.2 }
+ *
+ * Optional, and refused rather than coerced when malformed: a price the parser
+ * guessed at would produce a cap nobody can predict.
+ */
+export function parseModelPricing(
+  raw: unknown,
+): { ok: true; pricing: Record<string, ModelPricing> } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, pricing: {} }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, error: '`pricing:` must be a map of model id to { input_per_m, output_per_m }' }
+  }
+  const out: Record<string, ModelPricing> = {}
+  for (const [modelId, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return { ok: false, error: `\`pricing.${modelId}\` must be { input_per_m, output_per_m }` }
+    }
+    const entry = value as Record<string, unknown>
+    const input = entry.input_per_m
+    const output = entry.output_per_m
+    if (!isPrice(input) || !isPrice(output)) {
+      return { ok: false, error: `\`pricing.${modelId}\` needs numeric input_per_m and output_per_m (USD per million tokens)` }
+    }
+    out[modelId] = { inputPerM: input, outputPerM: output }
+  }
+  return { ok: true, pricing: out }
+}
+
+function isPrice(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }
 
 /** What a model connector exposes to the list/detail surfaces — never the key. */

@@ -1,0 +1,11 @@
+{
+  "name": "@visvine/vm-policy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "What an agent's machine may reach — compiled on the control plane, evaluated at the edge, one implementation for both",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "types": "./src/index.ts"
+}

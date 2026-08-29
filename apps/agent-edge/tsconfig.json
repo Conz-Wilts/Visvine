@@ -1,0 +1,11 @@
+{
+  "extends": "@visvine/config/tsconfig/base.json",
+  "compilerOptions": {
+    "lib": ["esnext"],
+    "types": ["@types/node"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts", "worker-configuration.d.ts"]
+}

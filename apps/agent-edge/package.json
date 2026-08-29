@@ -1,0 +1,26 @@
+{
+  "name": "@visvine/agent-edge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The edge half of the agent runtime — owns each agent's container, enforces its egress policy, relays its window",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "wrangler deploy --dry-run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "tail": "wrangler tail",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260828.1",
+    "@types/node": "^20.19.39",
+    "@visvine/config": "workspace:*",
+    "tsx": "^4.19.2",
+    "typescript": "^5",
+    "wrangler": "^4.127.1"
+  },
+  "dependencies": {
+    "@cloudflare/sandbox": "0.13.0-next.751.1",
+    "@visvine/vm-policy": "workspace:*"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "visvine-agent-edge",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-29",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "1495766bf2223bf0faba488da74a2274",
+
+  // One Durable Object per agent: it owns that agent's container, the egress
+  // policy that container is held to, and the window relayed off it.
+  "durable_objects": {
+    "bindings": [{ "name": "MACHINE", "class_name": "AgentMachine" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentMachine"] }],
+
+  // The machine. `standard-3` is the agent default (2 vCPU, 8 GiB, 16 GB disk);
+  // `standard-4` is the ceiling the platform offers, so anything needing more
+  // is a job for the isolate or a queue rather than a bigger machine.
+  "containers": [
+    {
+      "class_name": "AgentMachine",
+      "image": "./container/Dockerfile",
+      "instance_type": "standard-3",
+      // Concurrent machines across the whole platform. One per (space, agent),
+      // and they stop themselves after ten idle minutes — this is the ceiling
+      // on how many can be awake at once, not how many may exist.
+      "max_instances": 20
+    }
+  ],
+
+  // The space's /workspace. The container disk is ephemeral, so this is where
+  // anything an agent expects to survive a sleep actually lives.
+  "r2_buckets": [
+    { "binding": "WORKSPACES", "bucket_name": "visvine-agent-workspaces" }
+  ],
+
+  "observability": { "enabled": true },
+
+  // The control plane runs on Cloud Run, so the edge needs a URL it can reach.
+  // Every route but /health refuses without the shared service token, and the
+  // follow-up is a route on visvine.com rather than a workers.dev hostname.
+  "workers_dev": true,
+
+  // One entry point is enough. A preview URL is a second public hostname for
+  // the same Worker, and nothing here is meant to be reached from a browser.
+  "preview_urls": false
+}

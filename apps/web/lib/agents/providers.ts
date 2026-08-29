@@ -11,14 +11,14 @@ import { classifyModelStatus, type ChatConfig } from '@/lib/notes/ai'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { connectorKind, parseModelBaseUrl, parseModelConnector } from '@/lib/connectors/model'
 import { isConnectorEnabled } from '@/lib/connectors/config'
-import { parseModelRef, type ModelRef, type ProviderEntry } from './registry'
+import { parseModelRef, type ModelPricing, type ModelRef, type ProviderEntry } from './registry'
 
 export * from './registry'
 
 const SHARED_OWNER_KEY = 'shared'
 
 type CustomEndpointResult =
-  | { ok: true; baseURL: string; connector: string }
+  | { ok: true; baseURL: string; connector: string; pricing: Readonly<Record<string, ModelPricing>> }
   | { ok: false; message: string }
 
 /**
@@ -37,7 +37,7 @@ async function findCustomModelEndpoint(spaceId: string): Promise<CustomEndpointR
     select: { path: true, content: true },
     orderBy: { path: 'asc' },
   })
-  const found: { name: string; baseURL: string }[] = []
+  const found: { name: string; baseURL: string; pricing: Readonly<Record<string, ModelPricing>> }[] = []
   for (const row of rows) {
     const fm = parseFrontmatter(row.content)
     if (fm.type !== 'connector' || connectorKind(fm) !== 'model') continue
@@ -48,7 +48,11 @@ async function findCustomModelEndpoint(spaceId: string): Promise<CustomEndpointR
     if (typeof fm.provider !== 'string' || fm.provider.trim().toLowerCase() !== 'custom') continue
     const parsed = parseModelConnector(fm)
     if (!parsed.ok) return { ok: false, message: `The custom model connector ${row.path} is invalid: ${parsed.error}` }
-    found.push({ name: row.path.slice('connectors/'.length, -'.md'.length), baseURL: parsed.config.baseURL })
+    found.push({
+      name: row.path.slice('connectors/'.length, -'.md'.length),
+      baseURL: parsed.config.baseURL,
+      pricing: parsed.config.pricing,
+    })
   }
   if (found.length === 0) {
     return { ok: false, message: 'No custom model connector — an admin must add a connector with `provider: custom` and its `base_url:` under /connectors.' }
@@ -60,14 +64,14 @@ async function findCustomModelEndpoint(spaceId: string): Promise<CustomEndpointR
       message: `More than one custom model endpoint (${found.map((f) => f.name).join(', ')}) — keep one \`provider: custom\` connector, or give them the same base_url.`,
     }
   }
-  const [{ name, baseURL }] = found
+  const [{ name, baseURL, pricing }] = found
   try {
     const devHttp = baseURL.startsWith('http:') && process.env.NODE_ENV === 'development'
     await assertPubliclyRoutable(new URL(baseURL).hostname, { allowPrivate: devHttp })
   } catch (e) {
     return { ok: false, message: `The custom model endpoint on ${name} is not reachable from here: ${e instanceof Error ? e.message : String(e)}` }
   }
-  return { ok: true, baseURL, connector: name }
+  return { ok: true, baseURL, connector: name, pricing }
 }
 
 /**
@@ -98,10 +102,16 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
   const { ref } = parsed
 
   let baseURL = ref.provider.baseURL
+  let pricing = ref.pricing
   if (!baseURL) {
     const endpoint = await findCustomModelEndpoint(spaceId)
     if (!endpoint.ok) return { ok: false, reason: 'no_endpoint', message: endpoint.message }
     baseURL = endpoint.baseURL
+    // A custom endpoint's prices are whatever its note declares. Without them
+    // the run is metered in tokens only and the space's dollar cap cannot bind
+    // — see MAX_RUN_TOKENS, which is why that is a degraded cap and not an
+    // absent one.
+    pricing = endpoint.pricing[ref.modelId] ?? null
   }
 
   const row = await prisma.connectorSecret.findUnique({
@@ -121,7 +131,7 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
   } catch {
     return { ok: false, reason: 'bad_key', message: 'The stored model key could not be decrypted (SECRETS_KEY).' }
   }
-  return { ok: true, ref, config: { apiKey, baseURL, model: ref.modelId } }
+  return { ok: true, ref: { ...ref, pricing }, config: { apiKey, baseURL, model: ref.modelId } }
 }
 
 export type KeyProbeResult = { ok: true } | { ok: false; kind: 'auth' | 'upstream'; message: string }

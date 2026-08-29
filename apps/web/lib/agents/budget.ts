@@ -17,6 +17,18 @@ import type { ModelPricing } from './registry'
 /** Hard per-run backstop, USD cents. */
 export const MAX_RUN_COST_CENTS = 200
 
+/**
+ * The backstop that does not need prices: total tokens in one run.
+ *
+ * Every dollar ceiling above is unenforceable when pricing is unknown, which is
+ * the ordinary case for a gateway or a self-hosted endpoint (`provider: custom`
+ * with no `pricing:` in its note). Without this, an agent on such a model has
+ * no ceiling but `max_turns`, and a loop that grows its context each turn is
+ * exactly the runaway the cost cap exists to stop. Tokens are the one unit
+ * every provider reports, so the last line of defence is counted in them.
+ */
+export const MAX_RUN_TOKENS = 400_000
+
 const MICROS_PER_CENT = 10_000
 const MICROS_PER_DOLLAR = 1_000_000
 
@@ -63,6 +75,10 @@ export function preRunStop(state: BudgetState): 'budget' | null {
  * the usage accumulated so far in THIS run.
  */
 export function perTurnStop(state: BudgetState, runUsage: ChatUsage): 'budget' | 'run_cap' | null {
+  // Checked first and regardless of pricing: this is the ceiling that binds on
+  // a model nobody has priced.
+  if (runUsage.promptTokens + runUsage.completionTokens >= MAX_RUN_TOKENS) return 'run_cap'
+
   const runCost = costMicros(runUsage, state.pricing)
   if (runCost === null) return null
   if (runCost >= BigInt(MAX_RUN_COST_CENTS) * BigInt(MICROS_PER_CENT)) return 'run_cap'
