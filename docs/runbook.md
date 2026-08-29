@@ -278,6 +278,39 @@ secret is in the repo; `pnpm env:check` and the CI step guard that.
 | `AGENT_EMAIL_DOMAIN` / `EMAIL_INBOUND_SECRET` | Inbound email to agents (`<agent>@<space>.<domain>`). The secret authenticates the mail provider; with either unset there is no inbound email and nothing else changes |
 | `AGENT_EDGE_URL` / `EDGE_SERVICE_TOKEN` | The agent edge (`apps/agent-edge`) — agents' machines. The token must match `wrangler secret put EDGE_SERVICE_TOKEN` on the Worker; with either unset there are no machines and nothing else degrades |
 
+### The agent edge
+
+Machines live on Cloudflare (`apps/agent-edge`), so the platform has a second
+deployment target and two halves that must agree on one secret:
+
+```sh
+# The shared token, both sides. Cloud Run reads it from Secret Manager, which
+# deploy.yml mounts; the Worker holds its own copy.
+gcloud secrets create EDGE_SERVICE_TOKEN --project=visvine-platform   # once
+printf '%s' "$TOKEN" | gcloud secrets versions add EDGE_SERVICE_TOKEN --data-file=- --project=visvine-platform
+pnpm --filter @visvine/agent-edge exec wrangler secret put EDGE_SERVICE_TOKEN
+
+# Where each half finds the other. AGENT_EDGE_URL rides deploy.yml as a GitHub
+# repo variable (the deploy REPLACES the service's env, so setting it by hand on
+# Cloud Run does not survive); CONTROL_PLANE_URL is a Worker secret.
+gh variable set AGENT_EDGE_URL --body https://visvine-agent-edge.cwnz2004.workers.dev
+printf 'https://visvine.com' | pnpm --filter @visvine/agent-edge exec wrangler secret put CONTROL_PLANE_URL
+
+pnpm --filter @visvine/agent-edge deploy    # the Worker and its container image
+```
+
+With `AGENT_EDGE_URL` or `EDGE_SERVICE_TOKEN` unset there are simply no
+machines: `vm_exec` says so and nothing else degrades. The Worker also holds
+`REDTEAM_SECRET`, a canary value the nightly escape battery
+(`pnpm --filter @visvine/web vm:redteam`) injects and then proves is not
+readable from inside a machine.
+
+**A container rollout lags its deploy.** `wrangler deploy` reports the new image
+while `containers info` still names the old one, and a machine that is already
+awake keeps running the old one until it is stopped. Poll the configuration
+digest, then stop the machine — otherwise you are debugging an image that is not
+running.
+
 ### Rotating `SECRETS_KEY`
 
 This one is different: it is the key that connector secrets and OAuth tokens are
