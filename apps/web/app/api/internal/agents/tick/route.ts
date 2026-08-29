@@ -6,6 +6,7 @@ import { reapExpiredLeases } from '@/lib/vm/lease'
 import { meterAwakeMachines, stopOverspendingSpaces } from '@/lib/vm/quota'
 import { pruneEgressLog, sweepEgress } from '@/lib/vm/anomaly'
 import { stop as stopMachine, edgeConfigured } from '@/lib/vm/edge'
+import { environment } from '@/lib/vm/lease'
 import { logger } from '@/lib/logger'
 
 // The tick awaits the dispatches it fans out (each its own request to the run
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
  */
 async function vmHousekeeping() {
   const metered = await meterAwakeMachines(TICK_SECONDS)
-  const stopped = await stopOverspendingSpaces((spaceId, agentName) => stopMachine(spaceId, agentName))
+  const stopped = await stopOverspendingSpaces((spaceId, agentName) => stopMachine(environment(), spaceId, agentName))
   const anomalies = await sweepEgress()
   // Pruning is cheap and idempotent; doing it on the tick avoids a second job
   // for a table that only ever grows in one direction.

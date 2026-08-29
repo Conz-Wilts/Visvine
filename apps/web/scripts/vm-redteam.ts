@@ -13,7 +13,9 @@
  * internet. Skips loudly rather than passing quietly when there is no edge.
  */
 import 'dotenv/config';
+import { environment } from '../lib/vm/lease';
 
+const ENV = environment();
 const SPACE = process.env.REDTEAM_SPACE ?? 'community:blackbird-ventures';
 const AGENT = 'redteam';
 const edge = process.env.AGENT_EDGE_URL;
@@ -34,7 +36,7 @@ async function call(path: string, body: unknown) {
 }
 
 async function inMachine(cmd: string[], timeoutSeconds = 25) {
-  return call('/exec', { spaceId: SPACE, agentName: AGENT, cmd, timeoutSeconds }) as Promise<{
+  return call('/exec', { environment: ENV, spaceId: SPACE, agentName: AGENT, cmd, timeoutSeconds }) as Promise<{
     exitCode: number; stdout: string; stderr: string; timedOut: boolean;
   }>;
 }
@@ -74,10 +76,10 @@ async function main() {
     approval: [],
     inject: [{ host: 'example.com', header: 'X-Redteam', secret: 'REDTEAM_SECRET' }],
   };
-  await call('/stop', { spaceId: SPACE, agentName: AGENT });
+  await call('/stop', { environment: ENV, spaceId: SPACE, agentName: AGENT });
   console.log('lease:', JSON.stringify(await call('/lease', {
-    spaceId: SPACE, agentName: AGENT, policy, instanceType: 'standard-3',
-    workspaceKey: `spaces/${SPACE}/workspace`, idleMinutes: 10,
+    environment: ENV, spaceId: SPACE, agentName: AGENT, policy, instanceType: 'standard-3',
+    workspaceKey: `spaces/${ENV}/${SPACE}/workspace`, idleMinutes: 10,
   })));
 
   // Exercises the injection path too: the header is attached at the edge, so a
@@ -112,7 +114,7 @@ async function main() {
     detail: env.stdout.trim() ? `FOUND: ${env.stdout.trim().slice(0, 120)}` : 'not present anywhere in the machine',
   });
 
-  await call('/stop', { spaceId: SPACE, agentName: AGENT });
+  await call('/stop', { environment: ENV, spaceId: SPACE, agentName: AGENT });
 
   console.log('');
   for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name} — ${r.detail}`);

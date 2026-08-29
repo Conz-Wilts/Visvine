@@ -11,10 +11,12 @@
  * Object, which was handed it by the control plane; this class only applies it.
  */
 import { WorkerEntrypoint } from 'cloudflare:workers'
+import { machineName } from '@visvine/vm-policy'
 import { handleOutbound, type EgressRecord } from './outbound'
 import type { Env } from './index'
 
 interface MachineProps {
+  environment: string
   spaceId: string
   agentName: string
   machineId: string
@@ -29,7 +31,9 @@ export class EgressProxy extends WorkerEntrypoint<Env> {
       return new Response('egress denied: this request has no machine\n', { status: 403 })
     }
 
-    const machine = this.env.MACHINE.get(this.env.MACHINE.idFromName(machineName(props)))
+    const machine = this.env.MACHINE.get(
+      this.env.MACHINE.idFromName(machineName(props.environment, props.spaceId, props.agentName)),
+    )
     const policy = await machine.policy()
 
     const records: EgressRecord[] = []
@@ -44,11 +48,6 @@ export class EgressProxy extends WorkerEntrypoint<Env> {
     this.ctx.waitUntil(report(this.env, props, records))
     return response
   }
-}
-
-/** The name a (space, agent) resolves to. Derived, never stored as truth. */
-export function machineName(props: { spaceId: string; agentName: string }): string {
-  return `vm-${props.spaceId}-${props.agentName}`
 }
 
 /**

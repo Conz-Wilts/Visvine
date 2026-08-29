@@ -25,6 +25,37 @@
 
 export const POLICY_VERSION = 1 as const
 
+/**
+ * What a machine is called, and where its workspace lives.
+ *
+ * Derived in ONE place because both halves of the runtime need the same answer:
+ * the control plane addresses a machine by it and the edge resolves a Durable
+ * Object from it. Two derivations of one identity is a bug waiting for the day
+ * they disagree.
+ *
+ * The environment is part of the name for a blunter reason. A developer's
+ * machine talks to the same edge and the same bucket as production, and a
+ * machine is addressed by (space, agent) — so without this, a local test of a
+ * space whose id also exists in production would stop that production machine
+ * and overwrite its workspace. The environment is decided by the control plane
+ * and sent; the edge never guesses it, because the edge decides nothing.
+ */
+export type Environment = 'prod' | 'dev' | (string & {})
+
+export function machineName(environment: Environment, spaceId: string, agentName: string): string {
+  return `vm-${environment}-${spaceId}-${agentName}`
+}
+
+/** The R2 prefix for a space's shared volume. Belongs to the SPACE, not an agent. */
+export function workspacePrefix(environment: Environment, spaceId: string): string {
+  return `spaces/${environment}/${spaceId}/workspace`
+}
+
+/** What a watch ticket is bound to. Same shape on both sides of the boundary. */
+export function machineRef(environment: Environment, spaceId: string, agentName: string): string {
+  return `${environment}/${spaceId}/${agentName}`
+}
+
 /** A header the edge attaches on the way out. `secret` names a Worker binding, never a value. */
 export interface InjectRule {
   host: string

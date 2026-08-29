@@ -15,6 +15,7 @@
  * step and let the round-trip test say when they are not.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { machineRef as sharedRef } from '@visvine/vm-policy'
 
 /** Long enough to open a socket, useless to keep. */
 export const TICKET_TTL_SECONDS = 60
@@ -32,14 +33,23 @@ function sign(body: string, secret: string): string {
   return base64url(createHmac('sha256', secret).update(body).digest())
 }
 
-/** The name a ticket is bound to. Same shape on both sides of the boundary. */
-export function machineRef(spaceId: string, agentName: string): string {
-  return `${spaceId}/${agentName}`
+/**
+ * The machine a ticket is bound to — environment included, so a ticket minted
+ * against a developer's machine cannot open the production one of the same name.
+ */
+export function machineRef(environment: string, spaceId: string, agentName: string): string {
+  return sharedRef(environment, spaceId, agentName)
 }
 
-export function mintWatchTicket(spaceId: string, agentName: string, secret: string, now = Date.now()): string {
+export function mintWatchTicket(
+  environment: string,
+  spaceId: string,
+  agentName: string,
+  secret: string,
+  now = Date.now(),
+): string {
   const claims: TicketClaims = {
-    machine: machineRef(spaceId, agentName),
+    machine: machineRef(environment, spaceId, agentName),
     exp: Math.floor(now / 1000) + TICKET_TTL_SECONDS,
   }
   const body = base64url(Buffer.from(JSON.stringify(claims)))
@@ -67,8 +77,14 @@ export function verifyWatchTicket(token: string, machine: string, secret: string
 }
 
 /** Where the browser opens its socket, ticket attached. */
-export function watchUrl(edgeUrl: string, spaceId: string, agentName: string, ticket: string): string {
+export function watchUrl(
+  edgeUrl: string,
+  environment: string,
+  spaceId: string,
+  agentName: string,
+  ticket: string,
+): string {
   const base = edgeUrl.replace(/^http/, 'ws').replace(/\/+$/, '')
-  const params = new URLSearchParams({ space: spaceId, agent: agentName, ticket })
+  const params = new URLSearchParams({ env: environment, space: spaceId, agent: agentName, ticket })
   return `${base}/watch?${params.toString()}`
 }

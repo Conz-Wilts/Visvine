@@ -18,6 +18,8 @@ import { logger } from '@/lib/logger'
 export type InstanceType = 'lite' | 'standard-1' | 'standard-2' | 'standard-3' | 'standard-4'
 
 export interface LeaseSpec {
+  /** Which world this machine belongs to; the edge never decides it. */
+  environment: string
   spaceId: string
   agentName: string
   policy: VmPolicy
@@ -91,6 +93,7 @@ export function lease(spec: LeaseSpec): Promise<{ running: boolean; booted: bool
 }
 
 export function exec(
+  environment: string,
   spaceId: string,
   agentName: string,
   cmd: readonly string[],
@@ -99,14 +102,19 @@ export function exec(
   // The HTTP timeout sits above the machine's own, so a command that is killed
   // in the container still answers here rather than aborting the request.
   const seconds = timeoutSeconds ?? 120
-  return call('/exec', { spaceId, agentName, cmd, timeoutSeconds: seconds }, (seconds + 15) * 1000)
+  return call('/exec', { environment, spaceId, agentName, cmd, timeoutSeconds: seconds }, (seconds + 15) * 1000)
 }
 
 /** Open a page in the machine's own browser, and leave it open. */
-export function browse(spaceId: string, agentName: string, url: string): Promise<{ started: boolean; alreadyRunning: boolean }> {
-  return call('/browse', { spaceId, agentName, url }, 60_000)
+export function browse(
+  environment: string,
+  spaceId: string,
+  agentName: string,
+  url: string,
+): Promise<{ started: boolean; alreadyRunning: boolean }> {
+  return call('/browse', { environment, spaceId, agentName, url }, 60_000)
 }
 
-export function stop(spaceId: string, agentName: string): Promise<{ ok: true }> {
-  return call('/stop', { spaceId, agentName })
+export function stop(environment: string, spaceId: string, agentName: string): Promise<{ ok: true }> {
+  return call('/stop', { environment, spaceId, agentName })
 }

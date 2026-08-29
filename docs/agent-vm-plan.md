@@ -252,8 +252,33 @@ contain a compromised agent.
 
 We are multi-tenant. That trade is not available to us.
 
-**Our rule: one VM per (space, agent). The space is the security boundary and
-the VM never crosses it.**
+**Our rule: one VM per (space, agent, environment). The space is the security
+boundary, the agent is the authorization boundary, and a machine crosses
+neither.**
+
+Why the agent and not the space, when a machine per space would be cheaper:
+**an agent acts as its author**, so two agents in one space can have different
+reach. Sharing a machine would share the browser profile and every logged-in
+session on it, which hands agent B the sessions agent A's author established —
+a grant nobody made. The boundary a machine is drawn on has to be the boundary
+authorization is drawn on, and here that is the agent.
+
+Why not per USER, which is what a chat-shaped product would do: the agent does
+not act as the person who triggered it, so a per-user machine would put one
+human's sessions behind whatever agent they woke. That is Grok Bot's shared
+cookie jar with extra steps.
+
+Why the environment is in the identity: production and a developer's laptop
+share one edge and one bucket, and a machine is addressed by name. Without it, a
+local test of a space id that also exists in production stops that production
+machine and overwrites its workspace. The control plane decides the environment
+and sends it; the edge never guesses.
+
+The cost of per-agent is real and bounded: a machine is leased lazily — an agent
+that never runs a command never has one — and sleeps after ten idle minutes, so
+the bill is awake time rather than agent count. A space with five agents that
+each work an hour a day is about $15 a month, not five machines' worth of
+idling.
 
 - Two agents in the same space are two VMs. They hand off through the
   **workspace volume** and the **context store**, not through a shared machine.

@@ -33,6 +33,8 @@ import type { Env } from './index'
 
 /** What the control plane hands down when it leases a machine. */
 export interface LeaseSpec {
+  /** Which world this machine belongs to. Handed down; never decided here. */
+  environment: string
   spaceId: string
   agentName: string
   policy: VmPolicy
@@ -281,7 +283,12 @@ export class AgentMachine extends DurableObject<Env> {
     // entrypoint is one class shared by every machine, so without it the handler
     // would not know whose request it is holding.
     const egress = this.ctx.exports.EgressProxy({
-      props: { spaceId: spec.spaceId, agentName: spec.agentName, machineId: this.ctx.id.toString() },
+      props: {
+        environment: spec.environment,
+        spaceId: spec.spaceId,
+        agentName: spec.agentName,
+        machineId: this.ctx.id.toString(),
+      },
     })
     await container.interceptAllOutboundHttp(egress)
     for (const host of spec.policy.allow) {

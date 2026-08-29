@@ -14,6 +14,7 @@
  */
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
+import { machineName, workspacePrefix } from '@visvine/vm-policy'
 import { compileForSpace } from '@/lib/vm/policy'
 import { allowedToRun, recordExec } from '@/lib/vm/quota'
 import * as edge from '@/lib/vm/edge'
@@ -39,14 +40,18 @@ interface LeasedMachine {
   booted: boolean
 }
 
-/** The R2 prefix for a space's shared volume. Belongs to the SPACE, not an agent. */
-function workspaceKeyFor(spaceId: string): string {
-  return `spaces/${spaceId}/workspace`
-}
-
-/** How a row addresses a machine. Derived, never stored as truth. */
-function substrateNameFor(spaceId: string, agentName: string): string {
-  return `vm-${spaceId}-${agentName}`
+/**
+ * Which world these machines belong to.
+ *
+ * Production and a developer's laptop share one edge and one bucket, so this is
+ * what keeps them from addressing each other's machines. It is decided here,
+ * never at the edge, and it defaults to `dev` — a deployment that forgets to
+ * say it is production gets its own namespace rather than production's.
+ */
+export function environment(): string {
+  const named = process.env.VISVINE_ENV?.trim()
+  if (named) return named
+  return process.env.NODE_ENV === 'production' ? 'prod' : 'dev'
 }
 
 /**
@@ -69,8 +74,9 @@ async function leaseMachine(
   if (!quota.allowed) throw new QuotaExceededError(quota.reason)
 
   const compiled = await compileForSpace(spaceId, { taskAllow: options.taskAllow })
-  const substrateName = substrateNameFor(spaceId, agentName)
-  const workspaceKey = workspaceKeyFor(spaceId)
+  const env = environment()
+  const substrateName = machineName(env, spaceId, agentName)
+  const workspaceKey = workspacePrefix(env, spaceId)
   const instanceType = options.instanceType ?? DEFAULT_INSTANCE
   const now = new Date()
   const expiresAt = new Date(now.getTime() + LEASE_DAYS * 24 * 60 * 60 * 1000)
@@ -93,6 +99,7 @@ async function leaseMachine(
 
   try {
     const result = await edge.lease({
+      environment: env,
       spaceId,
       agentName,
       policy: compiled.policy,
@@ -127,7 +134,7 @@ export async function runOnMachine(
   options: { timeoutSeconds?: number; taskAllow?: readonly string[] } = {},
 ): Promise<RunOnMachineResult> {
   const leased = await leaseMachine(spaceId, agentName, { taskAllow: options.taskAllow })
-  const result = await edge.exec(spaceId, agentName, cmd, options.timeoutSeconds)
+  const result = await edge.exec(environment(), spaceId, agentName, cmd, options.timeoutSeconds)
   await Promise.all([
     prisma.agentVm.update({ where: { id: leased.vmId }, data: { lastActiveAt: new Date() } }),
     recordExec(spaceId),
@@ -147,7 +154,7 @@ export async function browseOnMachine(
   url: string,
 ): Promise<{ started: boolean; alreadyRunning: boolean; vmId: string }> {
   const leased = await leaseMachine(spaceId, agentName)
-  const result = await edge.browse(spaceId, agentName, url)
+  const result = await edge.browse(environment(), spaceId, agentName, url)
   await prisma.agentVm.update({ where: { id: leased.vmId }, data: { lastActiveAt: new Date() } })
   return { ...result, vmId: leased.vmId }
 }
@@ -167,7 +174,7 @@ export async function reapExpiredLeases(now = new Date()): Promise<number> {
   let reaped = 0
   for (const vm of expired) {
     try {
-      if (edge.edgeConfigured()) await edge.stop(vm.spaceId, vm.agentName)
+      if (edge.edgeConfigured()) await edge.stop(environment(), vm.spaceId, vm.agentName)
     } catch (err) {
       logger.warn('vm.reap.stop_failed', { vmId: vm.id, err })
     }

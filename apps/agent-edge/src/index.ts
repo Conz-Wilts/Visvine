@@ -11,9 +11,9 @@
  * Every request is from the control plane and carries the shared service
  * token. There is no public entry point and no workers.dev URL.
  */
-import type { VmPolicy } from '@visvine/vm-policy'
+import { machineName, machineRef, type VmPolicy } from '@visvine/vm-policy'
 import { AgentMachine, type ExecRequest, type LeaseSpec } from './machine'
-import { EgressProxy, machineName } from './egress'
+import { EgressProxy } from './egress'
 import { verifyTicket } from './ticket'
 
 export { AgentMachine, EgressProxy }
@@ -42,9 +42,15 @@ function bearer(request: Request): string | null {
   return header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : null
 }
 
-function machineFor(env: Env, spaceId: string, agentName: string) {
-  const name = machineName({ spaceId, agentName })
-  return env.MACHINE.get(env.MACHINE.idFromName(name))
+/**
+ * The Durable Object one machine is.
+ *
+ * `environment` is part of the name and comes from the control plane, never
+ * from here: a developer's machine and production's share this Worker, and
+ * without it a local test would address a production machine of the same name.
+ */
+function machineFor(env: Env, environment: string, spaceId: string, agentName: string) {
+  return env.MACHINE.get(env.MACHINE.idFromName(machineName(environment, spaceId, agentName)))
 }
 
 export default {
@@ -62,14 +68,17 @@ export default {
       if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
         return new Response('expected a websocket', { status: 426 })
       }
+      const environment = url.searchParams.get('env') ?? ''
       const space = url.searchParams.get('space') ?? ''
       const agent = url.searchParams.get('agent') ?? ''
       const ticket = url.searchParams.get('ticket') ?? ''
-      if (!space || !agent || !ticket) return new Response('space, agent and ticket are required', { status: 400 })
-      const refused = await verifyTicket(ticket, `${space}/${agent}`, env.EDGE_SERVICE_TOKEN)
+      if (!environment || !space || !agent || !ticket) {
+        return new Response('env, space, agent and ticket are required', { status: 400 })
+      }
+      const refused = await verifyTicket(ticket, machineRef(environment, space, agent), env.EDGE_SERVICE_TOKEN)
       if (refused) return new Response(refused, { status: 401 })
       // Forwarded as a request, not an RPC call: see AgentMachine#fetch.
-      return machineFor(env, space, agent).fetch(request)
+      return machineFor(env, environment, space, agent).fetch(request)
     }
 
     const token = bearer(request)
@@ -77,15 +86,18 @@ export default {
       return new Response('unauthorized', { status: 401 })
     }
 
-    let body: { spaceId?: string; agentName?: string } & Record<string, unknown> = {}
+    let body: { environment?: string; spaceId?: string; agentName?: string } & Record<string, unknown> = {}
     if (request.method === 'POST') {
       body = (await request.json().catch(() => ({}))) as typeof body
     }
+    const environment = body.environment ?? url.searchParams.get('env') ?? ''
     const spaceId = body.spaceId ?? url.searchParams.get('space') ?? ''
     const agentName = body.agentName ?? url.searchParams.get('agent') ?? ''
-    if (!spaceId || !agentName) return new Response('spaceId and agentName are required', { status: 400 })
+    if (!environment || !spaceId || !agentName) {
+      return new Response('environment, spaceId and agentName are required', { status: 400 })
+    }
 
-    const machine = machineFor(env, spaceId, agentName)
+    const machine = machineFor(env, environment, spaceId, agentName)
 
     try {
       switch (url.pathname) {

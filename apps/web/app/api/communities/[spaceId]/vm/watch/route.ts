@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import { mintWatchTicket, watchUrl } from '@/lib/vm/watch';
+import { environment } from '@/lib/vm/lease';
 
 /**
  * A ticket to watch one machine, and the socket URL to spend it on.
@@ -32,6 +33,7 @@ export async function POST(
     return NextResponse.json({ error: 'This deployment has no agent machines configured.' }, { status: 503 });
   }
 
-  const ticket = mintWatchTicket(spaceId, agent, secret);
-  return NextResponse.json({ url: watchUrl(edge, spaceId, agent, ticket), expiresInSeconds: 60 });
+  const env = environment();
+  const ticket = mintWatchTicket(env, spaceId, agent, secret);
+  return NextResponse.json({ url: watchUrl(edge, env, spaceId, agent, ticket), expiresInSeconds: 60 });
 }

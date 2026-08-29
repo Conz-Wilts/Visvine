@@ -8,30 +8,39 @@ import { machineRef, mintWatchTicket, TICKET_TTL_SECONDS, verifyWatchTicket, wat
 const SECRET = 'edge-service-token-for-tests-0000000000'
 const SPACE = 'community:blackbird-ventures'
 const AGENT = 'weekly-digest'
-const MACHINE = machineRef(SPACE, AGENT)
+const ENV = 'dev'
+const MACHINE = machineRef(ENV, SPACE, AGENT)
 
 test('a freshly minted ticket is good for its own machine', () => {
-  const ticket = mintWatchTicket(SPACE, AGENT, SECRET)
+  const ticket = mintWatchTicket(ENV, SPACE, AGENT, SECRET)
   assert.equal(verifyWatchTicket(ticket, MACHINE, SECRET), null)
 })
 
+test('a developer ticket cannot open the production machine of the same name', () => {
+  // The two share an edge and a bucket, so the environment is part of what a
+  // ticket names — without it, a local test opens production's window.
+  const dev = mintWatchTicket('dev', SPACE, AGENT, SECRET)
+  assert.equal(verifyWatchTicket(dev, machineRef('prod', SPACE, AGENT), SECRET) !== null, true)
+  assert.equal(verifyWatchTicket(dev, machineRef('dev', SPACE, AGENT), SECRET), null)
+})
+
 test('a ticket is good for exactly one machine', () => {
-  const ticket = mintWatchTicket(SPACE, AGENT, SECRET)
+  const ticket = mintWatchTicket(ENV, SPACE, AGENT, SECRET)
   // The interesting refusal: a real ticket, from a real admin, pointed at
   // somebody else's machine.
-  assert.match(verifyWatchTicket(ticket, machineRef(SPACE, 'other-agent'), SECRET) ?? '', /different machine/)
-  assert.match(verifyWatchTicket(ticket, machineRef('community:someone-else', AGENT), SECRET) ?? '', /different machine/)
+  assert.match(verifyWatchTicket(ticket, machineRef(ENV, SPACE, 'other-agent'), SECRET) ?? '', /different machine/)
+  assert.match(verifyWatchTicket(ticket, machineRef(ENV, 'community:someone-else', AGENT), SECRET) ?? '', /different machine/)
 })
 
 test('a ticket expires', () => {
   const now = Date.now()
-  const ticket = mintWatchTicket(SPACE, AGENT, SECRET, now)
+  const ticket = mintWatchTicket(ENV, SPACE, AGENT, SECRET, now)
   assert.equal(verifyWatchTicket(ticket, MACHINE, SECRET, now + (TICKET_TTL_SECONDS - 1) * 1000), null)
   assert.match(verifyWatchTicket(ticket, MACHINE, SECRET, now + (TICKET_TTL_SECONDS + 1) * 1000) ?? '', /expired/)
 })
 
 test('a ticket nobody signed, or signed with another secret, is refused', () => {
-  const ticket = mintWatchTicket(SPACE, AGENT, SECRET)
+  const ticket = mintWatchTicket(ENV, SPACE, AGENT, SECRET)
   assert.match(verifyWatchTicket(ticket, MACHINE, 'a-different-secret') ?? '', /not signed/)
 
   // Tampering with the claims invalidates the signature over them.
@@ -49,10 +58,11 @@ test('a ticket nobody signed, or signed with another secret, is refused', () => 
 })
 
 test('the socket URL carries the ticket and switches scheme', () => {
-  const ticket = mintWatchTicket(SPACE, AGENT, SECRET)
-  const url = new URL(watchUrl('https://edge.example.com', SPACE, AGENT, ticket))
+  const ticket = mintWatchTicket(ENV, SPACE, AGENT, SECRET)
+  const url = new URL(watchUrl('https://edge.example.com', ENV, SPACE, AGENT, ticket))
   assert.equal(url.protocol, 'wss:')
   assert.equal(url.pathname, '/watch')
+  assert.equal(url.searchParams.get('env'), ENV)
   assert.equal(url.searchParams.get('space'), SPACE)
   assert.equal(url.searchParams.get('agent'), AGENT)
   assert.equal(url.searchParams.get('ticket'), ticket)

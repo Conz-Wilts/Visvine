@@ -7,9 +7,11 @@
 import 'dotenv/config';
 import { writeFileSync } from 'node:fs';
 import { mintWatchTicket, watchUrl } from '../lib/vm/watch';
+import { environment } from '../lib/vm/lease';
 
-const SPACE = 'community:blackbird-ventures';
-const AGENT = 'browser-check';
+const SPACE = process.argv.find((a) => a.startsWith('community:')) ?? 'community:blackbird-ventures';
+const AGENT = 'window-check';
+const ENV = environment();
 const edge = process.env.AGENT_EDGE_URL!;
 const secret = process.env.EDGE_SERVICE_TOKEN!;
 const OUT = process.argv[2] ?? '/tmp';
@@ -28,11 +30,11 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function main() {
   const policy = { version: 1, allow: ['example.com'], deny: ['localhost'], approval: [], inject: [] };
   console.log('lease:', await call('/lease', {
-    spaceId: SPACE, agentName: AGENT, policy, instanceType: 'standard-3',
-    workspaceKey: `spaces/${SPACE}/workspace`, idleMinutes: 10,
+    environment: ENV, spaceId: SPACE, agentName: AGENT, policy, instanceType: 'standard-3',
+    workspaceKey: `spaces/${ENV}/${SPACE}/workspace`, idleMinutes: 10,
   }));
 
-  const socket = new WebSocket(watchUrl(edge, SPACE, AGENT, mintWatchTicket(SPACE, AGENT, secret)));
+  const socket = new WebSocket(watchUrl(edge, ENV, SPACE, AGENT, mintWatchTicket(ENV, SPACE, AGENT, secret)));
   const frames: string[] = [];
   const kinds: string[] = [];
   socket.addEventListener('message', (m) => {
@@ -47,7 +49,7 @@ async function main() {
   await new Promise<void>((r) => socket.addEventListener('open', () => r()));
   console.log('watching');
 
-  console.log('browse:', await call('/browse', { spaceId: SPACE, agentName: AGENT, url: 'https://example.com/' }));
+  console.log('browse:', await call('/browse', { environment: ENV, spaceId: SPACE, agentName: AGENT, url: 'https://example.com/' }));
   await wait(12_000);
   const beforeTakeover = frames.length;
 
@@ -72,7 +74,8 @@ async function main() {
   }
   console.log('events:', kinds.join(', '));
   socket.close();
-  console.log('status:', await call('/status', { spaceId: SPACE, agentName: AGENT }));
+  console.log('status:', await call('/status', { environment: ENV, spaceId: SPACE, agentName: AGENT }));
+  await call('/stop', { environment: ENV, spaceId: SPACE, agentName: AGENT });
 }
 
 main().catch((e) => { console.error(e); process.exitCode = 1; });
