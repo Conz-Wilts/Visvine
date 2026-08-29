@@ -6,9 +6,11 @@ import assert from 'node:assert/strict'
 import {
   CATALOG_CATEGORIES,
   CONNECTOR_CATALOG,
+  allowsManyConnectors,
   catalogEntryFor,
   connectorFromCatalog,
   searchCatalog,
+  suggestConnector,
 } from '@/lib/connectors/catalog'
 import { parseConnectorPerimeter, perimeterSecretRefs } from '@/lib/connectors/config'
 import { connectorKind, parseModelConnector } from '@/lib/connectors/model'
@@ -105,4 +107,88 @@ test('catalogEntryFor finds a note\'s logo by name, then by model provider', () 
   // A connector the space wrote itself matches nothing — the caller draws a plug.
   assert.equal(catalogEntryFor('appdb'), null)
   assert.equal(catalogEntryFor('appdb', null), null)
+})
+
+test('a second connector to one service keeps the service, under its own name', () => {
+  const drive = CONNECTOR_CATALOG.find((e) => e.id === 'google-drive')
+  assert.ok(drive)
+
+  // The name is free the first time and suffixed after that; the title follows.
+  assert.deepEqual(suggestConnector(drive, []), { name: 'google-drive', title: 'Google Drive' })
+  assert.deepEqual(suggestConnector(drive, ['google-drive']), { name: 'google-drive-2', title: 'Google Drive 2' })
+  assert.deepEqual(suggestConnector(drive, ['GOOGLE-DRIVE', 'google-drive-2']), {
+    name: 'google-drive-3',
+    title: 'Google Drive 3',
+  })
+
+  // The note says which service it is to, so the second one is still a Drive
+  // even though nothing about its name says so.
+  const { content } = connectorFromCatalog(drive, {
+    name: 'google-drive-2',
+    title: 'Google Drive 2',
+    description: '',
+    values: sampleValues(drive),
+  })
+  const fm = parseFrontmatter(content)
+  assert.equal(fm.recipe, 'google-drive')
+  assert.equal(catalogEntryFor('google-drive-2', null, 'google-drive')?.id, 'google-drive')
+  // …and a note that never carried `recipe:` still resolves by name.
+  assert.equal(catalogEntryFor('google-drive')?.id, 'google-drive')
+})
+
+test('a second connector gets its own secrets and its own linked accounts', () => {
+  const slack = CONNECTOR_CATALOG.find((e) => e.id === 'slack')
+  const drive = CONNECTOR_CATALOG.find((e) => e.id === 'google-drive')
+  assert.ok(slack && drive)
+
+  const first = connectorFromCatalog(slack, { name: 'slack', title: 'Slack', description: '', values: sampleValues(slack) })
+  const second = connectorFromCatalog(slack, { name: 'slack-2', title: 'Slack 2', description: '', values: sampleValues(slack) })
+
+  // Secret names are the SPACE's namespace: sharing them would leave the first
+  // workspace running on the second's token.
+  assert.deepEqual(first.secrets.map((s) => s.name), ['SLACK_BOT_TOKEN'])
+  assert.deepEqual(second.secrets.map((s) => s.name), ['SLACK_BOT_TOKEN__SLACK_2'])
+  for (const { content, secrets } of [first, second]) {
+    const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+    assert.ok(parsed.ok)
+    for (const ref of perimeterSecretRefs(parsed.perimeter)) {
+      assert.ok(secrets.some((s) => s.name === ref), `references unstored ${ref}`)
+    }
+  }
+
+  // Linked accounts key on the auth provider, so it follows the connector too.
+  const driveOne = parseConnectorPerimeter(parseFrontmatter(
+    connectorFromCatalog(drive, { name: 'google-drive', title: 'Google Drive', description: '', values: sampleValues(drive) }).content,
+  ))
+  const driveTwo = parseConnectorPerimeter(parseFrontmatter(
+    connectorFromCatalog(drive, { name: 'google-drive-2', title: 'Google Drive 2', description: '', values: sampleValues(drive) }).content,
+  ))
+  assert.ok(driveOne.ok && driveTwo.ok)
+  assert.equal(driveOne.perimeter.auth?.provider, 'google-drive')
+  assert.equal(driveTwo.perimeter.auth?.provider, 'google-drive-2')
+})
+
+test('a model provider is one connector per space; everything else is many', () => {
+  for (const entry of CONNECTOR_CATALOG) {
+    assert.equal(allowsManyConnectors(entry), entry.shape !== 'model', entry.id)
+  }
+  // The reason, asserted where it lives: every model recipe names the one
+  // reserved key its provider reads (lib/agents/registry.ts).
+  for (const entry of CONNECTOR_CATALOG.filter((e) => e.shape === 'model')) {
+    assert.ok(entry.fields.some((f) => f.secret && f.key.startsWith('MODEL_KEY_')), entry.id)
+  }
+})
+
+test('a model recipe stamps its service too', () => {
+  const openrouter = CONNECTOR_CATALOG.find((e) => e.id === 'openrouter')
+  assert.ok(openrouter)
+  const { content } = connectorFromCatalog(openrouter, {
+    name: 'openrouter',
+    title: 'OpenRouter',
+    description: '',
+    values: sampleValues(openrouter),
+  })
+  const fm = parseFrontmatter(content)
+  assert.equal(fm.recipe, 'openrouter')
+  assert.ok(parseModelConnector(fm).ok)
 })

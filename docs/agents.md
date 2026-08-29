@@ -56,7 +56,7 @@ Read this week's notes under updates/ and write a digest to reports/weekly.md �
   model connector (`lib/agents/providers.ts#findCustomModelEndpoint` — one per Space, SSRF-checked
   on save and on every resolve).
 - **Model connectors** — a model IS a connector: `connectors/<name>.md` with `type: connector`,
-  `kind: model`, `provider: gemini|openai|anthropic|custom`, plus `base_url:` for `custom` (Create
+  `kind: model`, `provider: gemini|openai|anthropic|openrouter|custom`, plus `base_url:` for `custom` (Create
   panel → Connector → *Model provider*). It sits in the Connectors list beside HTTP connectors, its
   page shows the provider, base URL (editable for custom), known model ids and the
   `MODEL_KEY_<PROVIDER>` key editor,

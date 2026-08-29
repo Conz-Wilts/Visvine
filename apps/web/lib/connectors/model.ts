@@ -2,9 +2,9 @@
  * Model connectors — the `kind: model` connector variant.
  *
  * A model connector is a note at `connectors/<name>.md` that stands for an LLM
- * provider the Space's agents run on (Gemini, OpenAI, Anthropic, or a custom
- * OpenAI-compatible endpoint). It sits beside HTTP connectors in the connectors
- * list and its key lives in the same encrypted secrets table, so "everything
+ * provider the Space's agents run on (Gemini, OpenAI, Anthropic, OpenRouter, or
+ * a custom OpenAI-compatible endpoint). It sits beside HTTP connectors in the
+ * connectors list and its key lives in the same encrypted secrets table, so "everything
  * this Space reaches out to, and the keys it uses" has one home — the
  * connectors folder — and nothing model-related lives anywhere else. Two things
  * deliberately make it NOT an ordinary connector:
@@ -25,7 +25,7 @@
  * Frontmatter:
  *   type: connector
  *   kind: model
- *   provider: gemini | openai | anthropic | custom
+ *   provider: gemini | openai | anthropic | openrouter | custom
  *   base_url: https://…      (custom only, required; refused on the others)
  *   description: …           (optional)
  *
@@ -189,7 +189,14 @@ export function modelConnectorInfo(config: ModelConnectorConfig): ModelConnector
  * The starting note for a model connector created from the Create panel.
  * Round-trips through {@link parseModelConnector}.
  */
-export function newModelConnectorNote(input: { name: string; provider: string; baseUrl?: string; description?: string }): string {
+export function newModelConnectorNote(input: {
+  name: string
+  provider: string
+  baseUrl?: string
+  description?: string
+  /** The catalog recipe this came from — display only (lib/connectors/catalog.ts). */
+  recipe?: string
+}): string {
   const provider = PROVIDERS.find((p) => p.id === input.provider.trim().toLowerCase())
   if (!provider) throw new Error(`unknown model provider "${input.provider}"`)
   let baseURL = provider.baseURL
@@ -206,6 +213,7 @@ export function newModelConnectorNote(input: { name: string; provider: string; b
     `alias: model`,
     `provider: ${provider.id}`,
   ]
+  if (input.recipe) front.push(`recipe: ${input.recipe}`)
   if (!provider.baseURL) front.push(`base_url: ${baseURL}`)
   if (description) front.push(`description: ${JSON.stringify(description)}`)
   const body = [

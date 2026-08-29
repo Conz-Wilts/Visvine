@@ -94,6 +94,23 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     ],
   },
   {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    baseURL: 'https://openrouter.ai/api/v1/',
+    keySecret: `${MODEL_KEY_PREFIX}OPENROUTER`,
+    probePath: 'models',
+    // A gateway namespaces its models by vendor, so an id here carries an
+    // interior slash (`anthropic/claude-sonnet-5`) — parseModelRef allows that,
+    // and the id only ever travels in the request body. Prices move with the
+    // upstream vendor and the route taken, so none are pinned: a space that
+    // wants its cap to bind declares `pricing:` on the connector note.
+    models: [
+      { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5', pricing: null },
+      { id: 'openai/gpt-4.1', label: 'GPT-4.1', pricing: null },
+      { id: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash', pricing: null },
+    ],
+  },
+  {
     id: 'custom',
     label: 'Custom endpoint',
     baseURL: null,
@@ -134,7 +151,7 @@ export function parseModelRef(raw: unknown): { ok: true; ref: ModelRef } | { ok:
     }
   }
   // A model id may carry interior slashes, because a gateway namespaces its
-  // models by vendor (`custom/z-ai/glm-5.3-flash` on OpenRouter). Only the
+  // models by vendor (`custom/z-ai/glm-5.3-flash`). Only the
   // FIRST slash separates provider from model, so the rest belong to the id.
   // The id is sent in the request body and never in a URL path, so a slash here
   // cannot steer a request anywhere — the endpoint is the connector's

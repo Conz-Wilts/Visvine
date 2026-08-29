@@ -50,6 +50,15 @@ export interface ConnectorSummary {
   model: ModelConnectorInfo | null
   /** Raw frontmatter `alias` — display metadata only (chip colour), any string. */
   alias: string | null
+  /**
+   * The catalog recipe this connection was written from, when it says so. A
+   * space may hold several connections to one service, so the name no longer
+   * identifies the service — this does. Display only: no perimeter, key or
+   * permission is read from it (lib/connectors/catalog.ts#catalogEntryFor).
+   */
+  recipe: string | null
+  /** Frontmatter `title` — what the connection is called where two share a service. */
+  title: string | null
   description: string | null
   /** Hosts the run may reach; empty = no network (documentation-only connector). */
   hosts: string[]
@@ -108,6 +117,8 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
     name: connectorName(path),
     path,
     alias: typeof fm.alias === 'string' ? fm.alias : null,
+    recipe: typeof fm.recipe === 'string' ? fm.recipe.trim().toLowerCase() : null,
+    title: typeof fm.title === 'string' ? fm.title : null,
     description: typeof fm.description === 'string' ? fm.description : null,
     enabled: isConnectorEnabled(fm),
     docs,

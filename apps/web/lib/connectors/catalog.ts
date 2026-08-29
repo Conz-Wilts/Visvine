@@ -17,6 +17,13 @@
  *     connector's page (lib/connectors/auth.ts).
  *   - `model`: an LLM provider the space's agents run on — never runnable
  *     (lib/connectors/model.ts).
+ *
+ * A recipe is not a slot. A space may connect one service several times — the
+ * team's Drive beside your own, two Slack workspaces — so a connector's NAME
+ * (`google-drive`, then `google-drive-2`) no longer says which service it is
+ * to. The note's `recipe:` does ({@link catalogEntryFor}). The exception is a
+ * model provider, which is one per space by construction
+ * ({@link allowsManyConnectors}).
  */
 
 import { SANDBOX_LIMITS } from './config'
@@ -740,6 +747,18 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     body: '',
   },
   {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    description: 'One key, hundreds of models from every vendor',
+    category: 'llm',
+    logo: 'openrouter.svg',
+    shape: 'model',
+    provider: 'openrouter',
+    hosts: [],
+    fields: [{ key: 'MODEL_KEY_OPENROUTER', label: 'API key', placeholder: 'sk-or-v1-…', secret: true, required: true, hint: 'openrouter.ai/keys → Create key.' }],
+    body: '',
+  },
+  {
     id: 'custom-model',
     name: 'OpenAI-compatible endpoint',
     description: 'Any provider speaking the OpenAI chat API',
@@ -844,18 +863,26 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
   },
 ]
 
-/** Entries matching a search by name, description or category; all of them when empty. */
 /**
- * The recipe a connector note came from, for display only — its logo, in the
- * console list and on the connector's own page.
+ * The service a connection came from — read for display (its logo, the service
+ * line under a connection's name) and to group a space's connections by what
+ * they reach.
  *
- * Matched on the note NAME, which is the recipe id for anything connected from
- * the catalog, and then on the model provider, so a `kind: model` note keeps
- * the provider's mark whatever it was called. Nothing is stamped into the note
- * to make this exact: a miss is a plug icon, never a broken page, and no
- * behaviour hangs off the answer.
+ * A space may hold SEVERAL connections to one service — two Drives, two Slack
+ * workspaces — so the note name cannot be the answer: only the first of them is
+ * called `google-drive`. The note carries `recipe:` in its frontmatter, written
+ * by {@link connectorFromCatalog}, and that is consulted first. The name, and
+ * then the model provider, remain the fallbacks, so a connection written before
+ * `recipe:` existed — or by hand — still finds its mark.
+ *
+ * It stays display-only. A wrong or missing answer costs a plug icon and a row
+ * listed on its own; no perimeter, key or permission is read from it.
  */
-export function catalogEntryFor(name: string, provider?: string | null): CatalogEntry | null {
+export function catalogEntryFor(name: string, provider?: string | null, recipe?: string | null): CatalogEntry | null {
+  if (recipe) {
+    const byRecipe = CONNECTOR_CATALOG.find((e) => e.id === recipe.trim().toLowerCase())
+    if (byRecipe) return byRecipe
+  }
   const slug = name.trim().toLowerCase()
   const byId = CONNECTOR_CATALOG.find((e) => e.id === slug)
   if (byId) return byId
@@ -864,6 +891,39 @@ export function catalogEntryFor(name: string, provider?: string | null): Catalog
   return CONNECTOR_CATALOG.find((e) => e.shape === 'model' && e.provider === key) ?? null
 }
 
+/**
+ * May the space add ANOTHER connection to this service?
+ *
+ * For an HTTP or OAuth service, always: a connection is one set of credentials,
+ * and two Drives (yours and the team's) or two Slack workspaces are ordinary.
+ * For a model provider, no — and not as a policy. Its key is
+ * `MODEL_KEY_<PROVIDER>`, one row per space by construction, and a registry
+ * provider's endpoint is pinned in code, so a second note would name the same
+ * key and the same URL and differ only in its title. `custom` is the same story
+ * from the other end: agents resolve ONE custom endpoint per space
+ * (lib/agents/providers.ts#findCustomModelEndpoint), so a second URL is a
+ * configuration error rather than a second choice.
+ */
+export function allowsManyConnectors(entry: CatalogEntry): boolean {
+  return entry.shape !== 'model'
+}
+
+/**
+ * What to call the next connector to a service, given the names the space has
+ * already used: `google-drive` then `google-drive-2`, titled "Google Drive"
+ * then "Google Drive 2". Pure, so the form opens on the note it is about to
+ * write; the title is the admin's to change, and the name follows it.
+ */
+export function suggestConnector(entry: CatalogEntry, taken: readonly string[]): { name: string; title: string } {
+  const used = new Set(taken.map((n) => n.trim().toLowerCase()))
+  if (!used.has(entry.id)) return { name: entry.id, title: entry.name }
+  for (let i = 2; ; i += 1) {
+    const name = `${entry.id}-${i}`
+    if (!used.has(name)) return { name, title: `${entry.name} ${i}` }
+  }
+}
+
+/** Entries matching a search by name, description or category; all of them when empty. */
 export function searchCatalog(query: string): CatalogEntry[] {
   const q = query.trim().toLowerCase()
   if (!q) return [...CONNECTOR_CATALOG]
@@ -896,22 +956,34 @@ export function connectorFromCatalog(
   input: { name: string; title: string; description: string; values: Record<string, string> },
 ): { content: string; secrets: Array<{ name: string; value: string }> } {
   const v = (key: string) => (input.values[key] ?? '').trim()
-  const secrets = entry.fields
-    .filter((f) => f.secret && v(f.key))
-    .map((f) => ({ name: f.key, value: v(f.key) }))
   const description = input.description.trim() || entry.description
 
   if (entry.shape === 'model') {
+    // A model provider's key is reserved and shared by design — one
+    // MODEL_KEY_<PROVIDER> per space — which is the same fact that makes it a
+    // one-connector service (allowsManyConnectors).
     return {
       content: newModelConnectorNote({
         name: input.name,
         provider: entry.provider ?? 'custom',
         baseUrl: v('base_url'),
         description,
+        recipe: entry.id,
       }),
-      secrets,
+      secrets: entry.fields.filter((f) => f.secret && v(f.key)).map((f) => ({ name: f.key, value: v(f.key) })),
     }
   }
+
+  // A second connector to a service gets its OWN secrets. The names are the
+  // space's namespace, not the note's, so two Slack workspaces both writing
+  // SLACK_BOT_TOKEN would leave the first one running on the second's token —
+  // silently, since the note still parses. The suffix is the connector's name,
+  // which is unique by construction, so `slack-2` binds SLACK_BOT_TOKEN__SLACK_2.
+  const suffix = input.name === entry.id ? '' : `__${input.name.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`
+  const secretName = (key: string) => `${key}${suffix}`
+  const secrets = entry.fields
+    .filter((f) => f.secret && v(f.key))
+    .map((f) => ({ name: secretName(f.key), value: v(f.key) }))
 
   const hosts = [...entry.hosts]
   if (v('host')) hosts.push(v('host').toLowerCase())
@@ -928,16 +1000,28 @@ export function connectorFromCatalog(
 
   const envLines = entry.fields
     .filter((f) => f.key !== 'host' && f.key !== 'url' && !/^[a-z]/.test(f.key) && v(f.key))
-    .map((f) => (f.secret ? `  ${f.key}: "{{secret:${f.key}}}"` : `  ${f.key}: ${yamlStr(v(f.key))}`))
+    .map((f) => (f.secret ? `  ${f.key}: "{{secret:${secretName(f.key)}}}"` : `  ${f.key}: ${yamlStr(v(f.key))}`))
 
-  const front = [`type: connector`, `title: ${yamlStr(input.title.trim() || entry.name)}`, `description: ${yamlStr(description)}`]
+  // `recipe:` says which service this connection is to. It is what lets a space
+  // hold two of one service — the second is `google-drive-2`, and only this
+  // says it is still a Drive (catalogEntryFor). Display only.
+  const front = [
+    `type: connector`,
+    `recipe: ${entry.id}`,
+    `title: ${yamlStr(input.title.trim() || entry.name)}`,
+    `description: ${yamlStr(description)}`,
+  ]
   front.push(yamlList('hosts', Array.from(new Set(hosts))))
   if (envLines.length > 0) front.push(`env:\n${envLines.join('\n')}`)
   front.push(`timeout_ms: ${SANDBOX_LIMITS.timeoutMs.default}`)
 
   if (entry.oauth) {
     const o = entry.oauth
-    const provider = o.provider || input.name
+    // The OAuth provider is the CONNECTOR's name, not the recipe's: linked
+    // accounts key on (space, provider, member) — ConnectorConnection — so two
+    // Drives sharing a provider would share one linked account each, which is
+    // the opposite of why a space connects a service twice.
+    const provider = input.name
     const clientId = entry.fields.find((f) => /CLIENT_ID$/.test(f.key) && !f.secret)
     const clientSecret = entry.fields.find((f) => /CLIENT_SECRET$/.test(f.key))
     const auth = [`auth:`, `  provider: ${provider}`, `  mode: ${o.mode}`]
@@ -945,7 +1029,7 @@ export function connectorFromCatalog(
     else if (v('url')) auth.push(`  discover: ${v('url')}`)
     else if (o.authorizeUrl && o.tokenUrl) auth.push(`  authorize_url: ${o.authorizeUrl}`, `  token_url: ${o.tokenUrl}`)
     if (clientId && v(clientId.key)) auth.push(`  client_id: ${yamlStr(v(clientId.key))}`)
-    if (clientSecret) auth.push(`  client_secret: "{{secret:${clientSecret.key}}}"`)
+    if (clientSecret) auth.push(`  client_secret: "{{secret:${secretName(clientSecret.key)}}}"`)
     if (o.scopes.length > 0) auth.push(yamlList('scopes', o.scopes, '  '))
     auth.push(yamlList('hosts', Array.from(new Set(hosts)), '  '))
     front.push(auth.join('\n'))

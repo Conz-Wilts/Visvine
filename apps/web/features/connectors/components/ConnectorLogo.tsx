@@ -10,8 +10,10 @@ import { catalogEntryFor, type CatalogEntry } from '@/lib/connectors/catalog';
  *
  * The same component on both surfaces (the console's Connectors list and the
  * connector's own page) so a row and the page it opens carry one mark. Pass
- * `entry` where the catalog row is already in hand; pass `name` (plus
- * `provider`, for a model connector) where all there is is a note.
+ * `entry` where the catalog row is already in hand; pass `name` (plus the note's
+ * `recipe`, and `provider` for a model connector) where all there is is a note.
+ * `recipe` is what keeps the mark right on a second connection to one service,
+ * whose name is `google-drive-2` rather than `google-drive`.
  */
 
 const SIZES = {
@@ -24,14 +26,17 @@ export default function ConnectorLogo({
   entry,
   name,
   provider,
+  recipe,
   size = 'md',
 }: {
   entry?: CatalogEntry | null;
   name?: string;
   provider?: string | null;
+  /** The note's `recipe:` — the service, where the name no longer says it. */
+  recipe?: string | null;
   size?: keyof typeof SIZES;
 }) {
-  const resolved = entry ?? (name ? catalogEntryFor(name, provider) : null);
+  const resolved = entry ?? (name ? catalogEntryFor(name, provider, recipe) : null);
   const { box, glyph } = SIZES[size];
   return (
     <div className={`${box} flex shrink-0 items-center justify-center bg-surface-2`}>

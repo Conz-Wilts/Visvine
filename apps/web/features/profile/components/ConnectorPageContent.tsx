@@ -64,6 +64,8 @@ interface ConnectorDetail {
   kind: 'http' | 'model';
   model: ModelInfo | null;
   alias: string | null;
+  /** The catalog service this connection is to, where the note says so. */
+  recipe: string | null;
   hosts: string[];
   allow: string[];
   /** `enabled: false` in the note — switched off in the console; every run is refused. */
@@ -1411,7 +1413,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {/* The same mark the console's Connectors list shows for this row —
               the service's logo, or the plug for one the space wrote itself. */}
-          <ConnectorLogo name={connector.name} provider={connector.model?.provider} size="lg" />
+          <ConnectorLogo name={connector.name} provider={connector.model?.provider} recipe={connector.recipe} size="lg" />
           <h1 className="truncate font-title text-xl font-semibold text-text-primary">
             {connector.name}
           </h1>

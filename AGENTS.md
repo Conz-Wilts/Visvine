@@ -432,16 +432,38 @@ notes. The `connectors/` folder is admin-only for writes regardless of grants
 admins-only by nature, so `/admin?section=connectors` IS the surface
 (`features/connectors/components/ConnectorsPanel.tsx`). The key is core and
 nav-hidden (`lib/featureAccess.ts`) — there is no rail row and no on/off
-switch. The section is the catalog (`lib/connectors/catalog.ts`): one
-searchable list of known services (All / Connected / Not connected), each a
-recipe — fields to fill in, the note that comes out. Saving writes the ordinary
+switch. It has two tabs, and they list different things: **In this space** is
+one row per CONNECTOR, and **Add a connector** is the catalog
+(`lib/connectors/catalog.ts`) — one row per SERVICE, each a recipe (fields to
+fill in, the note that comes out). Saving writes the ordinary
 `connectors/<name>.md` and PUTs each secret field to
-`/api/communities/<space>/secrets`; nothing else changes. Connected rows get
-Manage — what it reaches, which secrets it names, where the note is, plus
-**Turn off** and **Delete**. The row itself goes to the connector's page: the
-note IS the connector, so that is where it is read and edited. A connector the
-space wrote itself is a row too, under a plug rather than a logo, and is still
-authored on the draft surface.
+`/api/communities/<space>/secrets`; nothing else changes. Manage — on a
+connector's row — shows which service it is to, what it reaches, which secrets
+it names and where the note is, plus **Disable**, **Edit** and **Delete**. The
+row itself goes to the connector's page: the note IS the connector, so that is
+where it is read and edited. A connector the space wrote itself is a row in the
+first tab too, under a plug rather than a logo, and is still authored on the
+draft surface.
+
+**A service is not a slot.** A space may connect one service many times — the
+team's Drive beside your own, two Slack workspaces — so a catalog row never
+becomes "connected": it offers Connect, then **Add another**, whatever the space
+holds. Three things follow, all in `connectorFromCatalog`:
+
+- The note's name is `<recipe>`, then `<recipe>-2` (`suggestConnector`), so it
+  no longer says which service it is to. The note's **`recipe:`** does, and
+  `catalogEntryFor` reads it first (name, then model provider, are the fallbacks
+  for a note written before it). Display only — no perimeter, key or permission
+  is read from it.
+- **Secret names carry the connector**, `SLACK_BOT_TOKEN__SLACK_2`: a secret
+  name is the space's namespace, so sharing one would leave the first workspace
+  running on the second's token, silently, with both notes still parsing.
+- **`auth.provider` is the connector's name**, not the recipe's, because
+  `ConnectorConnection` keys linked accounts on `(space, provider, member)`.
+- The exception is a **model provider**: `MODEL_KEY_<PROVIDER>` is one row per
+  space and a registry base URL is pinned in code, so a second note would name
+  the same key and the same endpoint. `allowsManyConnectors` is false for it and
+  its row offers Manage instead.
 
 **Off is `enabled: false` in the frontmatter** (`isConnectorEnabled`), written
 by `PATCH …/connectors/<name>`; turning one back on deletes the key rather than
@@ -459,7 +481,7 @@ hangs off it. Logos live in `public/images/connectors/`. `tests/connector-catalo
 runs every recipe through the real parsers, so a new entry that would write an
 invalid note fails there.
 
-**Model connectors** (`kind: model`, `provider: gemini|openai|anthropic|custom`;
+**Model connectors** (`kind: model`, `provider: gemini|openai|anthropic|openrouter|custom`;
 `lib/connectors/model.ts`) are the one non-perimeter kind: they represent the
 LLM provider a Space's agents run on, keyed by the reserved `MODEL_KEY_<PROVIDER>`
 secret, with the base URL from `lib/agents/registry.ts` (never the note). They
