@@ -1,44 +1,42 @@
 /**
  * The agent note contract — pure, no I/O (tests import this directly).
  *
- * An agent is a FOLDER, `agents/<name>/`, holding two notes it is defined by
- * and whatever its runs write:
+ * An agent is a FOLDER, `agents/<name>/`, and ONE note defines it — the
+ * folder's index. What the agent is and whether it runs are the same note,
+ * because they are written by the same people and read as one thing:
  *
- *   agents/<name>/index.md      the BRIEF — what the agent is. Member-written;
- *                               the folder's index, so the folder IS the agent
+ *   agents/<name>/index.md      the BRIEF — what the agent is AND when it runs
  *   ---
  *   type: agent
  *   title: Weekly digest
  *   description: One line, shown on the roster
  *   model: gemini/gemma-4-31b-it      # <provider>/<model-id>, registry name never a URL
  *   connectors: [hubspot]             # declared reach — names under connectors/
- *   tools: [web]                      # optional extras: web (fetch_url), sandbox (run_code),
- *                                     #   messages (notify to a channel), directory (create_node/link_nodes)
+ *   tools: [web]                      # optional extras: web (fetch_url — any public page,
+ *                                     #   a search engine's results included), sandbox (run_code),
+ *                                     #   messages (notify to a channel),
+ *                                     #   directory (create_node/link_nodes), actions (run_action)
  *   agents: [digest]                  # optional — agents this one may chain into with run_agent
+ *                                     #   (omit it and any agent in the space may be chained)
  *   dry_run: true                     # optional — writes are captured in the transcript, not applied
- *   max_turns: 16                     # optional, 1..40
- *   ---
- *   The body is the brief. It is WRAPPED (a fixed preamble + the body), not
- *   passed verbatim as the whole system prompt.
+ *   max_turns: 40                     # optional, 1..200
  *
- *   agents/<name>/activation.md the ACTIVATION — whether and when it runs.
- *                               Admin-only: the write gate is path-only, so
- *                               the brief stays member-writable while this
- *                               one note beside it is not
- *   ---
- *   type: agent-activation
- *   active: true
+ *   active: true                      # ── the activation, same frontmatter ──
  *   schedule: daily                   # hourly | daily | weekly   (XOR with `every`)
  *   at: "07:00"                       # daily / weekly
  *   on: monday                        # weekly (a bare string is the weekday)
- *   every: 15m                        # Nm | Nh (5m..24h) or a 5-field cron
+ *   every: 15m                        # Nm | Nh (1m..24h) or a 5-field cron
  *   on:                               # a MAP declares event triggers
  *     context: ["people/**"]          #   note created/saved/renamed-to under a glob
  *     webhook: hubspot                #   connector whose inbound hook feeds this agent
  *     weekday: monday                 #   only with schedule: weekly (the bare string, moved here)
  *   debounce: 2m                      # coalesce window: Ns | Nm, default 60s, max 30m
  *   timezone: Pacific/Auckland        # required with a clock; UTC only for legacy notes
+ *   runs_as: <user id>                # admin-only unless you name yourself
  *   ---
+ *   The body is the brief. It is WRAPPED (a fixed preamble + the body), not
+ *   passed verbatim as the whole system prompt.
+ *
  *   An active agent needs at least one of `schedule`, `every` or `on`.
  *
  *   agents/<name>/<anything>.md  the agent's OWN notes — where its runs write
@@ -46,21 +44,30 @@
  *                               keeps between runs). The one place under
  *                               agents/ an agent may write, and only its own.
  *
+ * `agents/<name>/activation.md` was a second note holding the activation half.
+ * It is still READ when a brief carries no activation keys, so an agent
+ * written before the merge keeps running; `db:agents:activation` folds it in
+ * and removes it. Nothing writes one any more.
+ *
  * Budget is deliberately NOT here: it lives on the AgentState row because
  * money is admin-read while notes are member-read.
  *
  * Both parsers follow the connector precedent — `{ ok, … } | { ok: false,
- * error }` — so a broken note still describes itself on the roster.
+ * error }` — so a broken note still describes itself on the roster. They read
+ * the SAME frontmatter now: `parseAgentBrief` ignores the activation keys and
+ * `parseAgentActivation` ignores the brief's.
  */
+import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { parseModelRef, type ModelRef } from './registry'
 
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 const AGENT_TYPE = 'agent'
+/** The type a pre-merge standalone activation note carries. Read, never written. */
 const ACTIVATION_TYPE = 'agent-activation'
-const DEFAULT_MAX_TURNS = 16
-const MAX_MAX_TURNS = 40
-export const AGENT_TOOL_EXTRAS = ['web', 'sandbox', 'messages', 'directory'] as const
+const DEFAULT_MAX_TURNS = 40
+const MAX_MAX_TURNS = 200
+export const AGENT_TOOL_EXTRAS = ['web', 'sandbox', 'messages', 'directory', 'machine', 'actions'] as const
 export type AgentToolExtra = (typeof AGENT_TOOL_EXTRAS)[number]
 
 /**
@@ -70,10 +77,18 @@ export type AgentToolExtra = (typeof AGENT_TOOL_EXTRAS)[number]
  * and writes notes.
  */
 export const AGENT_TOOL_OPTIONS: ReadonlyArray<{ id: AgentToolExtra; label: string; description: string }> = [
-  { id: 'web', label: 'Web', description: 'Fetch public web pages (fetch_url).' },
+  { id: 'web', label: 'Web', description: 'Read public web pages, search engines included (fetch_url). A machine renders what needs JavaScript.' },
   { id: 'sandbox', label: 'Sandbox', description: 'Run JavaScript in an isolated sandbox (run_code).' },
   { id: 'messages', label: 'Messages', description: 'Post to a channel in this space (notify).' },
   { id: 'directory', label: 'Directory', description: 'Create records and link them (create_node, link_nodes).' },
+  // `machine` is deliberately absent: an agent gets a computer whenever the
+  // space HAS one (lib/agents/tools.ts), so it is not a checkbox. Old briefs
+  // that list it still parse — AGENT_TOOL_EXTRAS keeps the name.
+  {
+    id: 'actions',
+    label: 'Actions',
+    description: 'Everything else the platform can be asked to do (run_action) — events, the Drive, tools, connectors — as its author, with their access.',
+  },
 ]
 export const DEFAULT_AGENT_MODEL = 'gemini/gemma-4-31b-it'
 
@@ -92,13 +107,24 @@ export function agentBriefAliasPath(name: string): string {
   return `${agentFolderPath(name)}.md`
 }
 
+/**
+ * The pre-merge activation note. An agent written before the activation moved
+ * into the brief still has one, and it is still read when the brief carries no
+ * activation keys of its own — never written. `db:agents:activation` folds it in.
+ */
 export function agentActivationPath(name: string): string {
   return `${agentFolderPath(name)}/activation.md`
 }
 
-/** The href of an agent's page — where notifications about it point. */
-export function agentPageHref(name: string): string {
-  return `/directory/${encodeURIComponent(`agent:${name}`)}`
+/**
+ * The href of an agent's page — its node page, which is the ONE agent surface:
+ * the Agent tab is where it is configured AND where its runs are watched, the
+ * way a Profile tab belongs to a person node. There is no agents tool, rail row
+ * or roster page; a run to open rides along as `?run=<id>`.
+ */
+export function agentPageHref(name: string, runId?: string | null): string {
+  const href = `/directory/${encodeURIComponent(`agent:${name}`)}`
+  return runId ? `${href}?run=${encodeURIComponent(runId)}` : href
 }
 
 /** The agent name an agent-page href names, or null. Inverse of agentPageHref (either encoding). */
@@ -254,9 +280,9 @@ export interface AgentActivation {
   /**
    * Whose stored connections this agent spends, for connectors with an `auth:`
    * block (lib/connectors/auth.ts). A run has no person of its own, so one has
-   * to be named — and it lives HERE, on the admin-only live note, rather than in
-   * the member-writable brief. Writing your own agent must not be a way to make
-   * it act as somebody with more access than you.
+   * to be named — and it lives HERE, on the activation, where the write gate
+   * lets a member name only themselves and an admin anyone. Writing your own
+   * agent must not be a way to make it act as somebody with more access than you.
    *
    *   null            space connections only. An agent that reaches a
    *                   `mode: user` connector fails with a clear message rather
@@ -273,7 +299,7 @@ const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/
 const EVERY_RE = /^(\d{1,4})\s*([mh])$/i
 const DEBOUNCE_RE = /^(\d{1,5})\s*([sm])$/i
 const WEBHOOK_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
-const MIN_INTERVAL_MINUTES = 5
+const MIN_INTERVAL_MINUTES = 1
 const MAX_INTERVAL_MINUTES = 24 * 60
 export const DEFAULT_DEBOUNCE_MS = 60_000
 const MAX_DEBOUNCE_MS = 30 * 60_000
@@ -486,7 +512,7 @@ export function parseTriggers(raw: Record<string, unknown>): { ok: true; trigger
 export function scheduleHash(activation: AgentActivation, effectiveTz: string): string {
   // `runsAs` is deliberately absent: it changes whose credentials a run spends,
   // not when the run happens, and folding it in would reschedule every agent
-  // whenever an admin repointed one.
+  // whenever somebody repointed one.
   return JSON.stringify([activation.active, activation.schedule, effectiveTz, activation.every, activation.on, activation.debounceMs])
 }
 
@@ -813,6 +839,9 @@ export function newAgentNote(input: {
     `connectors: [${(input.connectors ?? []).join(', ')}]`,
     ...(input.tools?.length ? [`tools: [${input.tools.join(', ')}]`] : []),
     `max_turns: ${DEFAULT_MAX_TURNS}`,
+    // The activation lives here too. A new brief is off: turning it on is a
+    // deliberate act, and it writes the schedule keys in beside this one.
+    'active: false',
     '---',
     '',
   ]
@@ -861,44 +890,82 @@ function everyText(schedule: AgentSchedule | null): string | null {
   return null
 }
 
-export function newActivationNote(input: {
+/**
+ * The activation half of an agent's frontmatter, as keys — `active`, the
+ * clock, the triggers, the debounce and the zone. Written INTO the brief
+ * (withActivation), which is the only note an agent has.
+ */
+export function activationFrontmatter(input: {
   active: boolean
   schedule: AgentSchedule | null
   on?: AgentTriggers | null
-  /** ms; omitted or the default writes no `debounce:` line. */
+  /** ms; omitted or the default writes no `debounce:` key. */
   debounceMs?: number | null
   timezone?: string | null
-}): string {
-  const lines = ['---', `type: ${ACTIVATION_TYPE}`, `active: ${input.active ? 'true' : 'false'}`]
+}): NoteFrontmatter {
+  const fm: NoteFrontmatter = { active: input.active }
   const s = input.schedule
   if (s?.kind === 'interval' || s?.kind === 'cron') {
-    lines.push(`every: ${yamlString(everyText(s) ?? '')}`)
+    fm.every = everyText(s) ?? ''
   } else if (s) {
-    lines.push(`schedule: ${s.kind}`)
-    if (s.kind !== 'hourly') {
-      lines.push(`at: "${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}"`)
-    }
-    if (s.kind === 'weekly') lines.push(`on: ${WEEKDAYS[s.weekday]}`)
+    fm.schedule = s.kind
+    if (s.kind !== 'hourly') fm.at = `${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`
+    if (s.kind === 'weekly') fm.on = WEEKDAYS[s.weekday]
   }
   const on = input.on
   if (on && (on.context.length || on.webhook)) {
     // A weekly schedule's weekday moves INTO the map (`on.weekday`) so both fit.
-    if (s?.kind === 'weekly') lines.pop()
-    lines.push('on:')
-    if (s?.kind === 'weekly') lines.push(`  weekday: ${WEEKDAYS[s.weekday]}`)
-    if (on.context.length) lines.push(`  context: [${on.context.map(yamlString).join(', ')}]`)
-    if (on.webhook) lines.push(`  webhook: ${on.webhook}`)
+    const map: Record<string, unknown> = {}
+    if (s?.kind === 'weekly') map.weekday = WEEKDAYS[s.weekday]
+    if (on.context.length) map.context = [...on.context]
+    if (on.webhook) map.webhook = on.webhook
+    fm.on = map
   }
   const d = input.debounceMs
   if (typeof d === 'number' && d !== DEFAULT_DEBOUNCE_MS) {
-    lines.push(`debounce: ${d % 60_000 === 0 ? `${d / 60_000}m` : `${Math.round(d / 1000)}s`}`)
+    fm.debounce = d % 60_000 === 0 ? `${d / 60_000}m` : `${Math.round(d / 1000)}s`
   }
-  if (input.timezone) lines.push(`timezone: ${input.timezone}`)
-  lines.push(
-    '---',
-    '',
-    'Whether and when this agent runs — written by a space admin, beside the brief. Only `active`, `schedule`, `at`, `on`, `every`, `debounce`, `timezone` and `runs_as` are read.',
-    '',
-  )
-  return lines.join('\n')
+  if (input.timezone) fm.timezone = input.timezone
+  return fm
+}
+
+/**
+ * The frontmatter keys the activation owns. Every one is cleared before a new
+ * activation is written, so turning a daily agent into an interval one leaves
+ * no `at:` behind for the parser to argue with. `runs_as` is NOT in the list:
+ * it says whose credentials a run spends, is gated separately
+ * (contextService#activationRunsAsDenial) and survives every on/off.
+ */
+const ACTIVATION_KEYS = ['active', 'schedule', 'at', 'on', 'every', 'debounce', 'timezone'] as const
+
+/**
+ * Does this frontmatter carry an activation at all? A brief written before the
+ * merge does not, and its pre-merge `activation.md` is read instead.
+ */
+export function isLegacyActivationFrontmatter(fm: NoteFrontmatter): boolean {
+  return typeof fm.type === 'string' && fm.type.trim().toLowerCase() === ACTIVATION_TYPE
+}
+
+export function hasActivationFrontmatter(fm: NoteFrontmatter): boolean {
+  return ACTIVATION_KEYS.some((k) => fm[k] !== undefined && fm[k] !== null && fm[k] !== '')
+}
+
+/**
+ * The brief with a new activation written into its frontmatter — the one write
+ * that turns an agent on or off. The body and every brief key are untouched;
+ * only the activation keys are replaced.
+ */
+export function withActivation(
+  briefContent: string,
+  input: Parameters<typeof activationFrontmatter>[0],
+): string {
+  const fm = { ...parseFrontmatter(briefContent) }
+  for (const key of ACTIVATION_KEYS) delete fm[key]
+  return joinFrontmatter({ ...fm, ...activationFrontmatter(input) }, splitFrontmatter(briefContent).body)
+}
+
+/** The brief with `active: false` written in, leaving the rest of it alone. */
+export function withActiveFalse(briefContent: string): string {
+  const fm = parseFrontmatter(briefContent)
+  return joinFrontmatter({ ...fm, active: false }, splitFrontmatter(briefContent).body)
 }

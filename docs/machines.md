@@ -242,6 +242,15 @@ it.
 
 ## The window
 
+An agent reaches its machine from inside a run with `run_command` and
+`open_page` — offered to every agent of a space that HAS a machine
+(`lib/agents/tools.ts`), because the boundary is the policy below and not a key
+in a brief — and a person reaches it with the `vm_exec` / `vm_browse` actions. Both go through
+`runOnMachine` / `browseOnMachine`, and a run's commands carry its `runId` to
+the edge, which stamps it on every event it emits — so the machine's half of
+the story can be read back per run and nested under the step that asked
+(`lib/agents/shared/trace.ts#attachMachine`, shown on the agent's Agent tab).
+
 `apps/agent-edge/src/events.ts` is one stream with two audiences. Whoever is
 watching gets it live over a socket; the control plane gets it in batches
 (`POST /api/internal/vm/events`) and keeps it in `agent_vm_events`
@@ -254,6 +263,15 @@ Event kinds: `boot`, `wake`, `exec`, `output`, `exit`, `sleep`, `error`,
 survives a late batch; output is clipped to 4,000 characters per event and the
 stream capped at 2,000 events per boot, after which the timeline records that
 it stopped recording.
+
+**The agent reads the browser through CDP.** `browse.mjs` starts Chromium with
+DevTools on `127.0.0.1:9222`, so a `run_command` script attaches to the SAME
+browser (`chromium.connectOverCDP`) rather than launching a second one — the
+profile is locked by the running process, and a fresh browser would carry none
+of the sessions that make the first one useful. The port is loopback and never
+routed: `PLATFORM_DENY` refuses `localhost` before any allow rule, so the
+egress boundary is untouched by it, and nothing outside the container can reach
+it. `open_page`'s tool description carries the three-line script.
 
 **Frames go to whoever is watching and nowhere else.** Chromium runs headful
 on the machine's own Xvfb display; a screen service inside the container

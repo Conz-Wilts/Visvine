@@ -131,10 +131,10 @@ export async function runOnMachine(
   spaceId: string,
   agentName: string,
   cmd: readonly string[],
-  options: { timeoutSeconds?: number; taskAllow?: readonly string[] } = {},
+  options: { timeoutSeconds?: number; taskAllow?: readonly string[]; runId?: string | null } = {},
 ): Promise<RunOnMachineResult> {
   const leased = await leaseMachine(spaceId, agentName, { taskAllow: options.taskAllow })
-  const result = await edge.exec(environment(), spaceId, agentName, cmd, options.timeoutSeconds)
+  const result = await edge.exec(environment(), spaceId, agentName, cmd, options.timeoutSeconds, options.runId)
   await Promise.all([
     prisma.agentVm.update({ where: { id: leased.vmId }, data: { lastActiveAt: new Date() } }),
     recordExec(spaceId),

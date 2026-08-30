@@ -49,7 +49,7 @@ import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { writeGated } from '../lib/notes/contextService';
 import { principalOf, resolveContext } from '../lib/notes/resolve';
 import * as store from '../lib/notes/store';
-import { agentActivationPath, agentBriefPath } from '../lib/agents/config';
+import { agentBriefPath } from '../lib/agents/config';
 import { deactivateAgent } from '../lib/agents/hooks';
 import { tick } from '../lib/agents/schedule';
 import { encryptSecret } from '../lib/crypto/secrets';
@@ -104,11 +104,12 @@ async function eventually<T>(probe: () => Promise<T | null | undefined>, ms = 10
 
 // ── notes ─────────────────────────────────────────────────────────────────────
 
-const brief = (title: string) =>
-  ['---', 'type: agent', `title: ${title}`, 'model: custom/probe', '---', '', `Verify fixture: ${title}. Say hello and stop.`, ''].join('\n');
+/** A brief, with its activation in the same frontmatter — one note is the whole agent. */
+const brief = (title: string, activation: string[] = []) =>
+  ['---', 'type: agent', `title: ${title}`, 'model: custom/probe', ...activation, '---', '', `Verify fixture: ${title}. Say hello and stop.`, ''].join('\n');
 
-const NOTE_LIVE = ['---', 'active: true', 'on:', '  context:', '    - "people/**"', 'debounce: 5s', '---', ''].join('\n');
-const HOOK_LIVE = ['---', 'active: true', 'on:', `  webhook: ${CONNECTOR}`, 'debounce: 5s', '---', ''].join('\n');
+const NOTE_LIVE = ['active: true', 'on:', '  context:', '    - "people/**"', 'debounce: 5s'];
+const HOOK_LIVE = ['active: true', 'on:', `  webhook: ${CONNECTOR}`, 'debounce: 5s'];
 
 const CONNECTOR_NOTE = [
   '---',
@@ -244,12 +245,11 @@ async function main(): Promise<void> {
     );
 
     // ── a. on.context ────────────────────────────────────────────────────────
-    step('a1. brief + live note derive an active, event-only state row');
-    await write(agentBriefPath(NOTE_AGENT), brief('Event probe'));
-    await write(agentActivationPath(NOTE_AGENT), NOTE_LIVE);
+    step('a1. the brief derives an active, event-only state row');
+    await write(agentBriefPath(NOTE_AGENT), brief('Event probe', NOTE_LIVE));
     const derived = await state(NOTE_AGENT);
     check(
-      'agents/live/ev-probe.md → active row, no clock, triggers + debounce recorded',
+      'agents/ev-probe/index.md → active row, no clock, triggers + debounce recorded',
       derived?.active === true &&
         derived.nextRunAt === null &&
         derived.debounceMs === 5_000 &&
@@ -309,11 +309,10 @@ async function main(): Promise<void> {
     step('b1. a webhook: connector, its URL token, and a listening agent');
     await write(`connectors/${CONNECTOR}.md`, CONNECTOR_NOTE);
     const token = await provisionWebhookToken(SPACE, CONNECTOR, ADMIN_EMAIL);
-    await write(agentBriefPath(HOOK_AGENT), brief('Hook probe'));
-    await write(agentActivationPath(HOOK_AGENT), HOOK_LIVE);
+    await write(agentBriefPath(HOOK_AGENT), brief('Hook probe', HOOK_LIVE));
     const hookState = await state(HOOK_AGENT);
     check(
-      'agents/live/hook-probe.md → active row listening on the connector',
+      'agents/hook-probe/index.md → active row listening on the connector',
       hookState?.active === true && JSON.stringify(hookState.triggersJson) === JSON.stringify({ context: [], webhook: CONNECTOR }),
       hookState ? `active=${hookState.active} triggers=${JSON.stringify(hookState.triggersJson)}` : 'no agent_state row',
     );
@@ -392,10 +391,10 @@ async function main(): Promise<void> {
       const rows = await listNotifications(ADMIN_ID, { unreadOnly: true });
       return rows.find((r) => r.kind === 'agent_deactivated' && r.spaceId === SPACE) ?? null;
     });
-    const liveAfter = await store.readNoteOrNull(context, agentActivationPath(NOTE_AGENT));
+    const liveAfter = await store.readNoteOrNull(context, agentBriefPath(NOTE_AGENT));
     const stateAfter = await state(NOTE_AGENT);
     check(
-      'deactivateAgent(repeated_failure): live note active:false, row inactive with the reason, an unread agent_deactivated notification for the admin',
+      'deactivateAgent(repeated_failure): the brief reads active:false, row inactive with the reason, an unread agent_deactivated notification for the admin',
       activeBefore === true &&
         /active:\s*false/.test(liveAfter ?? '') &&
         stateAfter?.active === false &&

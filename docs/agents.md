@@ -1,7 +1,7 @@
 # Agents
 
 Scheduled and event-driven, self-hosted agents that run *from the context*: a Space authors an
-agent as a note, an admin activates it, and Visvine runs the tool-calling loop on a schedule, on an
+agent as ONE note, switches it on in that same note, and Visvine runs the tool-calling loop on a schedule, on an
 interval, or when a note under a glob changes / a webhook arrives — reading and writing the Space's
 notes, calling its connectors, and recording every run. This page is the operator and admin guide; the design decisions it records were made in the
 agents planning map (2026-08-17).
@@ -10,42 +10,54 @@ agents planning map (2026-08-17).
 ships, and reach only the connectors their brief declares. Connector credentials are decrypted
 inside Visvine and never leave it — not to the model, not to a sandbox, not to you.
 
-## An agent is two notes (plus a row)
+## An agent is one note (plus a row)
 
 | Path | Who writes | Holds |
 |---|---|---|
-| `agents/<name>.md` | any member (normal grants) | the **brief**: `type: agent`, `title`, `description`, `model`, `connectors`, `tools`, `max_turns`; the body is the system-prompt brief |
-| `agents/live/<name>.md` | space admins only | the **activation**: `active`, `schedule` (`hourly\|daily\|weekly`) *or* `every` (`15m`, `2h`, cron), `at`, `on` (a weekday, or the **triggers map** `{ context, webhook }`), `debounce`, `timezone`, `runs_as` |
+| `agents/<name>/index.md` | any member (normal grants) | the **whole agent**: `type: agent`, `title`, `description`, `model`, `connectors`, `tools`, `max_turns` — AND the **activation**: `active`, `schedule` (`hourly\|daily\|weekly`) *or* `every` (`15m`, `2h`, cron), `at`, `on` (a weekday, or the **triggers map** `{ context, webhook }`), `debounce`, `timezone`, `runs_as`. The body is the system-prompt brief |
+| `agents/<name>/…` | the agent's own runs | whatever it writes — its output, and `memory.md`, what it carries between runs |
 | `agent_state` row | derived, never authoritative | `nextRunAt`, `status`, `runningSince`, `scheduleHash`, `runAsUserId`, `triggersJson`, `debounceMs`, `budgetMonthlyCents`, failure bookkeeping |
 | `agent_events` rows | the payload **mailbox** | one row per note save / webhook / reply that woke an agent; claimed by the run that consumes them (`consumedBy`), pruned after 7 days |
 
-The write gate is path-only: one clause in `contextService.writeDenial` makes `agents/live/`
-admin-write, and `lockedDenial` freezes all of `agents/` for AI origins (an AI sweep — or an
-agent — can never rewrite a brief). **Budget is the one fact deliberately not in a note**: money is
-admin-read while notes are member-read, so it lives on the row behind an admin-only route.
+What an agent IS and whether it RUNS are the same note, because they are written by the same
+people: anyone whose grants reach the folder. Two fields are held back — `runs_as` (a member may
+name only themselves; `contextService#activationRunsAsDenial`) and the budget, which is not in a
+note at all: money is admin-read while notes are member-read, so it lives on the row behind an
+admin-only route. `lockedDenial` freezes all of `agents/` for AI origins, so an AI sweep — or an
+agent — can never rewrite a brief or switch anything on.
+
+`agents/<name>/activation.md` was a second note holding the activation half. It is still read when
+a brief carries no activation keys, so an agent from before the merge keeps running;
+`pnpm --filter @visvine/web db:agents:activation` folds it in and removes it. Nothing writes one.
 
 ```yaml
-# agents/weekly-digest.md
+# agents/weekly-digest/index.md
 ---
 type: agent
 title: Weekly digest
 description: Summarises the week into reports/weekly.md
-model: gemini/gemma-4-31b-it        # <provider>/<model-id> — a registry name, never a URL
+model: gemini/gemma-4-31b-it       # <provider>/<model-id> — a registry name, never a URL
 connectors: [hubspot]              # declared reach
-tools: [web]                       # optional: web, sandbox, messages, directory (see the tools table)
-agents: [crm-sync]                 # optional: agents this one may start with run_agent
+tools: [web, actions]              # optional: web, sandbox, messages, directory, actions
+agents: [crm-sync]                 # optional: the agents this one has in mind for run_agent
 dry_run: false                     # optional: true = rehearse — writes are captured, not applied
-max_turns: 16
+max_turns: 40                      # 1..200
+
+active: true                       # ── the activation, same frontmatter ──
+schedule: weekly
+at: "07:00"
+on: monday
+timezone: Pacific/Auckland
 ---
 Read this week's notes under updates/ and write a digest to reports/weekly.md …
 ```
 
 ### Rules the whole thing hangs on
 
-- **A member's edit to a live brief auto-deactivates it** (`brief_changed`); an admin's edit does
-  not — the admin approved a specific brief, and an admin editing it *is* the approval. The
-  deactivating write is the only machine write into `agents/live/` and can only ever set
-  `active: false`. Rename or delete of a brief also deactivates and carries the activation note.
+- **Editing a brief does not switch it off.** The people who can edit one are the people who turn
+  it on, so a changed brief is not a lapsed approval. Machine deactivation (a rejected key,
+  repeated failures) is the only machine write into the note and can only ever set
+  `active: false`. Rename or delete of a brief still deactivates.
 - **The agent acts as its author** (`ContextNote.createdBy` of the brief): reads and writes go
   through the author's grants, so a member's agent can't read what the member can't. Author leaves →
   `author_gone`, deactivated.
@@ -64,23 +76,21 @@ Read this week's notes under updates/ and write a digest to reports/weekly.md �
   `loadConnector` refuses `kind: model`, so MCP/agent `run_connector` and the console can't hand
   caller-authored JS the key. Base URL always comes from the registry, never the note
   (`lib/connectors/model.ts`).
-- **Run now** shares the scheduler's compare-and-swap claim, requires the agent to be **active**
-  (activation is the review point), does not advance the schedule, takes any waiting events with
-  it, and is author-or-admin.
+- **Run now** shares the scheduler's compare-and-swap claim, requires the agent to be **active**,
+  does not advance the schedule, takes any waiting events with it, and is open to anyone who can
+  edit the brief.
 - **An active agent needs at least one way to fire** — a `schedule`, an `every`, or an `on`
   trigger map. `schedule` and `every` are exclusive. A trigger-only agent has no clock:
   `next_run_at` is null until an event arrives.
 
 ## Triggers
 
-The live note (admin-only, so *what wakes an agent* is approved like *when*) may declare:
+The brief's own frontmatter says what wakes it:
 
 ```yaml
-# agents/live/crm-sync.md
----
-type: agent-activation
+# agents/crm-sync/index.md — the activation half of the frontmatter
 active: true
-every: 15m                 # Nm | Nh (5m … 24h), or a 5-field cron: "*/10 9-17 * * 1-5"
+every: 15m                 # Nm | Nh (1m … 24h), or a 5-field cron: "*/10 9-17 * * 1-5"
 on:                        # a MAP = event triggers (a bare string is still the weekly weekday)
   context: ["people/**"]   # note created / saved / renamed-to under a glob
   webhook: hubspot         # connector whose inbound hook feeds this agent
@@ -97,12 +107,12 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   then UTC (`effectiveTimezone`), so an old agent keeps the hour it has always fired at; nothing
   writes `spaces.timezone` any more.
 
-- **Grammar.** `every` accepts `Nm`/`Nh` (min 5m, max 24h; fires on the clock grid — `15m` at
+- **Grammar.** `every` accepts `Nm`/`Nh` (min 1m, max 24h; fires on the clock grid — `15m` at
   :00/:15/:30/:45) or a 5-field cron (`*`, `*/n`, lists, ranges, `a-b/n`; day-of-month and
-  day-of-week are ANDed; evaluated in the agent's timezone). `on.context` globs: `**` any depth,
-  `*` one segment, everything else literal). A cron may not fire more often than the same 5-minute
-  floor (`* * * * *`, `*/4 …` and `0,3 …` are refused: the minute set's smallest gap, wrapping the
-  hour, must be ≥ 5). `on.context` globs: a glob that **could match under `agents/`** is refused
+  day-of-week are ANDed; evaluated in the agent's timezone). The floor is one minute either way —
+  the tick's own cadence, so `* * * * *` is as often as anything can be asked to run.
+  `on.context` globs: `**` any depth, `*` one segment, everything else literal; a glob that
+  **could match under `agents/`** is refused
   (`**` alone is refused — name a folder), and `agents/` paths never fire regardless.
   `on.webhook` names a connector; the connector's own note declares how the hook is verified
   (`webhook:` block — see `docs/connectors.md`), and the inbound route enqueues an event for every
@@ -165,7 +175,7 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   OIDC token; the route verifies it itself (`lib/agents/internalAuth.ts`) because Cloud Run is
   `--allow-unauthenticated`. The tick: heartbeat → reclaim runs stuck > `MAX_RUN_MS + RECLAIM_GRACE_MS`
   (CAS on `running_since`; counts toward `repeated_failure`) → prune old
-  runs → re-derive rows whose activation note changed → CAS-claim due rows (`WHERE active AND
+  runs → re-derive rows whose brief changed → CAS-claim due rows (`WHERE active AND
   status='idle' AND next_run_at <= now()`, ≤ 5 per tick, one running per space — best-effort across
   overlapping ticks; the per-agent CAS is the hard guarantee) → claim the agent's pending
   events (`consumed_by = run id`) → create run rows (the claim names the
@@ -174,17 +184,18 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   **self-dispatch** each run as its own request to `POST /api/internal/agents/run` (60-second HS256
   token from `AUTH_SECRET`) and await them. No backfill: dispatch sets `next_run_at` to the next
   occurrence *after now*.
-- Cloud Run `--timeout=1800`; Scheduler `attemptDeadline` 1500 s; `MAX_RUN_MS` = 20 min, and the
-  stale-run reclaim fires at `MAX_RUN_MS + RECLAIM_GRACE_MS` (22 min; `lib/agents/limits.ts`). If runs
+- Cloud Run `--timeout=1800`; Scheduler `attemptDeadline` 1740 s; `MAX_RUN_MS` = 25 min, and the
+  stale-run reclaim fires at `MAX_RUN_MS + RECLAIM_GRACE_MS` (27 min; `lib/agents/limits.ts`). If runs
   ever need >30 min, swap
   `lib/agents/dispatch.ts` for Cloud Tasks; nothing else changes.
 - Dev: `AGENT_DISPATCH=inline` (default outside production) runs inside the tick request;
   `curl -X POST -H "Authorization: Bearer $AGENT_TICK_SECRET" localhost:3000/api/internal/agents/tick`.
-- Ceilings on a run: wall clock (`MAX_RUN_MS`), turns (`max_turns`, ≤ 40), spend (per-agent monthly
-  cap + fixed per-run backstop). Not resumable: a dead run is failed and the agent waits for its
+- Ceilings on a run: wall clock (`MAX_RUN_MS`, 25 min — the tick awaits its runs and Cloud
+  Scheduler's `attemptDeadline` cannot exceed 30), turns (`max_turns`, ≤ 200), spend (per-agent
+  monthly cap + a 2M-token per-run backstop). Not resumable: a dead run is failed and the agent waits for its
   next occurrence; partial note writes are revisions with origin `agent`, model `agent:<name>`.
 - Failure policy: 401/403 from the provider → `key_rejected`, deactivated; 429/402/5xx → wait for
-  the next occurrence; three consecutive failures → deactivated; budget reached → paused (not
+  the next occurrence; ten consecutive failures → deactivated; budget reached → paused (not
   deactivated), resumes next month or when the cap is raised.
 - Tick liveness: `agent_heartbeat` is written every tick; an agent's page shows a "scheduler delayed"
   banner when it is > 10 min old.
@@ -201,11 +212,13 @@ in `lib/agents/tools.ts`; side effects go through an injectable `AgentToolDeps` 
 | `list_context`, `search_context`, `read_context` | always | reads via `visibleVault` / `searchContext` / `readVisible` |
 | `write_context {path, content}`, `append_context {path, text}` | always | `writeGated` / `appendLogGated`, origin `agent`, model stamp `agent:<name>`; every changed path is collected into the run's **Changed notes** |
 | `run_connector {name, action\|code, args}` | `connectors: [names]` (never `kind: model` ones) | `loadConnector → executeConnectorScript` — the same single path the console and MCP use |
-| `fetch_url {url}` | `tools: [web]` | public https page → text |
+| `fetch_url {url}` | `tools: [web]` | public https page → text, redirects re-gated per hop (`lib/connectors/publicFetch.ts`). **This is also how an agent searches**: a search engine's results URL is a public page (`https://duckduckgo.com/html/?q=…`), so there is no search vendor, no search key and no per-provider code. A results page that only renders in a browser is one for the machine below |
+| `run_action {action, input?}` | `tools: [actions]` | the whole Action registry — events, the Drive, connectors, Tool authoring — through `runAction` as the author. `action` alone returns that action's manual; `action` + `input` runs it. Every scope but `secrets:write` |
 | `run_code {language, code}` | `tools: [sandbox]` | the named seam in `lib/agents/sandbox.ts`; nothing is built until a vendor is chosen (`AGENT_SANDBOX_PROVIDER`) |
-| `notify {message ≤2000, to?, title?}` | always; `to: channel:<name>` needs `tools: [messages]` | `to: author` (default) / `admins` → an `agent_notify` notification (bell, links to the agent page); `channel:<name>` → posts `<agent title>: <message>` into that space channel **as the author** (`sendMessage` enforces membership) and fans it out. **≤ 5 per run** — the sixth returns an error string |
-| `ask_human {question ≤1000, to?}` | always | an `agent_question` notification (bell) with a **reply box**. The run does not pause: it should ask, note what it is waiting on, and finish. The reply (`POST /api/notifications/[id]/reply`) is enqueued as a `reply` event for that agent (`agent_events`, `source: reply:<userId>`, payload `{question, reply, by}`), so it arrives as the **next run's** trigger payload. ≤ 2 per run |
-| `run_agent {name}` | `agents: [names]` | starts another agent of the space now via `claimManualRun` and returns its run id without waiting. Only names in `agents:`, never itself, target must be active and idle (a chained run skips the one-run-per-space check — the parent holds that slot). Chains carry `input.chain = {parent, depth}`; a run at depth ≥ 2 may not chain further |
+| `run_command {command[], timeout_seconds?}`, `open_page {url}` | whenever the space has a machine | the agent's OWN machine (`docs/machines.md`) — `runOnMachine` / `browseOnMachine`, a real Chromium for anything `fetch_url` cannot read (a JavaScript-rendered search page, a site behind a login a human established during a takeover). Note the asymmetry: `fetch_url` reaches any public host, the machine reaches only the hosts the space's connectors declare, so a browsing agent needs those hosts allowed. Every command stamped with the run id so the machine's timeline reads back under the step that asked for it. Not a brief switch: the boundary is the egress policy, the quota and the egress log. A dry run refuses both |
+| `notify {message ≤2000, to?, title?}` | always; `to: channel:<name>` needs `tools: [messages]` | `to: author` (default) / `admins` → an `agent_notify` notification (bell, links to the agent page); `channel:<name>` → posts `<agent title>: <message>` into that space channel **as the author** (`sendMessage` enforces membership) and fans it out. **≤ 25 per run** — the next returns an error string |
+| `ask_human {question ≤1000, to?}` | always | an `agent_question` notification (bell) with a **reply box**. The run does not pause: it should ask, note what it is waiting on, and finish. The reply (`POST /api/notifications/[id]/reply`) is enqueued as a `reply` event for that agent (`agent_events`, `source: reply:<userId>`, payload `{question, reply, by}`), so it arrives as the **next run's** trigger payload. ≤ 10 per run |
+| `run_agent {name}` | always | starts another agent of the space now via `claimManualRun` and returns its run id without waiting. `agents:` in the brief lists the ones it has in mind, it is not a fence: never itself, target must be active and idle (a chained run skips the one-run-per-space check — the parent holds that slot) and runs as ITS OWN author. Chains carry `input.chain = {parent, depth}`; a run at depth ≥ 5 may not chain further |
 | `create_node {type, name, description?, tags?, url?}` | `tools: [directory]` | `createEntity` (the same path as `POST /api/directory/entities` and MCP `add_context`): a person / space / resource / event node plus its context note, created by the author with the same `agent` / `agent:<name>` stamp as `write_context` (so it is held to Freeze-for-AI and never wakes this agent); duplicates are refused with the existing id |
 | `link_nodes {from, to, type?, note?}` | `tools: [directory]` | `upsertLink` (origin `manual`, `createdBy` author) between two node ids of the space, default relationship `related` |
 
@@ -312,7 +325,7 @@ gcloud scheduler jobs create http visvine-agent-tick \
   --uri="https://visvine.com/api/internal/agents/tick" --http-method=POST \
   --oidc-service-account-email=visvine-agent-tick@visvine-platform.iam.gserviceaccount.com \
   --oidc-token-audience="https://visvine.com/api/internal/agents/tick" \
-  --attempt-deadline=1500s
+  --attempt-deadline=1740s
 ```
 
 Migration `20260817120000_agents` adds `spaces.timezone`, `agent_state`,
@@ -329,11 +342,25 @@ deadline, UTC) was already correct and was left untouched.
 
 ## Surfaces
 
-- **Where they live** — there is no Agents tool. An agent is a note under `agents/` in the space's
-  Context, so the roster IS that folder in the context tree: folders of agents are ordinary folders
-  with an `index.md`, and a brief opens as the agent's page. Nothing about agents is switchable per
-  space — the `agent` type belongs to Context, which is always on — and nothing is nav-hidden
-  because there was never a rail row to hide.
+- **An agent is watched on its own node page** — `/directory/agent:<name>`, the **Agent** tab
+  beside Context and Raw (`features/profile/components/AgentPageContent.tsx`). It shows up on an
+  `agent:` node and nowhere else, the way Profile shows up on a person: an agent is a note under
+  `agents/` in the Context, so there is no agents tool — no rail row, no feature key, no roster
+  page, nothing to switch on or off. The tab carries the status line with Run and the switch, when
+  it runs (and what stands in the way while it is off), the brief's settings folded, spend
+  (admins), then the run: the one in flight — or the one the URL names, `?run=<id>` — as steps with
+  the machine's record nested under each `run_command` / `open_page` (`RunPane` + `RunSteps` over
+  the pure fold `lib/agents/shared/trace.ts#attachMachine`), and for an admin the machine itself
+  beside it (`MachinePane`: the screen, the terminal, Watch live — opened automatically while a run
+  is on — and Take control); then what it has been taught (`SkillsPanel`), a box to say something
+  to it, and the history, each row selecting a run in place. `run_agent`, `vm_browse` and
+  `create_agent` return a `watch` / `page` href into it
+  (`lib/agents/config.ts#agentPageHref(name, runId?)`). Polling throughout, never a stream: quick
+  while anything runs, a slow walk otherwise.
+- **Where they live** — an agent is still a note under `agents/` in the space's Context, so the
+  roster IS that folder in the context tree too: folders of agents are ordinary folders with an
+  `index.md`, and a brief opens as the agent's page. Nothing about agents is switchable per space —
+  the `agent` type belongs to Context, which is always on.
 - **Creating one** — "Create → Agent" (offered first while browsing `agents/`) opens the note-first draft (`/directory/new?type=agent`)
   with the agent half filled in (`features/agents/components/AgentDraftSetup.tsx`): a row of starter
   briefs (`lib/agents/templates.ts` — each fills the title, body, tools and roster line, and must
@@ -341,20 +368,21 @@ deadline, UTC) was already correct and was left untouched.
   model (the picker shows which providers hold a key), tool extras, connectors, the roster line.
   Those come from `GET /api/communities/[spaceId]/agents/options` (`lib/agents/options.ts`:
   providers + `keyStored`, connectors, sibling agents, `defaultModel` = the first provider with a
-  key). The body is the brief; Create writes `agents/<name>.md` through `newAgentNote` and lands on
-  the agent's page. An explicit `?type=` always wins over a draft stashed by an earlier visit.
+  key). The body is the brief; Create writes `agents/<name>/index.md` through `newAgentNote` (which
+  stamps `active: false` — a new agent is off until someone turns it on) and lands on the agent's page. An explicit `?type=` always wins over a draft stashed by an earlier visit.
 - `/directory/agent:<name>` — Agent tab beside the Context/Raw note tabs: the status line with its
   switch (the activation dialog's "Also run when…" section sets `on.context` globs, the `on.webhook`
   connector, `every` and `debounce`), Run now (author/admin), scheduler banner; while the agent is **off**, the setup checklist (`AgentSetupChecklist`: brief parses →
-  model key stored → when it runs → Turn on, each line naming who does what next; members see "an
-  admin turns it on"); while **on**, when it fires with a Change control (the activation dialog);
+  model key stored → when it runs → Turn on, each line naming who does what next); while **on**,
+  when it fires with a Change control (the activation dialog);
   **Settings** (`AgentSettingsPanel`, author or admin) — the same fields as the draft plus dry run
   and the turn cap, saved by rewriting only those frontmatter keys (`lib/agents/briefEdit.ts`) and
-  writing the note through the ordinary notes API, so a member's save turns a live agent off exactly
-  as editing the note would, and the form says so; spend + budget (admins); runs with live
-  transcripts.
+  writing the note through the ordinary notes API — the same note the activation lives in, so a save
+  keeps the schedule it already had; spend + budget (admins); the latest runs, each a
+  link into the window. The note page is the agent as a thing to configure; the window is the
+  agent at work.
 - Console → Agents: **gone.** Everything it held now lives on the agent: the run timezone is part of
-  the activation note (required to turn a scheduled agent on), models and keys are connectors, and
+  the brief (required to turn a scheduled agent on), models and keys are connectors, and
   activation was always per agent, on the agent's page.
 - API: `GET/PATCH /api/communities/[spaceId]/agents/[name]`, `POST …/[name]/run`,
   `GET …/[name]/runs/[runId]`, `GET/PUT …/[name]/budget`.

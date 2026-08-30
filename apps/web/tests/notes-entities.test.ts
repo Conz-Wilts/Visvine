@@ -495,23 +495,16 @@ test('namespaceFolderDenial pins the built-in folders, not what is inside them',
   assert.equal(namespaceFolderDenial(''), null);
 });
 
-test('structuralFolders follows the tools a space runs', () => {
-  // Nothing configured: every tool is on by default, so all three are there.
+test('structuralFolders: the three built-in folders are always there', () => {
+  // Nothing configured: all three are there.
   assert.deepEqual(structuralFolders(null).sort(), ['agents', 'connectors', 'tools']);
 
-  // Agents off -> no agents/ folder; the other two are untouched.
+  // Each folder is keyed to a core feature — agents/ to `notes`, since an agent
+  // is a brief in the Context — so they survive even an explicit false, and a
+  // stale `agents: false` from before the agents surface was removed means
+  // nothing: "they are always there" needs no special case.
   assert.deepEqual(
-    structuralFolders({ enabled: { agents: false } }).sort(),
-    ['connectors', 'tools'],
-  );
-  // connectors and tools are core feature keys, so they survive even an
-  // explicit false — "they are always there" needs no special case.
-  assert.deepEqual(
-    structuralFolders({ enabled: { connectors: false } }).sort(),
+    structuralFolders({ enabled: { agents: false, notes: false, connectors: false, tools: false } }).sort(),
     ['agents', 'connectors', 'tools'],
-  );
-  assert.deepEqual(
-    structuralFolders({ enabled: { agents: false, connectors: false, tools: false } }).sort(),
-    ['connectors', 'tools'],
   );
 });

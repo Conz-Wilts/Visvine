@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isSuperAdmin, requireSession } from '@/lib/session'
-import { isActiveMemberOf } from '@/lib/spaces/tree'
+import { isActiveMemberOf } from '@/lib/spaces/membership'
 import { getVersion, perimeterDiffForVersion, versionHistory } from '@/lib/tools/registry'
 import { EMPTY_PERIMETER, diffPerimeter } from '@/lib/tools/perimeter'
 import type { VersionDetail, VersionHistoryEntry, VersionResponse } from '@/lib/tools/api'

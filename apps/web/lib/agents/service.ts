@@ -5,36 +5,37 @@
  */
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/notes/audit'
-import { readVisible, visibleVault, writeDenialFull, writeGated } from '@/lib/notes/contextService'
+import { readVisible, visibleVault, writeDenial, writeDenialFull, writeGated } from '@/lib/notes/contextService'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
 
 /** The name an unmigrated flat brief (`agents/<name>.md`) carries, or null. */
 function agentNameOfAliasPath(path: string): string | null {
   const m = /^agents\/([^/]+)\.md$/.exec(path)
-  return m && AGENT_NAME_RE.test(m[1]) ? m[1] : null
+  // agents/index.md is the folder's own index note, never an agent called "index".
+  return m && m[1] !== 'index' && AGENT_NAME_RE.test(m[1]) ? m[1] : null
 }
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
-import { principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
+import { principalCanWrite, principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
 import { microsToCents } from './budget'
 import {
   AGENT_NAME_RE,
-  agentActivationPath,
   agentBriefPath,
   DEFAULT_DEBOUNCE_MS,
   describeSchedule,
   describeTriggers,
-  newActivationNote,
+  hasActivationFrontmatter,
   newAgentNote,
   parseAgentActivation,
   parseAgentBrief,
+  withActivation,
   type AgentActivation,
   type AgentBrief,
   type AgentSchedule,
   type AgentTriggers,
 } from './config'
-import { findAgentBrief } from './briefs'
+import { findAgentActivation, findAgentBrief } from './briefs'
 import { deactivateAgent, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
@@ -43,7 +44,6 @@ import { lastHeartbeat } from './schedule'
 
 export type AgentRowState =
   | 'off'
-  | 'needs_reactivation'
   | 'needs_key'
   | 'invalid'
   | 'scheduled'
@@ -102,11 +102,13 @@ export interface SerializedRun extends Omit<RunListItem, 'startedAt' | 'endedAt'
 }
 
 export function serializeRun(run: RunListItem): SerializedRun {
+  // costMicros is a BigInt, which JSON cannot carry: it leaves as cents.
+  const { costMicros, ...rest } = run
   return {
-    ...run,
+    ...rest,
     startedAt: run.startedAt.toISOString(),
     endedAt: run.endedAt ? run.endedAt.toISOString() : null,
-    costCents: microsToCents(run.costMicros),
+    costCents: microsToCents(costMicros),
   }
 }
 
@@ -118,7 +120,6 @@ function rowStateOf(
   if (s.invalid || s.activation.invalid) return 'invalid'
   if (s.state.status === 'running') return 'running'
   if (!s.activation.active) {
-    if (s.state.deactivatedReason === 'brief_changed') return 'needs_reactivation'
     if (s.state.deactivatedReason && s.state.deactivatedReason !== 'admin') return 'deactivated'
     return 'off'
   }
@@ -161,8 +162,8 @@ async function summarise(
   const parsedBrief = parseAgentBrief(fm, splitFrontmatter(briefContent).body)
   const brief = parsedBrief.ok ? parsedBrief.brief : null
 
-  const liveContent = await readVisible(p, context, agentActivationPath(name))
-  const parsedLive = liveContent ? parseAgentActivation(parseFrontmatter(liveContent)) : null
+  // The brief IS the activation; a pre-merge activation.md is the fallback.
+  const parsedLive = hasActivationFrontmatter(fm) ? parseAgentActivation(fm) : (await findAgentActivation(spaceId, name)).parsed
   const activation: AgentActivation | null = parsedLive?.ok ? parsedLive.activation : null
 
   const [state, last, keyStored, briefRow] = await Promise.all([
@@ -265,17 +266,14 @@ export async function describeAgent(
   context: Context,
   name: string,
   opts: { includeSpend?: boolean } = {},
-): Promise<(AgentSummary & { brief: string; activationNote: string | null; heartbeatAt: string | null }) | null> {
+): Promise<(AgentSummary & { brief: string; heartbeatAt: string | null }) | null> {
   if (!AGENT_NAME_RE.test(name)) return null
   const row = await findAgentBrief(context.spaceId, name)
   const content = row ? await readVisible(p, context, row.path) : null
   if (!row || content === null) return null
   const heartbeatAt = await lastHeartbeat()
-  const [summary, activationNote] = await Promise.all([
-    summarise(p, context, name, row.path, content, { includeSpend: !!opts.includeSpend, now: new Date(), heartbeatAt }),
-    readVisible(p, context, agentActivationPath(name)),
-  ])
-  return { ...summary, brief: content, activationNote, heartbeatAt: heartbeatAt?.toISOString() ?? null }
+  const summary = await summarise(p, context, name, row.path, content, { includeSpend: !!opts.includeSpend, now: new Date(), heartbeatAt })
+  return { ...summary, brief: content, heartbeatAt: heartbeatAt?.toISOString() ?? null }
 }
 
 export type ActivateResult =
@@ -283,9 +281,21 @@ export type ActivateResult =
   | { ok: false; status: number; error: string }
 
 /**
- * Admin activation: validate the brief and the key (a 401/403 refuses; other
- * probe failures activate with a warning), write the activation note through
- * the gate, and re-derive the state row.
+ * May this principal turn the agent on or off, change its schedule or run it
+ * now? Anyone who can EDIT its brief — a space admin, or a member whose grant
+ * reaches agents/<name>/ — so the people who can write what an agent does are
+ * the people who decide whether it runs. Money (setBudget) stays admin-only.
+ */
+function agentManageDenial(p: ContextPrincipal, context: Context, name: string): string | null {
+  if (principalIsSuperAdmin(p)) return null
+  return writeDenial(p, context, agentBriefPath(name))
+}
+
+/**
+ * Activation: validate the brief and the key (a 401/403 refuses; other
+ * probe failures activate with a warning), write the schedule into the brief
+ * through the gate, and re-derive the state row. Anyone who can edit the brief
+ * may.
  */
 export async function activateAgent(
   p: ContextPrincipal,
@@ -302,8 +312,9 @@ export async function activateAgent(
   if (input.schedule && !input.timezone?.trim()) {
     return { ok: false, status: 400, error: 'A scheduled agent must name the timezone it runs in.' }
   }
-  if (!principalIsSuperAdmin(p)) return { ok: false, status: 403, error: 'Only space admins can activate an agent.' }
   if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
+  const manage = agentManageDenial(p, context, name)
+  if (manage) return { ok: false, status: 403, error: manage }
   const row = await findAgentBrief(context.spaceId, name)
   const content = row ? await readVisible(p, context, row.path) : null
   if (!row || content === null) return { ok: false, status: 404, error: 'No such agent.' }
@@ -316,12 +327,13 @@ export async function activateAgent(
   if (!probe.ok && probe.kind === 'auth') return { ok: false, status: 400, error: probe.message }
   const warning = probe.ok ? null : probe.message
 
-  const note = newActivationNote({ active: true, schedule: input.schedule, on: input.on ?? null, debounceMs: input.debounceMs ?? null, timezone: input.timezone })
-  // The template is authoritative only once it parses: round-trip it so a bad
-  // glob or interval is refused here, not discovered by the tick.
+  // The activation is written INTO the brief — one note, one edit, the same
+  // people. Round-trip it so a bad glob or interval is refused here, not
+  // discovered by the tick.
+  const note = withActivation(content, { active: true, schedule: input.schedule, on: input.on ?? null, debounceMs: input.debounceMs ?? null, timezone: input.timezone })
   const check = parseAgentActivation(parseFrontmatter(note))
   if (!check.ok) return { ok: false, status: 400, error: check.error }
-  const written = await writeGated(p, context, agentActivationPath(name), note)
+  const written = await writeGated(p, context, row.path, note)
   if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
   await syncAgentState(context.spaceId, name)
   await logAudit(context.spaceId, {
@@ -334,9 +346,11 @@ export async function activateAgent(
   return { ok: true, warning }
 }
 
-export async function deactivateByAdmin(p: ContextPrincipal, context: Context, name: string): Promise<ActivateResult> {
-  if (!principalIsSuperAdmin(p)) return { ok: false, status: 403, error: 'Only space admins can deactivate an agent.' }
+/** Turn an agent off — the same people who may turn it on. */
+export async function switchOffAgent(p: ContextPrincipal, context: Context, name: string): Promise<ActivateResult> {
   if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
+  const manage = agentManageDenial(p, context, name)
+  if (manage) return { ok: false, status: 403, error: manage }
   await deactivateAgent(context.spaceId, name, 'admin', null, { userId: p.userId, name: p.name })
   return { ok: true, warning: null }
 }
@@ -363,11 +377,15 @@ export async function setBudget(
   return { ok: true, warning: null }
 }
 
-/** Author-or-admin: may this principal press "Run now" on this agent? */
+/**
+ * May this principal press "Run now" on this agent, or read its transcripts?
+ * Its author, a space admin, or any member whose grant lets them edit the
+ * brief — the same people who can turn it on.
+ */
 export async function canTriggerRun(p: ContextPrincipal, spaceId: string, name: string): Promise<boolean> {
   if (principalIsSuperAdmin(p)) return true
   const row = await findAgentBrief(spaceId, name)
-  return row !== null && row.createdBy === p.userId
+  return row !== null && (row.createdBy === p.userId || principalCanWrite(p, row.path))
 }
 
 export type CreateAgentResult =
@@ -388,12 +406,10 @@ export type CreateAgentResult =
  * its default HUMAN origin. Authoring is not sweeping. `writeDenial` and the
  * caller's own grants still apply in full; this widens nothing but the origin.
  *
- * CREATE ONLY, never overwrite. An admin who activated an agent approved a
- * SPECIFIC brief, and the deactivate-on-edit hook exempts admins — so a
- * caller able to rewrite briefs could swap an approved agent's instructions
- * and reach connectors nobody reviewed. Editing a brief stays a human act at
- * the note itself; this is the same line lib/tools/bridge.ts holds for a Tool
- * writing one.
+ * CREATE ONLY, never overwrite. Rewriting a live agent's instructions from an
+ * action would let a caller swap what runs unattended without anyone opening
+ * the note. Editing a brief stays a human act at the note itself; this is the
+ * same line lib/tools/bridge.ts holds for a Tool writing one.
  *
  * The brief is round-tripped through `parseAgentBrief` before it is saved, so
  * an unparseable model ref or tool extra is refused here rather than

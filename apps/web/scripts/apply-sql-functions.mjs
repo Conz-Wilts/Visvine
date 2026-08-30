@@ -33,7 +33,6 @@ if (!url) {
 const files = [
   "prisma/sql/retrieval-indexes.sql",
   "prisma/sql/public-space-name-unique.sql",
-  "prisma/sql/sibling-space-name-unique.sql",
 ];
 
 if (files.length === 0) {

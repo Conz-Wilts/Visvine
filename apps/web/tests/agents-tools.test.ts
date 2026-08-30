@@ -48,6 +48,8 @@ interface Fakes {
   appends: { path: string; text: string }[]
   created: { type: string; name: string; stamp?: { origin?: string; model?: string } }[]
   links: { from: string; to: string; relationship: string }[]
+  commands: { cmd: string[]; runId: string | null }[]
+  pages: string[]
 }
 
 function fakes(): Fakes {
@@ -59,6 +61,8 @@ function fakes(): Fakes {
     appends: [],
     created: [],
     links: [],
+    commands: [],
+    pages: [],
     deps: {
       writeGated: (async (_p, _c, path: string, content: string) => {
         f.writes.push({ path, content })
@@ -89,6 +93,15 @@ function fakes(): Fakes {
         f.links.push({ from, to, relationship })
         return null
       },
+      machineAvailable: () => true,
+      runOnMachine: (async (_space: string, _agent: string, cmd: readonly string[], opts?: { runId?: string | null }) => {
+        f.commands.push({ cmd: [...cmd], runId: opts?.runId ?? null })
+        return { exitCode: 0, stdout: 'ok', stderr: '', timedOut: false, vmId: 'vm-1', booted: true }
+      }) as AgentToolDeps['runOnMachine'],
+      browseOnMachine: (async (_space: string, _agent: string, url: string) => {
+        f.pages.push(url)
+        return { started: true, alreadyRunning: false, vmId: 'vm-1' }
+      }) as AgentToolDeps['browseOnMachine'],
     },
   }
   return f
@@ -116,13 +129,26 @@ const names = (tools: ReturnType<typeof agentTools>) => tools.map((t) => t.spec.
 
 test('the surface: always-on tools, and extras only when the brief asks', () => {
   const f = fakes()
+  // Notes, people and the roster are every agent's; the machine comes with the
+  // space (the fakes say it has one). The rest is what the brief asked for.
   const base = names(agentTools(ctx(f)))
-  assert.deepEqual(base, ['list_context', 'search_context', 'read_context', 'write_context', 'append_context', 'notify', 'ask_human'])
+  assert.deepEqual(base, [
+    'list_context',
+    'search_context',
+    'read_context',
+    'write_context',
+    'append_context',
+    'run_command',
+    'open_page',
+    'notify',
+    'ask_human',
+    'run_agent',
+  ])
   const full = names(
-    agentTools(ctx(f, { brief: brief({ tools: ['web', 'messages', 'directory'], agents: ['other'], connectors: ['hubspot'] }) })),
+    agentTools(ctx(f, { brief: brief({ tools: ['web', 'messages', 'directory', 'actions'], agents: ['other'], connectors: ['hubspot'] }) })),
   )
-  for (const n of ['run_connector', 'fetch_url', 'run_agent', 'create_node', 'link_nodes']) assert.ok(full.includes(n), n)
-  assert.ok(!base.includes('run_agent') && !base.includes('create_node'), 'no chaining / directory without opt-in')
+  for (const n of ['run_connector', 'fetch_url', 'run_action', 'create_node', 'link_nodes']) assert.ok(full.includes(n), n)
+  assert.ok(!base.includes('create_node') && !base.includes('run_action') && !base.includes('fetch_url'), 'no directory / actions / web without opt-in')
 })
 
 test('notify: author by default, admins on request, capped per run', async () => {
@@ -153,7 +179,7 @@ test('notify to a channel posts as the run principal with the agent title, and n
   assert.equal(f.notified.length, 0, 'channel posts are not bell notifications')
 })
 
-test('ask_human: agent_question to the author, capped at two per run', async () => {
+test('ask_human: agent_question to the author, capped per run', async () => {
   const f = fakes()
   const ask = tool(agentTools(ctx(f, { authorUserId: 'the-author' })), 'ask_human')
   assert.match(await ask.run({ question: 'Which quarter?' }), /^asked author/)
@@ -164,22 +190,25 @@ test('ask_human: agent_question to the author, capped at two per run', async () 
   assert.equal(f.notified[0].input.href, agentPageHref('weekly-digest'))
   assert.equal(f.notified[0].input.dedupeKey, undefined)
   assert.match(await ask.run({ question: 'And which year?', to: 'admins' }), /^asked admins/)
-  assert.match(await ask.run({ question: 'third?' }), /^error: ask_human cap reached/)
+  for (let i = f.notified.length; i < ASK_PER_RUN_CAP; i++) assert.match(await ask.run({ question: `q${i}` }), /^asked/)
+  assert.match(await ask.run({ question: 'one more?' }), /^error: ask_human cap reached/)
   assert.equal(f.notified.length, ASK_PER_RUN_CAP)
   assert.match(await ask.run({ question: '', to: 'author' }), /^error: question is required/)
 })
 
-test('run_agent: only names in agents:, never itself, and refused past the depth limit', async () => {
+test('run_agent: any agent of the space, never itself, and refused past the depth limit', async () => {
   const f = fakes()
   const at = (depth: number) => tool(agentTools(ctx(f, { brief: brief({ agents: ['digest', 'weekly-digest'] }), chainDepth: depth })), 'run_agent')
-  assert.match(await at(0).run({ name: 'unknown' }), /not in this brief's `agents:` list/)
+  // `agents:` lists the ones the brief had in mind; it is not a fence.
+  assert.equal(await at(0).run({ name: 'unknown' }), 'started agent unknown — run run-unknown')
+  assert.match(await at(0).run({ name: '' }), /^error: name is required/)
   assert.match(await at(0).run({ name: 'weekly-digest' }), /cannot start itself/)
   assert.equal(await at(0).run({ name: 'digest' }), 'started agent digest — run run-digest')
-  assert.deepEqual(f.claims, [{ name: 'digest', startedBy: 'author-1', chain: { parent: 'run-root', depth: 1 } }])
+  assert.deepEqual(f.claims[1], { name: 'digest', startedBy: 'author-1', chain: { parent: 'run-root', depth: 1 } })
   assert.equal(await at(1).run({ name: 'digest' }), 'started agent digest — run run-digest')
-  assert.equal(f.claims[1].chain.depth, 2)
+  assert.equal(f.claims[2].chain.depth, 2)
   assert.match(await at(MAX_CHAIN_DEPTH).run({ name: 'digest' }), /chain depth limit/)
-  assert.equal(f.claims.length, 2)
+  assert.equal(f.claims.length, 3)
   // The claim's own refusal comes back with its code.
   f.deps.claimManualRun = async () => ({ ok: false, code: 'inactive', message: 'not active' })
   assert.equal(await at(0).run({ name: 'digest' }), 'error (inactive): not active')
@@ -257,4 +286,28 @@ test('through the loop: a dry-run write shows up as a tool_result line and the n
   assert.deepEqual(written, ['reports/x.md'])
   assert.equal(results.filter((r) => r.tool === 'notify' && r.text.startsWith('notified')).length, NOTIFY_PER_RUN_CAP)
   assert.equal(results.filter((r) => r.tool === 'notify' && r.text.startsWith('error: notify cap')).length, 1)
+})
+
+test('the machine comes with the space: run_command and open_page, stamped with the run, and a dry run touches neither', async () => {
+  const f = fakes()
+  const live = agentTools(ctx(f, { brief: brief({ tools: ['machine'] }) }))
+  assert.ok(names(live).includes('run_command') && names(live).includes('open_page'))
+  assert.ok(names(agentTools(ctx(f))).includes('run_command'), 'no opt-in needed')
+  const off = agentTools(ctx(f, { brief: brief({ tools: ['machine'] }), deps: { ...f.deps, machineAvailable: () => false } }))
+  assert.ok(!names(off).includes('run_command'), 'not without a substrate')
+
+  const out = await tool(live, 'run_command').run({ command: ['python3', '-c', 'print(1)'] })
+  assert.match(out, /^exit 0/)
+  assert.match(out, /machine woke/)
+  assert.deepEqual(f.commands, [{ cmd: ['python3', '-c', 'print(1)'], runId: 'run-root' }])
+  assert.match(await tool(live, 'run_command').run({ command: [] }), /^error/)
+  assert.match(await tool(live, 'open_page').run({ url: 'http://x' }), /^error/)
+  assert.match(await tool(live, 'open_page').run({ url: 'https://x.example/' }), /^opened https:\/\/x\.example\//)
+  assert.deepEqual(f.pages, ['https://x.example/'])
+
+  const dry = agentTools(ctx(f, { brief: brief({ tools: ['machine'], dryRun: true }) }))
+  assert.match(await tool(dry, 'run_command').run({ command: ['rm', '-rf', '/workspace'] }), /^DRY RUN/)
+  assert.match(await tool(dry, 'open_page').run({ url: 'https://x.example/' }), /^DRY RUN/)
+  assert.equal(f.commands.length, 1)
+  assert.equal(f.pages.length, 1)
 })

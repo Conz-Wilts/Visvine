@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDownIcon, PlayIcon } from '@/features/shared/icons';
 import { Alert, Button, Input, Skeleton } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
@@ -11,32 +11,31 @@ import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ActivateAgentDialog from '@/features/agents/components/ActivateAgentDialog';
 import AgentSettingsPanel from '@/features/agents/components/AgentSettingsPanel';
-import LiveRun from '@/features/agents/components/LiveRun';
-import MachineWindow from '@/features/agents/components/MachineWindow';
+import MachinePane from '@/features/agents/components/MachinePane';
 import MessageAgent from '@/features/agents/components/MessageAgent';
+import RunPane from '@/features/agents/components/RunPane';
 import SkillsPanel from '@/features/agents/components/SkillsPanel';
-import RunTranscript from '@/features/agents/components/RunTranscript';
 import StatusDot from '@/features/agents/components/StatusDot';
-import { fmtAgo, fmtCents, setupBlocker, statusLine, terminalLabel } from '@/features/agents/lib/rowState';
+import { fmtAgo, fmtCents, fmtDuration, setupBlocker, statusLine, terminalLabel } from '@/features/agents/lib/rowState';
 
 /**
  * The first tab of an agent's node page: what the note alone can't say. The
  * brief itself is the note (Context / Raw tabs); this tab is the status line
  * with its switch and play control, then one line for when it runs — the
  * schedule with a Change beside it, or, while it is off, the one thing
- * standing in the way with the switch beside that; THE RUN IN FLIGHT, when
- * there is one — its steps as they happen (LiveRun); the brief's settings,
- * folded; spend (admins); the machine's window and timeline (admins); what the
- * agent has been taught; a box to say something to it; and the run history,
- * each row opening to its steps.
+ * standing in the way with the switch beside that; the brief's settings,
+ * folded; spend (admins); what the agent has been taught; a box to say
+ * something to it; and its latest runs, each a link into the agent's WINDOW
+ * on /agents — where a run is watched, steps and machine together. This tab
+ * is about the agent as a thing to configure; the window is the agent at work.
  */
-type AgentDetail = AgentSummary & { brief: string; activationNote: string | null; heartbeatAt: string | null };
+type AgentDetail = AgentSummary & { brief: string; heartbeatAt: string | null };
 
 interface DetailResponse {
   agent: AgentDetail;
   runs: SerializedRun[];
   isAdmin: boolean;
-  canRun: boolean;
+  canManage: boolean;
 }
 
 function runTone(r: SerializedRun): 'live' | 'bad' | 'ok' {
@@ -46,6 +45,9 @@ function runTone(r: SerializedRun): 'live' | 'bad' | 'ok' {
 export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const name = nodeId.startsWith('agent:') ? nodeId.slice('agent:'.length) : nodeId;
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const runParam = params.get('run');
   const { currentSpace, loading: spaceLoading } = useSpace();
   const spaceId = currentSpace?.id;
 
@@ -55,10 +57,23 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const [activating, setActivating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [openRun, setOpenRun] = useState<string | null>(null);
   const [editingBudget, setEditingBudget] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [budgetInput, setBudgetInput] = useState<string>('');
+
+  // The run being watched rides the URL beside `?tab=`, so a `watch` href from
+  // an action, a notification or a teammate opens exactly the run it names, and
+  // a reload lands back on it.
+  const selectRun = useCallback(
+    (runId: string | null) => {
+      const next = new URLSearchParams(params.toString());
+      if (runId) next.set('run', runId);
+      else next.delete('run');
+      const q = next.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+    },
+    [params, pathname, router],
+  );
 
   const reload = useCallback(async () => {
     if (!spaceId) return;
@@ -93,20 +108,18 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     return () => clearInterval(t);
   }, [data, reload]);
 
-  // A run that just ended: the panel hands back, the page catches up at once.
-  const onRunFinished = useCallback(() => {
-    void reload();
-  }, [reload]);
-
   if (spaceLoading || loading) return <Skeleton className="h-40 w-full rounded-lg" />;
   if (error || !data) return <Alert>{error ?? 'Not found'}</Alert>;
 
-  const { agent, runs, isAdmin, canRun } = data;
+  const { agent, runs, isAdmin, canManage } = data;
   const line = statusLine(agent);
   const liveRun = runs.find((r) => r.status === 'running') ?? null;
-  const maxTurns = /^max_turns:\s*(\d+)/m.exec(agent.brief)?.[1];
   const blocker = agent.activation.active ? null : setupBlocker(agent, isAdmin);
-  const runnable = canRun && agent.activation.active && agent.state.status !== 'running' && !agent.invalid;
+  const runnable = canManage && agent.activation.active && agent.state.status !== 'running' && !agent.invalid;
+  // What the run section shows: the run in flight, else the one the URL names,
+  // else the latest. A live run always wins — watching it is why you are here.
+  const shownRun = liveRun ?? runs.find((r) => r.id === runParam) ?? runs[0] ?? null;
+  const maxTurns = /^max_turns:\s*(\d+)/m.exec(agent.brief)?.[1];
   const editBrief = () => router.replace(`/directory/${encodeURIComponent(nodeId)}?tab=context`);
 
   const deactivate = async () => {
@@ -138,7 +151,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         `/api/communities/${spaceId}/agents/${encodeURIComponent(name)}/run`,
         { method: 'POST' },
       );
-      setOpenRun(res.runId);
+      selectRun(res.runId);
       if (res.error) setNotice(res.error);
       else if (res.outcome && res.outcome.status !== 'succeeded') setNotice(terminalLabel(res.outcome.reason));
     } catch (e) {
@@ -174,14 +187,16 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 pb-16">
+    // Wider for an admin: the run's steps and the machine beside them are two
+    // columns, and squeezing a terminal into a 3xl column reads as broken.
+    <div className={`mx-auto flex w-full flex-col gap-8 pb-16 ${isAdmin ? 'max-w-6xl' : 'max-w-3xl'}`}>
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
           <StatusDot tone={line.tone} />
           <p className={`min-w-0 flex-1 truncate text-sm ${line.problem ? (line.tone === 'bad' ? 'text-red-600' : 'text-amber-700') : 'text-text-primary'}`}>
             {line.text}
           </p>
-          {canRun && (
+          {canManage && (
             <button
               type="button"
               className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] font-semibold text-text-secondary hover:bg-surface-3 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
@@ -194,8 +209,8 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
           )}
           <Toggle
             checked={agent.activation.active}
-            disabled={!isAdmin || busy || !!agent.invalid}
-            aria-label={isAdmin ? (agent.activation.active ? 'Turn off' : 'Turn on') : 'An admin turns agents on'}
+            disabled={!canManage || busy || !!agent.invalid}
+            aria-label={canManage ? (agent.activation.active ? 'Turn off' : 'Turn on') : 'Someone who can edit the brief turns it on'}
             onChange={(next) => (next ? setActivating(true) : deactivate())}
           />
         </div>
@@ -246,13 +261,13 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
                   )
                 )}
               </>
-            ) : isAdmin ? (
+            ) : canManage ? (
               'Not on yet — turning it on is where the schedule is picked.'
             ) : (
-              'Not on yet — a space admin turns it on and picks when it runs.'
+              'Not on yet — someone who can edit the brief turns it on and picks when it runs.'
             )}
           </p>
-          {isAdmin &&
+          {canManage &&
             (agent.activation.active ? (
               <button type="button" className="shrink-0 font-semibold text-brand-dark-green hover:underline" onClick={() => setActivating(true)}>
                 Change
@@ -268,18 +283,8 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         </p>
       </section>
 
-      {liveRun && spaceId && (
-        <LiveRun
-          key={liveRun.id}
-          spaceId={spaceId}
-          agentName={name}
-          runId={liveRun.id}
-          maxTurns={maxTurns ? Number(maxTurns) : null}
-          onFinished={onRunFinished}
-        />
-      )}
 
-      {canRun && spaceId && (
+      {canManage && spaceId && (
         <section className="border-t border-border-subtle pt-5">
           <button
             type="button"
@@ -339,12 +344,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         </section>
       )}
 
-      {isAdmin && spaceId && (
-        <section className="border-t border-border-subtle pt-5">
-          <MachineWindow spaceId={spaceId} agentName={name} />
-        </section>
-      )}
-
       {spaceId && agent.activation.active && (
         <section className="border-t border-border-subtle pt-5">
           <MessageAgent spaceId={spaceId} agentName={name} />
@@ -357,43 +356,75 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         </section>
       )}
 
-      <section className="border-t border-border-subtle pt-5">
-        {runs.length === 0 ? (
-          <p className="text-[13px] text-text-muted">No runs yet.</p>
-        ) : (
-          <ul className="divide-y divide-border-subtle">
-            {runs.map((r) => {
-              // The run in flight is the panel above; its row only says so.
-              const open = openRun === r.id && r.id !== liveRun?.id;
-              const seconds = r.endedAt ? Math.round((new Date(r.endedAt).getTime() - new Date(r.startedAt).getTime()) / 1000) : null;
-              return (
-                <li key={r.id} className="py-2.5">
-                  <button type="button" className="group flex w-full items-center gap-3 text-left text-[13px]" onClick={() => setOpenRun(open ? null : r.id)}>
-                    <StatusDot tone={runTone(r)} />
-                    <span className={`font-medium ${r.status === 'failed' ? 'text-red-600' : 'text-text-primary'}`}>
-                      {r.status === 'running' ? 'Running' : terminalLabel(r.terminalReason) || r.status}
-                    </span>
-                    <span className="truncate text-text-muted">
-                      {fmtAgo(r.startedAt)} · {r.trigger}
-                      {r.input?.dryRun ? ' · dry run' : ''}
-                      {r.input?.writes?.length ? ` · ${r.input.writes.length} note${r.input.writes.length === 1 ? '' : 's'}` : ''}
-                    </span>
-                    <span className="ml-auto shrink-0 tabular-nums text-text-muted">
-                      {[seconds !== null ? `${seconds}s` : null, isAdmin && r.costCents !== null ? fmtCents(r.costCents) : null].filter(Boolean).join(' · ')}
-                    </span>
-                    <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 text-text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
-                  </button>
-                  {open && spaceId && (
-                    <div className="mt-3">
-                      <RunTranscript spaceId={spaceId} agentName={name} runId={r.id} />
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+      {spaceId && (
+        <section className="flex flex-col gap-4 border-t border-border-subtle pt-5">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+            {shownRun?.status === 'running' ? 'Running now' : 'Runs'}
+          </p>
+
+          {/* The run and the machine are one story: the steps carry the
+              machine's record nested under each command, and the screen and
+              terminal beside them are the same machine live. Admins only —
+              a terminal is not a member's surface. */}
+          <div className={`grid gap-8 ${isAdmin ? 'xl:grid-cols-[minmax(0,3fr)_minmax(18rem,2fr)]' : ''}`}>
+            <div className="min-w-0">
+              {shownRun ? (
+                <RunPane
+                  key={shownRun.id}
+                  spaceId={spaceId}
+                  agentName={name}
+                  runId={shownRun.id}
+                  maxTurns={maxTurns ? Number(maxTurns) : null}
+                  isAdmin={isAdmin}
+                  onFinished={() => void reload()}
+                />
+              ) : (
+                <p className="text-[13px] text-text-muted">
+                  No runs yet.{' '}
+                  {runnable
+                    ? 'Press Run to watch its first one here.'
+                    : agent.activation.active
+                      ? 'The first one appears here when it fires.'
+                      : 'Turn it on and its runs appear here.'}
+                </p>
+              )}
+            </div>
+            {isAdmin && <MachinePane spaceId={spaceId} agentName={name} autoWatch={!!liveRun} />}
+          </div>
+
+          {runs.length > 1 && (
+            <ul className="divide-y divide-border-subtle border-t border-border-subtle pt-1">
+              {runs.slice(0, 8).map((r) => {
+                const open = shownRun?.id === r.id;
+                return (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      aria-current={open ? 'true' : undefined}
+                      className={`flex w-full items-center gap-3 py-2 text-left text-[13px] ${open ? 'text-text-primary' : 'hover:text-text-primary'}`}
+                      onClick={() => selectRun(r.id === liveRun?.id ? null : r.id)}
+                    >
+                      <StatusDot tone={runTone(r)} />
+                      <span className={`font-medium ${r.status === 'failed' ? 'text-red-600' : open ? 'text-text-primary' : 'text-text-secondary'}`}>
+                        {r.status === 'running' ? 'Running' : terminalLabel(r.terminalReason) || r.status}
+                      </span>
+                      <span className="min-w-0 truncate text-text-muted">
+                        {fmtAgo(r.startedAt)} · {r.trigger}
+                        {r.input?.dryRun ? ' · dry run' : ''}
+                        {r.input?.writes?.length ? ` · ${r.input.writes.length} note${r.input.writes.length === 1 ? '' : 's'}` : ''}
+                        {r.summary ? ` — ${r.summary.split('\n')[0]}` : ''}
+                      </span>
+                      <span className="ml-auto shrink-0 tabular-nums text-text-muted">
+                        {[fmtDuration(r.startedAt, r.endedAt), isAdmin && r.costCents !== null ? fmtCents(r.costCents) : null].filter(Boolean).join(' · ')}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
 
       {activating && spaceId && (
         <ActivateAgentDialog

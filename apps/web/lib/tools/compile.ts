@@ -361,10 +361,10 @@ function locationAt(source: string, filename: string, index: number): Message['l
 
 /**
  * Warnings, never errors: each of these compiles and runs, it just makes the
- * Tool visibly not belong. The frame is transparent so the viewer's chosen
- * backdrop (often a gradient) shows through — a Tool that repaints the page,
- * or hardcodes white where the kit has a token, looks right on the plain
- * theme and wrong on every other one. Matched in the source text because that
+ * Tool visibly not belong. The frame is transparent so the app's own backdrop
+ * shows through — a Tool that repaints the page, or hardcodes a colour where
+ * the kit has a token, stops following the viewer's accent theme. Matched in
+ * the source text because that
  * is what the author wrote and can point at; each pattern is narrow enough
  * that a hit is worth a line even when it is a false alarm, since a warning
  * blocks nothing.
@@ -376,8 +376,8 @@ const DESIGN_LINTS: ReadonlyArray<{ pattern: RegExp; message: string }> = [
     pattern: /(?:^|[^\w#.-])(?:html|body|#root)\s*(?:,\s*(?:html|body|#root)\s*)*\{[^}]*background/,
     message:
       'This styles the page background. The frame is transparent so the app’s own backdrop ' +
-      '(the viewer may have chosen a gradient) shows through — leave html/body/#root unpainted ' +
-      'and put opaque content in a Card or on var(--vv-surface).',
+      'shows through — leave html/body/#root unpainted and put opaque content in a Card or ' +
+      'on var(--vv-surface).',
   },
   {
     // A hardcoded white background, CSS or JSX style prop:

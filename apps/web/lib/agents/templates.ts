@@ -1,8 +1,9 @@
 /**
  * Starter briefs for the create surface. Pure: a template is the title,
  * description, tool extras and body a new brief begins with — nothing here
- * decides when it runs (that is the activation note, admin-written) or which
- * model (the picker's default, keyed by which provider has a key stored).
+ * decides when it runs (that is the activation, written into the same
+ * frontmatter when a person switches the agent on) or which model (the
+ * picker's default, keyed by which provider has a key stored).
  *
  * Every template must round-trip through `newAgentNote` → `parseAgentBrief`;
  * tests/agents-templates.test.ts holds that line. The `trigger` field is

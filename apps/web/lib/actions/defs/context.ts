@@ -82,7 +82,7 @@ import { createEventRecord, updateEventRecord } from '@/lib/events/write'
 import { coverUrlFromResource } from '@/lib/events/cover'
 import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth'
 import { eventCreateInputSchema, eventUpdateInputSchema } from '@/lib/schemas/eventSchemas'
-import { activateAgent, canTriggerRun, createAgentBrief, deactivateByAdmin, listAgents } from '@/lib/agents/service'
+import { activateAgent, canTriggerRun, createAgentBrief, listAgents, switchOffAgent } from '@/lib/agents/service'
 import {
   AGENT_TOOL_EXTRAS,
   agentPageHref,
@@ -93,6 +93,7 @@ import {
   type AgentTriggers,
 } from '@/lib/agents/config'
 import { claimManualRun } from '@/lib/agents/schedule'
+import { intakeSummary } from '@/lib/actions/shared/intake'
 import { AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
 import { featureAccessForbidden } from '@/lib/auth'
 import { readNoteOrNull, type Context } from '@/lib/notes/store'
@@ -1857,7 +1858,7 @@ export const CONTEXT_ACTIONS = [
         'its schedule, next run and last run outcome. Spend is not included (admins see it in the app). ' +
         "Trigger one with run_agent (needs the 'agents:run' scope; the agent must be active). " +
         'Write a new one with create_agent and turn it on with activate_agent — an agent is a brief plus an ' +
-        'admin activation, and creating one does NOT start it. Briefs are EDITED on the note itself, not ' +
+        'activation, and creating one does NOT start it. Briefs are EDITED on the note itself, not ' +
         'through edit_context: agents/ is frozen against generic AI writes so that a sweep cannot silently ' +
         'switch off every agent in the space.',
       input: { space_id: z.string() },
@@ -1895,8 +1896,8 @@ export const CONTEXT_ACTIONS = [
       summary:
         'Trigger an agent run now.',
       description:
-        "Trigger a run of an ACTIVE agent now (see list_agents). Only the agent's author or a space admin may; an inactive " +
-        'agent is refused — activation is the review point. Shares the scheduler\'s claim path so it cannot double-fire, and ' +
+        "Trigger a run of an ACTIVE agent now (see list_agents). Anyone who can edit the brief may — its author, a space admin, " +
+        'or a member with edit access to its folder; an inactive agent is refused. Shares the scheduler\'s claim path so it cannot double-fire, and ' +
         "does not advance the schedule. Returns the run id and, when the run completes within this call, its outcome.",
       input: {
         space_id: spaceArg,
@@ -1905,7 +1906,7 @@ export const CONTEXT_ACTIONS = [
       run: async (ctx, args) => {
         const { principal } = await resolveTarget(ctx, args.space_id, 'shared')
         if (!(await canTriggerRun(principal, args.space_id, args.agent))) {
-          throw new ActionError(403, "Only the agent's author or a space admin can run it")
+          throw new ActionError(403, 'Only someone who can edit this agent can run it')
         }
         const claimed = await claimManualRun(args.space_id, args.agent, principal.userId)
         if (!claimed.ok) throw new ActionError(claimed.code === 'unknown' ? 404 : 409, claimed.message)
@@ -1914,14 +1915,18 @@ export const CONTEXT_ACTIONS = [
           run_id: claimed.runId,
           outcome: result?.ok ? result.outcome : null,
           error: result && !result.ok ? result.error : null,
+          // Where a person watches it — the agent's page, on the run just started:
+          // the steps as they happen, the machine beside them.
+          watch: agentPageHref(args.agent, claimed.runId),
         }
       },
     }),
     defineAction({
       name: 'create_agent',
       scope: 'agents:author',
-      summary: "Write a new agent's brief. It does nothing until an admin turns it on.",
+      summary: "Write a new agent's brief. It does nothing until it is turned on.",
       description:
+        `BEFORE YOU CALL THIS: ${intakeSummary('agent')} ` +
         'Create an agent: a folder agents/<name>/ whose index.md is the brief — frontmatter declaring the model ' +
         'it runs on, the connectors it may call and which tool extras it gets; BODY the instructions it follows ' +
         'on every run. Write the body as a standing instruction, not a one-off request: what to read from the ' +
@@ -1929,8 +1934,8 @@ export const CONTEXT_ACTIONS = [
         '`connectors` must be a connector the space already has, and `model` must name one of its model ' +
         'connectors (omit it for the space default). ' +
         `WHAT THE AGENT CAN DO, so the brief can ask for it: ${AGENT_RUN_CAPABILITIES} ` +
-        'CREATING IS NOT TURNING ON: a new brief is inert. A space admin activates it with activate_agent (or ' +
-        "the Turn on button on the agent's page), and that is the review point — say so when you hand it over. " +
+        'CREATING IS NOT TURNING ON: a new brief is inert. Anyone who can edit it turns it on with activate_agent (or ' +
+        "the Turn on button on the agent's page) — say so when you hand it over. " +
         'Creates only; an existing agent is a 409, and briefs are edited on the note itself.',
       input: {
         space_id: spaceArg,
@@ -1983,18 +1988,19 @@ export const CONTEXT_ACTIONS = [
           tools: r.brief.tools,
           active: false,
           page: agentPageHref(r.name),
-          next: 'A space admin must turn it on before it runs — activate_agent, or the Turn on button on its page.',
+          next: 'Turn it on before it runs — activate_agent, or the Turn on button on its page.',
         }
       },
     }),
     defineAction({
       name: 'activate_agent',
       scope: 'agents:admin',
-      summary: 'Turn an agent on and set when it runs. Space admins only — this is the review point.',
+      summary: 'Turn an agent on and set when it runs. Anyone who can edit its brief may.',
       description:
-        'Turn an agent on. SPACE ADMINS ONLY, and deliberately so: an active agent runs unattended on the ' +
-        "space's model key with whatever reach its brief declares, so approving it is a person's act. Read the " +
-        'brief first (read_context on its path from list_agents) — you are approving what it says. ' +
+        "Turn an agent on. Anyone who can edit the brief may — its author, a space admin, or a member whose grant reaches " +
+        "agents/<name>/. An active agent runs unattended on the space's model key with whatever reach its brief " +
+        'declares, as its author (or the member `runs_as` names), so read the brief first (read_context on its path ' +
+        'from list_agents) — you are approving what it says. ' +
         'Give it at least one of `schedule`, `every` or `on_context`/`on_webhook`. A schedule with a clock ' +
         'needs `timezone`: "daily at 07:00" is meaningless until somebody says whose 07:00. ' +
         "The model key is probed as part of this, so a bad key is refused here rather than at the first run; " +
@@ -2076,7 +2082,7 @@ export const CONTEXT_ACTIONS = [
       },
       run: async (ctx, args) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
-        const r = await deactivateByAdmin(principal, context, args.agent)
+        const r = await switchOffAgent(principal, context, args.agent)
         if (!r.ok) throw new ActionError(r.status, r.error)
         return { agent: args.agent, active: false, page: agentPageHref(args.agent) }
       },

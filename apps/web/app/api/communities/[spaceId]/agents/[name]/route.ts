@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { bad, requireAgentsAccess } from '@/lib/agents/route'
-import { activateAgent, deactivateByAdmin, describeAgent } from '@/lib/agents/service'
+import { activateAgent, canTriggerRun, describeAgent, switchOffAgent } from '@/lib/agents/service'
 import { isValidTimeZone, parseDebounce, parseScheduleFields, parseTriggers, type AgentTriggers } from '@/lib/agents/config'
 import { listRuns, type RunListItem } from '@/lib/agents/runs'
 import { serializeRun } from '@/lib/agents/service'
 
 /**
- * One agent: brief + activation + state + recent runs. PATCH is the admin
- * activation switch — `{ active: true, schedule?, at?, on?, every?, triggers?:
- * { context?, webhook? }, debounce?, timezone }` (at least one of schedule /
- * every / triggers; `timezone` is required) or `{ active: false }`. Activation writes `agents/live/<name>.md` through the
- * ordinary write gate (admin-only path) and re-derives the state row.
+ * One agent: its brief (which carries the activation) + state + recent runs.
+ * PATCH is the switch — `{ active: true, schedule?, at?, on?, every?,
+ * triggers?: { context?, webhook? }, debounce?, timezone }` (at least one of
+ * schedule / every / triggers; `timezone` is required) or `{ active: false }`.
+ * Anyone who can edit the brief may flip it: activating writes the schedule
+ * into `agents/<name>/index.md` through the ordinary write gate and re-derives
+ * the state row. `canManage` in the GET is that same answer.
  */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ spaceId: string; name: string }> }) {
   const { spaceId, name: raw } = await params
@@ -26,7 +28,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
     agent: resolved.isAdmin ? agent : { ...agent, spend: null },
     runs: runs.map(serializeRun),
     isAdmin: resolved.isAdmin,
-    canRun: resolved.isAdmin || agent.authorUserId === principal.userId,
+    canManage: await canTriggerRun(principal, spaceId, name),
   })
 }
 
@@ -47,13 +49,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sp
   const ctx = await requireAgentsAccess(spaceId)
   if (ctx instanceof Response) return ctx
   const { resolved, principal } = ctx
-  if (!resolved.isAdmin) return bad('Only space admins can activate an agent.', 403)
 
   const body = (await req.json().catch(() => null)) as PatchBody | null
   if (!body || typeof body.active !== 'boolean') return bad('active (boolean) is required')
 
   if (!body.active) {
-    const r = await deactivateByAdmin(principal, resolved, name)
+    const r = await switchOffAgent(principal, resolved, name)
     return r.ok ? NextResponse.json({ ok: true }) : bad(r.error, r.status)
   }
 

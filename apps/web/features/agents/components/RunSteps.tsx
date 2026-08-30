@@ -19,6 +19,7 @@ import {
   WaypointsIcon,
 } from '@/features/shared/icons';
 import type { AgentRunEvent } from '@/lib/agents/runs';
+import { attachMachine, stepsOf, type MachineEvent, type Step } from '@/lib/agents/shared/trace';
 import { hrefForNotePath } from '@/lib/notes/entities';
 import { TONE_DOT } from '../lib/rowState';
 
@@ -26,55 +27,15 @@ import { TONE_DOT } from '../lib/rowState';
  * A run's trace as STEPS: each tool call and its result folded into one row
  * with a verb, what it touched, how long it took and whether it went well —
  * the model's own text between them as thoughts, the executor's notes as
- * asides. The raw events (lib/agents/runs.ts#AgentRunEvent) are a flat log
- * the executor flushes every couple of seconds; this is the shape a person
- * reads, live while the run is on and after the fact in the history.
+ * asides. When the agent used its machine, the machine's own record of that
+ * step — the command, what it printed, how it exited, what the boundary
+ * refused — is nested under the step that asked for it, so the two logs read
+ * as one (lib/agents/shared/trace.ts is the fold; it is pure and tested).
  *
  * Pure over its input: the same component renders a finished transcript and a
  * run in flight — `live` only decides whether the last open step breathes and
  * whether the view follows the tail.
  */
-
-export interface Step {
-  kind: 'tool' | 'thought' | 'note';
-  at: number;
-  /** The tool name for a tool step. */
-  tool?: string;
-  /** What the call was about (path, query, recipient…). */
-  detail?: string;
-  /** The tool's result; undefined while it is still running. */
-  result?: string;
-  /** When the result arrived. */
-  endedAt?: number;
-  /** A thought's or note's text. */
-  text?: string;
-}
-
-/** Fold the flat trace into steps: a tool event opens one, its result closes it. */
-export function stepsOf(events: AgentRunEvent[]): Step[] {
-  const steps: Step[] = [];
-  let open: Step | null = null;
-  for (const e of events) {
-    if (e.type === 'tool') {
-      open = { kind: 'tool', at: e.at, tool: e.tool, detail: e.detail };
-      steps.push(open);
-    } else if (e.type === 'tool_result') {
-      if (open && open.tool === e.tool && open.result === undefined) {
-        open.result = e.text;
-        open.endedAt = e.at;
-      } else {
-        steps.push({ kind: 'tool', at: e.at, tool: e.tool, detail: '', result: e.text, endedAt: e.at });
-      }
-      open = null;
-    } else if (e.type === 'assistant') {
-      steps.push({ kind: 'thought', at: e.at, text: e.text });
-      open = null;
-    } else {
-      steps.push({ kind: 'note', at: e.at, text: e.text });
-    }
-  }
-  return steps;
-}
 
 /** The verb a tool reads as, and the icon beside it. */
 const TOOL_VERB: Record<string, { verb: string; Icon: (props: { className?: string }) => React.ReactNode }> = {
@@ -86,6 +47,8 @@ const TOOL_VERB: Record<string, { verb: string; Icon: (props: { className?: stri
   run_connector: { verb: 'Called', Icon: PlugIcon },
   fetch_url: { verb: 'Fetched', Icon: GlobeIcon },
   run_code: { verb: 'Ran code', Icon: CodeIcon },
+  run_command: { verb: 'Ran', Icon: CodeIcon },
+  open_page: { verb: 'Opened', Icon: GlobeIcon },
   notify: { verb: 'Notified', Icon: BellIcon },
   ask_human: { verb: 'Asked', Icon: CircleQuestionMarkIcon },
   run_agent: { verb: 'Started agent', Icon: BotIcon },
@@ -118,6 +81,54 @@ function duration(ms: number): string {
 
 const RESULT_PREVIEW = 160;
 
+/** One line of the machine's record, in the terminal's own words. */
+function machineLine(event: MachineEvent): { text: string; tone: 'cmd' | 'out' | 'bad' | 'meta' } | null {
+  const p = event.payload ?? {};
+  switch (event.kind) {
+    case 'exec':
+      return { text: `$ ${Array.isArray(p.cmd) ? (p.cmd as string[]).join(' ') : ''}`, tone: 'cmd' };
+    case 'output':
+      return typeof p.text === 'string' && p.text.trim() ? { text: p.text.trimEnd(), tone: 'out' } : null;
+    case 'exit':
+      return { text: p.timedOut ? 'timed out' : `exit ${String(p.exitCode ?? '?')}`, tone: Number(p.exitCode) === 0 ? 'meta' : 'bad' };
+    case 'boot':
+      return { text: `machine woke${p.workspaceRestored ? ' · workspace restored' : ''}`, tone: 'meta' };
+    case 'wake':
+      return { text: 'machine woke', tone: 'meta' };
+    case 'sleep':
+      return { text: 'machine slept', tone: 'meta' };
+    case 'error':
+      return { text: typeof p.message === 'string' ? p.message : 'error', tone: 'bad' };
+    case 'egress_denied':
+      return { text: `refused ${String(p.method ?? '')} ${String(p.host ?? '')}${p.reason ? ` — ${String(p.reason)}` : ''}`.trim(), tone: 'bad' };
+    case 'browse':
+      return { text: `opened ${String(p.url ?? '')}`, tone: 'cmd' };
+    default:
+      return null;
+  }
+}
+
+const MACHINE_TONE: Record<'cmd' | 'out' | 'bad' | 'meta', string> = {
+  cmd: 'text-text-primary',
+  out: 'text-text-secondary',
+  bad: 'text-red-600',
+  meta: 'text-text-muted italic',
+};
+
+function MachineRecord({ events }: { events: MachineEvent[] }) {
+  const lines = events.map(machineLine).filter((l): l is NonNullable<typeof l> => l !== null);
+  if (lines.length === 0) return null;
+  return (
+    <pre className="mt-1.5 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface-2 px-3 py-2 font-mono text-[12px] leading-5">
+      {lines.map((l, i) => (
+        <div key={i} className={MACHINE_TONE[l.tone]}>
+          {l.text}
+        </div>
+      ))}
+    </pre>
+  );
+}
+
 function ToolStep({ step, live, now }: { step: Step; live: boolean; now: number }) {
   const [open, setOpen] = useState(false);
   const meta = TOOL_VERB[step.tool ?? ''] ?? { verb: step.tool ?? 'Did', Icon: SparklesIcon };
@@ -131,6 +142,9 @@ function ToolStep({ step, live, now }: { step: Step; live: boolean; now: number 
   const more = result.length > preview.length;
   const tone = running ? 'live' : failed ? 'bad' : 'ok';
   const { Icon } = meta;
+  // The machine's record says more than the tool's one-line result, so a
+  // machine step shows the terminal and folds the result away.
+  const hasMachine = !!step.machine?.length;
 
   return (
     <li className="relative pl-6">
@@ -149,11 +163,10 @@ function ToolStep({ step, live, now }: { step: Step; live: boolean; now: number 
             )}
           </span>
         )}
-        <span className="ml-auto shrink-0 tabular-nums text-[11px] text-text-muted">
-          {took !== null ? duration(took) : ''}
-        </span>
+        <span className="ml-auto shrink-0 tabular-nums text-[11px] text-text-muted">{took !== null ? duration(took) : ''}</span>
       </div>
-      {result && (
+      {hasMachine && <MachineRecord events={step.machine!} />}
+      {result && !hasMachine && (
         <button
           type="button"
           className="mt-0.5 block max-w-full text-left font-mono text-[12px] leading-relaxed text-text-muted hover:text-text-secondary"
@@ -165,24 +178,31 @@ function ToolStep({ step, live, now }: { step: Step; live: boolean; now: number 
           {open && <span className="ml-1 text-brand-dark-green">less</span>}
         </button>
       )}
-      {running && !result && <p className="mt-0.5 font-mono text-[12px] text-text-muted">working…</p>}
+      {result && hasMachine && failed && <p className="mt-0.5 font-mono text-[12px] text-red-600">{preview}</p>}
+      {running && !result && !hasMachine && <p className="mt-0.5 font-mono text-[12px] text-text-muted">working…</p>}
     </li>
   );
 }
 
 export default function RunSteps({
   events,
+  machine,
   live,
   startedAt,
   /** Words for an empty trace — "Starting…" while live, "Nothing recorded." after. */
   emptyText,
+  /** Cap the height and scroll inside, following the tail while live. */
+  scroll = live,
 }: {
   events: AgentRunEvent[];
+  /** The machine's timeline for this run, nested under the steps that drove it. */
+  machine?: MachineEvent[] | null;
   live: boolean;
   startedAt: number;
   emptyText?: string;
+  scroll?: boolean;
 }) {
-  const steps = useMemo(() => stepsOf(events), [events]);
+  const steps = useMemo(() => attachMachine(stepsOf(events), machine ?? []), [events, machine]);
   // A one-second clock only while something is open, so a running step's
   // duration counts up rather than sitting at the last flush.
   const [now, setNow] = useState(() => Date.now());
@@ -197,19 +217,20 @@ export default function RunSteps({
   // has scrolled up to read something, in which case leave them there.
   const tail = useRef<HTMLLIElement | null>(null);
   const box = useRef<HTMLOListElement | null>(null);
+  const machineCount = machine?.length ?? 0;
   useEffect(() => {
     if (!live || !box.current || !tail.current) return;
     const el = box.current;
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
     if (nearBottom) tail.current.scrollIntoView({ block: 'end' });
-  }, [live, steps.length]);
+  }, [live, steps.length, machineCount]);
 
   if (steps.length === 0) {
     return <p className="text-[13px] text-text-muted">{emptyText ?? (live ? 'Starting…' : 'Nothing recorded.')}</p>;
   }
 
   return (
-    <ol ref={box} className={`flex flex-col gap-2.5 border-l border-border-subtle pl-3 ${live ? 'max-h-[28rem] overflow-y-auto' : ''}`}>
+    <ol ref={box} className={`flex flex-col gap-2.5 border-l border-border-subtle pl-3 ${scroll ? 'max-h-[32rem] overflow-y-auto' : ''}`}>
       {steps.map((step, i) => {
         if (step.kind === 'tool') return <ToolStep key={i} step={step} live={live} now={now} />;
         if (step.kind === 'thought') {

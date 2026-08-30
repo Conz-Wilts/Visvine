@@ -11,8 +11,8 @@ import { logger } from '@/lib/logger'
 
 // The tick awaits the dispatches it fans out (each its own request to the run
 // endpoint), so it can last as long as the longest claimed run.
-// Segment config must be a literal Next can read statically: MAX_RUN_MS (20 min) + 120s.
-export const maxDuration = 1320
+// Segment config must be a literal Next can read statically: MAX_RUN_MS (25 min) + 120s.
+export const maxDuration = 1620
 export const dynamic = 'force-dynamic'
 
 /**

@@ -4,7 +4,7 @@
  * One Cloud Scheduler job hits /api/internal/agents/tick every minute (a
  * slower job still works; events just wait longer for the next tick).
  * The tick: records a heartbeat → reclaims runs whose instance died → prunes
- * old runs → re-derives any row whose activation note changed under it →
+ * old runs → re-derives any row whose brief changed under it →
  * CLAIMS the due rows with an atomic compare-and-swap on `status` (correct
  * across ten instances; no in-process flag) → creates a run row per claim →
  * dispatches, and returns. Selection is `WHERE active AND next_run_at <=
@@ -15,8 +15,8 @@
  */
 import crypto from 'node:crypto'
 import prisma from '@/lib/prisma'
-import { parseFrontmatter } from '@/lib/notes/shared/markdown'
-import { agentActivationPath, nextOccurrence, parseAgentActivation, scheduleHash } from './config'
+import { nextOccurrence, scheduleHash } from './config'
+import { findAgentActivation } from './briefs'
 import { dispatchRun, type DispatchResult } from './dispatch'
 import { claimEvents, eventDepthOf, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, syncAgentState } from './hooks'
@@ -96,13 +96,9 @@ async function claim(stateId: string, mode: 'scheduled' | 'manual', now: Date, n
   return changed === 1
 }
 
-/** The agent's next clock occurrence after `now` from its activation note, or null (trigger-only / no note). */
+/** The agent's next clock occurrence after `now` from its brief, or null (trigger-only / no note). */
 async function nextClockOccurrence(spaceId: string, name: string, now: Date): Promise<Date | null> {
-  const live = await prisma.contextNote.findFirst({
-    where: { spaceId, ownerKey: 'shared', path: agentActivationPath(name), deletedAt: null },
-    select: { content: true },
-  })
-  const parsed = live ? parseAgentActivation(parseFrontmatter(live.content)) : null
+  const parsed = (await findAgentActivation(spaceId, name)).parsed
   if (!parsed?.ok || !parsed.activation.schedule) return null
   const tz = await effectiveTimezone(spaceId, parsed.activation.timezone)
   return nextOccurrence(parsed.activation.schedule, now, tz)
@@ -144,14 +140,10 @@ export async function tick(now = new Date()): Promise<TickReport> {
     if (claimed.length >= MAX_RUNS_PER_TICK) break
     if (busy.has(row.spaceId)) continue
 
-    // Derivation discipline: if the activation note changed under the row
-    // (a write that bypassed the hook — restore, direct SQL), re-derive first
-    // and only claim if the note still says it's due.
-    const live = await prisma.contextNote.findFirst({
-      where: { spaceId: row.spaceId, ownerKey: 'shared', path: agentActivationPath(row.name), deletedAt: null },
-      select: { content: true },
-    })
-    const parsed = live ? parseAgentActivation(parseFrontmatter(live.content)) : null
+    // Derivation discipline: if the brief changed under the row (a write that
+    // bypassed the hook — restore, direct SQL), re-derive first and only claim
+    // if the note still says it's due.
+    const parsed = (await findAgentActivation(row.spaceId, row.name)).parsed
     if (!parsed || !parsed.ok || !parsed.activation.active || (!parsed.activation.schedule && !parsed.activation.on)) {
       await syncAgentState(row.spaceId, row.name, { now })
       continue

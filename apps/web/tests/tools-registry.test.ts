@@ -100,8 +100,7 @@ test('toolKey is the space and the name, which is what an install pins', () => {
 // ── who may install what (the two verdicts) ──
 
 const OWN = 'community:acme'
-const CHILD_LINEAGE = ['community:acme:ops', OWN]
-const STRANGER = ['community:other']
+const STRANGER = 'community:other'
 
 test('a version its own space approved installs in that space', () => {
   assert.deepEqual(
@@ -109,21 +108,9 @@ test('a version its own space approved installs in that space', () => {
       status: 'approved',
       marketplaceStatus: null,
       sourceSpaceId: OWN,
-      lineage: [OWN],
+      spaceId: OWN,
     }),
     { ok: true },
-  )
-})
-
-test('...and in a space nested under it, because a child’s members are the parent’s', () => {
-  assert.equal(
-    installability({
-      status: 'approved',
-      marketplaceStatus: null,
-      sourceSpaceId: OWN,
-      lineage: CHILD_LINEAGE,
-    }).ok,
-    true,
   )
 })
 
@@ -132,7 +119,7 @@ test('an unlisted version is refused everywhere else — the private-space rule'
     status: 'approved',
     marketplaceStatus: null,
     sourceSpaceId: OWN,
-    lineage: STRANGER,
+    spaceId: STRANGER,
   })
   assert.equal(verdict.ok, false)
   assert.match(verdict.ok === false ? verdict.error : '', /private to the space that wrote it/)
@@ -144,7 +131,7 @@ test('a LISTED version installs anywhere — that is what listing means', () => 
       status: 'approved',
       marketplaceStatus: 'approved',
       sourceSpaceId: OWN,
-      lineage: STRANGER,
+      spaceId: STRANGER,
     }).ok,
     true,
   )
@@ -158,7 +145,7 @@ test('a listing cannot rescue a version its own space never approved', () => {
       status,
       marketplaceStatus: 'approved',
       sourceSpaceId: OWN,
-      lineage: [OWN],
+      spaceId: OWN,
     })
     assert.equal(verdict.ok, false, status)
   }
@@ -169,7 +156,7 @@ test('a version waiting on an admin says so, rather than “not approved”', ()
     status: 'pending',
     marketplaceStatus: null,
     sourceSpaceId: OWN,
-    lineage: [OWN],
+    spaceId: OWN,
   })
   assert.match(verdict.ok === false ? verdict.error : '', /waiting on an admin/)
 })

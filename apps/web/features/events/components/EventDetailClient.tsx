@@ -239,16 +239,14 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
           {/* ── POSTER COLUMN ── */}
           <div className="lg:sticky lg:top-16 self-start flex flex-col gap-4">
             <div className="aspect-square rounded-lg overflow-hidden relative"
-                 style={event.coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${theme.base}, ${theme.dark})` }}>
+                 style={event.coverImageUrl ? undefined : { background: theme.base }}>
               {event.coverImageUrl ? (
                 <img src={event.coverImageUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6">
-                  <div className="absolute inset-0 opacity-30"
-                       style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,.25) 1px, transparent 1.4px)', backgroundSize: '18px 18px' }} />
-                  <span className="relative text-6xl font-bold font-title leading-none">{day}</span>
-                  <span className="relative text-xl font-bold tracking-[0.3em] mt-1">{month}</span>
-                  <span className="relative mt-4 text-center text-base font-semibold opacity-90 line-clamp-3">{event.title}</span>
+                  <span className="text-6xl font-bold font-title leading-none">{day}</span>
+                  <span className="text-xl font-bold tracking-[0.3em] mt-1">{month}</span>
+                  <span className="mt-4 text-center text-base font-semibold opacity-90 line-clamp-3">{event.title}</span>
                 </div>
               )}
             </div>

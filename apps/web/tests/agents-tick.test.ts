@@ -19,8 +19,8 @@
  *     does.
  *   • claimManualRun mints the run id into current_run_id and refuses a
  *     second claim while the first is running (per-agent CAS).
- *   • canTriggerRun (transcript + Run-now gate): author yes, admin yes,
- *     other member no.
+ *   • canTriggerRun (transcript + Run-now gate): author yes, admin yes, a
+ *     member who can edit the brief yes, a view-only member no.
  *   • agent_events: 50 enqueues → the pending cap, one tick claim carrying
  *     them all (trigger `event`, oldest first), dedupe by key; an event during
  *     a run doesn't pull next_run_at but release re-arms it; glob/webhook
@@ -269,12 +269,12 @@ test('claimManualRun names its run in current_run_id and is exclusive per agent'
   }
 })
 
-test('canTriggerRun (transcript + Run-now gate): author and admin yes, other member no', async (t) => {
+test('canTriggerRun (transcript + Run-now gate): author, admin and a member who can edit the brief yes; a read-only member no', async (t) => {
   const reason = await probe()
   if (reason) return t.skip(reason)
   const { canTriggerRun } = await import('@/lib/agents/service')
   const { agentBriefPath } = await import('@/lib/agents/config')
-  const { OPEN_ACCESS } = await import('@/lib/notes/shared/authz')
+  const { OPEN_ACCESS, LEVEL_VIEW } = await import('@/lib/notes/shared/authz')
   await setup()
   try {
     await prisma!.contextNote.create({
@@ -286,17 +286,19 @@ test('canTriggerRun (transcript + Run-now gate): author and admin yes, other mem
         createdBy: AUTHOR,
       },
     })
-    const principal = (userId: string, spaceAdmin: boolean) => ({
+    const principal = (userId: string, spaceAdmin: boolean, access = OPEN_ACCESS) => ({
       userId,
       email: `${userId}@local.test`,
       name: userId,
       spaceId: SPACE,
       spaceAdmin,
-      access: OPEN_ACCESS,
+      access,
     })
-    assert.equal(await canTriggerRun(principal(AUTHOR, false), SPACE, 'gated'), true)
+    const readOnly = { ...OPEN_ACCESS, grants: [{ ...OPEN_ACCESS.grants[0], level: LEVEL_VIEW }] }
+    assert.equal(await canTriggerRun(principal(AUTHOR, false, readOnly), SPACE, 'gated'), true, 'the author, whatever their grants')
     assert.equal(await canTriggerRun(principal(ADMIN, true), SPACE, 'gated'), true)
-    assert.equal(await canTriggerRun(principal(MEMBER, false), SPACE, 'gated'), false)
+    assert.equal(await canTriggerRun(principal(MEMBER, false), SPACE, 'gated'), true, 'a member who can edit the brief')
+    assert.equal(await canTriggerRun(principal(MEMBER, false, readOnly), SPACE, 'gated'), false, 'a member who can only read it')
     assert.equal(await canTriggerRun(principal(MEMBER, false), SPACE, 'no-such-agent'), false)
   } finally {
     await teardown()

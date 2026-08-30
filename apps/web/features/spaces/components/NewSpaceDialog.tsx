@@ -14,11 +14,6 @@
 // note. Provisioning a whole space is a different act with a different
 // destination — you leave where you are and land somewhere new — so it lives
 // here, on the switcher that already owns "which space am I in".
-//
-// With `parent` the space is created INSIDE the one you're in (docs/sub-spaces.md):
-// it starts visible to that space's members, and the parent's context gets a
-// record of it — the same `space` node + note the directory's Create → Space
-// writes, which provisions a space of its own when none is linked.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -31,13 +26,7 @@ interface CreateResponse {
   space: { id: string; name: string };
 }
 
-export default function NewSpaceDialog({
-  onClose,
-  parent = null,
-}: {
-  onClose: () => void;
-  parent?: { id: string; name: string } | null;
-}) {
+export default function NewSpaceDialog({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const { refreshSpace, setCurrentSpace } = useSpace();
   const [name, setName] = useState('');
@@ -58,7 +47,6 @@ export default function NewSpaceDialog({
       // null, visibility to private and the tools to Directory only.
       const { space } = await fetchJsonBody<CreateResponse>('/api/communities', 'POST', {
         name: name.trim(),
-        ...(parent ? { parentId: parent.id } : {}),
       });
       // The switcher has to see it before we switch into it.
       await refreshSpace();
@@ -82,7 +70,7 @@ export default function NewSpaceDialog({
   return (
     <Modal
       onClose={onClose}
-      title={parent ? `New subspace inside ${parent.name}` : 'New space'}
+      title="New space"
       size="sm"
       footer={
         <div className="flex justify-end gap-2 border-t border-border-subtle px-6 py-4">
@@ -111,11 +99,6 @@ export default function NewSpaceDialog({
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
         />
-        {parent && (
-          <p className="text-xs text-text-muted">
-            Visible to {parent.name}&rsquo;s members to start. You&rsquo;ll be its admin; {parent.name}&rsquo;s admins can manage it too.
-          </p>
-        )}
         {error && (
           <div className="border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">{error}</div>
         )}

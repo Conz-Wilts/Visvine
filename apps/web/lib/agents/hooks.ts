@@ -5,27 +5,28 @@
  *
  * Three rules, all from the wayfinder map:
  *
- * 1. A write to `agents/<name>/activation.md` re-derives `active`, `nextRunAt`
- *    and `scheduleHash` from the note. The note is authoritative; the row is
- *    an index that can always be rebuilt.
- * 2. A MEMBER's edit to `agents/<name>/index.md` while it is live
- *    auto-deactivates the agent — the admin approved a specific brief, and
- *    that approval does not survive someone else rewriting it. The system
- *    principal writes `active: false` into the activation note (the ONLY
+ * 1. A write to `agents/<name>/index.md` re-derives `active`, `nextRunAt` and
+ *    `scheduleHash` from the note — the brief IS the activation. The note is
+ *    authoritative; the row is an index that can always be rebuilt. Editing a
+ *    brief does not switch the agent off: the people who can edit one are the
+ *    people who can turn it on, so a changed brief is not a lapsed approval.
+ *    Machine deactivation (a rejected key, repeated failures) is the ONLY
  *    machine write into the activation boundary, and it can only ever set
- *    false), plus an audit line naming the member. An ADMIN's edit is itself
- *    the approval: nothing happens.
- * 3. A rename or delete of the agent always deactivates — simple and safe; an
- *    admin re-activates in one click. The activation sits in the agent's own
- *    folder, so a folder rename or delete carries it by itself; the hook only
- *    has to move the state row.
+ *    `active: false`.
+ * 2. A write to a pre-merge `agents/<name>/activation.md` re-derives the row
+ *    the same way, so an agent from before the merge keeps working until
+ *    `db:agents:activation` folds it in.
+ * 3. A rename or delete of the agent always deactivates — simple and safe;
+ *    re-activating is one click. The activation rides the brief, so a folder
+ *    rename or delete carries it by itself; the hook only has to move the
+ *    state row.
  *
  * Only prisma, the pure parsers, audit and auth are imported statically; the
  * store is reached by dynamic import because the store imports this file.
  */
 import prisma from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
-import { isAdmin, spaceAdminUserIds } from '@/lib/auth'
+import { spaceAdminUserIds } from '@/lib/auth'
 import { logAudit } from '@/lib/notes/audit'
 import { notify } from '@/lib/notifications/service'
 import {
@@ -34,7 +35,7 @@ import {
   isAgentActivationPath,
   isAgentBriefPath,
 } from '@/lib/notes/entities'
-import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
+import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import type { Actor, Context } from '@/lib/notes/store'
 
 // Redeclared (as entityLinks.ts does) rather than imported: the store imports
@@ -45,19 +46,18 @@ import {
   agentBriefPath,
   agentPageHref,
   nextOccurrence,
-  parseAgentActivation,
   scheduleHash,
+  withActiveFalse,
   type AgentActivation,
   DEFAULT_DEBOUNCE_MS,
 } from './config'
-import { findAgentBrief } from './briefs'
+import { findAgentActivation, findAgentBrief } from './briefs'
 import { fireNoteTriggers, hasPendingEvents } from './events'
 
 /** The actor for machine writes into the activation boundary. */
 const SYSTEM_ACTOR: Actor = { id: 'system', name: 'Visvine' }
 
 export type DeactivationReason =
-  | 'brief_changed'
   | 'key_rejected'
   | 'repeated_failure'
   | 'author_gone'
@@ -78,7 +78,7 @@ async function readSharedNote(spaceId: string, path: string) {
 }
 
 /**
- * The IANA zone a live agent runs in: its own activation note, else UTC.
+ * The IANA zone a live agent runs in: the zone its brief names, else UTC.
  *
  * There is no space-wide default any more — activating a scheduled agent
  * requires naming the zone (lib/agents/service.ts#activateAgent), so the only
@@ -94,8 +94,8 @@ export async function effectiveTimezone(spaceId: string, noteTz: string | null):
 }
 
 /**
- * Re-derive the state row for one agent from its activation note (or from a
- * parsed activation the caller already has). Creates the row when missing.
+ * Re-derive the state row for one agent from its brief (or from a parsed
+ * activation the caller already has). Creates the row when missing.
  * Returns the row's derived facts for callers that want to render them.
  */
 export async function syncAgentState(
@@ -108,19 +108,16 @@ export async function syncAgentState(
   let invalid: string | null = null
   const briefRead = findAgentBrief(spaceId, name)
   if (activation === undefined || activation === null) {
-    const live = await readSharedNote(spaceId, agentActivationPath(name))
-    if (live) {
-      const parsed = parseAgentActivation(parseFrontmatter(live.content))
-      if (parsed.ok) activation = parsed.activation
-      else invalid = parsed.error
-    }
+    const found = await findAgentActivation(spaceId, name)
+    if (found.parsed?.ok) activation = found.parsed.activation
+    else if (found.parsed) invalid = found.parsed.error
   }
   const brief = await briefRead
   // Who the agent acts as. The brief's author by default — a member's agent
-  // reaches exactly what that member reaches — but the ADMIN-ONLY live note may
-  // repoint it with `runs_as`. That matters most for connectors with an `auth:`
-  // block: a run spends somebody's stored credentials, and choosing whose is
-  // not a decision the (member-writable) brief should get to make.
+  // reaches exactly what that member reaches — unless the activation repoints
+  // it with `runs_as`. That matters most for connectors with an `auth:` block:
+  // a run spends somebody's stored credentials, so the write gate lets a member
+  // name only themselves there and an admin anyone (contextService.writeGated).
   const runAsUserId = activation?.runsAs ?? brief?.createdBy ?? null
 
   // Active = the note says so AND it has some way to fire (a clock or a trigger).
@@ -161,8 +158,9 @@ export async function syncAgentState(
 }
 
 /**
- * Machine deactivation: write `active: false` into the activation note as the
- * system principal (only ever false — never true, never a schedule), record
+ * Machine deactivation: write `active: false` into the note that carries the
+ * activation, as the system principal (only ever false — never true, never a
+ * schedule), record
  * why on the row, and leave an audit line. Safe to call when already inactive.
  */
 export async function deactivateAgent(
@@ -172,24 +170,20 @@ export async function deactivateAgent(
   detail: string | null,
   by: { userId: string; name: string } = { userId: 'system', name: 'Visvine' },
 ): Promise<void> {
-  const path = agentActivationPath(name)
   // Snapshot the row BEFORE touching the note: writing `active: false` below
   // runs the store hook, which re-derives the row inactive — read afterwards it
   // would always say "already off" and the notification would never send.
-  const [state, live] = await Promise.all([
+  const [state, source] = await Promise.all([
     prisma.agentState.findFirst({ where: { spaceId, name }, select: { active: true, runAsUserId: true } }),
-    readSharedNote(spaceId, path),
+    findAgentActivation(spaceId, name),
   ])
-  if (live) {
-    const fm = parseFrontmatter(live.content)
-    if (fm.active !== false) {
-      const { body } = splitFrontmatter(live.content)
-      const next = joinFrontmatter({ ...fm, active: false }, body)
-      const store = await import('@/lib/notes/store')
-      // origin 'maintenance' stamps the revision as a machine act; the store
-      // is ungated (the gate lives in contextService), so no principal needed.
-      await store.writeNote({ spaceId, ownerKey: SHARED_OWNER_KEY }, path, next, SYSTEM_ACTOR, 'maintenance', 'agents')
-    }
+  // Into whichever note carries the activation — the brief, or a pre-merge
+  // activation.md an agent still has. Only ever `active: false`.
+  if (source.path && source.content && parseFrontmatter(source.content).active !== false) {
+    const store = await import('@/lib/notes/store')
+    // origin 'maintenance' stamps the revision as a machine act; the store
+    // is ungated (the gate lives in contextService), so no principal needed.
+    await store.writeNote({ spaceId, ownerKey: SHARED_OWNER_KEY }, source.path, withActiveFalse(source.content), SYSTEM_ACTOR, 'maintenance', 'agents')
   }
   await prisma.agentState.updateMany({
     where: { spaceId, name },
@@ -220,12 +214,6 @@ export async function deactivateAgent(
       })
     })().catch(() => {})
   }
-}
-
-/** Is this actor a space admin (or the system)? Members trigger auto-deactivate; admins don't. */
-async function actorIsAdmin(spaceId: string, actor: Actor): Promise<boolean> {
-  if (actor.id === SYSTEM_ACTOR.id) return true
-  return isAdmin(actor.id, spaceId, actor.email ?? null)
 }
 
 // ── Store hooks ──────────────────────────────────────────────────────────────
@@ -261,32 +249,16 @@ export async function agentNoteWritten(
   }
   const spaceId = context.spaceId
 
-  if (isAgentActivationPath(path)) {
-    await syncAgentState(spaceId, name)
-    return
-  }
-  if (isAgentBriefPath(path)) {
-    const state = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } } })
-    if (!state) {
-      await syncAgentState(spaceId, name) // creates the row (inactive) so the roster has it
-      return
-    }
-    if (state.active && opts.changed && !(await actorIsAdmin(spaceId, actor))) {
-      await deactivateAgent(spaceId, name, 'brief_changed', `brief edited by ${actor.name}`, {
-        userId: actor.id,
-        name: actor.name,
-      })
-    } else if (state.runAsUserId === null) {
-      await syncAgentState(spaceId, name)
-    }
-  }
+  // The brief carries the activation, so every write to it re-derives the row
+  // — that is how turning an agent on takes effect. A pre-merge activation.md
+  // does the same for an agent that still has one.
+  if (isAgentBriefPath(path) || isAgentActivationPath(path)) await syncAgentState(spaceId, name)
 }
 
 /**
  * After a note rename. A brief renamed to another agent's path is that agent
  * under a new name: deactivated, its state row (and run history) carried
- * over. The activation note is a sibling in the same folder, so a folder
- * rename moves it too and this hook sees it arrive as its own rename. A
+ * over. The activation rides the brief, so a folder rename carries it. A
  * rename INTO a listened-on path is a `note_written` event for the `to` path
  * (a note arriving under people/ is news whether typed or moved). `stamp` is
  * how the rename arose (origin / model, as for a write): an agent run's own
@@ -360,6 +332,11 @@ export async function agentNoteDeleted(context: Context, path: string): Promise<
     return
   }
   if (isAgentActivationPath(path)) {
+    // An admin took the activation away — unless the whole agent is going, in
+    // which case the brief's own delete is the reason and this is one of the
+    // notes going with it. A folder delete trashes its notes in no particular
+    // order, so this has to ask rather than assume it ran second.
+    if (!(await findAgentBrief(spaceId, name))) return
     await prisma.agentState.updateMany({
       where: { spaceId, name },
       data: { active: false, nextRunAt: null, deactivatedReason: 'admin', deactivatedDetail: 'activation removed' },

@@ -28,7 +28,7 @@ export async function PUT(
 
   const body = await req.json();
   // `timezone` is deliberately not read: a scheduled agent names its own zone
-  // in its activation note, so there is no space-wide default to set here.
+  // in its own brief, so there is no space-wide default to set here.
   const { name, description, country, location, tags, designConfig, featureConfig, visibility } = body as {
     name?: string;
     description?: string;

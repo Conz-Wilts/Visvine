@@ -203,13 +203,13 @@ test('an agent may write its OWN folder — never its brief, its activation or a
   assert.match(lockedDenial(p, SHARED, 'agents/digest/report.md', 'maintenance', 'agent:digest')!, /frozen/)
 })
 
-test('the activation is admin-write even for a member holding a full grant on agents/', () => {
+test('the activation follows the folder: a member who can edit the brief can turn it on', () => {
   const member: ContextPrincipal = { ...principal([]), spaceAdmin: false }
   const admin: ContextPrincipal = { ...principal([]), spaceAdmin: true }
   const system: ContextPrincipal = { ...member, system: true }
   assert.equal(writeDenial(member, SHARED, 'agents/digest/index.md'), null, 'the brief is member-writable')
   assert.equal(writeDenial(member, SHARED, 'agents/digest/report.md'), null, 'so is the rest of the folder')
-  assert.match(writeDenial(member, SHARED, 'agents/digest/activation.md')!, /Only space admins can activate/)
+  assert.equal(writeDenial(member, SHARED, 'agents/digest/activation.md'), null, 'and so is the activation')
   assert.equal(writeDenial(admin, SHARED, 'agents/digest/activation.md'), null)
-  assert.equal(writeDenial(system, SHARED, 'agents/digest/activation.md'), null, 'the auto-deactivate write')
+  assert.equal(writeDenial(system, SHARED, 'agents/digest/activation.md'), null, 'the machine deactivation write')
 })

@@ -18,6 +18,7 @@ import { resolveTarget } from '@/lib/actions/resolve'
 import { isAdmin } from '@/lib/auth'
 import { EdgeUnavailableError, edgeConfigured } from '@/lib/vm/edge'
 import { browseOnMachine, QuotaExceededError, runOnMachine } from '@/lib/vm/lease'
+import { agentPageHref } from '@/lib/agents/config'
 
 const spaceArg = z
   .string()
@@ -134,7 +135,7 @@ export const VM_ACTIONS = [
           started: result.started,
           already_running: result.alreadyRunning,
           // Where a person goes to see it, which is the point of a headful browser.
-          watch: `/directory/agent:${args.agent}`,
+          watch: agentPageHref(args.agent),
         }
       } catch (err) {
         if (err instanceof QuotaExceededError) throw new ActionError(429, err.message)

@@ -34,11 +34,12 @@ test('every template writes a brief the parser accepts', () => {
   assert.equal(agentTemplateById('nope'), null)
 })
 
-test('the tool option list names every tool extra exactly once', () => {
-  assert.deepEqual(
-    AGENT_TOOL_OPTIONS.map((o) => o.id).sort(),
-    [...AGENT_TOOL_EXTRAS].sort(),
-  )
+test('every tool option is a real extra, and only the machine is unlisted', () => {
+  const options = AGENT_TOOL_OPTIONS.map((o) => o.id).sort()
+  for (const id of options) assert.ok((AGENT_TOOL_EXTRAS as readonly string[]).includes(id), id)
+  // `machine` is deliberately not a checkbox: an agent gets a computer whenever
+  // the space has one. The name stays valid so an older brief still parses.
+  assert.deepEqual([...AGENT_TOOL_EXTRAS].filter((id) => !options.includes(id)), ['machine'])
 })
 
 test('updateBriefSettings rewrites settings and keeps the prose and hand-written keys', () => {

@@ -1,8 +1,7 @@
-// Creating a space — the one routine behind the switcher's "Create space",
-// the child a `space` record provisions (lib/directory/createEntity.ts) and the
-// migration that turns record-only cards into real spaces. Every space starts
-// the same way: a row, an Admin holder, seeded access state, a member node and
-// a root index. What differs is the parent and who is put in it.
+// Creating a space — the one routine behind the switcher's "Create space" and
+// the migration that turns record-only cards into real spaces. Every space
+// starts the same way: a row, an Admin holder, seeded access state, a member
+// node and a root index. What differs is who is put in it.
 import { randomUUID } from 'crypto'
 import prisma from '@/lib/prisma'
 import { slugify } from '@/lib/eventUtils'
@@ -13,29 +12,21 @@ import { ensureMemberNode } from '@/lib/spaces/memberNode'
 import { isReservedSpaceId } from '@/lib/spaces/globalSpace'
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store'
 import { logger } from '@/lib/logger'
-import { findPublicNameConflict, publicNameTakenMessage } from './publicName'
-import { defaultVisibility, visibilityDenial, type SpaceVisibility } from './hierarchy'
-import { ancestorsOf, childOfDenial, findSiblingNameConflict } from './tree'
+import { findPublicNameConflict, publicNameTakenMessage, type SpaceVisibility } from './publicName'
 
 export interface ProvisionInput {
   name: string
   description?: string
   location?: string | null
   visibility?: SpaceVisibility
-  /** The space this one lives inside; omit for a root space. */
-  parentId?: string | null
   /** Becomes the space's first member and holds its Admin alias. */
   creator: { id: string; name: string; email?: string | null }
-  /**
-   * False = a record: the space exists, nobody is in it, and the parent's
-   * admins run it through their standing over everything below them. That is
-   * what a portfolio company recorded from inside Blackbird is.
-   */
+  /** False = a record: the space exists and nobody is in it yet. */
   joinCreator?: boolean
 }
 
 export type ProvisionResult =
-  | { ok: true; space: { id: string; name: string; description: string | null; location: string | null; tags: string[]; createdAt: Date; visibility: string; parentId: string | null } }
+  | { ok: true; space: { id: string; name: string; description: string | null; location: string | null; tags: string[]; createdAt: Date; visibility: string } }
   | { ok: false; status: 400 | 403 | 409; error: string; code?: 'name_taken' }
 
 /**
@@ -54,22 +45,10 @@ async function freeSpaceId(name: string): Promise<string> {
 export async function provisionSpace(input: ProvisionInput): Promise<ProvisionResult> {
   const name = input.name.trim()
   if (!name) return { ok: false, status: 400, error: 'Space name is required' }
-  const parentId = input.parentId ?? null
-  const visibility = input.visibility ?? defaultVisibility(parentId)
+  const visibility = input.visibility ?? 'private'
 
-  let parent: { visibility: string } | null = null
-  if (parentId) {
-    const denied = await childOfDenial(parentId)
-    if (denied) return { ok: false, status: 400, error: denied }
-    parent = (await ancestorsOf(parentId))[0] ?? null
-    const sibling = await findSiblingNameConflict(parentId, name)
-    if (sibling) return { ok: false, status: 409, error: sibling.message, code: 'name_taken' }
-  }
-  const badVisibility = visibilityDenial(visibility, parent)
-  if (badVisibility) return { ok: false, status: 400, error: badVisibility }
-
-  // Only public names have to be unique platform-wide — a private or inherited
-  // space can be called anything (lib/spaces/publicName.ts).
+  // Only public names have to be unique platform-wide — a private space can be
+  // called anything (lib/spaces/publicName.ts).
   if (visibility === 'public') {
     const clash = await findPublicNameConflict(name)
     if (clash) return { ok: false, status: 409, error: publicNameTakenMessage(clash.name), code: 'name_taken' }
@@ -86,7 +65,6 @@ export async function provisionSpace(input: ProvisionInput): Promise<ProvisionRe
         description: input.description?.trim() ?? '',
         location: input.location?.trim() || null,
         visibility,
-        parentId,
         inviteToken: randomUUID(),
         // Most toggleable tools start off, opted in from the console. Core
         // keys — directory, notes, events — are always on and never persisted.
@@ -97,8 +75,7 @@ export async function provisionSpace(input: ProvisionInput): Promise<ProvisionRe
       await tx.spaceMember.create({ data: { userId: input.creator.id, spaceId: id, status: 'active' } })
       // Every space's Person aliases start with the built-in Admin one (the
       // aliases column default). The creator holds it — otherwise nobody could
-      // ever manage the space (lib/auth.ts#isAdmin). A record inside a parent
-      // is managed from above instead.
+      // ever manage the space (lib/auth.ts#isAdmin).
       await tx.userAlias.create({
         data: { spaceId: id, userId: input.creator.id, aliasId: ADMIN_ALIAS_ID, addedBy: input.creator.id },
       })
@@ -134,7 +111,6 @@ export async function provisionSpace(input: ProvisionInput): Promise<ProvisionRe
       tags: space.tags,
       createdAt: space.createdAt,
       visibility: space.visibility,
-      parentId: space.parentId,
     },
   }
 }

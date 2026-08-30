@@ -96,17 +96,6 @@ export function deleteFolderDenial(path: string): string | null {
   return namespaceFolderDenial(path)
 }
 
-/** The node at `path` in this tree, or null. Used to read a folder's own
- *  metadata (a sub-space record carries `space`) before acting on it. */
-function findNode(root: TreeNode, path: string): TreeNode | null {
-  if (root.path === path) return root
-  for (const child of root.children ?? []) {
-    const hit = findNode(child, path)
-    if (hit) return hit
-  }
-  return null
-}
-
 /** Whether a drop on `destFolder` would do anything (legal AND a real change). */
 export function canMoveInto(from: string, kind: 'note' | 'folder', destFolder: string): boolean {
   return moveDenial(from, kind, destFolder) === null && destFolder !== parentFolderOf(from)
@@ -370,49 +359,21 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
         count === 0
           ? 'It is empty.'
           : `This also deletes ${notesPhrase} inside it (moved to Trash, restorable for 7 days).`
-      // A sub-space's record folder is not an ordinary folder: it is where that
-      // space's own tree is federated in (docs/sub-spaces.md), so deleting it
-      // takes the record — and the parent's whole view of the child — with it.
-      // The child space itself is a separate tenant and survives, which is the
-      // part that has to be said out loud, and the name is typed to confirm.
-      const childSpace = findNode(tree, folderPath)?.space ?? null
       setConfirmError(null)
-      setPending(
-        childSpace
-          ? {
-              title: `Delete the subspace record “${name}”?`,
-              body:
-                `“${name}” is a subspace of this space, and this folder is its record here — ` +
-                `its own context is shown inside it. Deleting the folder removes the record and ` +
-                `${count === 0 ? 'everything this space wrote in it' : notesPhrase} (moved to Trash, restorable for 7 days), ` +
-                `and this space stops showing the subspace's context. The subspace itself — its ` +
-                `members, its context and everything in it — is NOT deleted, and it stays in the ` +
-                `space switcher; delete it from its own Space console.`,
-              confirmLabel: 'Delete record',
-              confirmText: name,
-              failure: 'Failed to delete the folder',
-              run: async () => {
-                await notesApi.deleteFolder(spaceId, folderPath)
-                invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
-                setTreeVersion((v) => v + 1)
-                if (currentPath?.startsWith(`${folderPath}/`)) router.push(CONTEXT_HOME)
-              },
-            }
-          : {
-              title: `Delete the folder “${name}”?`,
-              body: contents,
-              confirmLabel: 'Delete folder',
-              failure: 'Failed to delete the folder',
-              run: async () => {
-                await notesApi.deleteFolder(spaceId, folderPath)
-                invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
-                setTreeVersion((v) => v + 1)
-                if (currentPath?.startsWith(`${folderPath}/`)) router.push(CONTEXT_HOME)
-              },
-            },
-      )
+      setPending({
+        title: `Delete the folder “${name}”?`,
+        body: contents,
+        confirmLabel: 'Delete folder',
+        failure: 'Failed to delete the folder',
+        run: async () => {
+          await notesApi.deleteFolder(spaceId, folderPath)
+          invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
+          setTreeVersion((v) => v + 1)
+          if (currentPath?.startsWith(`${folderPath}/`)) router.push(CONTEXT_HOME)
+        },
+      })
     },
-    [spaceId, notes, tree, currentPath, router],
+    [spaceId, notes, currentPath, router],
   )
 
   // Moving a note = a rename to the same filename under another folder. The

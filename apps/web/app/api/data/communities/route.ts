@@ -4,7 +4,6 @@ import prisma from '@/lib/prisma';
 import { requireSession, isSuperAdmin } from '@/lib/session';
 import { isAdmin } from '@/lib/auth';
 import { purgeSpaceObjects } from '@/lib/storage/purge';
-import { descendantsOf } from '@/lib/spaces/tree';
 import {
   mergeNodeTypeList,
   type Space,
@@ -262,23 +261,15 @@ export async function DELETE(request: NextRequest) {
     // are only findable while the node still exists. Best-effort by design —
     // an orphaned object costs storage, a failed purge that aborted the delete
     // would cost the admin their delete. scripts/gc-orphan-objects.ts reconciles.
-    // Spaces inside this one go with it, deepest first — the parent FK is
-    // Restrict, so a wipe of a whole subtree is only ever this deliberate loop
-    // (docs/sub-spaces.md).
-    const ids = [...(await descendantsOf(id)).map((s) => s.id), id];
-    for (const spaceId of ids) {
-      await purgeSpaceObjects(spaceId).catch((err) =>
-        logger.error('api.data.spaces.delete.purge_failed', { spaceId, err })
-      );
-    }
+    await purgeSpaceObjects(id).catch((err) =>
+      logger.error('api.data.spaces.delete.purge_failed', { spaceId: id, err })
+    );
 
     // Then the rows. Everything cascades from the space now — `resources` grew
     // its foreign key in 20260823120100_resources_drive, so the hand-sweep that
     // used to stand here is gone (and it was the very thing that skipped the
     // bucket, since deleteMany never reaches the service that owns the bytes).
-    for (const spaceId of ids) {
-      await prisma.space.delete({ where: { id: spaceId } });
-    }
+    await prisma.space.delete({ where: { id } });
 
     revalidateTag('context-data', { expire: 0 });
 

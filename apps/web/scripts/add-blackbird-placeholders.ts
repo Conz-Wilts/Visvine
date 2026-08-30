@@ -176,10 +176,12 @@ async function seedAgents() {
       startedBy: null,
       input: { events: [] },
       events: [
-        { kind: 'tool_call', name: 'search_context', at: ago(65).toISOString(), summary: 'query: deals stage:new' },
-        { kind: 'tool_result', name: 'search_context', at: ago(64).toISOString(), summary: '6 notes' },
-        { kind: 'tool_call', name: 'write_note', at: ago(64).toISOString(), summary: 'data/weekly-digest.md' },
-        { kind: 'message', at: ago(63).toISOString(), summary: 'Digest written.' },
+        { type: 'assistant', at: ago(65).getTime(), text: 'Finding what moved this week.' },
+        { type: 'tool', tool: 'search_context', at: ago(65).getTime(), detail: 'deals stage:new' },
+        { type: 'tool_result', tool: 'search_context', at: ago(64).getTime(), text: '6 notes' },
+        { type: 'tool', tool: 'write_context', at: ago(64).getTime(), detail: 'data/weekly-digest.md' },
+        { type: 'tool_result', tool: 'write_context', at: ago(63).getTime(), text: 'written data/weekly-digest.md' },
+        { type: 'assistant', at: ago(63).getTime(), text: 'Digest written.' },
       ],
     },
     {
@@ -208,9 +210,11 @@ async function seedAgents() {
         ],
       },
       events: [
-        { kind: 'tool_call', name: 'read_note', at: ago(190).toISOString(), summary: 'deals/azonic.md' },
-        { kind: 'tool_call', name: 'write_note', at: ago(189).toISOString(), summary: 'deals/index.md' },
-        { kind: 'message', at: ago(188).toISOString(), summary: 'Pipeline index updated.' },
+        { type: 'tool', tool: 'read_context', at: ago(190).getTime(), detail: 'deals/azonic.md' },
+        { type: 'tool_result', tool: 'read_context', at: ago(190).getTime(), text: '# Azonic\\nStage: term sheet' },
+        { type: 'tool', tool: 'write_context', at: ago(189).getTime(), detail: 'deals/index.md' },
+        { type: 'tool_result', tool: 'write_context', at: ago(188).getTime(), text: 'written deals/index.md' },
+        { type: 'assistant', at: ago(188).getTime(), text: 'Pipeline index updated.' },
       ],
     },
     {
@@ -229,7 +233,7 @@ async function seedAgents() {
       turns: 0,
       startedBy: null,
       input: { events: [] },
-      events: [{ kind: 'error', at: ago(4_318).toISOString(), summary: 'auth: provider rejected the key' }],
+      events: [{ type: 'system', at: ago(4_318).getTime(), text: 'auth: provider rejected the key' }],
     },
     {
       id: 'run_bb_digest_003',
@@ -247,7 +251,7 @@ async function seedAgents() {
       turns: 1,
       startedBy: ADMIN,
       input: { events: [] },
-      events: [{ kind: 'tool_call', name: 'search_context', at: ago(2).toISOString(), summary: 'query: portfolio' }],
+      events: [{ type: 'tool', tool: 'search_context', at: ago(2).getTime(), detail: 'portfolio' }],
     },
   ];
 
@@ -273,7 +277,7 @@ async function seedAgents() {
         { kind: 'webhook', source: 'dealflow-inbound', summary: 'Affinity sync', at: ago(701).toISOString() },
       ],
     },
-    events: [{ kind: 'message', at: ago(698).toISOString(), summary: 'Pipeline reconciled.' }],
+    events: [{ type: 'assistant', at: ago(698).getTime(), text: 'Pipeline reconciled.' }],
   });
 
   for (const run of runs) {
@@ -301,7 +305,9 @@ async function seedAgents() {
         eventCount: Array.isArray(run.events) ? run.events.length : 0,
         input: run.input as never,
       },
-      update: {},
+      // The trace is placeholder data this script owns, so a re-run brings an
+      // older row up to the shape the executor writes today.
+      update: { events: run.events as never },
     });
   }
   count('agent_runs', runs.length);

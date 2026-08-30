@@ -17,7 +17,7 @@ export const KIT_CSS = `
   --vv-accent: var(--color-brand-green, #78d870);
   --vv-accent-strong: var(--color-brand-dark-green, #2f7a3e);
   --vv-accent-soft: var(--color-brand-light-bg, #eaf9ec);
-  /* The app's page backdrop (a gradient, or plain white — the viewer picks).
+  /* The app's page backdrop (white).
      Informational: the body below stays transparent so the host's own backdrop
      shows through; paint with this only for something that must be
      self-contained, like an exported image. */
@@ -58,9 +58,9 @@ export const KIT_CSS = `
 
 *, *::before, *::after { box-sizing: border-box; }
 
-/* Transparent on purpose: the host's backdrop — the viewer's gradient, or
-   plain white — shows through the frame, so a Tool sits on the same canvas as
-   every native page. A Tool must never repaint html/body/#root. */
+/* Transparent on purpose: the host's backdrop shows through the frame, so a
+   Tool sits on the same canvas as every native page. A Tool must never repaint
+   html/body/#root. */
 html, body {
   margin: 0;
   padding: 0;

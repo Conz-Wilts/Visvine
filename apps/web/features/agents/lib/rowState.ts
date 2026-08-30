@@ -36,7 +36,6 @@ function until(iso: string | null, now: number): string {
 }
 
 const REASON_LABEL: Record<string, string> = {
-  brief_changed: 'brief changed',
   key_rejected: 'model key rejected',
   repeated_failure: 'repeated failures',
   author_gone: 'author left the space',
@@ -81,8 +80,6 @@ export function statusLine(a: AgentSummary, now = Date.now()): StatusLine {
       return { tone: 'bad', text: `Invalid brief — ${a.invalid ?? a.activation.invalid ?? ''}`, problem: true };
     case 'running':
       return { tone: 'live', text: a.state.runningSince ? `Running · started ${ago(a.state.runningSince, now)}` : 'Running', problem: false };
-    case 'needs_reactivation':
-      return { tone: 'warn', text: 'Brief changed — needs re-activation', problem: true };
     case 'deactivated':
       return {
         tone: 'bad',
@@ -122,6 +119,15 @@ export const TONE_DOT: Record<Tone, string> = {
 
 export function fmtAgo(iso: string | null, now = Date.now()): string {
   return ago(iso, now);
+}
+
+/** A run's length, in the unit that reads: "42s", "2m 0s", "1h 05m". */
+export function fmtDuration(startedAt: string, endedAt: string | null): string | null {
+  if (!endedAt) return null;
+  const s = Math.max(0, Math.round((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+  return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`;
 }
 
 export function fmtCents(cents: number | null | undefined): string {

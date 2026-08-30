@@ -16,7 +16,7 @@ import type { SpaceAlias, Space, NodeTypeConfig } from '@/lib/types';
 import { isNodeTypeEnabled, nodeTypeToolKey } from '@/lib/featureAccess';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { FEATURES } from '@/features/shared/lib/features';
-import { Alert, Chip, ColorPicker, SearchInput, chipClass } from '@/components/ui';
+import { Alert, Button, Chip, ColorPicker, ConfirmDialog, SearchInput, chipClass } from '@/components/ui';
 import Select from '@/components/ui/Select';
 import { patchInstall } from '@/features/tools/lib/client';
 import { pageClaimantsFor } from '@/lib/tools/typePages';
@@ -218,7 +218,7 @@ function TypePageOwner({ typeName, claimants, onChoose, saving }: {
 
 // ─── Type Section ─────────────────────────────────────────────────────────────
 
-function TypeSection({ typeName, typeColor, toolLabel, pageOwner, aliases, allAliases, isPerson, noteScoped, previewChips, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, saving }: {
+function TypeSection({ typeName, typeColor, toolLabel, pageOwner, aliases, allAliases, isPerson, noteScoped, previewChips, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, onDelete, saving }: {
   typeName: string;
   typeColor: string;
   /** The tool this type came in with — named on the row so switching a tool off
@@ -237,6 +237,9 @@ function TypeSection({ typeName, typeColor, toolLabel, pageOwner, aliases, allAl
   onRemoveAlias: (name: string, nodeType: string) => void;
   onUpdateAliasColor: (name: string, nodeType: string, color: string) => void;
   onUpdateTypeColor: (color: string) => void;
+  /** Take this type out of the space's vocabulary. Member-made types only —
+      a built-in is what the tools create entities under. */
+  onDelete?: () => void;
   saving: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -349,10 +352,17 @@ function TypeSection({ typeName, typeColor, toolLabel, pageOwner, aliases, allAl
                page — so there is nothing here to alias: an alias narrows a
                directory record, and a note isn't one. The colour square above
                is the whole of what this type has to configure. */
-            <p className="text-sm text-text-muted">
-              Added from a note. Things of this type are context notes, so it carries no aliases —
-              only its colour.
-            </p>
+            <div className="flex items-start justify-between gap-4">
+              <p className="text-sm text-text-muted">
+                Added from a note. Things of this type are context notes, so it carries no aliases —
+                only its colour.
+              </p>
+              {onDelete && (
+                <Button variant="danger" size="sm" disabled={saving} onClick={onDelete}>
+                  Delete type
+                </Button>
+              )}
+            </div>
           ) : (
             <>
               {aliases.length > 0 && (
@@ -416,6 +426,7 @@ export default function TypesPanel() {
   const [query, setQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<NodeTypeConfig | null>(null);
   const { report } = useConsoleSave();
 
   useEffect(() => {
@@ -466,6 +477,19 @@ export default function TypesPanel() {
   // by merging the edited entry in — mapping alone would silently no-op.
   const handleUpdateTypeColor = (type: NodeTypeConfig, color: string) =>
     saveTypes(mergeNodeTypeList(types, [{ ...type, color }]));
+
+  // Deleting is the one edit the whole-record PUT can't express — it merges
+  // additively, on purpose — so it has its own call. Notes already declaring
+  // the type keep their `type:`; they just stop being coloured by it.
+  const handleDeleteType = (type: NodeTypeConfig) =>
+    save(async () => {
+      await fetchJsonBody(
+        `/api/communities/${currentSpace?.id}/node-types`,
+        'DELETE',
+        { name: type.name },
+      );
+      setDeleting(null);
+    });
 
   // Hand a type's page to one install and take it off the others. Release
   // before claim, in that order: setTypeClaims refuses a `page` on a type
@@ -569,6 +593,7 @@ export default function TypesPanel() {
         onRemoveAlias={handleRemoveAlias}
         onUpdateAliasColor={handleUpdateAliasColor}
         onUpdateTypeColor={color => handleUpdateTypeColor(liveType, color)}
+        onDelete={noteScoped ? () => setDeleting(liveType) : undefined}
         saving={saving}
       />
     );
@@ -622,6 +647,22 @@ export default function TypesPanel() {
           <p className="py-4 text-sm text-text-muted">{term ? 'No matches.' : 'None yet.'}</p>
         )}
       </section>
+
+      <ConfirmDialog
+        open={deleting !== null}
+        title={`Delete "${deleting?.name ?? ''}"?`}
+        body={
+          <>
+            It stops being offered when somebody types a type, and notes already
+            marked <code>{deleting?.name}</code> lose its colour and chip. Their
+            frontmatter is left alone, so naming the type again brings them back.
+          </>
+        }
+        confirmLabel="Delete type"
+        destructive
+        onConfirm={async () => { if (deleting) await handleDeleteType(deleting); }}
+        onClose={() => setDeleting(null)}
+      />
     </div>
   );
 }

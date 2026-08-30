@@ -121,13 +121,15 @@ async function main() {
       select: { id: true, type: true, metadata: true },
     });
 
-    // A `space` node stands for a real space (docs/sub-spaces.md): its
-    // metadata.spaceRef names a spaces row, and its note says the same.
+    // A `space` node may name a space that really runs here; when it does, the
+    // ref has to point at a row that exists. A record of an organisation out in
+    // the world names nothing, which is the ordinary case.
     for (const n of nodes) {
       if (n.type !== 'space') continue;
       const ref = (n.metadata as Record<string, unknown> | null)?.spaceRef;
-      if (typeof ref !== 'string' || !(await prisma.space.findUnique({ where: { id: ref }, select: { id: true } }))) {
-        violations.push(`${label} ${n.id}: space node has no spaceRef to an existing space (run db:spaces:records)`);
+      if (typeof ref !== 'string' || !ref.trim()) continue;
+      if (!(await prisma.space.findUnique({ where: { id: ref }, select: { id: true } }))) {
+        violations.push(`${label} ${n.id}: spaceRef names a space that does not exist (${ref})`);
       }
     }
     const nodeByIndexPath = new Map<string, { id: string; type: string; pointer: string | null }>();

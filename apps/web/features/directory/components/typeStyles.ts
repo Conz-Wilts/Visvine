@@ -16,7 +16,7 @@ export const getTypeColor = (
  * from a border/badge using the same colour elsewhere on the card.
  */
 export const getHeaderBgStyle = (color: string): CSSProperties => ({
-  background: `linear-gradient(135deg, ${color}cc 0%, ${color} 100%)`,
+  background: color,
 });
 
 // There is deliberately no on-colour text helper here. Type bands paint the

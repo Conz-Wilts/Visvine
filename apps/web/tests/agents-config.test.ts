@@ -16,7 +16,7 @@ import {
   globProblem,
   globToRegExp,
   matchesAnyGlob,
-  newActivationNote,
+  withActivation,
   parseEvery,
   newAgentNote,
   nextOccurrence,
@@ -110,7 +110,7 @@ test('parseAgentBrief describes what is wrong instead of vanishing', () => {
     [{ type: 'agent' }, 'body', /model/],
     [{ type: 'agent', model: 'https://evil/v1' }, 'body', /provider/],
     [{ type: 'agent', model: 'gemini/x', tools: ['shell'] }, 'body', /unknown tool/],
-    [{ type: 'agent', model: 'gemini/x', max_turns: 99 }, 'body', /max_turns/],
+    [{ type: 'agent', model: 'gemini/x', max_turns: 500 }, 'body', /max_turns/],
     [{ type: 'agent', model: 'gemini/x', connectors: ['bad name!'] }, 'body', /connector name/],
     [{ type: 'agent', model: 'gemini/x' }, '   ', /empty/],
     [{ type: 'agent', model: 'gemini/x', agents: ['Bad Name'] }, 'body', /agent name/],
@@ -176,8 +176,11 @@ test('parseAgentActivation reads hourly / daily / weekly and enforces the rules'
   assert.ok(off.ok && off.activation.active === false && off.activation.schedule === null)
 })
 
-test('newActivationNote round-trips and scheduleHash is stable', () => {
-  const md = newActivationNote({ active: true, schedule: { kind: 'weekly', hour: 9, minute: 30, weekday: 1 }, timezone: 'UTC' })
+test('withActivation round-trips through the brief and scheduleHash is stable', () => {
+  const md = withActivation(
+    '---\ntype: agent\nmodel: gemini/gemma-4-31b-it\n---\n\nBody.\n',
+    { active: true, schedule: { kind: 'weekly', hour: 9, minute: 30, weekday: 1 }, timezone: 'UTC' },
+  )
   const r = parseAgentActivation(parseFrontmatter(md))
   assert.ok(r.ok, JSON.stringify(r))
   if (r.ok) {
@@ -262,24 +265,22 @@ test('parseAgentActivation: `every` is an interval or a cron, exclusive with `sc
     assert.equal(cron.activation.schedule.fields.daysOfMonth, null)
     assert.deepEqual(cron.activation.schedule.fields.daysOfWeek, [1, 2, 3, 4, 5])
   } else assert.fail('expected cron')
-  assert.equal(parseAgentActivation({ active: true, every: '4m' }).ok, false, 'below 5m')
+  assert.ok(parseAgentActivation({ active: true, every: '4m' }).ok, 'a 4-minute interval is fine')
+  assert.equal(parseAgentActivation({ active: true, every: '0m' }).ok, false, 'below the 1m floor')
   assert.equal(parseAgentActivation({ active: true, every: '25h' }).ok, false, 'above 24h')
   assert.equal(parseAgentActivation({ active: true, every: '* * *' }).ok, false, 'not 5 fields')
   assert.equal(parseAgentActivation({ active: true, every: '61 * * * *' }).ok, false, 'minute out of range')
   assert.equal(parseAgentActivation({ active: true, schedule: 'hourly', every: '15m' }).ok, false, 'schedule XOR every')
 })
 
-test('parseEvery: a cron cannot fire more often than the 5m floor', () => {
-  for (const expr of ['* * * * *', '*/4 * * * *', '0,3 * * * *', '0,30,58 * * * *', '*/2 9-17 * * 1-5']) {
-    const r = parseEvery(expr)
-    assert.equal(r.ok, false, expr)
-    if (!r.ok) assert.match(r.error, /more often than every 5 minutes/)
-  }
-  // The gap wraps the hour: 0 and 58 are 2 minutes apart across :00.
-  assert.equal(parseEvery('58,0 * * * *').ok, false)
-  for (const expr of ['*/5 * * * *', '0,30 * * * *', '5,10,15 * * * *', '0 9 * * 1', '*/10 9-17 * * 1-5']) {
+test('parseEvery: the floor is one minute — the tick\'s own cadence', () => {
+  // Every minute is as often as anything can be: the tick fires once a minute,
+  // so a cron below that would be a schedule the platform cannot honour.
+  for (const expr of ['* * * * *', '*/4 * * * *', '0,3 * * * *', '58,0 * * * *', '*/5 * * * *', '0 9 * * 1', '*/10 9-17 * * 1-5']) {
     assert.ok(parseEvery(expr).ok, expr)
   }
+  assert.equal(parseEvery('* * *').ok, false, 'not 5 fields')
+  assert.equal(parseEvery('0m').ok, false, 'no interval at all')
 })
 
 test('parseAgentActivation: `on` map (context globs / webhook), debounce, and the >=1-of rule', () => {
@@ -345,7 +346,10 @@ test('nextOccurrence: interval aligns to the clock grid; cron respects fields an
   if (nye.ok) assert.equal(nextOccurrence(nye.schedule, t, 'UTC').toISOString(), '2026-12-31T23:30:00.000Z')
 })
 
-test('scheduleHash covers every / on / debounce; newActivationNote round-trips triggers', () => {
+/** A minimal valid brief, for the activation-into-the-brief round trips. */
+const BRIEF_MD = '---\ntype: agent\ntitle: Digest\nmodel: gemini/gemma-4-31b-it\n---\n\nDo the thing.\n'
+
+test('scheduleHash covers every / on / debounce; withActivation round-trips triggers into the brief', () => {
   const base = parseAgentActivation({ active: true, every: '15m', on: { context: ['people/**'], webhook: 'hubspot' }, debounce: '2m' })
   assert.ok(base.ok)
   if (!base.ok) return
@@ -354,8 +358,11 @@ test('scheduleHash covers every / on / debounce; newActivationNote round-trips t
   assert.notEqual(h, scheduleHash({ ...base.activation, every: '30m', schedule: { kind: 'interval', minutes: 30 } }, 'UTC'))
   assert.notEqual(h, scheduleHash({ ...base.activation, debounceMs: 5_000 }, 'UTC'))
 
-  const md = newActivationNote({ active: true, schedule: base.activation.schedule, on: base.activation.on, debounceMs: 120_000, timezone: null })
+  const md = withActivation(BRIEF_MD, { active: true, schedule: base.activation.schedule, on: base.activation.on, debounceMs: 120_000, timezone: null })
   const back = parseAgentActivation(parseFrontmatter(md))
+  // The brief half is still there and still parses — one note, two readers.
+  assert.match(md, /type: agent/)
+  assert.match(md, /Do the thing\./)
   assert.ok(back.ok, JSON.stringify(back) + '\n' + md)
   if (back.ok) {
     assert.deepEqual(back.activation.schedule, { kind: 'interval', minutes: 15 })
@@ -365,9 +372,9 @@ test('scheduleHash covers every / on / debounce; newActivationNote round-trips t
   const cron = parseEvery('*/10 * * * *')
   assert.ok(cron.ok)
   if (!cron.ok) return
-  const cronBack = parseAgentActivation(parseFrontmatter(newActivationNote({ active: true, schedule: cron.schedule })))
+  const cronBack = parseAgentActivation(parseFrontmatter(withActivation(BRIEF_MD, { active: true, schedule: cron.schedule })))
   assert.ok(cronBack.ok && cronBack.activation.every === '*/10 * * * *')
-  const weeklyMd = newActivationNote({ active: true, schedule: { kind: 'weekly', hour: 9, minute: 0, weekday: 5 }, on: { context: ['people/**'], webhook: null } })
+  const weeklyMd = withActivation(BRIEF_MD, { active: true, schedule: { kind: 'weekly', hour: 9, minute: 0, weekday: 5 }, on: { context: ['people/**'], webhook: null } })
   const weeklyBack = parseAgentActivation(parseFrontmatter(weeklyMd))
   assert.ok(weeklyBack.ok && weeklyBack.activation.schedule?.kind === 'weekly' && weeklyBack.activation.schedule.weekday === 5 && weeklyBack.activation.on?.context[0] === 'people/**', weeklyMd)
   assert.equal(describeTriggers(base.activation.on), 'when people/** changes · webhook hubspot')

@@ -43,7 +43,6 @@ export default function AgentSettingsPanel({
   }, [agent.brief]);
 
   const dirty = JSON.stringify(value) !== JSON.stringify(saved);
-  const willDeactivate = dirty && agent.activation.active && !isAdmin;
 
   const save = async () => {
     setBusy(true);
@@ -63,11 +62,6 @@ export default function AgentSettingsPanel({
   return (
     <div className="flex flex-col gap-4">
       <AgentSettingsFields value={value} onChange={setValue} options={options} isAdmin={isAdmin} />
-      {willDeactivate && (
-        <Alert inline variant="warning">
-          Saving turns the agent off until an admin turns it on again — they approved the brief as it was.
-        </Alert>
-      )}
       {error && <Alert inline>{error}</Alert>}
       <div className="flex items-center gap-2">
         <Button variant="brand" size="sm" onClick={save} disabled={!dirty || busy || !value.model.trim()} loading={busy} loadingText="Saving…">

@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
 import { handleApiError } from '@/lib/api/route';
-import { joinChildDenial } from '@/lib/spaces/hierarchy';
-import { isActiveMemberOf } from '@/lib/spaces/tree';
 
 /**
  * POST /api/communities/join-via-invite — accept a space invite link.
@@ -26,26 +24,10 @@ export async function POST(request: NextRequest) {
 
     const space = await prisma.space.findUnique({
       where: { inviteToken: token },
-      select: { id: true, name: true, parent: { select: { id: true, name: true, visibility: true } } },
+      select: { id: true, name: true },
     });
     if (!space) {
       return NextResponse.json({ error: 'This invite link is invalid or has been revoked.' }, { status: 404 });
-    }
-
-    // A child's member is a member of its parent (docs/sub-spaces.md). The
-    // invite link is not a way around the parent's door — a public parent is
-    // joined here, a private one must be joined first.
-    if (space.parent) {
-      const parentMember = await isActiveMemberOf(session.userId, space.parent.id);
-      const denied = joinChildDenial(space.parent, parentMember);
-      if (denied) return NextResponse.json({ error: denied }, { status: 403 });
-      if (!parentMember) {
-        await prisma.spaceMember.upsert({
-          where: { userId_spaceId: { userId: session.userId, spaceId: space.parent.id } },
-          create: { userId: session.userId, spaceId: space.parent.id },
-          update: {},
-        });
-      }
     }
 
     const existing = await prisma.spaceMember.findUnique({

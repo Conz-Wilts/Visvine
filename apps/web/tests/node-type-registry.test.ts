@@ -12,6 +12,7 @@ import {
   mergeNodeType,
   mergeNodeTypeList,
   normalizeTypeName,
+  removeNodeType,
   seedNodeTypes,
 } from '../lib/types/nodeTypeRegistry'
 
@@ -112,4 +113,26 @@ test('a stored vocabulary is left alone rather than reseeded', () => {
   assert.deepEqual(seedNodeTypes(stored), stored)
   const r = ok(mergeNodeType(stored, { name: 'Playbook', color: '#3b82f6' }))
   assert.equal(r.types.length, 2)
+})
+
+test('a member-made type can be removed, and nothing else can', () => {
+  const stored = ok(mergeNodeType(null, { name: 'Playbook', color: '#3b82f6' })).types
+
+  const gone = removeNodeType(stored, 'playbook')
+  assert.equal(gone.ok, true)
+  if (gone.ok) {
+    assert.equal(gone.type.name, 'Playbook')
+    assert.equal(gone.types.some((t) => t.name === 'Playbook'), false)
+    // Only the one entry left — the built-ins the removal seeded from stay.
+    assert.equal(gone.types.length, stored.length - 1)
+  }
+
+  // A built-in is what the tools create entities under: never removable.
+  assert.equal(removeNodeType(stored, 'Person').ok, false)
+  assert.equal(removeNodeType(stored, 'Nothing').ok, false)
+  // Not even if the stored row claims note scope.
+  const mislabelled = DEFAULT_NODE_TYPES.map((t) =>
+    t.name === 'Person' ? { ...t, scope: 'note' as const } : t,
+  )
+  assert.equal(removeNodeType(mislabelled, 'Person').ok, false)
 })

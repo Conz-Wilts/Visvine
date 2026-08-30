@@ -27,7 +27,7 @@ export const MAX_RUN_COST_CENTS = 200
  * exactly the runaway the cost cap exists to stop. Tokens are the one unit
  * every provider reports, so the last line of defence is counted in them.
  */
-export const MAX_RUN_TOKENS = 400_000
+export const MAX_RUN_TOKENS = 2_000_000
 
 const MICROS_PER_CENT = 10_000
 const MICROS_PER_DOLLAR = 1_000_000

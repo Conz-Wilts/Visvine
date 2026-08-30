@@ -39,7 +39,7 @@ A failure at any step leaves production on the previous revision. The
 A schema migration replays on deploy; a *data* shape change does not. When a
 release changes where the app expects data to live, the backfill is a one-off
 run **after** traffic is routed, through the proxy, with the local-DB guard's
-override — the way `db:spaces:records` was run. The app reads the old shape in
+override — the way `db:entities:folders` was run. The app reads the old shape in
 between, so the order is deploy first, then backfill.
 
 Entity notes became folders (`people/<slug>/index.md`, not `people/<slug>.md`).

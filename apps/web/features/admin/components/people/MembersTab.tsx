@@ -1,19 +1,25 @@
 'use client';
 
-// Members → People. Who is actually in this space.
+// Members → People. Who is actually in this space, and what each of them can do.
 //
-// The row says what someone IS — their name and the aliases they wear — and
-// gives you the way out. What an alias MEANS (who else holds it, what it
-// reaches) is the Aliases tab next door, so a name is never edited in two
-// places.
+// The row says what someone IS — their name, the aliases they wear, and one line
+// for how far they reach into the context. Opening the row is where an admin
+// gives them more: flip an alias on or off, see everything that reaches them
+// and why (Everyone, an alias, or a grant that is theirs alone), and grant them
+// a folder or note directly. What an alias MEANS (its colour, its other holders,
+// everything it reaches) is still the Aliases tab next door, so an alias is
+// edited in one place and handed out in two.
 
 import { useMemo, useState } from 'react';
-import { Trash2Icon } from '@/features/shared/icons';
+import { ChevronRightIcon, Trash2Icon, UsersIcon } from '@/features/shared/icons';
 import { Avatar, Button, Chip, ConfirmDialog, SearchInput } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import { formatDate } from '@/lib/date';
+import { notesApi } from '@/features/notes/lib/notesApi';
+import { levelDisplayLabel, levelName, LEVEL_EDIT } from '@/lib/notes/shared/authz';
+import { accessSummary, reachFor, type Reach } from '@/lib/notes/shared/memberAccess';
 import { usePeopleSection } from './PeopleDataContext';
-import type { SpaceMember, PeopleData } from './shared';
+import { AliasToggle, GrantEditor, PathLabel, type OverviewGrant, type SpaceMember, type PeopleData } from './shared';
 
 /** "7 Feb 2026" — the day someone joined is all this column needs. */
 function joinedLabel(iso: string): string {
@@ -23,10 +29,13 @@ function joinedLabel(iso: string): string {
 export default function MembersTab() {
   const { spaceId, data, busy, run } = usePeopleSection();
   const [query, setQuery] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ userId: string; name: string } | null>(null);
 
   const members = useMemo(() => data?.members ?? [], [data]);
   const aliases = useMemo(() => data?.aliases ?? [], [data]);
+  const grants = useMemo(() => data?.overview?.grants ?? [], [data]);
+  const restricted = useMemo(() => data?.overview?.restricted ?? [], [data]);
   const active = useMemo(() => members.filter((m) => m.status !== 'pending'), [members]);
 
   const filtered = useMemo(() => {
@@ -48,8 +57,21 @@ export default function MembersTab() {
     return map;
   }, [members, aliases]);
 
+  // Everything that reaches each member, and the one line the row shows for it.
+  const reachByMember = useMemo(() => {
+    const map = new Map<string, { reach: Reach<OverviewGrant>[]; summary: string; level: number }>();
+    for (const m of members) {
+      const standing = { userId: m.userId, aliases: heldByMember.get(m.userId) ?? [] };
+      const { label, level } = accessSummary(grants, standing, restricted);
+      map.set(m.userId, { reach: reachFor(grants, standing), summary: label, level });
+    }
+    return map;
+  }, [members, heldByMember, grants, restricted]);
+
   const remove = (userId: string) =>
     run(() => fetchJson(`/api/communities/${spaceId}/members/${userId}`, { method: 'DELETE' }));
+
+  if (!data) return null;
 
   return (
     <div className="space-y-4">
@@ -57,26 +79,43 @@ export default function MembersTab() {
         <SearchInput value={query} onChange={setQuery} placeholder="Search members…" />
       )}
 
-      <div className="overflow-x-auto">
+      {/* No overflow clip on the wrapper: an open row holds the path picker,
+          whose menu floats past the table's edge. */}
+      <div>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border-subtle text-left">
               <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Member</th>
-              <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Type</th>
+              <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Aliases</th>
+              <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Context access</th>
               <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Joined</th>
-              <th className="pb-2" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle">
-            {filtered.map((member) => (
-              <MemberRow
-                key={member.id}
-                member={member}
-                held={heldByMember.get(member.userId) ?? []}
-                busy={busy}
-                onRemove={() => setConfirm({ userId: member.userId, name: member.user.name })}
-              />
-            ))}
+            {filtered.map((member) => {
+              const standing = reachByMember.get(member.userId);
+              return (
+                <MemberRow
+                  key={member.id}
+                  member={member}
+                  held={heldByMember.get(member.userId) ?? []}
+                  summary={standing?.summary ?? 'No access'}
+                  level={standing?.level ?? 0}
+                  open={open === member.userId}
+                  onToggle={() => setOpen((o) => (o === member.userId ? null : member.userId))}
+                >
+                  <MemberAccess
+                    spaceId={spaceId}
+                    member={member}
+                    data={data}
+                    reach={standing?.reach ?? []}
+                    busy={busy}
+                    run={run}
+                    onRemove={() => setConfirm({ userId: member.userId, name: member.user.name })}
+                  />
+                </MemberRow>
+              );
+            })}
             {filtered.length === 0 && (
               <tr>
                 <td colSpan={4} className="py-8 text-center text-sm text-text-muted">
@@ -103,6 +142,7 @@ export default function MembersTab() {
           if (!confirm) return;
           const { userId } = confirm;
           setConfirm(null);
+          setOpen(null);
           await remove(userId);
         }}
         onClose={() => setConfirm(null)}
@@ -111,43 +151,197 @@ export default function MembersTab() {
   );
 }
 
-/** One member: who they are, what they are, when they arrived, and the way out. */
-function MemberRow({ member, held, busy, onRemove }: {
+/**
+ * One member: who they are, what they wear, how far they reach, when they
+ * arrived — and, opened, everything an admin can change about that.
+ */
+function MemberRow({ member, held, summary, level, open, onToggle, children }: {
   member: SpaceMember;
   held: PeopleData['aliases'];
-  busy: boolean;
-  onRemove: () => void;
+  summary: string;
+  level: number;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <tr className="transition hover:bg-surface-2">
-      <td className="py-3 pr-4">
-        <div className="flex items-center gap-3">
-          <Avatar name={member.user.name} imageUrl={member.user.image} size="sm" />
-          <div className="min-w-0">
-            <div className="truncate font-medium text-text-primary">{member.user.name}</div>
-            <div className="truncate text-xs text-text-muted">{member.user.email}</div>
+    <>
+      <tr
+        onClick={onToggle}
+        className={`cursor-pointer transition ${open ? 'bg-surface-2' : 'hover:bg-surface-2'}`}
+      >
+        <td className="py-3 pr-4">
+          <div className="flex items-center gap-2.5">
+            <ChevronRightIcon
+              className={`h-3.5 w-3.5 shrink-0 text-text-muted transition-transform ${open ? 'rotate-90' : ''}`}
+            />
+            <Avatar name={member.user.name} imageUrl={member.user.image} size="sm" />
+            <div className="min-w-0">
+              <div className="truncate font-medium text-text-primary">{member.user.name}</div>
+              <div className="truncate text-xs text-text-muted">{member.user.email}</div>
+            </div>
           </div>
-        </div>
-      </td>
-      <td className="py-3 pr-4">
-        {held.length === 0 ? (
-          <span className="text-xs text-text-muted">—</span>
+        </td>
+        <td className="py-3 pr-4">
+          {held.length === 0 ? (
+            <span className="text-xs text-text-muted">—</span>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {held.map((a) => (
+                <Chip key={a.name} color={a.color} title={a.admin ? `${a.name} — is admin of the space` : a.name}>
+                  {a.name}
+                </Chip>
+              ))}
+            </div>
+          )}
+        </td>
+        <td className="py-3 pr-4 whitespace-nowrap text-xs">
+          {held.some((a) => a.admin) ? (
+            <span className="text-brand-gold">Admin — everything</span>
+          ) : (
+            <span className={level >= LEVEL_EDIT ? 'text-text-primary' : level > 0 ? 'text-text-secondary' : 'text-text-muted'}>
+              {summary}
+            </span>
+          )}
+        </td>
+        <td className="py-3 whitespace-nowrap text-xs text-text-secondary">
+          {joinedLabel(member.joinedAt)}
+        </td>
+      </tr>
+      {open && (
+        <tr className="bg-surface-2/60">
+          <td colSpan={4} className="px-2 pb-5 pt-1 sm:px-9">
+            {children}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+/** A titled block inside the open row — "Aliases", "Can access". */
+function Block({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h5 className="mb-1.5 text-xs font-medium text-text-muted">
+        {title}
+        {hint && <span className="ml-1.5 font-normal opacity-80">{hint}</span>}
+      </h5>
+      {children}
+    </div>
+  );
+}
+
+/** "via Everyone" / "via Research" — where a grant that is not theirs came from. */
+function ViaChip({ via }: { via: Reach['via'] }) {
+  if (via.kind === 'everyone') {
+    return (
+      <Chip size="xs" tone="muted" title="Every member of this space has this">
+        <UsersIcon className="mr-1 inline h-3 w-3 opacity-70" />
+        Everyone
+      </Chip>
+    );
+  }
+  if (via.kind === 'alias') {
+    return (
+      <Chip size="xs" color={via.color} title={`Comes with the ${via.name} alias`}>
+        {via.name}
+      </Chip>
+    );
+  }
+  return null;
+}
+
+/**
+ * The whole of one person's standing, editable: the aliases they hold, what
+ * reaches them through those and through Everyone (read-only here — change it
+ * on the Aliases tab, where it changes for every holder), the grants that are
+ * theirs alone, and the way out.
+ */
+function MemberAccess({ spaceId, member, data, reach, busy, run, onRemove }: {
+  spaceId: string;
+  member: SpaceMember;
+  data: PeopleData;
+  reach: Reach<OverviewGrant>[];
+  busy: boolean;
+  run: (fn: () => Promise<unknown>) => Promise<void>;
+  onRemove: () => void;
+}) {
+  const held = new Set(member.aliases);
+  const inherited = reach.filter((r) => r.via.kind !== 'direct');
+  const direct = reach.filter((r) => r.via.kind === 'direct').map((r) => r.grant);
+  const isAdmin = data.aliases.some((a) => a.admin && held.has(a.name));
+
+  const toggleAlias = (name: string) =>
+    void run(() =>
+      notesApi.aliasAction(spaceId, {
+        action: held.has(name) ? 'removeHolder' : 'addHolder',
+        name,
+        userId: member.userId,
+      }),
+    );
+
+  return (
+    <div className="space-y-4">
+      <Block title="Aliases" hint="— click to give or take away">
+        {data.aliases.length === 0 ? (
+          <p className="text-xs text-text-muted">This space has no aliases yet. Create one on the Aliases tab.</p>
         ) : (
-          <div className="flex flex-wrap gap-1">
-            {held.map((a) => (
-              <Chip key={a.name} color={a.color} title={a.admin ? `${a.name} — is admin of the space` : a.name}>
-                {a.name}
-              </Chip>
+          <div className="flex flex-wrap gap-1.5">
+            {data.aliases.map((alias) => (
+              <AliasToggle
+                key={alias.name}
+                name={alias.name}
+                color={alias.color}
+                admin={alias.admin}
+                on={held.has(alias.name)}
+                disabled={busy}
+                onClick={() => toggleAlias(alias.name)}
+              />
             ))}
           </div>
         )}
-      </td>
-      <td className="py-3 pr-4 whitespace-nowrap text-xs text-text-secondary">
-        {joinedLabel(member.joinedAt)}
-      </td>
-      <td className="py-3 text-right">
-        {/* Always visible — removing is a real, named action, not something you
-            have to hover to discover. The confirm dialog is the safety net. */}
+      </Block>
+
+      <Block title="Can access" hint={isAdmin ? '— an admin reaches everything, whatever is listed here' : undefined}>
+        <div className="space-y-1">
+          {inherited.map(({ grant, via }) => (
+            <div
+              key={grant.id}
+              className="flex items-center gap-2.5 rounded-lg px-1 py-1 text-sm text-text-primary"
+            >
+              <PathLabel path={grant.resourcePath} contextName={data.contextName} paths={data.paths} />
+              <ViaChip via={via} />
+              <span className="w-16 shrink-0 text-right text-xs font-medium text-text-secondary">
+                {levelDisplayLabel(levelName(grant.level))}
+              </span>
+            </div>
+          ))}
+          {inherited.length === 0 && direct.length === 0 && !isAdmin && (
+            <p className="px-1 text-xs text-text-muted">
+              Nothing reaches {member.user.name.split(' ')[0]} yet — give them an alias above, or a folder or note below.
+            </p>
+          )}
+        </div>
+      </Block>
+
+      <Block title="Just for them" hint="— grants that belong to this person, not to an alias">
+        <GrantEditor
+          spaceId={spaceId}
+          subjectType="user"
+          subjectId={member.userId}
+          grants={direct}
+          paths={data.paths}
+          contextName={data.contextName}
+          busy={busy}
+          run={run}
+          emptyText="Nothing yet."
+          placeholder="Give them a folder or note…"
+          addLabel="Give"
+        />
+      </Block>
+
+      <div className="flex justify-end pt-1">
         <Button
           variant="danger"
           onClick={onRemove}
@@ -155,9 +349,9 @@ function MemberRow({ member, held, busy, onRemove }: {
           className="!inline-flex !items-center !gap-1.5 !px-2.5 !py-1 !text-xs"
         >
           <Trash2Icon className="h-3.5 w-3.5" />
-          Remove
+          Remove from space
         </Button>
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }

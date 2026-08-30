@@ -2,8 +2,8 @@
  * An agent's folder, against the local Docker Postgres: the brief written at
  * `agents/<name>/index.md` makes the `agent:` node and is held to the entity
  * contract; the write gate opens the rest of the folder to that agent's own
- * runs and nothing else; the activation beside it is admin-only and drives
- * the state row; the folder is the agent's identity — never renamed, and a
+ * runs and nothing else; the activation is in that same brief and drives the
+ * state row; the folder is the agent's identity — never renamed, and a
  * delete takes the node with it and retires the row.
  *
  * Skips loudly when there is no local database (CI has one).
@@ -154,13 +154,13 @@ test('the folder is the agent\'s own to write — and only its own', async (t) =
     const own = (path: string, content = '---\ntitle: Report\n---\nDone.\n') => writeGated(author, CONTEXT, path, content, 'agent', 'agent:digest')
 
     assert.equal((await own('agents/digest/2026-01-31.md')).status, 'applied')
-    assert.equal((await own('agents/digest/state.md')).status, 'applied')
-    assert.equal((await appendLogGated(author, CONTEXT, 'agents/digest/state.md', 'ran', 'agent', 'agent:digest')).status, 'applied')
+    assert.equal((await own('agents/digest/memory.md')).status, 'applied')
+    assert.equal((await appendLogGated(author, CONTEXT, 'agents/digest/memory.md', 'ran', 'agent', 'agent:digest')).status, 'applied')
 
     const brief = await own('agents/digest/index.md', BRIEF.replace('digest', 'anything I like'))
     assert.equal(brief.status, 'denied')
     assert.match(brief.status === 'denied' ? brief.reason : '', /frozen for AI/)
-    assert.equal((await own('agents/digest/activation.md', '---\ntype: agent-activation\nactive: true\nschedule: hourly\n---\n')).status, 'denied')
+    assert.equal((await own('agents/digest/activation.md', '---\ntype: agent-activation\nactive: true\nschedule: hourly\n---\n')).status, 'denied', 'nor the pre-merge activation note')
     assert.equal((await own('agents/other/report.md')).status, 'denied', "another agent's folder")
     assert.equal((await own('agents/digest/deep/report.md')).status, 'denied', 'no sub-folders of its own')
     assert.equal((await writeGated(author, CONTEXT, 'agents/digest/report.md', '# x', 'agent', 'mcp')).status, 'denied', 'a generic AI write is not the agent')
@@ -175,29 +175,36 @@ test('the folder is the agent\'s own to write — and only its own', async (t) =
   }
 })
 
-test('the activation beside the brief is admin-only and drives the state row; deleting the folder retires the agent', async (t) => {
+test('the activation IS the brief: whoever can edit it turns the agent on, and it drives the state row; deleting the folder retires the agent', async (t) => {
   const reason = await probe()
   if (reason) return t.skip(reason)
   const store = await import('@/lib/notes/store')
   const { writeGated } = await import('@/lib/notes/contextService')
-  const { newActivationNote } = await import('@/lib/agents/config')
+  const { withActivation } = await import('@/lib/agents/config')
   await setup()
   try {
     await store.createNote(CONTEXT, 'agents/digest/index.md', BRIEF, ACTOR)
-    const live = newActivationNote({ active: true, schedule: { kind: 'hourly' } })
-    const byMember = await writeGated(principal(AUTHOR, false), CONTEXT, 'agents/digest/activation.md', live)
-    assert.equal(byMember.status, 'denied')
-    assert.match(byMember.status === 'denied' ? byMember.reason : '', /Only space admins can activate/)
+    const live = withActivation(BRIEF, { active: true, schedule: { kind: 'hourly' } })
+    // A member who can edit the brief turns the agent on — but may only run it
+    // as themselves; naming somebody else's connections is an admin's call.
+    const asOther = live.replace('---\n', `---\nruns_as: ${ADMIN}\n`)
+    const byMemberAsOther = await writeGated(principal(AUTHOR, false), CONTEXT, 'agents/digest/index.md', asOther)
+    assert.equal(byMemberAsOther.status, 'denied')
+    assert.match(byMemberAsOther.status === 'denied' ? byMemberAsOther.reason : '', /run as someone else/)
+    const asSelf = live.replace('---\n', `---\nruns_as: ${AUTHOR}\n`)
+    assert.equal((await writeGated(principal(AUTHOR, false), CONTEXT, 'agents/digest/index.md', asSelf)).status, 'applied')
+    assert.equal((await writeGated(principal(AUTHOR, false), CONTEXT, 'agents/digest/index.md', live)).status, 'applied')
 
-    assert.equal((await writeGated(principal(ADMIN, true), CONTEXT, 'agents/digest/activation.md', live)).status, 'applied')
+    assert.equal((await writeGated(principal(ADMIN, true), CONTEXT, 'agents/digest/index.md', asOther)).status, 'applied', 'an admin may repoint it')
+    assert.equal((await writeGated(principal(ADMIN, true), CONTEXT, 'agents/digest/index.md', live)).status, 'applied')
     const on = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
     assert.equal(on.active, true)
     assert.ok(on.nextRunAt, 'an hourly clock was derived from the note')
 
     // The folder IS the agent, and like every entity folder its path is the
     // entity's identity: it cannot be renamed, only deleted — and deleting it
-    // takes the brief, the activation and the node, and retires the row (the
-    // run history hangs off it, so it stays).
+    // takes the brief (activation and all) and the node, and retires the row
+    // (the run history hangs off it, so it stays).
     await assert.rejects(store.renameFolder(CONTEXT, 'agents/digest', 'agents/summary', ACTOR), /entity's identity/)
     await store.deleteFolder(CONTEXT, 'agents/digest')
     assert.equal(await store.readNoteOrNull(CONTEXT, 'agents/digest/index.md'), null)
@@ -206,6 +213,43 @@ test('the activation beside the brief is admin-only and drives the state row; de
     const gone = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
     assert.equal(gone.active, false)
     assert.equal(gone.deactivatedReason, 'deleted')
+  } finally {
+    await teardown()
+  }
+})
+
+test('a pre-merge activation.md still drives an agent whose brief has none, and the brief wins once it has one', async (t) => {
+  const reason = await probe()
+  if (reason) return t.skip(reason)
+  const store = await import('@/lib/notes/store')
+  const { findAgentActivation } = await import('@/lib/agents/briefs')
+  const { withActivation } = await import('@/lib/agents/config')
+  await setup()
+  try {
+    // A brief written before the merge: no activation keys of its own.
+    await store.createNote(CONTEXT, 'agents/digest/index.md', BRIEF, ACTOR)
+    await store.createNote(
+      CONTEXT,
+      'agents/digest/activation.md',
+      '---\ntype: agent-activation\nactive: true\nschedule: hourly\ntimezone: UTC\n---\n',
+      ACTOR,
+    )
+    const legacy = await findAgentActivation(SPACE, 'digest')
+    assert.ok(legacy.legacy, 'read from the sibling')
+    assert.equal(legacy.parsed?.ok && legacy.parsed.activation.schedule?.kind, 'hourly')
+    const fromLegacy = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
+    assert.equal(fromLegacy.active, true, 'the older shape keeps running')
+
+    // The moment the brief says anything about when it runs, it is the answer:
+    // a stale sibling can never contradict the note a person just edited.
+    await store.writeNote(CONTEXT, 'agents/digest/index.md', withActivation(BRIEF, { active: false, schedule: null }), ACTOR)
+    const merged = await findAgentActivation(SPACE, 'digest')
+    assert.equal(merged.legacy, false)
+    assert.equal(merged.path, 'agents/digest/index.md')
+    assert.equal(merged.parsed?.ok && merged.parsed.activation.active, false)
+    const off = await prisma!.agentState.findUniqueOrThrow({ where: { agent_identity: { spaceId: SPACE, name: 'digest' } } })
+    assert.equal(off.active, false)
+    assert.equal(off.nextRunAt, null)
   } finally {
     await teardown()
   }

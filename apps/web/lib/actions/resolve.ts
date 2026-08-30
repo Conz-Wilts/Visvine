@@ -105,7 +105,7 @@ export async function listMySpaces(ctx: ActionCaller) {
   const rows = await prisma.spaceMember.findMany({
     where: { userId: ctx.userId, status: 'active' },
     select: {
-      space: { select: { id: true, name: true, personalOwnerId: true, aliases: true, parentId: true } },
+      space: { select: { id: true, name: true, personalOwnerId: true, aliases: true } },
     },
   })
   const spaceIds = rows.map((r) => r.space.id)
@@ -134,7 +134,5 @@ export async function listMySpaces(ctx: ActionCaller) {
     your_aliases: aliasesBySpace.get(r.space.id) ?? [],
     you_manage_it: owns.has(r.space.id),
     is_personal_space: r.space.personalOwnerId !== null,
-    // The space this one lives inside, if any (docs/sub-spaces.md).
-    parent_id: r.space.parentId,
   }))
 }

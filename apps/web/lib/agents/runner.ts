@@ -283,6 +283,15 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     // offered as run_connector targets.
     const runnableConnectors = await runnableConnectorNames(principal, context, brief.connectors)
     const connectorActions = await connectorActionsFor(principal, context, runnableConnectors)
+    // The action catalogue for run_action's description. Imported here rather
+    // than in lib/agents/tools.ts because an action definition imports the
+    // agent service, which reaches that module — a cycle at eval time.
+    const actionCatalogue = brief.tools.includes('actions')
+      ? (await import('@/lib/actions/registry'))
+          .allActions()
+          .map((a) => `- ${a.name} (${a.scope}): ${a.summary}`)
+          .join('\n')
+      : undefined
     const result = await runToolLoop({
       messages: [
         { role: 'system', content: system },
@@ -301,6 +310,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
         runId,
         authorUserId: authorUserId ?? undefined,
         chainDepth,
+        actionCatalogue,
         onWrite: noteWritten,
       }),
       maxTurns: brief.maxTurns,

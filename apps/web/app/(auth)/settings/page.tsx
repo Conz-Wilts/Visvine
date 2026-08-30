@@ -1,7 +1,7 @@
 'use client';
 
 import React, { Suspense } from 'react';
-import { useTheme, COLOR_THEMES, ColorTheme, type BackdropMode } from '@/features/shared/contexts/ThemeContext';
+import { useTheme, COLOR_THEMES, ColorTheme } from '@/features/shared/contexts/ThemeContext';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import LoadingText from '@/components/ui/LoadingText';
 import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePanel';
@@ -32,14 +32,14 @@ const swatchRing = (active: boolean, accent: string) =>
     ? `0 0 0 2px var(--surface-1, white), 0 0 0 4px ${accent}`
     : 'inset 0 0 0 1px var(--border-subtle, #e5e7eb)';
 
-/** One theme set: the accent dot sitting on its own gradient. */
+/** One theme set: the accent dot sitting on the set's soft tint. */
 function ThemeSwatch({ t, active, onSelect }: { t: ColorTheme; active: boolean; onSelect: () => void }) {
   return (
     <button onClick={onSelect} aria-label={`Select ${t.name} theme`} title={t.name} className="focus:outline-none">
       <div
         className="flex h-12 w-16 items-center justify-center rounded-lg transition-all duration-200"
         style={{
-          background: t.backdrop,
+          background: t.accentLight,
           boxShadow: swatchRing(active, t.accent),
           transform: active ? 'scale(1.08)' : 'scale(1)',
         }}
@@ -50,27 +50,10 @@ function ThemeSwatch({ t, active, onSelect }: { t: ColorTheme; active: boolean; 
   );
 }
 
-function ModeSwatch({ label, background, accent, active, onSelect }: {
-  label: string; background: string; accent: string; active: boolean; onSelect: () => void;
-}) {
-  return (
-    <button onClick={onSelect} aria-label={`${label} background`} title={label} className="focus:outline-none">
-      <div
-        className="h-12 w-16 rounded-lg transition-all duration-200"
-        style={{
-          background,
-          boxShadow: swatchRing(active, accent),
-          transform: active ? 'scale(1.08)' : 'scale(1)',
-        }}
-      />
-    </button>
-  );
-}
-
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
 function AppearanceSection() {
-  const { theme, setTheme, backdropMode, setBackdropMode } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   return (
     <div className="space-y-8">
@@ -86,26 +69,6 @@ function AppearanceSection() {
               t={t}
               active={theme.id === t.id}
               onSelect={() => setTheme(t.id)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Background — the set's gradient, or plain white. */}
-      <div>
-        <h3 className="text-sm font-semibold text-text-primary mb-1">Background</h3>
-        <p className="text-lg font-bold mb-4 text-text-secondary">
-          {backdropMode === 'gradient' ? 'Gradient' : 'White'}
-        </p>
-        <div className="flex flex-wrap gap-3">
-          {(['gradient', 'plain'] as BackdropMode[]).map(mode => (
-            <ModeSwatch
-              key={mode}
-              label={mode === 'gradient' ? 'Gradient' : 'White'}
-              background={mode === 'gradient' ? theme.backdrop : '#ffffff'}
-              accent={theme.accent}
-              active={backdropMode === mode}
-              onSelect={() => setBackdropMode(mode)}
             />
           ))}
         </div>

@@ -289,8 +289,8 @@ export default function ToolFrame({
                 onLoad={handleFrameLoad}
                 // A page-mode Tool IS the page, so the iframe paints nothing of
                 // its own: the frame document's body is transparent and the
-                // app's backdrop — the viewer's gradient or plain white —
-                // shows through, exactly as it does behind a native page. A
+                // app's backdrop shows through, exactly as it does behind a
+                // native page. A
                 // tab or preview is a panel, and panels sit on surface-1 like
                 // every other card in the app.
                 className={clsx('block h-full w-full', mode === 'page' ? 'bg-transparent' : 'bg-surface-1 rounded-xl border border-border-subtle')}
@@ -318,7 +318,7 @@ function ToolFrameSkeleton({ framed }: { framed: boolean }) {
       aria-hidden
       // Unframed (page mode) it paints no background, so the skeleton floats
       // on the app's backdrop the way a loading native page does — an opaque
-      // slab here would flash white over a gradient backdrop.
+      // slab here would read as a card the finished page never had.
       className={clsx('absolute inset-0 flex flex-col gap-3', framed ? 'bg-surface-1 rounded-xl border border-border-subtle p-5' : 'p-6')}
     >
       <Skeleton className="h-5 w-48" />

@@ -215,6 +215,10 @@ export default function NodeGrid({ items, loading = false, onCardClick, nodeType
           data={items}
           components={gridComponents}
           computeItemKey={(_, item) => item.id}
+          // Mount a screen's worth past each edge so a flick never lands on
+          // an empty row while the next batch mounts; the cards behind and
+          // ahead of that are unmounted.
+          increaseViewportBy={{ top: 400, bottom: 800 }}
           itemContent={(_, item) => (
             <RevealCard id={item.id} coordinator={coordinator}>
               <NodeCard item={item} onClick={onCardClick} nodeTypes={nodeTypes} aliases={aliases} />

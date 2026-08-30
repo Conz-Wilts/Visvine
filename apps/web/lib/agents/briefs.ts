@@ -7,7 +7,15 @@
  * it is read here so such an agent keeps running, never written.
  */
 import prisma from '@/lib/prisma'
-import { agentBriefAliasPath, agentBriefPath } from './config'
+import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import {
+  agentActivationPath,
+  agentBriefAliasPath,
+  agentBriefPath,
+  hasActivationFrontmatter,
+  parseAgentActivation,
+  type ParseActivationResult,
+} from './config'
 
 const SHARED_OWNER_KEY = 'shared'
 
@@ -26,4 +34,42 @@ export async function findAgentBrief(spaceId: string, name: string): Promise<Age
   })
   // The folder form wins when both exist — the alias is only ever a leftover.
   return rows.find((r) => r.path === index) ?? rows[0] ?? null
+}
+
+export interface AgentActivationSource {
+  /** The parse of whichever note carries the activation, or null when there is none. */
+  parsed: ParseActivationResult | null
+  /** The note the activation was read from — the brief, or a pre-merge activation.md. */
+  path: string | null
+  /** That note's content, for a caller about to write `active: false` back into it. */
+  content: string | null
+  /** True when it came from the pre-merge `agents/<name>/activation.md`. */
+  legacy: boolean
+}
+
+/**
+ * Where this agent's activation is, and what it says.
+ *
+ * The brief IS the activation now, so the answer is normally its own
+ * frontmatter. A brief carrying no activation keys is one written before the
+ * merge: its `activation.md` is read instead, so it keeps running until
+ * `db:agents:activation` folds it in. The brief always wins once it has any —
+ * a stale sibling can never contradict the note a person just edited.
+ */
+export async function findAgentActivation(spaceId: string, name: string): Promise<AgentActivationSource> {
+  const brief = await findAgentBrief(spaceId, name)
+  if (brief) {
+    const fm = parseFrontmatter(brief.content)
+    if (hasActivationFrontmatter(fm)) {
+      return { parsed: parseAgentActivation(fm), path: brief.path, content: brief.content, legacy: false }
+    }
+  }
+  const legacy = await prisma.contextNote.findFirst({
+    where: { spaceId, ownerKey: SHARED_OWNER_KEY, path: agentActivationPath(name), deletedAt: null },
+    select: { content: true },
+  })
+  if (legacy) {
+    return { parsed: parseAgentActivation(parseFrontmatter(legacy.content)), path: agentActivationPath(name), content: legacy.content, legacy: true }
+  }
+  return { parsed: brief ? parseAgentActivation({}) : null, path: brief?.path ?? null, content: brief?.content ?? null, legacy: false }
 }

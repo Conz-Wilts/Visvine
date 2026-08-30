@@ -4,7 +4,6 @@ import { parseBody } from '@/lib/api/route'
 import { spaceAdminUserIds } from '@/lib/auth'
 import { notify } from '@/lib/notifications/service'
 import { getVersion, installability } from '@/lib/tools/registry'
-import { ancestorsOf } from '@/lib/spaces/tree'
 import { bad, requireToolsAccess } from '@/lib/tools/route'
 import prisma from '@/lib/prisma'
 
@@ -45,7 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
     status: version.status,
     marketplaceStatus: version.marketplaceStatus,
     sourceSpaceId: version.sourceSpaceId,
-    lineage: (await ancestorsOf(ctx.resolved.spaceId)).map((row) => row.id),
+    spaceId: ctx.resolved.spaceId,
   })
   if (!installable.ok) return bad(installable.error, 409)
 

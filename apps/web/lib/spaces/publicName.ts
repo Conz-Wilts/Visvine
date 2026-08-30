@@ -17,9 +17,25 @@
 // check-then-write race this cannot).
 
 import prisma from '@/lib/prisma';
-import { normalizePublicName } from './hierarchy';
 
-export { normalizePublicName };
+/** A space is either listed on /discover or it is not. There is no third state. */
+export type SpaceVisibility = 'public' | 'private';
+
+export function isSpaceVisibility(value: unknown): value is SpaceVisibility {
+  return value === 'public' || value === 'private';
+}
+
+/**
+ * The comparison key for a space name: case- and whitespace-insensitive, so
+ * "Blackbird  VC" can't sit next to "blackbird vc".
+ *
+ * MUST stay identical to the SQL index expression
+ * `lower(regexp_replace(btrim(name), '\s+', ' ', 'g'))` behind the public name
+ * index, or the app check and the database backstop will disagree.
+ */
+export function normalizePublicName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLowerCase();
+}
 
 /** The one wording for this conflict, shared by every route that can raise it. */
 export function publicNameTakenMessage(existingName: string): string {

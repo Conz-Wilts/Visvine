@@ -52,10 +52,14 @@ describe('isFeatureEnabled', () => {
   });
 
   it('hides notes, events, resources, connectors and tools from the nav rail and console toggles', () => {
-    // All four are core and nav-hidden: notes and events live in the top bar,
+    // All five are core and nav-hidden: notes and events live in the top bar,
     // connectors in the Space Console, tools behind the marketplace icon and
     // per-install `tool:<slug>` rows.
     assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['notes', 'events', 'resources', 'connectors', 'tools']);
+    // Agents is not a feature key at all: an agent is a note under `agents/`,
+    // watched on its own node page's Agent tab — there is no agents surface to
+    // switch on, off or hide.
+    assert.equal(ALL_FEATURE_KEYS.includes('agents'), false);
     // resources is core: a space that switched the old Resources tool off keeps
     // its Drive — it is a Directory tab now.
     assert.equal(isFeatureEnabled({ enabled: { resources: false } }, 'resources'), true);

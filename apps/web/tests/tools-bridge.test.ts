@@ -235,11 +235,12 @@ test('the executable namespaces are sealed even when the perimeter names them', 
 
 // ── the one hole in the seal: an agent brief the tool declared ────────────────
 //
-// A brief is not the thing that runs — activation is (agents/<name>/activation.md, admin-only),
-// and claimManualRun refuses an inactive agent — so a Tool may CREATE the brief
-// of an agent its perimeter names. Every other shape stays sealed, and the
-// create-only rule is what keeps a Tool from rewriting instructions an admin
-// already approved. See bridge.ts#agentBriefExemption.
+// A brief is not the thing that runs — `active:` in its frontmatter is, and a
+// Tool-written brief carrying it is refused, so what a Tool creates is
+// something a person still has to switch on (claimManualRun refuses an
+// inactive agent). Every other shape stays sealed, and the create-only rule is
+// what keeps a Tool from rewriting instructions someone already approved. See
+// bridge.ts#agentBriefExemption.
 
 /** A perimeter that reaches all of agents/, so the SEAL is what refuses below — not a glob. */
 const BRIEF_AUTHOR = perimeter({ write: ['agents/**'], agents: ['wayfinder-*', 'nightly'] })
@@ -276,13 +277,28 @@ test('a wildcard-only agents perimeter names nobody, so it authors nothing', asy
   assert.match(error.message, /a bare "\*" names nobody/)
 })
 
-test('the activation note is not a brief — activation.md is sealed whatever the tool declares', async () => {
+test('nothing else in the folder is a brief — a sibling note is sealed whatever the tool declares', async () => {
   const t = target({ perimeter: BRIEF_AUTHOR })
   const error = errorOf(
     await handleBridgeCall(t, 'context.write', { path: 'agents/nightly/activation.md', content: 'active: true' }, deps()),
   )
   assert.equal(error.code, 'forbidden')
-  assert.match(error.message, /written by a space admin/)
+  assert.match(error.message, /only a brief at agents\/<name>\/index\.md is exempt/)
+})
+
+test('a tool cannot ship an agent already switched on', async () => {
+  // The brief carries the activation now, so the exemption has to be enforced
+  // on the content: `active: true` would be the Tool starting the agent.
+  const error = errorOf(
+    await handleBridgeCall(
+      target({ perimeter: BRIEF_AUTHOR }),
+      'context.write',
+      { path: 'agents/nightly/index.md', content: '---\ntype: agent\nactive: true\nschedule: hourly\n---\n\nRun forever.' },
+      deps({ readVisible: async () => null, writeGated: async () => assert.fail('the store must not be reached') }),
+    ),
+  )
+  assert.equal(error.code, 'forbidden')
+  assert.match(error.message, /active: true/)
 })
 
 test('a brief that already exists is never rewritten, only created', async () => {

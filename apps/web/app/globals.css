@@ -156,9 +156,10 @@
 html, body {
   height: 100%;
   font-family: var(--font-utility);
-  /* The page backdrop (Settings → Appearance → Background). Body never scrolls
-     — <main> does — so one paint covers the viewport and the transparent shell
-     chrome (navbar, rail, <main>) lets it run unbroken underneath. */
+  /* The page backdrop — plain white, written by ThemeContext. Body never
+     scrolls — <main> does — so one paint covers the viewport and the
+     transparent shell chrome (navbar, rail, <main>) lets it run unbroken
+     underneath. */
   background: var(--app-backdrop, #ffffff);
   accent-color: var(--theme-accent-color, #78d870);
   /* No horizontal rubber-band: macOS Chrome elastically bounces the viewport on
@@ -185,10 +186,9 @@ html, body {
 }
 
 /* Chrome that pins over scrolling content (pane tab rows, sticky toolbars,
-   the scrollbar mask) paints the page backdrop itself, fixed to the viewport:
-   the strip shows exactly the slice of gradient (or white) that sits behind
-   it, so it hides what scrolls beneath without ever reading as a block. Needs
-   no transformed ancestor — a transform re-anchors a fixed background. */
+   the scrollbar mask) paints the page backdrop itself, fixed to the viewport,
+   so it hides what scrolls beneath without ever reading as a block. Needs no
+   transformed ancestor — a transform re-anchors a fixed background. */
 .bg-glass {
   background: var(--app-backdrop, #ffffff);
   background-attachment: fixed;

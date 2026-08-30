@@ -3,8 +3,8 @@ import { verifyRunToken } from '@/lib/agents/internalAuth'
 import { executeRun } from '@/lib/agents/runner'
 
 // This request IS the run. Cloud Run's --timeout must exceed this.
-// Segment config must be a literal Next can read statically: MAX_RUN_MS (20 min) + 60s.
-export const maxDuration = 1260
+// Segment config must be a literal Next can read statically: MAX_RUN_MS (25 min) + 60s.
+export const maxDuration = 1560
 export const dynamic = 'force-dynamic'
 
 /**

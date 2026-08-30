@@ -31,7 +31,7 @@ const THEME_TOKENS: ReadonlyArray<readonly [source: string, alias: string, fallb
   ['--color-brand-green', '--vv-accent', '#78d870'],
   ['--color-brand-dark-green', '--vv-accent-strong', '#2f7a3e'],
   ['--color-brand-light-bg', '--vv-accent-soft', '#eaf9ec'],
-  // The page backdrop — the viewer's chosen gradient, or plain white. A Tool
+  // The page backdrop — plain white. A Tool
   // rarely paints this itself (the frame is transparent, so the app's own
   // backdrop already shows through); it goes over so a Tool that must know
   // the value (a canvas, an exported image) reads the real one.

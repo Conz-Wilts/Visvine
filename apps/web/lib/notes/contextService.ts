@@ -18,7 +18,7 @@ import { createSourceStage } from './sourceStage'
 import { createMemoryStage } from './memoryStage'
 import { embedTexts, semanticConfigured, type SemanticStatus } from './embeddings'
 import { getVault, vaultFor } from './vaultCache'
-import { splitFrontmatter } from './shared/markdown'
+import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { rewriteLinks } from './shared/linkRewrite'
 import { fusedSearch, type FusedResult, type SearchFilters } from './shared/retrieval'
 import { planSearch, type RewriteStatus } from './queryRewrite'
@@ -32,7 +32,7 @@ import {
   principalIsSuperAdmin,
   principalLevelName,
 } from './shared/permissions'
-import { agentOfRevisionStamp, isAgentActivationPath, isAgentOwnNotePath } from './entities'
+import { agentOfRevisionStamp, isAgentActivationPath, isAgentBriefPath, isAgentOwnNotePath } from './entities'
 import { isRestrictedPath, isLockedPath } from './shared/authz'
 import { replicaDenial } from './publications'
 import { isGlobalSpace } from '@/lib/spaces/globalSpace'
@@ -286,15 +286,6 @@ export function writeDenial(p: ContextPrincipal, context: Context, path: string)
   ) {
     return 'Only space admins can create or edit connectors.'
   }
-  // agents/<name>/activation.md is the agent's ACTIVATION (active + schedule).
-  // The brief beside it (agents/<name>/index.md) is member-writable on
-  // purpose; turning one on means "run unattended on the space's model key
-  // with declared connector reach", so that stays with admins. Sits inside
-  // the agent's folder, so a folder grant on agents/ does not reach it — this
-  // clause runs before the grant check.
-  if (isAgentActivationPath(path) && !p.system && !principalIsSuperAdmin(p)) {
-    return 'Only space admins can activate an agent.'
-  }
   // settings/ IS the space's configuration (lib/spaces/configNote.ts) — the
   // feature switches, the type vocabulary, and the alias flags that decide who
   // administers the space. Editing one of those notes changes the space, so it
@@ -419,8 +410,26 @@ export async function writeGated(
   // note and the columns from silently disagreeing.
   const configDenial = await configNoteDenial(context, path, content)
   if (configDenial) return { status: 'denied', reason: configDenial }
+  const runsAsDenial = activationRunsAsDenial(p, context, path, content)
+  if (runsAsDenial) return { status: 'denied', reason: runsAsDenial }
   await store.writeNote(context, path, content, actorOf(p), origin, model)
   return { status: 'applied', path }
+}
+
+/**
+ * An agent's brief (agents/<name>/index.md) carries its activation, and is
+ * written by whoever can edit the agent's folder — so turning an agent on is a
+ * member act. The one field in it that reaches beyond the writer is `runs_as`:
+ * a run spends that member's stored connections, and naming somebody else is a
+ * space admin's call. A member may leave it out (the agent runs as its author)
+ * or name themselves. A pre-merge `activation.md` is gated identically.
+ */
+function activationRunsAsDenial(p: ContextPrincipal, context: Context, path: string, content: string): string | null {
+  if (!isShared(context) || !(isAgentBriefPath(path) || isAgentActivationPath(path)) || p.system || principalIsSuperAdmin(p)) return null
+  const runsAs = parseFrontmatter(content).runs_as
+  if (runsAs === undefined || runsAs === null || runsAs === '') return null
+  if (typeof runsAs === 'string' && runsAs.trim() === p.userId) return null
+  return 'Only a space admin can make an agent run as someone else. Leave `runs_as` out, or name yourself.'
 }
 
 /** Why this settings note cannot be saved, or null when it is fine. */

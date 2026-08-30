@@ -26,6 +26,7 @@ import type { SpaceFeatureConfig } from '@/lib/types'
 import { isFeatureEnabled } from '@/lib/featureAccess'
 import { SANDBOX_LIMITS } from '@/lib/connectors/config'
 import { kw, type KeywordRule } from '@/lib/actions/shared/match'
+import { renderIntake, type IntakeKind } from '@/lib/actions/shared/intake'
 import { AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
 
 /** One call the client should make, in order. */
@@ -65,6 +66,13 @@ export interface Recipe {
   summary: string
   /** Weighted term rules over the lowercased prompt. Highest total wins. */
   keywords: KeywordRule[]
+  /**
+   * Set on the recipes that BUILD something that then runs unattended. It puts
+   * a short, budgeted intake in front of step 1 — the few questions whose
+   * answers change the artefact — because the alternative is a model writing a
+   * plausible agent nobody asked for at a time nobody chose.
+   */
+  intake?: IntakeKind
   steps: (ctx: RecipeContext) => PlanStep[]
   /** The literal contract — frontmatter shape, field names — where one applies. */
   contract?: string
@@ -142,14 +150,16 @@ no require/import, and no network beyond \`hosts\`.
 Optional keys: \`allow:\` (a list of "METHOD /path" rules, trailing * for prefix,
 enforced on every request), \`alias:\`, \`identity:\`, \`auth:\`, \`webhook:\`.`
 
-const AGENT_CONTRACT = `An agent is TWO things, and the split is the review model:
+const AGENT_CONTRACT = `An agent is TWO things:
 
   the BRIEF        what it does. Any member writes it — create_agent.
-  the ACTIVATION   whether and when it runs. ADMIN ONLY — activate_agent.
+  the ACTIVATION   whether and when it runs. Anyone who can edit the brief
+                   turns it on — activate_agent. An admin can turn it off or
+                   delete it.
 
-Creating an agent does NOT start it. A brief is inert until an admin turns it
+Creating an agent does NOT start it. A brief is inert until someone turns it
 on, and that is deliberate: an active agent runs unattended on the space's
-model key with whatever reach its brief declares, so a person approves it.
+model key with whatever reach its brief declares, so a person says go.
 
 create_agent writes the brief for you; you never write that note by hand. An
 agent is a folder, agents/<name>/, and the brief is its index.md:
@@ -195,6 +205,7 @@ const RECIPES: Recipe[] = [
       ...kw('connector', '', 2),
       ...kw('stripe|hubspot|salesforce|notion|slack|airtable|postgres|snowflake|github', '', 1),
     ],
+    intake: 'connector',
     contract: CONNECTOR_CONTRACT,
     steps: (ctx) => [
       {
@@ -241,6 +252,7 @@ const RECIPES: Recipe[] = [
       },
     ],
     mustKnow: (ctx) => [
+      'The intake above costs one message and saves a rewrite: which service and account, and what the secret is CALLED. Everything else can be proposed and corrected.',
       'Pass `visibility: "inherit"` on the write. A new shared note is PRIVATE by default, and list_connectors reads through the visibility lens — a private connector note is invisible to every member but you and the admins.',
       'NEVER write a credential value into the note. Reference it as `{{secret:NAME}}` in `env:` — the note is readable context, so a value written there is a value leaked to everyone who can read the space.',
       'The VALUE goes in the secret store, via set_connector_secret (admins only) when the user has handed you one, or by an admin on the connector\'s page otherwise. Storing it is write-only and irreversible to read: say so before you store, and never echo the value back afterwards.',
@@ -310,9 +322,8 @@ const RECIPES: Recipe[] = [
     id: 'create_agent',
     when: 'Set up something that runs on a schedule or on a trigger — "make an agent", "automate X", "every Monday do Y".',
     summary:
-      'Write the brief with create_agent, then get it turned on. Creating is not starting: a new agent is ' +
-      'inert until a space admin activates it, which is the review point. An admin can do both here; if you ' +
-      'are not one, say plainly that an admin has to turn it on.',
+      'Write the brief with create_agent, then turn it on with activate_agent. Creating is not starting: a new ' +
+      'agent is inert until someone who can edit it activates it — and whoever wrote the brief can.',
     keywords: [
       ...kw('creat|add|build|set up|setup|make|write|new|author', 'agent', 10),
       // Weak on purpose. "the weekly-digest agent" is a REFERENCE to one, not a
@@ -322,6 +333,7 @@ const RECIPES: Recipe[] = [
       ...kw('automate|automation|scheduled job|scheduled task|scheduled run', '', 6),
       ...kw('every day|every morning|every monday|every week|every hour|daily|weekly|nightly|on a schedule|cron', '', 4),
     ],
+    intake: 'agent',
     contract: AGENT_CONTRACT,
     steps: (ctx) => [
       {
@@ -351,15 +363,16 @@ const RECIPES: Recipe[] = [
       {
         n: 4,
         tool: 'activate_agent',
-        why: "Turn it on and set when it runs. SPACE ADMINS ONLY — if you are not one, stop at step 3 and tell the person an admin has to activate it, with this action or the Turn on button on the agent's page.",
+        why: "Turn it on and set when it runs. Anyone who can edit the brief may — with this action or the Turn on button on the agent's page. Confirm the schedule with the person first.",
         args: { space_id: spaceId(ctx), agent: '<slug>', schedule: 'weekly', at: '09:00', weekday: 'monday', timezone: '<IANA zone>' },
         optional: true,
       },
     ],
     mustKnow: (ctx) => [
       'CREATING IS NOT STARTING. A brief does nothing until it is activated — never tell the user their agent is running because you created it.',
+      'The intake above is the difference between an agent someone keeps and one they switch off: the two answers that matter most are what it should produce and when it should run. Ask those, in one message, then build.',
       "The `instructions` you pass IS the agent's system prompt. Be concrete: what to read, what to produce, where to write it.",
-      'create_agent CREATES only. An existing name is refused rather than overwritten — an admin who activated an agent approved a SPECIFIC brief. Briefs are edited on the note itself.',
+      'create_agent CREATES only. An existing name is refused rather than overwritten — a live agent runs the brief a person approved. Briefs are edited on the note itself.',
       'A clock schedule needs a timezone. Ask which one rather than assuming; "daily at 07:00" is meaningless without it.',
       'Once it is active, run_agent triggers it now without waiting for the schedule.',
       // agents/ refuses generic AI writes (contextService.lockedDenial), and
@@ -376,7 +389,7 @@ const RECIPES: Recipe[] = [
   {
     id: 'run_agent',
     when: 'Trigger an existing agent now, or check when one last ran and how it went.',
-    summary: 'The roster is member-visible; running is author-or-admin, and only for an ACTIVE agent.',
+    summary: 'The roster is member-visible; running is for anyone who can edit the brief, and only for an ACTIVE agent.',
     keywords: [
       ...kw('run|trigger|fire|kick off|execute', 'agent', 9),
       ...kw('list|show|which|what', 'agent', 6),
@@ -397,8 +410,8 @@ const RECIPES: Recipe[] = [
       },
     ],
     mustKnow: () => [
-      'An inactive agent is refused — activation is the review point, and only an admin can flip it.',
-      "Only the agent's author or a space admin may trigger a run.",
+      'An inactive agent is refused — turn it on first (activate_agent).',
+      "Only someone who can edit the agent's brief — its author, a space admin, or a member with edit access to its folder — may trigger a run.",
     ],
     blockers: (ctx) => scopeBlocker(ctx, 'agents:run', 'triggering an agent'),
   },
@@ -686,6 +699,7 @@ export function renderRecipeBody(recipe: Recipe): string {
   const out: string[] = []
   out.push(recipe.summary, '')
   out.push('## When this is the right plan', '', recipe.when, '')
+  if (recipe.intake) out.push('## Ask first', '', renderIntake(recipe.intake), '')
   out.push('## Steps', '')
   for (const step of recipe.steps(ctx)) {
     out.push(`${step.n}. **${step.tool}**${step.optional ? ' _(optional)_' : ''} — ${step.why}`)

@@ -45,7 +45,7 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
         {/* cover */}
         <div
           className="w-full aspect-[16/9] rounded-lg overflow-hidden flex items-center justify-center text-white"
-          style={event.coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)` }}
+          style={event.coverImageUrl ? undefined : { background: themeColor }}
         >
           {event.coverImageUrl ? (
             <img src={event.coverImageUrl} alt="" className="w-full h-full object-cover" />

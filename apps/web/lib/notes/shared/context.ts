@@ -93,21 +93,16 @@ export function buildNoteIndex(notes: RawNote[]): NoteMeta[] {
  * path segment at the point of display. The root is skipped — its label is the
  * space/context name, not its home note's title.
  */
-function folderTitles(metas: NoteMeta[]): { titles: Map<string, string>; spaces: Map<string, string> } {
+function folderTitles(metas: NoteMeta[]): Map<string, string> {
   const titles = new Map<string, string>()
-  const spaces = new Map<string, string>()
   for (const meta of metas) {
     if (baseName(meta.path).toLowerCase() !== 'index.md') continue
     const folder = folderOf(meta.path)
     if (!folder) continue
     const declared = meta.frontmatter?.title
     if (typeof declared === 'string' && declared.trim()) titles.set(folder, declared.trim())
-    // `space: <id>` marks a sub-space's record folder — what the tree route
-    // federates the child space's own tree in under.
-    const space = meta.frontmatter?.space
-    if (typeof space === 'string' && space.trim()) spaces.set(folder, space.trim())
   }
-  return { titles, spaces }
+  return titles
 }
 
 // Build the folder/note tree for the sidebar from the note index.
@@ -116,7 +111,7 @@ export function buildTree(metas: NoteMeta[]): TreeNode {
   const folders = new Map<string, TreeNode>([['', root]])
   // Resolved up front: sortTree keys on `title ?? name`, so a folder must
   // know its title before the tree is sorted.
-  const { titles, spaces } = folderTitles(metas)
+  const titles = folderTitles(metas)
 
   const ensureFolder = (folderPath: string): TreeNode => {
     const existing = folders.get(folderPath)
@@ -125,13 +120,11 @@ export function buildTree(metas: NoteMeta[]): TreeNode {
     }
     const parent = ensureFolder(folderOf(folderPath))
     const title = titles.get(folderPath)
-    const space = spaces.get(folderPath)
     const node: TreeNode = {
       name: baseName(folderPath),
       path: folderPath,
       kind: 'folder',
       ...(title ? { title } : {}),
-      ...(space ? { space } : {}),
       children: []
     }
     parent.children!.push(node)

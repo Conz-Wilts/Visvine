@@ -65,58 +65,29 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 - Tests: `node --import tsx --test tests/*.test.ts`. Prefer testing the pure
   layer (`lib/notes/shared/*`, `lib/connectors/perimeter.ts`) over routes.
 
-## Spaces nest
+## A space is a tenant
 
-`docs/sub-spaces.md` is the model. The parts that constrain code:
+Spaces do not nest — there is no parent, no inherited visibility, no federated
+tree. The parts that constrain code:
 
-- A child is a full `Space` row with `parentId` — its own context, members,
-  aliases, tool rail. Nothing is keyed by folder. Depth ≤ 3
-  (`lib/spaces/hierarchy.ts`, pure; `lib/spaces/tree.ts`, DB).
-- `visibility` is `public | private | inherit`; `inherit` (children only) means
-  the parent's active members. A root can't inherit; a public child needs a
-  public parent; sibling names are unique (partial index
-  `prisma/sql/sibling-space-name-unique.sql`).
-- **A child's member is a member of its parent.** Every join path enforces it
-  and removal from a parent removes from every descendant
-  (`removeFromDescendants`). Admin of a space is admin of everything below it
-  (`adminSpaceIds` walks ancestors).
-- **Every `space` node carries `metadata.spaceRef` to a real space.** Create →
-  Space links an existing one or provisions a child of the current space
-  (`createEntity`); its note carries `space: <id>`. `db:spaces:records` is the
-  idempotent backfill, `db:notes:verify` asserts it. Creating a space always
+- Every space is a full `Space` row: its own context, members, aliases and tool
+  rail. `visibility` is `public | private` and nothing else. Creating one always
   goes through `lib/spaces/provision.ts`.
-- **A record is not a tenant.** An organisation you only track — a portfolio
-  company, say — is a directory record of its own type (`Company` in the
-  Blackbird seed) whose note still lives in `communities/`; `company` folds onto
-  `space` in `TYPE_SYNONYMS`, so the entity machinery is unchanged while
-  `db:spaces:records` leaves it alone. Reserve `type: space` for the things that
-  really nest: in the seed, Blackbird's three teams.
-- **A sub-space's record is a folder at the ROOT of the parent's context** —
-  `operations/index.md`, beside `deals/` and `data/`, so the tree shows one
-  folder per team. The discriminator is the node id: `subspace:<slug>` is a
-  space nested inside this one, anything else (`space:`, `community:`, `org:`) is
-  a record of the outside world and stays in `communities/`. It is the id and
-  not `metadata` because every surface deriving a path holds `{ id, type }` and
-  many are client components that never load metadata
-  (`lib/notes/entities.ts#isChildSpaceNode`).
-- **That record folder carries the child's OWN tree, federated in.** The child
-  is a separate context, so the folder would otherwise sit empty and read as
-  broken. `GET /api/notes/tree` resolves each folder whose index declares
-  `space: <id>` through the ordinary `resolveContext` for that session — a
-  viewer who can't see the child gets its 403 and the folder stays empty — and
-  grafts its tree under the record (`lib/notes/shared/federation.ts`, pure and
-  tested). Grafted nodes are rebased under the record folder so their paths are
-  unique in THIS tree, and carry `foreign: { spaceId, path }`: they are
-  read-only here (no move, delete, share or drop target, and never a Move
-  destination) and opening one switches space rather than navigating in this
-  one. The child's own `index.md` is dropped — the parent's record note is that
-  folder's home page — and a note the parent wrote under the record folder wins
-  its path.
-- **A new space starts with every toggleable tool off** — `defaultFeatureConfig()`,
-  never the parent's rail. Both create routes, `provisionSpace` and the seed
+- **A record is not a tenant.** An organisation a space tracks — a portfolio
+  company, say — is a directory record whose note lives in `communities/`
+  (`Company` in the Blackbird seed; `company` folds onto `space` in
+  `TYPE_SYNONYMS`, so the entity machinery is unchanged). Creating one
+  provisions nothing.
+- **A `space` node MAY name a space that runs here.** The create flow writes
+  `metadata.spaceRef` (and `space: <id>` in the note's frontmatter) when the
+  picker matched a live space, which is what sends its page to
+  `/communities/<id>`; a record of the outside world carries neither.
+  `db:notes:verify` only checks that a ref that IS set points at a real row.
+- **A new space starts with every toggleable tool off** —
+  `defaultFeatureConfig()`. Both create routes, `provisionSpace` and the seed
   write it; the people in the space opt in from the console.
-- Listings (Discover, `/communities`) show roots; children are reached through
-  the switcher tree.
+- Listings (Discover, `/communities`) and the switcher are flat lists of the
+  spaces you can see.
 
 ## Auth and permissions
 
@@ -151,17 +122,47 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
   section — are read by name by the runtime and stay one flat note until a
   sub-note converts them. Never add a separate "general info" note beside an
   index: the index is that note.
-- **An agent is a folder too, and the folder is its home.** `agents/<name>/index.md`
-  is the brief (member-written), `agents/<name>/activation.md` beside it is the
-  admin-only activation (`writeDenial`), and everything else in the folder is
-  the agent's own — the ONE place under `agents/` a run stamped `agent:<name>`
-  may write (`contextService.lockedDenial`), never its brief, its activation or
-  another agent's folder. The run prompt (`lib/agents/shared/prompt.ts`) names
-  that folder as the default output location and teaches the markdown/link
-  contract; `create_agent` and its recipe quote the same text so an authoring
-  model knows what a brief can ask for. Nothing under `agents/` ever fires a
-  trigger. `db:agents:folders` moves the two earlier shapes (`agents/<name>.md`,
-  `agents/live/<name>.md`) into the folder.
+- **An agent is ONE note in a folder that is its home.** `agents/<name>/index.md`
+  is the whole agent: what it is (model, connectors, tools, the brief in the
+  body) AND whether and when it runs (`active`, `schedule`/`every`/`on`,
+  `debounce`, `timezone`) in the same frontmatter — because both are written by
+  the same people, anyone who can edit the folder (`agentManageDenial`). Only
+  `runs_as` is held back for admins (`writeGated#activationRunsAsDenial`), and
+  budget stays admin-only, on the row. Editing a brief does NOT switch the agent
+  off. Everything else in the folder is the agent's own — the ONE place under
+  `agents/` a run stamped `agent:<name>` may write
+  (`contextService.lockedDenial`), never its brief or another agent's folder —
+  and `agents/<name>/memory.md` is what it carries between runs. The run prompt
+  (`lib/agents/shared/prompt.ts`) names that folder as the default output
+  location and teaches the markdown/link contract; `create_agent` and its recipe
+  quote the same text so an authoring model knows what a brief can ask for.
+  Nothing under `agents/` ever fires a trigger. `db:agents:folders` moves the two
+  earlier shapes into the folder; `db:agents:activation` folds a pre-merge
+  `agents/<name>/activation.md` into the brief (it is still READ until then, so
+  an older agent keeps running).
+- **What an agent can do is its `tools:` plus what the space has.** Notes,
+  `run_agent` and the people tools are always on; `web` is `fetch_url` and
+  nothing else — **searching is fetching a search engine's results URL**, so
+  there is no search vendor, no `SEARCH_KEY` and no per-provider code to keep
+  current; `actions` is the whole Action registry through `runAction` as the
+  author (every scope but `secrets:write`); `sandbox`, `messages` and
+  `directory` are as before — and a machine comes with any space that has one,
+  no brief key needed, which is what reads a page `fetch_url` cannot
+  (`docs/machines.md` holds the boundary that makes that safe).
+- **An agent is watched on its own node page** — `/directory/agent:<name>`, the
+  Agent tab beside Context and Raw (`features/profile/components/AgentPageContent.tsx`),
+  the way Profile is a tab of a person node. There is no agents tool: no rail
+  row, no feature key, no roster page, and no console section. The roster is the
+  `agents/` folder in the context tree. The tab is the status line and
+  its switch, when it runs, the brief's settings, spend (admins), then THE RUN —
+  the one in flight, else the one `?run=<id>` names, else the latest — as steps
+  with the machine's record nested under each `run_command` / `open_page`
+  (`tools: [machine]` gives a run its own machine; the run id rides every command
+  so `agent_vm_events` joins the trace through the pure
+  `lib/agents/shared/trace.ts#attachMachine`), and for admins the live screen and
+  terminal beside them; then skills, a box to say something to it, and the
+  history. Actions return `watch` hrefs into it
+  (`lib/agents/config.ts#agentPageHref(name, runId?)`). Polling, never a stream.
 - **Links are derived, not authored.** A markdown link to an entity's note,
   inside another shared-context note, is what creates a `mentioned` edge. There is
   no create-link operation anywhere in the system.
@@ -212,6 +213,12 @@ columns are.
   field touches no node; removing one leaves the values in place, unlisted.
   Only admins add or remove fields (`useTrackedFields`); the key is minted from
   the label and may never be a column the type has or a key the platform owns.
+- **A member-made type can be deleted; a built-in cannot.** The whole-record PUT
+  merges the type list additively (`mergeNodeTypeList`), so shortening it needs
+  its own deliberate call: `DELETE /api/communities/<id>/node-types`, admin-only,
+  and `removeNodeType` refuses anything that isn't `scope: 'note'`. Notes already
+  declaring the type keep their `type:` — they just stop being coloured and
+  chipped by it — the same way removing a tracked field leaves its values.
 - **A viewer's arrangement is theirs.** Column order, hidden columns, widths
   and sort live in `localStorage` per space and type (`useTableView`), never on
   the space record. A column the viewer has never met appears at its canonical
@@ -321,6 +328,16 @@ is the maintainer's and survives untouched. So the half a model relies on to
 make a correct call cannot drift from the code, and the half explaining *when*
 to make it can be improved without a deploy — the same split connectors make
 between frontmatter and body.
+
+**A recipe that BUILDS something asks first.** `create_agent` and
+`create_connector` carry an `intake` (`lib/actions/shared/intake.ts`, pure and
+rendered into the note above the steps): at most four questions, in one message,
+each carrying what it decides and when to skip it — because an agent and a
+connector are configuration that then runs unattended, and the eager failure
+(writing a plausible one nobody asked for, at a time nobody chose) is worse than
+one message. "You decide" is a valid answer: pick the safe default, build, and
+name the default. `create_agent`'s own description carries the one-paragraph
+version for clients that never read a recipe.
 
 Recipes are how a request is routed. Matching is a weighted term
 overlap over each note's `keywords:` (`lib/actions/shared/match.ts`) — pure,

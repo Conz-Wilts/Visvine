@@ -210,9 +210,8 @@ function normalizeNotePath(raw: string): string | null {
  * declared perimeter is meant to be the whole story, and a write into these
  * folders is how it would stop being one.
  *
- * `writeDenial` already keeps non-admins out of `connectors/` and every
- * `agents/<name>/activation.md`, so this is the belt to that pair of braces,
- * and it binds admins too.
+ * `writeDenial` already keeps non-admins out of `connectors/`, so this is the
+ * belt to that pair of braces, and it binds admins too.
  *
  * ONE exception, in {@link agentBriefExemption}: creating the brief of an agent
  * the Tool's own perimeter names. See that comment for why the brief is not the
@@ -234,8 +233,8 @@ function sealedNamespace(path: string): string | null {
 
 /**
  * `agents/<name>/index.md` → `<name>`. The brief and nothing else in the
- * folder: `agents/<name>/activation.md` is the ACTIVATION and the rest is
- * the agent's own output, and neither gets anything from the exception below.
+ * folder: everything else under `agents/<name>/` is the agent's own output,
+ * and it gets nothing from the exception below.
  */
 function agentBriefName(path: string): string | null {
   return isAgentBriefPath(path) ? agentNameOfPath(path) : null
@@ -260,11 +259,10 @@ function declaresAgentByName(perimeter: ResolvedTarget['perimeter'], name: strin
  * The brief is the one thing under a sealed namespace a Tool may write, and only
  * ever by creating it.
  *
- * The brief (`agents/<name>/index.md`) is member-writable on purpose —
- * contextService's `writeDenial` guards the activation beside it and nothing
- * else, because ACTIVATION is what makes a brief run unattended on the space's
- * model key, and that stays a space admin's decision. So a Tool creating a
- * brief hands an admin something to read and approve; it does not start
+ * The brief (`agents/<name>/index.md`) is member-writable on purpose. What
+ * makes an agent RUN is `active:` in that same frontmatter, and the check
+ * above refuses a Tool-written brief that carries it — so a Tool creating a
+ * brief hands a person something to read and switch on; it does not start
  * anything. `claimManualRun` refuses an inactive agent, so even `agents.run`
  * on a Tool-authored brief does nothing until a person has said yes.
  *
@@ -280,6 +278,7 @@ function declaresAgentByName(perimeter: ResolvedTarget['perimeter'], name: strin
 function agentBriefExemption(
   t: ResolvedTarget,
   path: string,
+  body: string,
   mode: 'write' | 'append',
 ): string | null {
   if (mode === 'append') {
@@ -287,7 +286,15 @@ function agentBriefExemption(
   }
   const name = agentBriefName(path)
   if (!name) {
-    return 'only a brief at agents/<name>/index.md is exempt — activation.md beside it is written by a space admin, and the rest of the folder by the agent itself'
+    return 'only a brief at agents/<name>/index.md is exempt — the rest of the folder is written by the agent itself'
+  }
+  // The brief carries the activation now (lib/agents/config.ts), so "a Tool
+  // hands a person something to approve" has to be enforced on the CONTENT,
+  // not just the path: a brief that arrives already switched on would be a
+  // Tool starting an unattended run on the space's model key, which is the
+  // one thing this exemption promises it cannot do.
+  if (parseFrontmatter(body).active === true) {
+    return 'a tool writes a brief for a person to switch on — `active: true` in it would be the tool starting the agent itself'
   }
   if (!declaresAgentByName(t.perimeter, name)) {
     return t.perimeter.agents.length > 0
@@ -447,7 +454,7 @@ async function checkWrite(
 
   const sealed = sealedNamespace(path)
   if (sealed) {
-    const notExempt = sealed === 'agents' ? agentBriefExemption(t, path, mode) : 'no tool may write there, whatever its perimeter declares'
+    const notExempt = sealed === 'agents' ? agentBriefExemption(t, path, body, mode) : 'no tool may write there, whatever its perimeter declares'
     if (notExempt) {
       return {
         ok: false,
@@ -604,10 +611,10 @@ async function agentsRun(t: ResolvedTarget, params: unknown, deps: BridgeDeps): 
   if (missingHere(t.degraded?.missing.agents, name)) {
     return err('degraded', `This space has no "${name}" agent — the tool is running degraded.`)
   }
-  // The same check run_agent applies: running is author-or-admin. There is no
-  // feature gate — agents are Context, and Context is always on.
+  // The same check run_agent applies: running is for whoever can edit the
+  // brief. There is no feature gate — agents are Context, and Context is always on.
   if (!(await deps.canTriggerRun(t.principal, t.spaceId, name))) {
-    return err('forbidden', "Only the agent's author or a space admin can run it.")
+    return err('forbidden', 'Only someone who can edit this agent can run it.')
   }
 
   const claimed = await deps.claimManualRun(t.spaceId, name, t.principal.userId)

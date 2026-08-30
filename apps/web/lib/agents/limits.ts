@@ -2,8 +2,15 @@
  * The numbers the scheduler, executor and panel must agree on. Pure.
  */
 
-/** Wall-clock cap on one run. */
-export const MAX_RUN_MS = 20 * 60_000
+/**
+ * Wall-clock cap on one run.
+ *
+ * The ceiling is not ours: the tick AWAITS the runs it dispatches, and Cloud
+ * Scheduler's `attemptDeadline` cannot exceed 30 minutes, so a run longer than
+ * that would have the scheduler give up on a tick that is working. 25 minutes
+ * leaves the tick's own maxDuration (27) and the reclaim (27) inside it.
+ */
+export const MAX_RUN_MS = 25 * 60_000
 /**
  * The tick reclaims a row stuck in `running` after MAX_RUN_MS + this. The
  * grace exists because the executor's own timeout fires at exactly MAX_RUN_MS
@@ -23,9 +30,13 @@ const TICK_INTERVAL_MS = 5 * 60_000
 /** A due agent not picked up for two ticks means the tick itself is not firing. */
 export const DELAYED_AFTER_MS = 2 * TICK_INTERVAL_MS
 /** Runs claimed per tick, across all spaces (each is its own HTTP request). */
-export const MAX_RUNS_PER_TICK = 5
-/** Consecutive failed runs before an agent is switched off. */
-export const MAX_CONSECUTIVE_FAILURES = 3
+export const MAX_RUNS_PER_TICK = 20
+/**
+ * Consecutive failed runs before an agent is switched off. Generous on
+ * purpose: a run that fails is usually a service having a bad ten minutes, and
+ * switching an agent off is a thing a person then has to notice and undo.
+ */
+export const MAX_CONSECUTIVE_FAILURES = 10
 /** How often the executor flushes the transcript to the run row. */
 export const FLUSH_EVERY_MS = 2_000
 export const FLUSH_EVERY_EVENTS = 10

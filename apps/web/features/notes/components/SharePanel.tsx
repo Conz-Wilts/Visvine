@@ -15,17 +15,21 @@
 //     the boundary with limited access.
 //   • General access = Restricted ↔ Everyone in the space, plus the
 //     limited-access boundary (Drive's "disable inherited permissions").
+//   • As little prose as Drive: a row is a name, one muted line, and a role.
+//     What a setting does is in its tooltip, not beside every control.
 //
-// All enforcement is server-side (/api/notes/access, /api/notes/publications) —
-// this dialog only renders what those endpoints say the caller may do.
+// All enforcement is server-side (/api/notes/access) — this dialog only
+// renders what that endpoint says the caller may do.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { BotIcon, CheckIcon, ChevronDownIcon, Link2OffIcon, LockIcon, LockOpenIcon, RadioIcon, UsersIcon, UsersRoundIcon, XIcon } from '@/features/shared/icons';
+import { BotIcon, CheckIcon, ChevronDownIcon, Link2Icon, LockIcon, LockOpenIcon, UsersIcon, UsersRoundIcon, XIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey'
+import { useCopied } from '@/features/shared/hooks/useCopied'
+import { noteHref } from '@/lib/notes/entities'
+import { humanizeFolderName } from '@/lib/notes/shared/indexNote'
 import Avatar from '@/components/ui/Avatar'
-import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import Toggle from '@/components/ui/Toggle'
 import {
   ACCESS_LEVELS,
@@ -33,11 +37,7 @@ import {
   type AccessLevelName,
 } from '@/lib/notes/shared/authz'
 import type { AccessRequest } from '@/lib/notes/shared/contextTypes'
-import {
-  notesApi,
-  type PathAccessResponse,
-  type PublicationStateResponse,
-} from '../lib/notesApi'
+import { notesApi, type PathAccessResponse } from '../lib/notesApi'
 import { contextKeys, invalidateContextCache } from '../lib/contextPrefetch'
 
 const PERSONAL_ID_PREFIX = 'me:'
@@ -329,13 +329,13 @@ function IconTile({
   tone = 'muted',
   children,
 }: {
-  tone?: 'muted' | 'brand' | 'amber'
+  tone?: 'muted' | 'brand' | 'red'
   children: React.ReactNode
 }) {
   const tones = {
     muted: 'bg-surface-2 text-text-muted',
     brand: 'bg-brand-green/15 text-brand-green',
-    amber: 'bg-amber-500/15 text-amber-600',
+    red: 'bg-red-500/15 text-red-600',
   }
   return (
     <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tones[tone]}`}>
@@ -364,16 +364,20 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
   const { joinedSpaces } = useSpace()
   const isPersonalSpace = spaceId.startsWith(PERSONAL_ID_PREFIX)
   const spaceName = joinedSpaces.find((c) => c.id === spaceId)?.name ?? 'the space'
+  // A folder's index note is the folder, so it goes by the folder's name.
   const displayName =
-    title ?? (path === '' ? 'context root' : (path.split('/').pop() ?? path).replace(/\.md$/, ''))
+    title ??
+    (path === ''
+      ? 'context root'
+      : humanizeFolderName(
+          (path.replace(/\/?index\.md$/i, '').split('/').pop() ?? path).replace(/\.md$/i, ''),
+        ))
 
   const [access, setAccess] = useState<PathAccessResponse | null>(null)
   const [requests, setRequests] = useState<AccessRequest[]>([])
-  const [pubs, setPubs] = useState<PublicationStateResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [confirmRestrict, setConfirmRestrict] = useState(false)
 
   // Add-people typeahead state. `pending.length > 0` puts the dialog in add mode.
   const [query, setQuery] = useState('')
@@ -383,23 +387,18 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
   const inputRef = useRef<HTMLInputElement>(null)
   const typeaheadRef = useRef<HTMLDivElement>(null)
 
-  // Publish form.
-  const [publishTarget, setPublishTarget] = useState('')
-  const [publishPath, setPublishPath] = useState(path)
+  const [copied, copy] = useCopied()
 
   const adding = pending.length > 0
 
   useEscapeKey(() => {
-    if (!busy && !confirmRestrict && openMenuCount === 0) onClose()
+    if (!busy && openMenuCount === 0) onClose()
   })
 
   const reload = useCallback(() => {
     notesApi.getAccess(spaceId, path).then(setAccess).catch((e: unknown) => {
       setError(e instanceof Error ? e.message : 'Failed to load access')
     })
-    if (kind === 'note') {
-      notesApi.getPublications(spaceId, path).then(setPubs).catch(() => setPubs(null))
-    }
     if (!isPersonalSpace) {
       // Best-effort: the endpoint returns everything the caller may see, and the
       // block below narrows it to open requests for THIS path.
@@ -408,7 +407,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
         .then(({ requests: r }) => setRequests(r))
         .catch(() => setRequests([]))
     }
-  }, [spaceId, path, kind, isPersonalSpace])
+  }, [spaceId, path, isPersonalSpace])
 
   useEffect(() => {
     reload()
@@ -486,34 +485,19 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
   // read as a different setting depending on which way it is flipped.
   const restrictCopy = {
     note: {
-      row: {
-        title: 'Limit access',
-        on: { hint: 'On — access inherited from the folders above is cut off here' },
-        off: { hint: 'Off — people with access to the folders above can see this note' },
-      },
-      confirm: {
-        on: { title: 'Restore inherited access?', body: `People with access to the folders above “${displayName}” will be able to see it again.`, cta: 'Restore inheritance' },
-        off: { title: 'Limit access to this note?', body: `Only people added on “${displayName}” and space admins will see it. Access inherited from its folders is cut off.`, cta: 'Limit access' },
-      },
+      on: 'Access inherited from the folders above is cut off',
+      off: 'People with access to the folders above can see this note',
     },
     folder: {
-      row: {
-        title: 'Limit access',
-        on: { hint: 'On — access inherited from the parent folders is cut off here' },
-        off: { hint: 'Off — people with access to the parent folders can see inside' },
-      },
-      confirm: {
-        on: { title: 'Restore inherited access?', body: `People with access to the folders above “${path}/” will be able to see inside it again.`, cta: 'Restore inheritance' },
-        off: { title: 'Limit access to this folder?', body: `Only people and aliases added on “${path}/” and space admins will see inside. Everyone who reached it through a parent folder loses access.`, cta: 'Limit access' },
-      },
+      on: 'Access inherited from the parent folders is cut off',
+      off: 'People with access to the parent folders can see inside',
     },
   }[kind]
 
   const restrictRow = {
-    title: restrictCopy.row.title,
-    hint: (isRestricted ? restrictCopy.row.on : restrictCopy.row.off).hint,
+    title: 'Lock access',
+    hint: isRestricted ? restrictCopy.on : restrictCopy.off,
   }
-  const restrictConfirm = isRestricted ? restrictCopy.confirm.on : restrictCopy.confirm.off
 
   const toggleRestrict = () =>
     run(() =>
@@ -537,26 +521,6 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
         locked: !isLocked,
       }),
     )
-
-  const publish = () =>
-    run(async () => {
-      const result = await notesApi.publish(publishTarget, {
-        fromSpaceId: spaceId,
-        fromPath: path,
-        toPath: publishPath.trim() || path,
-      })
-      if (result.status === 'proposed') {
-        setNotice('You can’t write there directly — the publish request was sent for approval.')
-      }
-    })
-
-  const unlink = (id: string) =>
-    run(() => notesApi.unpublish(spaceId, id), 'Unlinked — the copy stays, no longer syncing.')
-
-  const publishTargets = useMemo(
-    () => joinedSpaces.filter((c) => c.id !== spaceId && !c.id.startsWith(PERSONAL_ID_PREFIX)),
-    [joinedSpaces, spaceId],
-  )
 
   const entries = useMemo(() => access?.entries ?? [], [access?.entries])
   const spaceEntry = entries.find((e) => e.subjectType === 'space') ?? null
@@ -639,13 +603,6 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
 
   const addStep = (
     <>
-      <p className="text-sm text-text-secondary">
-        They’ll get access to{' '}
-        <span className="font-medium text-text-primary">
-          {kind === 'folder' ? `${path}/` : displayName}
-        </span>
-        {kind === 'folder' && ' and everything inside it'}.
-      </p>
       <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-border-default px-2.5 py-2">
         {pending.map((p) => (
           <span
@@ -765,12 +722,9 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
                     {isMe && <span className="font-normal text-text-muted"> (you)</span>}
                   </div>
                   <div className="truncate text-[11px] text-text-muted">
-                    {entry.subjectType === 'alias' && 'Alias · '}
                     {direct
-                      ? entry.email ?? (kind === 'note' ? 'Added on this note' : 'Added on this folder')
-                      : entry.via === ''
-                        ? 'Inherited from the context root'
-                        : `Inherited from ${entry.via}/`}
+                      ? entry.subjectType === 'alias' ? 'Alias' : entry.email ?? ''
+                      : `via ${entry.via === '' ? spaceName : `${entry.via}/`}`}
                   </div>
                 </div>
                 <RoleMenu
@@ -786,15 +740,9 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
             )
           })}
           {peopleEntries.length === 0 && !spaceEntry && (
-            <p className="px-2 py-1 text-sm text-text-muted">
-              No one has been added yet — only space admins can see this.
-            </p>
+            <p className="px-2 py-1 text-sm text-text-muted">Only space admins.</p>
           )}
         </div>
-        <p className="mt-1 text-[11px] text-text-muted">
-          Space admins can see everything and are the only ones who can change access · You:{' '}
-          {levelDisplayLabel(access.myLevel)}
-        </p>
       </section>
 
       {/* General access */}
@@ -812,16 +760,8 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
                 disabled={busy}
                 current={spaceEntry ? 'space' : 'restricted'}
                 items={[
-                  {
-                    value: 'restricted',
-                    label: 'Restricted',
-                    hint: 'Only people added above and space admins',
-                  },
-                  {
-                    value: 'space',
-                    label: `Everyone in ${spaceName}`,
-                    hint: 'Any member of this space can find and open it',
-                  },
+                  { value: 'restricted', label: 'Restricted' },
+                  { value: 'space', label: `Everyone in ${spaceName}` },
                 ]}
                 onPick={(v) => {
                   if (v === 'space') {
@@ -841,11 +781,9 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
             <div className="truncate text-[11px] text-text-muted">
               {spaceEntry
                 ? spaceEntry.via === path
-                  ? `Anyone in ${spaceName} can ${
-                      spaceEntry.levelName === 'view' ? 'view' : 'edit'
-                    } this`
-                  : `Inherited from ${spaceEntry.via === '' ? 'the context root' : `${spaceEntry.via}/`}`
-                : 'Only people added above and space admins'}
+                  ? `Anyone in ${spaceName} can ${spaceEntry.levelName === 'view' ? 'view' : 'edit'}`
+                  : `via ${spaceEntry.via === '' ? spaceName : `${spaceEntry.via}/`}`
+                : 'Only people with access'}
             </div>
           </div>
           {spaceEntry && (
@@ -864,18 +802,17 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
 
         {canManage && path !== '' && (
           <div className={`-mx-2 mt-0.5 ${ROW_CLASS}`}>
-            <IconTile tone={isRestricted ? 'amber' : 'muted'}>
+            <IconTile tone={isRestricted ? 'red' : 'muted'}>
               {isRestricted ? <LockIcon className="h-4 w-4" /> : <LockOpenIcon className="h-4 w-4" />}
             </IconTile>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-text-primary">{restrictRow.title}</div>
-              <div className="text-[11px] text-text-muted">{restrictRow.hint}</div>
+            <div className="min-w-0 flex-1 text-sm font-medium text-text-primary" title={restrictRow.hint}>
+              {restrictRow.title}
             </div>
             <Toggle
               checked={isRestricted}
               disabled={busy}
               aria-label={restrictRow.title}
-              onChange={() => setConfirmRestrict(true)}
+              onChange={toggleRestrict}
               className="mr-1 shrink-0"
             />
           </div>
@@ -886,13 +823,11 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
             <IconTile tone="muted">
               <BotIcon className="h-4 w-4" />
             </IconTile>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-text-primary">Freeze for AI</div>
-              <div className="text-[11px] text-text-muted">
-                {isLocked
-                  ? 'On — maintenance passes leave this folder alone'
-                  : 'Off — review fixes and reorganizing may touch this folder'}
-              </div>
+            <div
+              className="min-w-0 flex-1 text-sm font-medium text-text-primary"
+              title="Maintenance passes — review fixes, reorganizing, enrichment — leave a frozen folder alone"
+            >
+              Freeze for AI
             </div>
             <Toggle
               checked={isLocked}
@@ -904,90 +839,6 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
           </div>
         )}
       </section>
-
-      {/* Published copies */}
-      {kind === 'note' && (pubs?.asTarget || (pubs?.asSource ?? []).length > 0 || publishTargets.length > 0) && (
-        <section>
-          <SectionHeading>Published copies</SectionHeading>
-          {pubs?.asTarget && (
-            <div className="mb-1 flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-sm">
-              <RadioIcon className="h-4 w-4 shrink-0 text-brand-green" />
-              <span className="min-w-0 flex-1 text-text-secondary">
-                Published from <span className="font-medium">{pubs.asTarget.sourceSpaceName}</span> —
-                read-only here.
-              </span>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void unlink(pubs.asTarget!.id)}
-                className="shrink-0 rounded p-1 text-text-muted transition hover:text-red-500 disabled:opacity-40"
-                title="Unlink (keep as an editable copy)"
-              >
-                <Link2OffIcon className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-          {(pubs?.asSource ?? []).map((pub) => (
-            <div key={pub.id} className={`-mx-2 text-sm ${ROW_CLASS}`}>
-              <RadioIcon className={`h-4 w-4 shrink-0 ${pub.active ? 'text-brand-green' : 'text-text-muted'}`} />
-              <span className="min-w-0 flex-1 truncate text-text-secondary">
-                → {pub.targetSpaceName} · {pub.targetPath}
-                {!pub.active && ' (unlinked)'}
-              </span>
-              {pub.active && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void unlink(pub.id)}
-                  className="shrink-0 rounded p-1 text-text-muted transition hover:text-red-500 disabled:opacity-40"
-                  title="Unlink (the copy stays, no longer syncing)"
-                >
-                  <Link2OffIcon className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          ))}
-
-          {publishTargets.length > 0 && (
-            <div className="mt-1.5 space-y-2 rounded-xl border border-border-default p-3">
-              <div className="flex items-center gap-2">
-                <select
-                  value={publishTarget}
-                  onChange={(e) => setPublishTarget(e.target.value)}
-                  className="h-8 min-w-0 flex-1 rounded-lg border border-border-default bg-surface-1 px-2 text-sm text-text-primary"
-                >
-                  <option value="">Publish a live copy to…</option>
-                  {publishTargets.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={busy || !publishTarget}
-                  onClick={() => void publish()}
-                  className="h-8 shrink-0 rounded-lg bg-brand-green px-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
-                >
-                  Publish
-                </button>
-              </div>
-              {publishTarget && (
-                <input
-                  value={publishPath}
-                  onChange={(e) => setPublishPath(e.target.value)}
-                  placeholder="Destination path, e.g. research/canva.md"
-                  className="h-8 w-full rounded-lg border border-border-default bg-surface-1 px-2 text-sm text-text-primary"
-                />
-              )}
-              <p className="text-[11px] text-text-muted">
-                The note stays yours here; a synced copy lives in the chosen space and updates on every
-                save. Unlink any time — the copy remains.
-              </p>
-            </div>
-          )}
-        </section>
-      )}
     </>
   )
 
@@ -1042,10 +893,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
             )}
 
             {isPersonalSpace ? (
-              <p className="text-sm text-text-muted">
-                This note lives in your personal context — only you can see it. Publish it into a space
-                below to share a live copy.
-              </p>
+              <p className="text-sm text-text-muted">Only you can see this — it lives in your personal context.</p>
             ) : adding ? (
               addStep
             ) : (
@@ -1079,7 +927,18 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
               </>
             ) : (
               <>
-                <span />
+                {kind === 'note' ? (
+                  <button
+                    type="button"
+                    onClick={() => void copy(`${window.location.origin}${noteHref(path)}`)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border-default px-3 text-sm font-medium text-text-secondary transition hover:bg-surface-2"
+                  >
+                    <Link2Icon className="h-4 w-4" />
+                    {copied ? 'Copied' : 'Copy link'}
+                  </button>
+                ) : (
+                  <span />
+                )}
                 <button
                   type="button"
                   onClick={onClose}
@@ -1123,19 +982,6 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
           ))}
         </div>
       )}
-
-      <ConfirmDialog
-        open={confirmRestrict}
-        title={restrictConfirm.title}
-        body={restrictConfirm.body}
-        confirmLabel={restrictConfirm.cta}
-        destructive={!isRestricted}
-        onConfirm={async () => {
-          await toggleRestrict()
-          setConfirmRestrict(false)
-        }}
-        onClose={() => setConfirmRestrict(false)}
-      />
     </>,
     document.body,
   )

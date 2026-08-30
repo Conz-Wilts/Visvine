@@ -117,9 +117,7 @@ test('two unplaced tools keep the order the space DTO gave them', () => {
 test('featureConfig.order places a tool exactly like a built-in', () => {
   const config: SpaceFeatureConfig = { order: ['tool:deals', 'directory', 'channels'] }
   const { rail } = nav(config, false, [install('deals')])
-  assert.deepEqual(rail.slice(0, 3), ['tool:deals', 'directory', 'channels'])
-  // Nothing else is left to fall in behind — those are the only built-in rows.
-  assert.deepEqual(rail.slice(3), [])
+  assert.deepEqual(rail, ['tool:deals', 'directory', 'channels'])
 })
 
 test('a tool key in `more` is tucked into the popup and off the rail', () => {

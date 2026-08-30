@@ -197,7 +197,7 @@ export function LevelSelect({
 }
 
 /** A resource by the name it goes by, with its folder trailing in muted text. */
-function PathLabel({ path, contextName, paths }: {
+export function PathLabel({ path, contextName, paths }: {
   path: string;
   contextName: string;
   paths: PathOption[];

@@ -68,7 +68,7 @@ export function ContextSidebar({
   focusPath?: string | null
 }) {
   const router = useRouter()
-  const { currentSpace, setCurrentSpace } = useSpace()
+  const { currentSpace } = useSpace()
   const { dockTopInset } = useContextPanel()
   // The toolbar tray only centres over the note column, so the tree climbs
   // past it to sit flush under the tab row whenever it's open.
@@ -114,18 +114,6 @@ export function ContextSidebar({
       router.push(owner ? entityContextHref(owner.id, owner.subPath) : noteHref(path))
     },
     [entityByPath, router, currentPath, spaceId],
-  )
-
-  // A note in a sub-space federated into this tree: it is another context's, so
-  // opening it means BEING in that space. The switch is the whole navigation —
-  // the tree, the rail and the note view all read the current space — and the
-  // path is the one that space knows, not the rebased one shown here.
-  const openForeign = useCallback(
-    (foreignSpaceId: string, path: string) => {
-      setCurrentSpace(foreignSpaceId)
-      router.push(noteHref(path))
-    },
-    [router, setCurrentSpace],
   )
 
   if (!notesEnabled || !spaceId) return null
@@ -181,7 +169,6 @@ export function ContextSidebar({
               }
               onShareNote={(path) => setShareTarget({ path, kind: 'note' })}
               onDeleteFolder={ctx.handleDeleteFolder}
-              onOpenForeign={openForeign}
               // Drag a note (or a whole folder) onto another folder to file it
               // there; the same move is in each row's menu as "Move to...".
               onMoveNote={ctx.handleMoveNote}

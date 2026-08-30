@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Trash2Icon } from '@/features/shared/icons';
 import { Space } from '@/lib/types';
-import type { SpaceVisibility } from '@/lib/spaces/hierarchy';
+import type { SpaceVisibility } from '@/lib/spaces/publicName';
 import { COUNTRIES, getCountry } from '@/lib/countries';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { Alert, Button, ConfirmDialog, CountryFlagIcon, Field, Input, Textarea, inputBaseClass } from '@/components/ui';
@@ -168,11 +168,8 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
   const [location, setLocation] = useState(space.location ?? '');
   const [imageUrl, setImageUrl] = useState(space.imageUrl ?? '');
   const [visibility, setVisibility] = useState<SpaceVisibility>(
-    space.visibility === 'private' || space.visibility === 'inherit' ? space.visibility : 'public'
+    space.visibility === 'private' ? 'private' : 'public'
   );
-  // A space inside another one has a third setting — open to the parent's
-  // members — and no lock toggle can say three things (docs/sub-spaces.md).
-  const nested = !!space.parentId;
 
   const [confirmPublic, setConfirmPublic] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -272,38 +269,17 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
                 <span className={isPrivate ? 'text-brand-dark-green' : 'text-text-muted'}>
                   {isPrivate ? <LockIcon /> : <GlobeIcon />}
                 </span>
-                {visibility === 'inherit' ? 'Inherited' : isPrivate ? 'Private' : 'Public'}
+                {isPrivate ? 'Private' : 'Public'}
               </div>
               <p className="mt-0.5 text-xs text-text-muted">
-                {visibility === 'inherit'
-                  ? 'Open to members of the space above'
-                  : isPrivate
-                    ? 'Invite or admin only'
-                    : 'Anyone can find and join'}
+                {isPrivate ? 'Invite or admin only' : 'Anyone can find and join'}
               </p>
-              {nested ? (
-                <select
-                  className="mt-3 rounded-lg border border-border-default bg-surface-1 px-2 py-1 text-sm text-text-primary"
-                  aria-label="Who can see this space"
-                  value={visibility}
-                  onChange={e => {
-                    const next = e.target.value as SpaceVisibility;
-                    if (next === 'public') setConfirmPublic(true);
-                    else void applyVisibility(next);
-                  }}
-                >
-                  <option value="inherit">Members of the space above</option>
-                  <option value="private">Members only</option>
-                  <option value="public">Anyone</option>
-                </select>
-              ) : (
-                <Toggle
-                  className="mt-3"
-                  checked={isPrivate}
-                  onChange={handleVisibilityToggle}
-                  aria-label="Private space"
-                />
-              )}
+              <Toggle
+                className="mt-3"
+                checked={isPrivate}
+                onChange={handleVisibilityToggle}
+                aria-label="Private space"
+              />
             </div>
           </div>
           {/* A refused publish (name already taken by another public space)

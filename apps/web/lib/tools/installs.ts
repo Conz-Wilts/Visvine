@@ -35,7 +35,6 @@ import { logAudit } from '@/lib/notes/audit'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { readSpaceConfig, updateSpaceConfig, UnknownSpaceError } from '@/lib/spaces/spaceConfig'
-import { ancestorsOf } from '@/lib/spaces/tree'
 import {
   ALL_FEATURE_KEYS,
   mergeFeatureConfig,
@@ -557,14 +556,14 @@ export async function installVersion(
     },
   })
   if (!version) return { ok: false, status: 404, error: 'No such tool version.' }
-  // The two verdicts, applied. A space's own approval reaches its own subtree;
+  // The two verdicts, applied. A space's own approval reaches that space;
   // outside it, only a marketplace listing will do — which is what keeps a Tool
   // written in a private space out of everyone else's reach.
   const allowed = installability({
     status: decodeVersionStatus(version.status),
     marketplaceStatus: version.marketplaceStatus ? decodeVersionStatus(version.marketplaceStatus) : null,
     sourceSpaceId: version.sourceSpaceId,
-    lineage: (await ancestorsOf(spaceId)).map((row) => row.id),
+    spaceId,
   })
   if (!allowed.ok) return { ok: false, status: 403, error: allowed.error }
 
@@ -894,7 +893,7 @@ export async function applyUpgrade(
           status: decodeVersionStatus(next.status),
           marketplaceStatus: next.marketplaceStatus ? decodeVersionStatus(next.marketplaceStatus) : null,
           sourceSpaceId: next.sourceSpaceId,
-          lineage: (await ancestorsOf(spaceId)).map((row) => row.id),
+          spaceId,
         })
       : { ok: false as const }
   if (!next || !offered.ok) {

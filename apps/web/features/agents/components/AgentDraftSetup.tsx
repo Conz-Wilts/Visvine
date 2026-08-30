@@ -59,7 +59,7 @@ export default function AgentDraftSetup({
 
       <p className="text-[13px] text-text-muted">
         Write the brief below: what to read, what to produce, where to write it. Its model, tools and connectors are on its page. It does
-        nothing until an admin turns it on.
+        nothing until it is turned on — from its page, by anyone who can edit it.
       </p>
     </div>
   );

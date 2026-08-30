@@ -930,15 +930,11 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         )}
       </div>
 
-      {/* A space record IS a space (docs/sub-spaces.md): linked to one picked
-          above, or made inside this one on save. Said once, here, so the
-          save is no surprise. */}
-      {type === 'space' && currentSpace && (
-        <p className="mb-3 text-xs text-text-muted">
-          {pickedSpace && pickedSpace.name.trim() === title.trim()
-            ? `Links to the space “${pickedSpace.name}”.`
-            : `Creates a space inside ${currentSpace.name}, visible to its members.`}
-        </p>
+      {/* A space card may name a space that really runs here — the picker's
+          case. Otherwise it is a record of an organisation and nothing else,
+          which is the ordinary one and needs no line. */}
+      {type === 'space' && pickedSpace && pickedSpace.name.trim() === title.trim() && (
+        <p className="mb-3 text-xs text-text-muted">Links to the space “{pickedSpace.name}”.</p>
       )}
 
       {/* Type and Tags ONLY. `type={null}` withholds the per-type field rows

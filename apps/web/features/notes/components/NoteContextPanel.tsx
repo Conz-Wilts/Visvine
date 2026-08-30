@@ -458,6 +458,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
           spaceId={spaceId}
           path={shown.path}
           kind="note"
+          title={title}
           onClose={() => setShareOpen(false)}
         />
       )}

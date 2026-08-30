@@ -1,4 +1,5 @@
-// Adding a type to a space's vocabulary, in one place.
+// Adding a type to a space's vocabulary — and taking a member-made one back
+// out — in one place.
 //
 // Members can invent a type from the draft-context surface, so the "is this
 // name already served, and what should it look like" rule is asked from three
@@ -152,4 +153,42 @@ export function mergeNodeType(
 
   const type: NodeTypeConfig = { name, color, shape: 'rectangle', scope: 'note' };
   return { ok: true, types: [...types, type], type, created: true };
+}
+
+export type RemoveNodeTypeResult =
+  | { ok: true; types: NodeTypeConfig[]; type: NodeTypeConfig }
+  | { ok: false; error: string };
+
+/**
+ * Take a member-made type back out of a space's vocabulary.
+ *
+ * Only a `scope: 'note'` type can go: the built-ins are what the tools create
+ * entities under, so a space that deleted `Person` would have a directory it
+ * could no longer add to. A custom type is vocabulary and nothing else — it
+ * colours and labels notes that already declare it — so removing it leaves
+ * those notes' `type:` alone, exactly the way removing a tracked field leaves
+ * its values in place. They fall back to the unstyled default until somebody
+ * names the type again.
+ *
+ * Deliberate by construction: the whole-record PUT merges additively
+ * (mergeNodeTypeList), so this is the one call that can shorten the list.
+ */
+export function removeNodeType(
+  stored: NodeTypeConfig[] | null | undefined,
+  name: string,
+): RemoveNodeTypeResult {
+  const wanted = (name ?? '').trim().toLowerCase();
+  if (!wanted) return { ok: false, error: 'A type needs a name' };
+
+  const types = seedNodeTypes(stored);
+  const type = types.find((t) => t.name.trim().toLowerCase() === wanted);
+  if (!type) return { ok: false, error: `No type named "${name}"` };
+  // Asked of the entry as stored AND of the registry, so a space that somehow
+  // stored `Person` with `scope: 'note'` still can't delete a built-in.
+  const builtIn = DEFAULT_NODE_TYPES.some((t) => t.name.toLowerCase() === wanted);
+  if (type.scope !== 'note' || builtIn) {
+    return { ok: false, error: `"${type.name}" is a built-in type and can't be deleted` };
+  }
+
+  return { ok: true, types: types.filter((t) => t !== type), type };
 }

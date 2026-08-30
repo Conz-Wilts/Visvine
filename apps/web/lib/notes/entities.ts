@@ -37,12 +37,13 @@ export type EntityKind =
 // gate on connectors/ in contextService.writeDenial remains the only door.
 //
 // agent is note-first in the same way, and a FOLDER from birth: an agent is
-// agents/<name>/ (lib/agents). Its index is the brief any member may write, its
-// activation — admin-only config — is the sibling agents/<name>/activation.md,
+// agents/<name>/ (lib/agents). Its index is the whole agent — the brief any
+// member may write, carrying in the same frontmatter whether and when it runs —
 // and everything else in the folder is the agent's own: the notes its runs
-// write, the state it keeps between them. The activation is a sub-note like
-// any other (it opens on the agent's Context tab) but never an entity note, so
-// it syncs no node and resolves no [[mention]].
+// write, the memory it keeps between them. A pre-merge agents/<name>/activation.md
+// is still read (never written); it is a sub-note like any other (it opens on
+// the agent's Context tab) but never an entity note, so it syncs no node and
+// resolves no [[mention]].
 //
 // tool is note-first too, and folder-only in the strictest sense: a Tool is
 // several notes by construction — tools/<name>/index.md (frontmatter = config,
@@ -131,34 +132,6 @@ const FLAT_ALIAS_ENTITY_KINDS: ReadonlySet<EntityKind> = new Set([
   'agent',
 ])
 
-/**
- * The id prefix of a SUB-SPACE record: the card a space keeps for a space
- * nested inside it (docs/sub-spaces.md).
- *
- * Every other `space` node is a directory record of some organisation — a
- * portfolio company, a firm you met — and lives in `communities/` beside the
- * rest. A sub-space is not a record of the outside world: it is part of how
- * THIS space is organised, so its note is a folder at the ROOT of the parent's
- * context (`operations/index.md`) and the parent's context tree shows one
- * folder per team.
- *
- * The signal is the ID rather than `metadata`, and deliberately: every surface
- * that derives a path holds `{ id, type }`, and half of them are client
- * components that never load metadata. Putting it in the id makes the
- * derivation total — `isOwnSpaceNode` already reads an id the same way.
- */
-const CHILD_SPACE_ID_PREFIX = 'subspace:'
-
-/** The node id a space's record inside its parent is minted with. */
-export function childSpaceNodeId(slug: string): string {
-  return `${CHILD_SPACE_ID_PREFIX}${slug}`
-}
-
-/** Does this node stand for a space nested inside the one it lives in? */
-export function isChildSpaceNode(node: { id: string }): boolean {
-  return node.id.startsWith(CHILD_SPACE_ID_PREFIX)
-}
-
 /** Is this kind's entity note ALWAYS the folder index? */
 export function isFolderOnlyEntityKind(kind: EntityKind | null | undefined): boolean {
   return kind != null && FOLDER_ONLY_ENTITY_KINDS.has(kind)
@@ -233,9 +206,6 @@ export function entityFlatPath(node: EntityNodeLike): string | null {
   const kind = entityKindOf(node.type)
   const slug = idSlug(node.id)
   if (!kind || !slug) return null
-  // A sub-space sits at the root of its parent's context, in no namespace —
-  // this is the derivation base its folder is cut from, never a live note.
-  if (kind === 'space' && isChildSpaceNode(node)) return `${slug}.md`
   return `${ENTITY_DIRS[kind]}/${slug}.md`
 }
 
@@ -279,9 +249,6 @@ export function entityNotePaths(node: EntityNodeLike): string[] {
   const flat = entityFlatPath(node)
   const index = entityIndexPathOf(node)
   if (!kind || !flat || !index) return []
-  // A sub-space record sits at the root of its parent's context, where the flat
-  // form (`operations.md`) would be an ordinary note — no alias there either.
-  if (kind === 'space' && isChildSpaceNode(node)) return [index]
   if (!isFolderOnlyEntityKind(kind) || FLAT_ALIAS_ENTITY_KINDS.has(kind)) return [flat, index]
   return [index]
 }
@@ -421,11 +388,13 @@ export function entityKindOfDir(path: string): EntityKind | null {
 // isEntityFolderIndex, parseEntityHref) that every entity kind shares.
 
 /**
- * An agent is the folder `agents/<name>/`. Three kinds of note live in it, and
- * the path alone says which:
+ * An agent is the folder `agents/<name>/`, and the path alone says what a note
+ * in it is:
  *
- *   agents/<name>/index.md        the BRIEF — the entity note, member-written
- *   agents/<name>/activation.md   the ACTIVATION — admin-only config
+ *   agents/<name>/index.md        the BRIEF — the entity note, member-written,
+ *                                 carrying the activation in its frontmatter
+ *   agents/<name>/activation.md   the pre-merge ACTIVATION — still read for an
+ *                                 agent written before the two notes became one
  *   agents/<name>/<anything>.md   the agent's OWN notes — what its runs write
  *
  * The name is the folder segment, unique across the space; `agents/index.md`
@@ -519,17 +488,19 @@ export function namespaceFolderDenial(path: string): string | null {
 
 /**
  * The folders a space HAS whether or not anything is in them yet, keyed by the
- * tool that brings each one: turn Agents on and `agents/` is there, ready, the
- * same way an empty Inbox is still a folder. `tools` is a core feature key
- * (lib/featureAccess CORE_FEATURE_KEYS) and so is never off — which is exactly
- * the rule we want, with no special case to state.
+ * tool that brings each one, the same way an empty Inbox is still a folder.
+ * Every key here is a core feature (lib/featureAccess CORE_FEATURE_KEYS) and so
+ * is never off — which is exactly the rule we want, with no special case to
+ * state. `agents/` is keyed to `notes` because that is what an agent IS: a
+ * brief in the Context, watched on its own node page rather than on a surface
+ * of its own. The folder is there before the first brief is written.
  *
  * The entity namespaces (`people/`, `events/`, …) are deliberately NOT here:
  * they're derived from the directory rather than switched on, so an empty one
  * is noise. This is about the three folders a person goes LOOKING for.
  */
 const STRUCTURAL_FOLDER_FEATURES: Record<string, string> = {
-  agents: 'agents',
+  agents: 'notes',
   connectors: 'connectors',
   tools: 'tools',
 }
@@ -697,8 +668,8 @@ export function entityDraftContent(
     `type: ${ENTITY_TYPE_LABEL[kind]}\n` +
     `title: ${JSON.stringify(title)}\n` +
     `node: ${JSON.stringify(node.id)}\n` +
-    // A space node's note names the space it stands for, so the note is
-    // self-describing without the node row (docs/sub-spaces.md).
+    // A space node that stands for a space running here names it, so the note
+    // is self-describing without the node row.
     (opts.spaceRef ? `space: ${JSON.stringify(opts.spaceRef)}\n` : '') +
     `tags: [${tags.join(', ')}]\n` +
     `---\n\n` +

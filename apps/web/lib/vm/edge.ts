@@ -98,11 +98,17 @@ export function exec(
   agentName: string,
   cmd: readonly string[],
   timeoutSeconds?: number,
+  /** The run asking, so the machine's timeline can be read back per run. Data, never a key. */
+  runId?: string | null,
 ): Promise<ExecResult> {
   // The HTTP timeout sits above the machine's own, so a command that is killed
   // in the container still answers here rather than aborting the request.
   const seconds = timeoutSeconds ?? 120
-  return call('/exec', { environment, spaceId, agentName, cmd, timeoutSeconds: seconds }, (seconds + 15) * 1000)
+  return call(
+    '/exec',
+    { environment, spaceId, agentName, cmd, timeoutSeconds: seconds, runId: runId ?? undefined },
+    (seconds + 15) * 1000,
+  )
 }
 
 /** Open a page in the machine's own browser, and leave it open. */

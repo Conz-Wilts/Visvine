@@ -24,7 +24,7 @@ type Kind = 'none' | 'hourly' | 'daily' | 'weekly' | 'every';
 /**
  * Turning an agent on is the one action that starts spending money on a
  * schedule with declared connector reach, so it is a dialog, not an optimistic
- * flip: the admin picks the clock, optionally the triggers, and the key is
+ * flip: the person picks the clock, optionally the triggers, and the key is
  * checked before anything is written. Triggers stay folded until wanted — most
  * agents just run on a clock.
  */
@@ -51,7 +51,7 @@ export default function ActivateAgentDialog({
   const [atHour = '07', atMinute = '00'] = at.split(':');
   const [on, setOn] = useState(initial?.kind === 'weekly' ? WEEKDAYS[(initial.weekday + 6) % 7] : 'monday');
   const [every, setEvery] = useState(agent.activation.every ?? '15m');
-  // Seeded from the note, then from the browser — the admin turning an agent on
+  // Seeded from the note, then from the browser — the person turning an agent on
   // is nearly always in the zone it should run in. It is still written out
   // explicitly; what is refused is a schedule with no zone on it at all.
   const [timezone, setTimezone] = useState(agent.activation.timezone ?? browserTimeZone());
@@ -70,7 +70,8 @@ export default function ActivateAgentDialog({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Admin-only list; the dialog is admin-only. Model connectors can't receive webhooks.
+    // Model connectors can't receive webhooks. A member who cannot list connectors gets no webhook picker.
+
     fetchJson<{ connectors: { name: string; kind: string }[] }>(`/api/communities/${spaceId}/connectors`)
       .then((r) => setConnectors(r.connectors.filter((c) => c.kind !== 'model').map((c) => c.name)))
       .catch(() => setConnectors([]));
@@ -199,7 +200,7 @@ export default function ActivateAgentDialog({
         )}
 
         {needsClock && (
-          <Field label="Timezone" hint="Whose clock “07:00” means. Written into the agent's activation note.">
+          <Field label="Timezone" hint="Whose clock “07:00” means. Written into the agent's own brief.">
             <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
               {/* No "space default": the space no longer keeps one, and a
                   schedule whose zone is implied is a schedule nobody can read

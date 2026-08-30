@@ -31,8 +31,7 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
                 { personalOwnerId: session.userId },
               ],
             },
-            // Public, or the caller is an active member of it, or it inherits
-            // from a parent the caller is an active member of (docs/sub-spaces.md).
+            // Public, or the caller is an active member of it.
             {
               OR: [
                 { visibility: 'public' },
@@ -41,10 +40,6 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
                   members: {
                     some: { userId: session.userId, status: 'active' },
                   },
-                },
-                {
-                  visibility: 'inherit',
-                  parent: { members: { some: { userId: session.userId, status: 'active' } } },
                 },
               ],
             },
@@ -69,7 +64,6 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
       designConfig: true,
       featureConfig: true,
       visibility: true,
-      parentId: true,
       timezone: true,
       // Derived, not stored: counting active memberships here cannot drift the
       // way a maintained column would.
@@ -100,7 +94,6 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
     designConfig: (c.designConfig as unknown as Space['designConfig']) ?? undefined,
     featureConfig: (c.featureConfig as unknown as Space['featureConfig']) ?? undefined,
     visibility: (c.visibility as Space['visibility']) ?? 'public',
-    parentId: c.parentId,
     timezone: c.timezone ?? null,
     installedTools: installedTools.get(c.id) ?? [],
   }));
@@ -120,15 +113,8 @@ export interface SpaceMembership {
   aliases: unknown;
   linkTypes: unknown;
   designConfig: unknown;
-  parentId: string | null;
   /** Whether the user holds an alias of this space that manages it. */
   isAdmin: boolean;
-  /**
-   * `member` = they hold a membership row; `inherit` = the space is open to them
-   * as a member of its parent (docs/sub-spaces.md). Both count as "a space you
-   * are in" for the switcher.
-   */
-  via: 'member' | 'inherit';
   joinedAt: string;
 }
 
@@ -145,7 +131,6 @@ const MEMBERSHIP_SPACE_SELECT = {
   aliases: true,
   linkTypes: true,
   designConfig: true,
-  parentId: true,
   _count: { select: { members: { where: { status: 'active' as const } } } },
 } as const;
 
@@ -162,28 +147,14 @@ export async function listUserSpaces(session: SessionPayload): Promise<SpaceMemb
     orderBy: { joinedAt: 'asc' },
   });
 
-  // Spaces reached through a parent: inheriting children of every space the
-  // user is an active member of. Not membership rows — a membership of a child
-  // is something you are given — but they belong in the switcher all the same.
-  const activeIds = memberships.filter(m => m.space).map(m => m.space.id);
-  const inherited = activeIds.length
-    ? await prisma.space.findMany({
-        where: {
-          visibility: 'inherit',
-          parentId: { in: activeIds },
-          NOT: { members: { some: { userId: session.userId } } },
-        },
-        select: { ...MEMBERSHIP_SPACE_SELECT, createdAt: true },
-        orderBy: { name: 'asc' },
-      })
-    : [];
-
-  const allIds = [...memberships.map(m => m.space.id), ...inherited.map(s => s.id)];
-  const adminIds = await adminSpaceIds(session.userId, allIds, session.email);
+  const adminIds = await adminSpaceIds(
+    session.userId,
+    memberships.map(m => m.space.id),
+    session.email,
+  );
 
   const toDto = (
     space: (typeof memberships)[number]['space'],
-    via: 'member' | 'inherit',
     joinedAt: Date,
   ): SpaceMembership => ({
     id: space.id,
@@ -199,14 +170,9 @@ export async function listUserSpaces(session: SessionPayload): Promise<SpaceMemb
     aliases: space.aliases,
     linkTypes: space.linkTypes,
     designConfig: space.designConfig,
-    parentId: space.parentId,
     isAdmin: adminIds.has(space.id),
-    via,
     joinedAt: joinedAt.toISOString(),
   });
 
-  return [
-    ...memberships.map(m => toDto(m.space, 'member', m.joinedAt)),
-    ...inherited.map(s => toDto(s, 'inherit', s.createdAt)),
-  ];
+  return memberships.map(m => toDto(m.space, m.joinedAt));
 }

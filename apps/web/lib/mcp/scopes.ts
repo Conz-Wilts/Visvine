@@ -44,11 +44,11 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
   'connectors:use':
     'Call external APIs and databases through connectors configured by space admins',
   'agents:run':
-    'Trigger a run of an agent you authored or administer — it runs on the space\'s model key with the reach its brief declares',
+    'Trigger a run of an agent you can edit — it runs on the space\'s model key with the reach its brief declares',
   'agents:author':
-    'Write agent briefs in your spaces — the instructions an agent follows and the connectors it may reach. A new brief does nothing until a space admin turns it on',
+    'Write agent briefs in your spaces — the instructions an agent follows and the connectors it may reach. A new brief does nothing until it is turned on',
   'agents:admin':
-    'Turn agents on and off in spaces you administer — an agent you turn on runs unattended on the space\'s model key, on the schedule you set',
+    'Turn agents you can edit on and off — an agent you turn on runs unattended on the space\'s model key, on the schedule you set',
   'tools:author':
     'Build tools in your spaces — write their code, compile it, and submit one for review to the tool marketplace',
   'tools:install':

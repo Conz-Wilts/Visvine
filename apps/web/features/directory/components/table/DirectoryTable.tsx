@@ -5,17 +5,23 @@
 // header wears its kind's glyph and opens a menu of what can be done to the
 // column — sort, step, hide, and an admin's edit — a drag reorders it, its
 // right edge resizes it, and the "+" past the last column shows a hidden
-// column or mints a new field without leaving the table. It renders every
-// row it is given — the grid virtualises because a card is heavy, a row is
-// not.
+// column or mints a new field without leaving the table.
 //
 // The table is its own scroll box (the view sizes it to the pane): the head
 // sticks to its top and the name column to its left, so a wide table keeps
 // the entry's name in view while its fields scroll. The header menus portal
 // out of the scroll box (HeaderPopover) for the same reason.
+//
+// Rows are windowed (TableVirtuoso): only the rows in or near the viewport
+// are mounted, and a row scrolled away is unmounted. A space of a few
+// thousand entries would otherwise cost a few thousand rows of cells — each
+// with an avatar, a tag list and an editor — on every filter keystroke. The
+// scroll box IS the virtualiser's scroller, so the head and name column stay
+// sticky against the same element that windows the rows.
 
-import { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
+import { TableVirtuoso, type TableComponents } from 'react-virtuoso';
 import Avatar from '@/components/ui/Avatar';
 import { ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
 import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon } from '@/features/shared/icons';
@@ -63,6 +69,65 @@ interface DirectoryTableProps {
 /** The width of the "+" header cell at the row's end. */
 const ADD_COLUMN_WIDTH = 44;
 
+/** What the table's frame components need that a row's content doesn't: the
+ *  column layout the `<colgroup>` is built from. */
+interface TableContext {
+  columns: TableColumn[];
+  widthOf: (column: TableColumn) => number;
+  totalWidth: number;
+}
+
+// The virtualiser's frame: the scroll box, the table, its head and body. Each
+// merges Virtuoso's inline style (it sizes and positions these) with the
+// classes the design needs. Cast through `unknown` once, the way the grid
+// does: react-virtuoso resolves a second copy of @types/react, so its ref
+// types are nominally distinct from the app's while the runtime contract is
+// identical.
+const Scroller = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<'div'>>(
+  function Scroller(props, ref) {
+    return <div ref={ref} {...props} className="h-full w-full overflow-auto custom-scrollbar" />;
+  },
+);
+
+function Table({ style, children, context }: React.ComponentPropsWithoutRef<'table'> & { context?: TableContext }) {
+  const { columns = [], widthOf, totalWidth = 0 } = context ?? {};
+  return (
+    <table
+      className="border-collapse text-sm"
+      style={{ ...style, tableLayout: 'fixed', width: Math.max(totalWidth, 0), minWidth: '100%' }}
+    >
+      <colgroup>
+        {columns.map((c) => (
+          <col key={c.key} style={{ width: widthOf?.(c) }} />
+        ))}
+        <col style={{ width: ADD_COLUMN_WIDTH }} />
+        {/* The filler absorbs any pane width past the columns, so the
+            gridlines end where the data does rather than stretching. */}
+        <col />
+      </colgroup>
+      {children}
+    </table>
+  );
+}
+
+// z-20, above the body's sticky name cells (z-10): Virtuoso's own inline
+// z-index on the head is 1, which the name column would scroll over.
+const TableHead = React.forwardRef<HTMLTableSectionElement, React.ComponentPropsWithoutRef<'thead'>>(
+  function TableHead({ style, ...props }, ref) {
+    return <thead ref={ref} {...props} style={{ ...style, zIndex: 20 }} className="bg-surface-1" />;
+  },
+);
+
+const TableRow = ({ item: _item, style, ...props }: React.ComponentPropsWithoutRef<'tr'> & { item?: DirectoryItem }) => (
+  <tr
+    {...props}
+    style={style}
+    className="group h-12 border-b border-border-subtle transition-colors hover:bg-surface-2"
+  />
+);
+
+const tableComponents = { Scroller, Table, TableHead, TableRow } as unknown as TableComponents<DirectoryItem, TableContext>;
+
 export default function DirectoryTable({
   items, columns, hiddenColumns, typeName, sort, widths, loading = false,
   nodeTypes, aliases, tagColors, fields,
@@ -109,7 +174,14 @@ export default function DirectoryTable({
     setAddAnchor(null);
   }, []);
 
-  const effectiveWidth = (c: TableColumn) => (liveWidth?.key === c.key ? liveWidth.width : widthOf(c));
+  const effectiveWidth = useCallback(
+    (c: TableColumn) => (liveWidth?.key === c.key ? liveWidth.width : widths[c.key] ?? defaultWidth(c)),
+    [liveWidth, widths],
+  );
+  const tableContext = useMemo<TableContext>(
+    () => ({ columns, widthOf: effectiveWidth, totalWidth }),
+    [columns, effectiveWidth, totalWidth],
+  );
   const menuColumn = menu ? columns.find((c) => c.key === menu.key) ?? null : null;
   const menuIndex = menuColumn ? columns.indexOf(menuColumn) : -1;
 
@@ -133,21 +205,14 @@ export default function DirectoryTable({
   }
 
   return (
-    <div className="h-full w-full overflow-auto custom-scrollbar">
-      <table
-        className="border-collapse text-sm"
-        style={{ tableLayout: 'fixed', width: Math.max(totalWidth, 0), minWidth: '100%' }}
-      >
-        <colgroup>
-          {columns.map((c) => (
-            <col key={c.key} style={{ width: effectiveWidth(c) }} />
-          ))}
-          <col style={{ width: ADD_COLUMN_WIDTH }} />
-          {/* The filler absorbs any pane width past the columns, so the
-              gridlines end where the data does rather than stretching. */}
-          <col />
-        </colgroup>
-        <thead className="sticky top-0 z-20 bg-surface-1">
+    <div className="h-full w-full">
+      <TableVirtuoso<DirectoryItem, TableContext>
+        data={items}
+        context={tableContext}
+        components={tableComponents}
+        computeItemKey={(_, item) => item.id}
+        increaseViewportBy={{ top: 240, bottom: 480 }}
+        fixedHeaderContent={() => (
           <tr className="h-10 border-b border-border-default">
             {columns.map((column) => {
               const active = sort?.key === column.key;
@@ -263,13 +328,12 @@ export default function DirectoryTable({
             </th>
             <th aria-hidden className="bg-surface-1 p-0" />
           </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => {
+        )}
+        itemContent={(_, item) => {
             const typeColor = getTypeColor(item.type, nodeTypes);
             const alias = item.alias ? aliases?.find((a) => a.name === item.alias) : undefined;
             return (
-              <tr key={item.id} className="group h-12 border-b border-border-subtle transition-colors hover:bg-surface-2">
+              <>
                 {columns.map((column) => {
                   const value = cellValue(item, column);
                   if (column.source === 'name') {
@@ -319,11 +383,10 @@ export default function DirectoryTable({
                   );
                 })}
                 <td aria-hidden colSpan={2} className="p-0" />
-              </tr>
+              </>
             );
-          })}
-        </tbody>
-      </table>
+        }}
+      />
 
       <HeaderPopover anchor={menu?.anchor ?? null} onClose={closeMenus}>
         {menuColumn && (

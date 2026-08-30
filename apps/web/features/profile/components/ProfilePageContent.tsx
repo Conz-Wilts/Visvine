@@ -375,7 +375,7 @@ function ExperienceTimeline({ entries, theme }: { entries: ExperienceEntry[]; th
     <div className="relative">
       {/* spine — draws downward on entry */}
       <div className="timeline-draw absolute left-[17px] top-2 bottom-2 w-px"
-           style={{ background: `linear-gradient(to bottom, ${theme.base}66, ${theme.base}1a)` }} />
+           style={{ background: `${theme.base}33` }} />
       <ol className="flex flex-col gap-5">
         {entries.map((entry, i) => {
           const isCurrent = !!entry.current && !entry.end;

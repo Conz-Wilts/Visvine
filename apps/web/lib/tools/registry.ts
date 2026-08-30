@@ -16,8 +16,8 @@
  *   status              the SOURCE SPACE's. An admin publishing approves as they
  *                       publish; a member publishing queues for their admins
  *                       (`reviewSpaceVersion`). `approved` is what makes a
- *                       version installable — inside that space's own lineage
- *                       and nowhere else.
+ *                       version installable — in that space itself and nowhere
+ *                       else.
  *   marketplaceStatus   VISVINE's, and NULL until an admin explicitly calls
  *                       `submitToMarketplace`. Only `approved` there lists a
  *                       version on the global shelf or lets an unrelated space
@@ -47,7 +47,6 @@ import { spaceAdminUserIds } from '@/lib/auth'
 import { isSuperAdmin } from '@/lib/session'
 import { logAudit } from '@/lib/notes/audit'
 import { notify } from '@/lib/notifications/service'
-import { descendantsOf } from '@/lib/spaces/tree'
 import { writeGated } from '@/lib/notes/contextService'
 import { principalCanWrite, principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
@@ -386,30 +385,18 @@ export function nextVersionNumber(existing: readonly number[]): number {
 }
 
 /**
- * A space and everything nested under it — how far that space's own verdict on
- * a Tool reaches. A version approved in a parent is installable in a child,
- * because a child's members are the parent's.
- */
-async function subtreeSpaceIds(spaceId: string): Promise<string[]> {
-  const below = await descendantsOf(spaceId)
-  return [spaceId, ...below.map((row) => row.id)]
-}
-
-/**
  * Whether one space may install one version — the rule the two verdicts exist
  * to express, pure so it can be read and tested in one sitting.
  *
- * `lineage` is the installing space and its ancestors (nearest first), which is
- * where a source space's own approval reaches: a Tool approved in a parent is
- * installable in a child, because a child's members are the parent's. Anywhere
+ * A source space's own approval reaches that space and nowhere else. Anywhere
  * else, only a marketplace listing will do.
  */
 export function installability(input: {
   status: ToolVersionStatus
   marketplaceStatus: MarketplaceStatus
   sourceSpaceId: string
-  /** The installing space, then each ancestor above it. */
-  lineage: readonly string[]
+  /** The space doing the installing. */
+  spaceId: string
 }): { ok: true } | { ok: false; error: string } {
   if (input.status !== 'approved') {
     return {
@@ -420,7 +407,7 @@ export function installability(input: {
           : `This version was ${input.status} by the space that wrote it.`,
     }
   }
-  if (input.lineage.includes(input.sourceSpaceId)) return { ok: true }
+  if (input.spaceId === input.sourceSpaceId) return { ok: true }
   if (input.marketplaceStatus === 'approved') return { ok: true }
   return {
     ok: false,
@@ -704,9 +691,9 @@ export async function publishTool(
 
   if (isSpaceAdmin) {
     // Installs of this Tool pinned to an older version are offered this one.
-    // Only inside the lineage, because that is the whole reach of a space
-    // verdict — anywhere else is waiting on the marketplace.
-    await flagStaleInstalls(created.key, created.id, created.version, { withinSubtreeOf: spaceId })
+    // Only in the space that wrote it, because that is the whole reach of a
+    // space verdict — anywhere else is waiting on the marketplace.
+    await flagStaleInstalls(created.key, created.id, created.version, { withinSpace: spaceId })
   } else {
     // The update queue. A member cannot approve their own work, so the admins
     // are told there is something to look at — the bell is the queue's door,
@@ -826,7 +813,7 @@ export async function reviewSpaceVersion(
 
   const upgraded =
     decision === 'approved'
-      ? await flagStaleInstalls(row.key, versionId, row.version, { withinSubtreeOf: row.sourceSpaceId })
+      ? await flagStaleInstalls(row.key, versionId, row.version, { withinSpace: row.sourceSpaceId })
       : 0
   return { ok: true, version: toSummary(updated), upgraded }
 }
@@ -1158,21 +1145,20 @@ export async function reviewVersion(
  * id, not by number, so "older than this" is a question about the joined row.
  * Returns how many installs were flagged.
  *
- * `withinSubtreeOf` is what keeps a space verdict inside its own subtree: a
- * space approving its own code may offer that upgrade to itself and its
- * children, and an install anywhere else is waiting on Visvine instead. Omit it
- * — a marketplace approval — and every install is offered the version, which is
- * what a global listing means.
+ * `withinSpace` is what keeps a space verdict inside that space: a space
+ * approving its own code may offer that upgrade to itself, and an install
+ * anywhere else is waiting on Visvine instead. Omit it — a marketplace
+ * approval — and every install is offered the version, which is what a global
+ * listing means.
  */
 async function flagStaleInstalls(
   key: string,
   versionId: string,
   version: number,
-  opts: { withinSubtreeOf?: string } = {},
+  opts: { withinSpace?: string } = {},
 ): Promise<number> {
-  const subtree = opts.withinSubtreeOf ? await subtreeSpaceIds(opts.withinSubtreeOf) : null
   const installs = await prisma.appToolInstall.findMany({
-    where: { key, ...(subtree ? { spaceId: { in: subtree } } : {}) },
+    where: { key, ...(opts.withinSpace ? { spaceId: opts.withinSpace } : {}) },
     select: { id: true, version: { select: { version: true } } },
   })
   const stale = installs.filter((install) => install.version.version < version).map((i) => i.id)

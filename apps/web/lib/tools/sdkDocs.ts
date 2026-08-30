@@ -151,8 +151,8 @@ declare module '@visvine/tool-kit' {
   /**
    * The theme as raw CSS custom properties; prefer styling with var(--vv-*),
    * which the runtime keeps applied to :root and repaints live when the viewer
-   * switches theme. Includes \`--vv-backdrop\` (the app's page backdrop — a
-   * gradient or plain white) for the rare case a value is needed in JS; the
+   * switches theme. Includes \`--vv-backdrop\` (the app's page backdrop, white)
+   * for the rare case a value is needed in JS; the
    * frame is transparent, so never paint it as a page background yourself.
    */
   export function useTheme(): Record<string, string>
@@ -548,8 +548,8 @@ you declare — they hold configuration that runs. One exception: a Tool may CRE
 \`agents/<name>/index.md\` (an agent brief) when its own \`perimeter.agents\` names
 that agent, e.g. \`agents: ["deal-*"]\` for \`agents/deal-nightly/index.md\`. A bare
 \`*\` names nobody. It may never rewrite a brief that already exists, never append
-to one, and never write \`agents/<name>/activation.md\` — ACTIVATION is a space
-admin's act, so a brief your Tool wrote does nothing until a person turns it on.
+to one, and never write one that says \`active: true\` — switching an agent on is a
+person's act, so a brief your Tool wrote does nothing until someone turns it on.
 
 ## ui.tsx
 
@@ -632,22 +632,21 @@ calls \`onMove\` and you write the note.
 
 ## Design: sit on the app's canvas
 
-Visvine's page background is the viewer's choice — plain white, or a colour
-gradient painted by the app behind every page. Your Tool's frame is
+Visvine paints one page background behind every page. Your Tool's frame is
 **transparent**, so that backdrop shows through it exactly as it does behind a
 native page. This only works if you leave it alone:
 
 - **Never paint a page background.** No \`background\` on \`html\`, \`body\`,
   \`#root\` or a full-page wrapper \`<div>\`. A hardcoded \`#fff\` or \`white\`
-  wrapper is the classic mistake: it looks fine on the plain theme and turns
-  into a white slab the moment the viewer picks a gradient.
+  wrapper is the classic mistake: it pins a colour the app is free to change
+  and leaves the Tool a slab the moment it does.
 - **Opaque panels are \`Card\`** (or \`background: var(--vv-surface)\`). That is
   the app's one opaque surface — cards, floats, inputs — and it is how content
   gets a solid backing without covering the backdrop edge to edge.
 - **Subtle fills are \`--vv-surface-2\` / \`--vv-surface-3\`.** They are
-  translucent ink tints, not greys: on white they read as light grey, and over
-  a gradient they tint it instead of painting a slab. Use them for hovers,
-  column backgrounds, code blocks.
+  translucent ink tints, not greys: over the backdrop they read as light grey,
+  and over a colour they tint it instead of painting a slab. Use them for
+  hovers, column backgrounds, code blocks.
 
 Style custom markup with the theme tokens, never literal colours — the viewer
 can switch the accent theme live and the runtime repaints \`:root\`, so a
@@ -789,8 +788,8 @@ broken instead of incomplete.
 - Don't import a UI library or a CSS framework. Nothing resolves at runtime and
   the bundle has a size cap.
 - Don't paint a page background or hardcode colours. The frame is transparent
-  over the viewer's chosen backdrop (which may be a gradient), and the accent
-  theme can change under you — a \`background: #fff\` wrapper or a literal hex
+  over the app's own backdrop, and the accent theme can change under you — a
+  \`background: #fff\` wrapper or a literal hex
   is the difference between a Tool that belongs and one that looks pasted in.
 - Don't poll. Query on mount and after a write, give the reader a refresh, and
   use \`useLiveQuery\` where staying current matters — it already polls, gently.

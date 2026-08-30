@@ -332,7 +332,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
           type="button"
           onClick={() => fileInputRef.current?.click()}
           className="absolute inset-0 w-full h-full flex items-center justify-center text-white"
-          style={coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)` }}
+          style={coverImageUrl ? undefined : { background: themeColor }}
         >
           {coverImageUrl ? (
             <img src={coverImageUrl} alt="Event cover" className="w-full h-full object-cover" />

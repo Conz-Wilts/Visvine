@@ -64,10 +64,10 @@ test('an interval or a cron is the other way to say when, and never both', () =>
   assert.equal(both.ok, false)
   assert.match(both.ok ? '' : both.error, /exclusive/)
 
-  // The floor applies however it is spelled, or `every: 1m` would just be
-  // written as a cron instead.
-  assert.equal(parseScheduleFields({ every: '1m' }).ok, false)
-  assert.equal(parseScheduleFields({ every: '* * * * *' }).ok, false)
+  // The floor is the tick's own cadence — once a minute, however it is spelled.
+  assert.ok(parseScheduleFields({ every: '1m' }).ok)
+  assert.ok(parseScheduleFields({ every: '* * * * *' }).ok)
+  assert.equal(parseScheduleFields({ every: '0m' }).ok, false)
 })
 
 test('no schedule at all is a trigger-only agent, not an error', () => {

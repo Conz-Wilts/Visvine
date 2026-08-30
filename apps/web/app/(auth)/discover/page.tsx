@@ -95,9 +95,7 @@ export default function DiscoverPage() {
   };
 
   const filteredSpaces = useMemo(() => {
-    // Spaces inside other spaces are reached through their parent (the
-    // switcher), never discovered on their own (docs/sub-spaces.md).
-    let result = spaces.filter(c => !c.parentId);
+    let result = spaces;
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(c =>

@@ -977,10 +977,7 @@ function NodeRoute() {
   if (nodeId.startsWith('event:')) {
     return <EventRoute nodeId={nodeId} />;
   }
-  // `subspace:` is a space nested inside this one (lib/notes/entities.ts); it is
-  // a Space page like any other — SpaceRoute redirects it to the space it
-  // stands for, which is exactly what its `spaceRef` guarantees.
-  if (nodeId.startsWith('space:') || nodeId.startsWith('subspace:')) {
+  if (nodeId.startsWith('space:')) {
     return <SpaceRoute nodeId={nodeId} />;
   }
   if (nodeId.startsWith('person:')) {

@@ -5,12 +5,13 @@ import { claimManualRun } from '@/lib/agents/schedule'
 import { dispatchMode } from '@/lib/agents/dispatch'
 
 // In `inline` dispatch (dev) the run happens inside this request.
-// Segment config must be a literal Next can read statically: MAX_RUN_MS (20 min) + 60s.
-export const maxDuration = 1260
+// Segment config must be a literal Next can read statically: MAX_RUN_MS (25 min) + 60s.
+export const maxDuration = 1560
 
 /**
- * "Run now" — author or admin, ACTIVE agents only (activation is the review
- * point; a member may not execute a never-approved brief with full reach).
+ * "Run now" — anyone who can edit the brief (author, admin, or a member whose
+ * grant reaches the agent's folder), ACTIVE agents only: an agent that is off
+ * has no schedule or run-as to run under.
  * Shares the scheduler's claim path (same compare-and-swap) so it cannot
  * collide with a scheduled firing, and does not advance the schedule.
  *
@@ -26,7 +27,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ sp
   const ctx = await requireAgentsAccess(spaceId)
   if (ctx instanceof Response) return ctx
   const { principal } = ctx
-  if (!(await canTriggerRun(principal, spaceId, name))) return bad('Only the agent\'s author or a space admin can run it.', 403)
+  if (!(await canTriggerRun(principal, spaceId, name))) return bad('Only someone who can edit this agent can run it.', 403)
 
   const claimed = await claimManualRun(spaceId, name, principal.userId)
   if (!claimed.ok) return bad(claimed.message, claimed.code === 'unknown' ? 404 : 409)

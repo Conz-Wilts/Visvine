@@ -17,8 +17,6 @@ import { logger } from '@/lib/logger'
 import { loadPersonAliases } from '@/lib/notes/aliases'
 import { findAliasByRef } from '@/lib/types/context'
 import { ensureMemberNode } from '@/lib/spaces/memberNode'
-import { joinChildDenial } from '@/lib/spaces/hierarchy'
-import { isActiveMemberOf } from '@/lib/spaces/tree'
 import { notify } from '@/lib/notifications/service'
 import { invitationHref } from '@/lib/notifications/types'
 
@@ -263,16 +261,6 @@ export async function respondToInvitation(
   const vocabulary = await loadPersonAliases(spaceId)
   const grantedIds = row.aliasIds.filter((id) => vocabulary.some((a) => a.id === id))
 
-  // A child's member is a member of its parent (docs/sub-spaces.md): a public
-  // parent is joined alongside, a private one has to have been joined first.
-  const parent = (await prisma.space.findUnique({
-    where: { id: spaceId },
-    select: { parent: { select: { id: true, name: true, visibility: true } } },
-  }))?.parent ?? null
-  const parentMember = parent ? await isActiveMemberOf(userId, parent.id) : true
-  const parentDenied = joinChildDenial(parent, parentMember)
-  if (parentDenied) return { ok: false, status: 400, error: parentDenied }
-
   // Claim, membership and aliases together, or not at all. The claim is the
   // compare-and-swap: two answers racing (a double-click, two tabs) means one
   // of them updates zero rows and does no work, rather than both getting past
@@ -282,13 +270,6 @@ export async function respondToInvitation(
   const claimed = await prisma.$transaction(async (tx) => {
     if (!(await claim(row.id, userId, 'accepted', tx))) return false
 
-    if (parent && !parentMember) {
-      await tx.spaceMember.upsert({
-        where: { userId_spaceId: { userId, spaceId: parent.id } },
-        create: { userId, spaceId: parent.id, status: 'active', addedBy: row.invitedBy ?? undefined },
-        update: {},
-      })
-    }
     await tx.spaceMember.upsert({
       where: { userId_spaceId: { userId, spaceId } },
       create: { userId, spaceId, status: 'active', addedBy: row.invitedBy ?? undefined },
