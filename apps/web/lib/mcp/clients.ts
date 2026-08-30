@@ -302,3 +302,43 @@ export async function resolveClient(clientId: string): Promise<McpClient | null>
     source: 'registered',
   }
 }
+
+// ── Redirect URI matching ──
+
+/**
+ * Does a requested redirect_uri match one the client registered?
+ *
+ * Exact string equality, with one exception RFC 8252 §7.3 requires: a native
+ * client's loopback callback listens on an ephemeral port it only learns at
+ * run time, so it registers `http://localhost/callback` and asks for
+ * `http://localhost:3118/callback`. The server MUST allow the port to vary —
+ * Claude Code, among others, is unusable otherwise. Everything else about the
+ * URI (scheme, host, path, query) still has to be identical, and only http
+ * loopback gets the exemption, so this widens nothing for a hosted client.
+ */
+export function redirectUriAllowed(registered: readonly string[], requested: string): boolean {
+  if (registered.includes(requested)) return true
+
+  let asked: URL
+  try {
+    asked = new URL(requested)
+  } catch {
+    return false
+  }
+  if (asked.protocol !== 'http:' || !LOOPBACK_HOSTS.has(asked.hostname)) return false
+
+  return registered.some((uri) => {
+    let known: URL
+    try {
+      known = new URL(uri)
+    } catch {
+      return false
+    }
+    return (
+      known.protocol === asked.protocol &&
+      known.hostname === asked.hostname &&
+      known.pathname === asked.pathname &&
+      known.search === asked.search
+    )
+  })
+}

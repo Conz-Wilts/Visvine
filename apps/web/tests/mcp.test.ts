@@ -27,6 +27,7 @@ import {
 import {
   isClientIdUrl,
   validateRedirectUri,
+  redirectUriAllowed,
   inferApplicationType,
   parseClientIdDocument,
   ClientResolutionError,
@@ -239,6 +240,27 @@ test('native clients may use loopback and private-use schemes; web clients may n
   assert.equal(validateRedirectUri('https://app.example.com/cb', 'web').ok, true)
   assert.equal(validateRedirectUri('http://localhost:3000/cb', 'web').ok, false)
   assert.equal(validateRedirectUri('http://app.example.com/cb', 'web').ok, false)
+})
+
+test('a loopback callback matches whatever ephemeral port the client listened on', () => {
+  // Claude Code's metadata document registers the port-less form and asks for
+  // the port it happened to bind (RFC 8252 §7.3).
+  const registered = ['http://localhost/callback', 'http://127.0.0.1/callback']
+  assert.equal(redirectUriAllowed(registered, 'http://localhost:3118/callback'), true)
+  assert.equal(redirectUriAllowed(registered, 'http://127.0.0.1:51763/callback'), true)
+  assert.equal(redirectUriAllowed(registered, 'http://localhost/callback'), true)
+
+  // Only the port may vary.
+  assert.equal(redirectUriAllowed(registered, 'http://localhost:3118/evil'), false)
+  assert.equal(redirectUriAllowed(registered, 'https://localhost:3118/callback'), false)
+  assert.equal(redirectUriAllowed(registered, 'http://evil.example:3118/callback'), false)
+  assert.equal(redirectUriAllowed(registered, 'http://localhost:3118/callback?x=1'), false)
+  assert.equal(redirectUriAllowed(registered, 'not a uri'), false)
+
+  // A hosted client gets exact matching and nothing else.
+  const hosted = ['https://app.example.com/cb']
+  assert.equal(redirectUriAllowed(hosted, 'https://app.example.com/cb'), true)
+  assert.equal(redirectUriAllowed(hosted, 'https://app.example.com:8443/cb'), false)
 })
 
 test('an omitted application_type is inferred, not defaulted to web', () => {

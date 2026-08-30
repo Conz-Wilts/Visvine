@@ -15,7 +15,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
 import { isDevAuthEnabled } from '@/lib/dev-auth'
 import { createAuthCode } from '@/lib/mcp/oauth'
-import { resolveClient, ClientResolutionError, type McpClient } from '@/lib/mcp/clients'
+import {
+  resolveClient,
+  redirectUriAllowed,
+  ClientResolutionError,
+  type McpClient,
+} from '@/lib/mcp/clients'
 import { oauthIssuer, isCanonicalResource, mcpResourceUrl } from '@/lib/mcp/config'
 import { negotiateScopes, serializeScopes, SCOPE_DESCRIPTIONS } from '@/lib/mcp/scopes'
 
@@ -86,7 +91,7 @@ export async function GET(req: NextRequest) {
 
   // Never redirect to an unregistered URI — that would make this an open
   // redirector, so the check has to happen before any redirect path below.
-  if (!client.redirectUris.includes(redirectUri)) {
+  if (!redirectUriAllowed(client.redirectUris, redirectUri)) {
     return htmlError('Invalid redirect_uri for this client.')
   }
   if (sp.get('response_type') !== 'code') {
@@ -198,7 +203,7 @@ export async function POST(req: NextRequest) {
   if ('error' in loaded) return loaded.error
   const { client } = loaded
 
-  if (!client.redirectUris.includes(redirectUri)) {
+  if (!redirectUriAllowed(client.redirectUris, redirectUri)) {
     return htmlError('Invalid redirect_uri for this client.')
   }
   if (!codeChallenge) return redirectError(redirectUri, 'invalid_request', state)
