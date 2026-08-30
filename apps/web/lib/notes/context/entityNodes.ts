@@ -71,6 +71,7 @@ const RECORD_KEY: Partial<Record<EntityNodeType, string>> = {
   section: 'sectionId',
   channel: 'conversationId',
   connector: 'notePath',
+  agent: 'notePath',
   tool: 'notePath',
 }
 

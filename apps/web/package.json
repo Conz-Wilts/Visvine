@@ -43,6 +43,7 @@
     "db:global:rebuild": "tsx scripts/rebuild-global-records.ts",
     "db:spaces:records": "tsx scripts/migrate-space-records.ts",
     "db:entities:folders": "tsx scripts/migrate-entity-folders.ts",
+    "db:agents:folders": "tsx scripts/migrate-agent-folders.ts",
     "db:actions:sync": "tsx scripts/sync-action-notes.ts",
     "db:secrets:rotate": "tsx scripts/rotate-secrets-key.ts",
     "db:connectors:demo": "tsx scripts/add-connector-demo.ts",

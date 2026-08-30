@@ -177,21 +177,39 @@ import { writeDenial } from '../lib/notes/contextService'
 test('agents/ refuses AI origins with no lock at all', () => {
   const p = principal([])
   for (const origin of ['agent', 'ai-enrich', 'maintenance'] as const) {
-    assert.match(lockedDenial(p, SHARED, 'agents/digest.md', origin)!, /Agent briefs are frozen/, origin)
-    assert.match(lockedDenial(p, SHARED, 'agents/live/digest.md', origin)!, /Agent briefs are frozen/, origin)
+    assert.match(lockedDenial(p, SHARED, 'agents/digest/index.md', origin)!, /Agent briefs are frozen/, origin)
+    assert.match(lockedDenial(p, SHARED, 'agents/digest/activation.md', origin)!, /Agent briefs are frozen/, origin)
+    assert.match(lockedDenial(p, SHARED, 'agents/digest/report.md', origin)!, /Agent briefs are frozen/, origin)
   }
   // Humans author briefs normally.
-  assert.equal(lockedDenial(p, SHARED, 'agents/digest.md', 'edit'), null)
-  assert.equal(lockedDenial(p, SHARED, 'agents/digest.md', 'restore'), null)
+  assert.equal(lockedDenial(p, SHARED, 'agents/digest/index.md', 'edit'), null)
+  assert.equal(lockedDenial(p, SHARED, 'agents/digest/index.md', 'restore'), null)
 })
 
-test('agents/live/ is admin-write even for a member holding a full grant on agents/', () => {
+test('an agent may write its OWN folder — never its brief, its activation or a sibling', () => {
+  const p = principal([])
+  const own = (path: string) => lockedDenial(p, SHARED, path, 'agent', 'agent:digest')
+  assert.equal(own('agents/digest/report.md'), null)
+  assert.equal(own('agents/digest/2026-01-31.md'), null)
+  assert.equal(own('agents/digest/state.md'), null)
+  assert.match(own('agents/digest/index.md')!, /frozen/)
+  assert.match(own('agents/digest/activation.md')!, /frozen/)
+  assert.match(own('agents/other/report.md')!, /frozen/)
+  assert.match(own('agents/digest/deep/note.md')!, /frozen/, 'no sub-folders of its own')
+  assert.match(own('agents/index.md')!, /frozen/)
+  // The stamp is what opens the door: the same path under another origin, or
+  // with no agent stamp, stays shut.
+  assert.match(lockedDenial(p, SHARED, 'agents/digest/report.md', 'agent', 'mcp')!, /frozen/)
+  assert.match(lockedDenial(p, SHARED, 'agents/digest/report.md', 'maintenance', 'agent:digest')!, /frozen/)
+})
+
+test('the activation is admin-write even for a member holding a full grant on agents/', () => {
   const member: ContextPrincipal = { ...principal([]), spaceAdmin: false }
   const admin: ContextPrincipal = { ...principal([]), spaceAdmin: true }
   const system: ContextPrincipal = { ...member, system: true }
-  assert.equal(writeDenial(member, SHARED, 'agents/digest.md'), null, 'the brief is member-writable')
-  assert.match(writeDenial(member, SHARED, 'agents/live/digest.md')!, /Only space admins can activate/)
-  assert.match(writeDenial(member, SHARED, 'agents/live')!, /Only space admins can activate/)
-  assert.equal(writeDenial(admin, SHARED, 'agents/live/digest.md'), null)
-  assert.equal(writeDenial(system, SHARED, 'agents/live/digest.md'), null, 'the auto-deactivate write')
+  assert.equal(writeDenial(member, SHARED, 'agents/digest/index.md'), null, 'the brief is member-writable')
+  assert.equal(writeDenial(member, SHARED, 'agents/digest/report.md'), null, 'so is the rest of the folder')
+  assert.match(writeDenial(member, SHARED, 'agents/digest/activation.md')!, /Only space admins can activate/)
+  assert.equal(writeDenial(admin, SHARED, 'agents/digest/activation.md'), null)
+  assert.equal(writeDenial(system, SHARED, 'agents/digest/activation.md'), null, 'the auto-deactivate write')
 })

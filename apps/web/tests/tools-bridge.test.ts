@@ -226,7 +226,7 @@ test('a tool writes markdown notes only', async () => {
 
 test('the executable namespaces are sealed even when the perimeter names them', async () => {
   const t = target({ perimeter: perimeter({ write: ['**'] }) })
-  for (const path of ['tools/other/ui.md', 'agents/nightly.md', 'connectors/stripe.md']) {
+  for (const path of ['tools/other/ui.md', 'agents/nightly/index.md', 'agents/nightly/report.md', 'connectors/stripe.md']) {
     const error = errorOf(await handleBridgeCall(t, 'context.write', { path, content: '# x' }, deps()))
     assert.equal(error.code, 'forbidden', `${path} must be sealed`)
     assert.match(error.message, /holds configuration that runs/)
@@ -235,7 +235,7 @@ test('the executable namespaces are sealed even when the perimeter names them', 
 
 // ── the one hole in the seal: an agent brief the tool declared ────────────────
 //
-// A brief is not the thing that runs — activation is (agents/live/, admin-only),
+// A brief is not the thing that runs — activation is (agents/<name>/activation.md, admin-only),
 // and claimManualRun refuses an inactive agent — so a Tool may CREATE the brief
 // of an agent its perimeter names. Every other shape stays sealed, and the
 // create-only rule is what keeps a Tool from rewriting instructions an admin
@@ -249,7 +249,7 @@ test('a tool may create the brief of an agent its perimeter names', async () => 
   const response = await handleBridgeCall(
     target({ perimeter: BRIEF_AUTHOR }),
     'context.write',
-    { path: 'agents/wayfinder-057.md', content: '---\ntype: agent\n---\n\nWork task 057.' },
+    { path: 'agents/wayfinder-057/index.md', content: '---\ntype: agent\n---\n\nWork task 057.' },
     deps({
       readVisible: async () => null,
       writeGated: async (_p, _c, path) => ({ status: 'applied', path }),
@@ -258,31 +258,31 @@ test('a tool may create the brief of an agent its perimeter names', async () => 
       },
     }),
   )
-  assert.deepEqual(valueOf(response), { path: 'agents/wayfinder-057.md' })
+  assert.deepEqual(valueOf(response), { path: 'agents/wayfinder-057/index.md' })
   assert.match(audits[0]?.detail ?? '', /tool:deals write/)
 })
 
 test('a brief the tool did not declare stays sealed', async () => {
   const t = target({ perimeter: BRIEF_AUTHOR })
-  const error = errorOf(await handleBridgeCall(t, 'context.write', { path: 'agents/payroll.md', content: '# x' }, deps()))
+  const error = errorOf(await handleBridgeCall(t, 'context.write', { path: 'agents/payroll/index.md', content: '# x' }, deps()))
   assert.equal(error.code, 'forbidden')
   assert.match(error.message, /does not name the agent "payroll"/)
 })
 
 test('a wildcard-only agents perimeter names nobody, so it authors nothing', async () => {
   const t = target({ perimeter: perimeter({ write: ['agents/**'], agents: ['*'] }) })
-  const error = errorOf(await handleBridgeCall(t, 'context.write', { path: 'agents/nightly.md', content: '# x' }, deps()))
+  const error = errorOf(await handleBridgeCall(t, 'context.write', { path: 'agents/nightly/index.md', content: '# x' }, deps()))
   assert.equal(error.code, 'forbidden')
   assert.match(error.message, /a bare "\*" names nobody/)
 })
 
-test('the activation note is not a brief — agents/live/ is sealed whatever the tool declares', async () => {
+test('the activation note is not a brief — activation.md is sealed whatever the tool declares', async () => {
   const t = target({ perimeter: BRIEF_AUTHOR })
   const error = errorOf(
-    await handleBridgeCall(t, 'context.write', { path: 'agents/live/nightly.md', content: 'active: true' }, deps()),
+    await handleBridgeCall(t, 'context.write', { path: 'agents/nightly/activation.md', content: 'active: true' }, deps()),
   )
   assert.equal(error.code, 'forbidden')
-  assert.match(error.message, /only a space admin writes/)
+  assert.match(error.message, /written by a space admin/)
 })
 
 test('a brief that already exists is never rewritten, only created', async () => {
@@ -291,7 +291,7 @@ test('a brief that already exists is never rewritten, only created', async () =>
     await handleBridgeCall(
       t,
       'context.write',
-      { path: 'agents/nightly.md', content: '# replaced' },
+      { path: 'agents/nightly/index.md', content: '# replaced' },
       // writeGated stays a trap: the refusal must happen before the store is reached.
       deps({ readVisible: async () => '---\ntype: agent\n---\n\nThe brief an admin approved.' }),
     ),

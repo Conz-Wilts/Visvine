@@ -1,12 +1,11 @@
 /**
  * The agent note contract — pure, no I/O (tests import this directly).
  *
- * An agent is TWO notes, because the write gate is path-only and the brief
- * must stay member-writable while activation is admin-only:
+ * An agent is a FOLDER, `agents/<name>/`, holding two notes it is defined by
+ * and whatever its runs write:
  *
- *   agents/<name>.md            the BRIEF — what the agent is; it may sit in a
- *                               folder of agents (agents/ops/<name>.md) — the
- *                               name is always the leaf, unique in the space
+ *   agents/<name>/index.md      the BRIEF — what the agent is. Member-written;
+ *                               the folder's index, so the folder IS the agent
  *   ---
  *   type: agent
  *   title: Weekly digest
@@ -22,7 +21,10 @@
  *   The body is the brief. It is WRAPPED (a fixed preamble + the body), not
  *   passed verbatim as the whole system prompt.
  *
- *   agents/live/<name>.md       the ACTIVATION — whether and when it runs
+ *   agents/<name>/activation.md the ACTIVATION — whether and when it runs.
+ *                               Admin-only: the write gate is path-only, so
+ *                               the brief stays member-writable while this
+ *                               one note beside it is not
  *   ---
  *   type: agent-activation
  *   active: true
@@ -38,6 +40,11 @@
  *   timezone: Pacific/Auckland        # required with a clock; UTC only for legacy notes
  *   ---
  *   An active agent needs at least one of `schedule`, `every` or `on`.
+ *
+ *   agents/<name>/<anything>.md  the agent's OWN notes — where its runs write
+ *                               by default (a digest, a report, the state it
+ *                               keeps between runs). The one place under
+ *                               agents/ an agent may write, and only its own.
  *
  * Budget is deliberately NOT here: it lives on the AgentState row because
  * money is admin-read while notes are member-read.
@@ -70,46 +77,23 @@ export const AGENT_TOOL_OPTIONS: ReadonlyArray<{ id: AgentToolExtra; label: stri
 ]
 export const DEFAULT_AGENT_MODEL = 'gemini/gemma-4-31b-it'
 
-/**
- * Where a NEW brief goes: `agents/<name>.md`, or inside a folder of agents
- * when one is given (`ops` → `agents/ops/<name>.md`). Reading an existing
- * brief by name is lib/agents/briefs.ts#findAgentBrief — the note may have
- * been moved into any folder since it was written.
- */
-export function agentBriefPath(name: string, folder: string | null = null): string {
-  const f = normaliseAgentFolder(folder)
-  return f ? `agents/${f}/${name}.md` : `agents/${name}.md`
+/** The agent's folder: `agents/<name>`. */
+export function agentFolderPath(name: string): string {
+  return `agents/${name}`
 }
 
-/**
- * A folder of agents, relative to `agents/`: one or more slug segments
- * (`ops`, `ops/reports`). `live` is the activation folder and never one.
- */
-const AGENT_FOLDER_SEGMENT_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
-
-/** `'/ops/reports/'`, `'agents/ops'` → `'ops/reports'`, `'ops'`; empty → null. */
-export function normaliseAgentFolder(folder: string | null | undefined): string | null {
-  if (!folder) return null
-  const trimmed = folder.trim().replace(/^\/+|\/+$/g, '').replace(/^agents(\/|$)/, '')
-  return trimmed || null
+/** The brief — the agent folder's index. */
+export function agentBriefPath(name: string): string {
+  return `${agentFolderPath(name)}/index.md`
 }
 
-/** Why a folder string cannot hold agents, or null when it can. */
-export function agentFolderProblem(folder: string | null | undefined): string | null {
-  const f = normaliseAgentFolder(folder)
-  if (!f) return null
-  const segments = f.split('/')
-  if (segments[0] === 'live') return '`agents/live/` holds activations — pick another folder name'
-  for (const s of segments) {
-    if (!AGENT_FOLDER_SEGMENT_RE.test(s)) return `"${s}" is not a folder name — lower-case letters, digits, - and _`
-  }
-  return null
+/** The flat alias a stale link or client may still hold: `agents/<name>.md`. */
+export function agentBriefAliasPath(name: string): string {
+  return `${agentFolderPath(name)}.md`
 }
 
-/** The folder a brief path sits in, relative to `agents/`: `agents/ops/x.md` → `ops`; flat → ''. */
-export function agentFolderOfPath(path: string): string {
-  const m = /^agents\/(?:(.+)\/)?[^/]+\.md$/.exec(path)
-  return m?.[1] ?? ''
+export function agentActivationPath(name: string): string {
+  return `${agentFolderPath(name)}/activation.md`
 }
 
 /** The href of an agent's page — where notifications about it point. */
@@ -129,9 +113,6 @@ export function agentNameOfHref(href: string | null | undefined): string | null 
     return null
   }
   return id.startsWith('agent:') ? id.slice('agent:'.length) || null : null
-}
-export function agentActivationPath(name: string): string {
-  return `agents/live/${name}.md`
 }
 
 // ── The brief ────────────────────────────────────────────────────────────────
@@ -549,8 +530,8 @@ export function globProblem(glob: string): string | null {
   if (g.includes('..')) return 'may not contain ".."'
   const re = globToRegExp(g)
   // A trigger may never fire on the agents' own notes: an agent that reacts to
-  // a brief or an activation note is a loop waiting to happen.
-  for (const probe of ['agents/probe.md', 'agents/live/probe.md', 'agents/probe/index.md']) {
+  // a brief, an activation or a note another run wrote is a loop waiting to happen.
+  for (const probe of ['agents/probe/index.md', 'agents/probe/activation.md', 'agents/probe/report.md', 'agents/probe.md']) {
     if (re.test(probe)) return 'could match under agents/ — name a folder such as people/** instead'
   }
   return null
@@ -835,10 +816,32 @@ export function newAgentNote(input: {
     '---',
     '',
   ]
-  const body =
-    input.body?.trim() ||
-    `You are ${title}. Describe here what this agent should do on each run: what to read from the context, what to produce, and where to write it.`
+  const body = input.body?.trim() || defaultBriefBody(title, input.name)
   return `${lines.join('\n')}${body}\n`
+}
+
+/**
+ * The scaffold a brief starts from when nobody wrote one: the three questions
+ * every brief answers, with the agent's own folder as the default answer to
+ * the third. Written so the person keeps the headings and replaces the prose.
+ */
+function defaultBriefBody(title: string, name: string): string {
+  return [
+    `You are ${title}.`,
+    '',
+    '## Each run',
+    'Say what to do on every run, as a standing instruction — not a one-off request.',
+    '',
+    '## Read',
+    'Which notes or folders to read first (list_context / search_context / read_context), and what counts as "changed since last run".',
+    '',
+    '## Produce',
+    'What the output is — a digest, a report, an updated record — and the shape it should take: headings, a table, a list of links.',
+    '',
+    '## Write to',
+    `Where it goes. Your own folder, agents/${name}/, is the default — a dated note (agents/${name}/2026-01-31.md) for something periodic, ` +
+      `one fixed note for something you keep current. Name another folder only when the notes belong to it (a person's folder, reports/).`,
+  ].join('\n')
 }
 
 /** Human label for the `on:` triggers ("when people/** changes · webhook hubspot"). */
@@ -894,7 +897,7 @@ export function newActivationNote(input: {
   lines.push(
     '---',
     '',
-    'Activation for this agent — written by a space admin. Only `active`, `schedule`, `at`, `on`, `every`, `debounce`, `timezone` and `runs_as` are read.',
+    'Whether and when this agent runs — written by a space admin, beside the brief. Only `active`, `schedule`, `at`, `on`, `every`, `debounce`, `timezone` and `runs_as` are read.',
     '',
   )
   return lines.join('\n')

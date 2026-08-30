@@ -19,7 +19,7 @@ import type {
 } from './shared/types'
 import { TRASH_RETENTION_DAYS } from './shared/types'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from './shared/markdown'
-import { ensureToolNode, syncContextLinksBulk } from './entityLinks'
+import { ensureAgentNode, ensureToolNode, syncContextLinksBulk } from './entityLinks'
 import { agentNoteDeleted, agentNoteRenamed } from '@/lib/agents/hooks'
 import { toolNoteDeleted, toolNoteRenamed } from '@/lib/tools/hooks'
 // The write path's outbox. Every mutator below enqueues the rebuild its write
@@ -1229,7 +1229,11 @@ async function enforceIndexContract(context: Context, p: string, content: string
   const folder = folderOfIndexPath(p)
   if (isEntityFolderIndex(p)) {
     let node = await nodeForEntityPath(context.spaceId, p)
-    if (!node && context.ownerKey === SHARED_OWNER_KEY && (await ensureToolNode(context.spaceId, p, content))) {
+    if (
+      !node &&
+      context.ownerKey === SHARED_OWNER_KEY &&
+      ((await ensureToolNode(context.spaceId, p, content)) || (await ensureAgentNode(context.spaceId, p, content)))
+    ) {
       node = await nodeForEntityPath(context.spaceId, p)
     }
     if (node) return enforceIndexFrontmatter(content, folder, entityContractOf(node))
@@ -1414,7 +1418,7 @@ export async function deleteFolder(context: Context, path: string): Promise<void
   // The last word on it: every door into a folder delete — the route, the MCP
   // tool, a script — comes through here, so the namespaces are safe without
   // each caller having to remember them. Deleting what's INSIDE one is
-  // untouched: `tools/<name>` and `agents/live/<name>` are ordinary paths and
+  // untouched: `tools/<name>` and `agents/<name>` are ordinary paths and
   // the teardown hooks that remove them still work.
   const denial = namespaceFolderDenial(p)
   if (denial) throw new Error(denial)

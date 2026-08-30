@@ -44,7 +44,7 @@ const HOW_IT_WORKS = [
 const NOTE_FIRST = [
   'Visvine is NOTE-FIRST. Almost everything in a space is a markdown note at a deterministic path, and the',
   'note IS the thing — not a description of a record stored elsewhere. A connector is `connectors/<name>.md`.',
-  'An agent is `agents/<name>.md` plus `agents/live/<name>.md`. A Tool is three notes under `tools/<name>/`.',
+  'An agent is a folder: `agents/<name>/index.md` (the brief), `agents/<name>/activation.md` (admin-only) and whatever its runs write beside them. A Tool is three notes under `tools/<name>/`.',
   'An entity is a typed node plus its note (`people/<slug>.md`). Links are never authored: a markdown link to',
   'an entity note, inside a shared note, IS the edge.',
   '',

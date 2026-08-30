@@ -82,14 +82,14 @@ test('agents/ stays shut to autonomous origins — that is what makes the create
   const p = principal()
   for (const origin of ['agent', 'ai-enrich', 'maintenance'] as const) {
     assert.match(
-      lockedDenial(p, SHARED, 'agents/weekly-digest.md', origin) ?? '',
+      lockedDenial(p, SHARED, 'agents/weekly-digest/index.md', origin) ?? '',
       /frozen for AI/,
       `origin ${origin} must not reach a brief`,
     )
-    assert.match(lockedDenial(p, SHARED, 'agents/live/weekly-digest.md', origin) ?? '', /frozen for AI/)
+    assert.match(lockedDenial(p, SHARED, 'agents/weekly-digest/activation.md', origin) ?? '', /frozen for AI/)
   }
   // createAgentBrief writes at the default human origin. If that ever stopped
   // being allowed the action would be dead; if the line above ever stopped
   // being refused, the freeze would be decorative.
-  assert.equal(lockedDenial(p, SHARED, 'agents/weekly-digest.md', 'edit'), null)
+  assert.equal(lockedDenial(p, SHARED, 'agents/weekly-digest/index.md', 'edit'), null)
 })

@@ -60,6 +60,7 @@ import { getToolState, setToolState, STATE_MAX_BYTES, STATE_MAX_KEYS } from './s
 import { acquireDataCall } from './limits'
 import { targetKey, type ResolvedTarget } from './target'
 import { logger } from '@/lib/logger'
+import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
 
 /**
  * Everything the handlers touch that isn't pure. Injectable as one object so a
@@ -209,15 +210,16 @@ function normalizeNotePath(raw: string): string | null {
  * declared perimeter is meant to be the whole story, and a write into these
  * folders is how it would stop being one.
  *
- * `writeDenial` already keeps non-admins out of `connectors/` and `agents/live/`,
- * so this is the belt to that pair of braces, and it binds admins too.
+ * `writeDenial` already keeps non-admins out of `connectors/` and every
+ * `agents/<name>/activation.md`, so this is the belt to that pair of braces,
+ * and it binds admins too.
  *
  * ONE exception, in {@link agentBriefExemption}: creating the brief of an agent
  * the Tool's own perimeter names. See that comment for why the brief is not the
  * thing that runs.
  *
  * That exception has a second-order effect worth stating, because it looks like a
- * hole and is not: creating `agents/<name>.md` also creates or updates
+ * hole and is not: creating `agents/<name>/index.md` also creates or updates
  * `agents/index.md`, since the note store maintains a folder index beside every
  * folder. So an exempt write does touch a second path inside a sealed namespace.
  * It is benign — the index is a generated children listing, and it can only ever
@@ -231,15 +233,12 @@ function sealedNamespace(path: string): string | null {
 }
 
 /**
- * `agents/<name>.md` → `<name>`. Exactly two segments: `agents/live/<name>.md`
- * is the ACTIVATION, not a brief, and gets nothing from the exception below.
- * The caller has already required a `.md` suffix.
+ * `agents/<name>/index.md` → `<name>`. The brief and nothing else in the
+ * folder: `agents/<name>/activation.md` is the ACTIVATION and the rest is
+ * the agent's own output, and neither gets anything from the exception below.
  */
 function agentBriefName(path: string): string | null {
-  const segments = path.split('/')
-  if (segments.length !== 2 || segments[0] !== 'agents') return null
-  const name = segments[1].slice(0, -'.md'.length)
-  return name.length > 0 ? name : null
+  return isAgentBriefPath(path) ? agentNameOfPath(path) : null
 }
 
 /**
@@ -261,13 +260,13 @@ function declaresAgentByName(perimeter: ResolvedTarget['perimeter'], name: strin
  * The brief is the one thing under a sealed namespace a Tool may write, and only
  * ever by creating it.
  *
- * The brief (`agents/<name>.md`) is member-writable on purpose — contextService's
- * `writeDenial` guards `agents/live/` and nothing else, because ACTIVATION is
- * what makes a brief run unattended on the space's model key, and that stays a
- * space admin's decision. So a Tool creating a brief hands an admin something to
- * read and approve; it does not start anything. `claimManualRun` refuses an
- * inactive agent, so even `agents.run` on a Tool-authored brief does nothing
- * until a person has said yes.
+ * The brief (`agents/<name>/index.md`) is member-writable on purpose —
+ * contextService's `writeDenial` guards the activation beside it and nothing
+ * else, because ACTIVATION is what makes a brief run unattended on the space's
+ * model key, and that stays a space admin's decision. So a Tool creating a
+ * brief hands an admin something to read and approve; it does not start
+ * anything. `claimManualRun` refuses an inactive agent, so even `agents.run`
+ * on a Tool-authored brief does nothing until a person has said yes.
  *
  * CREATE, never overwrite, and never append. An admin who activated an agent
  * approved a specific brief; the hook that auto-deactivates on a member's edit
@@ -288,7 +287,7 @@ function agentBriefExemption(
   }
   const name = agentBriefName(path)
   if (!name) {
-    return 'only a brief at agents/<name>.md is exempt — agents/live/ is the activation, which only a space admin writes'
+    return 'only a brief at agents/<name>/index.md is exempt — activation.md beside it is written by a space admin, and the rest of the folder by the agent itself'
   }
   if (!declaresAgentByName(t.perimeter, name)) {
     return t.perimeter.agents.length > 0

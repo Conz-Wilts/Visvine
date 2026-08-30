@@ -36,11 +36,13 @@ export type EntityKind =
 // CREATABLE_TYPES in lib/directory/createEntity.ts, so the admin-only write
 // gate on connectors/ in contextService.writeDenial remains the only door.
 //
-// agent is note-first in the same way: agents/<name>.md is the brief any
-// member may write (lib/agents). Its activation lives beside it in
-// agents/live/<name>.md, which is admin-only config and deliberately NOT an
-// entity note — entityKindOfPath / parseEntityHref match only the top level
-// of agents/, so activation notes never sync nodes or resolve [[mentions]].
+// agent is note-first in the same way, and a FOLDER from birth: an agent is
+// agents/<name>/ (lib/agents). Its index is the brief any member may write, its
+// activation — admin-only config — is the sibling agents/<name>/activation.md,
+// and everything else in the folder is the agent's own: the notes its runs
+// write, the state it keeps between them. The activation is a sub-note like
+// any other (it opens on the agent's Context tab) but never an entity note, so
+// it syncs no node and resolves no [[mention]].
 //
 // tool is note-first too, and folder-only in the strictest sense: a Tool is
 // several notes by construction — tools/<name>/index.md (frontmatter = config,
@@ -95,10 +97,13 @@ const ENTITY_DIRS: Record<EntityKind, string> = {
  * folder is a sub-note about it — so the tree shows one folder per thing and
  * nothing ever converts underneath a link.
  *
- * The config kinds (connector, agent, section) are the ones that stay flat:
- * their note is read by NAME by the runtime (`loadConnector`, `agents/live/`),
- * not written under, so they keep the lazy shape — one note until a sub-note
- * turns it into a folder (see "entity folders" below).
+ * An agent is folder-only for the opposite reason: its folder is WRITTEN
+ * under — the activation beside the brief, the notes its runs produce, the
+ * state it carries between runs — so the folder is the agent, not a
+ * conversion waiting to happen. The remaining config kinds (connector,
+ * section) are read by name by the runtime and never written under, so they
+ * keep the lazy shape — one note until a sub-note turns it into a folder (see
+ * "entity folders" below).
  */
 const FOLDER_ONLY_ENTITY_KINDS: ReadonlySet<EntityKind> = new Set([
   'person',
@@ -106,6 +111,7 @@ const FOLDER_ONLY_ENTITY_KINDS: ReadonlySet<EntityKind> = new Set([
   'event',
   'resource',
   'channel',
+  'agent',
   'tool',
 ])
 
@@ -122,6 +128,7 @@ const FLAT_ALIAS_ENTITY_KINDS: ReadonlySet<EntityKind> = new Set([
   'event',
   'resource',
   'channel',
+  'agent',
 ])
 
 /**
@@ -296,7 +303,7 @@ export function canonicalEntityPath(path: string): string {
 // Namespaces where EITHER form names the entity — '<ns>/<slug>/index.md', the
 // folder, or '<ns>/<slug>.md': the flat alias of a folder-only kind, or a lazy
 // kind's note before it converts (see FOLDER_ONLY_ENTITY_KINDS).
-const FLAT_ENTITY_NS_RE = 'people|resources|events|communities|spaces|channels|connectors'
+const FLAT_ENTITY_NS_RE = 'people|resources|events|communities|spaces|channels|connectors|agents'
 // Namespaces where only '<ns>/<slug>/index.md' names the entity: a tool's flat
 // path is an ordinary note.
 const FOLDER_ENTITY_NS_RE = 'tools'
@@ -337,13 +344,7 @@ export function isEntityFolderIndex(path: string): boolean {
 export function parseEntityHref(href: string): string | null {
   if (!href) return null
   const raw = href.startsWith('/') ? href.slice(1) : href
-  if (
-    !FLAT_ENTITY_HREF_RE.test(raw) &&
-    !FOLDER_ENTITY_HREF_RE.test(raw) &&
-    !isAgentBriefPath(raw) // agents/live/… is config, not an entity; nested briefs are
-  ) {
-    return null
-  }
+  if (!FLAT_ENTITY_HREF_RE.test(raw) && !FOLDER_ENTITY_HREF_RE.test(raw)) return null
   // 'people/index.md' matches with slug 'index' — that is the namespace root's
   // own index, never an entity.
   if (isIndexPath(raw) && raw.split('/').length === 2) return null
@@ -394,7 +395,6 @@ export function sourceHref(path: string): string {
 // namespace's own index and a sub-note inside an entity folder are not entity
 // paths (entityKindOfDir / entityOwnerPathOf answer for those).
 export function entityKindOfPath(path: string): EntityKind | null {
-  if (isAgentBriefPath(path)) return 'agent'
   return parseEntityHref(path) ? entityKindOfDir(path) : null
 }
 
@@ -421,25 +421,65 @@ export function entityKindOfDir(path: string): EntityKind | null {
 // isEntityFolderIndex, parseEntityHref) that every entity kind shares.
 
 /**
- * True for a brief — `agents/<name>.md` or, nested in a folder of agents,
- * `agents/<folder>/…/<name>.md`. The agent's NAME is always the leaf, unique
- * across the space; folders only organise. `agents/live/…` (activation) and
- * every index note are not briefs.
+ * An agent is the folder `agents/<name>/`. Three kinds of note live in it, and
+ * the path alone says which:
+ *
+ *   agents/<name>/index.md        the BRIEF — the entity note, member-written
+ *   agents/<name>/activation.md   the ACTIVATION — admin-only config
+ *   agents/<name>/<anything>.md   the agent's OWN notes — what its runs write
+ *
+ * The name is the folder segment, unique across the space; `agents/index.md`
+ * is the namespace's own home page and names no agent.
  */
+const AGENT_FOLDER_RE = /^agents\/([^/]+)\/([^/]+\.md)$/
+const AGENT_ACTIVATION_BASENAME = 'activation.md'
+
+/** True for a brief — an agent's folder index. */
 export function isAgentBriefPath(path: string): boolean {
-  return AGENT_BRIEF_RE.test(path) && !isIndexPath(path)
+  const m = AGENT_FOLDER_RE.exec(path)
+  return m !== null && m[2] === INDEX_BASENAME
 }
-const AGENT_BRIEF_RE = /^agents\/(?!live\/)(?:[^/]+\/)*[^/]+\.md$/
 
-/** True for `agents/live/<name>.md` — an activation note. */
+/** True for `agents/<name>/activation.md` — an activation note. */
 export function isAgentActivationPath(path: string): boolean {
-  return /^agents\/live\/[^/]+\.md$/.test(path) && !isIndexPath(path)
+  const m = AGENT_FOLDER_RE.exec(path)
+  return m !== null && m[2] === AGENT_ACTIVATION_BASENAME
 }
 
-/** The agent name a brief or activation path names — the leaf — or null. */
+/**
+ * True for a note an agent's runs may write: anything in its folder that is
+ * neither the brief nor the activation. Only the top level — a sub-folder
+ * under the agent is fine to READ but its index would be a folder the agent
+ * made, and folders are a person's to make.
+ */
+export function isAgentOwnNotePath(path: string, name: string): boolean {
+  const m = AGENT_FOLDER_RE.exec(path)
+  return m !== null && m[1] === name && m[2] !== INDEX_BASENAME && m[2] !== AGENT_ACTIVATION_BASENAME
+}
+
+/** The agent name a brief or activation path names, or null. */
 export function agentNameOfPath(path: string): string | null {
-  if (!isAgentBriefPath(path) && !isAgentActivationPath(path)) return null
-  return path.slice(path.lastIndexOf('/') + 1, -'.md'.length) || null
+  const m = AGENT_FOLDER_RE.exec(path)
+  if (!m || (m[2] !== INDEX_BASENAME && m[2] !== AGENT_ACTIVATION_BASENAME)) return null
+  return m[1]
+}
+
+/** The agent whose folder a path sits in — brief, activation or own note — or null. */
+export function agentOfPath(path: string): string | null {
+  const m = AGENT_FOLDER_RE.exec(path)
+  return m ? m[1] : null
+}
+
+/**
+ * The agent whose run made a write, from the revision stamps: origin `agent`
+ * and model `agent:<name>`. Every note an agent's run touches carries both
+ * (lib/agents/tools.ts), so this is how the store knows a write is the
+ * agent's own — for the one folder it may write, and for the trigger it must
+ * never wake.
+ */
+export function agentOfRevisionStamp(origin: string | undefined, model: string | undefined): string | null {
+  if (origin !== 'agent' || !model || !model.startsWith('agent:')) return null
+  return model.slice('agent:'.length) || null
 }
 
 // True when `path` IS one of the entity namespaces itself ('people',

@@ -268,10 +268,6 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // Bumped when something outside the editor replaces the body (a starter
   // brief): the editor owns its buffer and only reads initialContent on mount.
   const [editorKey, setEditorKey] = useState(0)
-  // An agent's `?folder=` names a folder of AGENTS — the roster row it was
-  // pressed on — not a folder in the context tree, so it is kept apart from the
-  // destination picker and only ever used to build the brief's path.
-  const agentFolder = useRef(initialType === 'agent' ? initialFolder : '').current
   const [files, setFiles] = useState<FileEntry[]>([])
   const [sections, setSections] = useState<ChannelSectionEntry[]>([])
   const [addingTag, setAddingTag] = useState(false)
@@ -610,16 +606,17 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     router.replace(`/directory/${encodeURIComponent(`connector:${name}`)}`)
   }, [spaceId, title, router])
 
-  // An agent is a note under `agents/`: the title names it, the body is the
-  // brief. The frontmatter it needs to run — the model, the connectors it may
-  // call — is scaffolded at its defaults and edited on the note afterwards (the
-  // Raw tab, or its own page); nothing about it is unchangeable, so nothing
-  // about it belongs in a form in front of the brief. It does nothing at all
-  // until an admin turns it on — its own page, or the console's Agents section.
+  // An agent is a folder under `agents/` whose index is the brief: the title
+  // names it, the body is the brief. The frontmatter it needs to run — the
+  // model, the connectors it may call — is scaffolded at its defaults and
+  // edited on the note afterwards (the Raw tab, or its own page); nothing
+  // about it is unchangeable, so nothing about it belongs in a form in front
+  // of the brief. It does nothing at all until an admin turns it on — its own
+  // page, or the console's Agents section.
   const commitAgent = useCallback(async () => {
     if (!spaceId) return
     const name = agentSlug(title)
-    const path = agentBriefPath(name, agentFolder)
+    const path = agentBriefPath(name)
     const a = extras.agent
     await notesApi.create(
       spaceId,
@@ -644,7 +641,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     // Its own page rather than the bare note: the write synced an `agent:<name>`
     // node, and that page is where the schedule and activation live.
     router.replace(`/directory/${encodeURIComponent(`agent:${name}`)}`)
-  }, [spaceId, title, agentFolder, extras.agent, router])
+  }, [spaceId, title, extras.agent, router])
 
   const commitChannel = useCallback(async () => {
     if (!spaceId) return
@@ -993,7 +990,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
           />
           {agentSlug(title) && (
             <div className="mt-4">
-              <PathPreview path={agentBriefPath(agentSlug(title), agentFolder)} />
+              <PathPreview path={agentBriefPath(agentSlug(title))} />
             </div>
           )}
         </>

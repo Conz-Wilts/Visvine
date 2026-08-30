@@ -25,14 +25,14 @@ export const AGENT_TEMPLATES: readonly AgentTemplate[] = [
   {
     id: 'weekly-digest',
     title: 'Weekly digest',
-    description: 'Summarises the week into reports/weekly.md',
+    description: 'Summarises the week into a dated note in its own folder',
     tools: [],
     trigger: 'Weekly, Monday morning',
-    body: `Each run, read every note under updates/ that changed in the last seven days and write a short digest to reports/weekly.md.
+    body: `Each run, read every note that changed in the last seven days and write a digest as a dated note in your own folder (agents/<your name>/YYYY-MM-DD.md).
 
-The digest is for people who were away all week: lead with what changed, name who was involved with a link to their note, and keep it under 300 words. Group by theme rather than by note. If nothing changed, say so in one line rather than inventing content.
+The digest is for people who were away all week: an H1 with the week, then "## What changed" grouped by theme rather than by note, then "## People" — everyone involved, each linked to their note. Keep it under 300 words. If nothing changed, say so in one line rather than inventing content.
 
-Overwrite the previous digest; the history is in the note's revisions.`,
+Each week is its own note, so the folder is the history.`,
   },
   {
     id: 'person-enrichment',
@@ -64,7 +64,7 @@ Keep it under 120 words. If nothing changed and nothing is on, post one line say
     description: 'Pulls new records from a connector into the directory',
     tools: ['directory'],
     trigger: 'Every hour',
-    body: `Each run, call the connector named in this brief's connectors list to list records created or updated since the previous run — the previous run's high-water mark is kept in agents/state/connector-sync.md, which you read at the start and rewrite at the end.
+    body: `Each run, call the connector named in this brief's connectors list to list records created or updated since the previous run — the previous run's high-water mark is kept in state.md in your own folder, which you read at the start and rewrite at the end.
 
 For every new record, create a matching person or organisation in the directory if none exists, and write what the connector knows to its note. For every updated record, append the change to the existing note; never overwrite what a person wrote.
 

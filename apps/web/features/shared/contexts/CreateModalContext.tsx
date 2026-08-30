@@ -56,9 +56,8 @@ const NOTE_FIRST: Partial<Record<CreateableType, string>> = {
   resource: 'resource',
   connector: 'connector',
   // An agent is a note like the rest: the title names it, the editor body is
-  // the brief, and the model/connectors/folder its runner needs are the draft's
-  // inline extras. `?folder=` names a folder of AGENTS here, not one in the
-  // context tree.
+  // the brief, and the model/connectors its runner needs are the draft's
+  // inline extras.
   agent: 'agent',
   channel: 'channel',
   section: 'section',

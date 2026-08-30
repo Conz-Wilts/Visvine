@@ -1242,7 +1242,7 @@ async function seedInboxAndAudit() {
     { id: 'cae_bb_003', userId: MEMBER, name: 'Dev Member', action: 'note.read', path: 'data/fund-metrics.md', detail: 'restricted boundary: data', at: ago(5_800) },
     { id: 'cae_bb_006', userId: ADMIN, name: 'Dev Admin', action: 'connector.run', path: 'connectors/sandbox.md', detail: '200 in 412ms', at: ago(30) },
     { id: 'cae_bb_007', userId: ADMIN, name: 'Dev Admin', action: 'secret.update', path: 'SANDBOX_KEY', detail: 'rotated', at: ago(9_000) },
-    { id: 'cae_bb_008', userId: ADMIN, name: 'Dev Admin', action: 'agent.deactivate', path: 'agents/lp-report-drafter.md', detail: 'brief_changed', at: ago(4_320) },
+    { id: 'cae_bb_008', userId: ADMIN, name: 'Dev Admin', action: 'agent.deactivate', path: 'agents/lp-report-drafter/index.md', detail: 'brief_changed', at: ago(4_320) },
     { id: 'cae_bb_009', userId: ADMIN, name: 'Dev Admin', action: 'proposal.approve', path: 'team/partner-notes-june.md', detail: 'publish from Dev Admin', at: ago(8_940) },
     { id: 'cae_bb_010', userId: ADMIN, name: 'Dev Admin', action: 'publication.unlink', path: 'sectors/climate-energy.md', detail: 'target visvine', at: ago(7_000) },
   ];

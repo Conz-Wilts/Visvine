@@ -29,11 +29,13 @@ import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { excerptsForTargets } from './shared/references'
 import { declaredFolderOnlyEntity, entityNameClashDenial, isIndexPath } from './shared/indexNote'
 import {
+  agentNameOfPath,
   entityKindOfPath,
   entityMentionPaths,
   entityNotePath,
   entityNotePaths,
   entityOwnerPathOf,
+  isAgentBriefPath,
 } from './entities'
 import { toolFileKindOfPath, toolNameOfPath } from '@/lib/tools/config'
 
@@ -181,10 +183,53 @@ async function syncNoteNode(
   // below; every other entity kind's index (a person's, a connector's) is
   // reached elsewhere and has nothing new to sync here.
   if (kind === 'tool') return content === null ? false : ensureToolNode(spaceId, path, content)
+  // An agent is folder-only too: its brief IS an index path, so it is answered
+  // before the generic index skip, and a write that declares `type: agent` at
+  // a fresh agents/<name>/index.md makes the node (ensureAgentNode) the way a
+  // Tool's does — the store calls it ahead of the index contract for the same
+  // reason (see ensureToolNode).
+  if (kind === 'agent') return syncAgentNode(spaceId, path, content)
   if (isIndexPath(path)) return false
   if (kind === 'connector') return syncConnectorNode(spaceId, path, content)
-  if (kind === 'agent') return syncAgentNode(spaceId, path, content)
   return false
+}
+
+/**
+ * The `agent:<name>` node behind an `agents/<name>/index.md` write that
+ * declares `type: agent`, made when none backs it yet. The counterpart of
+ * ensureToolNode, for the same reason: the brief is the folder's index, and
+ * store.ts#enforceIndexContract holds an entity index to its node — with no
+ * node the contract falls back to the plain folder shape and `type: agent`
+ * would be lost on the very first save. Called from the store before the
+ * contract is enforced; a no-op (`false`) for any other path, content that
+ * doesn't declare the type, a name AGENT_NAME_RE rejects, or a node that
+ * already exists. Throws when the id is claimed by another space.
+ */
+export async function ensureAgentNode(spaceId: string, path: string, content: string): Promise<boolean> {
+  if (!isAgentBriefPath(path)) return false
+  const name = agentNameOfPath(path)
+  if (!name || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(name)) return false
+  const declared = declaredFolderOnlyEntity(parseFrontmatter(content), 'agent', name)
+  if (!declared) return false
+
+  const nodeId = `agent:${name}`
+  const clash = await prisma.node.findUnique({ where: { id: nodeId }, select: { spaceId: true } })
+  if (clash) {
+    if (clash.spaceId === spaceId) return false
+    throw new Error(entityNameClashDenial(name, 'agent', 'lib/agents/service.ts#createAgentBrief'))
+  }
+
+  await syncEntityNode({
+    spaceId,
+    type: 'agent',
+    nodeId,
+    name: declared.name,
+    subtitle: declared.subtitle,
+    metadata: { notePath: path },
+    parentNodeId: spaceNodeId(spaceId),
+    revalidate: false,
+  })
+  return true
 }
 
 /**
@@ -239,15 +284,17 @@ export async function ensureToolNode(spaceId: string, path: string, content: str
 }
 
 /**
- * The `agent:` node standing for an `agents/<name>.md` brief — same shape as
- * the connector node: id `agent:<name>`, description as subtitle, `notePath`
- * in metadata as the exact way back. `agents/live/…` never reaches here
- * (entityKindOfPath returns null for it).
+ * The `agent:` node standing for an `agents/<name>/index.md` brief — same
+ * shape as the connector node: id `agent:<name>`, description as subtitle,
+ * `notePath` in metadata as the exact way back. The activation and the
+ * agent's own notes are sub-notes of the folder and never reach here
+ * (entityKindOfPath returns null for them). The flat alias `agents/<name>.md`
+ * is accepted for a brief written before the folder era.
  */
 async function syncAgentNode(spaceId: string, path: string, content: string | null): Promise<boolean> {
   if (content === null) return removeEntityNode(spaceId, 'agent', path)
 
-  const name = path.replace(/\.md$/i, '').split('/').pop() || path
+  const name = agentNameOfPath(path) ?? path.replace(/\.md$/i, '').split('/').pop() ?? path
   const fm = parseFrontmatter(content)
   const description = typeof fm.description === 'string' ? fm.description.trim() : ''
 

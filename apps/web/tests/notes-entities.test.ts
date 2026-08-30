@@ -256,7 +256,7 @@ test('a person is a folder from the first write, and the flat path is its alias'
 test('the config kinds stay flat until a sub-note converts them', () => {
   const node = { id: 'connector:sandbox', type: 'connector' };
   assert.equal(isFolderOnlyEntityKind('connector'), false);
-  assert.equal(isFolderOnlyEntityKind('agent'), false);
+  assert.equal(isFolderOnlyEntityKind('agent'), true);
   assert.equal(isFolderOnlyEntityKind('section'), false);
   assert.equal(isFolderOnlyEntityKind(null), false);
   assert.equal(entityNotePath(node), 'connectors/sandbox.md');

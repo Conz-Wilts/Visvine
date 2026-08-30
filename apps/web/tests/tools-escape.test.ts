@@ -363,12 +363,12 @@ test('a tool cannot author an agent brief it did not declare', async () => {
   // write globs here are wide open and the agents list is `*`, which names nobody,
   // and the store is a trap: nothing may be written before the refusal.
   const t = target({ perimeter: perimeter({ read: ['deals/**'], write: ['**'], agents: ['*'] }) })
-  for (const path of ['agents/nightly.md', 'agents/live/nightly.md']) {
+  for (const path of ['agents/nightly/index.md', 'agents/nightly/activation.md', 'agents/nightly/report.md']) {
     const error = errorOf(await handleBridgeCall(t, 'context.write', { path, content: '# x' }, deps()))
     assert.equal(error.code, 'forbidden', `${path} must be refused`)
   }
   const appended = errorOf(
-    await handleBridgeCall(t, 'context.append', { path: 'agents/nightly.md', text: 'x' }, deps()),
+    await handleBridgeCall(t, 'context.append', { path: 'agents/nightly/index.md', text: 'x' }, deps()),
   )
   assert.equal(appended.code, 'forbidden')
 })

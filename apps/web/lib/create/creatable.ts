@@ -42,7 +42,8 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
 
     // An agent brief is a note under agents/, so it follows Context, which is
     // always on. It is member-writable by design (lib/agents): only activating
-    // it is admin-gated, and that gate is on a different path (agents/live/).
+    // it is admin-gated, and that gate is on a different path (the
+    // activation note beside the brief).
     case 'agent':
       return isFeatureEnabled(featureConfig, 'notes')
 

@@ -32,6 +32,7 @@ import {
   principalIsSuperAdmin,
   principalLevelName,
 } from './shared/permissions'
+import { agentOfRevisionStamp, isAgentActivationPath, isAgentOwnNotePath } from './entities'
 import { isRestrictedPath, isLockedPath } from './shared/authz'
 import { replicaDenial } from './publications'
 import { isGlobalSpace } from '@/lib/spaces/globalSpace'
@@ -285,16 +286,13 @@ export function writeDenial(p: ContextPrincipal, context: Context, path: string)
   ) {
     return 'Only space admins can create or edit connectors.'
   }
-  // agents/live/ holds each agent's ACTIVATION (active + schedule). The brief
-  // beside it (agents/<name>.md) is member-writable on purpose; turning one on
-  // means "run unattended on the space's model key with declared connector
-  // reach", so that stays with admins. Sits inside agents/, so a folder grant
-  // on agents/ does not reach it — this clause runs before the grant check.
-  if (
-    (path === 'agents/live' || path.startsWith('agents/live/')) &&
-    !p.system &&
-    !principalIsSuperAdmin(p)
-  ) {
+  // agents/<name>/activation.md is the agent's ACTIVATION (active + schedule).
+  // The brief beside it (agents/<name>/index.md) is member-writable on
+  // purpose; turning one on means "run unattended on the space's model key
+  // with declared connector reach", so that stays with admins. Sits inside
+  // the agent's folder, so a folder grant on agents/ does not reach it — this
+  // clause runs before the grant check.
+  if (isAgentActivationPath(path) && !p.system && !principalIsSuperAdmin(p)) {
     return 'Only space admins can activate an agent.'
   }
   // settings/ IS the space's configuration (lib/spaces/configNote.ts) — the
@@ -334,6 +332,8 @@ export function lockedDenial(
   context: Context,
   path: string,
   origin: NoteRevisionOrigin,
+  /** The revision's model stamp — `agent:<name>` when an agent's own run is writing. */
+  model?: string,
 ): string | null {
   if (!isShared(context)) return null
   if (!AI_ORIGINS.has(origin)) return null
@@ -342,7 +342,15 @@ export function lockedDenial(
   // so an AI sweep that reformatted the briefs would silently switch off every
   // agent in the space — and an agent could otherwise rewrite itself or its
   // siblings. Agents are written by people.
+  //
+  // The one opening is an agent's OWN folder: a run stamped `agent:<name>`
+  // may write `agents/<name>/<anything>.md` — its digests, its reports, the
+  // state it keeps between runs — but never its brief or its activation, and
+  // never another agent's folder. Nothing under agents/ ever fires a trigger
+  // (lib/agents/config.ts#matchesAnyGlob), so this cannot wake anything.
   if (path === 'agents' || path.startsWith('agents/')) {
+    const own = agentOfRevisionStamp(origin, model)
+    if (own && isAgentOwnNotePath(path, own)) return null
     return 'Agent briefs are frozen for AI — a human must make this change.'
   }
   // tools/ is frozen for the same reason, one step further: a Tool's sub-notes
@@ -402,7 +410,7 @@ export async function writeGated(
   origin: Parameters<typeof store.writeNote>[4] = 'edit',
   model?: string,
 ): Promise<WriteResult> {
-  const denial = (await writeDenialFull(p, context, path)) ?? lockedDenial(p, context, path, origin)
+  const denial = (await writeDenialFull(p, context, path)) ?? lockedDenial(p, context, path, origin, model)
   if (denial) return { status: 'denied', reason: denial }
   // A config note is refused BEFORE it is saved when it does not describe a
   // valid configuration. The store hook that projects it into the columns runs
@@ -451,7 +459,7 @@ export async function appendLogGated(
   origin: NoteRevisionOrigin = 'edit',
   model?: string,
 ): Promise<WriteResult> {
-  const denial = (await writeDenialFull(p, context, path)) ?? lockedDenial(p, context, path, origin)
+  const denial = (await writeDenialFull(p, context, path)) ?? lockedDenial(p, context, path, origin, model)
   if (denial) return { status: 'denied', reason: denial }
   const current = await store.readNote(context, path)
   const role =

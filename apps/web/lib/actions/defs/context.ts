@@ -93,6 +93,7 @@ import {
   type AgentTriggers,
 } from '@/lib/agents/config'
 import { claimManualRun } from '@/lib/agents/schedule'
+import { AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
 import { featureAccessForbidden } from '@/lib/auth'
 import { readNoteOrNull, type Context } from '@/lib/notes/store'
 import { runClean, applyCleanFixes, trashNotes } from '@/lib/notes/clean'
@@ -1899,7 +1900,7 @@ export const CONTEXT_ACTIONS = [
         "does not advance the schedule. Returns the run id and, when the run completes within this call, its outcome.",
       input: {
         space_id: spaceArg,
-        agent: z.string().describe("The agent's name, e.g. 'weekly-digest' for agents/weekly-digest.md"),
+        agent: z.string().describe("The agent's name, e.g. 'weekly-digest' for agents/weekly-digest/"),
       },
       run: async (ctx, args) => {
         const { principal } = await resolveTarget(ctx, args.space_id, 'shared')
@@ -1921,12 +1922,13 @@ export const CONTEXT_ACTIONS = [
       scope: 'agents:author',
       summary: "Write a new agent's brief. It does nothing until an admin turns it on.",
       description:
-        'Create an agent: a brief at agents/<name>.md whose frontmatter declares the model it runs on, the ' +
-        'connectors it may call and which tool extras it gets, and whose BODY is the instructions it follows ' +
+        'Create an agent: a folder agents/<name>/ whose index.md is the brief — frontmatter declaring the model ' +
+        'it runs on, the connectors it may call and which tool extras it gets; BODY the instructions it follows ' +
         'on every run. Write the body as a standing instruction, not a one-off request: what to read from the ' +
         "context, what to produce, and where to write it. Read list_connectors first — every name in " +
         '`connectors` must be a connector the space already has, and `model` must name one of its model ' +
         'connectors (omit it for the space default). ' +
+        `WHAT THE AGENT CAN DO, so the brief can ask for it: ${AGENT_RUN_CAPABILITIES} ` +
         'CREATING IS NOT TURNING ON: a new brief is inert. A space admin activates it with activate_agent (or ' +
         "the Turn on button on the agent's page), and that is the review point — say so when you hand it over. " +
         'Creates only; an existing agent is a 409, and briefs are edited on the note itself.',
@@ -1939,7 +1941,11 @@ export const CONTEXT_ACTIONS = [
         description: z.string().optional().describe('One sentence on what it does — its line on the roster'),
         instructions: z
           .string()
-          .describe('The brief itself: what the agent does on every run, in the second person. This becomes its system prompt'),
+          .describe(
+            'The brief itself: what the agent does on every run, in the second person. This becomes its system prompt. ' +
+              'Say what to read, what to produce and the SHAPE it takes (headings, a table, links to the people involved), ' +
+              'and where to write it — its own folder agents/<name>/ unless the notes belong elsewhere',
+          ),
         model: z
           .string()
           .optional()
@@ -1955,10 +1961,6 @@ export const CONTEXT_ACTIONS = [
             "Extra capabilities: 'web' (fetch a public page), 'sandbox' (run code on a disposable computer), " +
               "'messages' (post to a channel), 'directory' (create nodes and links). Omit for none",
           ),
-        folder: z
-          .string()
-          .optional()
-          .describe("Optional folder under agents/ to file it in, e.g. 'ops' → agents/ops/<name>.md"),
       },
       run: async (ctx, args) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
@@ -1969,7 +1971,6 @@ export const CONTEXT_ACTIONS = [
           model: args.model,
           connectors: args.connectors,
           tools: args.tools,
-          folder: args.folder ?? null,
           body: args.instructions,
         })
         if (!r.ok) throw new ActionError(r.status, r.error)

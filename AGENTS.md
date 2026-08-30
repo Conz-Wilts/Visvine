@@ -148,9 +148,20 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
   (`lib/notes/entities.ts#FOLDER_ONLY_ENTITY_KINDS`); the flat path
   `people/craig.md` is an alias a stale link or client reaches the note through
   (`canonicalEntityPath`), never where it lives. The config kinds — connector,
-  agent, section — are read by name by the runtime and stay one flat note until
-  a sub-note converts them. Never add a separate "general info" note beside an
+  section — are read by name by the runtime and stay one flat note until a
+  sub-note converts them. Never add a separate "general info" note beside an
   index: the index is that note.
+- **An agent is a folder too, and the folder is its home.** `agents/<name>/index.md`
+  is the brief (member-written), `agents/<name>/activation.md` beside it is the
+  admin-only activation (`writeDenial`), and everything else in the folder is
+  the agent's own — the ONE place under `agents/` a run stamped `agent:<name>`
+  may write (`contextService.lockedDenial`), never its brief, its activation or
+  another agent's folder. The run prompt (`lib/agents/shared/prompt.ts`) names
+  that folder as the default output location and teaches the markdown/link
+  contract; `create_agent` and its recipe quote the same text so an authoring
+  model knows what a brief can ask for. Nothing under `agents/` ever fires a
+  trigger. `db:agents:folders` moves the two earlier shapes (`agents/<name>.md`,
+  `agents/live/<name>.md`) into the folder.
 - **Links are derived, not authored.** A markdown link to an entity's note,
   inside another shared-context note, is what creates a `mentioned` edge. There is
   no create-link operation anywhere in the system.

@@ -344,8 +344,8 @@ test('enqueueAgentEvent: 50 enqueues → one claim of ≤ cap; dedupe collapses;
     // No brief note exists → the tick's re-derive path would sync (and deactivate) — give it a brief + live note.
     await prisma!.contextNote.createMany({
       data: [
-        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/listener.md', content: '---\ntype: agent\nmodel: openai/gpt-4o-mini\n---\nReact.\n', createdBy: AUTHOR },
-        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/live/listener.md', content: '---\ntype: agent-activation\nactive: true\non:\n  context: ["people/**"]\ndebounce: 5s\n---\n', createdBy: ADMIN },
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/listener/index.md', content: '---\ntype: agent\nmodel: openai/gpt-4o-mini\n---\nReact.\n', createdBy: AUTHOR },
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/listener/activation.md', content: '---\ntype: agent-activation\nactive: true\non:\n  context: ["people/**"]\ndebounce: 5s\n---\n', createdBy: ADMIN },
       ],
     })
     // Match the hash the tick will compute so it claims without re-deriving.
@@ -471,8 +471,8 @@ test('claimManualRun resets next_run_at once it takes the mail; a trigger-only a
     if (!parsed.ok) return
     await prisma!.contextNote.createMany({
       data: [
-        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/only.md', content: '---\ntype: agent\nmodel: openai/gpt-4o-mini\n---\nReact.\n', createdBy: AUTHOR },
-        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/live/only.md', content: live, createdBy: ADMIN },
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/only/index.md', content: '---\ntype: agent\nmodel: openai/gpt-4o-mini\n---\nReact.\n', createdBy: AUTHOR },
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/only/activation.md', content: live, createdBy: ADMIN },
       ],
     })
     // The inline run must fail WITHOUT deactivating (as in the mid-run test): an undecryptable key + root access for the author.

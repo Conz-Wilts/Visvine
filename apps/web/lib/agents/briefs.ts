@@ -1,17 +1,13 @@
 /**
- * Where an agent's brief lives. An agent is named by its leaf — `digest` —
- * and the brief may sit anywhere under `agents/` except `agents/live/`: at
- * `agents/digest.md` or inside a folder of agents (`agents/ops/digest.md`).
- * The folders are ordinary context folders (each one an index note) and only
- * organise; the name is what activation, state rows, runs and the `agent:`
- * node key on. So every read-by-name goes through {@link findAgentBrief}.
- *
- * Two briefs sharing a leaf would be one agent with two bodies. The canonical
- * one is the shallowest path (then alphabetical); the roster flags the rest as
- * duplicates rather than guessing.
+ * Where an agent's brief lives: `agents/<name>/index.md`, the index of the
+ * agent's own folder (lib/agents/config.ts). The name is the folder segment,
+ * so it is unique in the space by construction and every read-by-name is one
+ * path lookup. The flat form `agents/<name>.md` is an alias a note written
+ * before the folder era may still sit at until `db:agents:folders` moves it;
+ * it is read here so such an agent keeps running, never written.
  */
 import prisma from '@/lib/prisma'
-import { isAgentBriefPath } from '@/lib/notes/entities'
+import { agentBriefAliasPath, agentBriefPath } from './config'
 
 const SHARED_OWNER_KEY = 'shared'
 
@@ -21,22 +17,13 @@ export interface AgentBriefRow {
   createdBy: string | null
 }
 
-/** Shallowest first, then alphabetical — the order duplicates are ranked in. */
-export function canonicalBriefOrder(a: string, b: string): number {
-  const depth = a.split('/').length - b.split('/').length
-  return depth !== 0 ? depth : a.localeCompare(b)
-}
-
-/** Every live brief in the space with this leaf name, canonical first. */
-async function findAgentBriefs(spaceId: string, name: string): Promise<AgentBriefRow[]> {
+/** The brief for `name`, or null when the agent does not exist. */
+export async function findAgentBrief(spaceId: string, name: string): Promise<AgentBriefRow | null> {
+  const index = agentBriefPath(name)
   const rows = await prisma.contextNote.findMany({
-    where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { startsWith: 'agents/', endsWith: `/${name}.md` } },
+    where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { in: [index, agentBriefAliasPath(name)] } },
     select: { path: true, content: true, createdBy: true },
   })
-  return rows.filter((r) => isAgentBriefPath(r.path)).sort((a, b) => canonicalBriefOrder(a.path, b.path))
-}
-
-/** The canonical brief for `name`, or null when the agent does not exist. */
-export async function findAgentBrief(spaceId: string, name: string): Promise<AgentBriefRow | null> {
-  return (await findAgentBriefs(spaceId, name))[0] ?? null
+  // The folder form wins when both exist — the alias is only ever a leftover.
+  return rows.find((r) => r.path === index) ?? rows[0] ?? null
 }

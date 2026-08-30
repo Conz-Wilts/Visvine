@@ -26,6 +26,7 @@ import type { SpaceFeatureConfig } from '@/lib/types'
 import { isFeatureEnabled } from '@/lib/featureAccess'
 import { SANDBOX_LIMITS } from '@/lib/connectors/config'
 import { kw, type KeywordRule } from '@/lib/actions/shared/match'
+import { AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
 
 /** One call the client should make, in order. */
 interface PlanStep {
@@ -150,8 +151,8 @@ Creating an agent does NOT start it. A brief is inert until an admin turns it
 on, and that is deliberate: an active agent runs unattended on the space's
 model key with whatever reach its brief declares, so a person approves it.
 
-create_agent writes the brief for you; you never write that note by hand. What
-it writes:
+create_agent writes the brief for you; you never write that note by hand. An
+agent is a folder, agents/<name>/, and the brief is its index.md:
 
 ---
 type: agent
@@ -162,11 +163,15 @@ connectors: [stripe, hubspot]  # names from list_connectors — its whole extern
 tools: []
 max_turns: 12
 ---
-You are the weekly digest. Each run, read what changed in the last seven days,
-write a summary to digests/<date>.md, and mention the people involved.
+You are the weekly digest. Each run, read what changed in the last seven days
+and write a digest to your own folder as a dated note (agents/weekly-digest/<date>.md):
+an H1, a "What changed" section grouped by theme, and a "People" list linking
+every person involved to their note.
 
 The body after the frontmatter IS the system prompt. Say what to read, what to
-produce, and where to write it.
+produce (and its shape), and where to write it.
+
+What the agent can do — so the brief can ask for it: ${AGENT_RUN_CAPABILITIES}
 
 Activation is activate_agent — a schedule (\`schedule: weekly\`, \`at: "09:00"\`,
 \`weekday: monday\`, \`timezone: "Pacific/Auckland"\`), an interval
@@ -334,7 +339,7 @@ const RECIPES: Recipe[] = [
       {
         n: 3,
         tool: 'create_agent',
-        why: "Writes the brief. `instructions` IS the agent's system prompt, so write a standing instruction — what to read, what to produce, where to write it — not a description of the agent.",
+        why: "Writes the brief. `instructions` IS the agent's system prompt, so write a standing instruction — what to read, what to produce and its shape (headings, a table, links to the people involved), where to write it (its own folder agents/<name>/ by default) — not a description of the agent.",
         args: {
           space_id: spaceId(ctx),
           name: '<slug>',

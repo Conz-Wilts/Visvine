@@ -11,6 +11,7 @@ import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ActivateAgentDialog from '@/features/agents/components/ActivateAgentDialog';
 import AgentSettingsPanel from '@/features/agents/components/AgentSettingsPanel';
+import LiveRun from '@/features/agents/components/LiveRun';
 import MachineWindow from '@/features/agents/components/MachineWindow';
 import MessageAgent from '@/features/agents/components/MessageAgent';
 import SkillsPanel from '@/features/agents/components/SkillsPanel';
@@ -23,10 +24,11 @@ import { fmtAgo, fmtCents, setupBlocker, statusLine, terminalLabel } from '@/fea
  * brief itself is the note (Context / Raw tabs); this tab is the status line
  * with its switch and play control, then one line for when it runs — the
  * schedule with a Change beside it, or, while it is off, the one thing
- * standing in the way with the switch beside that; the brief's settings,
+ * standing in the way with the switch beside that; THE RUN IN FLIGHT, when
+ * there is one — its steps as they happen (LiveRun); the brief's settings,
  * folded; spend (admins); the machine's window and timeline (admins); what the
- * agent has been taught; a box to say something to it; and the run history with
- * live transcripts.
+ * agent has been taught; a box to say something to it; and the run history,
+ * each row opening to its steps.
  */
 type AgentDetail = AgentSummary & { brief: string; activationNote: string | null; heartbeatAt: string | null };
 
@@ -82,18 +84,27 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     void reload();
   }, [spaceId, spaceLoading, reload]);
 
-  // While a run is in flight the row and the list move; keep them fresh.
+  // While a run is in flight the row and the list move; keep them fresh. The
+  // live panel follows the run itself more closely (every 2 s); this is for
+  // the status line and, once the run ends, the history row taking its place.
   useEffect(() => {
     if (!data || data.agent.state.status !== 'running') return;
     const t = setInterval(reload, 4000);
     return () => clearInterval(t);
   }, [data, reload]);
 
+  // A run that just ended: the panel hands back, the page catches up at once.
+  const onRunFinished = useCallback(() => {
+    void reload();
+  }, [reload]);
+
   if (spaceLoading || loading) return <Skeleton className="h-40 w-full rounded-lg" />;
   if (error || !data) return <Alert>{error ?? 'Not found'}</Alert>;
 
   const { agent, runs, isAdmin, canRun } = data;
   const line = statusLine(agent);
+  const liveRun = runs.find((r) => r.status === 'running') ?? null;
+  const maxTurns = /^max_turns:\s*(\d+)/m.exec(agent.brief)?.[1];
   const blocker = agent.activation.active ? null : setupBlocker(agent, isAdmin);
   const runnable = canRun && agent.activation.active && agent.state.status !== 'running' && !agent.invalid;
   const editBrief = () => router.replace(`/directory/${encodeURIComponent(nodeId)}?tab=context`);
@@ -119,7 +130,9 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     if (!spaceId) return;
     setBusy(true);
     setNotice(null);
-    const t = setInterval(reload, 3000);
+    // The run row exists before the executor starts, so the first reload puts
+    // the live panel up while this request is still waiting on the outcome.
+    const t = setInterval(reload, 1500);
     try {
       const res = await fetchJson<{ ok: true; runId: string; outcome: { status: string; reason: string } | null; error: string | null }>(
         `/api/communities/${spaceId}/agents/${encodeURIComponent(name)}/run`,
@@ -255,6 +268,17 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         </p>
       </section>
 
+      {liveRun && spaceId && (
+        <LiveRun
+          key={liveRun.id}
+          spaceId={spaceId}
+          agentName={name}
+          runId={liveRun.id}
+          maxTurns={maxTurns ? Number(maxTurns) : null}
+          onFinished={onRunFinished}
+        />
+      )}
+
       {canRun && spaceId && (
         <section className="border-t border-border-subtle pt-5">
           <button
@@ -339,7 +363,8 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         ) : (
           <ul className="divide-y divide-border-subtle">
             {runs.map((r) => {
-              const open = openRun === r.id;
+              // The run in flight is the panel above; its row only says so.
+              const open = openRun === r.id && r.id !== liveRun?.id;
               const seconds = r.endedAt ? Math.round((new Date(r.endedAt).getTime() - new Date(r.startedAt).getTime()) / 1000) : null;
               return (
                 <li key={r.id} className="py-2.5">

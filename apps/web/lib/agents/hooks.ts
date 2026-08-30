@@ -5,18 +5,20 @@
  *
  * Three rules, all from the wayfinder map:
  *
- * 1. A write to `agents/live/<name>.md` re-derives `active`, `nextRunAt` and
- *    `scheduleHash` from the note. The note is authoritative; the row is an
- *    index that can always be rebuilt.
- * 2. A MEMBER's edit to `agents/<name>.md` while it is live auto-deactivates
- *    the agent — the admin approved a specific brief, and that approval does
- *    not survive someone else rewriting it. The system principal writes
- *    `active: false` into the activation note (the ONLY machine write into
- *    the activation boundary, and it can only ever set false), plus an audit
- *    line naming the member. An ADMIN's edit is itself the approval: nothing
- *    happens.
- * 3. A rename or delete of the brief carries the activation note with it and
- *    always deactivates — simple and safe; an admin re-activates in one click.
+ * 1. A write to `agents/<name>/activation.md` re-derives `active`, `nextRunAt`
+ *    and `scheduleHash` from the note. The note is authoritative; the row is
+ *    an index that can always be rebuilt.
+ * 2. A MEMBER's edit to `agents/<name>/index.md` while it is live
+ *    auto-deactivates the agent — the admin approved a specific brief, and
+ *    that approval does not survive someone else rewriting it. The system
+ *    principal writes `active: false` into the activation note (the ONLY
+ *    machine write into the activation boundary, and it can only ever set
+ *    false), plus an audit line naming the member. An ADMIN's edit is itself
+ *    the approval: nothing happens.
+ * 3. A rename or delete of the agent always deactivates — simple and safe; an
+ *    admin re-activates in one click. The activation sits in the agent's own
+ *    folder, so a folder rename or delete carries it by itself; the hook only
+ *    has to move the state row.
  *
  * Only prisma, the pure parsers, audit and auth are imported statically; the
  * store is reached by dynamic import because the store imports this file.
@@ -28,6 +30,7 @@ import { logAudit } from '@/lib/notes/audit'
 import { notify } from '@/lib/notifications/service'
 import {
   agentNameOfPath,
+  agentOfRevisionStamp,
   isAgentActivationPath,
   isAgentBriefPath,
 } from '@/lib/notes/entities'
@@ -227,11 +230,7 @@ async function actorIsAdmin(spaceId: string, actor: Actor): Promise<boolean> {
 
 // ── Store hooks ──────────────────────────────────────────────────────────────
 
-/** The agent whose run made this write, from the revision's model stamp (`agent:<name>`). */
-function agentOfStamp(origin: string | undefined, model: string | undefined): string | null {
-  if (origin !== 'agent' || !model || !model.startsWith('agent:')) return null
-  return model.slice('agent:'.length) || null
-}
+const agentOfStamp = agentOfRevisionStamp
 
 /**
  * After a note write (create or save). `changed` = the content actually
@@ -284,11 +283,14 @@ export async function agentNoteWritten(
 }
 
 /**
- * After a note rename. Carries the activation note with the brief and
- * deactivates; a rename INTO a listened-on path is a `note_written` event for
- * the `to` path (a note arriving under people/ is news whether typed or moved).
- * `stamp` is how the rename arose (origin / model, as for a write): an agent
- * run's own move (`agent` / `agent:<name>`) never wakes that agent.
+ * After a note rename. A brief renamed to another agent's path is that agent
+ * under a new name: deactivated, its state row (and run history) carried
+ * over. The activation note is a sibling in the same folder, so a folder
+ * rename moves it too and this hook sees it arrive as its own rename. A
+ * rename INTO a listened-on path is a `note_written` event for the `to` path
+ * (a note arriving under people/ is news whether typed or moved). `stamp` is
+ * how the rename arose (origin / model, as for a write): an agent run's own
+ * move (`agent` / `agent:<name>`) never wakes that agent.
  */
 export async function agentNoteRenamed(
   context: Context,
@@ -309,35 +311,29 @@ export async function agentNoteRenamed(
   }
 
   if (fromName && isAgentBriefPath(from)) {
-    if (toName === fromName && isAgentBriefPath(to)) {
-      // Moved between folders of agents: same name, same agent. Nothing keyed
-      // on the name changes, so the activation (if any) stands.
-      await syncAgentState(spaceId, toName)
-      return
-    }
-    // Deactivate under the old name, then move the row + activation note.
+    if (toName === fromName) return
+    // Deactivate under the old name, then carry the row to the new one.
     await deactivateAgent(spaceId, fromName, 'renamed', toName ? `now ${to}` : `moved to ${to}`)
-    const store = await import('@/lib/notes/store')
-    const liveFrom = agentActivationPath(fromName)
     if (toName && isAgentBriefPath(to)) {
-      if (await readSharedNote(spaceId, liveFrom)) {
-        const liveTo = agentActivationPath(toName)
-        if (!(await readSharedNote(spaceId, liveTo))) await store.renameNote(context, liveFrom, liveTo)
-      }
       await prisma.agentState.deleteMany({ where: { spaceId, name: toName } })
       await prisma.agentState.updateMany({ where: { spaceId, name: fromName }, data: { name: toName } })
       await syncAgentState(spaceId, toName)
     } else {
-      // Moved out of agents/ — it is no longer an agent. Retire the activation.
-      if (await readSharedNote(spaceId, liveFrom)) await store.deleteNote(context, liveFrom)
+      // Moved out of agents/ — it is no longer an agent. An activation left
+      // behind in the old folder is retired with the row.
+      const stale = agentActivationPath(fromName)
+      if (await readSharedNote(spaceId, stale)) {
+        const store = await import('@/lib/notes/store')
+        await store.deleteNote(context, stale)
+      }
       await prisma.agentState.deleteMany({ where: { spaceId, name: fromName } })
     }
     return
   }
   if (fromName && isAgentActivationPath(from)) {
-    // Someone moved an activation note by hand: whatever it now is, the old
-    // agent has no activation any more.
-    await syncAgentState(spaceId, fromName)
+    // The activation moved — with its folder, or by hand. Either way the old
+    // name has none any more, and the new one re-derives from what arrived.
+    if (toName !== fromName) await syncAgentState(spaceId, fromName)
     if (toName && isAgentActivationPath(to)) await syncAgentState(spaceId, toName)
     return
   }
@@ -352,6 +348,8 @@ export async function agentNoteDeleted(context: Context, path: string): Promise<
   const spaceId = context.spaceId
   if (isAgentBriefPath(path)) {
     await deactivateAgent(spaceId, name, 'deleted', 'brief deleted')
+    // The folder delete that removed the brief removes the activation with it;
+    // a brief deleted on its own leaves one behind, and it is retired here.
     const live = agentActivationPath(name)
     if (await readSharedNote(spaceId, live)) {
       const store = await import('@/lib/notes/store')

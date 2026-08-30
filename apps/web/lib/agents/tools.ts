@@ -9,8 +9,10 @@
  * the directory, `sendMessage` for channels, `notify` for people — under the
  * run's principal (the brief's author). So an agent provably cannot exceed
  * what its author can do, `writeDenial` and Freeze-for-AI apply unchanged,
- * and `agents/` itself is frozen for AI: an agent can never rewrite itself or
- * its siblings.
+ * and `agents/` itself is frozen for AI except the agent's OWN folder
+ * (`agents/<name>/`, minus its brief and activation — contextService's
+ * lockedDenial reads the `agent:<name>` stamp): an agent can never rewrite
+ * itself or its siblings, and has one obvious place to put what it makes.
  *
  * Names mirror the MCP tools (list/search/read/write/append_context,
  * run_connector) so there is one vocabulary. Connector reach is DECLARED — only
@@ -51,7 +53,7 @@ import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ToolHandler } from '@/lib/notes/toolLoop'
 import { notify, type NotifyInput } from '@/lib/notifications/service'
-import { agentPageHref, type AgentBrief } from './config'
+import { agentFolderPath, agentPageHref, type AgentBrief } from './config'
 import type { RunNowResult } from './schedule'
 import { sandboxProvider } from './sandbox'
 
@@ -184,6 +186,8 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
   const stamp = agentModelStamp(ctx.agentName)
   const title = brief.title || ctx.agentName
   const href = agentPageHref(ctx.agentName)
+  /** The agent's own folder, with its trailing slash — the default home for everything it writes. */
+  const home = `${agentFolderPath(ctx.agentName)}/`
   const authorId = ctx.authorUserId ?? principal.userId
   const dry = brief.dryRun
   const noteWritten = (path: string) => ctx.onWrite?.(path)
@@ -264,13 +268,13 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       spec: {
         name: 'write_context',
         description:
-          'Create or overwrite a note at a path with full markdown (frontmatter optional). Writes go through the same permission gate as a human edit; some folders may refuse. Never write under agents/.' +
+          `Create or overwrite a note at a path with full markdown: frontmatter (\`title:\` at least), then headings, lists, tables and root-relative links to the notes and people it concerns. Your home folder ${home} is the default place — a dated note (${home}<YYYY-MM-DD>.md) for periodic output, one fixed note for something kept current, ${home}state.md for what you carry between runs — and the only place under agents/ you may write (never ${home}index.md or ${home}activation.md). Elsewhere, the same permission gate as a human edit applies; some folders refuse.` +
           (dry ? ' THIS IS A DRY RUN: the write is recorded, not applied.' : ''),
         parameters: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: 'e.g. "reports/weekly.md"' },
-            content: { type: 'string', description: 'The complete note' },
+            path: { type: 'string', description: `e.g. "${home}2026-01-31.md" or "reports/weekly.md"` },
+            content: { type: 'string', description: 'The complete note, frontmatter included' },
           },
           required: ['path', 'content'],
         },
@@ -295,7 +299,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       spec: {
         name: 'append_context',
         description:
-          'Append a dated entry to a note\'s "## Log" section (creating it if absent). Good for journals and running records without rewriting the whole note.' +
+          `Append a dated entry to a note's "## Log" section (creating it if absent). Good for journals and running records without rewriting the whole note — ${home}log.md is a natural place for your own. Entries are markdown too: link what they mention.` +
           (dry ? ' THIS IS A DRY RUN: the append is recorded, not applied.' : ''),
         parameters: {
           type: 'object',

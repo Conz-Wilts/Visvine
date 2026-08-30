@@ -7,6 +7,12 @@ import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/notes/audit'
 import { readVisible, visibleVault, writeDenialFull, writeGated } from '@/lib/notes/contextService'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
+
+/** The name an unmigrated flat brief (`agents/<name>.md`) carries, or null. */
+function agentNameOfAliasPath(path: string): string | null {
+  const m = /^agents\/([^/]+)\.md$/.exec(path)
+  return m && AGENT_NAME_RE.test(m[1]) ? m[1] : null
+}
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
@@ -16,8 +22,6 @@ import {
   AGENT_NAME_RE,
   agentActivationPath,
   agentBriefPath,
-  agentFolderOfPath,
-  agentFolderProblem,
   DEFAULT_DEBOUNCE_MS,
   describeSchedule,
   describeTriggers,
@@ -30,7 +34,7 @@ import {
   type AgentSchedule,
   type AgentTriggers,
 } from './config'
-import { canonicalBriefOrder, findAgentBrief } from './briefs'
+import { findAgentBrief } from './briefs'
 import { deactivateAgent, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
@@ -53,8 +57,6 @@ export type AgentRowState =
 export interface AgentSummary {
   name: string
   path: string
-  /** The folder of agents the brief sits in, relative to `agents/` — '' at the top. */
-  folder: string
   title: string
   description: string | null
   model: string | null
@@ -152,7 +154,7 @@ async function summarise(
   name: string,
   path: string,
   briefContent: string,
-  opts: { includeSpend: boolean; now: Date; heartbeatAt: Date | null; duplicateOf?: string | null },
+  opts: { includeSpend: boolean; now: Date; heartbeatAt: Date | null },
 ): Promise<AgentSummary> {
   const spaceId = context.spaceId
   const fm = parseFrontmatter(briefContent)
@@ -177,17 +179,12 @@ async function summarise(
   const summary: AgentSummary = {
     name,
     path,
-    folder: agentFolderOfPath(path),
     title: brief?.title || (typeof fm.title === 'string' && fm.title) || name,
     description: brief?.description ?? (typeof fm.description === 'string' ? fm.description : null),
     model: brief?.model ?? (typeof fm.model === 'string' ? fm.model : null),
     connectors: brief?.connectors ?? [],
     tools: brief?.tools ?? [],
-    invalid: opts.duplicateOf
-      ? `Another agent is already named "${name}" (${opts.duplicateOf}) — rename this one`
-      : parsedBrief.ok
-        ? null
-        : parsedBrief.error,
+    invalid: parsedBrief.ok ? null : parsedBrief.error,
     authorUserId: briefRow?.createdBy ?? null,
     activation: {
       active: !!activation?.active,
@@ -228,10 +225,9 @@ export interface AgentRoster {
 }
 
 /**
- * Every agent brief the principal can see — valid or broken. Two briefs with
- * one leaf name are one agent: the canonical path is summarised as it, the
- * rest list as invalid duplicates. The folders they sit in are not part of
- * the roster: they are ordinary Context folders, browsed in the tree.
+ * Every agent brief the principal can see — valid or broken. One folder is
+ * one agent, so there is nothing to dedupe; a flat `agents/<name>.md` left
+ * from before the folder era lists too, under its name, until it is moved.
  */
 export async function listAgents(
   p: ContextPrincipal,
@@ -241,23 +237,22 @@ export async function listAgents(
   const now = new Date()
   const [heartbeatAt, { raws }] = await Promise.all([lastHeartbeat(), visibleVault(p, context)])
   const briefs: { name: string; path: string; content: string }[] = []
+  const seen = new Set<string>()
+  // Folder briefs first, so a leftover alias never shadows the real one.
   for (const raw of raws) {
     const name = isAgentBriefPath(raw.path) ? agentNameOfPath(raw.path) : null
-    if (name) briefs.push({ name, path: raw.path, content: raw.content })
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    briefs.push({ name, path: raw.path, content: raw.content })
   }
-  briefs.sort((a, b) => canonicalBriefOrder(a.path, b.path))
-  const canonical = new Map<string, string>()
-  for (const b of briefs) if (!canonical.has(b.name)) canonical.set(b.name, b.path)
+  for (const raw of raws) {
+    const name = agentNameOfAliasPath(raw.path)
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    briefs.push({ name, path: raw.path, content: raw.content })
+  }
   const out = await Promise.all(
-    briefs.map((b) => {
-      const first = canonical.get(b.name)!
-      return summarise(p, context, b.name, b.path, b.content, {
-        includeSpend: !!opts.includeSpend,
-        now,
-        heartbeatAt,
-        duplicateOf: first === b.path ? null : first,
-      })
-    }),
+    briefs.map((b) => summarise(p, context, b.name, b.path, b.content, { includeSpend: !!opts.includeSpend, now, heartbeatAt })),
   )
   return {
     agents: out.sort((a, b) => a.path.localeCompare(b.path)),
@@ -362,7 +357,7 @@ export async function setBudget(
     userId: p.userId,
     name: p.name,
     action: 'agent',
-    path: (await findAgentBrief(context.spaceId, name))?.path ?? `agents/${name}.md`,
+    path: (await findAgentBrief(context.spaceId, name))?.path ?? agentBriefPath(name),
     detail: budgetMonthlyCents === null ? 'budget removed' : `budget set: ${budgetMonthlyCents} cents / month`,
   })
   return { ok: true, warning: null }
@@ -414,7 +409,6 @@ export async function createAgentBrief(
     model?: string
     connectors?: string[]
     tools?: string[]
-    folder?: string | null
     body: string
   },
 ): Promise<CreateAgentResult> {
@@ -425,18 +419,13 @@ export async function createAgentBrief(
   if (context.ownerKey !== SHARED_OWNER_KEY) {
     return { ok: false, status: 400, error: 'Agents are authored in a space, not in personal context.' }
   }
-  const folderProblem = agentFolderProblem(input.folder)
-  if (folderProblem) return { ok: false, status: 400, error: folderProblem }
 
-  // By LEAF name, not by path: the leaf is what activation, the state row, runs
-  // and the `agent:` node all key on, so two briefs sharing one would be a
-  // single agent with two bodies (lib/agents/briefs.ts).
   const existing = await findAgentBrief(context.spaceId, name)
   if (existing) {
     return { ok: false, status: 409, error: `An agent named "${name}" already exists at ${existing.path}. Edit it there — a brief is only ever created here, never replaced.` }
   }
 
-  const path = agentBriefPath(name, input.folder ?? null)
+  const path = agentBriefPath(name)
   const denial = await writeDenialFull(p, context, path)
   if (denial) return { ok: false, status: 403, error: denial }
 
