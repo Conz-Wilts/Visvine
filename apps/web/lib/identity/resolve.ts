@@ -110,7 +110,7 @@ async function backfillIdentityFields(identityId: string, signals: IdentitySigna
  * Writes the assignment + any suggestion rows to the audit table and returns the
  * chosen identity id. `nodeId` need not exist yet — audit rows reference it loosely.
  */
-export async function resolveIdentity(
+async function resolveIdentity(
   nodeId: string,
   input: ResolveInput,
   opts: { actorUserId?: string | null } = {},

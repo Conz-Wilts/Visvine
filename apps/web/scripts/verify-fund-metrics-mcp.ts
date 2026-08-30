@@ -6,9 +6,8 @@
  *   visibility lens → perimeter parse → secret decrypt → sandbox →
  *   fetch to the fund-metrics API → redaction → back over the wire
  *
- * Unlike scripts/verify-connectors-demo.ts (which calls the service layer
- * directly), this one goes over the actual MCP transport, so the token, the
- * scope check and the tool schemas are all exercised too.
+ * It goes over the actual MCP transport, so the token, the scope check and
+ * the tool schemas are all exercised too.
  *
  * Needs `pnpm dev` running and `pnpm db:connectors:funds` seeded.
  *

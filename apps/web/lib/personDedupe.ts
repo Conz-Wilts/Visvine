@@ -65,6 +65,3 @@ export function findMatchingPerson(
   return null;
 }
 
-// createPersonNode / ensureUniquePersonId were removed (unused) — node creation
-// now goes through the canonical lib/identity resolver.
-

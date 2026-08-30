@@ -231,7 +231,7 @@ agent per day; a human's own act (admin switch, rename, delete) tells nobody.
 
 An agent can also be given a **machine** — a container in Cloudflare with a
 filesystem, Node, Python and `uv`, reached through the `vm_exec` action behind
-the `vm:run` scope. `docs/agent-vm-plan.md` is the design; the parts an operator
+the `vm:run` scope. `docs/machines.md` is the reference; the parts an operator
 needs:
 
 - **Two deployment targets.** The control plane is this app on Cloud Run; the
@@ -357,7 +357,7 @@ deadline, UTC) was already correct and was left untouched.
   the activation note (required to turn a scheduled agent on), models and keys are connectors, and
   activation was always per agent, on the agent's page.
 - API: `GET/PATCH /api/communities/[spaceId]/agents/[name]`, `POST …/[name]/run`,
-  `GET …/[name]/runs[/[runId]]`, `GET/PUT …/[name]/budget`.
+  `GET …/[name]/runs/[runId]`, `GET/PUT …/[name]/budget`.
 - MCP: `list_agents` (`context:read`; includes `schedule`, `every` and `triggers` so a trigger-only
   agent does not read "No schedule"), `run_agent` (`agents:run`). Authoring is not an MCP tool.
 - Bell: `notify` / `ask_human` land in the Navbar bell; an `agent_question` row shows a reply box
@@ -368,7 +368,7 @@ deadline, UTC) was already correct and was left untouched.
 `lib/agents/{registry,providers,config,hooks,principal,tools,sandbox,budget,runs,runner,schedule,dispatch,internalAuth,service,route,limits,events,options,templates,briefEdit}.ts`
 (`events.ts` is the mailbox: `enqueueAgentEvent`, `claimEvents`, `matchNoteTriggers`,
 `fireNoteTriggers`, `webhookRecipients`, `rearmIfPending`, `pruneEvents`),
-the shared loop `lib/notes/toolLoop.ts` (also under the connector-creation agent), the entity sync
+the shared loop `lib/notes/toolLoop.ts`, the entity sync
 points (`lib/notes/entities.ts`, `entityLinks.ts`, `context/entityNodes.ts`), UI in `features/agents/*` and
 `features/profile/components/AgentPageContent.tsx`. Tests: `tests/agents-config.test.ts` (grammar, globs, cron, interval math),
 `tests/agents-tick.test.ts` (claim / reclaim / release / events, against the local Docker DB),

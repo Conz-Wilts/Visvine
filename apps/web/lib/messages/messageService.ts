@@ -308,26 +308,6 @@ function serializeSavedMessage(message: SavedMessageRecord): SavedMessageEntry {
   };
 }
 
-/** All pinned messages in a conversation, newest pin first. */
-export async function listPinnedMessages(
-  currentUserId: string,
-  conversationId: string,
-): Promise<SavedMessageEntry[]> {
-  await ensureConversationMember(conversationId, currentUserId);
-
-  const records = await prisma.message.findMany({
-    where: { conversationId, pinnedAt: { not: null }, deletedAt: null },
-    include: {
-      sender: { select: { name: true } },
-      conversation: { select: { id: true, name: true } },
-    },
-    orderBy: { pinnedAt: 'desc' },
-    take: 50,
-  });
-
-  return records.map(serializeSavedMessage);
-}
-
 /** The user's starred (saved) messages across all their conversations, newest star first. */
 export async function listStarredMessages(currentUserId: string): Promise<SavedMessageEntry[]> {
   const stars = await prisma.messageStar.findMany({

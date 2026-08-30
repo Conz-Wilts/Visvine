@@ -735,6 +735,29 @@ standalone output tracer cannot reach `react-dom`'s client entry through
 pnpm's `node_modules` symlink — `vendorBundle.ts`'s file comment has the full
 story if that ever needs revisiting.
 
+## Known rough edges
+
+Judged not worth a wide fix; none is a regression and each has a narrow fix.
+
+- **`context.list` reads the whole visible vault** (`lib/tools/bridge.ts`,
+  `deps.visibleVault`) and filters in JS, so a glob matching three notes costs
+  O(vault) on a path a Tool can hit 120×/min. Fix: push the glob's literal
+  prefix (`compileGlob` already computes it) into the vault query, keeping the
+  `refuseRead` filter in JS so the perimeter stays the last word.
+- **Uninstall leaves `featureConfig.enabled['tool:<slug>']` behind**
+  (`lib/tools/installs.ts#featureConfigWithoutRail`). Harmless — reinstall
+  defaults to enabled — but `mergeFeatureConfig` cannot express a deletion, so
+  fixing it touches every feature, not just Tools.
+- **`deploy.yml` expands to a trailing `TOOLS_ORIGIN=` when the repo variable is
+  unset.** gcloud accepts the empty value and `toolsOrigin()` treats it as null
+  (the same-origin fallback), so it is safe today; a stricter gcloud would want
+  the pair omitted in a build step.
+
+Deliberate, not defects: a Tool note's own page is `<dir>/project.md`, not
+`index.md` (`enforceIndexFrontmatter`); a Tool may create an agent brief but
+never edit one; `hostBridge` posts to `'*'` because an opaque origin matches
+nothing else (reasoned at the call site, covered by the escape suite).
+
 ## Verification
 
 ```sh

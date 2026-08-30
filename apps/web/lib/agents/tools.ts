@@ -30,7 +30,7 @@
  * services.
  */
 import prisma from '@/lib/prisma'
-import { RUN_OUTPUT_CAP_CHARS, toolFetchUrl } from '@/lib/connectors/agent'
+import { fetchPublicText } from '@/lib/connectors/publicFetch'
 import { ConnectorError } from '@/lib/connectors/config'
 import { executeConnectorScript, loadConnector, type ConnectorActionSummary } from '@/lib/connectors/service'
 import { createEntity, type CreateEntityInput, type CreateEntityResult } from '@/lib/directory/createEntity'
@@ -154,6 +154,7 @@ export interface AgentToolContext {
   deps?: Partial<AgentToolDeps>
 }
 
+const RUN_OUTPUT_CAP_CHARS = 12_000
 const clip = (s: string, cap = RUN_OUTPUT_CAP_CHARS) => (s.length > cap ? s.slice(0, cap) + '\n…[truncated]' : s)
 
 function str(v: unknown): string {
@@ -385,7 +386,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
         parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
       },
       describe: (a) => str(a.url),
-      run: (a) => toolFetchUrl(str(a.url)),
+      run: (a) => fetchPublicText(str(a.url)),
     })
   }
 

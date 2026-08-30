@@ -32,7 +32,6 @@ export {
   deleteMessage,
   toggleReaction,
   toggleStar,
-  listPinnedMessages,
   listStarredMessages,
   markConversationRead,
   getConversationMemberIds,

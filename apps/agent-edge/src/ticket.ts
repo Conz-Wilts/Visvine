@@ -13,18 +13,11 @@
 
 const encoder = new TextEncoder()
 
-export interface TicketClaims {
+interface TicketClaims {
   /** The machine this ticket is for: `${spaceId}/${agentName}`. */
   machine: string
   /** Seconds since the epoch. */
   exp: number
-}
-
-function base64url(bytes: ArrayBuffer | Uint8Array): string {
-  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-  let binary = ''
-  for (const byte of view) binary += String.fromCharCode(byte)
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
 function fromBase64url(value: string): Uint8Array {
@@ -33,18 +26,11 @@ function fromBase64url(value: string): Uint8Array {
   return Uint8Array.from(binary, (c) => c.charCodeAt(0))
 }
 
+// Verify only: the control plane signs (lib/vm/watch.ts), the edge never does.
 async function key(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
-    'sign',
     'verify',
   ])
-}
-
-/** Sign a ticket. The control plane has the same implementation in lib/vm/watch.ts. */
-export async function signTicket(claims: TicketClaims, secret: string): Promise<string> {
-  const body = base64url(encoder.encode(JSON.stringify(claims)))
-  const signature = await crypto.subtle.sign('HMAC', await key(secret), encoder.encode(body))
-  return `${body}.${base64url(signature)}`
 }
 
 /**

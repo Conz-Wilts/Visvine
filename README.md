@@ -222,7 +222,7 @@ pnpm desktop:test    # unit tests;  pnpm desktop:e2e = Playwright electron smoke
 pnpm desktop:pack    # unpacked build in apps/desktop/release/;  pnpm desktop:dist = installers
 ```
 
-See `apps/desktop/README.md` and `docs/desktop-electron-plan.md`.
+See `apps/desktop/README.md`.
 
 ## Documentation
 
@@ -234,13 +234,12 @@ this README only names:
 | [`docs/runbook.md`](docs/runbook.md) | **Production.** How a release goes out and how to roll one back, what is alerting and where, backups and the restore drill, rotating `SECRETS_KEY`, and the limits that are decisions rather than oversights. |
 | [`docs/data-architecture.md`](docs/data-architecture.md) | **Read this first when adding storage.** When something becomes a context note, a Postgres table, or a GCS blob — and the note-write outbox that keeps derived state honest. |
 | [`docs/agents.md`](docs/agents.md) | Scheduled and event-driven agents: the brief/activation note pair, the trigger mailbox, the tool set, the Cloud Scheduler tick. |
+| [`docs/machines.md`](docs/machines.md) | An agent's machine: the Cloudflare edge, the egress boundary and its policy grammar, the workspace archive, the window and takeover, teaching, quota. |
 | [`docs/connectors.md`](docs/connectors.md) | Connector notes: the declared perimeter, the JS isolate, secrets vs identity vs OAuth connections, inbound webhooks. |
 | [`docs/tools.md`](docs/tools.md) | User-created Tools: the note layout, the bridge, the sandboxed iframe, the marketplace and its review queue. |
 | [`docs/notifications.md`](docs/notifications.md) | Notification kinds, the navbar bell, and why there is deliberately no email channel. |
 | [`docs/icons.md`](docs/icons.md) | The owned icon set and its three codegen targets. No icon library — importing one is a lint error. |
-| [`docs/entity-folders.md`](docs/entity-folders.md) | How a directory node binds to its context note by path, and what happens when one node needs several notes. |
-| [`docs/tools-known-issues.md`](docs/tools-known-issues.md) | What is still open on Tools: two deployment steps that need a person, and a short list of accepted defects. |
-| [`docs/desktop-electron-plan.md`](docs/desktop-electron-plan.md) | The Electron desktop shell. |
+| [`apps/desktop/README.md`](apps/desktop/README.md) | The Electron desktop shell: which server it talks to, security posture, packaging. |
 
 ## Production debugging escape hatch
 

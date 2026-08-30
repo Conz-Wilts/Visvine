@@ -2,8 +2,10 @@
 
 The Visvine desktop app: an Electron shell that loads the Visvine web app
 (`apps/web`) in a hardened Chromium window. Like the native mobile clients it is a
-thin client — there is no separate UI or API surface to keep in sync. See
-`docs/desktop-electron-plan.md` for the design rationale.
+thin client — there is no separate UI or API surface to keep in sync. `apps/web`
+needs Postgres, Prisma, GCS and Google OAuth, so bundling a server into an
+installer would mean shipping a database engine and per-user secrets and still
+needing the network; Slack, Notion and Linear ship the same shape.
 
 ## Run it
 

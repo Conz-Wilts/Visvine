@@ -117,7 +117,7 @@ export async function chat(messages: ChatMessage[]): Promise<string> {
   return stripReasoning(content)
 }
 
-// ── Tool-calling chat, for agent loops (the connectors creation agent) ──────
+// ── Tool-calling chat, for agent loops (lib/notes/toolLoop.ts) ──────────────
 // Same endpoint and config as chat(), plus the OpenAI-compatible `tools`
 // wire format. Kept here so every AI pass shares one config resolution.
 

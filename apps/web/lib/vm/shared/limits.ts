@@ -5,7 +5,7 @@
  * the tick, and in a refusal a person reads. Nothing here does I/O; the halves
  * that need rows are in `lib/vm/quota.ts` and `lib/vm/anomaly.ts`.
  *
- * The costing that shapes these numbers is §16 of docs/agent-vm-plan.md: an
+ * The costing that shapes these numbers is docs/machines.md § Cost and quota: an
  * awake machine is roughly $0.10 an hour, so a monthly cap is really an answer
  * to "how much is this space allowed to spend before someone looks at it".
  */

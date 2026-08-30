@@ -1,7 +1,6 @@
 /**
- * The tool-calling loop every server-side agent shares — the connector
- * creation agent (lib/connectors/agent.ts) and scheduled Space agents
- * (lib/agents/runner.ts). One place owns the mechanics: send messages + tool
+ * The tool-calling loop every server-side agent shares (lib/agents/runner.ts
+ * is the scheduled Space agent). One place owns the mechanics: send messages + tool
  * schemas, run each requested tool, feed results back, stop on a plain
  * answer, a turn cap, an abort, or a caller-supplied stop (budget).
  *
