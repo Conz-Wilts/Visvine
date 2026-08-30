@@ -95,8 +95,8 @@ export type DraftType =
   | 'resource'
   | 'connector'
   // A scheduled agent, written as its brief under agents/ (lib/agents/config).
-  // The title names it, the editor body IS the brief; an admin activates it
-  // afterwards from /agents.
+  // The title names it, the editor body IS the brief; an admin turns it on
+  // afterwards, from its own page or the console's Agents section.
   | 'agent'
   | 'channel'
   // The channels-tool container.
@@ -615,7 +615,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // call — is scaffolded at its defaults and edited on the note afterwards (the
   // Raw tab, or its own page); nothing about it is unchangeable, so nothing
   // about it belongs in a form in front of the brief. It does nothing at all
-  // until an admin activates it from /agents.
+  // until an admin turns it on — its own page, or the console's Agents section.
   const commitAgent = useCallback(async () => {
     if (!spaceId) return
     const name = agentSlug(title)

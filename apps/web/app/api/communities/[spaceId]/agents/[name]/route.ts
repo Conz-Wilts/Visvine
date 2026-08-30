@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { bad, requireAgentsAccess } from '@/lib/agents/route'
 import { activateAgent, deactivateByAdmin, describeAgent } from '@/lib/agents/service'
-import { isValidTimeZone, parseDebounce, parseEvery, parseTriggers, WEEKDAYS, type AgentSchedule, type AgentTriggers } from '@/lib/agents/config'
+import { isValidTimeZone, parseDebounce, parseScheduleFields, parseTriggers, type AgentTriggers } from '@/lib/agents/config'
 import { listRuns, type RunListItem } from '@/lib/agents/runs'
 import { serializeRun } from '@/lib/agents/service'
 
@@ -41,27 +41,6 @@ interface PatchBody {
   timezone?: unknown
 }
 
-/** `schedule` (hourly/daily/weekly) XOR `every` (interval or cron); neither → null (triggers only). */
-function parseScheduleBody(body: PatchBody): { ok: true; schedule: AgentSchedule | null } | { ok: false; error: string } {
-  const kind = typeof body.schedule === 'string' ? body.schedule.toLowerCase() : ''
-  const every = typeof body.every === 'string' ? body.every.trim() : ''
-  if (every) {
-    if (kind && kind !== 'every' && kind !== 'none') return { ok: false, error: 'schedule and every are exclusive' }
-    return parseEvery(every)
-  }
-  if (!kind || kind === 'none' || kind === 'every') return { ok: true, schedule: null }
-  if (kind === 'hourly') return { ok: true, schedule: { kind: 'hourly' } }
-  if (kind !== 'daily' && kind !== 'weekly') return { ok: false, error: 'schedule must be hourly, daily or weekly' }
-  const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(typeof body.at === 'string' ? body.at.trim() : '')
-  if (!m) return { ok: false, error: 'at must be a time like "07:00"' }
-  const hour = Number(m[1])
-  const minute = Number(m[2])
-  if (kind === 'daily') return { ok: true, schedule: { kind: 'daily', hour, minute } }
-  const weekday = (WEEKDAYS as readonly string[]).indexOf(typeof body.on === 'string' ? body.on.toLowerCase() : '')
-  if (weekday === -1) return { ok: false, error: 'on must be a weekday' }
-  return { ok: true, schedule: { kind: 'weekly', hour, minute, weekday } }
-}
-
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ spaceId: string; name: string }> }) {
   const { spaceId, name: raw } = await params
   const name = decodeURIComponent(raw)
@@ -78,7 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sp
     return r.ok ? NextResponse.json({ ok: true }) : bad(r.error, r.status)
   }
 
-  const schedule = parseScheduleBody(body)
+  const schedule = parseScheduleFields({ schedule: body.schedule, at: body.at, weekday: body.on, every: body.every })
   if (!schedule.ok) return bad(schedule.error)
   let on: AgentTriggers | null = null
   if (body.triggers !== undefined && body.triggers !== null) {

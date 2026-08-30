@@ -141,12 +141,17 @@ no require/import, and no network beyond \`hosts\`.
 Optional keys: \`allow:\` (a list of "METHOD /path" rules, trailing * for prefix,
 enforced on every request), \`alias:\`, \`identity:\`, \`auth:\`, \`webhook:\`.`
 
-const AGENT_CONTRACT = `An agent is TWO notes:
+const AGENT_CONTRACT = `An agent is TWO things, and the split is the review model:
 
-  agents/<name>.md        the brief — what it does. Written by a member.
-  agents/live/<name>.md   activation — whether and when it runs. ADMIN ONLY.
+  the BRIEF        what it does. Any member writes it — create_agent.
+  the ACTIVATION   whether and when it runs. ADMIN ONLY — activate_agent.
 
-The brief:
+Creating an agent does NOT start it. A brief is inert until an admin turns it
+on, and that is deliberate: an active agent runs unattended on the space's
+model key with whatever reach its brief declares, so a person approves it.
+
+create_agent writes the brief for you; you never write that note by hand. What
+it writes:
 
 ---
 type: agent
@@ -163,15 +168,10 @@ write a summary to digests/<date>.md, and mention the people involved.
 The body after the frontmatter IS the system prompt. Say what to read, what to
 produce, and where to write it.
 
-Activation (admin, in agents/live/<name>.md):
-
----
-type: agent-activation
-active: true
-schedule: weekly
-at: "09:00"
-on: monday
----`
+Activation is activate_agent — a schedule (\`schedule: weekly\`, \`at: "09:00"\`,
+\`weekday: monday\`, \`timezone: "Pacific/Auckland"\`), an interval
+(\`every: "15m"\`), or a trigger (\`on_context: ["people/**"]\`). At least one of
+them, and a clock needs a timezone.`
 
 // ── The catalog ───────────────────────────────────────────────────────────
 
@@ -305,10 +305,9 @@ const RECIPES: Recipe[] = [
     id: 'create_agent',
     when: 'Set up something that runs on a schedule or on a trigger — "make an agent", "automate X", "every Monday do Y".',
     summary:
-      'An agent is two notes (brief + activation), and agents/ is STRUCTURALLY FROZEN against AI writes — ' +
-      'edit_context there is refused whatever your permissions, deliberately: an AI that could rewrite a ' +
-      'brief could rewrite itself, and a member edit to a live brief silently deactivates it. So you draft, ' +
-      'a human authors, an admin activates. Do not promise the user you will create it.',
+      'Write the brief with create_agent, then get it turned on. Creating is not starting: a new agent is ' +
+      'inert until a space admin activates it, which is the review point. An admin can do both here; if you ' +
+      'are not one, say plainly that an admin has to turn it on.',
     keywords: [
       ...kw('creat|add|build|set up|setup|make|write|new|author', 'agent', 10),
       // Weak on purpose. "the weekly-digest agent" is a REFERENCE to one, not a
@@ -323,41 +322,43 @@ const RECIPES: Recipe[] = [
       {
         n: 1,
         tool: 'list_agents',
-        why: 'See the roster and its conventions — model, declared connectors, schedule shape — and avoid duplicating one.',
+        why: 'See the roster and its conventions — model, declared connectors, schedule shape — and avoid duplicating one. A name already taken is refused.',
         args: { space_id: spaceId(ctx) },
       },
       {
         n: 2,
         tool: 'list_connectors',
-        why: "The brief's `connectors:` list is the agent's entire external reach, and every name must be a connector that exists. `model:` must name a `kind: model` connector the space has.",
+        why: "The brief's `connectors` list is the agent's entire external reach, and every name must be a connector that exists. `model` must name a `kind: model` connector the space has — omit it for the space default.",
         args: { space_id: spaceId(ctx) },
       },
       {
         n: 3,
-        tool: 'edit_context',
-        why: 'OPTIONAL, and NOT at agents/. Park the drafted brief somewhere ordinary so the work is durable and reviewable — then tell the human the exact path to copy it to. Skip this and just show the brief in your reply if the user would rather paste it themselves.',
+        tool: 'create_agent',
+        why: "Writes the brief. `instructions` IS the agent's system prompt, so write a standing instruction — what to read, what to produce, where to write it — not a description of the agent.",
         args: {
           space_id: spaceId(ctx),
-          scope: 'shared',
-          path: 'drafts/agents/<name>.md',
-          content: '<the brief, per `contract`>',
+          name: '<slug>',
+          title: '<display name>',
+          description: '<one line for the roster>',
+          instructions: '<the brief, per `contract`>',
         },
-        optional: true,
       },
       {
         n: 4,
-        tool: '(hand off to a human)',
-        why: 'Tell the user, plainly: paste the brief into agents/<name>.md themselves in the Visvine app, then a space admin activates it in agents/live/<name>.md. Activation is the review point and is admin-only by design.',
-        args: {},
+        tool: 'activate_agent',
+        why: "Turn it on and set when it runs. SPACE ADMINS ONLY — if you are not one, stop at step 3 and tell the person an admin has to activate it, with this action or the Turn on button on the agent's page.",
+        args: { space_id: spaceId(ctx), agent: '<slug>', schedule: 'weekly', at: '09:00', weekday: 'monday', timezone: '<IANA zone>' },
+        optional: true,
       },
     ],
     mustKnow: (ctx) => [
-      'agents/ refuses every MCP write with "Agent briefs are frozen for AI — a human must make this change." This is not a permissions problem you can escalate around; it is structural.',
-      'The brief body after the frontmatter IS the agent\'s system prompt. Be concrete: what to read, what to produce, where to write it.',
-      'Once it exists and is active, you CAN trigger it with run_agent — authoring is the only part that is closed to you.',
+      'CREATING IS NOT STARTING. A brief does nothing until it is activated — never tell the user their agent is running because you created it.',
+      "The `instructions` you pass IS the agent's system prompt. Be concrete: what to read, what to produce, where to write it.",
+      'create_agent CREATES only. An existing name is refused rather than overwritten — an admin who activated an agent approved a SPECIFIC brief. Briefs are edited on the note itself.',
+      'A clock schedule needs a timezone. Ask which one rather than assuming; "daily at 07:00" is meaningless without it.',
+      'Once it is active, run_agent triggers it now without waiting for the schedule.',
       ...(ctx.space?.agents.length ? [`Already in this space: ${ctx.space.agents.join(', ')}.`] : []),
     ],
-    blockers: () => ['agents/ is frozen for AI origins — you cannot create the agent yourself, only draft it.'],
   },
 
   {

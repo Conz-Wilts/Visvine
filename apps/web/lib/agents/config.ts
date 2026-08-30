@@ -238,7 +238,7 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
 
 // ── The activation ───────────────────────────────────────────────────────────
 
-export const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const
 
 export type AgentSchedule =
   | { kind: 'hourly' }
@@ -429,6 +429,42 @@ function cronMinGapMinutes(minutes: number[]): number {
     min = Math.min(min, next - sorted[i])
   }
   return min
+}
+
+/**
+ * The activation schedule a caller asked for, from the loose fields both doors
+ * take: `schedule` (hourly/daily/weekly, with `at` and a weekday) XOR `every`
+ * (an interval or a cron). Neither means a trigger-only agent, which is a
+ * schedule of null rather than an error — `activateAgent` is what insists on
+ * at least one of schedule/interval/trigger, in one place.
+ *
+ * Shared by `PATCH /api/communities/<id>/agents/<name>` and the
+ * `activate_agent` action so the two cannot drift: turning an agent on means
+ * the same thing whichever door it came through.
+ */
+export function parseScheduleFields(input: {
+  schedule?: unknown
+  at?: unknown
+  weekday?: unknown
+  every?: unknown
+}): { ok: true; schedule: AgentSchedule | null } | { ok: false; error: string } {
+  const kind = typeof input.schedule === 'string' ? input.schedule.toLowerCase() : ''
+  const every = typeof input.every === 'string' ? input.every.trim() : ''
+  if (every) {
+    if (kind && kind !== 'every' && kind !== 'none') return { ok: false, error: '`schedule` and `every` are exclusive — give one' }
+    return parseEvery(every)
+  }
+  if (!kind || kind === 'none' || kind === 'every') return { ok: true, schedule: null }
+  if (kind === 'hourly') return { ok: true, schedule: { kind: 'hourly' } }
+  if (kind !== 'daily' && kind !== 'weekly') return { ok: false, error: '`schedule` must be hourly, daily or weekly' }
+  const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(typeof input.at === 'string' ? input.at.trim() : '')
+  if (!m) return { ok: false, error: `a ${kind} schedule needs \`at\`, a time like "07:00"` }
+  const hour = Number(m[1])
+  const minute = Number(m[2])
+  if (kind === 'daily') return { ok: true, schedule: { kind: 'daily', hour, minute } }
+  const weekday = (WEEKDAYS as readonly string[]).indexOf(typeof input.weekday === 'string' ? input.weekday.toLowerCase() : '')
+  if (weekday === -1) return { ok: false, error: 'a weekly schedule needs `weekday` — monday, tuesday, …' }
+  return { ok: true, schedule: { kind: 'weekly', hour, minute, weekday } }
 }
 
 /** `debounce:` → ms, or null when malformed / out of range. */

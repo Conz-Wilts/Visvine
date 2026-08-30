@@ -54,7 +54,7 @@ const GUIDANCE: Record<string, string> = {
   section: 'Structural container grouping channels — created from the space\'s admin surfaces, never via add_context.',
   channel: 'A conversation channel — created from the space\'s admin surfaces, never via add_context.',
   connector: 'A gateway to an external API or database, note-first and admin-only: an admin authors connectors/<name>.md (frontmatter declares alias/hosts/limits). Never creatable via add_context; execute one with run_connector. A `kind: model` connector is the LLM provider agents run on (its key is the space\'s) — listed, never runnable.',
-  agent: 'A scheduled agent, note-first: a member authors agents/<name>.md (frontmatter: model, connectors, tools; body = the brief) and an admin activates it in agents/live/<name>.md. Never creatable via add_context (agents/ is frozen for AI — a human writes briefs); list with list_agents, trigger with run_agent.',
+  agent: 'A scheduled agent, note-first: a brief at agents/<name>.md (frontmatter: model, connectors, tools; body = the instructions) plus an admin activation at agents/live/<name>.md. Not creatable via add_context — use create_agent, then activate_agent to turn it on (admins only; creating one does not start it). List with list_agents, trigger with run_agent.',
   tool: 'A Tool — an app a member builds, note-first and folder-only: the member authors tools/<name>/index.md (frontmatter declares its surfaces and the perimeter of context it may touch; body = docs) beside tools/<name>/ui.tsx and tools/<name>/data.js, which hold its source. Never creatable via add_context (tools/ is frozen for AI — a human authors tools); admins install and publish one from the Tools marketplace.',
 }
 

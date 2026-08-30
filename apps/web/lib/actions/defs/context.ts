@@ -82,7 +82,16 @@ import { createEventRecord, updateEventRecord } from '@/lib/events/write'
 import { coverUrlFromResource } from '@/lib/events/cover'
 import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth'
 import { eventCreateInputSchema, eventUpdateInputSchema } from '@/lib/schemas/eventSchemas'
-import { canTriggerRun, listAgents } from '@/lib/agents/service'
+import { activateAgent, canTriggerRun, createAgentBrief, deactivateByAdmin, listAgents } from '@/lib/agents/service'
+import {
+  AGENT_TOOL_EXTRAS,
+  agentPageHref,
+  isValidTimeZone,
+  parseDebounce,
+  parseScheduleFields,
+  parseTriggers,
+  type AgentTriggers,
+} from '@/lib/agents/config'
 import { claimManualRun } from '@/lib/agents/schedule'
 import { featureAccessForbidden } from '@/lib/auth'
 import { readNoteOrNull, type Context } from '@/lib/notes/store'
@@ -1839,10 +1848,10 @@ export const CONTEXT_ACTIONS = [
         "List the space's scheduled agents: name, brief summary, model, declared connectors, whether it is active, " +
         'its schedule, next run and last run outcome. Spend is not included (admins see it in the app). ' +
         "Trigger one with run_agent (needs the 'agents:run' scope; the agent must be active). " +
-        'AUTHORING IS CLOSED TO YOU: an agent is a brief at agents/<name>.md plus an admin activation at ' +
-        'agents/live/<name>.md, and agents/ is structurally frozen against AI writes — edit_context there is ' +
-        'refused whatever your permissions. Draft the brief and hand it to a human. The create_agent recipe has the ' +
-        'brief contract and the hand-off steps.',
+        'Write a new one with create_agent and turn it on with activate_agent — an agent is a brief plus an ' +
+        'admin activation, and creating one does NOT start it. Briefs are EDITED on the note itself, not ' +
+        'through edit_context: agents/ is frozen against generic AI writes so that a sweep cannot silently ' +
+        'switch off every agent in the space.',
       input: { space_id: z.string() },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
@@ -1898,6 +1907,170 @@ export const CONTEXT_ACTIONS = [
           outcome: result?.ok ? result.outcome : null,
           error: result && !result.ok ? result.error : null,
         }
+      },
+    }),
+    defineAction({
+      name: 'create_agent',
+      scope: 'agents:author',
+      summary: "Write a new agent's brief. It does nothing until an admin turns it on.",
+      description:
+        'Create an agent: a brief at agents/<name>.md whose frontmatter declares the model it runs on, the ' +
+        'connectors it may call and which tool extras it gets, and whose BODY is the instructions it follows ' +
+        'on every run. Write the body as a standing instruction, not a one-off request: what to read from the ' +
+        "context, what to produce, and where to write it. Read list_connectors first — every name in " +
+        '`connectors` must be a connector the space already has, and `model` must name one of its model ' +
+        'connectors (omit it for the space default). ' +
+        'CREATING IS NOT TURNING ON: a new brief is inert. A space admin activates it with activate_agent (or ' +
+        "the Turn on button on the agent's page), and that is the review point — say so when you hand it over. " +
+        'Creates only; an existing agent is a 409, and briefs are edited on the note itself.',
+      input: {
+        space_id: spaceArg,
+        name: z
+          .string()
+          .describe("The agent's name — lower-case letters, digits, - and _, e.g. 'weekly-digest'. This is what it is known by everywhere"),
+        title: z.string().optional().describe('Display name, e.g. "Weekly digest". Defaults to the name'),
+        description: z.string().optional().describe('One sentence on what it does — its line on the roster'),
+        instructions: z
+          .string()
+          .describe('The brief itself: what the agent does on every run, in the second person. This becomes its system prompt'),
+        model: z
+          .string()
+          .optional()
+          .describe("The model connector it runs on, from list_connectors (kind: model). Omit for the space default"),
+        connectors: z
+          .array(z.string())
+          .optional()
+          .describe("Connectors it may call, by name. This list is its ENTIRE external reach — omit for none"),
+        tools: z
+          .array(z.enum(AGENT_TOOL_EXTRAS))
+          .optional()
+          .describe(
+            "Extra capabilities: 'web' (fetch a public page), 'sandbox' (run code on a disposable computer), " +
+              "'messages' (post to a channel), 'directory' (create nodes and links). Omit for none",
+          ),
+        folder: z
+          .string()
+          .optional()
+          .describe("Optional folder under agents/ to file it in, e.g. 'ops' → agents/ops/<name>.md"),
+      },
+      run: async (ctx, args) => {
+        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const r = await createAgentBrief(principal, context, {
+          name: args.name,
+          title: args.title,
+          description: args.description,
+          model: args.model,
+          connectors: args.connectors,
+          tools: args.tools,
+          folder: args.folder ?? null,
+          body: args.instructions,
+        })
+        if (!r.ok) throw new ActionError(r.status, r.error)
+        return {
+          name: r.name,
+          path: r.path,
+          title: r.brief.title,
+          model: r.brief.model,
+          connectors: r.brief.connectors,
+          tools: r.brief.tools,
+          active: false,
+          page: agentPageHref(r.name),
+          next: 'A space admin must turn it on before it runs — activate_agent, or the Turn on button on its page.',
+        }
+      },
+    }),
+    defineAction({
+      name: 'activate_agent',
+      scope: 'agents:admin',
+      summary: 'Turn an agent on and set when it runs. Space admins only — this is the review point.',
+      description:
+        'Turn an agent on. SPACE ADMINS ONLY, and deliberately so: an active agent runs unattended on the ' +
+        "space's model key with whatever reach its brief declares, so approving it is a person's act. Read the " +
+        'brief first (read_context on its path from list_agents) — you are approving what it says. ' +
+        'Give it at least one of `schedule`, `every` or `on_context`/`on_webhook`. A schedule with a clock ' +
+        'needs `timezone`: "daily at 07:00" is meaningless until somebody says whose 07:00. ' +
+        "The model key is probed as part of this, so a bad key is refused here rather than at the first run; " +
+        'other probe failures activate with a `warning`.',
+      input: {
+        space_id: spaceArg,
+        agent: z.string().describe("The agent's name, from list_agents"),
+        schedule: z
+          .enum(['hourly', 'daily', 'weekly'])
+          .optional()
+          .describe("A clock schedule. 'daily' and 'weekly' need `at`; 'weekly' needs `weekday`. Exclusive with `every`"),
+        at: z.string().optional().describe('Time of day for daily/weekly, 24h, e.g. "07:00"'),
+        weekday: z
+          .enum(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])
+          .optional()
+          .describe('Which day, for a weekly schedule'),
+        every: z
+          .string()
+          .optional()
+          .describe('An interval instead of a clock: "15m", "6h" (5m…24h), or a 5-field cron expression. Exclusive with `schedule`'),
+        timezone: z
+          .string()
+          .optional()
+          .describe('IANA zone the clock is read in, e.g. "Pacific/Auckland". REQUIRED with `schedule` or a cron'),
+        on_context: z
+          .array(z.string())
+          .optional()
+          .describe('Run when a note under these globs is created, saved or renamed, e.g. ["people/**"]'),
+        on_webhook: z
+          .string()
+          .optional()
+          .describe("A connector whose inbound webhook feeds this agent, by name"),
+        debounce: z
+          .string()
+          .optional()
+          .describe('Coalesce window for triggers: "30s", "2m" (5s…30m). Defaults to 60s'),
+      },
+      run: async (ctx, args) => {
+        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const schedule = parseScheduleFields(args)
+        if (!schedule.ok) throw new ActionError(400, schedule.error)
+        let on: AgentTriggers | null = null
+        if (args.on_context?.length || args.on_webhook) {
+          const parsed = parseTriggers({
+            ...(args.on_context?.length ? { context: args.on_context } : {}),
+            ...(args.on_webhook ? { webhook: args.on_webhook } : {}),
+          })
+          if (!parsed.ok) throw new ActionError(400, parsed.error)
+          on = parsed.triggers
+        }
+        let debounceMs: number | null = null
+        if (args.debounce) {
+          debounceMs = parseDebounce(args.debounce)
+          if (debounceMs === null) throw new ActionError(400, 'debounce must be like "30s" or "2m" (5s … 30m)')
+        }
+        const zone = args.timezone?.trim() ?? ''
+        if (zone && !isValidTimeZone(zone)) throw new ActionError(400, 'timezone must be an IANA zone, e.g. "Pacific/Auckland"')
+        const r = await activateAgent(principal, context, args.agent, {
+          schedule: schedule.schedule,
+          on,
+          debounceMs,
+          timezone: zone || null,
+        })
+        if (!r.ok) throw new ActionError(r.status, r.error)
+        return { agent: args.agent, active: true, warning: r.warning, page: agentPageHref(args.agent) }
+      },
+    }),
+    defineAction({
+      name: 'deactivate_agent',
+      scope: 'agents:admin',
+      summary: 'Turn an agent off. Space admins only. The brief and its history are untouched.',
+      description:
+        'Turn an agent off: it stops running on its schedule and stops answering triggers, immediately. ' +
+        'SPACE ADMINS ONLY. The brief, its runs and its history are untouched — this is the switch, not a ' +
+        'delete — so activate_agent turns it back on. Use this rather than editing a brief to stop an agent.',
+      input: {
+        space_id: spaceArg,
+        agent: z.string().describe("The agent's name, from list_agents"),
+      },
+      run: async (ctx, args) => {
+        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const r = await deactivateByAdmin(principal, context, args.agent)
+        if (!r.ok) throw new ActionError(r.status, r.error)
+        return { agent: args.agent, active: false, page: agentPageHref(args.agent) }
       },
     }),
 ]

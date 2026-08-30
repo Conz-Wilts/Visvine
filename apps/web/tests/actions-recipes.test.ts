@@ -133,7 +133,7 @@ test('a space with no connectors says so on the run recipe instead of dead-endin
   )
 })
 
-test('the agent recipe tells the truth: drafting yes, authoring no', () => {
+test('the agent recipe creates and then hands the switch to an admin', () => {
   for (const prompt of [
     'create an agent that summarises the week every Monday',
     'set up an agent to watch our dealflow',
@@ -142,15 +142,28 @@ test('the agent recipe tells the truth: drafting yes, authoring no', () => {
     assert.equal(route(prompt).intent, 'create_agent', `"${prompt}" routed elsewhere`)
   }
   const recipe = recipeById('create_agent')!
-  // The freeze is structural, so it is a blocker, not a footnote.
-  assert.ok(blockers('create_agent', adminSpace()).some((b) => /frozen for AI/i.test(b)))
-  // And the plan must NOT propose writing to agents/, which is the one write
-  // guaranteed to be refused (lib/notes/contextService.ts lockedDenial).
-  for (const step of recipe.steps(ctx(adminSpace()))) {
+  const steps = recipe.steps(ctx(adminSpace()))
+
+  // Authoring is no longer a hand-off: the plan must actually create the agent.
+  assert.ok(steps.some((s) => s.tool === 'create_agent'), 'the plan must call create_agent')
+  assert.ok(steps.some((s) => s.tool === 'activate_agent'), 'the plan must say how it gets turned on')
+
+  // The one thing that is still always refused: a generic context write into
+  // agents/. Briefs are written by the dedicated action or by a person, never
+  // by edit_context (lib/notes/contextService.ts lockedDenial).
+  for (const step of steps) {
     const path = String(step.args?.path ?? '')
     assert.ok(!/^agents\//.test(path), `step ${step.n} proposes a write to ${path}, which is always refused`)
+    assert.ok(!/^drafts\//.test(path), `step ${step.n} parks a draft at ${path} instead of creating the agent`)
   }
-  assert.match(String(recipe.contract), /agents\/live\/<name>\.md/)
+
+  // Creating is not starting, and the recipe must say so where a caller reads
+  // it — that is the mistake this whole shape exists to prevent.
+  assert.match(String(recipe.contract), /does NOT start it/i)
+  assert.ok(
+    recipe.mustKnow!(ctx(adminSpace())).some((m) => /CREATING IS NOT STARTING/.test(m)),
+    'the plan must warn that a new agent is inert',
+  )
 })
 
 test('a missing scope is predicted at plan time, not discovered at step four', () => {

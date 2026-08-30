@@ -5,21 +5,24 @@
  */
 import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/notes/audit'
-import { readVisible, visibleVault, writeGated } from '@/lib/notes/contextService'
+import { readVisible, visibleVault, writeDenialFull, writeGated } from '@/lib/notes/contextService'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
-import type { Context } from '@/lib/notes/store'
+import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import { principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
 import { microsToCents } from './budget'
 import {
   AGENT_NAME_RE,
   agentActivationPath,
+  agentBriefPath,
   agentFolderOfPath,
+  agentFolderProblem,
   DEFAULT_DEBOUNCE_MS,
   describeSchedule,
   describeTriggers,
   newActivationNote,
+  newAgentNote,
   parseAgentActivation,
   parseAgentBrief,
   type AgentActivation,
@@ -370,4 +373,94 @@ export async function canTriggerRun(p: ContextPrincipal, spaceId: string, name: 
   if (principalIsSuperAdmin(p)) return true
   const row = await findAgentBrief(spaceId, name)
   return row !== null && row.createdBy === p.userId
+}
+
+export type CreateAgentResult =
+  | { ok: true; name: string; path: string; brief: AgentBrief }
+  | { ok: false; status: number; error: string }
+
+/**
+ * Write a new agent's brief.
+ *
+ * This exists so that authoring an agent is a first-class act rather than a
+ * hand-off. `agents/` is frozen for AI ORIGINS (contextService.lockedDenial),
+ * and that freeze is about autonomous sweeps: a maintenance pass that
+ * reformatted the briefs would silently switch off every agent in the space
+ * (lib/agents/hooks auto-deactivates on a member edit), and an agent that could
+ * write here could rewrite itself. None of that describes a person asking an
+ * assistant to set an agent up, so — exactly as the Tool authoring loop does
+ * for the identical `tools/` freeze — the write goes through `writeGated` at
+ * its default HUMAN origin. Authoring is not sweeping. `writeDenial` and the
+ * caller's own grants still apply in full; this widens nothing but the origin.
+ *
+ * CREATE ONLY, never overwrite. An admin who activated an agent approved a
+ * SPECIFIC brief, and the deactivate-on-edit hook exempts admins — so a
+ * caller able to rewrite briefs could swap an approved agent's instructions
+ * and reach connectors nobody reviewed. Editing a brief stays a human act at
+ * the note itself; this is the same line lib/tools/bridge.ts holds for a Tool
+ * writing one.
+ *
+ * The brief is round-tripped through `parseAgentBrief` before it is saved, so
+ * an unparseable model ref or tool extra is refused here rather than
+ * discovered by the admin who tries to turn it on.
+ */
+export async function createAgentBrief(
+  p: ContextPrincipal,
+  context: Context,
+  input: {
+    name: string
+    title?: string
+    description?: string
+    model?: string
+    connectors?: string[]
+    tools?: string[]
+    folder?: string | null
+    body: string
+  },
+): Promise<CreateAgentResult> {
+  const name = input.name.trim().toLowerCase()
+  if (!AGENT_NAME_RE.test(name)) {
+    return { ok: false, status: 400, error: `"${input.name}" is not an agent name — lower-case letters, digits, - and _, up to 64 characters.` }
+  }
+  if (context.ownerKey !== SHARED_OWNER_KEY) {
+    return { ok: false, status: 400, error: 'Agents are authored in a space, not in personal context.' }
+  }
+  const folderProblem = agentFolderProblem(input.folder)
+  if (folderProblem) return { ok: false, status: 400, error: folderProblem }
+
+  // By LEAF name, not by path: the leaf is what activation, the state row, runs
+  // and the `agent:` node all key on, so two briefs sharing one would be a
+  // single agent with two bodies (lib/agents/briefs.ts).
+  const existing = await findAgentBrief(context.spaceId, name)
+  if (existing) {
+    return { ok: false, status: 409, error: `An agent named "${name}" already exists at ${existing.path}. Edit it there — a brief is only ever created here, never replaced.` }
+  }
+
+  const path = agentBriefPath(name, input.folder ?? null)
+  const denial = await writeDenialFull(p, context, path)
+  if (denial) return { ok: false, status: 403, error: denial }
+
+  const content = newAgentNote({
+    name,
+    title: input.title,
+    description: input.description,
+    model: input.model,
+    connectors: input.connectors,
+    tools: input.tools,
+    body: input.body,
+  })
+  const parsed = parseAgentBrief(parseFrontmatter(content), splitFrontmatter(content).body)
+  if (!parsed.ok) return { ok: false, status: 400, error: `That brief is not valid: ${parsed.error}` }
+
+  const written = await writeGated(p, context, path, content)
+  if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
+
+  await logAudit(context.spaceId, {
+    userId: p.userId,
+    name: p.name,
+    action: 'agent',
+    path,
+    detail: `brief created: ${parsed.brief.title}`,
+  })
+  return { ok: true, name, path, brief: parsed.brief }
 }
