@@ -42,7 +42,7 @@
     "db:index-notes:rebuild": "tsx scripts/rebuild-index-notes.ts",
     "db:index-notes:strip-type": "tsx scripts/strip-index-type.ts",
     "db:root-index:backfill": "tsx scripts/backfill-root-index.ts",
-    "db:notes:verify": "tsx scripts/verify-notes-rules.ts community:blackbird-ventures",
+    "db:notes:verify": "tsx scripts/verify-notes-rules.ts blackbird-ventures",
     "db:embed": "tsx scripts/embed-context.ts",
     "db:memories": "tsx scripts/derive-memories.ts",
     "db:global:rebuild": "tsx scripts/rebuild-global-records.ts",
