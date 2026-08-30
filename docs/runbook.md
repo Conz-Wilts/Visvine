@@ -42,8 +42,9 @@ run **after** traffic is routed, through the proxy, with the local-DB guard's
 override — the way `db:spaces:records` was run. The app reads the old shape in
 between, so the order is deploy first, then backfill.
 
-The one outstanding: entity notes became folders (`people/<slug>/index.md`,
-not `people/<slug>.md`). After that release ships:
+Entity notes became folders (`people/<slug>/index.md`, not `people/<slug>.md`).
+That backfill has been run against production; the commands are kept because it
+is idempotent and a space restored from an old dump needs it again:
 
 ```
 pnpm --filter @visvine/web db:entities:folders --dry-run   # counts, moves nothing
