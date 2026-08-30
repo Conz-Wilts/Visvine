@@ -357,8 +357,15 @@ const RECIPES: Recipe[] = [
       'create_agent CREATES only. An existing name is refused rather than overwritten — an admin who activated an agent approved a SPECIFIC brief. Briefs are edited on the note itself.',
       'A clock schedule needs a timezone. Ask which one rather than assuming; "daily at 07:00" is meaningless without it.',
       'Once it is active, run_agent triggers it now without waiting for the schedule.',
+      // agents/ refuses generic AI writes (contextService.lockedDenial), and
+      // create_agent is the ONE way past it — it writes at a human origin.
+      // Without this a model refused at step 3 improvises a brief into some
+      // unfrozen folder, where nothing reads it: findAgentBrief only looks
+      // under agents/, so the "agent" it reports creating does not exist.
+      'create_agent is the ONLY way to write a brief. agents/ refuses add_context and edit_context, and a brief written anywhere else is not an agent — never invent a folder to hold one. If create_agent is refused, say so and stop.',
       ...(ctx.space?.agents.length ? [`Already in this space: ${ctx.space.agents.join(', ')}.`] : []),
     ],
+    blockers: (ctx) => scopeBlocker(ctx, 'agents:author', 'writing the brief'),
   },
 
   {
