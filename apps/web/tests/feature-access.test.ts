@@ -43,19 +43,19 @@ describe('isFeatureEnabled', () => {
     assert.equal(isFeatureEnabled({ enabled: { directory: false } }, 'directory'), true);
   });
 
-  it('lists directory, notes, events, resources, connectors and tools as the core features', () => {
+  it('lists directory, notes, resources, connectors and tools as the core features', () => {
     // tools is core: the marketplace has no switch — what a space runs is
     // decided by review + install. See tools-feature-keys.test.ts. connectors is
     // core for the same reason: its surface is a console section, admins only.
     // resources is core too: it is a tab of the Directory, not a tool.
-    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'notes', 'events', 'resources', 'connectors', 'tools']);
+    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'notes', 'resources', 'connectors', 'tools']);
   });
 
-  it('hides notes, events, resources, connectors and tools from the nav rail and console toggles', () => {
-    // All five are core and nav-hidden: notes and events live in the top bar,
-    // connectors in the Space Console, tools behind the marketplace icon and
-    // per-install `tool:<slug>` rows.
-    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['notes', 'events', 'resources', 'connectors', 'tools']);
+  it('hides notes, resources, connectors and tools from the nav rail and console toggles', () => {
+    // All four are core and nav-hidden: notes is a Directory tab, connectors a
+    // Space Console section, tools behind the marketplace icon and per-install
+    // `tool:<slug>` rows. Events is NOT here: it is a tool with a rail row.
+    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['notes', 'resources', 'connectors', 'tools']);
     // Agents is not a feature key at all: an agent is a note under `agents/`,
     // watched on its own node page's Agent tab — there is no agents surface to
     // switch on, off or hide.
@@ -73,10 +73,9 @@ describe('isFeatureEnabled', () => {
     assert.equal(isFeatureEnabled({ enabled: {} }, 'notes'), true);
     assert.equal(isFeatureEnabled({ enabled: { notes: false } }, 'notes'), true);
     assert.equal(canAccessFeature({ enabled: { notes: false } }, 'notes', false), true);
-    // events is core too: it's reached from the navbar calendar button, so a
-    // stale `enabled.events: false` from before the move must not switch it off.
-    assert.equal(isFeatureEnabled({ enabled: { events: false } }, 'events'), true);
-    assert.equal(canAccessFeature({ enabled: { events: false } }, 'events', false), true);
+    // events is a toggleable tool: switching it off closes the surface.
+    assert.equal(isFeatureEnabled({ enabled: { events: false } }, 'events'), false);
+    assert.equal(canAccessFeature({ enabled: { events: false } }, 'events', false), false);
   });
 });
 
@@ -249,10 +248,11 @@ describe('moreFeatureKeys', () => {
   });
 
   it('returns the configured keys, dropping unknowns, duplicates and nav-hidden keys', () => {
-    // events and notes are nav-hidden, so neither can live in "More".
+    // notes is nav-hidden, so it can never live in "More"; events is a tool
+    // with a rail row, so it can.
     assert.deepEqual(
       moreFeatureKeys({ more: ['channels', 'bogus', 'channels', 'events', 'notes'] }),
-      ['channels'],
+      ['channels', 'events'],
     );
   });
 
@@ -267,7 +267,7 @@ describe('moreFeatureKeys', () => {
 describe('isNodeTypeEnabled', () => {
   it('leaves ungated types alone', () => {
     // 'Space' is the org type — always on, like Person.
-    for (const type of ['Person', 'Space', 'space', 'Event']) {
+    for (const type of ['Person', 'Space', 'space', 'Resource']) {
       assert.equal(nodeTypeFeatureKey(type), null);
       assert.equal(isNodeTypeEnabled({ enabled: { channels: false } }, type), true);
     }
@@ -333,16 +333,16 @@ describe('sanitizeFeatureConfig adminOnly', () => {
   });
 
   it('reduces adminOnly to known, nav-bearing keys', () => {
-    assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['channels', 'events', 'bogus'] }).adminOnly, ['channels']);
+    assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['channels', 'notes', 'bogus'] }).adminOnly, ['channels']);
     assert.equal('adminOnly' in sanitizeFeatureConfig({}), false);
     // The always-admins-only keys are implicit — never written back to the row.
     assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['connectors'] }).adminOnly, []);
   });
 });
 
-// The Tools panel and Members → Tools write different keys of the same
-// column, so a save must inherit the keys it didn't send. These are the exact
-// crossings that used to wipe each other when the PUT replaced the column.
+// Different console panels write different keys of the same column, so a save
+// must inherit the keys it didn't send. These are the exact crossings that used
+// to wipe each other when the PUT replaced the column.
 describe('mergeFeatureConfig', () => {
   const stored = {
     enabled: { channels: false },
@@ -388,13 +388,13 @@ describe('mergeFeatureConfig', () => {
 describe('featureNodeTypeNames', () => {
   it('names the types a tool carries in and out with it', () => {
     assert.deepEqual(featureNodeTypeNames('channels'), ['Section', 'Channel']);
+    assert.deepEqual(featureNodeTypeNames('events'), ['Event']);
     // Resource belongs to the Directory's Resources tab: nothing switches it off.
     assert.deepEqual(featureNodeTypeNames('resources'), []);
 
   });
 
   it('is empty for tools that own no node type', () => {
-    assert.deepEqual(featureNodeTypeNames('events'), []);
     // Connectors is core and nav-hidden: it has no console row to name a type on.
     assert.deepEqual(featureNodeTypeNames('connectors'), []);
     assert.deepEqual(featureNodeTypeNames('directory'), []);

@@ -21,11 +21,10 @@ import type { SpaceFeatureConfig } from '@/lib/types';
  *
  * `tools` is core because the marketplace needs no switch: what a space runs
  * is already decided by two explicit human acts — a Visvine reviewer approving
- * a version, and a space admin installing it (members can only ASK — see the
- * install-request flow in app/api/communities/[spaceId]/tools/requests). A
- * third toggle on top of that pipeline gated nothing anyone needed gated.
+ * a version, and a space admin installing it. A third toggle on top of that
+ * pipeline gated nothing anyone needed gated.
  */
-export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events', 'resources', 'connectors', 'tools'];
+export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'resources', 'connectors', 'tools'];
 
 /**
  * Every key in the registry, in its default (registry) order. Must stay in sync
@@ -108,8 +107,6 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
  * Feature keys that carry NO sidebar nav item (and no console toggle):
  * - `notes` ("Context") is always on (core) and surfaced as the Context tab under
  *   the Directory page, so it has no rail item and is not a toggleable tool.
- * - `events` is always on (core) and reached from the calendar button in the top
- *   navbar, so it has no rail item either.
  * - `resources` is always on (core) and is the Resources tab of the Directory
  *   page (`/directory?view=resources`), beside Grid and Context.
  * - `connectors` is a section of the Space Console (`/admin?section=connectors`),
@@ -119,7 +116,7 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
  *   vocabulary itself never wants a "Tools" row. Those per-install keys are not
  *   nav-hidden: they are the rail rows.
  */
-export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['notes', 'events', 'resources', 'connectors', 'tools'];
+export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['notes', 'resources', 'connectors', 'tools'];
 
 /**
  * Is `key` enabled for a space? Core features are always enabled; any other
@@ -138,18 +135,19 @@ export function isFeatureEnabled(config: SpaceFeatureConfig | null | undefined, 
  * `nodeTypes` name (matched case-insensitively, since stored `node.type` casing
  * drifts — 'section' vs 'Section'), valued by the feature slug that owns them.
  *
- * Person, Space (the org type) and Resource belong to the always-on
- * directory (Resources is one of its tabs), Event to the always-on navbar Events surface, Connector to the
- * always-on console section, Tool to the always-on marketplace, and Agent to
- * Context itself — an agent is a brief note under `agents/`, browsed in the
- * tree like any other folder, with no surface of its own to switch off — so
- * none of them appears here and they're never hidden.
+ * Person, Space (the org type), Resource, Agent and Connector all belong to the
+ * always-on directory — Resources is one of its tabs, an agent is watched on its
+ * own node page, and a connector is a record whose note the console edits — and
+ * Tool to the always-on marketplace, so none of them appears here and they're
+ * never hidden. Event does: Events is a toggleable tool, so a space that has it
+ * off loses the type with it.
  * In particular 'space' must NOT be added: it would hide every org record
  * whenever the Channels tool is off.
  */
 const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   section: 'channels',
   channel: 'channels',
+  event: 'events',
 };
 
 /** The feature slug a node type belongs to, or null if it isn't feature-gated. */
@@ -173,10 +171,16 @@ export function featureNodeTypeNames(featureKey: string): string[] {
  *
  * Deliberately separate from NODE_TYPE_FEATURE_KEYS above: that map decides what
  * gets HIDDEN when a tool is off, so it may only ever hold types a space can
- * afford to lose. This one names the owning tool for every built-in, including
- * the always-on ones (Person and Space are the directory's, Agent the context
- * surface's, Event the navbar calendar's) — naming a type's tool is safe where
- * gating on it would not be.
+ * afford to lose. This one names the owning tool for every built-in — naming a
+ * type's tool is safe where gating on it would not be.
+ *
+ * Only a REAL tool may be named here — one with a rail row. Context, Resources
+ * and Connectors are surfaces, not tools: Context is the note tree under the Directory,
+ * Resources is one of the Directory's tabs, and Connectors is a console section.
+ * The types they used to be filed under are the Directory's, because the
+ * Directory is where each of them is a node you can open: an agent is watched on
+ * `/directory/agent:<name>`, a resource is a row in the Resources tab, and a
+ * connector's note is reached from its record.
  *
  * A type absent from here is one a member invented: it has no tool, and the
  * console lists it under Custom types.
@@ -185,10 +189,9 @@ const NODE_TYPE_TOOL_KEYS: Record<string, string> = {
   ...NODE_TYPE_FEATURE_KEYS,
   person: 'directory',
   space: 'directory',
-  resource: 'resources',
-  agent: 'notes',
-  event: 'events',
-  connector: 'connectors',
+  resource: 'directory',
+  agent: 'directory',
+  connector: 'directory',
 };
 
 /** The tool a built-in node type comes from, or null if no tool owns it. */
@@ -311,7 +314,7 @@ export function moreFeatureKeys(config: SpaceFeatureConfig | null | undefined): 
  *
  * Nav-hidden keys are dropped up front — they have no row to place — and every
  * candidate goes through `canAccessFeature`. A Tool is not an exception to that:
- * members see installed Tools, but a row an admin locked on Members → Tools is
+ * members see installed Tools, but a row an admin locked on Console → Tools is
  * locked whether a Tool or a built-in is behind it.
  *
  * `toolKeys` are dropped wholesale when `tools` itself is off — switched off or
@@ -345,15 +348,14 @@ export function navFeatureKeys(
 /**
  * Fold a client-submitted patch over the stored config and normalize the result.
  *
- * featureConfig is written by more than one console panel — Tools owns which
- * tools the space has (`enabled`) and how the sidebar reads (`order`, `more`),
- * Members owns which of them members may open (`adminOnly`) — so a save
- * carries only the keys its panel owns and inherits the rest.
+ * featureConfig is written by more than one console panel — Tools owns the row
+ * per tool (`enabled`, `order`, `more`, and `adminOnly`), General owns the space
+ * record's own keys — so a save carries only the keys its panel owns and
+ * inherits the rest.
  *
  * `enabled` merges one tool at a time, because it is a map rather than a list:
- * two panels (or two tabs) each toggling a different tool would otherwise
- * clobber each other, the whole tool vocabulary riding on whichever save landed
- * second. Turning a tool off still works — that writes `false` for its key,
+ * two admins each toggling a different tool would otherwise clobber each other,
+ * the whole tool vocabulary riding on whichever save landed second. Turning a tool off still works — that writes `false` for its key,
  * which the merge keeps.
  *
  * The arrays (`adminOnly`, `order`, `more`) stay whole-value: each is owned by

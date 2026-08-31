@@ -50,7 +50,7 @@ function nav(
 }
 
 /** The built-in rail keys, in registry order — what a member of a fresh space sees. */
-const BUILT_IN_RAIL = ['directory', 'channels']
+const BUILT_IN_RAIL = ['directory', 'channels', 'events']
 
 // ── which installs earn a row ────────────────────────────────────────────────
 
@@ -115,9 +115,9 @@ test('two unplaced tools keep the order the space DTO gave them', () => {
 })
 
 test('featureConfig.order places a tool exactly like a built-in', () => {
-  const config: SpaceFeatureConfig = { order: ['tool:deals', 'directory', 'channels'] }
+  const config: SpaceFeatureConfig = { order: ['tool:deals', 'directory', 'channels', 'events'] }
   const { rail } = nav(config, false, [install('deals')])
-  assert.deepEqual(rail, ['tool:deals', 'directory', 'channels'])
+  assert.deepEqual(rail, ['tool:deals', 'directory', 'channels', 'events'])
 })
 
 test('a tool key in `more` is tucked into the popup and off the rail', () => {
@@ -163,8 +163,8 @@ test('a stored `tools: false` no longer drops installed Tool rows — the key is
 })
 
 test('nav-hidden keys never become rows, the tool vocabulary included', () => {
-  const { rail, more } = nav({ more: ['notes', 'events', 'tools'] }, true, [install('deals')])
-  for (const hidden of ['notes', 'events', 'tools']) {
+  const { rail, more } = nav({ more: ['notes', 'resources', 'tools'] }, true, [install('deals')])
+  for (const hidden of ['notes', 'resources', 'tools']) {
     assert.equal([...rail, ...more].includes(hidden), false, `${hidden} must not be a nav row`)
   }
   assert.equal(rail.includes('tool:deals'), true)

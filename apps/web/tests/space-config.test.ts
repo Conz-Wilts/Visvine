@@ -222,8 +222,8 @@ describe('mergeFeatureConfig: enabled merges one tool at a time', () => {
   })
 
   test('a core tool is still never storable as off', () => {
-    const merged = mergeFeatureConfig({ enabled: { channels: false } }, { enabled: { events: false } })
-    assert.equal(merged.enabled?.events, undefined)
+    const merged = mergeFeatureConfig({ enabled: { channels: false } }, { enabled: { notes: false } })
+    assert.equal(merged.enabled?.notes, undefined)
     assert.equal(merged.enabled?.channels, false)
   })
 

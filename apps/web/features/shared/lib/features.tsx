@@ -78,10 +78,6 @@ export const FEATURES: FeatureDef[] = [
     label: 'Events',
     href: '/events',
     description: 'Create and RSVP to events, manage guests and invitations.',
-    // Always on and nav-less: events are reached from the calendar button in the
-    // global navbar, not a sidebar rail item, so there is nothing to toggle or
-    // reorder per space. See NAV_HIDDEN_FEATURE_KEYS.
-    core: true,
     icon: <NavEventsIcon className={iconClass} />,
   },
   {
