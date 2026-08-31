@@ -336,11 +336,8 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
         </div>
       </section>
 
-      {/* Hand-rolled rather than a SettingsSection: the red wash has to enclose
-          the heading too, which that component's hairline-divider shell can't do.
-          The button names the action, so there's no label row beside it. */}
-      <section className="rounded-xl border border-red-300 bg-red-50 p-5">
-        <h3 className="mb-4 text-base font-semibold text-red-600">Danger zone</h3>
+      {/* The button names the action, so it stands alone — no heading, no label row. */}
+      <section>
         {deleteError && <Alert variant="error" className="mb-4">{deleteError}</Alert>}
         <Button
           variant="danger"
