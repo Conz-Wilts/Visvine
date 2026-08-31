@@ -100,23 +100,6 @@ export function patchInstall(
   )
 }
 
-/**
- * A member asking their space admins to install a Tool — the marketplace's
- * answer when the viewer isn't an admin. Lands in every admin's notification
- * bell; one open ask per member+tool (the server dedupes while unread).
- */
-export function requestInstall(
-  spaceId: string,
-  versionId: string,
-  message?: string,
-): Promise<{ ok: true; notified: number }> {
-  return fetchJsonBody<{ ok: true; notified: number }>(
-    `/api/communities/${encodeURIComponent(spaceId)}/tools/requests`,
-    'POST',
-    { versionId, ...(message?.trim() ? { message: message.trim() } : {}) },
-  )
-}
-
 export function uninstallTool(spaceId: string, installId: string): Promise<{ ok: true }> {
   return fetchJson<{ ok: true }>(
     `/api/communities/${encodeURIComponent(spaceId)}/tools/${encodeURIComponent(installId)}`,

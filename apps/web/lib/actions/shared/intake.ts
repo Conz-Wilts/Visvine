@@ -68,9 +68,9 @@ const AGENT_QUESTIONS: readonly IntakeQuestion[] = [
     skipWhen: 'The space has no connectors, or the job is plainly context-only — then say what you assumed instead of asking.',
   },
   {
-    ask: 'Who should hear about it, and should the first runs be a rehearsal?',
-    decides: '`notify` in the brief (author, admins, a channel) and whether to set `dry_run: true` so the first runs are captured rather than applied.',
-    skipWhen: 'Always skippable. Ask it only when the agent WRITES somewhere shared, or notifies people who did not ask for it.',
+    ask: 'Should the first runs be a rehearsal rather than the real thing?',
+    decides: '`dry_run: true` in the brief, so the first runs are captured in the transcript rather than applied to the space.',
+    skipWhen: 'Always skippable. Ask it only when the agent WRITES somewhere shared — a rehearsal of a read-only brief decides nothing.',
   },
 ]
 

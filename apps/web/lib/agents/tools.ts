@@ -6,7 +6,7 @@
  * `readVisible`/`visibleVault`/`searchContext` for reads, `writeGated` /
  * `appendLogGated` (origin `agent`) for writes, `loadConnector` →
  * `executeConnectorScript` for connectors, `createEntity` / `upsertLink` for
- * the directory, `sendMessage` for channels, `notify` for people — under the
+ * the directory — under the
  * run's principal (the brief's author). So an agent provably cannot exceed
  * what its author can do, `writeDenial` and Freeze-for-AI apply unchanged,
  * and `agents/` itself is frozen for AI except the agent's OWN folder
@@ -18,14 +18,12 @@
  * run_connector) so there is one vocabulary. Connector reach is DECLARED — only
  * the names in the brief's `connectors:` are offered — and the extras appear
  * only when the brief asks: `fetch_url` (`tools: [web]`), `run_code`
- * (`[sandbox]`), channel posts from `notify` (`[messages]`), `create_node` /
- * `link_nodes` (`[directory]`), `run_agent` (`agents: [...]`). `notify` and
- * `ask_human` are always on, capped per run.
+ * (`[sandbox]`), `create_node` / `link_nodes` (`[directory]`), `run_agent`
+ * (`agents: [...]`).
  *
- * `dry_run: true` in the brief turns every WRITE (notes, nodes, links, channel
- * posts, chained runs) into a transcript line — "DRY RUN — would …" — while
- * reads and notifications to people still happen, so a brief can be rehearsed
- * end to end without touching the space.
+ * `dry_run: true` in the brief turns every WRITE (notes, nodes, links, chained
+ * runs) into a transcript line — "DRY RUN — would …" — while reads still
+ * happen, so a brief can be rehearsed end to end without touching the space.
  *
  * Side effects go through `AgentToolDeps` so the handlers can be exercised
  * against fakes (tests/agents-tools.test.ts); the defaults are the real
@@ -37,10 +35,6 @@ import { MCP_SCOPES } from '@/lib/mcp/scopes'
 import { ConnectorError } from '@/lib/connectors/config'
 import { executeConnectorScript, loadConnector, type ConnectorActionSummary } from '@/lib/connectors/service'
 import { createEntity, type CreateEntityInput, type CreateEntityResult } from '@/lib/directory/createEntity'
-import { spaceAdminUserIds } from '@/lib/auth'
-import { listChannelsForSpace } from '@/lib/messages/conversationService'
-import { sendMessage } from '@/lib/messages/messageService'
-import { publishToUsers } from '@/lib/messages/realtime'
 import {
   appendLogGated,
   readVisible,
@@ -53,8 +47,7 @@ import type { ResolvedContext } from '@/lib/notes/resolve'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ToolHandler } from '@/lib/notes/toolLoop'
-import { notify, type NotifyInput } from '@/lib/notifications/service'
-import { agentFolderPath, agentPageHref, type AgentBrief } from './config'
+import { agentFolderPath, type AgentBrief } from './config'
 import { edgeConfigured, EdgeUnavailableError } from '@/lib/vm/edge'
 import { browseOnMachine, QuotaExceededError, runOnMachine } from '@/lib/vm/lease'
 import type { RunNowResult } from './schedule'
@@ -63,27 +56,14 @@ import { sandboxProvider } from './sandbox'
 const READ_CAP_CHARS = 160_000
 const LIST_CAP = 2_000
 const SEARCH_CAP = 50
-/** `notify` calls one run may make (people or channels); the next returns an error string. */
-export const NOTIFY_PER_RUN_CAP = 25
-/** `ask_human` calls one run may make. */
-export const ASK_PER_RUN_CAP = 10
 /** A run at this chain depth may not `run_agent` further (root run = 0). */
 export const MAX_CHAIN_DEPTH = 5
-const NOTIFY_MESSAGE_MAX = 2_000
-const ASK_QUESTION_MAX = 1_000
-const NOTIFY_TITLE_MAX = 120
 
 
 /** Everything the tools do to the world outside the note store — swappable for tests. */
 export interface AgentToolDeps {
   writeGated: typeof writeGated
   appendLogGated: typeof appendLogGated
-  notify: (userIds: string[], n: NotifyInput) => Promise<{ created: number }>
-  spaceAdminUserIds: (spaceId: string) => Promise<string[]>
-  /** Channels in the space visible to `userId` (name → id). */
-  listChannels: (userId: string, spaceId: string) => Promise<{ id: string; name: string }[]>
-  /** Post `text` to a channel as `userId` (membership enforced inside) and fan it out. */
-  postToChannel: (userId: string, conversationId: string, text: string) => Promise<void>
   claimManualRun: (
     spaceId: string,
     name: string,
@@ -104,14 +84,6 @@ function defaultDeps(): AgentToolDeps {
   return {
     writeGated,
     appendLogGated,
-    notify,
-    spaceAdminUserIds,
-    listChannels: async (userId, spaceId) => (await listChannelsForSpace(userId, spaceId)).map((c) => ({ id: c.id, name: c.name })),
-    postToChannel: async (userId, conversationId, text) => {
-      const { message, memberIds } = await sendMessage(userId, conversationId, { text })
-      publishToUsers(memberIds, { type: 'message.new', conversationId, message })
-      publishToUsers(memberIds, { type: 'conversation.updated', conversationId })
-    },
     // Dynamic: schedule → dispatch → runner → tools would otherwise be an eval-time cycle.
     claimManualRun: async (spaceId, name, startedBy, opts) => (await import('./schedule')).claimManualRun(spaceId, name, startedBy, new Date(), opts),
     createEntity,
@@ -156,10 +128,8 @@ export interface AgentToolContext {
    * description simply doesn't enumerate them.
    */
   connectorActions?: Readonly<Record<string, readonly ConnectorActionSummary[]>>
-  /** The run these tools serve (chain parent, notification bookkeeping). */
+  /** The run these tools serve — stamped onto every machine command so its timeline joins the trace. */
   runId?: string
-  /** The brief's author — where `to: author` notifications go. Defaults to the principal. */
-  authorUserId?: string
   /** How deep in a run_agent chain this run is (root = 0). */
   chainDepth?: number
   /**
@@ -201,19 +171,11 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
   const { principal, context, spaceId, brief } = ctx
   const deps: AgentToolDeps = { ...defaultDeps(), ...(ctx.deps ?? {}) }
   const stamp = agentModelStamp(ctx.agentName)
-  const title = brief.title || ctx.agentName
-  const href = agentPageHref(ctx.agentName)
   /** The agent's own folder, with its trailing slash — the default home for everything it writes. */
   const home = `${agentFolderPath(ctx.agentName)}/`
-  const authorId = ctx.authorUserId ?? principal.userId
   const dry = brief.dryRun
   const noteWritten = (path: string) => ctx.onWrite?.(path)
   const bytes = (s: string) => Buffer.byteLength(s, 'utf8')
-  let notifies = 0
-  let asks = 0
-
-  const recipientsFor = async (to: 'author' | 'admins'): Promise<string[]> =>
-    to === 'admins' ? await deps.spaceAdminUserIds(spaceId) : [authorId]
 
   const tools: ToolHandler[] = [
     {
@@ -538,102 +500,6 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       },
     })
   }
-
-  // ── People ─────────────────────────────────────────────────────────────────
-
-  const channels = brief.tools.includes('messages')
-  tools.push({
-    spec: {
-      name: 'notify',
-      description:
-        `Tell a person something now (a bell notification, emailed too). \`to\` is "author" (default — whoever wrote this brief) or "admins" (the space admins)` +
-        (channels ? ', or "channel:<name>" to post the message into a space channel as the agent\'s author' : '') +
-        `. At most ${NOTIFY_PER_RUN_CAP} per run — summarise, don't stream. Not for questions: use ask_human.`,
-      parameters: {
-        type: 'object',
-        properties: {
-          message: { type: 'string', description: `plain text, ≤${NOTIFY_MESSAGE_MAX} chars` },
-          to: { type: 'string', description: channels ? 'author | admins | channel:<name>' : 'author | admins' },
-          title: { type: 'string', description: 'optional one-line title (defaults to the agent title)' },
-        },
-        required: ['message'],
-      },
-    },
-    describe: (a) => `${str(a.to) || 'author'}: ${str(a.message).slice(0, 120)}`,
-    run: async (a) => {
-      const message = str(a.message).trim()
-      if (!message) return 'error: message is required'
-      if (message.length > NOTIFY_MESSAGE_MAX) return `error: message is longer than ${NOTIFY_MESSAGE_MAX} characters`
-      if (notifies >= NOTIFY_PER_RUN_CAP) return `error: notify cap reached (${NOTIFY_PER_RUN_CAP} per run) — put the rest in your summary or a note`
-      const to = (str(a.to).trim() || 'author').toLowerCase()
-      const customTitle = str(a.title).trim().slice(0, NOTIFY_TITLE_MAX)
-      if (to.startsWith('channel:')) {
-        if (!channels) return 'error: posting to channels needs `tools: [messages]` in the brief'
-        const channelName = to.slice('channel:'.length).trim().replace(/^#/, '')
-        if (!channelName) return 'error: channel name is required (to: "channel:<name>")'
-        const list = await deps.listChannels(principal.userId, spaceId)
-        const channel = list.find((c) => c.name.toLowerCase() === channelName.toLowerCase())
-        if (!channel) return `error: no channel named "${channelName}" (known: ${list.map((c) => c.name).join(', ') || 'none'})`
-        notifies++
-        const text = `${customTitle || title}: ${message}`
-        if (dry) return `DRY RUN — would post to #${channel.name} (${bytes(text)} bytes)`
-        try {
-          await deps.postToChannel(principal.userId, channel.id, text)
-        } catch (e) {
-          return `error: could not post to #${channel.name} — ${e instanceof Error ? e.message : String(e)}`
-        }
-        return `posted to #${channel.name}`
-      }
-      if (to !== 'author' && to !== 'admins') return 'error: `to` must be author, admins' + (channels ? ' or channel:<name>' : '')
-      notifies++
-      const recipients = await recipientsFor(to)
-      if (recipients.length === 0) return `error: nobody to notify (${to})`
-      const { created } = await deps.notify(recipients, {
-        spaceId,
-        kind: 'agent_notify',
-        title: customTitle || title,
-        body: message,
-        href,
-      })
-      return `notified ${to} (${created} recipient${created === 1 ? '' : 's'})`
-    },
-  })
-
-  tools.push({
-    spec: {
-      name: 'ask_human',
-      description:
-        `Ask the author (or the admins) a question. It reaches them as a notification with a reply box; the answer does NOT arrive in this run — it wakes your NEXT run as a "reply" event whose payload holds the question and the reply. Ask, note what you are waiting on, and finish. At most ${ASK_PER_RUN_CAP} per run.`,
-      parameters: {
-        type: 'object',
-        properties: {
-          question: { type: 'string', description: `plain text, ≤${ASK_QUESTION_MAX} chars` },
-          to: { type: 'string', description: 'author (default) | admins' },
-        },
-        required: ['question'],
-      },
-    },
-    describe: (a) => `${str(a.to) || 'author'}: ${str(a.question).slice(0, 120)}`,
-    run: async (a) => {
-      const question = str(a.question).trim()
-      if (!question) return 'error: question is required'
-      if (question.length > ASK_QUESTION_MAX) return `error: question is longer than ${ASK_QUESTION_MAX} characters`
-      if (asks >= ASK_PER_RUN_CAP) return `error: ask_human cap reached (${ASK_PER_RUN_CAP} per run) — finish this run and wait for the answers`
-      const to = (str(a.to).trim() || 'author').toLowerCase()
-      if (to !== 'author' && to !== 'admins') return 'error: `to` must be author or admins'
-      asks++
-      const recipients = await recipientsFor(to)
-      if (recipients.length === 0) return `error: nobody to ask (${to})`
-      const { created } = await deps.notify(recipients, {
-        spaceId,
-        kind: 'agent_question',
-        title: `${title} asks`,
-        body: question,
-        href,
-      })
-      return `asked ${to} (${created} recipient${created === 1 ? '' : 's'}) — the reply arrives as a "reply" event on a later run`
-    },
-  })
 
   // ── Chaining ───────────────────────────────────────────────────────────────
 

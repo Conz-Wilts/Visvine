@@ -178,10 +178,10 @@ export function personAliases(aliases: SpaceAlias[] | undefined): SpaceAlias[] {
 /**
  * The Person aliases someone may pick for THEMSELVES when joining a space.
  *
- * Never an admin one. Managing a space is something the space hands out — an
- * invitation, or the console — so the door must not offer it, and the filter is
- * on the `admin` flag rather than the built-in Admin's name so a space that
- * calls its owning alias "Owner" is covered too.
+ * Never an admin one. Managing a space is something the space hands out from
+ * the console, so the door must not offer it, and the filter is on the `admin`
+ * flag rather than the built-in Admin's name so a space that calls its owning
+ * alias "Owner" is covered too.
  */
 export function selfJoinAliases(aliases: SpaceAlias[] | undefined): SpaceAlias[] {
   return personAliases(aliases).filter((a) => !a.admin && !a.system);

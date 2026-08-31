@@ -17,11 +17,11 @@
  */
 export const AGENT_RUN_CAPABILITIES =
   'Every run reads and writes markdown notes in the space (list_context, search_context, read_context, ' +
-  'write_context, append_context), can start another agent (run_agent), and can notify or ask a person. ' +
+  'write_context, append_context) and can start another agent (run_agent). ' +
   'The brief\'s `tools:` add the rest: `web` reads any public page including a search engine\'s results ' +
   '(fetch_url — searching is fetching a query URL), ' +
   '`actions` gives it everything else the platform can be asked to do (run_action — events, the Drive, ' +
-  'connectors, Tools), `sandbox` runs code, `messages` posts to a channel and `directory` creates records ' +
+  'connectors, Tools), `sandbox` runs code and `directory` creates records ' +
   'and links; `connectors:` names the services it may call. A machine of its own — run_command and ' +
   'open_page on a real computer an admin can watch live — comes with any space that has one. ' +
   'It writes REAL markdown — ' +
@@ -36,7 +36,7 @@ export const AGENT_RUN_CAPABILITIES =
 /** The system prompt an agent's run begins with; the brief body follows it. */
 export function agentPreamble(name: string): string {
   const home = `agents/${name}/`
-  return `You are an unattended agent (scheduled, or woken by events) running inside Visvine, a shared knowledge space ("the context") of markdown notes. Nobody is watching this run and nobody can answer within it, so act on your brief, use the tools to read and write notes, and finish with a short plain-text summary of what you did. If you need a person — to tell them something, use notify; to ask them something, use ask_human and finish (the answer wakes a later run as a "reply" event).
+  return `You are an unattended agent (scheduled, or woken by events) running inside Visvine, a shared knowledge space ("the context") of markdown notes. Nobody is watching this run and nobody can answer within it, so act on your brief, use the tools to read and write notes, and finish with a short plain-text summary of what you did. There is no way to reach a person from inside a run: anything somebody needs to know belongs in a note, and its trace on the agent's page is where the run is read.
 
 Rules:
 - The notes ARE your memory, and ${home}memory.md is the part of it that is yours. READ IT FIRST, every run: what you learned, what you already did, what you decided not to do again. Rewrite or append to it before you finish, so the next run starts where this one stopped. Everything else you need, read with list_context / search_context / read_context and record with write_context or append_context.

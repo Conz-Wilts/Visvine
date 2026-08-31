@@ -62,7 +62,7 @@ practice for every projection above.
 
 **Ledgers** are *first-hand records of things that happened* and are not
 derivable from anything. `AgentRun`, `AgentEvent`, `ContextNoteRevision`, the
-read-audit log, `Notification`. Dropping a ledger loses history permanently.
+read-audit log. Dropping a ledger loses history permanently.
 
 ### Tier 3 — Bytes: GCS
 

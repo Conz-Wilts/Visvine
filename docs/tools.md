@@ -302,10 +302,9 @@ act with a second reviewer. That split is carried by two independent columns on
    being able to write the Tool's note:
    - an **admin**'s publish lands `status: approved` (an admin publishing *is*
      the approval) and flags this space's older installs with the upgrade;
-   - a **member**'s lands `status: pending`, and the space's admins get a
-     `tool_approval_request` notification pointing at `/tools?tab=approvals`.
-     **That is the update queue**: edit an installed Tool, publish, an admin
-     decides whether the installs move.
+   - a **member**'s lands `status: pending`, waiting on an admin at
+     `/tools?tab=approvals`. **That is the update queue**: edit an installed
+     Tool, publish, an admin decides whether the installs move.
 
    Nothing here writes `marketplaceStatus`, so a Tool written in a private space
    is invisible outside it. Re-publishing **supersedes** an earlier submission
@@ -594,12 +593,9 @@ registry order *first*, with the new Tool appended after it. `tools` itself is
 **core and nav-hidden** (`lib/featureAccess.ts#CORE_FEATURE_KEYS`): it has no
 rail row of its own (reached only from the marketplace icon in the navbar) and
 no on/off switch. What a space runs is decided by the pipeline itself — a
-Visvine reviewer approves a version, a space admin installs it. A member's
-Install button becomes **"Ask an admin to install"**: `POST
-/api/communities/[spaceId]/tools/requests` notifies every space admin through
-the bell (`tool_install_request`, deduped per member+tool while unread) and
-links them to the marketplace where Install lives. There is no request table —
-the notification is the request.
+Visvine reviewer approves a version, a space admin installs it. A member
+browsing the marketplace sees what a Tool is and who wrote it; Install is an
+admin's button, and there is no way to ask for one from here.
 
 ### Type pages
 

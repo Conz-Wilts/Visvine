@@ -1,10 +1,11 @@
 'use client';
 
-// One load of everything the People, Aliases and Invite console sections need —
-// members, aliases, the grant overview, the context tree and open access requests
-// — shared by all three, with every mutation reloading the lot. That is what
-// keeps them from ever disagreeing: they are three views of one snapshot, not
-// three components each fetching their own.
+// One load of everything the Members and Types console sections need — members,
+// aliases, the grant overview, the context tree and open access requests —
+// shared by both, with every mutation reloading the lot. That is what keeps the
+// invite link, the queues, the alias panel and the members table from ever
+// disagreeing: they are views of one snapshot, not components each fetching
+// their own.
 //
 // It also owns the single definition of "waiting" (people wanting to join plus
 // members wanting context access), which the console nav renders as a badge.
@@ -41,10 +42,10 @@ const PeopleDataCtx = createContext<PeopleDataValue | null>(null);
  * The shared snapshot, plus a cleared error on mount — call this from a console
  * section's top-level component.
  *
- * The three sections share one provider, so without the reset a refusal raised
- * on Aliases would still be sitting at the top of Invite when you switched to
- * it. An error belongs to the mutation that raised it and to the section you
- * were on when it happened, so each section starts clean.
+ * Both sections share one provider, so without the reset a refusal raised on
+ * Members would still be sitting at the top of Types when you switched to it. An
+ * error belongs to the mutation that raised it and to the section you were on
+ * when it happened, so each section starts clean.
  */
 export function usePeopleSection(): PeopleDataValue {
   const value = useContext(PeopleDataCtx);
@@ -74,11 +75,8 @@ export default function PeopleDataProvider({
   const spaceName = currentSpace?.name ?? null;
 
   const reload = useCallback(async () => {
-    const [membersRes, invitationsRes, aliasesRes, overview, treeRes, settingsRes, requestsRes] = await Promise.all([
+    const [membersRes, aliasesRes, overview, treeRes, settingsRes, requestsRes] = await Promise.all([
       fetchJson<{ members: SpaceMember[] }>(`/api/communities/${spaceId}/members`),
-      fetchJson<{ invitations: PeopleData['invitations'] }>(`/api/communities/${spaceId}/invitations`).catch(
-        () => null,
-      ),
       notesApi.listAliases(spaceId),
       notesApi.getAccessOverview(spaceId).catch(() => null),
       notesApi.tree(spaceId).catch(() => null),
@@ -87,7 +85,6 @@ export default function PeopleDataProvider({
     ]);
     setData({
       members: membersRes.members,
-      invitations: invitationsRes?.invitations ?? [],
       aliases: aliasesRes.aliases,
       overview,
       paths: flattenTree(treeRes?.tree ?? null),
@@ -105,8 +102,9 @@ export default function PeopleDataProvider({
     );
   }, [reload]);
 
-  // Two "needs your attention" numbers, badged on the tab that resolves them:
-  // people waiting to join go on Members, context access requests on Aliases.
+  // Two "needs your attention" numbers, added into the one badge on the section
+  // that resolves them both — people waiting to join, and members asking for
+  // context access.
   const pendingMembers = data ? data.members.filter((m) => m.status === 'pending').length : 0;
   const pendingRequests = data ? data.requests.filter((r) => r.status === 'pending').length : 0;
   useEffect(() => {

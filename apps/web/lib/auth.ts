@@ -81,22 +81,6 @@ export async function adminSpaceIds(
   return directlyAdministered(userId, spaceIds);
 }
 
-/**
- * The inverse of `isAdmin`: every user holding an admin/system alias in the
- * space — i.e. who to tell when something in the space needs an admin
- * (lib/notifications). Super-admins are NOT included: they can act everywhere
- * but are not the people responsible for this space's agents and connections.
- */
-export async function spaceAdminUserIds(spaceId: string): Promise<string[]> {
-  const owning = (await adminAliasIds([spaceId])).get(spaceId);
-  if (!owning || owning.size === 0) return [];
-  const held = await prisma.userAlias.findMany({
-    where: { spaceId, aliasId: { in: [...owning] } },
-    select: { userId: true },
-  });
-  return [...new Set(held.map((h) => h.userId))];
-}
-
 // Re-exported so routes can import the personal-space predicate + DB guard from
 // one auth module. The pure predicate lives in lib/spaces/personalSpace.ts.
 export { isForeignPersonalSpace };

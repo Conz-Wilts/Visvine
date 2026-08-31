@@ -58,9 +58,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
 }
 
 /**
- * There is deliberately no POST here any more. An admin used to be able to
- * write an active membership for somebody else's account by typing their
- * address; being added to a space is now something the person agrees to, so
- * that path is `POST /api/communities/[spaceId]/invitations` — it asks, and
- * accepting (lib/spaces/invitations.ts) is what creates the member row.
+ * There is deliberately no POST here. Being in a space is something the person
+ * agrees to, so joining is always their act: the public join, or the space's
+ * invite link, which writes a PENDING member row. An admin turns that into a
+ * member with the PUT on [userId] — they approve, they never enrol.
  */

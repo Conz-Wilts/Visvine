@@ -128,7 +128,6 @@ fun ProfileScreen(
             Section {
                 MenuItem(AppIcons.Person, "Edit Profile", onEditProfile)
                 MenuItem(AppIcons.Settings, "Settings", onSettings)
-                MenuItem(AppIcons.Bell, "Notifications") {}
                 MenuItem(AppIcons.Help, "Help & Support") {}
             }
 

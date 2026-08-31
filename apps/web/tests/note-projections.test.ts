@@ -301,27 +301,3 @@ test('a deleted or renamed note drops its embedding', () => {
   assert.match(projectionsSrc, /kind === 'rename'[\s\S]*?dropEmbedding\(context, from\)/)
 })
 
-test('a parked job tells the space admins, not just the log', () => {
-  // A parked job is the ONE failure the outbox cannot recover from: eight
-  // attempts exhausted, so this note's links, agent state or Tool build stay
-  // stale until a person intervenes. Every comparable giving-up in this codebase
-  // writes a notification — a broken connection, a deactivated agent, a failed
-  // run — and this one only ever wrote a log line, so the single unrecoverable
-  // case was also the only silent one.
-  assert.match(projectionsSrc, /kind: 'projection_stalled'/)
-  assert.match(projectionsSrc, /notifyParked\(job\.spaceId/)
-  // Deduped per (space, path): a note that parks on every drain pass must
-  // produce one unread line, not one per pass.
-  assert.match(projectionsSrc, /dedupeKey: `projection:\$\{spaceId\}:\$\{path\}`/)
-})
-
-test('notifying about a parked job cannot stop the drain', () => {
-  // The drain's job is to keep draining. A notification failure must not
-  // prevent it claiming the next row.
-  const start = projectionsSrc.indexOf('async function notifyParked(')
-  assert.ok(start > 0)
-  const body = projectionsSrc.slice(start, projectionsSrc.indexOf('\n}\n', start))
-  assert.match(body, /try \{/, 'notifyParked must swallow its own failures')
-  assert.match(body, /catch/)
-  assert.match(projectionsSrc, /void notifyParked\(/, 'the call must not be awaited')
-})

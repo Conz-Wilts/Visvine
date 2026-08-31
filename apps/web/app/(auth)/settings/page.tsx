@@ -16,9 +16,9 @@ import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPane
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
-// Only the tabs that do something. Notifications / Privacy were coming-soon
-// placeholders and are gone until there's something behind them; Account is back
-// because deleting your account is something.
+// Only the tabs that do something. Privacy was a coming-soon placeholder and is
+// gone until there's something behind it; Account is here because deleting your
+// account is something.
 const SECTIONS: ConsoleSection[] = [
   { id: 'appearance', label: 'Appearance', width: 'form' },
   { id: 'mcp', label: 'MCP', width: 'form' },

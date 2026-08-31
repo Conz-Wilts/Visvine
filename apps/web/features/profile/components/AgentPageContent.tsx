@@ -62,7 +62,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const [budgetInput, setBudgetInput] = useState<string>('');
 
   // The run being watched rides the URL beside `?tab=`, so a `watch` href from
-  // an action, a notification or a teammate opens exactly the run it names, and
+  // an action or a teammate opens exactly the run it names, and
   // a reload lands back on it.
   const selectRun = useCallback(
     (runId: string | null) => {

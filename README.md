@@ -237,7 +237,6 @@ this README only names:
 | [`docs/machines.md`](docs/machines.md) | An agent's machine: the Cloudflare edge, the egress boundary and its policy grammar, the workspace archive, the window and takeover, teaching, quota. |
 | [`docs/connectors.md`](docs/connectors.md) | Connector notes: the declared perimeter, the JS isolate, secrets vs identity vs OAuth connections, inbound webhooks. |
 | [`docs/tools.md`](docs/tools.md) | User-created Tools: the note layout, the bridge, the sandboxed iframe, the marketplace and its review queue. |
-| [`docs/notifications.md`](docs/notifications.md) | Notification kinds, the navbar bell, and why there is deliberately no email channel. |
 | [`docs/icons.md`](docs/icons.md) | The owned icon set and its three codegen targets. No icon library — importing one is a lint error. |
 | [`apps/desktop/README.md`](apps/desktop/README.md) | The Electron desktop shell: which server it talks to, security posture, packaging. |
 

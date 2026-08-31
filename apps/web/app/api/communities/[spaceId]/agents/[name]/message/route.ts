@@ -19,8 +19,8 @@ const bodySchema = z.object({
  * message lands in the agent's mailbox and the ordinary tick runs it — because
  * one loop behind every channel is the property worth keeping.
  *
- * The reply arrives the way an agent's work always does: on its timeline, in
- * the notes it writes, and through `notify` if its brief says so.
+ * The reply arrives the way an agent's work always does: on its timeline and
+ * in the notes it writes.
  */
 export async function POST(
   req: NextRequest,

@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import SpaceSelector from "@/features/spaces/components/SpaceSelector";
 import UserMenu from "@/features/auth/components/UserMenu";
-import NotificationBell from "@/features/shared/components/layout/NotificationBell";
 import { useHeader } from "@/features/shared/contexts/HeaderContext";
 import { useSpace } from "@/features/shared/contexts/SpaceContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { useSession } from "@/features/auth/lib/auth-client";
+import { canAccessFeature } from "@/features/shared/lib/features";
+import type { SpaceFeatureConfig } from "@/lib/types";
 
 export default function Navbar() {
   const { headerContent, headerRight } = useHeader();
@@ -19,6 +20,16 @@ export default function Navbar() {
   const eventsActive = pathname.startsWith("/events");
   const adminActive = pathname.startsWith("/admin");
   const canAccessAdmin = isAdmin || session?.user?.isSuperAdmin === true;
+  // Events is a tool a space can switch off, and this calendar is its only
+  // shell-level door. With no space selected it lands on the global discover
+  // grid, which no space's config governs.
+  const canAccessEvents =
+    !currentSpace ||
+    canAccessFeature(
+      (currentSpace.featureConfig as SpaceFeatureConfig | undefined) ?? null,
+      "events",
+      isAdmin,
+    );
 
   return (
     <header
@@ -80,24 +91,24 @@ export default function Navbar() {
         {/* Right: page-injected controls (e.g. directory view toggle) + profile */}
         <div className="flex items-center gap-3">
           {headerRight}
-          {/* Events live here, not in the sidebar rail: they're a shell-level
-              surface (like Messages), always reachable and not a per-space
-              tool, so public events from other spaces stay discoverable. */}
-          {/* With no space selected the space-scoped events page has nothing
-              to show, so the calendar lands on the global discover grid instead. */}
-          <Link
-            href={currentSpace ? "/events?scope=discover" : "/events/discover"}
-            aria-label="Discover events"
-            title="Discover events"
-            className={`w-12 h-12 rounded-xl flex items-center justify-center shell-icon-btn ${
-              eventsActive ? "shell-icon-btn--active" : ""
-            }`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </Link>
-          <NotificationBell />
+          {/* The shell-level door to events, beside the space's own rail row:
+              it opens the discover scope, so public events from other spaces
+              stay reachable. With no space selected the space-scoped page has
+              nothing to show, so it lands on the global discover grid instead. */}
+          {canAccessEvents && (
+            <Link
+              href={currentSpace ? "/events?scope=discover" : "/events/discover"}
+              aria-label="Discover events"
+              title="Discover events"
+              className={`w-12 h-12 rounded-xl flex items-center justify-center shell-icon-btn ${
+                eventsActive ? "shell-icon-btn--active" : ""
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </Link>
+          )}
           <UserMenu />
         </div>
       </div>

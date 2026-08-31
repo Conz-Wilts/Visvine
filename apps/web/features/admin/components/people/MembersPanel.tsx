@@ -1,78 +1,70 @@
 'use client';
 
-// Console → Members. Everything about who is here and what they can do.
+// Console → Members. One page, top to bottom, answering the questions in the
+// order an admin actually has them: how does someone get in, who is waiting on
+// me, who is here, and what any of them can be.
 //
-// One tab answers "who can see what?", because the answer used to be split three
-// ways: aliases and their grants lived under the Person node type on Types, the
-// per-tool lock lived among the sidebar layout controls on Tools, and Members
-// could only show you people it couldn't change. Now Types describes things,
-// Tools arranges the sidebar, and permissions are all here.
+// It used to be four sub-tabs, and two of them weren't about members: the
+// per-tool lock is a line on a tool's row (Console → Tools), and a queue is an
+// interruption rather than a place you visit.
+//
+// Aliases are HANDED OUT here, not made: the list at the foot of the page is
+// who holds each one, whether holding it owns the space, and which context
+// folders it opens — the permission model, beside the people it is about. What
+// an alias is CALLED and coloured is the Person type's vocabulary and lives on
+// Types → Person, with every other type's labels. The toggles in a member's
+// open row are this same list applied one person at a time.
 
-import { useState } from 'react';
-import { Alert } from '@/components/ui';
-import type { Space } from '@/lib/types';
-import AliasesTab from './AliasesTab';
-import MembersTab from './MembersTab';
-import RequestsTab from './RequestsTab';
-import ToolAccessTab from './ToolAccessTab';
+import Link from 'next/link';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
+import { getNodeTypeConfig } from '@/lib/types';
+import { Alert, SettingsSection } from '@/components/ui';
+import AliasList from './AliasList';
+import InviteLink from './InviteLink';
+import MemberTable from './MemberTable';
+import Requests from './Requests';
 import { usePeopleSection } from './PeopleDataContext';
 
-type Tab = 'people' | 'aliases' | 'tools' | 'requests';
-
-export default function MembersPanel({ space, onSaved }: {
-  space: Space;
-  onSaved: (updated: Partial<Space>) => void;
-}) {
-  const { data, error, setError } = usePeopleSection();
-  const [tab, setTab] = useState<Tab>('people');
-
-  // Both queues a person can be waiting in, counted the way the console tab
-  // above counts them — one definition of "waiting", in PeopleDataContext.
-  const waiting =
-    (data?.members ?? []).filter((m) => m.status === 'pending').length +
-    (data?.requests ?? []).filter((r) => r.status === 'pending').length;
-
-  const tabs: [Tab, string][] = [
-    ['people', `People${data ? ` (${data.members.filter((m) => m.status !== 'pending').length})` : ''}`],
-    ['aliases', 'Aliases'],
-    ['tools', 'Tools'],
-    ['requests', waiting > 0 ? `Requests (${waiting})` : 'Requests'],
-  ];
+export default function MembersPanel() {
+  const { spaceId, data, error, setError } = usePeopleSection();
+  const { currentSpace } = useSpace();
+  const active = (data?.members ?? []).filter((m) => m.status !== 'pending');
+  const personColor = getNodeTypeConfig('person', currentSpace?.nodeTypes).color;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
 
-      <div className="flex gap-1 border-b border-border-subtle">
-        {tabs.map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`-mb-px border-b-2 px-3 pb-2 text-sm font-medium transition-colors ${
-              tab === id
-                ? 'border-brand-green text-text-primary'
-                : 'border-transparent text-text-muted hover:text-text-primary'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* No description on any of these: the invite link looks like an invite
+          link, a queue names the thing it is asking for, and a page an admin
+          reads once does not want a sentence under every heading. */}
+      <SettingsSection title="Invite link">
+        <InviteLink spaceId={spaceId} />
+      </SettingsSection>
 
-      {/* Tool access is the one tab that reads the space record rather than
-          the People snapshot, so it takes the same props the Tools section does. */}
-      {data === null && tab !== 'tools' ? (
-        <p className="text-sm text-text-muted">Loading…</p>
-      ) : tab === 'people' ? (
-        <MembersTab />
-      ) : tab === 'aliases' ? (
-        <AliasesTab />
-      ) : tab === 'tools' ? (
-        <ToolAccessTab space={space} onSaved={onSaved} />
-      ) : (
-        <RequestsTab />
-      )}
+      {/* Both queues, or nothing. */}
+      <Requests />
+
+      <SettingsSection title={`In this space${data ? ` (${active.length})` : ''}`}>
+        {data === null ? <p className="text-sm text-text-muted">Loading…</p> : <MemberTable />}
+      </SettingsSection>
+
+      {/* Last, because it is the vocabulary the roll above is written in: you
+          read who is here, then what any of them can be and what that opens. */}
+      <SettingsSection
+        title="Aliases and access"
+        description={
+          <>
+            Who holds each alias and what it opens. New ones are named on{' '}
+            <Link href="/admin?section=types" className="underline underline-offset-2">
+              Types → Person
+            </Link>
+            .
+          </>
+        }
+      >
+        <AliasList mode="permissions" typeColor={personColor} />
+      </SettingsSection>
     </div>
   );
 }

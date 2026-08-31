@@ -108,7 +108,6 @@ struct ProfileView: View {
                 section {
                     menuRow(.person, "Edit Profile", route: .edit)
                     menuRow(.settings, "Settings", route: .settings)
-                    menuStatic(.bell, "Notifications")
                     menuStatic(.help, "Help & Support")
                 }
 

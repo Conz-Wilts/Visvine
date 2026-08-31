@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import PeopleDataProvider from '@/features/admin/components/people/PeopleDataContext';
 import MembersPanel from '@/features/admin/components/people/MembersPanel';
-import InvitePanel from '@/features/admin/components/people/InvitePanel';
 import SpaceSettingsPanel from '@/features/admin/components/SpaceSettingsPanel';
 import TypesPanel from '@/features/admin/components/TypesPanel';
 import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
@@ -16,14 +15,14 @@ import { useSession } from '@/features/auth/lib/auth-client';
 import { LoadingText, Alert } from '@/components/ui';
 import { Space } from '@/lib/types';
 
-// Each section owns one job: General is the space's own record, Tools decides
-// which surfaces exist and how the sidebar is ordered, Connectors is the space's
-// gateways to the outside world, Types describes what kinds
-// of thing the space records, and Members owns every permission — people, aliases
-// and their grants, which tools members can open, and both request queues. Types,
-// Members and Invite share a single data load (PeopleDataProvider; Types still
-// reads it for the read-only Person chips), which is also where the Members badge
-// count comes from: one definition of "waiting", not one per component.
+// Each section owns one job, and the job is one noun: General is the space's own
+// record, Tools is a row per tool (whether the space has it, where it sits, who
+// may open it), Connectors is the space's gateways to the outside world, Types is
+// what kinds of thing the space records, and Members is the people — the invite
+// link, both request queues, the aliases they can hold, and the roll itself.
+// Types and Members share a single data load (PeopleDataProvider; Types shows the
+// same alias chips under Person), which is also where the Members badge count
+// comes from: one definition of "waiting", not one per component.
 function AdminConsole({ space, onSaved }: {
   space: Space;
   onSaved: (updated: Partial<Space>) => void;
@@ -33,8 +32,6 @@ function AdminConsole({ space, onSaved }: {
     (counts: { members: number; requests: number }) => setPending(counts),
     [],
   );
-
-  const configKey = `${space.id}-${JSON.stringify(space.featureConfig ?? {})}`;
 
   // Tool review is the one section that is not about this space: the queue is
   // global and the gate is Visvine super admin, so a space admin never sees the
@@ -47,14 +44,13 @@ function AdminConsole({ space, onSaved }: {
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', width: 'form' },
     { id: 'tools', label: 'Tools', width: 'form' },
+    { id: 'types', label: 'Types', width: 'form' },
     // Connectors has no rail row of its own — it is admins-only by nature, so
     // this console IS its surface (lib/featureAccess NAV_HIDDEN_FEATURE_KEYS).
     { id: 'connectors', label: 'Connectors', width: 'form' },
-    { id: 'types', label: 'Types', width: 'form' },
     // Both queues a person can be waiting in — to join, and for context access —
     // are resolved here, so one badge counts them both.
     { id: 'members', label: 'Members', width: 'wide', badge: pending.members + pending.requests },
-    { id: 'invite', label: 'Invite', width: 'form' },
     ...(isSuperAdmin
       ? ([{ id: 'review', label: 'Tool review', width: 'wide', badge: reviewQueue.items.length }] as const)
       : []),
@@ -72,20 +68,15 @@ function AdminConsole({ space, onSaved }: {
           switch (id) {
             case 'general':
               return <SpaceSettingsPanel space={space} onSaved={onSaved} />;
-            // Tools seeds `adminOnly` into local state but does not edit it —
-            // Members does — so it is keyed on the config it read: once a lock
-            // changes there, onSaved bubbles the new record up and this panel
-            // re-seeds instead of re-sending a stale array on its next save.
-            // Members isn't keyed that way on purpose: remounting it on every
-            // toggle would throw you back to its first sub-tab.
+            // Not keyed on the stored featureConfig: this panel is the only
+            // writer of every key it holds, so remounting it on its own save
+            // would only interrupt the drag that caused it.
             case 'tools':
-              return <SpaceToolsPanel key={configKey} space={space} onSaved={onSaved} />;
+              return <SpaceToolsPanel key={space.id} space={space} onSaved={onSaved} />;
             case 'connectors':
               return <ConnectorsPanel key={space.id} />;
             case 'members':
-              return <MembersPanel key={space.id} space={space} onSaved={onSaved} />;
-            case 'invite':
-              return <InvitePanel />;
+              return <MembersPanel key={space.id} />;
             case 'types':
               return <TypesPanel key={`${space.id}-${JSON.stringify(space.nodeTypes)}`} />;
             // Not keyed on the space: the queue outlives whichever space the

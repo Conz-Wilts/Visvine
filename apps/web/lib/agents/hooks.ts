@@ -26,9 +26,7 @@
  */
 import prisma from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
-import { spaceAdminUserIds } from '@/lib/auth'
 import { logAudit } from '@/lib/notes/audit'
-import { notify } from '@/lib/notifications/service'
 import {
   agentNameOfPath,
   agentOfRevisionStamp,
@@ -44,7 +42,6 @@ const SHARED_OWNER_KEY = 'shared'
 import {
   agentActivationPath,
   agentBriefPath,
-  agentPageHref,
   nextOccurrence,
   scheduleHash,
   withActiveFalse,
@@ -170,13 +167,7 @@ export async function deactivateAgent(
   detail: string | null,
   by: { userId: string; name: string } = { userId: 'system', name: 'Visvine' },
 ): Promise<void> {
-  // Snapshot the row BEFORE touching the note: writing `active: false` below
-  // runs the store hook, which re-derives the row inactive — read afterwards it
-  // would always say "already off" and the notification would never send.
-  const [state, source] = await Promise.all([
-    prisma.agentState.findFirst({ where: { spaceId, name }, select: { active: true, runAsUserId: true } }),
-    findAgentActivation(spaceId, name),
-  ])
+  const source = await findAgentActivation(spaceId, name)
   // Into whichever note carries the activation — the brief, or a pre-merge
   // activation.md an agent still has. Only ever `active: false`.
   if (source.path && source.content && parseFrontmatter(source.content).active !== false) {
@@ -196,24 +187,6 @@ export async function deactivateAgent(
     path: (await findAgentBrief(spaceId, name))?.path ?? agentBriefPath(name),
     detail: `deactivated: ${reason}${detail ? ` — ${detail}` : ''}`,
   })
-  // A MACHINE deactivation is news to the people who can fix it: the brief's
-  // author, whoever the live note runs it as, and the admins (who re-activate).
-  // A person's own act (admin switch, rename, delete) is not — they were there.
-  // Only when it WAS active: re-deactivating an idle agent tells nobody anything.
-  if (state?.active && reason !== 'admin' && reason !== 'renamed' && reason !== 'deleted') {
-    void (async () => {
-      const brief = await findAgentBrief(spaceId, name)
-      const recipients = [brief?.createdBy, state.runAsUserId, ...(await spaceAdminUserIds(spaceId))].filter((id): id is string => !!id)
-      await notify(recipients, {
-        spaceId,
-        kind: 'agent_deactivated',
-        title: `Agent ${name} was deactivated (${reason.replace(/_/g, ' ')})`,
-        body: detail,
-        href: agentPageHref(name),
-        dedupeKey: `agent:${spaceId}:${name}:deactivated`,
-      })
-    })().catch(() => {})
-  }
 }
 
 // ── Store hooks ──────────────────────────────────────────────────────────────

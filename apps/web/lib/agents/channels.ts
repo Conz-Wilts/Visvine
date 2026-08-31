@@ -73,10 +73,10 @@ async function senderMember(spaceId: string, email: string | undefined): Promise
 /**
  * Put one message in an agent's mailbox.
  *
- * The event is `kind: 'reply'` — the same kind a human's answer to `ask_human`
- * produces — because to the run they are the same thing: words from a person
- * that arrived between runs. Deduped on the provider's own id, so a retried
- * delivery is not a second run.
+ * The event is `kind: 'reply'` — the same kind saying something to an agent
+ * from its page produces — because to the run they are the same thing: words
+ * from a person that arrived between runs. Deduped on the provider's own id,
+ * so a retried delivery is not a second run.
  */
 export async function deliverMessage(message: InboundMessage): Promise<DeliveryResult> {
   const space = await prisma.space.findUnique({ where: { id: message.spaceId }, select: { id: true } })

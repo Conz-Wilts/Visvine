@@ -21,13 +21,11 @@
  *     HTTP round trip to the provider means holding a pooled connection across
  *     it too, and lock/unlock would not even be guaranteed the same connection.
  *  3. A DEAD CONNECTION IS RECORDED, NOT DELETED. An agent failing at 3am
- *     should leave behind which connection broke and why, so somebody can be
- *     told to reconnect. Deleting the row loses that.
+ *     should leave behind which connection broke and why, so somebody can see
+ *     it needs reconnecting. Deleting the row loses that.
  */
 import prisma from '@/lib/prisma'
 import { decryptSecret, encryptSecret } from '@/lib/crypto/secrets'
-import { spaceAdminUserIds } from '@/lib/auth'
-import { notify } from '@/lib/notifications/service'
 import { ConnectorError } from './config'
 import { connectionOwner, type ConnectorAuth } from './auth'
 import { refreshTokens, resolveEndpoints, type TokenSet } from './oauth'
@@ -112,27 +110,9 @@ export async function deleteConnection(spaceId: string, provider: string, userId
 }
 
 async function markBroken(id: string, reason: string): Promise<void> {
-  const row = await prisma.connectorConnection
+  await prisma.connectorConnection
     .update({ where: { id }, data: { brokenAt: new Date(), brokenReason: reason.slice(0, 500) } })
     .catch(() => null)
-  if (!row) return
-  // Tell whoever can reconnect it: the member whose account it is, or — for a
-  // space connection — the admins. A courtesy on top of the flag; never awaited
-  // by the caller's failure path. Deduped while the last one is unread.
-  void (async () => {
-    const recipients = row.userId ? [row.userId] : await spaceAdminUserIds(row.spaceId)
-    await notify(recipients, {
-      spaceId: row.spaceId,
-      kind: 'connection_broken',
-      title: `${row.provider} connection broken`,
-      body: `The ${row.provider} connection${row.accountLabel ? ` (${row.accountLabel})` : ''} needs reconnecting: ${reason.slice(0, 500)}`,
-      // The console's Connectors section: `provider` names a SERVICE (notion,
-      // linear), not a connector note, so there is no single connector page to
-      // send them to.
-      href: '/admin?section=connectors',
-      dedupeKey: `connection:${row.id}:broken`,
-    })
-  })().catch(() => {})
 }
 
 /**

@@ -48,18 +48,6 @@ Start with the context: search for the person's name, their organisation and any
 Append a "## Background" section to their note with what you found. Never rewrite what a person wrote about them, and never add contact details that were not already in the context.`,
   },
   {
-    id: 'channel-briefing',
-    title: 'Morning briefing',
-    description: 'Posts a short daily briefing to a channel',
-    tools: ['messages'],
-    trigger: 'Daily at 08:00',
-    body: `Every morning, post a briefing to the #general channel.
-
-Read the notes that changed since the previous run and any events under events/ happening in the next two days. Write three to five bullets: what changed, who to follow up with, what is on today. Link each bullet to the note it came from.
-
-Keep it under 120 words. If nothing changed and nothing is on, post one line saying so.`,
-  },
-  {
     id: 'inbox-triage',
     title: 'Connector sync',
     description: 'Pulls new records from a connector into the directory',

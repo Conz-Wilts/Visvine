@@ -70,8 +70,8 @@ const nextConfig: NextConfig = {
         destination: "/context",
         permanent: false,
       },
-      // Connectors moved into the Space Console. Notifications written before
-      // the move still carry the old path (lib/connectors/connections.ts).
+      // Connectors moved into the Space Console; the old path still resolves
+      // for anything that bookmarked or linked it.
       {
         source: "/connectors",
         destination: "/admin?section=connectors",

@@ -14,10 +14,8 @@
  *                    wrong token 404) → the tick claims it → `trigger: 'webhook'`
  *                    with the delivery as the payload; the admin Webhook GET
  *                    reports the same URL and the listening agent
- *   c. the bell      a machine deactivation (`repeated_failure`) writes a
- *                    `notifications` row for the admin, GET /api/notifications
- *                    over HTTP (dev-login cookie) lists it with unread=1, and
- *                    markRead clears it
+ *   c. deactivation  a machine deactivation (`repeated_failure`) writes
+ *                    `active: false` into the brief and the reason onto the row
  *
  * The runs themselves are expected to FAIL: the brief names `custom/probe` and
  * the space's custom model connector points at a closed local port, so the loop's
@@ -27,8 +25,8 @@
  * being proved is trigger → mailbox → claim → run row, over the real tick.
  *
  * Needs `pnpm dev` running for the HTTP steps (the hook POSTs, dev login, the
- * two GETs); everything else is in-process. It WRITES to the database (a space,
- * a user, notes, secrets, agent rows, notifications) so it is guarded to a
+ * admin GET); everything else is in-process. It WRITES to the database (a space,
+ * a user, notes, secrets, agent rows) so it is guarded to a
  * local one, and it takes all of it back out — the cleanup also runs first, so
  * a run after a failed one starts clean.
  *
@@ -56,7 +54,6 @@ import { encryptSecret } from '../lib/crypto/secrets';
 import { provisionWebhookToken } from '../lib/connectors/webhookInbound';
 import { webhookPath } from '../lib/connectors/webhook';
 import { newModelConnectorNote } from '../lib/connectors/model';
-import { listNotifications, markRead } from '../lib/notifications/service';
 
 // The tick dispatches inline (the dev default) — stated, so a shell that
 // exported AGENT_DISPATCH=self for something else cannot turn the claimed runs
@@ -91,16 +88,6 @@ function step(title: string): void {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Poll until `probe` returns a value, or give up after `ms`. */
-async function eventually<T>(probe: () => Promise<T | null | undefined>, ms = 10_000): Promise<T | null> {
-  const deadline = Date.now() + ms;
-  for (;;) {
-    const found = await probe();
-    if (found) return found;
-    if (Date.now() > deadline) return null;
-    await sleep(250);
-  }
-}
 
 // ── notes ─────────────────────────────────────────────────────────────────────
 
@@ -168,7 +155,7 @@ const sign = (body: string, secret: string) => `sha256=${createHmac('sha256', se
 /**
  * Everything the run creates hangs off the space or the user, and every table
  * involved cascades from one of them (context notes, agent rows, events,
- * secrets, notifications, audit lines). Deleting the two is the whole cleanup —
+ * secrets, audit lines). Deleting the two is the whole cleanup —
  * so it is also safe to run BEFORE the run, against whatever a crashed one left.
  */
 async function cleanup(): Promise<void> {
@@ -383,68 +370,24 @@ async function main(): Promise<void> {
         : `tick claimed [${report2.claimed.join(', ')}], no run row`,
     );
 
-    // ── c. notifications ─────────────────────────────────────────────────────
-    step('c1. a machine deactivation lights the bell for the admin');
+    // ── c. deactivation ──────────────────────────────────────────────────────
+    step('c1. a machine deactivation switches the agent off in the brief and on the row');
     const activeBefore = (await state(NOTE_AGENT))?.active;
     await deactivateAgent(SPACE, NOTE_AGENT, 'repeated_failure', 'verify-agents-events: forced');
-    const notification = await eventually(async () => {
-      const rows = await listNotifications(ADMIN_ID, { unreadOnly: true });
-      return rows.find((r) => r.kind === 'agent_deactivated' && r.spaceId === SPACE) ?? null;
-    });
     const liveAfter = await store.readNoteOrNull(context, agentBriefPath(NOTE_AGENT));
     const stateAfter = await state(NOTE_AGENT);
     check(
-      'deactivateAgent(repeated_failure): the brief reads active:false, row inactive with the reason, an unread agent_deactivated notification for the admin',
+      'deactivateAgent(repeated_failure): the brief reads active:false, the row is inactive with the reason',
       activeBefore === true &&
         /active:\s*false/.test(liveAfter ?? '') &&
         stateAfter?.active === false &&
-        stateAfter.deactivatedReason === 'repeated_failure' &&
-        notification !== null &&
-        notification.readAt === null &&
-        /ev-probe/.test(notification.title),
-      notification
-        ? `"${notification.title}" href=${notification.href} read=${notification.readAt} · row reason=${stateAfter?.deactivatedReason}`
-        : `no notification within 10s · row active=${stateAfter?.active} reason=${stateAfter?.deactivatedReason}`,
-    );
-
-    step('c2. GET /api/notifications over HTTP with the dev session cookie');
-    const inbox = await http(`${APP}/api/notifications`, { headers: { cookie: cookie ?? '' } });
-    let inboxJson: { notifications?: { id: string; kind: string; readAt: string | null }[]; unread?: number } = {};
-    try {
-      inboxJson = JSON.parse(inbox.body);
-    } catch {
-      /* asserted below */
-    }
-    // The two failed runs above each left an `agent_run_failed` line as well
-    // (runner.ts tells the author), so the inbox holds three unread rows: the
-    // count is asserted against what is listed, not against 1.
-    const listed = inboxJson.notifications?.find((n) => n.id === notification?.id);
-    const unreadListed = (inboxJson.notifications ?? []).filter((n) => n.readAt === null).length;
-    check(
-      '200 { notifications: [… the agent_deactivated row, unread …], unread: <the unread count> }',
-      inbox.status === 200 && listed?.kind === 'agent_deactivated' && listed.readAt === null && inboxJson.unread === unreadListed && unreadListed >= 1,
-      `${inbox.status} unread=${inboxJson.unread} kinds=[${(inboxJson.notifications ?? []).map((n) => `${n.kind}${n.readAt ? '(read)' : ''}`).join(', ')}]`,
-    );
-
-    step('c3. markRead clears it');
-    const marked = notification ? await markRead(ADMIN_ID, { ids: [notification.id] }) : { updated: 0 };
-    const inboxAfter = await http(`${APP}/api/notifications?unread=1`, { headers: { cookie: cookie ?? '' } });
-    let afterJson: { notifications?: { id: string }[]; unread?: number } = {};
-    try {
-      afterJson = JSON.parse(inboxAfter.body);
-    } catch {
-      /* asserted below */
-    }
-    const stillUnread = (afterJson.notifications ?? []).some((n) => n.id === notification?.id);
-    check(
-      'markRead updates 1; ?unread=1 no longer lists it and unread dropped by one',
-      marked.updated === 1 && inboxAfter.status === 200 && !stillUnread && afterJson.unread === unreadListed - 1,
-      `updated=${marked.updated} · ${inboxAfter.status} unread=${afterJson.unread} (was ${unreadListed}) listed=${(afterJson.notifications ?? []).length}`,
+        stateAfter.deactivatedReason === 'repeated_failure',
+      `brief active=${/active:\s*false/.test(liveAfter ?? '') ? 'false' : 'not false'} · row active=${stateAfter?.active} reason=${stateAfter?.deactivatedReason}`,
     );
   } finally {
     step('cleanup');
     await cleanup();
-    const [spaces, users, notes, states, events, runs, secrets, notifications] = await Promise.all([
+    const [spaces, users, notes, states, events, runs, secrets] = await Promise.all([
       prisma.space.count({ where: { id: SPACE } }),
       prisma.user.count({ where: { id: ADMIN_ID } }),
       prisma.contextNote.count({ where: { spaceId: SPACE } }),
@@ -452,13 +395,12 @@ async function main(): Promise<void> {
       prisma.agentEvent.count({ where: { spaceId: SPACE } }),
       prisma.agentRun.count({ where: { spaceId: SPACE } }),
       prisma.connectorSecret.count({ where: { spaceId: SPACE } }),
-      prisma.notification.count({ where: { userId: ADMIN_ID } }),
     ]);
-    const left = spaces + users + notes + states + events + runs + secrets + notifications;
+    const left = spaces + users + notes + states + events + runs + secrets;
     check(
       'cleanup leaves nothing behind (space, user and everything hanging off them)',
       left === 0,
-      `space=${spaces} user=${users} notes=${notes} agent_state=${states} events=${events} runs=${runs} secrets=${secrets} notifications=${notifications}`,
+      `space=${spaces} user=${users} notes=${notes} agent_state=${states} events=${events} runs=${runs} secrets=${secrets}`,
     );
   }
 }

@@ -24,9 +24,8 @@ import { readVisible } from '@/lib/notes/contextService'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import { runToolLoop, type ChatFn } from '@/lib/notes/toolLoop'
-import { notify } from '@/lib/notifications/service'
 import { costMicros, perTurnStop, preRunStop, type BudgetState } from './budget'
-import { agentPageHref, parseAgentBrief, type AgentBrief } from './config'
+import { parseAgentBrief, type AgentBrief } from './config'
 import { findAgentBrief } from './briefs'
 import { eventsForRun, rearmIfPending, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, type DeactivationReason } from './hooks'
@@ -143,11 +142,9 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
   /** Note paths this run changed (or, under dry_run, would have) — kept on the run row as input.writes. */
   const writes: string[] = []
   let dryRun = false
-  let authorUserId: string | null = null
   const noteWritten = (path: string) => {
     if (!writes.includes(path)) writes.push(path)
   }
-  const dayKey = now.toISOString().slice(0, 10)
 
   const fail = async (
     reason: TerminalReason,
@@ -173,20 +170,6 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       countsAsFailure: o.countsAsFailure ?? true,
       deactivate: o.deactivate ?? null,
     })
-    // Tell the author — a courtesy, never part of the outcome. Deduped per
-    // agent and day so a nightly agent that keeps failing is one line, not
-    // thirty; deactivation has its own (louder, emailed) notification.
-    const author = authorUserId ?? state.runAsUserId
-    if (author && !deactivated) {
-      void notify([author], {
-        spaceId,
-        kind: 'agent_run_failed',
-        title: `Agent ${name} run failed (${reason})`,
-        body: message,
-        href: agentPageHref(name),
-        dedupeKey: `agent:${spaceId}:${name}:failed:${dayKey}`,
-      }).catch(() => {})
-    }
     return { status: 'failed', reason, deactivated }
   }
 
@@ -194,7 +177,6 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     // 1. The brief — read raw (not through a principal yet; the author may be gone).
     const briefRow = await findAgentBrief(spaceId, name)
     if (!briefRow) return fail('config', 'The agent brief no longer exists.', { deactivate: { reason: 'deleted', detail: 'brief missing at run time' } })
-    authorUserId = briefRow.createdBy ?? null
     const parsed = parseAgentBrief(parseFrontmatter(briefRow.content), splitFrontmatter(briefRow.content).body)
     if (!parsed.ok) return fail('config', `The brief is invalid: ${parsed.error}`, { deactivate: { reason: 'config', detail: parsed.error } })
     const brief: AgentBrief = parsed.brief
@@ -308,7 +290,6 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
         runnableConnectors,
         connectorActions,
         runId,
-        authorUserId: authorUserId ?? undefined,
         chainDepth,
         actionCatalogue,
         onWrite: noteWritten,

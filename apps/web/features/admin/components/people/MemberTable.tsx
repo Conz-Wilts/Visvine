@@ -1,14 +1,14 @@
 'use client';
 
-// Members → People. Who is actually in this space, and what each of them can do.
+// Who is actually in this space, and what each of them can do.
 //
 // The row says what someone IS — their name, the aliases they wear, and one line
 // for how far they reach into the context. Opening the row is where an admin
 // gives them more: flip an alias on or off, see everything that reaches them
 // and why (Everyone, an alias, or a grant that is theirs alone), and grant them
 // a folder or note directly. What an alias MEANS (its colour, its other holders,
-// everything it reaches) is still the Aliases tab next door, so an alias is
-// edited in one place and handed out in two.
+// everything it reaches) belongs to the Person type and is edited on Types, so an
+// alias is defined in one place and handed out here.
 
 import { useMemo, useState } from 'react';
 import { ChevronRightIcon, Trash2Icon, UsersIcon } from '@/features/shared/icons';
@@ -21,14 +21,23 @@ import { accessSummary, reachFor, type Reach } from '@/lib/notes/shared/memberAc
 import { usePeopleSection } from './PeopleDataContext';
 import { AliasToggle, GrantEditor, PathLabel, type OverviewGrant, type SpaceMember, type PeopleData } from './shared';
 
+/**
+ * How many rows are drawn before the list asks. A space with thousands of
+ * members is a page you SEARCH, not one you scroll: the table is a window onto
+ * the roll rather than the whole of it, so an admin looking for one person types
+ * their name instead of paging to them.
+ */
+const PAGE = 25;
+
 /** "7 Feb 2026" — the day someone joined is all this column needs. */
 function joinedLabel(iso: string): string {
   return Number.isNaN(new Date(iso).getTime()) ? '—' : formatDate(iso);
 }
 
-export default function MembersTab() {
+export default function MemberTable() {
   const { spaceId, data, busy, run } = usePeopleSection();
   const [query, setQuery] = useState('');
+  const [shown, setShown] = useState(PAGE);
   const [open, setOpen] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ userId: string; name: string } | null>(null);
 
@@ -46,27 +55,39 @@ export default function MembersTab() {
     );
   }, [active, query]);
 
-  // Alias objects per member, resolved once per data load rather than per row
-  // per render (search keystrokes retype the whole table).
+  // A search searches everyone, not the drawn rows — so every new query starts
+  // its results at the top of a fresh page.
+  const search = (next: string) => {
+    setQuery(next);
+    setShown(PAGE);
+    setOpen(null);
+  };
+
+  const rows = useMemo(() => filtered.slice(0, shown), [filtered, shown]);
+  const hidden = filtered.length - rows.length;
+
+  // Alias objects per drawn member, resolved once per render of the page rather
+  // than per row (search keystrokes retype the whole table) — and only for the
+  // rows on screen, so the work is a page's worth however big the space is.
   const heldByMember = useMemo(() => {
     const byName = new Map(aliases.map((a) => [a.name, a]));
     const map = new Map<string, PeopleData['aliases']>();
-    for (const m of members) {
+    for (const m of rows) {
       map.set(m.userId, m.aliases.map((n) => byName.get(n)).filter((a) => a !== undefined));
     }
     return map;
-  }, [members, aliases]);
+  }, [rows, aliases]);
 
-  // Everything that reaches each member, and the one line the row shows for it.
+  // Everything that reaches each drawn member, and the one line the row shows.
   const reachByMember = useMemo(() => {
     const map = new Map<string, { reach: Reach<OverviewGrant>[]; summary: string; level: number }>();
-    for (const m of members) {
+    for (const m of rows) {
       const standing = { userId: m.userId, aliases: heldByMember.get(m.userId) ?? [] };
       const { label, level } = accessSummary(grants, standing, restricted);
       map.set(m.userId, { reach: reachFor(grants, standing), summary: label, level });
     }
     return map;
-  }, [members, heldByMember, grants, restricted]);
+  }, [rows, heldByMember, grants, restricted]);
 
   const remove = (userId: string) =>
     run(() => fetchJson(`/api/communities/${spaceId}/members/${userId}`, { method: 'DELETE' }));
@@ -75,8 +96,8 @@ export default function MembersTab() {
 
   return (
     <div className="space-y-4">
-      {active.length > 3 && (
-        <SearchInput value={query} onChange={setQuery} placeholder="Search members…" />
+      {active.length > 8 && (
+        <SearchInput value={query} onChange={search} placeholder="Search members…" />
       )}
 
       {/* No overflow clip on the wrapper: an open row holds the path picker,
@@ -92,7 +113,7 @@ export default function MembersTab() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle">
-            {filtered.map((member) => {
+            {rows.map((member) => {
               const standing = reachByMember.get(member.userId);
               return (
                 <MemberRow
@@ -126,6 +147,33 @@ export default function MembersTab() {
           </tbody>
         </table>
       </div>
+
+      {hidden > 0 && (
+        <div className="flex items-center justify-between gap-3 text-xs text-text-muted">
+          <span>
+            {rows.length} of {filtered.length}
+            {query ? ' matching' : ''}
+          </span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShown((n) => n + PAGE)}
+              className="font-medium text-text-secondary transition-colors hover:text-text-primary"
+            >
+              Show {Math.min(PAGE, hidden)} more
+            </button>
+            {hidden > PAGE && (
+              <button
+                type="button"
+                onClick={() => setShown(filtered.length)}
+                className="transition-colors hover:text-text-primary"
+              >
+                Show all {filtered.length}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirm !== null}
@@ -255,7 +303,7 @@ function ViaChip({ via }: { via: Reach['via'] }) {
 /**
  * The whole of one person's standing, editable: the aliases they hold, what
  * reaches them through those and through Everyone (read-only here — change it
- * on the Aliases tab, where it changes for every holder), the grants that are
+ * in the alias's own panel, where it changes for every holder), the grants that are
  * theirs alone, and the way out.
  */
 function MemberAccess({ spaceId, member, data, reach, busy, run, onRemove }: {
@@ -285,7 +333,7 @@ function MemberAccess({ spaceId, member, data, reach, busy, run, onRemove }: {
     <div className="space-y-4">
       <Block title="Aliases" hint="— click to give or take away">
         {data.aliases.length === 0 ? (
-          <p className="text-xs text-text-muted">This space has no aliases yet. Create one on the Aliases tab.</p>
+          <p className="text-xs text-text-muted">This space has no aliases yet. Make one on Types, under Person.</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {data.aliases.map((alias) => (
@@ -325,7 +373,7 @@ function MemberAccess({ spaceId, member, data, reach, busy, run, onRemove }: {
         </div>
       </Block>
 
-      <Block title="Just for them" hint="— grants that belong to this person, not to an alias">
+      <Block title="Just for them">
         <GrantEditor
           spaceId={spaceId}
           subjectType="user"

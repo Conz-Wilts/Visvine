@@ -320,40 +320,6 @@ export interface DrainReport {
 }
 
 /**
- * Tell the space's admins that a note's projections have stopped converging.
- *
- * Best-effort and fire-and-forget: the drain's job is to keep draining, and a
- * notification failure must not stop it claiming the next row. `dedupeKey` is
- * per (space, path), so a note that parks repeatedly produces one unread line
- * rather than one per drain pass.
- */
-async function notifyParked(
-  spaceId: string,
-  path: string,
-  lastError: string | null,
-): Promise<void> {
-  try {
-    const { notify } = await import('@/lib/notifications/service')
-    const { spaceAdminUserIds } = await import('@/lib/auth')
-    const recipients = await spaceAdminUserIds(spaceId)
-    if (recipients.length === 0) return
-    await notify(recipients, {
-      spaceId,
-      kind: 'projection_stalled',
-      title: `Derived data for “${path}” is out of date`,
-      body:
-        `Its rebuild failed ${MAX_ATTEMPTS} times and has been parked, so links, ` +
-        `agent state or the Tool build for this note may be stale. ` +
-        (lastError ? `Last error: ${lastError.slice(0, 300)}` : ''),
-      href: '/admin',
-      dedupeKey: `projection:${spaceId}:${path}`,
-    })
-  } catch (err) {
-    logger.error('notes.projection.parked.notify_failed', { spaceId, path, err })
-  }
-}
-
-/**
  * Retry the projections nobody settled — the crash-recovery half of the outbox.
  *
  * Claims each due row by compare-and-swap on `attempts`, so two instances
@@ -385,14 +351,6 @@ export async function drainProjections(limit = DRAIN_BATCH): Promise<DrainReport
           attempts: job.attempts,
           err: job.lastError,
         })
-        // …and tell somebody. A parked job means this note's derived state —
-        // its directory edges, its agent schedule, its Tool build — is stale
-        // and will now stay stale until a person intervenes. Every comparable
-        // giving-up in this codebase writes a notification (a broken
-        // connection, a deactivated agent, a failed run); this one only ever
-        // wrote a log line, so the single failure mode the outbox cannot
-        // recover from was also the only one nobody was told about.
-        void notifyParked(job.spaceId, job.path, job.lastError)
       }
       continue
     }

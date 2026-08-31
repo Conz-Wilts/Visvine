@@ -1170,77 +1170,10 @@ async function seedMachinery() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 8. Inbox + the audit ledger — top up what the other layers only started
+// 8. The audit ledger — top up what the other layers only started
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function seedInboxAndAudit() {
-  const notifications = [
-    {
-      id: 'ntf_bb_001',
-      userId: ADMIN,
-      kind: 'access_request',
-      title: 'Dev Member asked for access',
-      body: 'comment on deals',
-      href: '/console/people',
-      dedupeKey: 'access_request:car_bb_001',
-      createdAt: ago(180),
-      readAt: null as Date | null,
-    },
-    {
-      id: 'ntf_bb_002',
-      userId: ADMIN,
-      kind: 'connection_broken',
-      title: 'Atlassian connection needs reconnecting',
-      body: 'The provider rejected the refresh grant.',
-      href: '/console/connectors',
-      dedupeKey: 'connection_broken:atlassian',
-      createdAt: ago(2_875),
-      readAt: null,
-    },
-    {
-      id: 'ntf_bb_003',
-      userId: ADMIN,
-      kind: 'agent_deactivated',
-      title: 'lp-report-drafter was deactivated',
-      body: 'Its brief changed, so it will not run until an admin re-activates it.',
-      href: '/console/agents',
-      dedupeKey: 'agent_deactivated:lp-report-drafter',
-      createdAt: ago(4_320),
-      readAt: ago(4_000),
-    },
-    {
-      id: 'ntf_bb_004',
-      userId: MEMBER,
-      kind: 'mention',
-      title: 'Dev Admin mentioned you in #general',
-      body: 'Q3 close is the 30th.',
-      href: '/channels/chan_bb_general',
-      dedupeKey: null,
-      createdAt: ago(1_200),
-      readAt: ago(1_100),
-    },
-    {
-      id: 'ntf_bb_006',
-      userId: MEMBER,
-      kind: 'tool_review',
-      title: 'Portfolio Board was approved',
-      body: 'Your Tool is live in the marketplace.',
-      href: '/tools/portfolio-board',
-      dedupeKey: null,
-      createdAt: ago(700),
-      readAt: null,
-    },
-  ];
-
-  for (const notification of notifications) {
-    await prisma.notification.upsert({
-      where: { id: notification.id },
-      create: { ...notification, spaceId: SPACE },
-      update: {},
-    });
-  }
-  count('notifications', notifications.length);
-
+async function seedAudit() {
   // Governance mutations and gated reads — the events the ledger exists for.
   const entries = [
     { id: 'cae_bb_001', userId: ADMIN, name: 'Dev Admin', action: 'grant.create', path: 'deals', detail: 'alias Partner → edit', at: ago(20_000) },
@@ -1276,7 +1209,7 @@ async function main() {
   await seedDrive();
   await seedMessaging();
   await seedMachinery();
-  await seedInboxAndAudit();
+  await seedAudit();
 
   console.log(`\nplaceholder layer seeded into ${SPACE}:`);
   for (const table of Object.keys(tally).sort()) {

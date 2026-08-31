@@ -1,9 +1,9 @@
 'use client';
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Trash2Icon } from '@/features/shared/icons';
+import { LockIcon, Trash2Icon } from '@/features/shared/icons';
 import { Space, SpaceFeatureConfig } from '@/lib/types';
-import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, adminOnlyFeatureKeys, featureNodeTypeNames, isFeatureEnabled, isToolRailKey, moreFeatureKeys, sortFeatureKeys, toolFeatures } from '@/features/shared/lib/features';
+import { ADMIN_ONLY_FEATURE_KEYS, FEATURES, NAV_HIDDEN_FEATURE_KEYS, adminOnlyFeatureKeys, featureNodeTypeNames, isFeatureEnabled, isToolRailKey, moreFeatureKeys, sortFeatureKeys, toolFeatures } from '@/features/shared/lib/features';
 import { ConfirmDialog, Modal, SearchInput, SettingsSection } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
@@ -81,6 +81,41 @@ function typeNamesPhrase(featureKey: string): string | null {
   return `the ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} types`;
 }
 
+/**
+ * The admins-only lock on a tool's row. Unlabelled: the padlock is the label,
+ * and the row is already a heading — a "Who can open this" caption on every one
+ * of a dozen rows says the same thing a dozen times.
+ */
+function LockToggle({ label, locked, always, onChange }: {
+  label: string;
+  locked: boolean;
+  always: boolean;
+  onChange: (locked: boolean) => void;
+}) {
+  const title = always
+    ? `${label} is always admins-only`
+    : locked
+      ? `${label} is admins-only — click to open it to everyone`
+      : `${label} is open to everyone — click to restrict it to admins`;
+  return (
+    <span
+      data-no-drag
+      title={title}
+      className={`flex shrink-0 items-center gap-1.5 ${
+        locked || always ? 'text-text-secondary' : 'text-text-muted'
+      }`}
+    >
+      <LockIcon className="h-3.5 w-3.5" />
+      <Toggle
+        checked={locked || always}
+        disabled={always}
+        onChange={onChange}
+        aria-label={`Restrict ${label} to admins`}
+      />
+    </span>
+  );
+}
+
 export default function SpaceToolsPanel({ space, onSaved }: Props) {
   const savedConfig = (space.featureConfig ?? {}) as SpaceFeatureConfig;
 
@@ -131,10 +166,9 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
         .map(f => [f.key, isFeatureEnabled(savedConfig, f.key)])
     )
   );
-  // Tools only admins can see. Edited on Members → Tools, not here;
-  // this panel carries it only so removing a tool can drop the lock that was
-  // placed on a row that no longer exists. The console keys this panel on the
-  // stored config, so the copy is re-seeded whenever a lock changes next door.
+  // Tools only admins can open. A tool's row says everything about that tool —
+  // whether the space has it, where it sits, and who may open it — rather than
+  // splitting the last one onto a permissions screen the other two aren't on.
   const [adminOnly, setAdminOnly] = useState<string[]>(() => adminOnlyFeatureKeys(savedConfig));
   // Nav-hidden features (Messages and Events in the top bar, Context under the
   // Directory) are never a toggle and never ordered here — see NAV_HIDDEN_FEATURE_KEYS.
@@ -452,7 +486,9 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   // rail/More position to drag them into, so they get a plain toggle in their
   // own list instead of a row in `order`, and only surface in the picker while
   // off (mirroring how a removed built-in only shows there too).
-  const unplaceableFeatures = allFeatures.filter(f => !f.core && NAV_HIDDEN_FEATURE_KEYS.includes(f.key));
+  const unplaceableFeatures = allFeatures.filter(
+    f => !f.core && NAV_HIDDEN_FEATURE_KEYS.includes(f.key),
+  );
   const isUnplaceableEnabled = (key: string) => enabled[key] !== false;
   const enabledUnplaceable = unplaceableFeatures.filter(f => isUnplaceableEnabled(f.key));
   const disabledUnplaceable = unplaceableFeatures.filter(f => !isUnplaceableEnabled(f.key));
@@ -460,6 +496,16 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   /** Flip a no-row tool on or off. Only `enabled` changes — `order`/`more` never see it. */
   const toggleUnplaceable = (key: string, on: boolean) => {
     commit({ ...enabled, [key]: on }, adminOnly, order, more);
+  };
+
+  /** Lock a tool to admins, or open it to the space again. */
+  const setToolAdminOnly = (key: string, locked: boolean) => {
+    commit(
+      enabled,
+      locked ? [...adminOnly, key] : adminOnly.filter(k => k !== key),
+      order,
+      more,
+    );
   };
 
   const availableFeatures = [...removedKeys.map(key => featureOf(key)!), ...disabledUnplaceable];
@@ -530,9 +576,15 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
               {feature.label}
             </span>
           </div>
-          {/* Who can open a tool is a permission, not a layout choice, so the
-              admins-only lock lives on Members → Tools. This page is
-              only about which tools the space has and where they sit. */}
+          {/* Who may open it. Off is the default and says nothing; on, the tool
+              leaves every member's sidebar and refuses them the page. A few
+              tools are admins-only by nature and show the lock held shut. */}
+          <LockToggle
+            label={feature.label}
+            locked={adminOnly.includes(feature.key)}
+            always={ADMIN_ONLY_FEATURE_KEYS.includes(feature.key)}
+            onChange={locked => setToolAdminOnly(feature.key, locked)}
+          />
           {/* Remove — takes the tool's pages and its node types with it, so it
               asks first. */}
           {isFixed ? (

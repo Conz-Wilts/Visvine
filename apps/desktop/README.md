@@ -89,8 +89,8 @@ and Google account URLs load in-window; other `http(s)`/`mailto:` links go to th
 browser; `javascript:`/`data:` navigations are dropped. The policy is applied to
 `will-navigate`, `will-redirect` (server-side 30x to another origin, e.g. the MCP OAuth
 consent hop) and `window.open`, and inherited by any child window (only an auth provider may open one).
-Permission checks and requests are denied except clipboard, fullscreen and
-notifications, and only for the app origin itself. The renderer sees a read-only
+Permission checks and requests are denied except clipboard and fullscreen, and
+only for the app origin itself. The renderer sees a read-only
 `{ isDesktop, platform, version }` bridge and nothing else. The Electron UA token is
 stripped (Google refuses OAuth from embedded UAs) and `VisvineDesktop/<version>` is
 appended so the web app can detect the shell.

@@ -216,16 +216,14 @@ in `lib/agents/tools.ts`; side effects go through an injectable `AgentToolDeps` 
 | `run_action {action, input?}` | `tools: [actions]` | the whole Action registry — events, the Drive, connectors, Tool authoring — through `runAction` as the author. `action` alone returns that action's manual; `action` + `input` runs it. Every scope but `secrets:write` |
 | `run_code {language, code}` | `tools: [sandbox]` | the named seam in `lib/agents/sandbox.ts`; nothing is built until a vendor is chosen (`AGENT_SANDBOX_PROVIDER`) |
 | `run_command {command[], timeout_seconds?}`, `open_page {url}` | whenever the space has a machine | the agent's OWN machine (`docs/machines.md`) — `runOnMachine` / `browseOnMachine`, a real Chromium for anything `fetch_url` cannot read (a JavaScript-rendered search page, a site behind a login a human established during a takeover). Note the asymmetry: `fetch_url` reaches any public host, the machine reaches only the hosts the space's connectors declare, so a browsing agent needs those hosts allowed. Every command stamped with the run id so the machine's timeline reads back under the step that asked for it. Not a brief switch: the boundary is the egress policy, the quota and the egress log. A dry run refuses both |
-| `notify {message ≤2000, to?, title?}` | always; `to: channel:<name>` needs `tools: [messages]` | `to: author` (default) / `admins` → an `agent_notify` notification (bell, links to the agent page); `channel:<name>` → posts `<agent title>: <message>` into that space channel **as the author** (`sendMessage` enforces membership) and fans it out. **≤ 25 per run** — the next returns an error string |
-| `ask_human {question ≤1000, to?}` | always | an `agent_question` notification (bell) with a **reply box**. The run does not pause: it should ask, note what it is waiting on, and finish. The reply (`POST /api/notifications/[id]/reply`) is enqueued as a `reply` event for that agent (`agent_events`, `source: reply:<userId>`, payload `{question, reply, by}`), so it arrives as the **next run's** trigger payload. ≤ 10 per run |
 | `run_agent {name}` | always | starts another agent of the space now via `claimManualRun` and returns its run id without waiting. `agents:` in the brief lists the ones it has in mind, it is not a fence: never itself, target must be active and idle (a chained run skips the one-run-per-space check — the parent holds that slot) and runs as ITS OWN author. Chains carry `input.chain = {parent, depth}`; a run at depth ≥ 5 may not chain further |
 | `create_node {type, name, description?, tags?, url?}` | `tools: [directory]` | `createEntity` (the same path as `POST /api/directory/entities` and MCP `add_context`): a person / space / resource / event node plus its context note, created by the author with the same `agent` / `agent:<name>` stamp as `write_context` (so it is held to Freeze-for-AI and never wakes this agent); duplicates are refused with the existing id |
 | `link_nodes {from, to, type?, note?}` | `tools: [directory]` | `upsertLink` (origin `manual`, `createdBy` author) between two node ids of the space, default relationship `related` |
 
-**`dry_run: true`** turns every write — `write_context`, `append_context`, channel posts,
+**`dry_run: true`** turns every write — `write_context`, `append_context`,
 `create_node`, `link_nodes`, `run_agent` — into a transcript line (`DRY RUN — would write
 reports/x.md (412 bytes)`) that returns success to the model, so a brief can be rehearsed end to
-end. Reads and notifications to people still happen — and so does **`run_connector`**: a dry
+end. Reads still happen — and so does **`run_connector`**: a dry
 run does NOT suppress it, because a connector may be read-only (a search, a lookup) and the run
 cannot tell which; the brief's author decides what a rehearsal may reach (leave write-capable
 connectors out of `connectors:` while rehearsing). The run row carries `input.dryRun = true`
@@ -235,10 +233,11 @@ connectors out of `connectors:` while rehearsing). The run row carries `input.dr
 run (shown as "Triggered by …"), the chain parent/depth, and at run end the note paths written
 (rendered as **Changed notes** links on the transcript). No new columns.
 
-**Notifications about agents** (`docs/notifications.md`): machine deactivation
-(`key_rejected`, `repeated_failure`, `author_gone`, `config`, `brief_changed`) → author +
-`runs_as` + admins, deduped per agent; a failed run → author only, deduped per
-agent per day; a human's own act (admin switch, rename, delete) tells nobody.
+**A run reaches nobody.** There is no way to notify or question a person from
+inside a run: what a run has to say belongs in the notes it writes, and its
+trace on the agent's page is where it is read. Machine deactivation
+(`key_rejected`, `repeated_failure`, `author_gone`, `config`, `brief_changed`)
+and a failed run are recorded on the agent's row and in the audit log.
 
 ## Machines (the VM runtime)
 
@@ -388,8 +387,6 @@ deadline, UTC) was already correct and was left untouched.
   `GET …/[name]/runs/[runId]`, `GET/PUT …/[name]/budget`.
 - MCP: `list_agents` (`context:read`; includes `schedule`, `every` and `triggers` so a trigger-only
   agent does not read "No schedule"), `run_agent` (`agents:run`). Authoring is not an MCP tool.
-- Bell: `notify` / `ask_human` land in the Navbar bell; an `agent_question` row shows a reply box
-  (`POST /api/notifications/[id]/reply`).
 
 ## Code map
 

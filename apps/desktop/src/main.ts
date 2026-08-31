@@ -17,7 +17,7 @@ import { loadWindowState, saveWindowState } from "./window-state";
 const APP_NAME = "Visvine";
 const OFFLINE_PAGE = path.join(__dirname, "..", "resources", "offline.html");
 const SERVER_POLL_MS = 2500;
-const ALLOWED_PERMISSIONS = new Set(["clipboard-read", "clipboard-sanitized-write", "fullscreen", "notifications"]);
+const ALLOWED_PERMISSIONS = new Set(["clipboard-read", "clipboard-sanitized-write", "fullscreen"]);
 
 app.setName(APP_NAME);
 if (process.env.VISVINE_DESKTOP_USER_DATA) {

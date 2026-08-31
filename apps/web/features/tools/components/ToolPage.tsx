@@ -34,7 +34,7 @@ export default function ToolPage({ slug }: { slug: string }) {
   // that doesn't resolve here is uninstalled, switched off, or never existed —
   // all one answer to the person looking at the URL.
   const install = (currentSpace?.installedTools ?? []).find((tool) => tool.slug === slug) ?? null;
-  // An admin who locked this row on Members → Tools locked the page with it,
+  // An admin who locked this row on Console → Tools locked the page with it,
   // and switching the `tools` vocabulary off takes every installed Tool's page
   // down with it — the same rule the bridge enforces for the frame itself
   // (lib/tools/target.ts#forbiddenForTools), so a member can't land on a page

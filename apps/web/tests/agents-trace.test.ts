@@ -33,7 +33,7 @@ describe('stepsOf', () => {
   })
 
   it('keeps an orphan result as its own step rather than losing it', () => {
-    const steps = stepsOf([{ at: 1, type: 'tool_result', tool: 'notify', text: 'sent' }])
+    const steps = stepsOf([{ at: 1, type: 'tool_result', tool: 'fetch_url', text: 'sent' }])
     assert.equal(steps.length, 1)
     assert.equal(steps[0].result, 'sent')
   })

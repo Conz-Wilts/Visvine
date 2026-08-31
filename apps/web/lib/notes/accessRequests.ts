@@ -12,9 +12,6 @@ import prisma from '@/lib/prisma'
 import { SHARED_OWNER_KEY, type Context } from './store'
 import { readJsonl, writeJsonl } from './sidecar'
 import { grantAccess, normalizeResourcePath } from './access'
-import { spaceAdminUserIds } from '@/lib/auth'
-import { notify } from '@/lib/notifications/service'
-import { logger } from '@/lib/logger'
 import { logAudit } from './audit'
 import type { AccessRequest, ContextPrincipal } from './shared/contextTypes'
 import { canRequest, canResolveRequest, requestVisibleTo, sortRequests } from './shared/accessRequests'
@@ -145,31 +142,7 @@ export async function createAccessRequest(
       message: message?.trim() ? message.trim().slice(0, 1000) : null,
     },
   })
-  void notifyManagers(p, path, message).catch((err) =>
-    logger.warn('access_requests.notify.failed', { err }),
-  )
   return toRequest(row)
-}
-
-/**
- * Tell everyone who could resolve the request — the space admins, exactly the
- * people `canResolveRequest` will let act now that granting access is an
- * admin-only power. Best-effort: filing the request never waits on or fails
- * for this.
- */
-async function notifyManagers(p: ContextPrincipal, path: string, message?: string): Promise<void> {
-  const admins = await spaceAdminUserIds(p.spaceId)
-  const managers = admins.filter((id) => id !== p.userId)
-  if (managers.length === 0) return
-  const target = path === '' ? 'the whole context' : path.replace(/\.md$/i, '')
-  await notify(managers, {
-    spaceId: p.spaceId,
-    kind: 'access_request',
-    title: `${p.name || p.email} asked for access to ${target}`,
-    body: message?.trim() ? message.trim().slice(0, 1000) : null,
-    href: '/admin?section=members',
-    dedupeKey: `access_request:${p.userId}:${path}`,
-  })
 }
 
 /**

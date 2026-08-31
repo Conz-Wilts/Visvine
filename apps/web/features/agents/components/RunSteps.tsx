@@ -3,9 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  BellIcon,
   BotIcon,
-  CircleQuestionMarkIcon,
   CodeIcon,
   FileTextIcon,
   GlobeIcon,
@@ -49,8 +47,6 @@ const TOOL_VERB: Record<string, { verb: string; Icon: (props: { className?: stri
   run_code: { verb: 'Ran code', Icon: CodeIcon },
   run_command: { verb: 'Ran', Icon: CodeIcon },
   open_page: { verb: 'Opened', Icon: GlobeIcon },
-  notify: { verb: 'Notified', Icon: BellIcon },
-  ask_human: { verb: 'Asked', Icon: CircleQuestionMarkIcon },
   run_agent: { verb: 'Started agent', Icon: BotIcon },
   create_node: { verb: 'Created', Icon: PlusIcon },
   link_nodes: { verb: 'Linked', Icon: WaypointsIcon },

@@ -2,10 +2,10 @@
 
 // The context access-request queue: "X wants access to Y".
 //
-// It sits on Members → Requests, above the join requests: from where the
-// member stands both are the same act — asking an admin to be let in to something
-// — so the one screen that answers people answers both. Approving one writes a
-// grant exactly the way an alias's "Can access" list does.
+// It sits on Members above the join queue: from where the member stands both are
+// the same act — asking an admin to be let in to something — so the one screen
+// that answers people answers both. Approving one writes a grant exactly the way
+// an alias's "Can access" list does.
 
 import { useState } from 'react';
 import { FileTextIcon, FolderIcon, UsersIcon } from '@/features/shared/icons';
@@ -40,9 +40,10 @@ export default function AccessRequests() {
   const resolved = requests.filter((r) => r.status !== 'pending').slice(0, 5);
   const contextName = data?.contextName ?? '';
 
-  // Silent only when there is no history either — on its own Requests tab the
-  // recently-resolved strip is worth showing after the queue drains.
-  if (pending.length === 0 && resolved.length === 0) return null;
+  // An empty queue renders nothing at all. The recently-resolved strip below is
+  // there to steady your hand while you answer the ones still waiting — it is
+  // not a log, and a page with a members table on it doesn't want one.
+  if (pending.length === 0) return null;
 
   const resolveRequest = (request: AccessRequest, approveIt: boolean) =>
     run(() =>
@@ -56,9 +57,7 @@ export default function AccessRequests() {
 
   return (
     <>
-      <SettingsSection
-        title={pending.length > 0 ? `Access requests (${pending.length})` : 'Recent access requests'}
-      >
+      <SettingsSection title={`Wants access (${pending.length})`}>
         <div className="divide-y divide-border-subtle">
           {pending.map((request) => (
             <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
@@ -106,11 +105,7 @@ export default function AccessRequests() {
         </div>
 
         {resolved.length > 0 && (
-          <div
-            className={`space-y-1.5 ${
-              pending.length > 0 ? 'mt-4 border-t border-border-subtle pt-3' : ''
-            }`}
-          >
+          <div className="mt-4 space-y-1.5 border-t border-border-subtle pt-3">
             {resolved.map((request) => (
               <div key={request.id} className="flex items-center gap-2 text-xs text-text-muted">
                 <span

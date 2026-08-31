@@ -43,7 +43,6 @@ model Space {
   links           Link[]
   nodes           Node[]
   members         SpaceMember[]
-  invitations     SpaceInvitation[]
   notes           ContextNote[]
   noteFolders     ContextFolder[]
   contextState    ContextState[]
@@ -74,7 +73,6 @@ model Space {
 
   appToolBuilds   AppToolBuild[]
   appToolInstalls AppToolInstall[]
-  notifications   Notification[]
   resources       Resource[]
   resourceFolders ResourceFolder[]
   projectionJobs  NoteProjectionJob[]
@@ -1122,9 +1120,6 @@ model User {
   membersAdded  SpaceMember[] @relation("AddedByRelation")
   memberships   SpaceMember[] @relation("MemberOf")
 
-  invitations     SpaceInvitation[] @relation("InvitedUser")
-  invitationsSent SpaceInvitation[] @relation("InvitedByUser")
-
   // --- messaging ---
   conversationMemberships ConversationMember[]
   conversationsCreated    Conversation[]       @relation("ConversationCreator")
@@ -1133,7 +1128,6 @@ model User {
   messageStars            MessageStar[]        @relation("StarAuthor")
 
   appToolVersionsAuthored AppToolVersion[]     @relation("AppToolVersionAuthor")
-  notifications           Notification[]
 
   // Deleting a person must take their ACCESS and their CREDENTIALS with it. Each
   // of these was a bare scalar that only lib/account/deleteAccount.ts knew to
@@ -1147,29 +1141,6 @@ model User {
   oauthAuthCodes          OAuthAuthCode[]
 
   @@map("users")
-}
-
-/// One line in a person's inbox (lib/notifications). Written by the machinery
-/// that has something to tell a human — a connection broke, an agent was
-/// deactivated, a Tool review landed, someone asked for access — and read by
-/// the Navbar bell. `dedupeKey` collapses repeats while the previous one is
-/// still unread (partial unique index in the migration). Cascades with the user and with the space it points at.
-model Notification {
-  id        String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  userId    String    @map("user_id")
-  spaceId   String?   @map("space_id")
-  kind      String
-  title     String
-  body      String?
-  href      String?
-  dedupeKey String?   @map("dedupe_key")
-  createdAt DateTime  @default(now()) @map("created_at")
-  readAt    DateTime? @map("read_at")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  space     Space?    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-
-  @@index([userId, readAt, createdAt(sort: Desc)])
-  @@map("notifications")
 }
 
 /// A person's membership of a space. Deliberately carries no role — what
@@ -1192,36 +1163,6 @@ model SpaceMember {
   @@index([userId])
   @@index([spaceId])
   @@map("space_members")
-}
-
-/**
- * An admin asking someone to join. Deliberately NOT a SpaceMember row in some
- * third status: most membership checks read the row's existence, not its
- * status, so an unanswered invitation living in space_members would be access
- * granted before the person said yes. Nothing here grants anything — accepting
- * is what writes the SpaceMember (and the UserAlias rows staged in aliasIds).
- */
-model SpaceInvitation {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  spaceId     String    @map("space_id")
-  userId      String    @map("user_id")
-  invitedBy   String?   @map("invited_by")
-  // The aliases the admin ticked, parked until the answer. Ids, not names: an
-  // alias renamed while the invitation sits unanswered is still the same alias.
-  aliasIds    String[]  @default([]) @map("alias_ids")
-  // "pending" | "accepted" | "declined". Answered rows are kept so an admin can
-  // see they were turned down rather than watching the invite disappear.
-  status      String    @default("pending")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  respondedAt DateTime? @map("responded_at")
-  space       Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  user        User      @relation("InvitedUser", fields: [userId], references: [id], onDelete: Cascade)
-  inviter     User?     @relation("InvitedByUser", fields: [invitedBy], references: [id], onDelete: SetNull)
-
-  @@unique([spaceId, userId])
-  @@index([userId, status])
-  @@index([spaceId, status])
-  @@map("space_invitations")
 }
 
 model Person {

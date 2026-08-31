@@ -43,10 +43,8 @@
  * straight to the client.
  */
 import prisma from '@/lib/prisma'
-import { spaceAdminUserIds } from '@/lib/auth'
 import { isSuperAdmin } from '@/lib/session'
 import { logAudit } from '@/lib/notes/audit'
-import { notify } from '@/lib/notifications/service'
 import { writeGated } from '@/lib/notes/contextService'
 import { principalCanWrite, principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
@@ -694,17 +692,9 @@ export async function publishTool(
     // Only in the space that wrote it, because that is the whole reach of a
     // space verdict — anywhere else is waiting on the marketplace.
     await flagStaleInstalls(created.key, created.id, created.version, { withinSpace: spaceId })
-  } else {
-    // The update queue. A member cannot approve their own work, so the admins
-    // are told there is something to look at — the bell is the queue's door,
-    // the same way an install request reaches them.
-    await notifySpaceAdmins(spaceId, p.userId, {
-      kind: 'tool_approval_request',
-      title: `${p.name || 'A member'} published ${created.title} v${created.version}`,
-      body: opts.releaseNotes?.trim() || opts.note?.trim() || null,
-      dedupeKey: `tool-approval:${created.id}`,
-    })
   }
+  // A member cannot approve their own work, so their publish lands pending and
+  // waits on /tools?tab=approvals — that page IS the update queue.
 
   // Human origin on purpose: a person pressed Publish. 'agent'/'maintenance'
   // would hit the tools/ AI freeze in contextService.lockedDenial.
@@ -719,32 +709,6 @@ export async function publishTool(
     }
   }
   return { ok: true, version: toSummary(created), warning }
-}
-
-/**
- * Tell every admin of a space except the person who caused it. Used by the two
- * places a Tool needs a decision from someone with the authority to make it:
- * a member's publish, and a member asking for a marketplace listing.
- *
- * Silent when the space has no other admin. A member who is themselves the only
- * admin never reaches here (they publish approved), and a notification with
- * nobody to act on it is noise pretending to be a queue.
- */
-async function notifySpaceAdmins(
-  spaceId: string,
-  actorUserId: string,
-  input: { kind: 'tool_approval_request'; title: string; body: string | null; dedupeKey: string },
-): Promise<void> {
-  const admins = (await spaceAdminUserIds(spaceId)).filter((id) => id !== actorUserId)
-  if (admins.length === 0) return
-  void notify(admins, {
-    spaceId,
-    kind: input.kind,
-    title: input.title,
-    body: input.body,
-    href: '/tools?tab=approvals',
-    dedupeKey: input.dedupeKey,
-  })
 }
 
 /**
@@ -801,16 +765,6 @@ export async function reviewSpaceVersion(
     path: toolIndexPath(row.name),
     detail: `${decision} v${row.version} for this space by ${actor.email}${note?.trim() ? ` — ${note.trim()}` : ''}`,
   })
-  if (row.authorUserId && row.authorUserId !== actor.userId) {
-    void notify([row.authorUserId], {
-      spaceId: row.sourceSpaceId,
-      kind: 'tool_review',
-      title: `${row.title} v${row.version} was ${decision}`,
-      body: note?.trim() ? note.trim() : null,
-      href: '/tools',
-    })
-  }
-
   const upgraded =
     decision === 'approved'
       ? await flagStaleInstalls(row.key, versionId, row.version, { withinSpace: row.sourceSpaceId })
@@ -1123,18 +1077,6 @@ export async function reviewVersion(
     path: toolIndexPath(row.name),
     detail: `${decision} the marketplace listing of v${row.version} by ${reviewer.email}${note?.trim() ? ` — ${note.trim()}` : ''}`,
   })
-  // Tell the author. The review queue is the one super-admin surface, so this is
-  // the only way a submitter hears back without polling /tools.
-  if (row.authorUserId) {
-    void notify([row.authorUserId], {
-      spaceId: row.sourceSpaceId,
-      kind: 'tool_review',
-      title: `The marketplace listing of ${row.title} v${row.version} was ${decision}`,
-      body: note?.trim() ? note.trim() : null,
-      href: '/tools',
-    })
-  }
-
   const upgraded = decision === 'approved' ? await flagStaleInstalls(row.key, versionId, row.version) : 0
   return { ok: true, version: toSummary(updated), upgraded }
 }

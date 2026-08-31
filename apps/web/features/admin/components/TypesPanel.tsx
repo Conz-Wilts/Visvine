@@ -3,11 +3,11 @@
 // Console → Types: every kind of thing this space records, and the aliases each
 // kind can wear.
 //
-// Person is the one type whose aliases mean something beyond a label — they are
-// the permission model (holders, ownership, context grants) — so they are handed
-// out and pointed at content on Members, not here. This page still shows them,
-// read-only, because a Person type you can't see the shape of isn't much of a
-// description; it just doesn't edit them, so no name is ever edited twice.
+// Person's aliases are here like everybody else's — named, coloured, made and
+// unmade — but only that half of them. What holding one MEANS (who has it,
+// whether it owns the space, which context folders it opens) is the permission
+// model, and that lives on Members beside the people wearing it. This page says
+// where it went rather than keeping a second copy of it.
 
 import { useState, useEffect, type ReactNode } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -16,55 +16,25 @@ import type { SpaceAlias, Space, NodeTypeConfig } from '@/lib/types';
 import { isNodeTypeEnabled, nodeTypeToolKey } from '@/lib/featureAccess';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { FEATURES } from '@/features/shared/lib/features';
-import { Alert, Button, Chip, ColorPicker, ConfirmDialog, SearchInput, chipClass } from '@/components/ui';
+import { Alert, Button, Chip, ColorPicker, ConfirmDialog, Input, SearchInput } from '@/components/ui';
+import { ChevronDownIcon, Trash2Icon } from '@/features/shared/icons';
 import Select from '@/components/ui/Select';
 import { patchInstall } from '@/features/tools/lib/client';
 import { pageClaimantsFor } from '@/lib/tools/typePages';
 import type { InstalledToolDto } from '@/lib/tools/installs';
 import { useConsoleSave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { usePeopleSection } from '@/features/admin/components/people/PeopleDataContext';
+import { TreeSpine } from '@/components/ui/TreeChrome';
+import AliasList, {
+  AliasBackRow,
+  AliasLabel,
+  AliasRow,
+  NewAliasRow,
+} from '@/features/admin/components/people/AliasList';
 
 // The type whose aliases are the permission model. Everything else's aliases are
 // plain directory labels, stored on the space and edited in place.
 const PERMISSION_TYPE = 'person';
-
-// ─── Alias Chip ───────────────────────────────────────────────────────────────
-// The same rounded square the alias wears on a directory card, a note header and
-// a member row — this is where you pick its colour, so it has to be the shape
-// you'll meet it in (components/ui/Chip.tsx).
-
-function AliasChip({ alias, onColorChange, onRemove, disabled }: {
-  alias: SpaceAlias;
-  onColorChange: (c: string) => void;
-  onRemove: () => void;
-  disabled: boolean;
-}) {
-  const [showPicker, setShowPicker] = useState(false);
-  const [localColor, setLocalColor] = useState(alias.color);
-
-  const commit = (c: string) => { setLocalColor(c); setShowPicker(false); onColorChange(c); };
-
-  return (
-    <div className="relative inline-flex items-center gap-1">
-      <Chip
-        size="lg"
-        color={localColor}
-        disabled={disabled}
-        title="Click to change colour"
-        onClick={() => setShowPicker(p => !p)}
-        onRemove={onRemove}
-        removeLabel={`Remove "${alias.name}"`}
-      >
-        {alias.name}
-      </Chip>
-      {showPicker && (
-        <div className="absolute left-0 top-9 z-40">
-          <ColorPicker color={localColor} onChange={c => setLocalColor(c)} onClose={() => commit(localColor)} />
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Add Alias Row ────────────────────────────────────────────────────────────
 
@@ -129,46 +99,174 @@ function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabl
   );
 }
 
-// ─── Person aliases: read-only ────────────────────────────────────────────────
+// ─── A plain type's aliases ───────────────────────────────────────────────────
 
 /**
- * What a Person can be, without being the place you change it. The chips are the
- * live permission snapshot rather than the space record, so they include the
- * built-in Admin and stay honest the moment an alias is renamed on Members. The
- * hover title carries the holder count; the row itself is just the vocabulary.
+ * The aliases of every type that ISN'T Person, opened the same way Person's are:
+ * a row of chips inside the type's settings, and clicking one puts what that
+ * alias is in place of them.
+ *
+ * What opens is shorter, because there is less of it to be. A Person alias is
+ * the permission model — holders, the admin flag, context grants — and those
+ * only mean something for a person, since access is resolved through the aliases
+ * a USER holds. An alias on Space or Channel narrows a directory record instead:
+ * it is a name and a colour on a card, held by nodes rather than people, so its
+ * panel is a name, a colour and the way to remove it, and it says as much rather
+ * than showing an empty permissions block that could never fill.
  */
-function PersonAliases() {
-  const { data } = usePeopleSection();
+function LabelAliases({ typeName, typeColor, aliases, allAliases, newOpen, onNewStart, onNewDone, onAdd, onRename, onUpdateColor, onRemove, saving }: {
+  typeName: string;
+  typeColor: string;
+  aliases: SpaceAlias[];
+  allAliases: SpaceAlias[];
+  /** The create form, opened from the line at the head of the list. */
+  newOpen: boolean;
+  onNewStart: () => void;
+  onNewDone: () => void;
+  onAdd: (a: SpaceAlias) => void;
+  onRename: (name: string, nodeType: string, newName: string) => void;
+  onUpdateColor: (name: string, nodeType: string, color: string) => void;
+  onRemove: (name: string, nodeType: string) => void;
+  saving: boolean;
+}) {
+  const [open, setOpen] = useState<{ kind: 'alias'; name: string } | null>(null);
+  const [draftName, setDraftName] = useState('');
+  const [picking, setPicking] = useState(false);
 
-  if (data === null) return <p className="py-2 text-xs text-text-muted">Loading…</p>;
+  const close = () => { setOpen(null); setPicking(false); onNewDone(); };
+  const showing = open ? aliases.find(a => a.name === open.name) : undefined;
 
-  const aliases = [...data.aliases].sort(
-    (a, b) =>
-      Number(b.system) - Number(a.system) ||
-      Number(b.admin) - Number(a.admin) ||
-      a.name.localeCompare(b.name),
-  );
+  const openAlias = (alias: SpaceAlias) => {
+    setDraftName(alias.name);
+    setPicking(false);
+    setOpen({ kind: 'alias', name: alias.name });
+  };
+
+  if (newOpen) {
+    return (
+      <div>
+        <AliasBackRow label="Aliases" onBack={close} />
+        <AddAliasRow
+          nodeType={typeName}
+          defaultColor={typeColor}
+          existing={allAliases}
+          onAdd={a => { onAdd(a); close(); }}
+          onCancel={close}
+          disabled={saving}
+        />
+      </div>
+    );
+  }
+
+  if (showing) {
+    const commitName = () => {
+      const next = draftName.trim();
+      if (!next || next === showing.name) return;
+      onRename(showing.name, showing.nodeType, next);
+      close();
+    };
+    return (
+      <div>
+        <AliasBackRow label="Aliases" onBack={close}>
+          <AliasLabel name={showing.name} color={showing.color} />
+        </AliasBackRow>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setPicking(p => !p)}
+                className="block h-7 w-7 rounded-lg border-2 border-border-default transition-transform hover:scale-110"
+                style={{ background: showing.color }}
+                title={`Change the colour of ${showing.name}`}
+                aria-label={`Colour of ${showing.name}`}
+              />
+              {picking && (
+                <div className="absolute left-0 top-9 z-50">
+                  <ColorPicker
+                    color={showing.color}
+                    onChange={c => onUpdateColor(showing.name, showing.nodeType, c)}
+                    onClose={() => setPicking(false)}
+                  />
+                </div>
+              )}
+            </div>
+            <Input
+              value={draftName}
+              disabled={saving}
+              maxLength={40}
+              aria-label={`Name of ${showing.name}`}
+              className="!py-1 !text-sm"
+              onChange={e => setDraftName(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); commitName(); }
+                if (e.key === 'Escape') setDraftName(showing.name);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => { onRemove(showing.name, showing.nodeType); close(); }}
+              disabled={saving}
+              title={`Remove ${showing.name}`}
+              className="shrink-0 rounded-full p-1 text-text-muted transition hover:text-red-500 disabled:opacity-40"
+            >
+              <Trash2Icon className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <p className="text-xs text-text-muted">
+            A label on a {typeName.toLowerCase()} card. Only Person&apos;s aliases carry holders and
+            permissions.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {aliases.map((alias) => (
-        <Chip
-          key={alias.name}
-          size="lg"
-          color={alias.color}
-          title={`${alias.name} — ${alias.holders.length} ${alias.holders.length === 1 ? 'person' : 'people'}${alias.admin ? ', is admin of the space' : ''}`}
-        >
-          {alias.name}
-        </Chip>
+    <TreeSpine animate>
+      <NewAliasRow nested={aliases.length === 0 ? 'last' : 'mid'} onClick={onNewStart} />
+      {aliases.map((alias, i) => (
+        <AliasRow
+          key={`${alias.nodeType}:${alias.name}`}
+          nested={i === aliases.length - 1 ? 'last' : 'mid'}
+          label={<AliasLabel name={alias.name} color={alias.color} muted />}
+          meta=""
+          action={null}
+          onOpen={() => openAlias(alias)}
+        />
       ))}
-    </div>
+    </TreeSpine>
+  );
+}
+
+// ─── Person aliases ───────────────────────────────────────────────────────────
+
+/**
+ * What a Person can be called here, and nothing about what it opens: the same
+ * list Members draws, in its naming half.
+ */
+function PersonAliases({ typeColor, newOpen, onNewStart, onNewDone }: {
+  typeColor: string;
+  newOpen: boolean;
+  onNewStart: () => void;
+  onNewDone: () => void;
+}) {
+  return (
+    <AliasList
+      mode="naming"
+      typeColor={typeColor}
+      newOpen={newOpen}
+      onNewStart={onNewStart}
+      onNewDone={onNewDone}
+    />
   );
 }
 
 // ─── Who draws a type's page ──────────────────────────────────────────────────
 
 /**
- * The Tool that owns this type's page, on the row for the type itself.
+ * The Tool that owns this type's page, inside the type's own settings.
  *
  * The profiles/spaces/events analogy, from the admin's side: a member-invented
  * type gets a real page the moment an installed Tool claims it, and this is the
@@ -188,42 +286,138 @@ function TypePageOwner({ typeName, claimants, onChoose, saving }: {
 }) {
   const noun = `${typeName.toLowerCase()} notes`;
 
-  if (claimants.length > 1) {
-    return (
-      <Select
-        className="w-44 shrink-0"
-        value={claimants[0].id}
-        disabled={saving}
-        title={`${claimants.length} tools claim this page — pick the one that draws it`}
-        aria-label={`Which tool draws the page for ${noun}`}
-        onChange={e => onChoose(e.target.value)}
-      >
-        {claimants.map(install => (
-          <option key={install.id} value={install.id}>{install.title}</option>
-        ))}
-      </Select>
-    );
-  }
-
-  const admin = claimants[0] ?? null;
   return (
-    <span
-      className="w-24 shrink-0 truncate text-right text-xs text-text-muted"
-      title={admin ? `${admin.title} draws the page for ${noun}` : `No installed tool draws a page for ${noun}`}
-    >
-      {admin ? admin.title : '—'}
-    </span>
+    <Field label="Page drawn by">
+      {claimants.length > 1 ? (
+        <Select
+          className="w-56"
+          value={claimants[0].id}
+          disabled={saving}
+          title={`${claimants.length} tools claim this page — pick the one that draws it`}
+          aria-label={`Which tool draws the page for ${noun}`}
+          onChange={e => onChoose(e.target.value)}
+        >
+          {claimants.map(install => (
+            <option key={install.id} value={install.id}>{install.title}</option>
+          ))}
+        </Select>
+      ) : (
+        <span className="text-sm text-text-secondary">
+          {claimants[0]
+            ? claimants[0].title
+            : 'No installed tool draws a page for these — they read as context notes.'}
+        </span>
+      )}
+    </Field>
   );
 }
 
-// ─── Type Section ─────────────────────────────────────────────────────────────
+// ─── Type row + its settings ──────────────────────────────────────────────────
 
-function TypeSection({ typeName, typeColor, toolLabel, pageOwner, aliases, allAliases, isPerson, noteScoped, previewChips, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, onDelete, saving }: {
+/** A labelled line inside the settings panel. */
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <h5 className="mb-1.5 text-xs font-medium text-text-muted">{label}</h5>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * One type, as a line you read: its colour, its name, the aliases it can wear,
+ * and the chevron that drops everything you can change about it open in place.
+ *
+ * The row says nothing about which tool the type came in with, because the
+ * section it sits under is that tool — provenance is a heading, not a column
+ * repeated down every line.
+ */
+function TypeRow({ typeName, typeColor, previewChips, expanded, onOpen, onUpdateColor }: {
   typeName: string;
   typeColor: string;
-  /** The tool this type came in with — named on the row so switching a tool off
-      never silently takes a type with it. Absent on member-made types. */
-  toolLabel?: string;
+  previewChips: { name: string; color: string }[];
+  /** Open right here, under the row — there is no second window over this one. */
+  expanded: boolean;
+  onOpen: () => void;
+  onUpdateColor: (color: string) => void;
+}) {
+  const [showColorPicker, setShowColorPicker] = useState(false);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
+      className="flex cursor-pointer items-center gap-3.5 py-4 transition-colors hover:bg-surface-2"
+      aria-expanded={expanded}
+      aria-label={`Settings for ${typeName}`}
+    >
+      {/* The chevron leads the row: it points into the type while shut and down
+          the moment what's inside is on screen, so a column of them reads as
+          which one is open. */}
+      <span className="ml-1 grid h-5 w-5 shrink-0 place-items-center text-text-muted">
+        <ChevronDownIcon className={`h-4 w-4 transition-transform ${expanded ? '' : '-rotate-90'}`} />
+      </span>
+
+      {/* The swatch IS the colour control — the one thing on this row you change
+          without opening anything, so the click never reaches the row. */}
+      <span className="relative shrink-0" onClick={e => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => setShowColorPicker(p => !p)}
+          className="block h-5 w-5 rounded transition-transform hover:scale-110"
+          style={{ background: typeColor }}
+          title={`Change the colour of ${typeName}`}
+          aria-label={`Colour of ${typeName}`}
+        />
+        {showColorPicker && (
+          <span className="absolute left-0 top-7 z-50 block">
+            <ColorPicker
+              color={typeColor}
+              onChange={onUpdateColor}
+              onClose={() => setShowColorPicker(false)}
+            />
+          </span>
+        )}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-base font-semibold text-text-primary">
+        {typeName}
+      </span>
+
+      {/* The chips are the collapsed view of what's underneath, so they go when
+          the list they preview is on screen — faded out rather than cut, since
+          the list is growing in at the same moment. They keep their space so
+          the row's other parts never jump. */}
+      {previewChips.length > 0 && (
+        <span
+          aria-hidden={expanded}
+          className={`flex shrink-0 items-center gap-1.5 transition-opacity duration-200 ${
+            expanded ? 'pointer-events-none opacity-0' : 'opacity-100'
+          }`}
+        >
+          {previewChips.slice(0, 3).map(a => (
+            <Chip key={a.name} size="sm" color={a.color}>{a.name}</Chip>
+          ))}
+          {previewChips.length > 3 && (
+            <span className="text-xs text-text-muted">+{previewChips.length - 3}</span>
+          )}
+        </span>
+      )}
+
+    </div>
+  );
+}
+
+/**
+ * Everything a type is, dropped open under its row: the aliases it can wear,
+ * who draws its page, and — for a type a member named rather than a tool
+ * brought in — the way to take it back out of the vocabulary. Its colour is
+ * not here: the swatch on the row is the whole control.
+ */
+function TypeSettings({ typeName, typeColor, pageOwner, aliases, allAliases, isPerson, noteScoped, newOpen, onNewStart, onNewDone, onAddAlias, onRemoveAlias, onRenameAlias, onUpdateAliasColor, onDelete, saving }: {
+  typeName: string;
+  typeColor: string;
   /** Which installed Tool draws this type's page. Member-made types only. */
   pageOwner?: ReactNode;
   aliases: SpaceAlias[];
@@ -232,176 +426,61 @@ function TypeSection({ typeName, typeColor, toolLabel, pageOwner, aliases, allAl
   isPerson?: boolean;
   /** A type a member invented: it labels context notes, so it has no aliases. */
   noteScoped?: boolean;
-  previewChips: { name: string; color: string }[];
+  /** The create form, opened by "New alias" at the head of this panel. */
+  newOpen: boolean;
+  onNewStart: () => void;
+  onNewDone: () => void;
   onAddAlias: (a: SpaceAlias) => void;
   onRemoveAlias: (name: string, nodeType: string) => void;
+  onRenameAlias: (name: string, nodeType: string, newName: string) => void;
   onUpdateAliasColor: (name: string, nodeType: string, color: string) => void;
-  onUpdateTypeColor: (color: string) => void;
   /** Take this type out of the space's vocabulary. Member-made types only —
       a built-in is what the tools create entities under. */
   onDelete?: () => void;
   saving: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
-
-  const handleAdd = (alias: SpaceAlias) => {
-    onAddAlias(alias);
-    setAdding(false);
-  };
-
-  const toggleExpanded = () => {
-    setExpanded(p => !p);
-    setAdding(false);
-    setShowColorPicker(false);
-  };
-
   return (
-    <div>
-      {/* Header. This list IS the page, so the rows are sized like a heading
-          each rather than like a settings line — a type is the biggest idea in
-          the space, and the chips have to be readable at a glance. */}
-      <div className="flex items-center gap-3.5 py-4">
-        {/* Expand chevron */}
-        <button
-          type="button"
-          onClick={toggleExpanded}
-          className="w-6 h-6 flex items-center justify-center shrink-0 text-text-muted hover:text-text-primary transition-colors"
-        >
-          <svg
-            className="w-4 h-4 transition-transform duration-200"
-            style={{ transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
-            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+    <div className="space-y-5">
+      {isPerson ? (
+        <PersonAliases
+          typeColor={typeColor}
+          newOpen={newOpen}
+          onNewStart={onNewStart}
+          onNewDone={onNewDone}
+        />
+      ) : noteScoped ? (
+        /* A type somebody named on the draft surface. Things made under it are
+           context notes — Context and Raw, a coloured chip, no profile page — so
+           there is nothing here to alias: an alias narrows a directory record,
+           and a note isn't one. */
+        <p className="text-sm text-text-muted">
+          Added from a note. Things of this type are context notes, so it carries no aliases —
+          only the colour on its row.
+        </p>
+      ) : (
+        <LabelAliases
+          typeName={typeName}
+          typeColor={typeColor}
+          aliases={aliases}
+          allAliases={allAliases}
+          newOpen={newOpen}
+          onNewStart={onNewStart}
+          onNewDone={onNewDone}
+          onAdd={onAddAlias}
+          onRename={onRenameAlias}
+          onUpdateColor={onUpdateAliasColor}
+          onRemove={onRemoveAlias}
+          saving={saving}
+        />
+      )}
 
-        {/* Clickable color square — picker opens from here */}
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={e => { e.stopPropagation(); setShowColorPicker(p => !p); }}
-            className="w-5 h-5 rounded transition-transform hover:scale-110"
-            style={{ background: typeColor }}
-            title="Change type colour"
-          />
-          {showColorPicker && (
-            <div className="absolute left-0 top-7 z-50" onClick={e => e.stopPropagation()}>
-              <ColorPicker
-                color={typeColor}
-                onChange={onUpdateTypeColor}
-                onClose={() => setShowColorPicker(false)}
-              />
-            </div>
-          )}
-        </div>
+      {pageOwner}
 
-        {/* Name — clicking expands */}
-        <button
-          type="button"
-          onClick={toggleExpanded}
-          className="font-semibold text-base text-text-primary flex-1 text-left"
-        >
-          {typeName}
-        </button>
-
-        {/* Alias preview */}
-        {previewChips.length > 0 && (
-          <button
-            type="button"
-            onClick={toggleExpanded}
-            className="flex items-center gap-1.5 shrink-0"
-          >
-            {previewChips.slice(0, 3).map(a => (
-              <Chip key={a.name} size="sm" color={a.color}>{a.name}</Chip>
-            ))}
-            {previewChips.length > 3 && (
-              <span className="text-xs text-text-muted">+{previewChips.length - 3}</span>
-            )}
-          </button>
-        )}
-
-        {/* Which tool this type belongs to. Always last, so the tool names line
-            up down the right edge however many aliases a row carries — it's
-            provenance, not vocabulary, and must not read as an alias chip. */}
-        {toolLabel && (
-          <span
-            className="w-24 shrink-0 text-right text-xs text-text-muted"
-            title={`Comes with the ${toolLabel} tool`}
-          >
-            {toolLabel}
-          </span>
-        )}
-
-        {/* Same column, same reason, for a member-made type: what draws its
-            page. A tool type's page is Visvine's own, so the two never both
-            appear on one row. */}
-        {pageOwner}
-      </div>
-
-      {/* Expanded panel */}
-      {expanded && (
-        <div className="space-y-3 pb-5 pl-[3.25rem]">
-          {isPerson ? (
-            <PersonAliases />
-          ) : noteScoped ? (
-            /* A type somebody named on the draft surface. Things made under it
-               are context notes — Context and Raw, a coloured chip, no profile
-               page — so there is nothing here to alias: an alias narrows a
-               directory record, and a note isn't one. The colour square above
-               is the whole of what this type has to configure. */
-            <div className="flex items-start justify-between gap-4">
-              <p className="text-sm text-text-muted">
-                Added from a note. Things of this type are context notes, so it carries no aliases —
-                only its colour.
-              </p>
-              {onDelete && (
-                <Button variant="danger" size="sm" disabled={saving} onClick={onDelete}>
-                  Delete type
-                </Button>
-              )}
-            </div>
-          ) : (
-            <>
-              {aliases.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {aliases.map(alias => (
-                    <AliasChip
-                      key={`${alias.nodeType}:${alias.name}`}
-                      alias={alias}
-                      onColorChange={c => onUpdateAliasColor(alias.name, alias.nodeType, c)}
-                      onRemove={() => onRemoveAlias(alias.name, alias.nodeType)}
-                      disabled={saving}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {adding ? (
-                <AddAliasRow
-                  nodeType={typeName}
-                  defaultColor={typeColor}
-                  existing={allAliases}
-                  onAdd={handleAdd}
-                  onCancel={() => setAdding(false)}
-                  disabled={saving}
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setAdding(true)}
-                  className={chipClass({ tone: 'dashed', size: 'lg', className: 'gap-1.5 hover:bg-surface-3 hover:text-text-primary' })}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add alias
-                </button>
-              )}
-            </>
-          )}
+      {onDelete && (
+        <div className="flex justify-end border-t border-border-subtle pt-4">
+          <Button variant="danger" size="sm" disabled={saving} onClick={onDelete}>
+            Delete type
+          </Button>
         </div>
       )}
     </div>
@@ -427,6 +506,13 @@ export default function TypesPanel() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<NodeTypeConfig | null>(null);
+  // The type dropped open. Held by NAME, not by the object: every save
+  // refreshes the space record, and the panel has to follow the new colour
+  // rather than keep showing the one it opened with.
+  const [openName, setOpenName] = useState<string | null>(null);
+  // The type whose "New alias" was pressed. Held beside the open type rather
+  // than inside the list, because the button that starts one is on the row.
+  const [creatingFor, setCreatingFor] = useState<string | null>(null);
   const { report } = useConsoleSave();
 
   useEffect(() => {
@@ -471,6 +557,8 @@ export default function TypesPanel() {
     aliasAction({ action: 'create', nodeType: alias.nodeType, name: alias.name, color: alias.color });
   const handleRemoveAlias = (name: string, nodeType: string) =>
     aliasAction({ action: 'delete', nodeType, name });
+  const handleRenameAlias = (name: string, nodeType: string, newName: string) =>
+    aliasAction({ action: 'update', nodeType, name, newName });
   const handleUpdateAliasColor = (name: string, nodeType: string, color: string) =>
     aliasAction({ action: 'update', nodeType, name, color });
   // A built-in the space never stored has nothing to map over, so recolour
@@ -532,12 +620,15 @@ export default function TypesPanel() {
   // belongs to nobody but the space. Telling them apart is the difference
   // between "why can't I delete Channel" and "why is Playbook in this list".
   const toolLabels = new Map(FEATURES.map(f => [f.key, f.label]));
-  const toolTypes: { type: NodeTypeConfig; toolLabel: string }[] = [];
+  // One bucket per tool, in the tool order the sidebar uses — the heading IS the
+  // provenance, so a type never repeats its tool's name down the right edge.
+  const byTool = new Map<string, NodeTypeConfig[]>();
   const customTypes: NodeTypeConfig[] = [];
   // Search reaches a type's aliases as well as its name: an alias is the word a
   // member actually has in mind ("Founder"), and the type it hangs off
-  // ("Person") is what they're looking for. Person's aliases live on the
-  // permission snapshot, so they're matched from there.
+  // ("Person") is what they're looking for. Person's live on the permission
+  // snapshot and are edited on Members, so typing one still finds Person here
+  // and Person says where it went.
   const term = query.trim().toLowerCase();
   const matches = (type: NodeTypeConfig) => {
     if (!term) return true;
@@ -551,65 +642,95 @@ export default function TypesPanel() {
     if (!matches(type)) continue;
     const key = nodeTypeToolKey(type.name);
     const label = key ? toolLabels.get(key) : undefined;
-    if (label) toolTypes.push({ type, toolLabel: label });
+    if (label) byTool.set(label, [...(byTool.get(label) ?? []), type]);
     else customTypes.push(type);
   }
+  // FEATURES order, so the sections read down the page the way the tools do in
+  // the rail; a label with nothing under it after the search simply isn't drawn.
+  const toolSections = FEATURES.map(f => f.label)
+    .filter((label, i, all) => all.indexOf(label) === i)
+    .map(label => ({ label, types: byTool.get(label) ?? [] }))
+    .filter(section => section.types.length > 0);
+  const anyToolTypes = toolSections.length > 0;
 
-  const renderType = (liveType: NodeTypeConfig, toolLabel?: string) => {
+  // One type at a time: a list where every row can be open at once is a list
+  // you scroll rather than one you read.
+  const renderRow = (liveType: NodeTypeConfig) => {
     const isPerson = liveType.name.toLowerCase() === PERMISSION_TYPE;
-    const typeAliases = aliasesForType(aliases, liveType.name);
-    // Only a member-made type can have a Tool-owned page; pageClaimantsFor
-    // answers empty for everything else, so the column stays off those rows
-    // rather than promising a '—' that could never become a name.
     const noteScoped = liveType.scope === 'note';
+    const typeAliases = aliasesForType(aliases, liveType.name);
+    const expanded = openName?.toLowerCase() === liveType.name.toLowerCase();
+    // Only a member-made type can have a Tool-owned page; pageClaimantsFor
+    // answers empty for everything else, so the field stays off those panels
+    // rather than promising a '—' that could never become a name.
     const claimants = noteScoped
       ? pageClaimantsFor(currentSpace.installedTools, liveType.name)
       : [];
+
     return (
-      <TypeSection
-        key={liveType.name}
-        typeName={liveType.name}
-        typeColor={liveType.color}
-        toolLabel={toolLabel}
-        pageOwner={
-          noteScoped ? (
-            <TypePageOwner
+      <div key={liveType.name}>
+        <TypeRow
+          typeName={liveType.name}
+          typeColor={liveType.color}
+          // Person's preview comes from the live permission snapshot, which
+          // already grafts in the built-in Admin; every other type's from the
+          // space record it saves to.
+          previewChips={isPerson ? (data?.aliases ?? []) : typeAliases}
+          expanded={expanded}
+          onOpen={() => {
+            setCreatingFor(null);
+            setOpenName(expanded ? null : liveType.name);
+          }}
+          onUpdateColor={color => handleUpdateTypeColor(liveType, color)}
+        />
+        {expanded && (
+          <div className="mb-4">
+            <TypeSettings
               typeName={liveType.name}
-              claimants={claimants}
+              typeColor={liveType.color}
+              pageOwner={
+                noteScoped ? (
+                  <TypePageOwner
+                    typeName={liveType.name}
+                    claimants={claimants}
+                    saving={saving}
+                    onChoose={installId =>
+                      handleChoosePageOwner(liveType.name, claimants, installId)
+                    }
+                  />
+                ) : undefined
+              }
+              noteScoped={noteScoped}
+              newOpen={creatingFor?.toLowerCase() === liveType.name.toLowerCase()}
+              onNewStart={() => setCreatingFor(liveType.name)}
+              onNewDone={() => setCreatingFor(null)}
+              aliases={typeAliases}
+              allAliases={aliases}
+              isPerson={isPerson}
+              onAddAlias={handleAddAlias}
+              onRemoveAlias={handleRemoveAlias}
+              onRenameAlias={handleRenameAlias}
+              onUpdateAliasColor={handleUpdateAliasColor}
+              onDelete={noteScoped ? () => setDeleting(liveType) : undefined}
               saving={saving}
-              onChoose={installId => handleChoosePageOwner(liveType.name, claimants, installId)}
             />
-          ) : undefined
-        }
-        noteScoped={noteScoped}
-        aliases={typeAliases}
-        allAliases={aliases}
-        isPerson={isPerson}
-        // Person's preview comes from the live permission snapshot, which
-        // already grafts in the built-in Admin; every other type's from the
-        // space record it saves to.
-        previewChips={isPerson ? (data?.aliases ?? []) : typeAliases}
-        onAddAlias={handleAddAlias}
-        onRemoveAlias={handleRemoveAlias}
-        onUpdateAliasColor={handleUpdateAliasColor}
-        onUpdateTypeColor={color => handleUpdateTypeColor(liveType, color)}
-        onDelete={noteScoped ? () => setDeleting(liveType) : undefined}
-        saving={saving}
-      />
+          </div>
+        )}
+      </div>
     );
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
       {accessError && <Alert variant="error" onDismiss={() => setAccessError(null)}>{accessError}</Alert>}
 
-      {/* The tab bar above already says "Types", so each list starts straight
-          away under its own heading. A type whose tool is switched off isn't
-          offered at all — no point curating aliases for something the space
-          can't create.
+      {/* The tab bar above already says "Types", so the page starts on the
+          search box and then goes tool by tool. A type whose tool is switched
+          off isn't offered at all — no point curating aliases for something the
+          space can't create.
 
-          Alphabetical within each group: the registry order in
+          Alphabetical within each section: the registry order in
           DEFAULT_NODE_TYPES groups types by what they are (people, then places,
           then containers) and the directory and graph still read it that way. A
           list you scan to find one type wants names in the order you'd look
@@ -620,31 +741,32 @@ export default function TypesPanel() {
         placeholder="Search types and aliases…"
       />
 
-      <section>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-          Tool types
-        </h3>
-        {toolTypes.length > 0 ? (
-          <div className="mt-1 divide-y divide-border-subtle">
-            {toolTypes.map(({ type, toolLabel }) => renderType(type, toolLabel))}
+      {/* One section per tool: the tool's name, a hairline, then its types. */}
+      {toolSections.map(({ label, types: sectionTypes }) => (
+        <section key={label}>
+          <h3 className="border-b border-border-default pb-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+            {label}
+          </h3>
+          <div className="divide-y divide-border-subtle">
+            {sectionTypes.map(renderRow)}
           </div>
-        ) : (
-          <p className="py-4 text-sm text-text-muted">No matches.</p>
-        )}
-      </section>
+        </section>
+      ))}
+
+      {!anyToolTypes && <p className="text-sm text-text-muted">No matches.</p>}
 
       {/* Member-made types. Rendered even when empty — an empty list is the
           answer to "where do the types I name on a draft show up?". */}
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+        <h3 className="border-b border-border-default pb-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
           Custom types
         </h3>
         {customTypes.length > 0 ? (
-          <div className="mt-1 divide-y divide-border-subtle">
-            {customTypes.map(type => renderType(type))}
+          <div className="divide-y divide-border-subtle">
+            {customTypes.map(renderRow)}
           </div>
         ) : (
-          <p className="py-4 text-sm text-text-muted">{term ? 'No matches.' : 'None yet.'}</p>
+          <p className="py-3 text-sm text-text-muted">{term ? 'No matches.' : 'None yet.'}</p>
         )}
       </section>
 

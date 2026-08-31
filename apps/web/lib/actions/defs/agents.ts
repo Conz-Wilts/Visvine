@@ -37,7 +37,7 @@ export const AGENT_ACTIONS = [
       'Send a message to an agent in this space. It lands in that agent\'s mailbox and is read on its next run, ' +
       'exactly as an email or an in-app message would be — there is one path for all of them. The agent runs as ' +
       'itself with its own brief and grants, so a message asks it to do something; it never lends it your access. ' +
-      'The reply arrives as the agent\'s ordinary work: its timeline, the notes it writes, and its notifications.',
+      'The reply arrives as the agent\'s ordinary work: its timeline and the notes it writes.',
     input: {
       space_id: spaceArg,
       agent: z.string().min(1).describe("The agent to message, e.g. 'weekly-digest'"),

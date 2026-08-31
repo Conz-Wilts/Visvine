@@ -1,10 +1,13 @@
 'use client';
 
-// Members → Requests. Everybody waiting on an admin, in one queue.
+// Everybody waiting on an admin, in one queue near the top of Members.
 //
 // Two different things are being asked for — to join the space at all, and to
 // reach something inside it — but from where the member stands they are the same
-// act, so they are answered on the same screen rather than one per surface.
+// act, so they are answered together, above the members they are asking to join.
+//
+// Nothing waiting means nothing rendered. A queue is an interruption; an empty
+// one is not worth a line of the page, let alone the tab it used to have.
 
 import { useState } from 'react';
 import { Avatar, Button, ConfirmDialog, SettingsSection } from '@/components/ui';
@@ -12,7 +15,7 @@ import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import AccessRequests from './AccessRequests';
 import { usePeopleSection } from './PeopleDataContext';
 
-export default function RequestsTab() {
+export default function Requests() {
   const { spaceId, data, busy, run } = usePeopleSection();
   const [deny, setDeny] = useState<{ userId: string; name: string } | null>(null);
 
@@ -25,15 +28,15 @@ export default function RequestsTab() {
   const removePending = (userId: string) =>
     run(() => fetchJson(`/api/communities/${spaceId}/members/${userId}`, { method: 'DELETE' }));
 
+  if (pending.length === 0 && pendingAccess.length === 0) return null;
+
   return (
-    <div className="space-y-5">
-      {/* Renders its own section when anything is waiting or has recently been
-          resolved; silent otherwise, so an empty queue is one empty state below
-          rather than two. */}
+    <>
+      {/* Renders its own section, or nothing when no access request is waiting. */}
       <AccessRequests />
 
       {pending.length > 0 && (
-        <SettingsSection title={`Join requests (${pending.length})`}>
+        <SettingsSection title={`Wants to join (${pending.length})`}>
           <div className="divide-y divide-border-subtle">
             {pending.map((member) => (
               <div key={member.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
@@ -68,10 +71,6 @@ export default function RequestsTab() {
         </SettingsSection>
       )}
 
-      {pending.length === 0 && pendingAccess.length === 0 && (
-        <p className="py-8 text-center text-sm text-text-muted">Nobody is waiting on you.</p>
-      )}
-
       <ConfirmDialog
         open={deny !== null}
         title="Deny join request"
@@ -90,6 +89,6 @@ export default function RequestsTab() {
         }}
         onClose={() => setDeny(null)}
       />
-    </div>
+    </>
   );
 }
