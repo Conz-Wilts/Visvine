@@ -1,18 +1,17 @@
 'use client';
 
 /**
- * The Drive's tiles and rows: a folder tile, a file card, the list-view row,
- * and the kebab menu they all carry. Drag-and-drop between them speaks one
+ * The Drive's tiles: a folder tile, a file card, and the kebab menu they both
+ * carry. Drag-and-drop between them speaks one
  * payload (`DRAG_TYPE`) so a file or folder can be dropped on any folder tile
  * or breadcrumb.
  */
 
-import { useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useRef, useState, type DragEvent } from 'react';
 import { FolderIcon } from '@/features/shared/icons';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
 import { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown';
-import { formatBytes } from '@/lib/utils';
-import { FILE_BG, FILE_LABEL, FileTypeIcon, INDEX_STATE_LABEL } from './resourceUi';
+import { FILE_BG, FileTypeIcon, INDEX_STATE_LABEL } from './resourceUi';
 import type { Resource, ResourceFolder } from '@/lib/types';
 
 // ─── Drag payload ─────────────────────────────────────────────────────────────
@@ -207,94 +206,5 @@ export function FileCard({
         </p>
       )}
     </div>
-  );
-}
-
-// ─── List rows ────────────────────────────────────────────────────────────────
-
-function fileDate(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function Row({
-  icon, name, meta, trailing, actions, selected, over, onOpen, dragProps, dropProps,
-}: {
-  icon: ReactNode;
-  name: string;
-  meta: ReactNode;
-  trailing: ReactNode;
-  actions: MenuAction[];
-  selected?: boolean;
-  over?: boolean;
-  onOpen: () => void;
-  dragProps: React.HTMLAttributes<HTMLDivElement>;
-  dropProps?: React.HTMLAttributes<HTMLDivElement>;
-}) {
-  return (
-    <div
-      role="row"
-      draggable
-      onClick={onOpen}
-      {...dragProps}
-      {...dropProps}
-      className={`group grid h-14 cursor-pointer select-none grid-cols-[minmax(0,1fr)_140px_100px_40px] items-center gap-4 border-b border-border-default px-3 text-[15px] transition-colors ${
-        selected ? 'bg-brand-green/10' : 'hover:bg-surface-2'
-      } ${over ? 'ring-2 ring-inset ring-brand-green bg-brand-green/10' : ''}`}
-    >
-      <div className="flex min-w-0 items-center gap-3.5">
-        {icon}
-        <span className="truncate font-medium text-text-primary">{name}</span>
-      </div>
-      <span className="truncate text-[13px] text-text-muted">{meta}</span>
-      <span className="truncate text-[13px] text-text-muted">{trailing}</span>
-      <ItemMenu actions={actions} className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100" />
-    </div>
-  );
-}
-
-export function FolderRow({
-  folder, actions, onOpen, onDropItem,
-}: {
-  folder: ResourceFolder; actions: MenuAction[]; onOpen: () => void; onDropItem: (item: DragItem) => void;
-}) {
-  const { over, handlers } = useDropTarget(onDropItem);
-  return (
-    <Row
-      icon={<FolderIcon className="h-6 w-6 shrink-0 text-text-secondary" />}
-      name={folder.name}
-      meta={fileDate(folder.createdAt)}
-      trailing="—"
-      actions={actions}
-      over={over}
-      onOpen={onOpen}
-      dragProps={{ onDragStart: e => setDragItem(e, { kind: 'folder', id: folder.id }) }}
-      dropProps={handlers}
-    />
-  );
-}
-
-export function FileRow({
-  resource, selected, pinned, actions, onOpen, location,
-}: {
-  resource: Resource; selected: boolean; pinned: boolean; actions: MenuAction[]; onOpen: () => void;
-  /** Shown in search results, where rows come from many folders. */
-  location?: string;
-}) {
-  return (
-    <Row
-      icon={<FileTypeIcon type={resource.fileType} className="h-7 w-7 shrink-0 rounded-md [&>svg]:h-[18px] [&>svg]:w-[18px]" />}
-      name={resource.name}
-      meta={location ?? fileDate(resource.createdAt)}
-      trailing={
-        <>
-          {resource.fileSize ? formatBytes(resource.fileSize) : (FILE_LABEL[resource.fileType] ?? '—')}
-          {pinned ? ' · Pinned' : ''}
-        </>
-      }
-      actions={actions}
-      selected={selected}
-      onOpen={onOpen}
-      dragProps={{ onDragStart: e => setDragItem(e, { kind: 'file', id: resource.id }) }}
-    />
   );
 }

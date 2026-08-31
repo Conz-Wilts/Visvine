@@ -1,46 +1,33 @@
 'use client';
-// The Resources tab of the Directory: a space's Drive — folders, files, upload
-// by drop, preview in a drawer. It renders inside the directory pane under the
-// Grid / Context / Resources tab bar (app/(auth)/directory/page.tsx), so its
-// toolbar sits exactly where the Directory's own does; `/resources/<id>` is
-// still a file's full page, and `/resources` sends you here.
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+// The Resources tab of the Directory: a space's Drive — folder tiles, file
+// cards, upload by dropping onto the page, preview in a drawer. The toolbar is
+// the breadcrumb and the search box and nothing else. It renders inside the
+// directory pane under the Grid / Context / Resources tab bar
+// (app/(auth)/directory/page.tsx), so its toolbar sits exactly where the
+// Directory's own does; `/resources/<id>` is still a file's full page, and
+// `/resources` sends you here.
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useResources } from '@/features/resources/hooks/useResources';
-import ResourceUploadDialog from '@/features/resources/components/ResourceUploadDialog';
 import ResourceDetailDrawer from '@/features/resources/components/ResourceDetailDrawer';
 import { getPinned, togglePin } from '@/features/resources/components/resourceUi';
 import {
-  FileCard, FileRow, FolderRow, FolderTile, useDropTarget,
+  FileCard, FolderTile, useDropTarget,
   type DragItem, type MenuAction,
 } from '@/features/resources/components/driveItems';
 import { MoveDialog, NameDialog } from '@/features/resources/components/driveDialogs';
 import { driveApi } from '@/features/resources/lib/driveApi';
-import { childFolders, folderPathLabel, folderTrail, subtree } from '@/features/resources/lib/tree';
-import { ConfirmDialog, EmptyState, SearchInput, ViewToggle } from '@/components/ui';
-import Dropdown, { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown';
-import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
-import { ChevronRightIcon, FolderIcon, PlusIcon, UploadIcon } from '@/features/shared/icons';
+import { childFolders, folderTrail, subtree } from '@/features/resources/lib/tree';
+import { ConfirmDialog, EmptyState, SearchInput } from '@/components/ui';
+import { ChevronRightIcon } from '@/features/shared/icons';
 import type { Resource, ResourceFolder } from '@/lib/types';
 
-type View = 'grid' | 'list';
-type TypeFilter = 'all' | 'docs' | 'sheets' | 'pdf' | 'image' | 'other';
-/** Field and direction in one choice — the menu says what the order IS. */
-type Sort = 'name-asc' | 'name-desc' | 'newest' | 'oldest';
-
-const TYPE_GROUP: Record<TypeFilter, (t: string) => boolean> = {
-  all: () => true,
-  docs: t => t === 'docx' || t === 'markdown' || t === 'text',
-  sheets: t => t === 'xlsx' || t === 'csv',
-  pdf: t => t === 'pdf',
-  image: t => t === 'image',
-  other: t => !['docx', 'markdown', 'text', 'xlsx', 'csv', 'pdf', 'image'].includes(t),
-};
+/** Tiles and cards share one column track, so they line up and neither
+    stretches to half the screen on a wide monitor. */
+const DRIVE_GRID = 'grid gap-4 grid-cols-[repeat(auto-fill,minmax(220px,1fr))]';
 
 type Dialog =
-  | { kind: 'newFolder' }
-  | { kind: 'upload' }
   | { kind: 'renameFolder'; folder: ResourceFolder }
   | { kind: 'renameFile'; file: Resource }
   | { kind: 'moveFolder'; folder: ResourceFolder }
@@ -70,37 +57,6 @@ function Crumb({
   );
 }
 
-// ─── "New" button ─────────────────────────────────────────────────────────────
-
-function NewButton({ onFolder, onUpload }: { onFolder: () => void; onUpload: () => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useClickOutside(ref, () => setOpen(false));
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="flex h-10 items-center gap-2 rounded-lg bg-brand-green pl-3 pr-4 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-      >
-        <PlusIcon className="h-4 w-4" />
-        New
-      </button>
-      {open && (
-        <div className={`${DROPDOWN_MENU_CLASS} min-w-[200px]`}>
-          <button type="button" onClick={() => { setOpen(false); onFolder(); }} className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-surface-2">
-            <FolderIcon className="h-4 w-4 text-text-muted" /> New folder
-          </button>
-          <button type="button" onClick={() => { setOpen(false); onUpload(); }} className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-surface-2">
-            <UploadIcon className="h-4 w-4 text-text-muted" /> File upload
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-
 export default function ResourcesBrowser() {
   const router = useRouter();
   const { currentSpace } = useSpace();
@@ -108,15 +64,12 @@ export default function ResourcesBrowser() {
   const { resources, folders, loading, refetch } = useResources(spaceId);
 
   const [folderId, setFolderId] = useState<string | null>(null);
-  const [view, setView] = useState<View>('grid');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [sort, setSort] = useState<Sort>('name-asc');
   const [search, setSearch] = useState('');
   const [pinned, setPinned] = useState<string[]>([]);
   const [selected, setSelected] = useState<Resource | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [osDrop, setOsDrop] = useState(false);
-  const [uploadingCount, setUploadingCount] = useState(0);
+  const [uploading, setUploading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => { setPinned(getPinned()); }, []);
@@ -148,21 +101,6 @@ export default function ResourcesBrowser() {
   const searching = search.trim().length > 0;
   const needle = search.trim().toLowerCase();
 
-  // A folder shows everything it holds; Type is the only thing that narrows it.
-  const matchesFilters = useCallback(
-    (r: Resource) => TYPE_GROUP[typeFilter](r.fileType),
-    [typeFilter],
-  );
-
-  const compare = useCallback((a: Resource, b: Resource) => {
-    if (sort === 'name-asc' || sort === 'name-desc') {
-      const v = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      return sort === 'name-asc' ? v : -v;
-    }
-    const v = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    return sort === 'oldest' ? v : -v;
-  }, [sort]);
-
   const visibleFolders = useMemo(() => {
     if (searching) return folders.filter(f => f.name.toLowerCase().includes(needle));
     return childFolders(folders, folderId);
@@ -172,10 +110,12 @@ export default function ResourcesBrowser() {
     const pool = searching
       ? resources.filter(r => r.name.toLowerCase().includes(needle))
       : resources.filter(r => r.folderId === folderId);
-    return pool.filter(matchesFilters).sort(compare);
-  }, [resources, folderId, searching, needle, matchesFilters, compare]);
+    // Newest first, always — there is no order to choose.
+    return [...pool].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [resources, folderId, searching, needle]);
 
   const trail = folderTrail(folders, folderId);
+  /** The open folder, named for the drop overlay. */
   const hereLabel = trail.length ? trail[trail.length - 1].name : 'Resources';
 
   // ── Moves (drag-and-drop and the Move dialog share one path) ─────────────
@@ -197,7 +137,7 @@ export default function ResourcesBrowser() {
 
   const uploadFiles = useCallback(async (files: File[]) => {
     if (!spaceId || !files.length) return;
-    setUploadingCount(files.length);
+    setUploading(true);
     const failures: string[] = [];
     for (const file of files) {
       try {
@@ -205,8 +145,8 @@ export default function ResourcesBrowser() {
       } catch (e) {
         failures.push(`${file.name}: ${e instanceof Error ? e.message : 'upload failed'}`);
       }
-      setUploadingCount(n => n - 1);
     }
+    setUploading(false);
     if (failures.length) setActionError(failures.join(' · '));
     refetch();
   }, [spaceId, folderId, refetch]);
@@ -253,12 +193,11 @@ export default function ResourcesBrowser() {
       onDragLeave={e => { if (e.currentTarget === e.target) setOsDrop(false); }}
       onDrop={onPageDrop}
     >
-      {/* ── Toolbar: breadcrumb, search, filters, view, New ─────────────
+      {/* ── Toolbar: breadcrumb and search ──────────────────────────────
           The Directory toolbar's chrome to the pixel — sticky at top-8 under
           the pane tab bar, the same -ml-6 bleed, pl-12 inset and pt-9 / pb-2
           rhythm — so switching Grid → Resources moves nothing but the content.
-          Opaque: the grid scrolls under it. Nothing here may get
-          overflow-hidden or the filter menus clip. */}
+          Opaque: the grid scrolls under it. */}
       <div className="sticky top-8 z-10 -ml-6 bg-glass pt-9 pb-2 pl-12 pr-6">
 
         {/* Breadcrumb only once there is somewhere to go back to — at the root
@@ -300,54 +239,7 @@ export default function ResourcesBrowser() {
             size="lg"
             className="w-full max-w-[420px] flex-1 sm:min-w-[280px]"
           />
-          <div className="hidden h-6 w-px shrink-0 bg-border-subtle sm:block" />
-          <Dropdown<TypeFilter>
-            label="Type"
-            value={typeFilter}
-            onChange={setTypeFilter}
-            active={typeFilter !== 'all'}
-            options={[
-              { value: 'all', label: 'Any' },
-              { value: 'docs', label: 'Documents' },
-              { value: 'sheets', label: 'Spreadsheets' },
-              { value: 'pdf', label: 'PDFs' },
-              { value: 'image', label: 'Images' },
-              { value: 'other', label: 'Other' },
-            ]}
-          />
-          <Dropdown<Sort>
-            label="Sort"
-            value={sort}
-            onChange={setSort}
-            menuWidthClass="min-w-[180px]"
-            options={[
-              { value: 'name-asc', label: 'Name A–Z' },
-              { value: 'name-desc', label: 'Name Z–A' },
-              { value: 'newest', label: 'Newest first' },
-              { value: 'oldest', label: 'Oldest first' },
-            ]}
-          />
-          <div className="ml-auto flex items-center gap-2">
-            {!loading && (
-              <span className="text-xs text-text-muted">
-                {visibleFolders.length ? `${visibleFolders.length} ${visibleFolders.length === 1 ? 'folder' : 'folders'} · ` : ''}
-                {visibleFiles.length} {visibleFiles.length === 1 ? 'file' : 'files'}
-                {uploadingCount > 0 ? ` · uploading ${uploadingCount}…` : ''}
-              </span>
-            )}
-            <ViewToggle<View>
-              value={view}
-              onChange={setView}
-              options={[
-                { id: 'grid', label: 'Grid' },
-                { id: 'list', label: 'List' },
-              ]}
-            />
-            <NewButton
-              onFolder={() => setDialog({ kind: 'newFolder' })}
-              onUpload={() => setDialog({ kind: 'upload' })}
-            />
-          </div>
+          {uploading && <span className="text-xs text-text-muted">Uploading…</span>}
         </div>
       </div>
 
@@ -359,25 +251,25 @@ export default function ResourcesBrowser() {
       <div className="px-6 pt-7 pb-8">
         {loading ? (
           <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className={DRIVE_GRID}>
               {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-surface-2" />)}
             </div>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            <div className={DRIVE_GRID}>
               {Array.from({ length: 8 }).map((_, i) => <div key={i} className="aspect-[4/4.2] animate-pulse rounded-xl bg-surface-2" />)}
             </div>
           </div>
         ) : empty ? (
           <EmptyState
             title={searching ? 'Nothing matches' : 'This folder is empty'}
-            description={searching ? 'Try another name or clear the filters.' : 'Drop files anywhere on this page, or use New.'}
+            description={searching ? 'Try another name.' : 'Drop files anywhere on this page to upload them.'}
           />
-        ) : view === 'grid' ? (
+        ) : (
           <>
             {/* No "Folders" / "Files" headings: a folder pill and a file card
                 are already nothing alike, so the words only added chrome. */}
             {visibleFolders.length > 0 && (
               <section className="mb-6">
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                <div className={DRIVE_GRID}>
                   {visibleFolders.map(f => (
                     <FolderTile
                       key={f.id}
@@ -392,7 +284,7 @@ export default function ResourcesBrowser() {
             )}
             {visibleFiles.length > 0 && (
               <section>
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                <div className={DRIVE_GRID}>
                   {visibleFiles.map(r => (
                     <FileCard
                       key={r.id}
@@ -407,35 +299,6 @@ export default function ResourcesBrowser() {
               </section>
             )}
           </>
-        ) : (
-          <div role="table">
-            <div className="grid h-10 grid-cols-[minmax(0,1fr)_140px_100px_40px] items-center gap-4 border-b border-border-default px-3 text-xs font-semibold text-text-muted">
-              <span>Name</span>
-              <span>{searching ? 'Location' : 'Added'}</span>
-              <span>Size</span>
-              <span />
-            </div>
-            {visibleFolders.map(f => (
-              <FolderRow
-                key={f.id}
-                folder={f}
-                actions={folderActions(f)}
-                onOpen={() => { setSearch(''); setFolderId(f.id); }}
-                onDropItem={item => moveItem(item, f.id)}
-              />
-            ))}
-            {visibleFiles.map(r => (
-              <FileRow
-                key={r.id}
-                resource={r}
-                selected={selected?.id === r.id}
-                pinned={pinned.includes(r.id)}
-                actions={fileActions(r)}
-                onOpen={() => setSelected(r)}
-                location={searching ? folderPathLabel(folders, r.folderId) : undefined}
-              />
-            ))}
-          </div>
         )}
       </div>
 
@@ -458,23 +321,6 @@ export default function ResourcesBrowser() {
       />
 
       {/* ── Dialogs ─────────────────────────────────────────────────────── */}
-      {dialog?.kind === 'upload' && (
-        <ResourceUploadDialog
-          spaceId={currentSpace.id}
-          folderId={folderId}
-          folderName={hereLabel}
-          onClose={() => setDialog(null)}
-          onUploaded={refetch}
-        />
-      )}
-      {dialog?.kind === 'newFolder' && (
-        <NameDialog
-          title={`New folder in ${hereLabel}`}
-          submitLabel="Create"
-          onSubmit={name => act(() => driveApi.createFolder(currentSpace.id, name, folderId))}
-          onClose={() => setDialog(null)}
-        />
-      )}
       {dialog?.kind === 'renameFolder' && (
         <NameDialog
           title="Rename folder"
