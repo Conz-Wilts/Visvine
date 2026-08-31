@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Children, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 /**
  * The chrome every tree in the app is drawn with: the full-bleed row band, the
@@ -40,13 +40,128 @@ export function TreeGuide({ guide, active = false }: { guide: TreeGuideKind; act
   const edge = active ? 'border-brand-green/60' : 'border-border-default/70';
   return (
     <span className="relative flex w-3 shrink-0 self-stretch" aria-hidden="true">
+      {/* `tree-line` marks the vertical strokes so a branch opening can draw
+          them downward (globals.css) rather than switching them on. */}
       {guide === 'last' ? (
-        <span className={`absolute left-0 top-0 h-1/2 w-2.5 rounded-bl-[6px] border-b border-l ${edge}`} />
+        <span className={`tree-line absolute left-0 top-0 h-1/2 w-2.5 rounded-bl-[6px] border-b border-l ${edge}`} />
       ) : (
         <>
-          <span className={`absolute left-0 top-0 h-full w-px ${line}`} />
+          <span className={`tree-line absolute left-0 top-0 h-full w-px ${line}`} />
           <span className={`absolute left-0 top-1/2 h-px w-2.5 ${line}`} />
         </>
+      )}
+    </span>
+  );
+}
+
+/**
+ * A SPINE: one unbroken stroke down a short list, dropping out of the swatch on
+ * the row above, a tick into each row and a rounded corner into the last — it
+ * ends where the list does rather than trailing past it.
+ *
+ * The difference from the guides above is what the two are FOR. A tree's rows
+ * each draw their own segment because any of them may open a subtree of its
+ * own; a spine is one flat set — a type's aliases, say — so it is drawn as one
+ * line and can grow downward when the set is revealed.
+ *
+ * `ml-[14px]` puts it under the centre of the 20px glyph column on the row
+ * above (4px of margin + half of 20), and the stem is the 18px from that
+ * glyph's bottom edge down to the row's own (a `py-4` list row). Pass `animate`
+ * when the list is being revealed: the stroke draws down and each row lands as
+ * it is reached.
+ */
+export function TreeSpine({ children, animate = false }: {
+  children: React.ReactNode;
+  animate?: boolean;
+}) {
+  const rows = Children.toArray(children);
+  const last = rows.pop();
+  const count = rows.length + (last ? 1 : 0);
+  // The stem is the short climb back to the swatch, so it draws first and the
+  // run picks up where it stops; the run takes as long as the rows it passes.
+  const runMs = spineDelay(Math.max(count - 1, 0)) + SPINE_ROW_MS;
+  const stem = animate ? { animationDuration: `${SPINE_STEM_MS}ms` } : undefined;
+  const run = animate
+    ? { animationDuration: `${runMs}ms`, animationDelay: `${SPINE_STEM_MS}ms` }
+    : undefined;
+  const row = (i: number) =>
+    animate ? { animationDelay: `${SPINE_STEM_MS + spineDelay(i)}ms` } : undefined;
+
+  return (
+    <div className={`relative ml-[14px] ${animate ? 'tree-spine-enter' : ''}`}>
+      <span
+        aria-hidden
+        style={stem}
+        className="tree-line pointer-events-none absolute -top-[18px] left-0 h-[18px] w-px bg-border-default/70"
+      />
+      {rows.length > 0 && (
+        <div className="relative">
+          <span
+            aria-hidden
+            style={run}
+            className="tree-line pointer-events-none absolute inset-y-0 left-0 w-px bg-border-default/70"
+          />
+          {rows.map((child, i) => (
+            <div key={keyOf(child, i)} className="tree-spine-row" style={row(i)}>
+              {child}
+            </div>
+          ))}
+        </div>
+      )}
+      {last && (
+        <div className="tree-spine-row" style={row(rows.length)}>
+          {last}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The spine's timing, in one place: the stem draws, then the run travels past
+// one row every STAGGER while each row lands under it. The stagger stops
+// growing after a handful of rows so a long list never holds its tail off
+// screen waiting its turn.
+//
+// The numbers are the ones the context tree's branch cascade uses (globals.css,
+// `.ctx-branch-enter`): every tree in the app grows open at one speed, so a
+// folder and an alias list are visibly the same gesture.
+const SPINE_STEM_MS = 90;
+const SPINE_STAGGER_MS = 40;
+const SPINE_ROW_MS = 190;
+// The step shortens after the fifth row rather than stopping: holding every
+// later row on one delay animates the head of a long list and then drops the
+// whole tail on a single frame, which reads as two different animations.
+const SPINE_FULL_ROWS = 5;
+const SPINE_TAIL_MS = 18;
+const SPINE_TAIL_ROWS = 14;
+
+/** How long after the stem a row lands, walking down the list. */
+function spineDelay(i: number): number {
+  return (
+    Math.min(i, SPINE_FULL_ROWS) * SPINE_STAGGER_MS +
+    Math.max(0, Math.min(i, SPINE_TAIL_ROWS) - SPINE_FULL_ROWS) * SPINE_TAIL_MS
+  );
+}
+
+function keyOf(child: React.ReactNode, i: number): string {
+  return typeof child === 'object' && child !== null && 'key' in child && child.key
+    ? String(child.key)
+    : String(i);
+}
+
+/**
+ * A row's join to the spine: the tick off it, or the rounded corner that ends
+ * it. `-my-2.5` cancels the row's own padding — align-self stretch fills the
+ * CONTENT box, so without it the corner would start below the row's top edge,
+ * exactly where the stroke above it ends, leaving a gap.
+ */
+export function TreeSpineJoin({ kind }: { kind: TreeGuideKind }) {
+  return (
+    <span className="relative -my-2.5 flex w-3 shrink-0 self-stretch" aria-hidden>
+      {kind === 'last' ? (
+        <span className="tree-line absolute left-0 top-0 h-1/2 w-3 rounded-bl-[6px] border-b border-l border-border-default/70" />
+      ) : (
+        <span className="absolute left-0 top-1/2 h-px w-3 bg-border-default/70" />
       )}
     </span>
   );

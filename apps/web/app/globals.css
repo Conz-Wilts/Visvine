@@ -368,20 +368,54 @@ html, body {
 .ctx-branch-enter .ctx-branch > * {
   animation: ctx-row-drop 0.19s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+/* One cadence for every tree that grows open — the same steps TreeChrome's
+   spine walks (`SPINE_*`), so a folder and an alias list unfold at the same
+   speed rather than at two different ones.
+
+   The step SHORTENS after the fifth row rather than stopping: a flat delay for
+   everything past it made a long folder animate its head and then drop the
+   whole tail on one frame, which read as two different animations. 40ms a row
+   while the eye is following, 18ms once it isn't, and level after row 15 —
+   by then the cascade is 360ms deep and the rest is off the bottom anyway. */
 .ctx-branch-enter .ctx-branch > *:nth-child(1) { animation-delay: 0s; }
-.ctx-branch-enter .ctx-branch > *:nth-child(2) { animation-delay: 0.015s; }
-.ctx-branch-enter .ctx-branch > *:nth-child(3) { animation-delay: 0.03s; }
-.ctx-branch-enter .ctx-branch > *:nth-child(4) { animation-delay: 0.045s; }
-.ctx-branch-enter .ctx-branch > *:nth-child(5) { animation-delay: 0.06s; }
-/* The cascade stops growing after the fifth row: a folder of two hundred notes
-   would otherwise hold the tail at opacity 0 long enough to read as an empty
-   panel — the exact stall the animation is supposed to remove. */
-.ctx-branch-enter .ctx-branch > *:nth-child(n + 6) { animation-delay: 0.07s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(2) { animation-delay: 0.04s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(3) { animation-delay: 0.08s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(4) { animation-delay: 0.12s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(5) { animation-delay: 0.16s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(6) { animation-delay: 0.2s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(7) { animation-delay: 0.218s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(8) { animation-delay: 0.236s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(9) { animation-delay: 0.254s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(10) { animation-delay: 0.272s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(11) { animation-delay: 0.29s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(12) { animation-delay: 0.308s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(13) { animation-delay: 0.326s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(14) { animation-delay: 0.344s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(15) { animation-delay: 0.362s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(n + 16) { animation-delay: 0.362s; }
 /* Past two dozen rows there is nothing on screen to animate — a long folder
    runs off the bottom of the panel — so those rows skip the animation instead
    of paying for a composited layer each. */
 .ctx-branch-enter .ctx-branch > *:nth-child(n + 25) {
   animation: none;
+}
+
+/* A spine growing downward (TreeChrome's TreeSpine): the stroke draws from the
+   row above and each row lands as the line reaches it, so opening a set reads
+   as it being drawn rather than switched on. Durations and delays are inline —
+   they depend on how many rows there are — and the same `tree-line` hook draws
+   the context tree's own guides as its rows cascade in. */
+@keyframes tree-line-draw {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+.tree-spine-enter .tree-line,
+.ctx-branch-enter .ctx-branch > * .tree-line {
+  transform-origin: top;
+  animation: tree-line-draw 0.19s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tree-spine-enter .tree-spine-row {
+  animation: ctx-row-drop 0.19s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -395,7 +429,10 @@ html, body {
   .dropdown-pop,
   .tabbar-label-enter,
   .tabbar-label-exit,
-  .ctx-branch-enter .ctx-branch > * {
+  .ctx-branch-enter .ctx-branch > *,
+  .tree-spine-enter .tree-line,
+  .tree-spine-enter .tree-spine-row,
+  .ctx-branch-enter .ctx-branch > * .tree-line {
     animation: none !important;
   }
   .ctx-branch-wrap {

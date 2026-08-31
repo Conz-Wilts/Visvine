@@ -36,7 +36,11 @@ import {
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
 import { entityKindOf, isEntityFolderIndex } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
-import { TRASH_PATH, useContextTreeState } from '@/features/notes/hooks/useContextTreeState'
+import {
+  TRASH_PATH,
+  treeScrollMemory as scrollMemory,
+  useContextTreeState,
+} from '@/features/notes/hooks/useContextTreeState'
 import { canMoveInto, deleteFolderDenial, moveDenial, parentFolderOf } from '../lib/useContextTree'
 
 // Expansion state (openPaths + reveal overlay + persistence) lives in
@@ -47,13 +51,6 @@ function onSelectedPath(path: string, selectedPath: string | null): boolean {
   if (!selectedPath) return false
   return selectedPath === path || selectedPath.startsWith(`${path}/`)
 }
-
-// Where the tree was scrolled to, per scope, kept for the lifetime of the tab.
-// The docked tree re-mounts on every navigation (each page renders its own
-// ContextSidebar), and a fresh scroll container starts at 0 â€” so clicking a note
-// half-way down the tree would snap the list to the top and then smooth-scroll
-// back. Restoring the offset on mount makes the swap invisible.
-const scrollMemory = new Map<string, number>()
 
 // The glyph for a note's frontmatter type. `entityKindOf` is the wider net â€”
 // it catches retired organisation spellings getNodeGlyph has no entry for â€” so
@@ -591,6 +588,10 @@ function Tree({
   const children = (node.children ?? []).filter(
     (c) => !(c.kind === 'note' && c.path === ownIndex),
   )
+  // An open folder with nothing in it draws a stem into blank space, which
+  // reads as a branch that failed to load. One elbow into the word "Empty"
+  // ends the line where the folder does.
+  if (children.length === 0) return <EmptyBranchRow />
   return (
     <>
       {children.map((child, i) => {
@@ -635,6 +636,17 @@ function Tree({
         )
       })}
     </>
+  )
+}
+
+/** What an open folder shows when it holds nothing: the guide ends in an
+ *  elbow against the word, rather than trailing down past the last row. */
+function EmptyBranchRow() {
+  return (
+    <div className="flex items-center">
+      <GuideLine guide="last" />
+      <span className="py-1.5 pl-1.5 text-[13px] italic text-text-muted">Empty</span>
+    </div>
   )
 }
 

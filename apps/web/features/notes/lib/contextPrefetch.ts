@@ -95,6 +95,16 @@ export function swrFetch<T>(key: string, fn: () => Promise<T>, onData: (data: T)
   })
 }
 
+/** The cached value for a key, if one is already resolved and still fresh
+ *  enough to act on. Read-only and synchronous: a caller deciding whether it
+ *  can skip a round trip (the Context tab's "is the root note there?") asks
+ *  here rather than awaiting a fetch it may not need. */
+export function peekContextCache<T>(key: string): T | undefined {
+  const hit = cache.get(key)
+  if (!hit?.hasValue || Date.now() - hit.ts >= KEEP_MS) return undefined
+  return hit.value as T
+}
+
 // Subscribers per key. Invalidation is a mutation signal, not just an eviction:
 // a live surface holding the key's data in React state (the docked tree's note
 // index) has no other way to learn a save elsewhere changed it, and would keep
@@ -235,4 +245,37 @@ export function usePrefetchEntityContext(nodeId: string, node: NBNode | null, en
     })
     if (path) prefetchNoteContext(spaceId, path)
   }, [enabled, nodeId, nodeType, notePointer, spaceId])
+}
+
+// The context's home note, spelled here rather than imported: rootIndex.ts
+// imports this module, so taking its constant back would close a cycle.
+const CONTEXT_ROOT_NOTE = 'index.md'
+
+/** The Directory's own pages call this on mount: the Context tab is one click
+ *  away from every one of them, and its first paint needs three code-split
+ *  chunks (the docked tree, the panel, Tiptap) plus the tree/list/note reads.
+ *  Started when the grid mounts, all of it is warm by the time the tab is
+ *  clicked, so the click is a route change over cached data rather than the
+ *  whole cold load. Idle-scheduled so it never competes with the grid's own
+ *  fetch. */
+export function usePrefetchContextRoot(spaceId: string | null, enabled: boolean) {
+  useEffect(() => {
+    if (!enabled || !spaceId) return
+    let cancelled = false
+    const warm = () => {
+      if (cancelled) return
+      void import('../components/ContextSidebar').catch(() => {})
+      void import('../components/NoteContextPanel').catch(() => {})
+      prefetchNoteContext(spaceId, CONTEXT_ROOT_NOTE)
+    }
+    const hasIdle = typeof window.requestIdleCallback === 'function'
+    const idle = hasIdle
+      ? window.requestIdleCallback(warm, { timeout: 1500 })
+      : window.setTimeout(warm, 200)
+    return () => {
+      cancelled = true
+      if (hasIdle) window.cancelIdleCallback(idle)
+      else window.clearTimeout(idle)
+    }
+  }, [spaceId, enabled])
 }

@@ -1,10 +1,18 @@
 'use client'
 
-// Expansion state for the docked notes tree (NoteSidebar), persisted per scope
-// so a folder stays open across visits.
+// Expansion state for the docked notes tree (NoteSidebar).
+//
+// It is NOT persisted. Opening Context always starts the way the tree reads
+// best — the space root open, one layer of folders under it — rather than
+// restoring whatever chain was open days ago, which arrived as a wall of rows
+// nobody asked for and made the tab feel slow before a byte of it was useful.
+// Within a visit the set is remembered in memory (the docked tree re-mounts on
+// every navigation, so a hand-opened folder has to survive clicking a note),
+// and leaving Context for another Directory view clears it — see
+// `resetContextTreeState`, called from the Directory page.
 //
 // Three layers compose into what's actually open:
-//   openPaths       — what the user opened by hand, persisted per scope.
+//   openPaths       — what the user opened by hand, for this visit.
 //   revealPath      — a transient peek (search focus, profile navigation) that
 //                     expands a note's folder chain WITHOUT touching openPaths;
 //                     clearing it snaps back to exactly the hand-opened set.
@@ -19,7 +27,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ancestorFolders } from '@/lib/notes/shared/indexNote'
 
 const ROOT_PATH = ''
-const OPEN_STORE_PREFIX = 'visvine:notes-tree-open:'
+
+// Per-space expansion for the current visit. A module-level map, not
+// localStorage and not component state: the tree re-mounts on every navigation
+// (so state alone would collapse the tree whenever a note is clicked) but a
+// reload, or a trip out to the grid, should start from the root again.
+const visitOpen = new Map<string, Set<string>>()
+
+// Where the tree was scrolled to, per scope, for the same reason and the same
+// lifetime as the expansion above: the docked tree re-mounts on every
+// navigation, and a fresh scroll container starts at 0 — so clicking a note
+// half-way down would snap the list to the top and smooth-scroll back.
+export const treeScrollMemory = new Map<string, number>()
+
+/** Forget every space's expansion — the tree opens at its root next time.
+ *  Called when a Directory view that is not Context mounts, which is what makes
+ *  entering Context a fresh, one-layer tree. */
+export function resetContextTreeState(): void {
+  visitOpen.clear()
+  treeScrollMemory.clear()
+}
 
 /** The Trash row's expansion key. Not a real context path (a note can never live
  *  at a `:` prefix — sanitizePath strips it), so it shares openPaths without
@@ -33,19 +60,12 @@ function ancestorChain(path: string): string[] {
 }
 
 function readOpenPaths(storageKey: string | null): Set<string> {
-  if (!storageKey || typeof window === 'undefined') return new Set([ROOT_PATH])
-  try {
-    const raw = window.localStorage.getItem(OPEN_STORE_PREFIX + storageKey)
-    if (!raw) return new Set([ROOT_PATH])
-    const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed) ? new Set(parsed.map(String)) : new Set([ROOT_PATH])
-  } catch {
-    return new Set([ROOT_PATH])
-  }
+  if (!storageKey) return new Set([ROOT_PATH])
+  return new Set(visitOpen.get(storageKey) ?? [ROOT_PATH])
 }
 
 export interface ContextTreeState {
-  /** What the user opened by hand (persisted). */
+  /** What the user opened by hand, this visit. */
   openPaths: Set<string>
   /** openPaths + the reveal overlay − suppressed collapses: render from this. */
   effectiveOpenPaths: Set<string>
@@ -64,7 +84,7 @@ export function useContextTreeState(
   revealPath: string | null,
   /** Extra paths to hold open (the explorer's search prune force-expands the
    *  matched chains). Same transient contract as revealPath: layered over
-   *  openPaths, never persisted, and a manual collapse still wins. */
+   *  openPaths, never remembered, and a manual collapse still wins. */
   forceOpen?: Set<string> | null,
 ): ContextTreeState {
   const [openPaths, setOpenPaths] = useState<Set<string>>(() => readOpenPaths(storageKey))
@@ -78,12 +98,8 @@ export function useContextTreeState(
   }, [storageKey])
 
   useEffect(() => {
-    if (!storageKey || typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(OPEN_STORE_PREFIX + storageKey, JSON.stringify([...openPaths]))
-    } catch {
-      // Private mode / quota — expansion just stops persisting.
-    }
+    if (!storageKey) return
+    visitOpen.set(storageKey, openPaths)
   }, [openPaths, storageKey])
 
   const revealedPaths = useMemo(
