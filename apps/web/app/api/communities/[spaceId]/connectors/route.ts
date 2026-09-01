@@ -38,6 +38,22 @@ export async function GET(
     ).map((row) => row.name)
   );
 
+  // Whether the account behind an OAuth connector is actually linked. A
+  // connector written by a recipe names its provider after the note
+  // (AGENTS.md#connectors), so one query keyed by provider answers it for every
+  // row — and a note whose dance was abandoned reads as what it is rather than
+  // as connected. The caller's own connection wins over the space's, which is
+  // the order a run resolves them in.
+  const linked = new Map<string, { actsAs: string | null; broken: boolean }>();
+  const connections = await prisma.connectorConnection.findMany({
+    where: { spaceId, userId: { in: ['', session.userId] } },
+    select: { provider: true, userId: true, accountLabel: true, brokenAt: true },
+  });
+  for (const row of connections) {
+    if (row.userId !== session.userId && linked.has(row.provider)) continue;
+    linked.set(row.provider, { actsAs: row.accountLabel, broken: row.brokenAt !== null });
+  }
+
   return NextResponse.json({
     // Which OAuth services this deployment can complete on its own — names
     // only, never credentials. It is what lets the catalog offer one-click
@@ -48,6 +64,9 @@ export async function GET(
       ...rest,
       secrets,
       missingSecrets: secrets.filter((name) => !stored.has(name)),
+      // Null for a connector that holds no linked account — either it uses no
+      // OAuth at all, or nobody has finished the dance.
+      connection: linked.get(rest.name) ?? null,
     })),
   });
 }

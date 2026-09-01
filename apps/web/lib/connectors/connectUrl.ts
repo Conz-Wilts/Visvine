@@ -22,12 +22,27 @@ export function appOrigin(): string {
  * pressed Connect in a settings panel expects that panel back.
  */
 export function connectorConnectUrl(spaceId: string, connector: string, returnTo?: string | null): string {
-  const url = new URL(`${appOrigin()}/api/connectors/oauth/start`)
-  url.searchParams.set('space', spaceId)
-  url.searchParams.set('connector', connector)
+  return appOrigin() + connectorConnectPath(spaceId, connector, returnTo)
+}
+
+/**
+ * The same link, as a path on this app — what a browser already sitting on it
+ * should be sent to.
+ *
+ * `appOrigin()` reads a NEXT_PUBLIC_ variable, and those are inlined into the
+ * client bundle when the image is BUILT, not when the container is run. The
+ * deployment sets the origin at run time, so a component that builds an
+ * absolute URL in the browser gets the `http://localhost:3000` fallback and
+ * sends the person to their own machine. A relative path cannot drift from the
+ * page it was clicked on, so every client surface uses this one and the
+ * absolute form is left to the contexts that have no page — an agent's
+ * step-up message, a scheduled run's error.
+ */
+export function connectorConnectPath(spaceId: string, connector: string, returnTo?: string | null): string {
+  const params = new URLSearchParams({ space: spaceId, connector })
   const safe = safeReturnTo(returnTo)
-  if (safe) url.searchParams.set('return', safe)
-  return url.toString()
+  if (safe) params.set('return', safe)
+  return `/api/connectors/oauth/start?${params.toString()}`
 }
 
 /**

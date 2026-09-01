@@ -523,6 +523,24 @@ never chose to run it, and the test button is about one particular note. An
 agent run and a direct action call are acts of the person they run as, so those
 get it. `list_connectors` reports the caller's own with `personal: true`.
 
+**Your own settings offer only what you press once.** The same panel, in
+`scope: 'personal'`, shows the catalogue filtered to the services that connect
+in one press (`catalogForScope`) and one connector each
+(`allowsManyConnectors(entry, scope)`) — because a personal connector is your
+ACCOUNT at a service, and you sign in as yourself once; a second Drive is a
+space's thing, not yours. A row says whether an account is actually linked
+(`connection` on the list route, keyed by provider = the note's name), so a note
+left behind by an abandoned dance reads "Not signed in" and offers the sign-in,
+rather than claiming to be connected.
+
+**The link a browser is sent to is relative** (`connectorConnectPath`).
+`appOrigin()` reads `NEXT_PUBLIC_APP_URL`, which Next inlines when the image is
+BUILT while the deployment sets it when the container is RUN — so a client
+component that builds an absolute connect URL in production ships the
+`http://localhost:3000` fallback and sends the person to their own machine.
+`connectorConnectUrl` stays for the contexts with no page: an agent's step-up
+message, a scheduled run's error.
+
 `GET /api/user/personal-space` provisions the space and hands back the id (it
 is derivable, but a personal space is created lazily and every space-scoped
 route 404s on one that has not been). The admin gate on those routes is

@@ -38,7 +38,7 @@ import ConnectorLogo from '@/features/connectors/components/ConnectorLogo';
 import { timeAgo } from '@/lib/date';
 import { SANDBOX_LIMITS, type AllowRule, type ConnectorPerimeter } from '@/lib/connectors/config';
 import { PROVIDERS } from '@/lib/agents/registry';
-import { connectorConnectUrl } from '@/lib/connectors/connectUrl';
+import { connectorConnectPath } from '@/lib/connectors/connectUrl';
 import { Skeleton } from '@/components/ui';
 
 interface SecretStatus {
@@ -784,7 +784,7 @@ function ConnectionsSection({
   const explainer = shared
     ? 'Everyone who can run this connector acts as the connected account. An admin connects once and the whole space shares it.'
     : 'Each person connects their own account. Runs use the caller\u2019s connection, never anyone else\u2019s.';
-  const connectHref = connectorConnectUrl(spaceId, name);
+  const connectHref = connectorConnectPath(spaceId, name);
   const alreadyConnected = shared
     ? (rows ?? []).some((r) => r.isShared)
     : (rows ?? []).some((r) => r.isMine);

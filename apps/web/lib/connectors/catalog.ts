@@ -915,21 +915,46 @@ export function catalogEntryFor(name: string, provider?: string | null, recipe?:
   return CONNECTOR_CATALOG.find((e) => e.shape === 'model' && e.provider === key) ?? null
 }
 
+/** Whose connectors a surface is offering — a space's, or your own. */
+export type ConnectorScope = 'space' | 'personal'
+
 /**
- * May the space add ANOTHER connection to this service?
+ * May this surface add ANOTHER connection to this service?
  *
- * For an HTTP or OAuth service, always: a connection is one set of credentials,
- * and two Drives (yours and the team's) or two Slack workspaces are ordinary.
- * For a model provider, no — and not as a policy. Its key is
+ * For an HTTP or OAuth service a SPACE may, always: a connection is one set of
+ * credentials, and two Drives (the team's and yours) or two Slack workspaces
+ * are ordinary. For a model provider, no — and not as a policy. Its key is
  * `MODEL_KEY_<PROVIDER>`, one row per space by construction, and a registry
  * provider's endpoint is pinned in code, so a second note would name the same
  * key and the same URL and differ only in its title. `custom` is the same story
  * from the other end: agents resolve ONE custom endpoint per space
  * (lib/agents/providers.ts#findCustomModelEndpoint), so a second URL is a
  * configuration error rather than a second choice.
+ *
+ * Your own connectors are one per service too, for a different reason: a
+ * personal connector is your ACCOUNT at a service, and you sign in to a service
+ * as yourself once. Two spaces reaching two Drives is a real thing; two of your
+ * own Google accounts in one settings panel is a question nobody asked, and
+ * every extra row is another thing to keep working.
  */
-export function allowsManyConnectors(entry: CatalogEntry): boolean {
-  return entry.shape !== 'model'
+export function allowsManyConnectors(entry: CatalogEntry, scope: ConnectorScope = 'space'): boolean {
+  if (entry.shape === 'model') return false
+  return scope === 'space'
+}
+
+/**
+ * The services a surface offers, for the deployment it is running on.
+ *
+ * A space's console offers the whole catalogue: an admin configuring the team's
+ * tools is doing setup, and pasting a bot token is part of that job. Your own
+ * settings offer only what connects in one press — the row you sign in to and
+ * are finished with. A service you would have to go and fetch a credential for
+ * is a developer errand, and the honest thing is not to put it in a panel about
+ * your own accounts at all.
+ */
+export function catalogForScope(scope: ConnectorScope, platformClients: readonly string[]): CatalogEntry[] {
+  if (scope === 'space') return [...CONNECTOR_CATALOG]
+  return CONNECTOR_CATALOG.filter((entry) => connectsInOneClick(entry, platformClients))
 }
 
 /**
@@ -1004,10 +1029,13 @@ export function suggestConnector(entry: CatalogEntry, taken: readonly string[]):
 }
 
 /** Entries matching a search by name, description or category; all of them when empty. */
-export function searchCatalog(query: string): CatalogEntry[] {
+export function searchCatalog(
+  query: string,
+  entries: readonly CatalogEntry[] = CONNECTOR_CATALOG,
+): CatalogEntry[] {
   const q = query.trim().toLowerCase()
-  if (!q) return [...CONNECTOR_CATALOG]
-  return CONNECTOR_CATALOG.filter(
+  if (!q) return [...entries]
+  return entries.filter(
     (e) =>
       e.name.toLowerCase().includes(q) ||
       e.description.toLowerCase().includes(q) ||

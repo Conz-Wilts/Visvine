@@ -9,6 +9,7 @@ import {
   allowsManyConnectors,
   catalogConnectStyle,
   catalogEntryFor,
+  catalogForScope,
   catalogRowLabel,
   connectorFromCatalog,
   connectsInOneClick,
@@ -16,7 +17,7 @@ import {
   searchCatalog,
   suggestConnector,
 } from '@/lib/connectors/catalog'
-import { connectorConnectUrl, safeReturnTo } from '@/lib/connectors/connectUrl'
+import { appOrigin, connectorConnectPath, connectorConnectUrl, safeReturnTo } from '@/lib/connectors/connectUrl'
 import { parseConnectorPerimeter, perimeterSecretRefs } from '@/lib/connectors/config'
 import { connectorKind, parseModelConnector } from '@/lib/connectors/model'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
@@ -330,6 +331,42 @@ test('a return path is a relative path on this app or nothing', () => {
     new URL(connectorConnectUrl('s1', 'google', 'https://evil.example')).searchParams.get('return'),
     null,
   )
+})
+
+test('the link a browser is sent to is relative, and carries the same query', () => {
+  // NEXT_PUBLIC_APP_URL is inlined when the bundle is BUILT and set when the
+  // container is RUN, so an absolute URL built in the browser is the
+  // localhost fallback — every client surface uses the path instead.
+  const path = connectorConnectPath('me:u1', 'google-drive', '/settings?section=connectors')
+  assert.ok(path.startsWith('/api/connectors/oauth/start?'))
+  const url = new URL(path, 'https://example.test')
+  assert.equal(url.searchParams.get('space'), 'me:u1')
+  assert.equal(url.searchParams.get('connector'), 'google-drive')
+  assert.equal(url.searchParams.get('return'), '/settings?section=connectors')
+  assert.equal(connectorConnectUrl('me:u1', 'google-drive'), appOrigin() + connectorConnectPath('me:u1', 'google-drive'))
+  assert.equal(new URL(connectorConnectPath('s1', 'g', 'https://evil.example'), 'https://x.test').searchParams.get('return'), null)
+})
+
+test('your own settings offer only what you connect in one press, one account each', () => {
+  const platform = ['google']
+  const personal = catalogForScope('personal', platform)
+  assert.ok(personal.length > 0)
+  // Everything offered there is a press, and nothing else is offered.
+  for (const entry of personal) assert.ok(connectsInOneClick(entry, platform))
+  const drive = personal.find((e) => e.id === 'google-drive')
+  assert.ok(drive, 'Google Drive connects in one press on a deployment with a Google client')
+  // A key you have to go and fetch is a developer errand, not a settings row.
+  assert.ok(!personal.some((e) => e.shape === 'key'))
+
+  // A space may hold the team's Drive beside yours; you have one Google account
+  // in your own settings, so its row never offers another.
+  assert.equal(allowsManyConnectors(drive, 'space'), true)
+  assert.equal(allowsManyConnectors(drive, 'personal'), false)
+  // A deployment with no platform client offers nothing to press, rather than a
+  // Connect that would send someone to a provider that refuses them.
+  assert.deepEqual(catalogForScope('personal', []), [])
+  // The console is unchanged: the whole catalogue, every service addable again.
+  assert.equal(catalogForScope('space', platform).length, CONNECTOR_CATALOG.length)
 })
 
 test('a service you paste a credential into is named for what it is', () => {

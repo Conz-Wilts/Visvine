@@ -11,12 +11,13 @@ import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contextPrefetch';
 import { fetchJson } from '@/lib/fetchJson';
 import { connectorSlug } from '@/lib/create/noteSlug';
-import { connectorConnectUrl } from '@/lib/connectors/connectUrl';
+import { connectorConnectPath } from '@/lib/connectors/connectUrl';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 import {
   allowsManyConnectors,
   catalogConnectStyle,
   catalogEntryFor,
+  catalogForScope,
   catalogRowLabel,
   connectorFromCatalog,
   connectsInOneClick,
@@ -24,6 +25,7 @@ import {
   searchCatalog,
   suggestConnector,
   type CatalogEntry,
+  type ConnectorScope,
 } from '@/lib/connectors/catalog';
 
 /**
@@ -91,9 +93,23 @@ interface ExistingConnector {
   /** Secret NAMES the note references — never values. */
   secrets: string[];
   missingSecrets: string[];
+  /**
+   * The linked account behind an OAuth connector, when there is one — null both
+   * for a connector that uses no OAuth and for one whose sign-in was never
+   * finished. What tells a connected Drive from a note left behind by an
+   * abandoned dance.
+   */
+  connection: { actsAs: string | null; broken: boolean } | null;
 }
 
 type Tone = 'ok' | 'warn' | 'bad' | 'muted';
+
+/**
+ * Does this connector hold an account somebody signs in to, per its recipe?
+ */
+function signsIn(connector: ExistingConnector): boolean {
+  return catalogEntryFor(connector.name, connector.model?.provider, connector.recipe)?.shape === 'oauth';
+}
 
 /**
  * A connected connector's verdict, in the order the failures actually bite: a
@@ -102,7 +118,7 @@ type Tone = 'ok' | 'warn' | 'bad' | 'muted';
  * is sent. A healthy connector says nothing — the chip flags the ways one
  * fails, it doesn't congratulate the working ones.
  */
-function statusOf(connector: ExistingConnector): { label: string; tone: Tone } | null {
+function statusOf(connector: ExistingConnector, scope: ConnectorScope): { label: string; tone: Tone } | null {
   // Off comes first: a connector nobody can run has no interesting second
   // opinion about its secrets.
   if (!connector.enabled) return { label: 'Off', tone: 'muted' };
@@ -110,6 +126,14 @@ function statusOf(connector: ExistingConnector): { label: string; tone: Tone } |
   if (connector.missingSecrets.length > 0) return { label: 'Missing secrets', tone: 'warn' };
   if (connector.warnings.length > 0) return { label: 'Needs migration', tone: 'warn' };
   if (connector.kind !== 'model' && connector.hosts.length === 0) return { label: 'No network', tone: 'warn' };
+  // Your own connectors are accounts you signed in to, so an OAuth note with no
+  // account behind it is unfinished rather than configured — the state an
+  // abandoned dance leaves. A space's are not said the same way: there the
+  // account is per member, and the row is about what the space has.
+  if (scope === 'personal' && signsIn(connector)) {
+    if (connector.connection?.broken) return { label: 'Reconnect', tone: 'bad' };
+    if (!connector.connection) return { label: 'Not signed in', tone: 'warn' };
+  }
   return null;
 }
 
@@ -156,7 +180,7 @@ function ManageConnections({ spaceId, name, returnTo }: { spaceId: string; name:
       {mine?.broken && (
         <span className="text-red-600">stopped working{mine.broken.reason ? ` — ${mine.broken.reason}` : ''}</span>
       )}
-      <a href={connectorConnectUrl(spaceId, name, returnTo)} className="font-medium text-text-primary underline underline-offset-2">
+      <a href={connectorConnectPath(spaceId, name, returnTo)} className="font-medium text-text-primary underline underline-offset-2">
         {mine ? 'Reconnect' : 'Connect'}
       </a>
     </div>
@@ -169,8 +193,8 @@ const TABS: Record<'space' | 'personal', Array<{ id: Tab; label: string }>> = {
     { id: 'catalog', label: 'Add a connector' },
   ],
   personal: [
-    { id: 'mine', label: 'Yours' },
-    { id: 'catalog', label: 'Add a connector' },
+    { id: 'mine', label: 'Connected' },
+    { id: 'catalog', label: 'Available' },
   ],
 };
 
@@ -184,9 +208,10 @@ const TABS: Record<'space' | 'personal', Array<{ id: Tab; label: string }>> = {
  * about notes, secrets or the OAuth dance is special-cased for it. What differs
  * is where a row can lead: your personal space is not the space the app is
  * currently showing, so a row opens Manage rather than navigating to a
- * directory page that isn't there.
+ * directory page that isn't there — and WHAT is offered: only the services you
+ * connect in one press, one account each.
  */
-export type ConnectorScope = 'space' | 'personal';
+export type { ConnectorScope };
 
 export default function ConnectorsPanel({
   space,
@@ -316,7 +341,13 @@ export default function ConnectorsPanel({
     });
   }, [existing, query]);
 
-  const services = useMemo(() => searchCatalog(query), [query]);
+  // The catalogue this surface offers, searched. A space's console offers
+  // everything; your own settings offer only the services you connect by
+  // pressing Connect (lib/connectors/catalog.ts#catalogForScope).
+  const services = useMemo(
+    () => searchCatalog(query, catalogForScope(scope, platformClients)),
+    [query, scope, platformClients],
+  );
 
   const remove = async () => {
     if (!confirmDelete || !spaceId) return;
@@ -368,6 +399,12 @@ export default function ConnectorsPanel({
   const openConnector = (name: string) =>
     router.push(`/directory/${encodeURIComponent(`connector:${name}`)}`);
 
+  /** Send the browser to the provider for a connector whose note already exists. */
+  const signIn = (name: string) => {
+    if (!spaceId) return;
+    window.location.href = connectorConnectPath(spaceId, name, returnTo);
+  };
+
   /**
    * Connect a service in one press: write the note the recipe would have
    * written with everything left at its default, then send the browser to the
@@ -391,7 +428,7 @@ export default function ConnectorsPanel({
       const path = `connectors/${name}.md`;
       await notesApi.create(spaceId, path, content);
       invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId), contextKeys.read(spaceId, path));
-      window.location.href = connectorConnectUrl(spaceId, name, returnTo);
+      window.location.href = connectorConnectPath(spaceId, name, returnTo);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start the connection');
       setConnecting(null);
@@ -597,7 +634,7 @@ export default function ConnectorsPanel({
               each with its own key, its own on/off and its own note. */}
           <ul className="divide-y divide-border-subtle">
             {mine.map((c) => {
-              const status = statusOf(c);
+              const status = statusOf(c, scope);
               const service = serviceOf(c);
               return (
                 <li key={c.path} className="py-1">
@@ -632,10 +669,10 @@ export default function ConnectorsPanel({
 
           <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4 mt-2">
             <p className="text-xs text-text-muted">
-              {personal ? 'Connect another service to your own account.' : 'Connect another service, or write one yourself.'}
+              {personal ? 'Sign in to another service.' : 'Connect another service, or write one yourself.'}
             </p>
             <Button variant="neutral" size="sm" onClick={() => { setQuery(''); setTab('catalog'); }}>
-              Add a connector
+              {personal ? 'See services' : 'Add a connector'}
             </Button>
           </div>
         </div>
@@ -645,15 +682,17 @@ export default function ConnectorsPanel({
             <p className="py-8 text-center text-sm text-text-muted">Nothing matches “{query}”.</p>
           )}
 
-          {/* One row per SERVICE, and it never fills up: a service the space
-              already reaches still offers another, because a second connector
-              is a second set of credentials (the team's Drive beside yours),
-              not a duplicate. The exception is a model provider — one key per
-              space — whose row hands over to the one it has. */}
+          {/* One row per SERVICE. In a space's console it never fills up: a
+              service the space already reaches still offers another, because a
+              second connector is a second set of credentials (the team's Drive
+              beside yours), not a duplicate. Two rows do fill up — a model
+              provider, whose key is the space's one key, and every row in your
+              own settings, where a connector is your account at a service and
+              you have one of those. Those hand over to the one they have. */}
           <ul className="divide-y divide-border-subtle">
             {services.map((e) => {
               const rows = held.get(e.id) ?? [];
-              const many = allowsManyConnectors(e);
+              const many = allowsManyConnectors(e, scope);
               const showInfo = info === e.id;
               // Nothing to ask for: Connect is the whole interaction, and the
               // form stays reachable through the row for the space that wants
@@ -661,11 +700,25 @@ export default function ConnectorsPanel({
               const oneClick = connectsInOneClick(e, platformClients);
               const style = catalogConnectStyle(e, platformClients);
               const busy = connecting === e.id;
+              // In your own settings a row is your account at the service, so
+              // "connected" means an account is actually linked — a note left
+              // behind by a dance nobody finished says Sign in, not Connected.
+              const held0 = rows[0] ?? null;
+              const signedIn = Boolean(held0?.connection && !held0.connection.broken);
               return (
                 <li key={e.id} className="py-1">
                   <div className="-mx-3 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
                     <button
-                      onClick={() => (many || rows.length === 0 ? setEntry(e) : openManage(rows[0], e.description))}
+                      onClick={() =>
+                        rows.length > 0 && !many
+                          ? openManage(rows[0], e.description)
+                          : oneClick && personal
+                            // Nothing to fill in and nothing to choose, so the
+                            // row says what it is rather than opening a form
+                            // whose every field is an OAuth app you don't have.
+                            ? setInfo(showInfo ? null : e.id)
+                            : setEntry(e)
+                      }
                       className="flex min-w-0 flex-1 items-center gap-4 text-left"
                     >
                       <ConnectorLogo entry={e} />
@@ -675,10 +728,21 @@ export default function ConnectorsPanel({
                       </div>
                     </button>
                     {/* How you connect it, before you press anything: one press,
-                        a sign-in, or a credential you have to go and fetch. */}
-                    <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[style === 'key' ? 'muted' : 'ok']}`}>
-                      {style === 'one-click' ? 'One click' : style === 'sign-in' ? 'Sign in' : 'API key'}
-                    </span>
+                        a sign-in, or a credential you have to go and fetch.
+                        Every row in your own settings is one press, so there
+                        the chip has nothing to distinguish and says whether you
+                        are signed in instead. */}
+                    {personal ? (
+                      rows.length > 0 && (
+                        <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[signedIn ? 'ok' : 'warn']}`}>
+                          {signedIn ? 'Connected' : 'Not signed in'}
+                        </span>
+                      )
+                    ) : (
+                      <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[style === 'key' ? 'muted' : 'ok']}`}>
+                        {style === 'one-click' ? 'One click' : style === 'sign-in' ? 'Sign in' : 'API key'}
+                      </span>
+                    )}
                     <button
                       onClick={() => setInfo(showInfo ? null : e.id)}
                       aria-label={`About ${e.name}`}
@@ -687,7 +751,7 @@ export default function ConnectorsPanel({
                     >
                       <InfoIcon className="h-4 w-4" />
                     </button>
-                    {rows.length > 0 && (
+                    {rows.length > 0 && !personal && (
                       <span className="shrink-0 text-xs text-text-muted">
                         {rows.length === 1 ? '1 connected' : `${rows.length} connected`}
                       </span>
@@ -700,6 +764,16 @@ export default function ConnectorsPanel({
                         onClick={() => (oneClick ? void connectInOneClick(e) : setEntry(e))}
                       >
                         {busy ? 'Connecting…' : 'Connect'}
+                      </Button>
+                    ) : personal && !signedIn && held0 ? (
+                      // The note is already there, so this is the sign-in it is
+                      // missing rather than a second connector.
+                      <Button
+                        variant="brand"
+                        size="sm"
+                        onClick={() => signIn(held0.name)}
+                      >
+                        Sign in
                       </Button>
                     ) : many ? (
                       <Button
@@ -833,7 +907,7 @@ function EntryForm({
       // straight over to the provider rather than landing on a page whose only
       // useful control is Connect.
       if (entry.oauth) {
-        window.location.href = connectorConnectUrl(spaceId, name, returnTo);
+        window.location.href = connectorConnectPath(spaceId, name, returnTo);
         return;
       }
       onCreated(`/directory/${encodeURIComponent(`connector:${name}`)}`);
