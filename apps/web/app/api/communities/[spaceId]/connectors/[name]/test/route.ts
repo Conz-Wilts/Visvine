@@ -61,7 +61,9 @@ export async function POST(
   const principal = await principalOf(resolved);
   let loaded;
   try {
-    loaded = await loadConnector(principal, resolved, decodeURIComponent(name));
+    // Space-only: this is the page for one note, and running it must test
+    // THAT connector rather than a same-named one of the admin's own.
+    loaded = await loadConnector(principal, resolved, decodeURIComponent(name), { personal: false });
   } catch (e) {
     // A note that exists but doesn't parse — the page already shows the error;
     // running against it is a 400, not a crash.
@@ -71,7 +73,7 @@ export async function POST(
   if (!loaded) return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
 
   try {
-    const result = await executeConnectorScript(principal, resolved, spaceId, loaded, run);
+    const result = await executeConnectorScript(loaded, run);
     return NextResponse.json({
       result: {
         ok: result.ok,

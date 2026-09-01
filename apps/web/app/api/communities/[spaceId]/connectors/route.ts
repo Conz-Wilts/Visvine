@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
 import { resolveContext, principalOf } from '@/lib/notes/resolve';
 import { listConnectors } from '@/lib/connectors/service';
+import { availablePlatformClients } from '@/lib/connectors/platformClients';
 
 /**
  * Admin view of the space's connectors — the parsed state of every
@@ -38,6 +39,11 @@ export async function GET(
   );
 
   return NextResponse.json({
+    // Which OAuth services this deployment can complete on its own — names
+    // only, never credentials. It is what lets the catalog offer one-click
+    // Connect for Google here and the paste-your-own-app form on a deployment
+    // that has no client of its own (lib/connectors/catalog.ts#connectsInOneClick).
+    platformClients: availablePlatformClients(),
     connectors: connectors.map(({ docs: _docs, secrets, ...rest }) => ({
       ...rest,
       secrets,

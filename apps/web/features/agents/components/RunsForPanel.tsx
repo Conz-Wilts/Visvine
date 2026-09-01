@@ -56,10 +56,24 @@ export function ConnectorReadinessNotices({
         let line: React.ReactNode;
         switch (r.status) {
           case 'missing':
+            // Missing HERE, and — for the viewer's own runs — missing from
+            // their settings too, since a connector they connected for
+            // themselves would have resolved (lib/connectors/service.ts).
             line = (
               <>
                 Uses a connector this space doesn’t have: {r.connector}
                 {adminLink}
+                {mine && (
+                  <>
+                    {' — or '}
+                    <Link
+                      href="/settings?section=connectors"
+                      className="font-semibold text-brand-dark-green hover:underline"
+                    >
+                      connect it for yourself
+                    </Link>
+                  </>
+                )}
               </>
             );
             break;

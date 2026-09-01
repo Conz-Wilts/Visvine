@@ -47,6 +47,18 @@ export function resolvePlatformClient(
   return { clientId, clientSecret: clientSecret || null }
 }
 
+/**
+ * Which platform clients this deployment actually holds — the names, never the
+ * credentials. The console asks so a Connect button can be one click where the
+ * deployment can complete the dance and a form where it cannot; sending a name
+ * is safe precisely because the id and secret stay here.
+ */
+export function availablePlatformClients(
+  env: Record<string, string | undefined> = process.env,
+): string[] {
+  return Object.keys(PLATFORM_CLIENTS).filter((ref) => resolvePlatformClient(ref, env) !== null)
+}
+
 /** The env vars a ref would read, for error messages. */
 export function platformClientEnvNames(ref: string): { id: string; secret: string } | null {
   return PLATFORM_CLIENTS[ref] ?? null

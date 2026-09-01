@@ -4,6 +4,13 @@
 // it is private to that one owner. See `spaceReadForbidden` in lib/auth.ts
 // for the DB-backed guard that wraps this.
 
+/** Deterministic id → exactly one personal space per user. Pure, so a caller
+ * that only needs the id (a lookup, a client component, a test) never pulls in
+ * Prisma or the provisioning path. */
+export function personalSpaceId(userId: string): string {
+  return `me:${userId}`
+}
+
 /**
  * True when `spaceId`'s `personalOwnerId` belongs to someone OTHER than
  * `userId` — i.e. it's another user's private personal space and the caller must

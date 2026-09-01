@@ -574,12 +574,12 @@ async function connectorsCall(t: ResolvedTarget, params: unknown, deps: BridgeDe
     // Exactly what MCP's run_connector does: load through the visibility lens
     // (so folder permissions decide whether the connector is even there) and
     // execute under the viewer's principal. No admin widening, no thinner path.
-    const loaded = await deps.loadConnector(t.principal, t.context, name)
+    // `personal: false` — a Tool reaches only what the space that wrote it has.
+    // The viewer never chose to run this code, so their own connectors (and
+    // the accounts behind them) are not this page's to spend.
+    const loaded = await deps.loadConnector(t.principal, t.context, name, { personal: false })
     if (!loaded) return err('not_found', `No connector named "${name}" here.`)
     const result = await deps.executeConnectorScript(
-      t.principal,
-      t.context,
-      t.spaceId,
       loaded,
       action !== undefined ? { action, args: args ?? {} } : { code: code! },
     )

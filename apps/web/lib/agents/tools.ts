@@ -343,7 +343,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
           const run = action
             ? { action, args: a.args !== null && typeof a.args === 'object' ? a.args : {} }
             : { code }
-          const result = await executeConnectorScript(principal, context, spaceId, loaded, run)
+          const result = await executeConnectorScript(loaded, run)
           const rendered = result.value === undefined ? '' : clip(JSON.stringify(result.value, null, 2) ?? '')
           return [
             result.timedOut ? 'TIMED OUT' : result.ok ? 'ok' : `error: ${result.error?.message ?? 'unknown'}`,

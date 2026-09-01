@@ -17,10 +17,10 @@ import { logger } from '@/lib/logger'
 
 const WELCOME_PATH = 'welcome.md'
 
-/** Deterministic id → exactly one personal space per user. */
-export function personalSpaceId(userId: string): string {
-  return `me:${userId}`
-}
+// The id itself lives in the pure module beside this one, so a caller that
+// only needs it doesn't pull in Prisma and the provisioning path.
+import { personalSpaceId } from './personalSpaceAccess'
+export { personalSpaceId }
 
 function welcomeNote(name: string): string {
   const first = name.split(' ')[0] || name

@@ -29,6 +29,12 @@ export interface PendingAuthorization {
   verifier: string
   state: string
   scopes: string[]
+  /**
+   * Where to send the browser when the dance is done — a relative path,
+   * validated at /start (safeReturnTo) and carried here rather than through the
+   * provider, which would hand the round trip back an unsigned destination.
+   */
+  returnTo?: string
 }
 
 function secret(): Uint8Array {
@@ -67,6 +73,10 @@ export async function readPending(raw: string | undefined): Promise<PendingAutho
       verifier: payload.verifier,
       state: payload.state,
       scopes: Array.isArray(payload.scopes) ? payload.scopes.filter((s): s is string => typeof s === 'string') : [],
+      // Spread rather than an explicit undefined: the pending record is
+      // compared whole, and a key that is present-but-undefined is a different
+      // object from one that was never set.
+      ...(typeof payload.returnTo === 'string' ? { returnTo: payload.returnTo } : {}),
     }
   } catch {
     return null

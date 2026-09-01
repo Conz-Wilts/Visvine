@@ -13,6 +13,9 @@
 import prisma from '@/lib/prisma'
 import { decryptSecret } from '@/lib/crypto/secrets'
 import { readVisible, visibleVault } from '@/lib/notes/contextService'
+import { personalPrincipal } from '@/lib/notes/principal'
+import { personalSpaceId } from '@/lib/spaces/personalSpaceAccess'
+import { SHARED_OWNER_KEY } from '@/lib/notes/store'
 import { listAudit, logAudit } from '@/lib/notes/audit'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { Context } from '@/lib/notes/store'
@@ -41,6 +44,98 @@ import { connectorKind, modelConnectorInfo, parseModelConnector, type ConnectorK
 const CONNECTORS_DIR = 'connectors/'
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 const DOCS_CAP_CHARS = 4_000
+
+/**
+ * Where a connector name resolved to — and therefore whose secrets, whose
+ * linked account, whose run budget and whose audit trail the run uses.
+ *
+ * Two places are searched, in this order: the space the caller is in, then the
+ * caller's OWN personal space. That second look is what makes a connector you
+ * connected once in Settings work everywhere you go — you sign in to Google
+ * once, and any space you are a member of can spend it, because it is still
+ * only ever YOUR account being spent (`principal` is you, in your own space).
+ *
+ * The order matters and is not a preference. A space that has written its own
+ * `google-drive` note has made a decision about what its agents reach and
+ * whose credentials they use; a personal note must never quietly displace it.
+ * So a personal connector fills a gap and never overrides one.
+ *
+ * Only a person has a personal space, so a system/maintenance pass never
+ * falls back — and neither does a Tool (lib/tools/bridge.ts), which is code a
+ * space wrote running against a viewer who never chose it. An agent run and a
+ * direct action call are acts of the person they run as; a page render is not.
+ */
+interface ConnectorSource {
+  content: string
+  path: string
+  /** The space whose secrets, connections, quota and audit line this uses. */
+  spaceId: string
+  /** The principal those reads and that audit happen as. */
+  principal: ContextPrincipal
+  /** True when the note came from the caller's personal space. */
+  personal: boolean
+}
+
+/** How wide a connector lookup reaches. */
+export interface ConnectorLookup {
+  /**
+   * Consult the caller's own personal space when this one has no such
+   * connector. Default true. Pass false where the question is about a
+   * PARTICULAR space's note — the console's test run, a Tool's render — rather
+   * than about what this person can do.
+   */
+  personal?: boolean
+  /**
+   * WHOSE own space to look in, when it isn't the caller's. The one caller is
+   * the agent page asking whether a subscriber's runs would work: those runs
+   * resolve through that person's connectors, so readiness has to ask the same
+   * question rather than the viewer's version of it.
+   */
+  personalFor?: string
+}
+
+/**
+ * A person in their own personal space, or null when there is no such place to
+ * look. Read-only by use: the principal is theirs, so nothing here widens what
+ * anyone can see — it narrows the lookup to one person's own notes.
+ */
+function personalLens(userId: string, context: Context): { principal: ContextPrincipal; context: Context } | null {
+  if (!userId) return null
+  const spaceId = personalSpaceId(userId)
+  // Already looking there — a second identical read would find the same nothing.
+  if (context.spaceId === spaceId) return null
+  return {
+    principal: personalPrincipal({ userId, email: '', name: '' }),
+    context: { spaceId, ownerKey: SHARED_OWNER_KEY },
+  }
+}
+
+/**
+ * Find a connector note by name: this space's, else the caller's own. Null
+ * when neither has it — or when the caller cannot see it, which is the same
+ * answer for the same reason readVisible gives it.
+ */
+async function readConnectorNote(
+  p: ContextPrincipal,
+  context: Context,
+  name: string,
+  opts: ConnectorLookup = {},
+): Promise<ConnectorSource | null> {
+  if (!NAME_RE.test(name)) return null
+  const path = `${CONNECTORS_DIR}${name}.md`
+  const here = await readVisible(p, context, path)
+  if (here !== null) return { content: here, path, spaceId: context.spaceId, principal: p, personal: false }
+  if (opts.personal === false || p.system) return null
+  const lens = personalLens(opts.personalFor ?? p.userId, context)
+  if (!lens) return null
+  const mine = await readVisible(lens.principal, lens.context, path)
+  if (mine === null) return null
+  // The principal keeps the caller's own name and email where it IS them, so
+  // the audit line and any identity assertion still say who ran it.
+  const principal =
+    lens.principal.userId === p.userId ? { ...lens.principal, email: p.email, name: p.name } : lens.principal
+  return { content: mine, path, spaceId: lens.context.spaceId, principal, personal: true }
+}
 
 export interface ConnectorSummary {
   name: string
@@ -76,6 +171,11 @@ export interface ConnectorSummary {
   /** Named actions callers can run by name instead of writing code. */
   actions: ConnectorActionSummary[]
   docs: string
+  /**
+   * The caller's own connector, brought from their Settings rather than
+   * belonging to this space. Only ever true where the lookup asked for them.
+   */
+  personal?: boolean
 }
 
 /** One action as list_connectors reports it — everything but the code. */
@@ -156,8 +256,8 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
   }
 }
 
-/** Every valid-or-broken connector note the principal can see. */
-export async function listConnectors(p: ContextPrincipal, context: Context): Promise<ConnectorSummary[]> {
+/** Every valid-or-broken connector note in one context. */
+async function listConnectorsIn(p: ContextPrincipal, context: Context): Promise<ConnectorSummary[]> {
   const { raws } = await visibleVault(p, context)
   const summaries: ConnectorSummary[] = []
   for (const raw of raws) {
@@ -165,7 +265,33 @@ export async function listConnectors(p: ContextPrincipal, context: Context): Pro
     const summary = summariseNote(raw.path, raw.content)
     if (summary) summaries.push(summary)
   }
-  return summaries.sort((a, b) => a.name.localeCompare(b.name))
+  return summaries
+}
+
+/**
+ * Every valid-or-broken connector note the principal can see.
+ *
+ * With `personal: true` the caller's own connectors are appended — the ones
+ * they connected in Settings, which their runs in this space would resolve
+ * ({@link ConnectorSource}). Anything the space itself has wins the name, so
+ * the list can never show two rows a caller has to choose between. Default
+ * off, because the console's list is about what the SPACE has and must not
+ * offer to disable or delete something that isn't its.
+ */
+export async function listConnectors(
+  p: ContextPrincipal,
+  context: Context,
+  opts: ConnectorLookup = {},
+): Promise<ConnectorSummary[]> {
+  const own = await listConnectorsIn(p, context)
+  const lens = opts.personal === true && !p.system ? personalLens(p.userId, context) : null
+  if (lens) {
+    const taken = new Set(own.map((c) => c.name))
+    for (const mine of await listConnectorsIn(lens.principal, lens.context)) {
+      if (!taken.has(mine.name)) own.push({ ...mine, personal: true })
+    }
+  }
+  return own.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 /**
@@ -242,6 +368,18 @@ export interface LoadedConnector {
   perimeter: ConnectorPerimeter
   path: string
   warnings: string[]
+  /**
+   * The space this connector belongs to — its secrets, its linked accounts, its
+   * run budget, its audit trail. Usually the space the caller is in; the
+   * caller's own personal space for a connector they brought with them
+   * ({@link ConnectorSource}). Carried on the loaded connector rather than
+   * passed alongside it so no executor can pair a note with the wrong space.
+   */
+  spaceId: string
+  /** Who the run acts as, in that space. */
+  principal: ContextPrincipal
+  /** True when this is the caller's own connector, reached from another space. */
+  personal: boolean
 }
 
 /**
@@ -256,11 +394,11 @@ export async function loadConnector(
   p: ContextPrincipal,
   context: Context,
   name: string,
+  opts: ConnectorLookup = {},
 ): Promise<LoadedConnector | null> {
-  if (!NAME_RE.test(name)) return null
-  const path = `${CONNECTORS_DIR}${name}.md`
-  const content = await readVisible(p, context, path)
-  if (content === null) return null
+  const source = await readConnectorNote(p, context, name, opts)
+  if (source === null) return null
+  const { content, path } = source
   const fm = parseFrontmatter(content)
   if (!isConnectorNote(fm)) {
     throw new ConnectorError('config', `The note at ${path} is not a connector (missing \`type: connector\`)`)
@@ -281,7 +419,14 @@ export async function loadConnector(
   }
   const parsed = parseConnectorPerimeter(fm)
   if (!parsed.ok) throw new ConnectorError('config', parsed.error)
-  return { perimeter: parsed.perimeter, path, warnings: parsed.warnings }
+  return {
+    perimeter: parsed.perimeter,
+    path,
+    warnings: parsed.warnings,
+    spaceId: source.spaceId,
+    principal: source.principal,
+    personal: source.personal,
+  }
 }
 
 type ConnectorReadinessStatus = 'ok' | 'missing' | 'disabled' | 'invalid' | 'needs_connection' | 'broken'
@@ -295,6 +440,8 @@ export interface ConnectorReadiness {
   /** The OAuth start link, when connecting (or reconnecting) is the fix. */
   connectUrl: string | null
   detail: string | null
+  /** This is the person's own connector, brought from Settings — not the space's. */
+  personal: boolean
 }
 
 /**
@@ -313,35 +460,38 @@ export async function connectorReadiness(
 ): Promise<ConnectorReadiness[]> {
   return Promise.all(
     names.map(async (name): Promise<ConnectorReadiness> => {
-      const none = { auth: null, connectUrl: null, detail: null }
+      const none = { auth: null, connectUrl: null, detail: null, personal: false }
       if (!NAME_RE.test(name)) return { connector: name, status: 'invalid', ...none, detail: 'not a connector name' }
-      const content = await readVisible(p, context, `${CONNECTORS_DIR}${name}.md`)
-      if (content === null) return { connector: name, status: 'missing', ...none }
+      // Judged for ONE person, so their own connectors count: what a run would
+      // actually resolve is what readiness must ask about.
+      const source = await readConnectorNote(p, context, name, { personalFor: forUserId })
+      if (source === null) return { connector: name, status: 'missing', ...none }
+      const { content, spaceId: ownerSpaceId, personal } = source
       const fm = parseFrontmatter(content)
       if (!isConnectorNote(fm)) return { connector: name, status: 'invalid', ...none, detail: 'the note is not a connector' }
       // A model connector names the provider the agent runs on; the model-key
       // check (keyStored) owns that half, so it never blocks here.
-      if (connectorKind(fm) === 'model') return { connector: name, status: 'ok', ...none }
-      if (!isConnectorEnabled(fm)) return { connector: name, status: 'disabled', ...none }
+      if (connectorKind(fm) === 'model') return { connector: name, status: 'ok', ...none, personal }
+      if (!isConnectorEnabled(fm)) return { connector: name, status: 'disabled', ...none, personal }
       const parsed = parseConnectorPerimeter(fm)
-      if (!parsed.ok) return { connector: name, status: 'invalid', ...none, detail: parsed.error }
+      if (!parsed.ok) return { connector: name, status: 'invalid', ...none, personal, detail: parsed.error }
       const auth = parsed.perimeter.auth
-      if (!auth) return { connector: name, status: 'ok', ...none }
-      const connectUrl = connectorConnectUrl(context.spaceId, name)
+      if (!auth) return { connector: name, status: 'ok', ...none, personal }
+      const connectUrl = connectorConnectUrl(ownerSpaceId, name)
       const row = await prisma.connectorConnection.findUnique({
         where: {
-          connection_identity: { spaceId: context.spaceId, provider: auth.provider, userId: connectionOwner(auth, forUserId) },
+          connection_identity: { spaceId: ownerSpaceId, provider: auth.provider, userId: connectionOwner(auth, forUserId) },
         },
         select: { mode: true, accountLabel: true, brokenAt: true, brokenReason: true },
       })
       const authInfo = { provider: auth.provider, mode: auth.mode, accountLabel: row?.accountLabel ?? null }
       if (!row || row.mode !== auth.mode) {
-        return { connector: name, status: 'needs_connection', auth: authInfo, connectUrl, detail: null }
+        return { connector: name, status: 'needs_connection', auth: authInfo, connectUrl, detail: null, personal }
       }
       if (row.brokenAt) {
-        return { connector: name, status: 'broken', auth: authInfo, connectUrl, detail: row.brokenReason }
+        return { connector: name, status: 'broken', auth: authInfo, connectUrl, detail: row.brokenReason, personal }
       }
-      return { connector: name, status: 'ok', auth: authInfo, connectUrl: null, detail: null }
+      return { connector: name, status: 'ok', auth: authInfo, connectUrl: null, detail: null, personal }
     }),
   )
 }
@@ -361,9 +511,8 @@ export async function runnableConnectorNames(
 ): Promise<string[]> {
   const kept = await Promise.all(
     names.map(async (name) => {
-      if (!NAME_RE.test(name)) return false
-      const content = await readVisible(p, context, `${CONNECTORS_DIR}${name}.md`)
-      return content === null || connectorKind(parseFrontmatter(content)) !== 'model'
+      const source = await readConnectorNote(p, context, name)
+      return source === null || connectorKind(parseFrontmatter(source.content)) !== 'model'
     }),
   )
   return names.filter((_, i) => kept[i])
@@ -383,10 +532,9 @@ export async function connectorActionsFor(
   await Promise.all(
     names.map(async (name) => {
       out[name] = []
-      if (!NAME_RE.test(name)) return
-      const content = await readVisible(p, context, `${CONNECTORS_DIR}${name}.md`)
-      if (content === null) return
-      const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+      const source = await readConnectorNote(p, context, name)
+      if (source === null) return
+      const parsed = parseConnectorPerimeter(parseFrontmatter(source.content))
       if (parsed.ok) out[name] = summariseActions(parsed.perimeter.actions)
     }),
   )
@@ -485,8 +633,8 @@ function resolveRun(
 /**
  * Run one connector script inside its perimeter — the whole execution path,
  * shared by the agent tool, the MCP tool, the Tools bridge and the console
- * terminal: the space's quota is charged, secrets resolve server-side into the
- * isolate's `env`, the isolate's only egress is the capability functions gated
+ * terminal: the owning space's quota is charged, secrets resolve server-side
+ * into the isolate's `env`, the isolate's only egress is the capability functions gated
  * on the note's hosts, secret values are redacted from everything that comes
  * back, and the run is audited win or lose.
  *
@@ -495,12 +643,13 @@ function resolveRun(
  * `args` installed as a frozen global.
  */
 export async function executeConnectorScript(
-  p: ContextPrincipal,
-  context: Context,
-  spaceId: string,
   loaded: LoadedConnector,
   run: string | ConnectorRun,
 ): Promise<IsolateRunResult> {
+  // Both come off the loaded connector, never from the caller: a note and the
+  // space whose secrets it opens are one fact, and pairing them at the call
+  // site is how a personal connector would end up reading a space's keys.
+  const { spaceId, principal: p } = loaded
   const { code, globals, summary } = resolveRun(loaded, run)
 
   // Quota BEFORE any secret leaves the store, and per space rather than per

@@ -11,7 +11,6 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/session';
-import { isAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { encryptSecret, decryptSecret } from '@/lib/crypto/secrets';
 import { principalOf, resolveContext } from '@/lib/notes/resolve';
@@ -19,7 +18,7 @@ import { describeConnector } from '@/lib/connectors/service';
 import { connectionOwner } from '@/lib/connectors/auth';
 import { platformClientEnvNames, platformClientRef, resolvePlatformClient } from '@/lib/connectors/platformClients';
 import { authorizeUrl, createPkce, randomState, registerClient, resolveEndpoints } from '@/lib/connectors/oauth';
-import { oauthRedirectUri } from '@/lib/connectors/connectUrl';
+import { oauthRedirectUri, safeReturnTo } from '@/lib/connectors/connectUrl';
 import { ConnectorError, findSecretRefs } from '@/lib/connectors/config';
 import { signPending, PENDING_COOKIE, PENDING_TTL_SECONDS } from '@/lib/connectors/pending';
 import { logger } from '@/lib/logger';
@@ -49,7 +48,10 @@ export async function GET(req: NextRequest) {
 
   // A space connection is one credential the whole space then acts through, so
   // creating it is an admin act. A user connection is only ever the caller's own.
-  if (auth.mode === 'space' && !(await isAdmin(session.userId, spaceId, session.email))) {
+  // `resolved.isAdmin` rather than isAdmin(): it is the same question one query
+  // earlier, and it already knows that the owner of a personal space
+  // administers it (no aliases live there, and never will).
+  if (auth.mode === 'space' && !resolved.isAdmin) {
     return fail('Only a space admin can connect a shared account for this connector.', 403);
   }
 
@@ -145,6 +147,7 @@ export async function GET(req: NextRequest) {
       verifier,
       state,
       scopes: auth.scopes,
+      returnTo: safeReturnTo(req.nextUrl.searchParams.get('return')) ?? undefined,
     }), {
       httpOnly: true,
       sameSite: 'lax',

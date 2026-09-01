@@ -17,7 +17,7 @@ import { decryptSecret } from '@/lib/crypto/secrets';
 import { principalOf, resolveContext } from '@/lib/notes/resolve';
 import { describeConnector } from '@/lib/connectors/service';
 import { exchangeCode, resolveEndpoints, statesMatch } from '@/lib/connectors/oauth';
-import { appOrigin, oauthRedirectUri } from '@/lib/connectors/connectUrl';
+import { appOrigin, oauthRedirectUri, safeReturnTo } from '@/lib/connectors/connectUrl';
 import { platformClientRef, resolvePlatformClient } from '@/lib/connectors/platformClients';
 import { saveConnection } from '@/lib/connectors/connections';
 import { ConnectorError } from '@/lib/connectors/config';
@@ -36,13 +36,19 @@ function page(message: string, status = 200): NextResponse {
 }
 
 /**
- * When the pending cookie names the connector, land the browser back on its
- * page with the outcome in the query string rather than on a bare text page.
- * Failures with no pending cookie have nowhere to go back to and keep the page.
+ * Land the browser back where the flow started, with the outcome in the query
+ * string rather than on a bare text page: the surface that sent it, when /start
+ * was given one, and otherwise the connector's own page. Failures with no
+ * pending cookie have nowhere to go back to and keep the page.
  */
-function done(connector: string | null, ok: boolean, message: string): NextResponse {
-  if (!connector) return page(message, ok ? 200 : 400);
-  const url = new URL(`${appOrigin()}/directory/${encodeURIComponent(`connector:${connector}`)}`);
+function done(pending: { connector: string; returnTo?: string } | null, ok: boolean, message: string): NextResponse {
+  if (!pending) return page(message, ok ? 200 : 400);
+  // Re-validated even though /start already did: the check is cheap, and a
+  // redirect target is not something to trust on the strength of one signature.
+  const url = new URL(
+    safeReturnTo(pending.returnTo) ?? `/directory/${encodeURIComponent(`connector:${pending.connector}`)}`,
+    appOrigin(),
+  );
   url.searchParams.set(ok ? 'connected' : 'connect_error', message);
   const response = NextResponse.redirect(url);
   response.cookies.set(PENDING_COOKIE, '', { path: '/api/connectors/oauth', maxAge: 0 });
@@ -60,7 +66,7 @@ export async function GET(req: NextRequest) {
   const providerError = params.get('error');
   if (providerError) {
     const detail = params.get('error_description');
-    return done(pending?.connector ?? null, false, `The provider refused the connection: ${detail ?? providerError}`);
+    return done(pending, false, `The provider refused the connection: ${detail ?? providerError}`);
   }
 
   if (!pending) return page('This connection attempt expired. Start it again.', 400);
@@ -103,7 +109,7 @@ export async function GET(req: NextRequest) {
     let clientSecret: string | null;
     if (platformRef) {
       const platform = resolvePlatformClient(platformRef);
-      if (!platform) return done(pending.connector, false, 'This deployment has no platform client for that service any more. Start again.');
+      if (!platform) return done(pending, false, 'This deployment has no platform client for that service any more. Start again.');
       clientId = platform.clientId;
       clientSecret = platform.clientSecret;
     } else {
@@ -116,7 +122,7 @@ export async function GET(req: NextRequest) {
           },
         },
       });
-      if (!client) return done(pending.connector, false, 'The client registration is missing. Start again.');
+      if (!client) return done(pending, false, 'The client registration is missing. Start again.');
       clientId = client.clientId;
       clientSecret = client.clientSecret ? decryptSecret(client.clientSecret) : null;
     }
@@ -145,10 +151,10 @@ export async function GET(req: NextRequest) {
       pending.mode === 'space'
         ? `This space now acts as ${tokens.accountLabel ?? 'the connected account'} for ${pending.provider}.`
         : `Connected ${tokens.accountLabel ?? 'your account'} for ${pending.provider}.`;
-    return done(pending.connector, true, who);
+    return done(pending, true, who);
   } catch (e) {
-    if (e instanceof ConnectorError) return done(pending.connector, false, e.message);
+    if (e instanceof ConnectorError) return done(pending, false, e.message);
     logger.error('connectors.oauth.callback_failed', { err: e });
-    return done(pending.connector, false, 'The connection could not be completed.');
+    return done(pending, false, 'The connection could not be completed.');
   }
 }

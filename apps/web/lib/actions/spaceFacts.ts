@@ -27,7 +27,7 @@ export async function spaceFactsFor(
       select: { name: true, featureConfig: true },
     })
     const [connectors, agents] = await Promise.all([
-      listConnectors(principal, context).catch(() => []),
+      listConnectors(principal, context, { personal: true }).catch(() => []),
       listAgents(principal, context)
         .then((r) => r.agents)
         .catch(() => []),

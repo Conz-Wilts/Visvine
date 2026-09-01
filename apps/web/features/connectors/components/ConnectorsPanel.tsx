@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button, ConfirmDialog, Field, Input, Modal, SearchInput, Skeleton, Alert } from '@/components/ui';
 import { ArrowLeftIcon, InfoIcon, Trash2Icon } from '@/features/shared/icons';
 import ConnectorLogo from './ConnectorLogo';
@@ -15,8 +15,12 @@ import { connectorConnectUrl } from '@/lib/connectors/connectUrl';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 import {
   allowsManyConnectors,
+  catalogConnectStyle,
   catalogEntryFor,
+  catalogRowLabel,
   connectorFromCatalog,
+  connectsInOneClick,
+  plainFields,
   searchCatalog,
   suggestConnector,
   type CatalogEntry,
@@ -123,7 +127,7 @@ interface ManageConnectionRow {
  * dialog opens (one request per open, never per row), and silent for a
  * connector without OAuth: the endpoint 404s and this renders nothing.
  */
-function ManageConnections({ spaceId, name }: { spaceId: string; name: string }) {
+function ManageConnections({ spaceId, name, returnTo }: { spaceId: string; name: string; returnTo: string | null }) {
   const [state, setState] = useState<{ mode: 'user' | 'space'; rows: ManageConnectionRow[] } | null | undefined>(undefined);
 
   useEffect(() => {
@@ -152,29 +156,85 @@ function ManageConnections({ spaceId, name }: { spaceId: string; name: string })
       {mine?.broken && (
         <span className="text-red-600">stopped working{mine.broken.reason ? ` — ${mine.broken.reason}` : ''}</span>
       )}
-      <a href={connectorConnectUrl(spaceId, name)} className="font-medium text-text-primary underline underline-offset-2">
+      <a href={connectorConnectUrl(spaceId, name, returnTo)} className="font-medium text-text-primary underline underline-offset-2">
         {mine ? 'Reconnect' : 'Connect'}
       </a>
     </div>
   );
 }
 
-const TABS: Array<{ id: Tab; label: string }> = [
-  { id: 'mine', label: 'In this space' },
-  { id: 'catalog', label: 'Add a connector' },
-];
+const TABS: Record<'space' | 'personal', Array<{ id: Tab; label: string }>> = {
+  space: [
+    { id: 'mine', label: 'In this space' },
+    { id: 'catalog', label: 'Add a connector' },
+  ],
+  personal: [
+    { id: 'mine', label: 'Yours' },
+    { id: 'catalog', label: 'Add a connector' },
+  ],
+};
 
-export default function ConnectorsPanel() {
+/**
+ * Whose connectors these are.
+ *
+ * `space` is the console: the space's own connectors, shared with everyone in
+ * it, and the row goes to the connector's page in that space's directory.
+ * `personal` is Settings: the same machinery pointed at your personal space,
+ * which is a full space you are the only member and the admin of — so nothing
+ * about notes, secrets or the OAuth dance is special-cased for it. What differs
+ * is where a row can lead: your personal space is not the space the app is
+ * currently showing, so a row opens Manage rather than navigating to a
+ * directory page that isn't there.
+ */
+export type ConnectorScope = 'space' | 'personal';
+
+export default function ConnectorsPanel({
+  space,
+  scope = 'space',
+  returnTo = null,
+}: {
+  /** The space to work in; defaults to the one the app is showing. */
+  space?: string | null;
+  scope?: ConnectorScope;
+  /** Where the OAuth round trip lands — this surface, not the connector page. */
+  returnTo?: string | null;
+} = {}) {
   const router = useRouter();
   const { currentSpace } = useSpace();
   const openCreate = useCreateSurface();
-  const spaceId = currentSpace?.id ?? null;
+  const spaceId = space ?? currentSpace?.id ?? null;
+  const personal = scope === 'personal';
+
+  // What the OAuth round trip said on its way back here. Read once and then
+  // wiped from the URL, so a refresh doesn't re-announce a connection made
+  // minutes ago (the connector's own page does the same with these params).
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const [outcome, setOutcome] = useState<{ ok: boolean; message: string } | null>(null);
+  useEffect(() => {
+    const ok = params.get('connected');
+    const bad = params.get('connect_error');
+    if (!ok && !bad) return;
+    setOutcome({ ok: Boolean(ok), message: ok ?? bad ?? '' });
+    const next = new URLSearchParams(params.toString());
+    next.delete('connected');
+    next.delete('connect_error');
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [params, pathname, router]);
 
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('mine');
   const [entry, setEntry] = useState<CatalogEntry | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [existing, setExisting] = useState<ExistingConnector[]>([]);
+  // The OAuth services this deployment can complete without the space
+  // registering its own app — what makes a Connect button one click.
+  const [platformClients, setPlatformClients] = useState<string[]>([]);
+  // The catalog row whose one-click connect is in flight, by entry id: the note
+  // is written, then the browser leaves for the provider, so the button stays
+  // busy until navigation rather than settling back.
+  const [connecting, setConnecting] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // The connector Manage is open on, by note name, plus the recipe blurb the
@@ -195,10 +255,13 @@ export default function ConnectorsPanel() {
     if (!spaceId) return;
     let cancelled = false;
     setLoading(true);
-    fetchJson<{ connectors: ExistingConnector[] }>(`/api/communities/${encodeURIComponent(spaceId)}/connectors`)
+    fetchJson<{ connectors: ExistingConnector[]; platformClients?: string[] }>(
+      `/api/communities/${encodeURIComponent(spaceId)}/connectors`,
+    )
       .then((data) => {
         if (cancelled) return;
         setExisting(data.connectors);
+        setPlatformClients(data.platformClients ?? []);
         setError(null);
         // What the space has is the question an admin usually has, but a space
         // with nothing connected would open on an empty list — so land on the
@@ -305,12 +368,43 @@ export default function ConnectorsPanel() {
   const openConnector = (name: string) =>
     router.push(`/directory/${encodeURIComponent(`connector:${name}`)}`);
 
+  /**
+   * Connect a service in one press: write the note the recipe would have
+   * written with everything left at its default, then send the browser to the
+   * provider. No form, because there is nothing to ask — the deployment's own
+   * OAuth client stands in for the one nobody wants to register, and the
+   * title, scopes and note are all the recipe's.
+   *
+   * The note is written FIRST because the OAuth start route reads the
+   * connector's perimeter out of it: the note is the connector, so there is
+   * nothing to authorize against until it exists. A dance the person abandons
+   * therefore leaves a connector with no account attached — visible in the
+   * list, deletable, and exactly what pressing Connect again picks up.
+   */
+  const connectInOneClick = async (entry: CatalogEntry) => {
+    if (!spaceId) return;
+    setConnecting(entry.id);
+    setError(null);
+    try {
+      const { name, title } = suggestConnector(entry, takenNames);
+      const { content } = connectorFromCatalog(entry, { name, title, description: '', values: {} });
+      const path = `connectors/${name}.md`;
+      await notesApi.create(spaceId, path, content);
+      invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId), contextKeys.read(spaceId, path));
+      window.location.href = connectorConnectUrl(spaceId, name, returnTo);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start the connection');
+      setConnecting(null);
+    }
+  };
+
   if (entry) {
     return (
       <EntryForm
         entry={entry}
         spaceId={spaceId}
         taken={takenNames}
+        returnTo={returnTo}
         onBack={() => setEntry(null)}
         onCreated={(href) => router.push(href)}
       />
@@ -360,9 +454,15 @@ export default function ConnectorsPanel() {
             >
               {toggling === connected.name ? 'Saving…' : connected.enabled ? 'Disable' : 'Enable'}
             </Button>
-            <Button variant="neutral" size="sm" onClick={() => { setManage(null); openConnector(connected.name); }}>
-              Edit
-            </Button>
+            {/* The note IS the connector, so Edit is a door to its page —
+                which only exists in the directory of the space being shown. A
+                personal connector's note lives in your own space, reached from
+                your context rather than from here. */}
+            {!personal && (
+              <Button variant="neutral" size="sm" onClick={() => { setManage(null); openConnector(connected.name); }}>
+                Edit
+              </Button>
+            )}
           </div>
         </div>
       }
@@ -423,7 +523,7 @@ export default function ConnectorsPanel() {
           </p>
         )}
         {connected.kind !== 'model' && spaceId && (
-          <ManageConnections spaceId={spaceId} name={connected.name} />
+          <ManageConnections spaceId={spaceId} name={connected.name} returnTo={returnTo} />
         )}
         {connected.invalid && <p className="mt-2 text-red-600">Not working: {connected.invalid}</p>}
         {!connected.enabled && (
@@ -443,11 +543,17 @@ export default function ConnectorsPanel() {
       <SearchInput
         value={query}
         onChange={setQuery}
-        placeholder={tab === 'mine' ? 'Search this space’s connectors…' : 'Search services…'}
+        placeholder={
+          tab === 'mine'
+            ? personal
+              ? 'Search your connectors…'
+              : 'Search this space’s connectors…'
+            : 'Search services…'
+        }
       />
 
       <div className="flex gap-1">
-        {TABS.map((t) => (
+        {TABS[scope].map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
@@ -464,6 +570,14 @@ export default function ConnectorsPanel() {
           </button>
         ))}
       </div>
+
+      {outcome && (
+        <p
+          className={`text-sm ${outcome.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}
+        >
+          {outcome.message}
+        </p>
+      )}
 
       {error && <Alert>{error}</Alert>}
 
@@ -489,7 +603,7 @@ export default function ConnectorsPanel() {
                 <li key={c.path} className="py-1">
                   <div className="-mx-3 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
                     <button
-                      onClick={() => openConnector(c.name)}
+                      onClick={() => (personal ? openManage(c) : openConnector(c.name))}
                       className="flex min-w-0 flex-1 items-center gap-4 text-left"
                     >
                       <ConnectorLogo name={c.name} provider={c.model?.provider} recipe={c.recipe} />
@@ -517,7 +631,9 @@ export default function ConnectorsPanel() {
           </ul>
 
           <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4 mt-2">
-            <p className="text-xs text-text-muted">Connect another service, or write one yourself.</p>
+            <p className="text-xs text-text-muted">
+              {personal ? 'Connect another service to your own account.' : 'Connect another service, or write one yourself.'}
+            </p>
             <Button variant="neutral" size="sm" onClick={() => { setQuery(''); setTab('catalog'); }}>
               Add a connector
             </Button>
@@ -539,6 +655,12 @@ export default function ConnectorsPanel() {
               const rows = held.get(e.id) ?? [];
               const many = allowsManyConnectors(e);
               const showInfo = info === e.id;
+              // Nothing to ask for: Connect is the whole interaction, and the
+              // form stays reachable through the row for the space that wants
+              // its own OAuth app or extra scopes.
+              const oneClick = connectsInOneClick(e, platformClients);
+              const style = catalogConnectStyle(e, platformClients);
+              const busy = connecting === e.id;
               return (
                 <li key={e.id} className="py-1">
                   <div className="-mx-3 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
@@ -548,10 +670,15 @@ export default function ConnectorsPanel() {
                     >
                       <ConnectorLogo entry={e} />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-text-primary">{e.name}</p>
+                        <p className="truncate text-sm font-semibold text-text-primary">{catalogRowLabel(e)}</p>
                         <p className="truncate text-xs text-text-muted">{e.description}</p>
                       </div>
                     </button>
+                    {/* How you connect it, before you press anything: one press,
+                        a sign-in, or a credential you have to go and fetch. */}
+                    <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[style === 'key' ? 'muted' : 'ok']}`}>
+                      {style === 'one-click' ? 'One click' : style === 'sign-in' ? 'Sign in' : 'API key'}
+                    </span>
                     <button
                       onClick={() => setInfo(showInfo ? null : e.id)}
                       aria-label={`About ${e.name}`}
@@ -566,12 +693,22 @@ export default function ConnectorsPanel() {
                       </span>
                     )}
                     {rows.length === 0 ? (
-                      <Button variant="brand" size="sm" onClick={() => setEntry(e)}>
-                        Connect
+                      <Button
+                        variant="brand"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => (oneClick ? void connectInOneClick(e) : setEntry(e))}
+                      >
+                        {busy ? 'Connecting…' : 'Connect'}
                       </Button>
                     ) : many ? (
-                      <Button variant="neutral" size="sm" onClick={() => setEntry(e)}>
-                        Add another
+                      <Button
+                        variant="neutral"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => (oneClick ? void connectInOneClick(e) : setEntry(e))}
+                      >
+                        {busy ? 'Connecting…' : 'Add another'}
                       </Button>
                     ) : (
                       <Button
@@ -592,7 +729,7 @@ export default function ConnectorsPanel() {
                         {e.shape === 'model'
                           ? 'A model provider this space’s agents run on — never runnable, and no note or agent can read the key. One per space: the key is the space’s own, so a second connector would name the same key and the same endpoint.'
                           : e.shape === 'oauth'
-                            ? 'Each person connects their own account; Visvine holds the tokens and sends them on every call. Connect it as many times as the space has accounts to reach — each is its own connector.'
+                            ? `${oneClick ? 'Connect signs you in at the provider — there is nothing to fill in. ' : ''}Each person connects their own account; Visvine holds the tokens and sends them on every call. Connect it as many times as the space has accounts to reach — each is its own connector.`
                             : `Needs ${e.fields.map((f) => f.label.toLowerCase()).join(', ')}, stored as write-only secrets. Connect it once per set of credentials.`}
                       </p>
                     </div>
@@ -604,12 +741,14 @@ export default function ConnectorsPanel() {
 
           {/* The service that isn't on the list: a connector is only ever a
               note, so a custom one is written on the draft surface. */}
-          <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4 mt-2">
-            <p className="text-xs text-text-muted">Something not on the list? Write its note yourself.</p>
-            <Button variant="neutral" size="sm" onClick={() => openCreate('connector')}>
-              Custom connector
-            </Button>
-          </div>
+          {!personal && (
+            <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4 mt-2">
+              <p className="text-xs text-text-muted">Something not on the list? Write its note yourself.</p>
+              <Button variant="neutral" size="sm" onClick={() => openCreate('connector')}>
+                Custom connector
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
@@ -642,6 +781,7 @@ function EntryForm({
   entry,
   spaceId,
   taken,
+  returnTo,
   onBack,
   onCreated,
 }: {
@@ -649,6 +789,8 @@ function EntryForm({
   spaceId: string | null;
   /** Connector names the space already uses — the new note may not be one of them. */
   taken: string[];
+  /** Where the OAuth round trip lands, for a service that has one. */
+  returnTo: string | null;
   onBack: () => void;
   onCreated: (href: string) => void;
 }) {
@@ -656,7 +798,14 @@ function EntryForm({
   const [title, setTitle] = useState(suggestion.title);
   const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // The ordinary fields, and the ones only a space registering its own OAuth
+  // app ever fills in. Splitting them is what keeps a client id and secret off
+  // a screen whose honest answer is "press Connect".
+  const plain = useMemo(() => plainFields(entry), [entry]);
+  const advanced = useMemo(() => entry.fields.filter((f) => f.advanced), [entry]);
 
   const name = connectorSlug(title) || entry.id;
   const clash = taken.some((n) => n.toLowerCase() === name.toLowerCase());
@@ -680,12 +829,41 @@ function EntryForm({
         });
       }
       invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId), contextKeys.read(spaceId, path));
+      // A connector nobody has signed into does nothing, so saving one hands
+      // straight over to the provider rather than landing on a page whose only
+      // useful control is Connect.
+      if (entry.oauth) {
+        window.location.href = connectorConnectUrl(spaceId, name, returnTo);
+        return;
+      }
       onCreated(`/directory/${encodeURIComponent(`connector:${name}`)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save the connector');
       setSaving(false);
     }
   };
+
+  const field = (f: CatalogEntry['fields'][number]) => (
+    <Field
+      key={f.key}
+      label={
+        <>
+          {f.label}
+          {f.required && <span className="text-red-500"> *</span>}
+        </>
+      }
+      hint={f.hint}
+    >
+      <Input
+        type={f.secret ? 'password' : 'text'}
+        autoComplete="off"
+        placeholder={f.placeholder}
+        value={values[f.key] ?? ''}
+        onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+        className={f.secret ? 'font-mono' : undefined}
+      />
+    </Field>
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -699,7 +877,7 @@ function EntryForm({
         </button>
         <ConnectorLogo entry={entry} size="lg" />
         <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-text-primary">{entry.name}</h2>
+          <h2 className="text-lg font-semibold text-text-primary">{catalogRowLabel(entry)}</h2>
           <p className="text-sm text-text-muted">
             {nth
               ? `Another ${entry.name} connector — its own credentials, its own note.`
@@ -716,33 +894,38 @@ function EntryForm({
         <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={64} />
       </Field>
 
-      {entry.fields.map((f) => (
-        <Field
-          key={f.key}
-          label={
-            <>
-              {f.label}
-              {f.required && <span className="text-red-500"> *</span>}
-            </>
-          }
-        >
-          <Input
-            type={f.secret ? 'password' : 'text'}
-            autoComplete="off"
-            placeholder={f.placeholder}
-            value={values[f.key] ?? ''}
-            onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-            className={f.secret ? 'font-mono' : undefined}
-          />
-        </Field>
-      ))}
+      {plain.map(field)}
+
+      {advanced.length > 0 && (
+        <div className="border-t border-border-subtle pt-4">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            aria-expanded={showAdvanced}
+            className="text-sm font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary"
+          >
+            {entry.oauth ? 'Use your own OAuth app' : 'Advanced'}
+          </button>
+          {showAdvanced && (
+            <div className="mt-4 flex flex-col gap-5">
+              {entry.oauth && (
+                <p className="text-xs text-text-muted">
+                  Leave these blank and the connection runs on Visvine’s own app — nothing to
+                  register. Fill them in to hold the grant in your own provider account instead.
+                </p>
+              )}
+              {advanced.map(field)}
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <p className="border-l-2 border-red-500 py-1 pl-3 text-sm text-red-500">{error}</p>}
 
       <div className="flex items-center justify-end gap-2 border-t border-border-subtle pt-4">
         <Button variant="neutral" onClick={onBack} disabled={saving}>Cancel</Button>
         <Button variant="brand" onClick={submit} disabled={!ready || saving}>
-          {saving ? 'Saving…' : 'Save connector'}
+          {saving ? 'Saving…' : entry.oauth ? 'Continue to sign-in' : 'Save connector'}
         </Button>
       </div>
     </div>

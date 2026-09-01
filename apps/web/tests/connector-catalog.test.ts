@@ -7,11 +7,16 @@ import {
   CATALOG_CATEGORIES,
   CONNECTOR_CATALOG,
   allowsManyConnectors,
+  catalogConnectStyle,
   catalogEntryFor,
+  catalogRowLabel,
   connectorFromCatalog,
+  connectsInOneClick,
+  plainFields,
   searchCatalog,
   suggestConnector,
 } from '@/lib/connectors/catalog'
+import { connectorConnectUrl, safeReturnTo } from '@/lib/connectors/connectUrl'
 import { parseConnectorPerimeter, perimeterSecretRefs } from '@/lib/connectors/config'
 import { connectorKind, parseModelConnector } from '@/lib/connectors/model'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
@@ -253,4 +258,111 @@ test('google: extra scopes append to the defaults and never reach env', () => {
   // A scope list is authorization config, not something an agent reads at run time.
   assert.equal(parsed.perimeter.env.extra_scopes, undefined)
   assert.ok(!JSON.stringify(parsed.perimeter.env).includes('gmail.send'))
+})
+
+test('one-click Connect is offered only where there is nothing to ask', () => {
+  const google = CONNECTOR_CATALOG.find((e) => e.id === 'google')
+  const drive = CONNECTOR_CATALOG.find((e) => e.id === 'google-drive')
+  const microsoft = CONNECTOR_CATALOG.find((e) => e.id === 'microsoft')
+  const slack = CONNECTOR_CATALOG.find((e) => e.id === 'slack')
+  assert.ok(google && drive && microsoft && slack)
+
+  // Google rides the deployment's own OAuth app and every field it offers is
+  // advanced, so pressing Connect is the whole interaction.
+  assert.equal(connectsInOneClick(google, ['google']), true)
+  assert.equal(connectsInOneClick(drive, ['google']), true)
+  assert.deepEqual(plainFields(google), [])
+
+  // …but only on a deployment that HOLDS that client. With none configured the
+  // one-click path would send someone to a provider that refuses them.
+  assert.equal(connectsInOneClick(google, []), false)
+  assert.equal(connectsInOneClick(drive, ['microsoft']), false)
+
+  // Microsoft needs an app registration of the space's own, and Slack is not
+  // OAuth at all — both keep the form.
+  assert.equal(connectsInOneClick(microsoft, ['google', 'microsoft']), false)
+  assert.equal(connectsInOneClick(slack, ['google']), false)
+  assert.ok(plainFields(microsoft).length > 0)
+})
+
+test('every advanced field is optional, so hiding one can never block a connect', () => {
+  for (const entry of CONNECTOR_CATALOG) {
+    for (const f of entry.fields.filter((x) => x.advanced)) {
+      assert.ok(!f.required, `${entry.id}.${f.key} is advanced but required`)
+    }
+  }
+})
+
+test('a one-click recipe writes a complete note from no input at all', () => {
+  for (const entry of CONNECTOR_CATALOG.filter((e) => connectsInOneClick(e, ['google']))) {
+    const { name, title } = suggestConnector(entry, [])
+    const { content, secrets } = connectorFromCatalog(entry, { name, title, description: '', values: {} })
+    const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+    assert.ok(parsed.ok, `${entry.id}: ${parsed.ok ? '' : parsed.error}`)
+    assert.ok(parsed.perimeter.auth, `${entry.id} has an auth block`)
+    assert.deepEqual(secrets, [], `${entry.id} needs no secret stored`)
+    assert.ok(parsed.perimeter.hosts.length > 0, `${entry.id} reaches something`)
+  }
+})
+
+test('a return path is a relative path on this app or nothing', () => {
+  assert.equal(safeReturnTo('/settings?section=connectors'), '/settings?section=connectors')
+  assert.equal(safeReturnTo('/admin?section=connectors&tab=mine'), '/admin?section=connectors&tab=mine')
+  assert.equal(safeReturnTo(null), null)
+  assert.equal(safeReturnTo(''), null)
+  // An open redirect off the back of an authenticated flow is the whole risk.
+  assert.equal(safeReturnTo('https://evil.example/steal'), null)
+  assert.equal(safeReturnTo('//evil.example/steal'), null)
+  assert.equal(safeReturnTo('/\\evil.example'), null)
+  assert.equal(safeReturnTo('javascript:alert(1)'), null)
+  // A Location header takes what it is given, so control characters never pass.
+  assert.equal(safeReturnTo('/settings\r\nSet-Cookie: a=b'), null)
+  assert.equal(safeReturnTo('/set tings'), null)
+
+  // The link the console builds carries it; the link without one does not.
+  const url = new URL(connectorConnectUrl('me:u1', 'google-drive', '/settings?section=connectors'))
+  assert.equal(url.pathname, '/api/connectors/oauth/start')
+  assert.equal(url.searchParams.get('space'), 'me:u1')
+  assert.equal(url.searchParams.get('connector'), 'google-drive')
+  assert.equal(url.searchParams.get('return'), '/settings?section=connectors')
+  assert.equal(new URL(connectorConnectUrl('s1', 'google')).searchParams.get('return'), null)
+  assert.equal(
+    new URL(connectorConnectUrl('s1', 'google', 'https://evil.example')).searchParams.get('return'),
+    null,
+  )
+})
+
+test('a service you paste a credential into is named for what it is', () => {
+  const label = (id: string) => {
+    const e = CONNECTOR_CATALOG.find((x) => x.id === id)
+    assert.ok(e, id)
+    return catalogRowLabel(e)
+  }
+  // One press or a sign-in: the plain name.
+  assert.equal(label('google-drive'), 'Google Drive')
+  assert.equal(label('microsoft'), 'Microsoft')
+  // A credential you go and fetch is a different kind of thing, and the list
+  // says so before anyone clicks.
+  assert.equal(label('slack'), 'Slack API')
+  assert.equal(label('granola'), 'Granola API')
+  // …except where the suffix would read as a lie: a database is not an API,
+  // and a model provider and the catch-alls already say what they are.
+  assert.equal(label('postgres'), CONNECTOR_CATALOG.find((e) => e.id === 'postgres')!.name)
+  assert.equal(label('mcp'), CONNECTOR_CATALOG.find((e) => e.id === 'mcp')!.name)
+  for (const e of CONNECTOR_CATALOG.filter((x) => x.shape === 'model')) {
+    assert.equal(catalogRowLabel(e), e.name)
+  }
+})
+
+test('how a service connects is one of three answers', () => {
+  const style = (id: string, platform: string[] = ['google']) => {
+    const e = CONNECTOR_CATALOG.find((x) => x.id === id)
+    assert.ok(e, id)
+    return catalogConnectStyle(e, platform)
+  }
+  assert.equal(style('google-drive'), 'one-click')
+  // No platform client for it: the same row is a sign-in you must configure.
+  assert.equal(style('google-drive', []), 'sign-in')
+  assert.equal(style('microsoft'), 'sign-in')
+  assert.equal(style('slack'), 'key')
 })

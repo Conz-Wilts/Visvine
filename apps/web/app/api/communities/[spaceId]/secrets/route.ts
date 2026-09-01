@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession as requireAdmin } from '@/lib/auth';
+import { requireSession } from '@/lib/session';
+import { resolveContext } from '@/lib/notes/resolve';
 import {
   setSpaceSecret,
   deleteSpaceSecret,
@@ -25,12 +26,28 @@ function actorOf(session: { userId: string; name: string; email: string }): Secr
   return { userId: session.userId, name: session.name, email: session.email };
 }
 
+/**
+ * The admin of the space these secrets belong to, or null.
+ *
+ * resolveContext rather than isAdmin(): a personal space holds no aliases and
+ * never will, so its owner is its admin by definition — and that is the one
+ * place that fact is written down. Storing the key for your own Google
+ * connector goes through here like any other.
+ */
+async function adminSession(spaceId: string) {
+  const session = await requireSession();
+  if (session instanceof Response) return null;
+  const resolved = await resolveContext(session, spaceId);
+  if (resolved instanceof Response || !resolved.isAdmin) return null;
+  return session;
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ spaceId: string }> }
 ) {
   const { spaceId } = await params;
-  const session = await requireAdmin(spaceId);
+  const session = await adminSession(spaceId);
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   return NextResponse.json({ secrets: await listSecretNames(spaceId) });
@@ -46,7 +63,7 @@ export async function PUT(
   { params }: { params: Promise<{ spaceId: string }> }
 ) {
   const { spaceId } = await params;
-  const session = await requireAdmin(spaceId);
+  const session = await adminSession(spaceId);
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = (await req.json()) as { name?: unknown; value?: unknown };
@@ -71,7 +88,7 @@ export async function DELETE(
   { params }: { params: Promise<{ spaceId: string }> }
 ) {
   const { spaceId } = await params;
-  const session = await requireAdmin(spaceId);
+  const session = await adminSession(spaceId);
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = (await req.json()) as { name?: unknown };

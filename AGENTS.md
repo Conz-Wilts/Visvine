@@ -485,6 +485,57 @@ where it is read and edited. A connector the space wrote itself is a row in the
 first tab too, under a plug rather than a logo, and is still authored on the
 draft surface.
 
+**Connecting an OAuth service is one press.** A catalog row whose every field
+is optional and `advanced:`, riding a client the deployment itself holds
+(`clientId: platform:google`, resolved from env in
+`lib/connectors/platformClients.ts`), skips the form entirely: Connect writes
+the recipe's note with no input and sends the browser to the provider
+(`connectsInOneClick`, pure — the list route reports which platform clients
+exist, so a deployment with no Google client shows the form instead of a dead
+end). The own-OAuth-app fields are still there, behind "Use your own OAuth app";
+a service that genuinely needs credentials (Microsoft) keeps its form, and
+saving it hands over to the provider rather than to a page whose only useful
+control is Connect. The round trip lands back where it started —
+`connectorConnectUrl(space, name, returnTo)` carries a `return` path, validated
+by `safeReturnTo` at both ends and held in the signed pending cookie, never
+echoed through the provider.
+
+**A connector you connect for yourself works in every space you are in.** Sign
+in once at `/settings?section=connectors` and the note lands in your personal
+space (`me:<userId>` — a full Space you are the only member and admin of, so
+nothing about notes, secrets or the OAuth dance is special-cased). What makes
+it travel is `readConnectorNote`: a name is looked up in the space you are in,
+and then in the CALLER's own space. Two consequences, both load-bearing:
+
+- **A space's own note always wins its name.** An admin who configured
+  `google-drive` decided what its agents reach and whose credentials they use;
+  a personal note fills a gap and never displaces one.
+- **The connector carries the space it belongs to.** `LoadedConnector` holds
+  `spaceId` + `principal`, and `executeConnectorScript(loaded, run)` takes
+  nothing else — so the secrets, the linked account, the run budget and the
+  audit line are all the owner's, and no call site can pair a note with the
+  wrong space. Resolution runs through the person a run acts as, so a fan-out
+  run spends the SUBSCRIBER's connectors, not the author's.
+
+The fallback is off (`{ personal: false }`) for the Tools bridge and the
+console's test run: a Tool is code a space wrote, rendering for a viewer who
+never chose to run it, and the test button is about one particular note. An
+agent run and a direct action call are acts of the person they run as, so those
+get it. `list_connectors` reports the caller's own with `personal: true`.
+
+`GET /api/user/personal-space` provisions the space and hands back the id (it
+is derivable, but a personal space is created lazily and every space-scoped
+route 404s on one that has not been). The admin gate on those routes is
+`resolveContext(...).isAdmin`, never `isAdmin()`: a personal space holds no
+aliases and never will, and its owner administers it by definition.
+
+**The catalogue says how a service connects before you press anything.** One
+press, a sign-in, or a credential you have to go and fetch
+(`catalogConnectStyle`), and a row you paste a credential into is named for
+what it is — "Slack API" — with the plain name left to the ones you just press
+Connect on (`catalogRowLabel`; a database, a model provider and the catch-alls
+keep their names, because "Postgres API" would be worse than Postgres).
+
 **A service is not a slot.** A space may connect one service many times — the
 team's Drive beside your own, two Slack workspaces — so a catalog row never
 becomes "connected": it offers Connect, then **Add another**, whatever the space

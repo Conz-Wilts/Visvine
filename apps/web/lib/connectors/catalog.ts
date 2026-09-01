@@ -28,6 +28,7 @@
 
 import { SANDBOX_LIMITS } from './config'
 import { newModelConnectorNote } from './model'
+import { platformClientRef } from './platformClients'
 
 export type CatalogCategory =
   | 'email'
@@ -62,6 +63,13 @@ interface CatalogField {
   required?: boolean
   /** A multi-line value (e.g. a list of hosts). */
   multiline?: boolean
+  /**
+   * Not part of the ordinary path — the form keeps it behind a disclosure, and
+   * a service whose every field is advanced connects in one click
+   * ({@link connectsInOneClick}). This is what an own-OAuth-app credential is:
+   * available to the space that needs it, invisible to the space that doesn't.
+   */
+  advanced?: boolean
 }
 
 export interface CatalogEntry {
@@ -135,11 +143,11 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
       clientId: 'platform:google',
     },
     fields: [
-      { key: 'extra_scopes', label: 'Extra scopes', required: false,
+      { key: 'extra_scopes', label: 'Extra scopes', required: false, advanced: true,
         hint: 'Optional space-separated additional Google scopes, e.g. https://www.googleapis.com/auth/gmail.send. The defaults are read-only.' },
-      { key: 'GOOGLE_CLIENT_ID', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com', required: false,
+      { key: 'GOOGLE_CLIENT_ID', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com', required: false, advanced: true,
         hint: 'Optional — leave blank to use Visvine’s own Google app. To use your own: Google Cloud console → APIs & Services → Credentials → OAuth client (Web application), with this deployment’s /api/connectors/oauth/callback as an authorised redirect URI.' },
-      { key: 'GOOGLE_CLIENT_SECRET', label: 'OAuth client secret', placeholder: 'GOCSPX-…', secret: true, required: false },
+      { key: 'GOOGLE_CLIENT_SECRET', label: 'OAuth client secret', placeholder: 'GOCSPX-…', secret: true, required: false, advanced: true },
     ],
     body: [
       'Each member connects their own Google account from this connector’s page; Visvine then sends their bearer on every call to the hosts above.',
@@ -170,9 +178,9 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
       clientId: 'platform:google',
     },
     fields: [
-      { key: 'GOOGLE_DRIVE_CLIENT_ID', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com', required: false,
+      { key: 'GOOGLE_DRIVE_CLIENT_ID', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com', required: false, advanced: true,
         hint: 'Optional — leave blank to use Visvine’s own Google app. To use your own: Google Cloud console → APIs & Services → Credentials → OAuth client (Web application) with the Drive API enabled and this deployment’s /api/connectors/oauth/callback as an authorised redirect URI.' },
-      { key: 'GOOGLE_DRIVE_CLIENT_SECRET', label: 'OAuth client secret', placeholder: 'GOCSPX-…', secret: true, required: false },
+      { key: 'GOOGLE_DRIVE_CLIENT_SECRET', label: 'OAuth client secret', placeholder: 'GOCSPX-…', secret: true, required: false, advanced: true },
     ],
     body: [
       'Members connect their own Drive from this connector’s page. The `drive.file` scope reaches only files the person opened or created through Visvine.',
@@ -922,6 +930,62 @@ export function catalogEntryFor(name: string, provider?: string | null, recipe?:
  */
 export function allowsManyConnectors(entry: CatalogEntry): boolean {
   return entry.shape !== 'model'
+}
+
+/**
+ * What the picker calls a service.
+ *
+ * A one-click OAuth row is a different KIND of thing from a row that wants a
+ * key pasted into it, and the list should say so before anyone clicks: signing
+ * in to Google Drive and holding a Slack bot token are not the same act. So a
+ * service that is connected by pasting an API credential is named for what it
+ * actually is — "Slack API" — and the plain name is left to the ones you just
+ * press Connect on.
+ *
+ * The suffix is only added where it READS as true: a database, a model
+ * provider, an MCP server and the catch-all "other" rows are named for what
+ * they are already, and "Postgres API" would be worse than Postgres. The note
+ * a recipe writes is titled with the plain name either way — this is how the
+ * catalogue reads, not what the connector is called.
+ */
+export function catalogRowLabel(entry: CatalogEntry): string {
+  if (entry.shape !== 'key') return entry.name
+  if (entry.category === 'data' || entry.category === 'llm' || entry.category === 'other') return entry.name
+  return `${entry.name} API`
+}
+
+/** How a service is connected, in two words, for the row that offers it. */
+export function catalogConnectStyle(
+  entry: CatalogEntry,
+  platformClients: readonly string[],
+): 'one-click' | 'sign-in' | 'key' {
+  if (connectsInOneClick(entry, platformClients)) return 'one-click'
+  return entry.shape === 'oauth' ? 'sign-in' : 'key'
+}
+
+/** The fields the ordinary path asks for — everything not marked advanced. */
+export function plainFields(entry: CatalogEntry): CatalogEntry['fields'] {
+  return entry.fields.filter((f) => !f.advanced)
+}
+
+/**
+ * Can this service be connected by pressing one button — no form at all?
+ *
+ * Only when there is genuinely nothing to ask: an OAuth service whose every
+ * field is optional and advanced, riding a platform client this deployment
+ * actually holds. That last clause is why the answer is a function of the
+ * deployment rather than of the catalog — with no GOOGLE_CLIENT_ID set, the
+ * one-click path would send someone to a provider that refuses them, so the
+ * form (where they can paste their own OAuth app) is the honest surface.
+ *
+ * Pure: the caller passes the platform client names the server reported
+ * (`availablePlatformClients`), so this stays importable from the client.
+ */
+export function connectsInOneClick(entry: CatalogEntry, platformClients: readonly string[]): boolean {
+  if (entry.shape !== 'oauth' || !entry.oauth) return false
+  if (entry.fields.some((f) => f.required || !f.advanced)) return false
+  const ref = platformClientRef(entry.oauth.clientId ?? null)
+  return ref !== null && platformClients.includes(ref)
 }
 
 /**

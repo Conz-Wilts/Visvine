@@ -1529,7 +1529,9 @@ export const CONTEXT_ACTIONS = [
         'and the env var names its code can read. `actions` lists named entry points (name, description, params) ' +
         'you can run with run_connector by name instead of writing code. Run one with run_connector; a connector with no hosts is ' +
         "documentation-only. Entries with kind 'model' are LLM providers the space's agents run on (their key " +
-        "is the space's) — they are listed for context but never runnable. Executing needs the 'connectors:use' scope. " +
+        "is the space's) — they are listed for context but never runnable. Entries marked `personal: true` are the " +
+        'CALLER\'s own connectors, connected in their settings and usable in every space they are in; the space does not ' +
+        "share them. Executing needs the 'connectors:use' scope. " +
         'TO CREATE ONE: a connector is a NOTE at connectors/<name>.md, written with edit_context ' +
         "(scope:'shared', visibility:'inherit'), space admins only — there is no create_connector tool because " +
         'there is nothing to create but the note. Ask the visvine tool with no action for the frontmatter contract and the ' +
@@ -1538,7 +1540,9 @@ export const CONTEXT_ACTIONS = [
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
-        return { connectors: await listConnectors(principal, context) }
+        // `personal: true` — the caller's own connectors resolve here too, so
+        // the catalogue has to name them or they cannot be asked for.
+        return { connectors: await listConnectors(principal, context, { personal: true }) }
       },
     }),
     defineAction({
@@ -1587,9 +1591,6 @@ export const CONTEXT_ACTIONS = [
         const loaded = await loadConnectorOr404(principal, context, args.connector)
         try {
           const result = await executeConnectorScript(
-            principal,
-            context,
-            args.space_id,
             loaded,
             hasAction ? { action: args.action!.trim(), args: args.args ?? {} } : { code: args.code! },
           )
