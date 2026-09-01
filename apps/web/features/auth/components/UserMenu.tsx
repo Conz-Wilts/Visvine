@@ -42,7 +42,7 @@ export default function UserMenu() {
   }, [open]);
 
   if (isPending) {
-    return <div className="h-10 w-10 rounded-[10px] bg-surface-3 animate-pulse" />;
+    return <div className="h-10 w-10 rounded-full bg-surface-3 animate-pulse" />;
   }
 
   if (!session) return null;
@@ -64,7 +64,7 @@ export default function UserMenu() {
         aria-label="Account menu"
         aria-haspopup="menu"
         aria-expanded={open}
-        className="h-10 w-10 overflow-hidden rounded-[10px] border-2 border-brand-green transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
+        className="h-10 w-10 overflow-hidden rounded-full border-2 border-brand-green transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
       >
         {user.image ? (
           <Image src={user.image} alt={user.name ?? "Profile"} width={40} height={40} className="h-full w-full object-cover" />
