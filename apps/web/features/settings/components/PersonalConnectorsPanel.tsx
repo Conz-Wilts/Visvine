@@ -46,14 +46,5 @@ export default function PersonalConnectorsPanel() {
     );
   }
 
-  return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-text-muted">
-        Sign in once and it works everywhere you do. These are yours: nobody else can see them or
-        use the accounts behind them, and your agents and tool calls can reach them in any space
-        you are in — unless that space has a connector of its own by the same name, which wins.
-      </p>
-      <ConnectorsPanel space={spaceId} scope="personal" returnTo={RETURN_TO} />
-    </div>
-  );
+  return <ConnectorsPanel space={spaceId} scope="personal" returnTo={RETURN_TO} />;
 }
