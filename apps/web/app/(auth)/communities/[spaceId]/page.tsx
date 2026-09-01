@@ -287,7 +287,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
           {isMember && (
             <SectionCard id="events" title="Upcoming events" scrollMargin="scroll-mt-20"
                          badge={events.length > 0 ? counts.upcomingEvents : undefined}
-                         action={<Link href="/events" className="text-[13px] font-semibold hover:underline" style={{ color: theme.dark }}>View all</Link>}>
+                         action={<Link href="/directory?type=event" className="text-[13px] font-semibold hover:underline" style={{ color: theme.dark }}>View all</Link>}>
               {events.length > 0 ? (
                 <div className="flex flex-col divide-y divide-border-subtle">
                   {events.map((e) => <EventRow key={e.id} event={e} theme={theme} />)}

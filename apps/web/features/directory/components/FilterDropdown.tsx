@@ -8,7 +8,6 @@ import {
   DROPDOWN_TRIGGER_ACTIVE_STYLE,
   DROPDOWN_TRIGGER_IDLE_STYLE,
 } from '@/components/ui/Dropdown';
-import { ArrowDownIcon } from '@/features/shared/icons';
 import Chip from '@/components/ui/Chip';
 
 // ── Multi-select filter dropdown ──────────────────────────────────────────────
@@ -278,35 +277,5 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
         </div>
       )}
     </div>
-  );
-}
-
-// ── Sort toggle ───────────────────────────────────────────────────────────────
-interface SortToggleProps {
-  value: 'az' | 'za';
-  onChange: (value: 'az' | 'za') => void;
-}
-
-/**
- * Two directions is not a menu. One button states the current order and flips
- * it — the arrow rotates to show which way the flip went.
- */
-export function SortToggle({ value, onChange }: SortToggleProps) {
-  const az = value === 'az';
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(az ? 'za' : 'az')}
-      className={DROPDOWN_TRIGGER_CLASS}
-      style={DROPDOWN_TRIGGER_IDLE_STYLE}
-      aria-label={`Sort ${az ? 'A to Z' : 'Z to A'}; click to reverse`}
-      title="Reverse sort order"
-    >
-      <ArrowDownIcon
-        className={`h-4 w-4 transition-transform duration-200 ${az ? '' : 'rotate-180'}`}
-       
-      />
-      <span className="tabular-nums">{az ? 'A → Z' : 'Z → A'}</span>
-    </button>
   );
 }

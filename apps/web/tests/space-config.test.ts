@@ -228,12 +228,12 @@ describe('mergeFeatureConfig: enabled merges one tool at a time', () => {
   })
 
   test('the sidebar layout is still inherited when only enabled is sent', () => {
-    const merged = mergeFeatureConfig({ order: ['directory', 'events'] }, { enabled: { channels: false } })
-    assert.deepEqual(merged.order, ['directory', 'events'])
+    const merged = mergeFeatureConfig({ order: ['directory', 'channels'] }, { enabled: { channels: false } })
+    assert.deepEqual(merged.order, ['directory', 'channels'])
   })
 
   test('arrays are still replaced whole — one panel owns each', () => {
-    const merged = mergeFeatureConfig({ order: ['directory', 'events'] }, { order: ['events'] })
-    assert.deepEqual(merged.order, ['events'])
+    const merged = mergeFeatureConfig({ order: ['directory', 'channels'] }, { order: ['channels'] })
+    assert.deepEqual(merged.order, ['channels'])
   })
 })

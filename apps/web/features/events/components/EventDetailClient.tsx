@@ -163,12 +163,11 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   const withContextBar = (body: React.ReactNode) => (
     <TabBarSlotProvider>
       <div className="profile-enter w-full pb-10">
-        {/* Direct child of the tall page container so `sticky` pins; "-top-4 -mt-4"
-            cancels <main>'s pt-4 so the bar sits flush under the navbar. */}
+        {/* Direct child of the tall page container so `sticky` pins. */}
         <PageTabBar
           tabs={EVENT_TABS} activeTab={viewTab} onTabChange={setViewTab}
           ariaLabel="Event sections"
-          stickyTop="-top-4 -mt-4" attachedOpen={viewTab === 'context'}
+          attachedOpen={viewTab === 'context'}
           edgeClass={barEdgeClass} handoffKey={HANDOFF_KEY}
         />
         {body}

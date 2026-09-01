@@ -211,29 +211,7 @@ html, body {
   box-shadow: var(--shadow-strip);
 }
 
-/* ── Shell chrome buttons (navbar icons, community selector) ──────────────
-   The --shell-* vars are written by ThemeContext: plain white shell by
-   default, solid pastel chrome when the user turns on "Solid shell". The
-   fallbacks here reproduce the white shell exactly, so these classes are a
-   no-op restyle when the vars are absent (e.g. before hydration). */
-.shell-icon-btn {
-  color: var(--shell-fg, #374151);
-  transition: color 0.15s, background-color 0.15s;
-}
-.shell-icon-btn:hover {
-  color: var(--shell-fg-strong, #111827);
-  background-color: var(--shell-hover, #f9fafb);
-}
-.shell-icon-btn--active {
-  color: var(--shell-active-fg, var(--color-brand-green));
-  background-color: var(--shell-active-bg, transparent);
-}
-.shell-icon-btn--active:hover {
-  color: var(--shell-active-fg-hover, var(--color-brand-dark-green));
-  background-color: var(--shell-active-bg, transparent);
-}
-
-/* In @layer base so text-* utilities on links (e.g. the navbar's active
+/* In @layer base so text-* utilities on links (e.g. the rail's active
    text-brand-green) can override these defaults — unlayered rules would
    always beat @layer utilities regardless of specificity. */
 @layer base {
@@ -440,10 +418,9 @@ html, body {
   }
 }
 
-/* scroll padding for sticky tab bar + navbar. Page scroll lives in the auth
-   shell's <main> (see AuthLayoutClient), not the document, so the scrollbar
-   starts below the fixed navbar — <main> reserves its own gutter and carries the
-   scroll padding. The document itself no longer scrolls. */
+/* scroll padding for the sticky tab bar. Page scroll lives in the auth shell's
+   <main> (see AuthLayoutClient), not the document — <main> reserves its own
+   gutter and carries the scroll padding. The document itself does not scroll. */
 html {
   scroll-padding-top: 128px;
 }
@@ -487,8 +464,8 @@ html {
   background: transparent;
 }
 
-/* Pane-top tab bar routes: the bar pins flush under the navbar INSIDE <main>,
-   so <main>'s scroll track starts behind it — and on a long page the thumb is
+/* Pane-top tab bar routes: the bar pins at the top of <main>, so <main>'s
+   scroll track starts behind it — and on a long page the thumb is
    short enough to hide entirely behind the bar at rest. A track margin moves
    the thumb's travel range to start below the bar, so the scrollbar genuinely
    begins after the tab row instead of being masked over. PaneTopScrollbarMask

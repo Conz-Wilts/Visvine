@@ -25,10 +25,11 @@ interface PageTabBarProps {
   onTabChange: (tab: PageTab) => void;
   /** Accessible name for the tablist — what these tabs are sections OF. */
   ariaLabel?: string;
-  /** Override sticky offset — defaults to top-20 (80px navbar). Inside the
-   *  (auth) <main> scroll container pass '-top-4 -mt-4' to cancel its pt-4 so
-   *  the bar sits flush under the navbar (at rest and pinned) with no
-   *  see-through gap and no shift when it pins. */
+  /** Override the sticky box's placement. The default cancels <main>'s top pad
+   *  twice — once in flow ("-mt-6"), once in the sticky offset ("-top-6", which
+   *  resolves against <main>'s content box) — so the box sits at the surface's
+   *  top edge at rest and pinned, with the clearance above the row painted
+   *  inside it rather than left as a gap the page scrolls through. */
   stickyTop?: string;
   /** Open the region below the tab row that the active tab's content portals its
    *  own bar into (the note toolbar on Context — see TabBarSlotContext). Drive it
@@ -54,7 +55,7 @@ export default function PageTabBar({
   activeTab,
   onTabChange,
   ariaLabel = 'Page sections',
-  stickyTop = 'top-20',
+  stickyTop = '-top-6 -mt-6',
   attachedOpen = false,
   edgeClass = '-ml-6 z-20',
   handoffKey,
@@ -116,11 +117,16 @@ export default function PageTabBar({
 
   return (
     <div className={`sticky ${stickyTop} ${edgeClass}`}>
+      {/* The clearance above the row, painted and part of the sticky box, so
+          the band between the surface's top edge and the tabs is opaque when
+          the bar is pinned. */}
+      <div aria-hidden className="h-6 bg-glass" />
+
       {/* -ml-6 bleeds the bar left into <main>'s 24px gutter so its bottom
-          border starts at the sidebar's right edge (continuing the navbar seam).
-          No pl-6 to push the content back: the tab row hugs the sidebar too
-          (its own small paddings are the only offset). The gutter is padding on
-          the scrollport, not overflow, so nothing is clipped.
+          border starts at the sidebar's right edge; pl-8 puts the first tab's
+          label back on that gutter, so the words line up with the content.
+          The gutter is padding on the scrollport, not overflow, so nothing is
+          clipped.
           Border + background live on the TAB ROW alone — the attached region
           below is transparent, so the toolbar tray it hosts reads as a pill
           hanging off the nav line with the page visible beside it, not as a
@@ -130,7 +136,7 @@ export default function PageTabBar({
           its toolbar tray over that column, NoteEditor). The tablist keeps
           flex-1 so it spans the row —
           a shrink-to-fit box with overflow-x-auto grows a stray scrollbar. */}
-      <div className="flex w-full items-center border-b border-border-subtle bg-glass px-1">
+      <div className="flex w-full items-center border-b border-border-subtle bg-glass pl-8 pr-1">
         <div
           role="tablist"
           aria-label={ariaLabel}

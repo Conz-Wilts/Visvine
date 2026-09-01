@@ -845,11 +845,12 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
   // Portalled to <body>: the ContextSidebar renders this from inside the
   // Sidebar's docked column, which animates with a transform — and a
   // transformed ancestor makes `fixed` resolve against it, trapping the dialog
-  // in the sidebar instead of centring it over the viewport.
+  // in the sidebar instead of centring it over the viewport. Centred both ways;
+  // the body caps at 70vh so it never outgrows the screen.
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-[90] flex items-start justify-center bg-black/30 p-4 pt-[10vh]"
+        className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 p-4"
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) onClose()
         }}

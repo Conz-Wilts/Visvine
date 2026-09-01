@@ -1,11 +1,16 @@
 'use client';
 
-// The one pane-top tab bar for everything under /directory. It lives in the
-// persistent shell (directory/layout.tsx → PaneShell), so navigating between
-// notes, profiles and the Directory index re-labels this bar instead of
-// mounting a new one. What it shows comes from the pages via PaneShellContext.
+// The one tab set for everything under /directory — rendered INTO the shell's
+// top band (ShellTopBar's shellTabsHost/shellTrailHost) so the band, the tabs
+// and the page actions are one row rather than two stacked bars. The component
+// itself stays mounted in the persistent pane shell (directory/layout.tsx →
+// PaneShell), so navigating between notes, profiles and the Directory index
+// re-labels the portalled row instead of mounting a new one; what it shows
+// comes from the pages via PaneShellContext. What remains in the pane is the
+// sticky strip + the attached toolbar tray, which belong over the content.
 
 import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usePathname } from 'next/navigation';
 import { WaypointsIcon } from '@/features/shared/icons';
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext';
@@ -20,19 +25,18 @@ import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '
 import { TAB_MOTION, TAB_MOTION_EASE, TAB_SET_MOTION_MS } from '@/components/ui/tabMotion';
 import { usePaneChromeState, type PaneChromeState, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import PaneTopScrollbarMask from './PaneTopScrollbarMask';
-
-/** Height of the tab row. */
-const TAB_ROW_H = 48;
+import { SHELL_PANE_TOP } from '@/features/shared/contexts/ThemeContext';
 
 /** Height the attached region reserves: the floating toolbar card (44px), the
  *  gap detaching it from the nav line, and room below for its shadow — the
  *  region clips (overflow-hidden), so anything unaccounted for is cut off. */
 export const TRAY_ROW_H = 72;
 
-/** Top inset for anything docking beside the bar (the notes tree). Only the tab
- *  row spans the docked column — the attached toolbar is a centred pill over
- *  the content — so the inset is always one row. */
-export const dockTopInsetFor = () => TAB_ROW_H;
+/** Top inset for anything docking beside the pane (the notes tree). The tab
+ *  row lives in the shell band now, so nothing of the pane's chrome stands
+ *  above the tree — it starts at the content line, the same SHELL_PANE_TOP
+ *  the rail's first row sits on. */
+export const dockTopInsetFor = () => SHELL_PANE_TOP;
 
 /** Handoff key for the underline (see tabIndicatorHandoff). This bar never
  *  remounts within /directory, so it only fires crossing into or out of the
@@ -93,7 +97,7 @@ function PaneTabBarInner({
   // way, so the tray insets by its width too — otherwise the toolbar stays
   // centred on the full card while the text it acts on slides left. Both only
   // exist at a breakpoint inline padding can't see, so each is read in JS.
-  const { connectionsOpen, setConnectionsOpen, setTabTrailHost } = useContextPanel();
+  const { connectionsOpen, setConnectionsOpen, setTabTrailHost, shellTabsHost, shellTrailHost } = useContextPanel();
   const surfaceKind = chrome.surface?.kind;
   const showConnections = surfaceKind === 'note' || surfaceKind === 'entity';
   const rawOn =
@@ -233,33 +237,15 @@ function PaneTabBarInner({
     }
   }
 
-  return (
-    // pointer-events-none here, auto on the pieces that are actually solid (the
-    // tab row below, and whatever the tray hosts). The wrapper is full-width and
-    // as tall as the tab row PLUS the transparent tray region, and it sits at
-    // z-45 — above the note body and above the connections rail (z-30), whose
-    // header starts at exactly the tray's height. Left clickable it swallowed
-    // every click along that strip, which is why the rail's close button did
-    // nothing.
-    <div className={`pointer-events-none sticky -top-4 -mt-4 ${edgeClass}`}>
-      {/* Keeps the page scrollbar from running up beside the pinned bar. */}
-      <PaneTopScrollbarMask />
-      {/* The negative left margin bleeds the bar into <main>'s gutter so its
-          bottom border continues the navbar seam. Border + background live on
-          the tab row alone, so the transparent region below reads as a pill
-          hanging off the nav line rather than a second bar. "-top-4 -mt-4"
-          rather than top-0: <main> has pt-4 and sticky offsets resolve below
-          it, so top-0 would pin the bar 16px short of the navbar. */}
-      {/* pr-1 only: with a left inset the first tab's underline stopped 4px
-          short of the pane's left edge, reading as a chopped line against the
-          colour frame. Flush left, the underline meets the edge cleanly. */}
-      <div className="pointer-events-auto flex w-full items-center bg-glass pr-1">
-        <div
-          role="tablist"
-          aria-label={chrome.ariaLabel ?? 'Sections'}
-          className="relative flex flex-1 overflow-x-auto"
-        >
-          {tabs.map((tab, idx) => (
+  // The tab row, rendered into the shell band's tabs host — it sits beside the
+  // panel switch, on the same line as the search and the account button.
+  const tabsRow = (
+    <div
+      role="tablist"
+      aria-label={chrome.ariaLabel ?? 'Sections'}
+      className="relative flex min-w-0 overflow-x-auto"
+    >
+      {tabs.map((tab, idx) => (
             <button
               key={tab.id}
               ref={(el) => { tabRefs.current[idx] = el; }}
@@ -290,25 +276,27 @@ function PaneTabBarInner({
             </span>
           ))}
 
-          {/* Animated green underline indicator. During a tab-set change it
-              slows to the FLIP's duration so it travels with the sliding word. */}
-          <div
-            className={`absolute bottom-0 h-[3px] bg-brand-green ${motion}`}
-            style={{
-              left: indicatorStyle.left,
-              width: indicatorStyle.width,
-              transitionDuration: slowSet ? `${TAB_SET_MOTION_MS}ms` : undefined,
-            }}
-          />
-        </div>
+      {/* Animated green underline indicator. During a tab-set change it
+          slows to the FLIP's duration so it travels with the sliding word. */}
+      <div
+        className={`absolute bottom-0 h-[3px] bg-brand-green ${motion}`}
+        style={{
+          left: indicatorStyle.left,
+          width: indicatorStyle.width,
+          transitionDuration: slowSet ? `${TAB_SET_MOTION_MS}ms` : undefined,
+        }}
+      />
+    </div>
+  );
 
-        {/* Trailing chrome, read as part of the tab row rather than as buttons
-            floating beside it: same type, colour and height as a tab, and each
-            toggle carries the tabs' green underline while it is on so "on"
-            reads the same way "selected" does. Neither is wired to the sliding
-            indicator — that belongs to the tab set, and these are toggles, not
-            extra tabs. */}
-        {chrome.rawToggle && (
+  // Trailing chrome, rendered into the band's trail host beside the account
+  // button: same type, colour and height as a tab, and each toggle carries the
+  // tabs' green underline while it is on so "on" reads the same way "selected"
+  // does. Neither is wired to the sliding indicator — that belongs to the tab
+  // set, and these are toggles, not extra tabs.
+  const trailChrome = (
+    <>
+      {chrome.rawToggle && (
           <button
             type="button"
             onClick={() => onSelect('raw')}
@@ -340,11 +328,39 @@ function PaneTabBarInner({
             )}
           </button>
         )}
-        {/* Share and anything else the open surface owns, portalled in by the
-            panel (see ContextPanelContext.tabTrailHost). Zero-width when
-            empty, so the row is unchanged on surfaces that fill nothing. */}
-        <div ref={setTabTrailHost} className="flex shrink-0 items-center" />
-      </div>
+      {/* Share and anything else the open surface owns, portalled in by the
+          panel (see ContextPanelContext.tabTrailHost). Zero-width when
+          empty, so the row is unchanged on surfaces that fill nothing. */}
+      <div ref={setTabTrailHost} className="flex shrink-0 items-center" />
+    </>
+  );
+
+  return (
+    <>
+      {shellTabsHost && createPortal(tabsRow, shellTabsHost)}
+      {shellTrailHost && createPortal(trailChrome, shellTrailHost)}
+
+      {/* What stays in the pane: the painted clearance strip and the attached
+          toolbar tray, pinned over the content. pointer-events-none here, auto
+          on the pieces that are actually solid (the strip, and whatever the
+          tray hosts) — left clickable the wrapper swallowed every click along
+          its band, which is why the connections rail's close button did
+          nothing. z-45 keeps a closing docked tree from crossing it.
+
+          The clearance is a PAINTED strip inside the sticky box, not <main>'s
+          top padding: "-mt-6" cancels that padding and "-top-6" cancels it
+          again in the sticky offset (which resolves against <main>'s CONTENT
+          box, not its padding box), so the box sits at the surface's top edge
+          both at rest and pinned, and nothing scrolls through the space above
+          the toolbar tray. */}
+      <div className={`pointer-events-none sticky -top-6 -mt-6 ${edgeClass}`}>
+        {/* Keeps the page scrollbar from running up beside the pinned strip.
+            height={0} because the tab row itself is portalled into the shell
+            band: the only thing pinned HERE is the 24px clearance below, so the
+            mask covers that and nothing more. The default 48 would hang a white
+            strip 48px down the surface's right edge past everything it serves. */}
+        <PaneTopScrollbarMask height={0} />
+        <div aria-hidden className="pointer-events-auto h-6 bg-glass" />
 
       {/* The attached region. Always mounted (a conditional mount would snap
           open with no transition) and animated 0fr↔1fr off the same tab state
@@ -383,6 +399,7 @@ function PaneTabBarInner({
           />
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

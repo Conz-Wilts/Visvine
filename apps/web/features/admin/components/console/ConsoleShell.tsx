@@ -120,13 +120,17 @@ export default function ConsoleShell({
   return (
     <ConsoleSaveProvider>
       <div className="w-full">
-        {/* Same chrome as the pane-top bars: -ml-6 bleeds into <main>'s gutter so
-            the bottom border continues the navbar seam, and "-top-4 -mt-4"
-            cancels <main>'s pt-4 so the bar pins flush under the navbar. */}
-        <div className="sticky -top-4 -mt-4 -ml-6 z-20">
+        {/* Same chrome as the pane-top bars: -ml-6 bleeds into <main>'s gutter
+            so the bottom border runs from the rail's seam, "-top-6 -mt-6"
+            cancels <main>'s top pad in flow and in the sticky offset so the box
+            sits at the surface's top edge either way, and the clearance above
+            the row is painted inside the box — so the band above the tabs is
+            opaque rather than something the page scrolls through. */}
+        <div className="sticky -top-6 -mt-6 -ml-6 z-20">
           {/* Keeps the page scrollbar from running up beside the pinned bar. */}
           <PaneTopScrollbarMask />
-          <div className="flex w-full items-center border-b border-border-subtle bg-glass px-1">
+          <div aria-hidden className="h-6 bg-glass" />
+          <div className="flex w-full items-center border-b border-border-subtle bg-glass pl-8 pr-1">
             <div
               role="tablist"
               aria-label={ariaLabel}

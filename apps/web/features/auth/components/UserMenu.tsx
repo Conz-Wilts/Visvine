@@ -1,24 +1,48 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession, signOut } from "@/features/auth/lib/auth-client";
 import { useFullProfile } from "@/features/shared/contexts/FullProfileContext";
-import { useClickOutside } from "@/features/shared/hooks/useClickOutside";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
 
+/**
+ * The account button, floated in the shell's top-right corner (AuthLayoutClient)
+ * — the one piece of chrome that is not the rail. Its menu hangs down and to the
+ * left of the avatar, portalled to <body> so nothing a page pins at its own top
+ * edge can paint over it.
+ */
 export default function UserMenu() {
   const { data: session, isPending } = useSession();
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
   const router = useRouter();
   const { openProfile } = useFullProfile();
 
-  useClickOutside(menuRef, () => setOpen(false));
+  useEffect(() => {
+    if (!open) return;
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) setMenuPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [open]);
 
   if (isPending) {
-    return <div className="w-10 h-10 rounded-xl bg-surface-3 animate-pulse shrink-0" />;
+    return <div className="h-10 w-10 rounded-[10px] bg-surface-3 animate-pulse" />;
   }
 
   if (!session) return null;
@@ -33,30 +57,33 @@ export default function UserMenu() {
   }
 
   return (
-    <div ref={menuRef} className="relative shrink-0">
-      {/* Avatar button */}
+    <>
       <button
+        ref={triggerRef}
         onClick={() => setOpen((v) => !v)}
-        className="w-10 h-10 rounded-xl overflow-hidden border-2 border-brand-green hover:border-brand-green transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
         aria-label="Account menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="h-10 w-10 overflow-hidden rounded-[10px] border-2 border-brand-green transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
       >
         {user.image ? (
-          <Image src={user.image} alt={user.name ?? "Profile"} width={40} height={40} className="w-full h-full object-cover" />
+          <Image src={user.image} alt={user.name ?? "Profile"} width={40} height={40} className="h-full w-full object-cover" />
         ) : (
           <PersonSilhouette />
         )}
       </button>
 
-      {/* Dropdown */}
-      {open && (
-        <div className="absolute right-0 mt-2 w-56 rounded-xl bg-surface-1 border border-border-subtle shadow-float z-50 py-1 overflow-hidden">
-          {/* User info */}
+      {open && typeof document !== "undefined" && createPortal(
+        <div
+          ref={menuRef}
+          className="fixed w-56 overflow-hidden rounded-xl border border-border-subtle bg-surface-1 py-1 shadow-float z-[60]"
+          style={{ top: menuPos.top, right: menuPos.right }}
+        >
           <div className="px-4 py-3 border-b border-border-subtle">
             <p className="text-sm font-medium text-text-primary truncate">{user.name}</p>
             <p className="text-xs text-text-muted truncate">{user.email}</p>
           </div>
 
-          {/* Profile */}
           <button
             onClick={() => {
               setOpen(false);
@@ -70,7 +97,6 @@ export default function UserMenu() {
             Profile
           </button>
 
-          {/* Settings */}
           <button
             onClick={() => { setOpen(false); router.push("/settings"); }}
             className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors flex items-center gap-2"
@@ -82,10 +108,8 @@ export default function UserMenu() {
             Settings
           </button>
 
-
           <div className="border-t border-border-subtle my-1" />
 
-          {/* Sign out */}
           <button
             onClick={handleSignOut}
             className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors flex items-center gap-2"
@@ -95,8 +119,9 @@ export default function UserMenu() {
             </svg>
             Sign out
           </button>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }

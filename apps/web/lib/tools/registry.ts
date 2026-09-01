@@ -694,7 +694,7 @@ export async function publishTool(
     await flagStaleInstalls(created.key, created.id, created.version, { withinSpace: spaceId })
   }
   // A member cannot approve their own work, so their publish lands pending and
-  // waits on /tools?tab=approvals — that page IS the update queue.
+  // waits on /admin?section=approvals — that page IS the update queue.
 
   // Human origin on purpose: a person pressed Publish. 'agent'/'maintenance'
   // would hit the tools/ AI freeze in contextService.lockedDenial.

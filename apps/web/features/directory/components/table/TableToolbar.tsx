@@ -4,8 +4,10 @@
 // record count on the left — or, below `lg` where the type rail is hidden,
 // the type menu that is the same choice folded into a button (each type row
 // opens to its aliases, so "Founders" is one pick, not two) — then active
-// filters as removable pills beside a "+ Filter" menu; search, sort and the
-// view's Columns menu on the right. The shape is the data-grid one (Attio,
+// filters as removable pills beside a "+ Filter" menu; sort and the
+// view's Columns menu on the right. Search is not here: every Directory tab
+// carries the same search box in the same place, the row above this one
+// (DirectoryTableView). The shape is the data-grid one (Attio,
 // Linear): every control is a small text button that only shows chrome when
 // it has something to say, so the resting bar is almost empty.
 //
@@ -56,8 +58,6 @@ interface TableToolbarProps {
   types: TableType[];
   /** The current type's id — the `?type=` value. */
   typeKey: string;
-  /** The current type's display name, for the search placeholder. */
-  typeName: string;
   onTypeChange: (type: string) => void;
   /** The columns the sort menu offers (the visible ones). */
   columns: TableColumn[];
@@ -67,10 +67,9 @@ interface TableToolbarProps {
   trailing?: ReactNode;
 }
 
-export default function TableToolbar({ browse, types, typeKey, typeName, onTypeChange, columns, sort, onSortChange, trailing }: TableToolbarProps) {
+export default function TableToolbar({ browse, types, typeKey, onTypeChange, columns, sort, onSortChange, trailing }: TableToolbarProps) {
   const {
     nodes, space,
-    searchTerm, setSearchTerm,
     filterAliases, setFilterAliases,
     filterTags, setFilterTags,
   } = browse;
@@ -99,10 +98,10 @@ export default function TableToolbar({ browse, types, typeKey, typeName, onTypeC
     <div className="flex flex-wrap items-center gap-1.5 py-1.5">
       {/* Which table this is, and the choice of table, are the same control:
           the menu names the type and opens the list of them, each type opening
-          to its aliases so "Founders" is one pick. Then the search, then the
-          three menus that act on the table — Filter, Sort, Columns — as one
-          run, because they are one job; nothing is parked at the far end. The
-          active filters trail them as removable chips. */}
+          to its aliases so "Founders" is one pick. Then the three menus that
+          act on the table — Filter, Sort, Columns — as one run, because they
+          are one job; nothing is parked at the far end. The active filters
+          trail them as removable chips. */}
       <TypeMenu
         types={types}
         activeKey={typeKey}
@@ -113,8 +112,6 @@ export default function TableToolbar({ browse, types, typeKey, typeName, onTypeC
         onChangeAliases={setFilterAliases}
         onTypeChange={onTypeChange}
       />
-      <ToolbarSearch value={searchTerm} onChange={setSearchTerm} typeName={typeName} />
-
       <div className="h-4 w-px shrink-0 bg-border-subtle" />
 
       <FilterMenu
@@ -147,53 +144,6 @@ export default function TableToolbar({ browse, types, typeKey, typeName, onTypeC
           className="text-[12px] font-medium text-text-muted transition-colors hover:text-text-secondary"
         >
           Clear
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── Search: an icon until it has something to hold ───────────────────────────
-
-function ToolbarSearch({ value, onChange, typeName }: {
-  value: string;
-  onChange: (value: string) => void;
-  typeName: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const expanded = open || value.length > 0;
-
-  if (!expanded) {
-    return (
-      <button type="button" onClick={() => setOpen(true)} className={TABLE_TOOLBAR_BTN} aria-label="Search the table">
-        <SearchIcon className="h-4 w-4" />
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex h-7 w-[200px] items-center gap-1.5 rounded-md bg-surface-2 px-2">
-      <SearchIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />
-      <input
-        autoFocus
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={() => { if (!value) setOpen(false); }}
-        onKeyDown={(e) => { if (e.key === 'Escape') { onChange(''); setOpen(false); } }}
-        placeholder={`Search ${typeName.toLowerCase()}s…`}
-        className="min-w-0 flex-1 bg-transparent text-[12.5px] text-text-primary outline-none placeholder:text-text-muted"
-        aria-label="Search the table"
-      />
-      {value && (
-        <button
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onChange('')}
-          className="shrink-0 text-text-muted transition-colors hover:text-text-secondary"
-          aria-label="Clear search"
-        >
-          <XIcon className="h-3.5 w-3.5" />
         </button>
       )}
     </div>

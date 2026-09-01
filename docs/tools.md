@@ -154,7 +154,7 @@ calls the same `createTool` scaffold `create_tool` uses (a `railLabel` becomes
 preview link plus the MCP address from `mcpResourceUrl()` — "finish it with
 your coding agent (Settings → MCP)".
 
-The marketplace's **Mine** tab can also delete a working copy:
+The console's **Build** section can also delete a working copy:
 `DELETE /api/communities/[spaceId]/tools/authoring/[name]` →
 `lib/tools/service.ts#deleteTool` trashes the Tool's notes, removes its folder,
 `tool:<name>` node and build, and (admin) uninstalls it from the space. Held to
@@ -291,7 +291,7 @@ act with a second reviewer. That split is carried by two independent columns on
 | column | whose verdict | what `approved` grants |
 | --- | --- | --- |
 | `status` | the **source space**'s admin | installable in that space and everything nested under it |
-| `marketplaceStatus` | **Visvine**'s super-admin, and **NULL until someone asks** | listed in Browse; installable by any space |
+| `marketplaceStatus` | **Visvine**'s super-admin, and **NULL until someone asks** | installable by any space (over `install_tool`) |
 
 1. **Publish** (`publish_tool` / `lib/tools/registry.ts#publishTool`) snapshots
    the working copy — config, perimeter, all three sources, both compiled
@@ -303,7 +303,7 @@ act with a second reviewer. That split is carried by two independent columns on
    - an **admin**'s publish lands `status: approved` (an admin publishing *is*
      the approval) and flags this space's older installs with the upgrade;
    - a **member**'s lands `status: pending`, waiting on an admin at
-     `/tools?tab=approvals`. **That is the update queue**: edit an installed
+     `/admin?section=approvals`. **That is the update queue**: edit an installed
      Tool, publish, an admin decides whether the installs move.
 
    Nothing here writes `marketplaceStatus`, so a Tool written in a private space
@@ -319,7 +319,7 @@ act with a second reviewer. That split is carried by two independent columns on
    or reject with a note the author reads. Approving flags every install **in
    this space's subtree** pinned to an older version with an offered upgrade; it
    never changes what is running anywhere.
-3. **List** (`submitToMarketplace`, `action: 'list'`; Mine → "Submit to
+3. **List** (`submitToMarketplace`, `action: 'list'`; Build → "Submit to
    marketplace…") is the only thing that offers a Tool to other spaces, and it
    is a space admin acting on a version their space has **already approved**.
    It sets `marketplaceStatus: 'pending'`. `withdrawFromMarketplace`
@@ -591,11 +591,12 @@ reorder or hide an installed Tool exactly like a built-in feature — installing
 never silently reorders the front door: an empty `order` is materialised as the
 registry order *first*, with the new Tool appended after it. `tools` itself is
 **core and nav-hidden** (`lib/featureAccess.ts#CORE_FEATURE_KEYS`): it has no
-rail row of its own (reached only from the marketplace icon in the navbar) and
-no on/off switch. What a space runs is decided by the pipeline itself — a
-Visvine reviewer approves a version, a space admin installs it. A member
-browsing the marketplace sees what a Tool is and who wrote it; Install is an
-admin's button, and there is no way to ask for one from here.
+rail row of its own and no on/off switch. What a space runs is decided by the
+pipeline itself — a version is approved, then installed. There is no `/tools`
+destination: the Space Console owns every one of those decisions (Tools =
+placement + the installed versions, Build = the working copies written here,
+Approvals = what a member published), and cross-space install is the
+`install_tool` action rather than a browsable catalogue.
 
 ### Type pages
 

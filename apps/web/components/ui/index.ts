@@ -16,5 +16,3 @@ export { default as Modal } from './Modal';
 export { default as Skeleton } from './Skeleton';
 export { default as ViewToggle } from './ViewToggle';
 export type { ViewToggleOption } from './ViewToggle';
-export { default as UnderlineTabs } from './UnderlineTabs';
-export type { UnderlineTab } from './UnderlineTabs';

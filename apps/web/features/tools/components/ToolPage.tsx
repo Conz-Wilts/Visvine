@@ -91,10 +91,10 @@ function ToolNotFound({ slug }: { slug: string }) {
           been uninstalled or switched off.
         </p>
         <Link
-          href="/tools?tab=installed"
+          href="/admin?section=tools"
           className="mt-5 inline-flex items-center rounded-lg bg-brand-green px-3.5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
         >
-          Browse tools
+          Space Console
         </Link>
       </div>
     </div>

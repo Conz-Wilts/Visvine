@@ -44,7 +44,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   // On wide viewports the Channels page docks its channel list INTO the global
   // Sidebar (the same portal host the /context notes tree uses), so the rail +
   // channel list read as one connected card instead of a separate floating box.
-  const { host, setDockRequested, contextOpen, setContextOpen } = useContextPanel();
+  const { host } = useContextPanel();
   // Channel + section creation lives in the global "Create new" (+) modal, opened
   // from anywhere via this context.
   const { open: openCreateModal } = useCreateModal();
@@ -763,21 +763,6 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   // the docked panel) and pad the thread to clear the docked card.
   const docked = isWide && Boolean(host);
 
-  // Channels surfaces the navbar's panel toggle (dockRequested) so the docked
-  // list can be closed; closed = the list is hidden entirely (thread gets the
-  // full width), NOT the un-docked inline layout.
-  useEffect(() => {
-    setDockRequested(isWide);
-    return () => setDockRequested(false);
-  }, [isWide, setDockRequested]);
-  // Channels always opens with the channel-list sidebar showing. contextOpen is
-  // shared session state (the notes/admin docks close it too), so landing on
-  // /channels re-opens it by default; the navbar toggle can still close it after.
-  useEffect(() => {
-    setContextOpen(true);
-  }, [setContextOpen]);
-  const channelsCollapsed = isWide && !contextOpen;
-
   // The inbox / channel list. When docked it portals into the Sidebar host;
   // un-docked it renders inline beside the thread.
   const listPanel = (
@@ -828,11 +813,10 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
   // Channels is full-bleed Slack-style: the shell gives us the whole area below
   // the navbar (h-full, no gutters) and we pad left by exactly CHANNELS_PANEL_W
-  // (Sidebar.tsx) so the thread's border lands on the docked card's right edge —
-  // only while the panel is actually open (channelsCollapsed animates it away).
+  // (Sidebar.tsx) so the thread's border lands on the docked card's right edge.
   return (
     <div
-      className={`flex h-full min-h-0 w-full flex-col ${docked && !channelsCollapsed ? 'lg:pl-[300px]' : ''}`}
+      className={`flex h-full min-h-0 w-full flex-col ${docked ? 'lg:pl-[300px]' : ''}`}
       style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}
     >
 
@@ -843,9 +827,8 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
              same shape whether the list is docked into the sidebar or inline. */}
       <div className="flex min-h-0 w-full flex-1 items-stretch">
 
-      {/* Un-docked: the list renders inline beside the thread (unless the user
-          closed the channels panel from the navbar toggle) */}
-      {!docked && !channelsCollapsed && showInbox && listPanel}
+      {/* Un-docked: the list renders inline beside the thread */}
+      {!docked && showInbox && listPanel}
 
       {/* ╭── Thread — the open channel, chat thread or feed ───────────────╮ */}
       {showThread && (

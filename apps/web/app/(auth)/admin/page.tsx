@@ -10,6 +10,12 @@ import TypesPanel from '@/features/admin/components/TypesPanel';
 import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
 import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
 import ToolReviewPanel, { useToolReviewQueue } from '@/features/admin/components/ToolReviewPanel';
+import {
+  AuthoredToolsPanel,
+  InstalledToolsPanel,
+  ToolApprovalsPanel,
+  useToolApprovalCount,
+} from '@/features/tools/components/manage/ToolsConsole';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import { useSession } from '@/features/auth/lib/auth-client';
 import { LoadingText, Alert } from '@/components/ui';
@@ -17,9 +23,15 @@ import { Space } from '@/lib/types';
 
 // Each section owns one job, and the job is one noun: General is the space's own
 // record, Tools is a row per tool (whether the space has it, where it sits, who
-// may open it), Connectors is the space's gateways to the outside world, Types is
-// what kinds of thing the space records, and Members is the people — the invite
-// link, both request queues, the aliases they can hold, and the roll itself.
+// may open it, and which version it runs), Build is the tools written here,
+// Approvals is what a member published and is waiting on an admin, Connectors is
+// the space's gateways to the outside world, Types is what kinds of thing the
+// space records, and Members is the people — the invite link, both request
+// queues, the aliases they can hold, and the roll itself.
+//
+// There is no Tools destination outside this console: a tool is authored by a
+// coding agent over MCP and previewed at /tools/preview/<name>, and every
+// decision about one is admin work, which is what this console is.
 // Types and Members share a single data load (PeopleDataProvider; Types shows the
 // same alias chips under Person), which is also where the Members badge count
 // comes from: one definition of "waiting", not one per component.
@@ -41,9 +53,15 @@ function AdminConsole({ space, onSaved }: {
   const isSuperAdmin = session?.user?.isSuperAdmin === true;
   const reviewQueue = useToolReviewQueue(isSuperAdmin);
 
+  // This space's own queue — the versions its members published. Counted here
+  // so the tab carries the badge, and re-read when the panel acts on one.
+  const approvals = useToolApprovalCount();
+
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', width: 'form' },
     { id: 'tools', label: 'Tools', width: 'form' },
+    { id: 'build', label: 'Build', width: 'wide' },
+    { id: 'approvals', label: 'Approvals', width: 'wide', badge: approvals.count },
     { id: 'types', label: 'Types', width: 'form' },
     // Connectors has no rail row of its own — it is admins-only by nature, so
     // this console IS its surface (lib/featureAccess NAV_HIDDEN_FEATURE_KEYS).
@@ -72,7 +90,21 @@ function AdminConsole({ space, onSaved }: {
             // writer of every key it holds, so remounting it on its own save
             // would only interrupt the drag that caused it.
             case 'tools':
-              return <SpaceToolsPanel key={space.id} space={space} onSaved={onSaved} />;
+              return (
+                <div className="space-y-8">
+                  <SpaceToolsPanel key={space.id} space={space} onSaved={onSaved} />
+                  <InstalledToolsPanel key={`${space.id}-installs`} />
+                </div>
+              );
+            case 'build':
+              return <AuthoredToolsPanel key={space.id} />;
+            case 'approvals':
+              return (
+                <ToolApprovalsPanel
+                  key={space.id}
+                  onReviewed={approvals.refresh}
+                />
+              );
             case 'connectors':
               return <ConnectorsPanel key={space.id} />;
             case 'members':

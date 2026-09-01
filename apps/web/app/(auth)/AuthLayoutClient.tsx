@@ -4,7 +4,8 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/features/shared/components/layout/Sidebar";
 import { HeaderProvider } from "@/features/shared/contexts/HeaderContext";
-import Navbar from "@/features/shared/components/layout/Navbar";
+import ShellTopBar from "@/features/shared/components/layout/ShellTopBar";
+import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
 import { SpaceProvider, useSpace } from "@/features/shared/contexts/SpaceContext";
 import { FEATURES, canAccessFeature, defaultLandingHref } from "@/features/shared/lib/features";
 import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/Sidebar";
@@ -56,50 +57,56 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   // second scroll container around it.
   const fullBleed = pathname.startsWith("/channels") || pathname.startsWith("/t/");
 
-  // Every page scrolls inside <main> — not on the document — so the green
-  // scrollbar starts BELOW the fixed navbar instead of running up its right
-  // edge to the top of the viewport. (/context is immersive: it pins body
-  // overflow itself and never scrolls this container.)
+  // Every page scrolls inside <main> — not on the document — so <main> owns its
+  // own scroll padding and gutter. (/context is immersive: it pins body overflow
+  // itself and never scrolls this container.)
   //
   // overscroll-y-none is load-bearing, not cosmetic: <main> is a nested
   // scroller, so on macOS a fast flick past either end rubber-bands it. A
-  // `sticky` tab bar can't hold above its rest position, so it rides that
-  // bounce down while the fixed navbar stays put — the bar visibly unsticks.
-  // Killing the bounce keeps every page's sticky top bar welded to the navbar.
+  // `sticky` tab bar can't hold above its rest position, so it would ride that
+  // bounce down and visibly unstick. Killing the bounce keeps every page's
+  // sticky top bar welded to the top of the surface.
 
   const railW = expanded ? EXPANDED_W : COLLAPSED_W;
 
   const mainInner = fullBleed ? (
     <div className="h-full">{children}</div>
   ) : (
-    <div style={{ minHeight: 'calc(100vh - 5rem - 3rem)' }}>
+    <div style={{ minHeight: `calc(100dvh - ${SHELL_TOP_BAR_H + SHELL_PANE_TOP + 24}px)` }}>
       {children}
     </div>
   );
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <Navbar />
-
-      {/* Sidebar floats fixed over content — shadow not clipped */}
+      {/* The sidebar is the shell's only chrome: it runs the full height of the
+          viewport, fixed over the content's left edge. */}
       <Sidebar />
 
-      {/* Main content: one flat surface right of the rail (marginLeft:
-          railW) and below the navbar (marginTop: 64). <main> is the scroll
-          container, so its scrollbar starts under the navbar rather than at
-          the viewport top. Each page supplies its own 24px horizontal padding
-          (px-6). */}
+      {/* Main content: one flat surface right of the rail (marginLeft: railW),
+          running to the top of the viewport. <main> is the scroll container, so
+          its scrollbar is the surface's own. Each page supplies its own 24px
+          horizontal padding (px-6). */}
       <div
-        className="flex-1 min-h-0"
+        className="flex min-h-0 flex-1 flex-col"
         style={{
-          marginTop: 64,
           marginLeft: railW,
           transition: "margin-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
         }}
       >
+        {/* The shell's band: the rail's switch, the page's search, and you.
+            It is a row of the surface, not an overlay — <main> starts below it,
+            so a page's own pinned bar (the Directory's tabs, the console's
+            sections) pins under it without either knowing about the other. */}
+        <ShellTopBar />
+
         <main
-          className={fullBleed ? "h-full overflow-hidden" : "h-full pt-4 pb-6 scroll-pt-32 overflow-y-auto overscroll-y-none"}
+          className={fullBleed ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 pb-6 scroll-pt-32 overflow-y-auto overscroll-y-none"}
           style={{
+            // The clearance above anything a page pins at the top of the
+            // surface. The bars cancel it and repaint it themselves, so it is
+            // one number (SHELL_PANE_TOP) rather than a pt-* they must match.
+            paddingTop: fullBleed ? 0 : SHELL_PANE_TOP,
             // Full 24px like the classic shell: pane bars bleed into the
             // gutter with -ml-6 (24px), so a smaller padding here makes
             // them overshoot the surface edge and clip (the Grid underline
@@ -150,10 +157,10 @@ export default function AuthLayoutClient({
               <SidebarProvider>
               <ContextPanelProvider>
               <CreateModalProvider>
-                <AuthLayoutInner>
+                              <AuthLayoutInner>
                   {children}
                 </AuthLayoutInner>
-              </CreateModalProvider>
+                            </CreateModalProvider>
               </ContextPanelProvider>
               </SidebarProvider>
             </FullProfileProvider>

@@ -53,7 +53,7 @@ export default function DegradedBanner({
         </span>
       ))}
       {isAdmin && (
-        <Link href="/tools?tab=installed" className="ml-auto font-medium text-amber-900 underline">
+        <Link href="/admin?section=tools" className="ml-auto font-medium text-amber-900 underline">
           Manage install
         </Link>
       )}

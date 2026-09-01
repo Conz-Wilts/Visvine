@@ -16,23 +16,17 @@ interface ContextPanelValue {
   setHost: (el: HTMLElement | null) => void;
   // A query-param-gated route (the directory Context tab) can't be pathname-docked
   // in the Sidebar like /channels, so it raises this flag instead: it marks the
-  // notes tree as AVAILABLE to dock. Whether the panel column actually opens is
-  // the user's call via `contextOpen` below.
+  // notes tree as AVAILABLE to dock.
   dockRequested: boolean;
   setDockRequested: (v: boolean) => void;
   // Immediate release, skipping the DOCK_RELEASE_MS grace below — for moves
   // where nothing will re-claim the dock, so the grace would only hold the
   // panel open over a page with no dock inset.
   releaseDockNow: () => void;
-  // User intent: the docked panel starts OPEN and can be closed from the
-  // navbar's panel toggle. Lives here so it survives page-to-page navigation
-  // within a session; a fresh load starts open again.
-  contextOpen: boolean;
-  setContextOpen: (v: boolean) => void;
   // The connections rail on the note surfaces (NoteContextPanel /
   // EntityContextPanel): the same ContextLinksPanel the 3-column browser shows,
   // as a toggleable right-hand column. Lives here — not in either panel — so it
-  // survives note→note and note↔entity navigation the way `contextOpen` does.
+  // survives note→note and note↔entity navigation.
   // No grace timers: the rail is mounted once by PaneSurfaceHost, so nothing
   // unmounts/remounts it across those swaps.
   connectionsOpen: boolean;
@@ -45,6 +39,16 @@ interface ContextPanelValue {
   // the editor toolbar then, so the action is never simply missing.
   tabTrailHost: HTMLElement | null;
   setTabTrailHost: (el: HTMLElement | null) => void;
+  // Portal hosts in the shell's top band (ShellTopBar): the page's tab set
+  // renders into `shellTabsHost` beside the panel switch, and its trailing
+  // chrome (Raw, Connections, Share) into `shellTrailHost` beside the account
+  // button — so the band, the tabs and the page actions are ONE row rather
+  // than two stacked bars. The pane shell (PaneTabBar) is the writer; a page
+  // with no tabs simply leaves both hosts empty.
+  shellTabsHost: HTMLElement | null;
+  setShellTabsHost: (el: HTMLElement | null) => void;
+  shellTrailHost: HTMLElement | null;
+  setShellTrailHost: (el: HTMLElement | null) => void;
   // Pixels the docked panel's content should start BELOW the card top. A page
   // that keeps its own bar pinned at the card top (the Directory's Grid/Context
   // tabs) sets this to that bar's height so the notes tree begins under
@@ -59,12 +63,14 @@ const ContextPanelContext = createContext<ContextPanelValue>({
   dockRequested: false,
   setDockRequested: () => {},
   releaseDockNow: () => {},
-  contextOpen: true,
-  setContextOpen: () => {},
   connectionsOpen: false,
   setConnectionsOpen: () => {},
   tabTrailHost: null,
   setTabTrailHost: () => {},
+  shellTabsHost: null,
+  setShellTabsHost: () => {},
+  shellTrailHost: null,
+  setShellTrailHost: () => {},
   dockTopInset: 0,
   setDockTopInset: () => {},
 });
@@ -113,9 +119,10 @@ export function useConnectionsRailVisible(): boolean {
 export function ContextPanelProvider({ children }: { children: ReactNode }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [dockRequestedState, setDockRequestedState] = useState(false);
-  const [contextOpen, setContextOpen] = useState(true);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [tabTrailHost, setTabTrailHost] = useState<HTMLElement | null>(null);
+  const [shellTabsHost, setShellTabsHost] = useState<HTMLElement | null>(null);
+  const [shellTrailHost, setShellTrailHost] = useState<HTMLElement | null>(null);
   const [dockTopInsetState, setDockTopInsetState] = useState(0);
 
   // One timer per latched value: claiming cancels a pending release.
@@ -179,12 +186,14 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
         dockRequested: dockRequestedState,
         setDockRequested,
         releaseDockNow,
-        contextOpen,
-        setContextOpen,
         connectionsOpen,
         setConnectionsOpen,
         tabTrailHost,
         setTabTrailHost,
+        shellTabsHost,
+        setShellTabsHost,
+        shellTrailHost,
+        setShellTrailHost,
         dockTopInset: dockTopInsetState,
         setDockTopInset,
       }}
@@ -205,8 +214,8 @@ export function useContextPanel() {
  * panel must hold its state through both or the closing panel paints over it.
  */
 export function useDockVisuallyOpen() {
-  const { dockRequested, contextOpen } = useContextPanel();
-  const open = dockRequested && contextOpen;
+  const { dockRequested } = useContextPanel();
+  const open = dockRequested;
   const [visuallyOpen, setVisuallyOpen] = useState(open);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {

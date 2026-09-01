@@ -24,28 +24,28 @@ import { prefetchNoteContext } from '../lib/contextPrefetch'
 import { useContextTree } from '../lib/useContextTree'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import SearchInput from '@/components/ui/SearchInput'
 import { NoteSidebar } from './NoteSidebar'
 import { SharePanel } from './SharePanel'
+import { SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext'
 
 /** Width of the tree column. The pane tab bars inset their toolbar tray by the
  *  same amount so the tray centres over the note, not the whole pane. */
 export const CONTEXT_PANEL_W = 300
-/** The navbar's height — the column's sticky range starts below it. */
-const NAVBAR_H = 64
 /** <main>'s bottom padding (pb-6 in AuthLayoutClient). The column stops short
  *  of it: a column that ran to the viewport's bottom edge would make <main>
  *  overflow by exactly that padding, and those few pixels of scroll have no
  *  sticky range to absorb them — the whole column would ride up under the tab
  *  row on notes short enough that the column is the tallest thing in the row. */
 const MAIN_PAD_B = 24
-/** <main>'s top padding (pt-4). Sticky offsets resolve below it, so the column
- *  cancels it the way the tab bar's "-top-4" does — otherwise a scrolled note
- *  pins the column 16px short of the row it should sit flush under. */
-const MAIN_PAD_T = 16
 /** Below this the column is hidden (Tailwind lg); anything that lines up with
  *  it — the tab bar's toolbar tray — reads the same breakpoint through here. */
 const TREE_MIN_W = 1024
 
+/** True when the tree column is actually taking width: wide enough to render.
+ *  The column has no switch — where it fits, it is open. Anything that lines
+ *  up with the column (the tab bar's toolbar tray) reads this rather than the
+ *  breakpoint directly. */
 export function useContextTreeVisible(): boolean {
   const [wide, setWide] = useState(false)
   useEffect(() => {
@@ -82,6 +82,9 @@ export function ContextSidebar({
   const { notes, trash, loading, error, shareTarget, setShareTarget } = ctx
 
   const [selectedPath, setSelectedPath] = useState<string | null>(currentPath)
+  // The Directory's search, on the Context tab: the tree is this tab's browse
+  // surface the way the cards are the Grid's, so the box filters it.
+  const [query, setQuery] = useState('')
 
   // Keep the highlight on the open entity's note as the profile view navigates
   // between entities (the column itself survives in the pane shell).
@@ -118,8 +121,9 @@ export function ContextSidebar({
 
   if (!notesEnabled || !spaceId) return null
 
-  // Sticks under the pane's pinned tab row (dockTopInset, 0 when there is no
-  // bar) and runs to just above <main>'s bottom padding, scrolling on its own
+  // Sticks under the pane's pinned tab row — dockTopInset is where that row's
+  // bottom edge is, 0 when there is no bar — and runs to just above <main>'s
+  // bottom padding, scrolling on its own
   // while the note scrolls the page. Hidden below lg, where the column would
   // crowd the note. No entrance animation: it re-mounts on every navigation between
   // surfaces, and the cache repaints the tree synchronously, so it swaps in
@@ -129,13 +133,27 @@ export function ContextSidebar({
       className="sticky hidden shrink-0 flex-col overflow-hidden lg:flex"
       style={{
         width: CONTEXT_PANEL_W,
-        top: dockTopInset - MAIN_PAD_T,
-        height: `calc(100dvh - ${NAVBAR_H + dockTopInset + MAIN_PAD_B}px)`,
+        top: dockTopInset,
+        height: `calc(100dvh - ${SHELL_TOP_BAR_H + dockTopInset + MAIN_PAD_B}px)`,
         marginTop: trayOpen ? -TRAY_ROW_H : 0,
         transition: 'margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col" style={{ width: CONTEXT_PANEL_W }}>
+        {/* The Directory's one search box, in the place it sits on every other
+            tab: first thing under the tab bar, at the pane's left edge. The
+            column is narrower than the grid's 420px field, so it takes the
+            column's width — the same `lg` field either way. */}
+        <div className="shrink-0 pb-1 pr-3">
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search the context…"
+            size="lg"
+            className="w-full"
+          />
+        </div>
+
         {loading && notes.length === 0 ? (
           <div className="px-3 py-4 text-sm text-text-muted">Loading context…</div>
         ) : error ? (
@@ -156,6 +174,7 @@ export function ContextSidebar({
               bare
               root={ctx.rootFolder}
               storageKey={spaceId}
+              query={query}
               // The search focus (and, on a profile, the open note) only PEEKS
               // the tree open — clearing the search restores the user's own
               // expand/collapse state. selectedPath keeps the highlight after

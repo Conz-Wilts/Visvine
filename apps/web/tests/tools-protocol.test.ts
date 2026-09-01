@@ -145,7 +145,7 @@ test('isFrameMessage rejects malformed frame messages', () => {
 // ── navigate ──
 
 test('isInAppPath only allows same-origin absolute paths', () => {
-  for (const ok of ['/', '/tools', '/t/deals', '/directory/note/deals/acme.md', '/events?scope=discover']) {
+  for (const ok of ['/', '/tools', '/t/deals', '/directory/note/deals/acme.md', '/directory?type=event']) {
     assert.ok(isInAppPath(ok), ok)
   }
   for (const bad of [

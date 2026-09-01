@@ -146,6 +146,56 @@ export function buildTree(metas: NoteMeta[]): TreeNode {
   return root
 }
 
+// Prune the tree to what a query matches. A note is kept when its title, its
+// filename or its path contains the needle; a folder is kept when it matches
+// itself (with everything under it, so "people" opens the whole namespace) or
+// when anything under it does. The shape is preserved rather than flattened:
+// where a note lives is half of what it is, and the Directory's other tabs
+// filter in place too.
+export function filterTree(node: TreeNode, query: string): TreeNode {
+  const needle = query.trim().toLowerCase()
+  if (!needle) {
+    return node
+  }
+  const hits = (n: TreeNode) =>
+    (n.title ?? '').toLowerCase().includes(needle) ||
+    n.name.toLowerCase().includes(needle) ||
+    n.path.toLowerCase().includes(needle)
+
+  const prune = (n: TreeNode): TreeNode | null => {
+    if (n.kind === 'note') {
+      return hits(n) ? n : null
+    }
+    if (hits(n)) {
+      return n
+    }
+    const children = (n.children ?? []).map(prune).filter((c): c is TreeNode => c !== null)
+    return children.length > 0 ? { ...n, children } : null
+  }
+
+  // The root itself is the context, not a match candidate: it always survives,
+  // holding whatever is left.
+  const children = (node.children ?? []).map(prune).filter((c): c is TreeNode => c !== null)
+  return { ...node, children }
+}
+
+// Every folder path in a tree — what the sidebar opens while a search is
+// running, so a match is never hidden inside a collapsed ancestor.
+export function folderPathsIn(node: TreeNode): Set<string> {
+  const paths = new Set<string>()
+  const walk = (n: TreeNode) => {
+    if (n.kind !== 'folder') {
+      return
+    }
+    paths.add(n.path)
+    for (const child of n.children ?? []) {
+      walk(child)
+    }
+  }
+  walk(node)
+  return paths
+}
+
 // Folders first, then notes, each alphabetically by display name — a folder's
 // index title when it has one, its path segment otherwise. Exported because the
 // tree API sorts again after grafting explicitly-created empty folders.

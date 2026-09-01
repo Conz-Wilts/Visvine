@@ -144,8 +144,8 @@ function DirectoryPane() {
 
   // No space selected (zero memberships): the sidebar rail is already empty,
   // so the directory chrome — tab bar, toolbar, grid — hides too. The centre
-  // stays blank on purpose; Discover is reachable from the navbar and the
-  // space switcher, so no prompt sits in the middle of the app. Nothing is
+  // stays blank on purpose; Discover is reachable from the space switcher, so
+  // no prompt sits in the middle of the app. Nothing is
   // rendered at all — a min-height filler here would overflow <main>'s own
   // padded height and leave a scrollbar on an empty page.
   if (noSpace) return null;
@@ -154,10 +154,11 @@ function DirectoryPane() {
     return (
       // A fixed height, not a minimum: the table is its own scroll box and has
       // to know where the pane ends (DirectoryTableView). It ends at the
-      // VIEWPORT, not at <main>'s padding: 64px of navbar + 16 of pt-4 + the
-      // 32 the pane tab row takes in flow, with `-mb-6` eating <main>'s pb-6 so
-      // the last row sits on the bottom edge rather than 24px above it.
-      <div className="relative -mb-6 w-full" style={{ height: 'calc(100dvh - 112px)' }}>
+      // VIEWPORT, not at <main>'s padding: the shell's 64px band and 24px of
+      // top pad (the tab set rides the band, taking no flow space), with
+      // `-mb-6` eating <main>'s pb-6 so the last row sits on the bottom edge
+      // rather than 24px above it.
+      <div className="relative -mb-6 w-full" style={{ height: 'calc(100dvh - 88px)' }}>
         <div id="panel-table" role="tabpanel" className="h-full">
           <DirectoryTableView browse={browse} type={typeParam} onTypeChange={handleTypeChange} />
         </div>
@@ -167,7 +168,7 @@ function DirectoryPane() {
 
   if (view === 'resources') {
     return (
-      <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 136px)' }}>
+      <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 112px)' }}>
         <div id="panel-resources" role="tabpanel">
           <ResourcesBrowser />
         </div>
@@ -177,9 +178,9 @@ function DirectoryPane() {
 
   return (
     // The surface fills the pane exactly, so a short grid has nothing to
-    // scroll: 64px navbar + <main>'s pt-4/pb-6 is 104px, plus the 32px the
-    // pane tab bar takes in flow (48px row, 16px of it pulled back by -mt-4).
-    <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 136px)' }}>
+    // scroll: the shell's 64px band and <main>'s 48px of padding — the tab
+    // set rides the band and takes no flow space.
+    <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 112px)' }}>
       {/* Search, filters, sort and count ride one sticky toolbar welded under
           the pane tab bar; the cards scroll beneath it. */}
       <div id="panel-grid" role="tabpanel">

@@ -2,51 +2,83 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/CreateModalContext";
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { useSpace } from "@/features/shared/contexts/SpaceContext";
-import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from "@/features/shared/contexts/ThemeContext";
-import { railFeatures, moreFeatures, canAccessFeature } from "@/features/shared/lib/features";
+import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_PANE_TOP, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
+import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
+import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
 import CreateModal from "@/features/create/components/CreateModal";
+import SpaceSelector from "@/features/spaces/components/SpaceSelector";
 import type { SpaceFeatureConfig } from "@/lib/types";
 
 /*
- * Layout model (nothing changes on expanded toggle except container width):
+ * The rail is the shell's chrome — there is no bar across the top of the page,
+ * only the account button the layout floats in its top-right corner. The rail
+ * runs the full height of the viewport in three bands, and opens either on
+ * hover or from the switch in the shell's top band (which pins it):
  *
- *  Container: width transitions COLLAPSED_W ↔ EXPANDED_W, overflow-hidden clips labels
  *  ┌──────────────────────────────────┐
- *  │ 12px │ 32px icon │ 12px │ label… │  ← each row is fixed layout
+ *  │ [space]  Blackbird Ventures      │  head: the space, and the page's panel
+ *  ├──────────────────────────────────┤
+ *  │ +  Create new                    │  top: the one thing you DO, and the two
+ *  │ ◎  Discover                      │  ways out of this space — held apart
+ *  │ ⬚  Marketplace                   │  from the tools by one hairline
+ *  ├──────────────────────────────────┤
+ *  │ ▣  Directory                     │  nav: what this space can do
+ *  │ ▤  Channels …                    │
+ *  ├──────────────────────────────────┤
+ *  │ …  More                          │  foot: the tools the space tucked away
  *  └──────────────────────────────────┘
  *
- *  Collapsed: icon centered, label clipped
- *  Expanded: icon same spot, label revealed
- *  Transition: ONLY container width animates. Zero instant flips.
+ *  Every row is the same shape: a 48px glyph cell on one column, then a label
+ *  the collapsed rail clips away with overflow-hidden. Only the container's
+ *  width animates — nothing flips.
  *
- * The card always spans navbar → viewport bottom. While the /context page or a
- * profile's Context tab is active it ALSO hosts the notes tree (the embedded
- * workspace requests the dock and portals its tree into the host div below via
- * ContextPanelContext), so the icon rail + tree read as one connected container.
+ * While the /channels list or a console section is docked, the card ALSO hosts
+ * that panel beside the rail (the page portals into the host below via
+ * ContextPanelContext), so the two read as one connected container.
  */
 
-// Exported so the AuthLayout's frame box and the rail track the exact same
+// Exported so the AuthLayout's content inset and the rail track the exact same
 // widths — change them here and the whole shell stays in sync.
-export const COLLAPSED_W = 68;
-export const EXPANDED_W = 224;
-const NAVBAR_H = 64;   // fixed navbar the rail hangs below
-const ROW_H = 48;      // row height, and the side of the square a collapsed row occupies
-const ROW_INSET = (COLLAPSED_W - ROW_H) / 2; // row ↔ rail edge; the navbar avatar shares this column
-// Icon cell → label gap. The label's left edge lands past the collapsed rail's
-// right edge, so the overflow-hidden container clips it away entirely.
-const LABEL_ML = COLLAPSED_W - ROW_INSET - ROW_H;
-const ITEM_GAP = 12;   // airy spacing between rows — the rail is a column of glyphs, not a list
+// Wide enough that the closed rail's tiles can spell their names out under a
+// glyph big enough to read at a glance. A label that has to truncate is one the
+// rail is not actually saying — which is what the short names are for
+// (`shortLabel`), not a narrower column.
+export const COLLAPSED_W = 88;
+export const EXPANDED_W = 272;
+const ROW_H = 48;      // row height, and the side of the square a row's glyph is centred in
+const ROW_INSET = 6;   // row ↔ rail edge
+// The glyph column is the same width open or closed, and it is the CLOSED
+// rail's full inner width — so a glyph's centre lands on COLLAPSED_W / 2 in
+// both states and nothing about it moves when the rail opens.
+const GLYPH_CELL_W = COLLAPSED_W - ROW_INSET * 2;
+const LABEL_ML = 8;    // glyph cell → label, on the open row
+// Closed, each row's name hangs UNDER its glyph, the way Slack's rail reads.
+// It is drawn OUT OF FLOW (absolutely, in the gap below the row) rather than as
+// a second line of the row: a row that grew a line would push every glyph below
+// it down, and opening the rail would then slide the whole column. So the gap
+// is what carries the names — wide enough for one 11px line under every row,
+// open or closed, because the geometry has to be the same either way.
+const ITEM_GAP = 20;
+const LABEL_TOP = ROW_H - 4; // where that name sits, measured from the row's top
+const LABEL_H = 11;          // its one line, at text-[11px]/leading-none
+// How far that name hangs past the row it belongs to. Every band boundary
+// measures from HERE rather than from the row, so the seam clears the last name
+// by the same distance a row clears the one above it.
+const LABEL_OVERHANG = LABEL_TOP + LABEL_H - ROW_H;
+// The space switcher draws its own 48px cell, so it takes its own inset to put
+// that cell — and the avatar centred in it — on the glyph column's centre line.
+const HEAD_INSET = (COLLAPSED_W - 48) / 2;
 // The nav icons ship at h-5 w-5 from the feature registry (they are also drawn
-// on the launcher cards at that size); the rail draws them at 28px unfilled, so
+// on the launcher cards at that size); the rail draws them at 32px unfilled, so
 // each cell scales its own svg rather than the registry carrying a second set.
-const GLYPH = "[&>svg]:h-7 [&>svg]:w-7";
+const GLYPH = "[&>svg]:h-8 [&>svg]:w-8";
 // One row shape for every entry — Create, each tool, More. At rest a row is
 // bare: no border, no fill, just the glyph (and the label once the rail is
 // open). The soft block appears under the pointer only, which is what makes the
@@ -54,19 +86,134 @@ const GLYPH = "[&>svg]:h-7 [&>svg]:w-7";
 const ROW_CLASS =
   "relative z-10 flex w-full items-center rounded-[10px] transition-colors duration-150 hover:bg-surface-3";
 const ROW_TEXT = "text-[15px] whitespace-nowrap";
+// Names cross-fade between the two places they live; they never travel. The
+// rail's width takes 300ms, and a label revealed BY that width reads as sliding
+// out from under the glyph column — so the open one is held back until the
+// width has arrived, and the shut one is gone before it starts.
+const LABEL_FADE_MS = 140;
+const LABEL_FADE_IN_DELAY_MS = 200;
+function labelFade(show: boolean, reduced: boolean) {
+  return {
+    opacity: show ? 1 : 0,
+    transition: reduced
+      ? "none"
+      : `opacity ${LABEL_FADE_MS}ms ease ${show ? LABEL_FADE_IN_DELAY_MS : 0}ms`,
+  };
+}
 const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
-const RAIL_H = `calc(100dvh - ${NAVBAR_H}px)`; // rail card always runs from the navbar bottom to the viewport bottom
-const RAIL_PAD_Y = 12; // paddingTop/paddingBottom on the rail column
-const RAIL_GAP = 10; // gap between the Create block and the nav list
+const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full height
+// paddingBottom on the rail column. It matches SHELL_PANE_TOP, so the rail's
+// last row and a page's content share the surface's bottom rhythm.
+const RAIL_PAD_Y = SHELL_PANE_TOP;
+// paddingTop is its own number, because the head row is not aligned to the
+// pane below it but to the account button ACROSS from it: the shell band is
+// SHELL_TOP_BAR_H tall and centres a 40px avatar in it, so the space avatar —
+// 40px in a 48px row — has to start where its centre lands on the same line.
+const RAIL_PAD_TOP = (SHELL_TOP_BAR_H - ROW_H) / 2;
+// A band boundary: the hairline sits ITEM_GAP below the last name and ITEM_GAP
+// above the next row, so the two bands are held apart by the rhythm the rows
+// already have rather than by a number of its own.
+const BAND_TOP = LABEL_OVERHANG + ITEM_GAP;
+
+// Active is carried by weight and colour, not by a coloured pill: the current
+// surface is the dark, semibold row; everything else sits muted until hovered.
+function rowColor(active: boolean) {
+  return active ? "var(--shell-fg-strong, #111827)" : "var(--shell-fg-muted, #111827)";
+}
+
+/**
+ * Every row in the rail is this shape, whichever band it sits in: a glyph on the
+ * rail's one icon column, and a name — beside it while the rail is open, under
+ * it while the rail is shut. The glyph itself never moves. Same cell, same row
+ * height, same gap in both states; only the name changes place.
+ */
+function Row({
+  label,
+  shortLabel,
+  icon,
+  href,
+  onClick,
+  active = false,
+  badge,
+  expanded,
+  reduced,
+  ...aria
+}: {
+  label: string;
+  /** What the CLOSED rail calls this, when the full name is too long for a tile. */
+  shortLabel?: string;
+  icon: ReactNode;
+  href?: string;
+  onClick?: () => void;
+  active?: boolean;
+  badge?: ReactNode;
+  expanded: boolean;
+  /** prefers-reduced-motion — no fade, the name is simply there or not. */
+  reduced: boolean;
+  "aria-expanded"?: boolean;
+  "aria-haspopup"?: "dialog";
+}) {
+  const inner = (
+    <>
+      {/* Icon: the one glyph column, identical open or closed */}
+      <span
+        className={`relative flex shrink-0 items-center justify-center ${GLYPH}`}
+        style={{ width: GLYPH_CELL_W, height: ROW_H }}
+      >
+        {icon}
+        {badge}
+      </span>
+      {/* The open name. Always mounted so it can fade rather than be wiped in
+          by the widening rail; while the rail is shut it is transparent AND
+          clipped, so it is not on screen either way. */}
+      <span
+        aria-hidden
+        className={`${ROW_TEXT} ${active ? "font-semibold" : "font-normal"}`}
+        style={{ marginLeft: LABEL_ML, ...labelFade(expanded, reduced) }}
+      >
+        {label}
+      </span>
+    </>
+  );
+  const style = { height: ROW_H, color: rowColor(active), transition: "color 0.2s, background-color 0.15s" };
+
+  return (
+    <div className="relative">
+      {href ? (
+        <Link href={href} className={ROW_CLASS} style={style} aria-label={label}>
+          {inner}
+        </Link>
+      ) : (
+        <button type="button" onClick={onClick} className={ROW_CLASS} style={style} aria-label={label} {...aria}>
+          {inner}
+        </button>
+      )}
+
+      {/* The shut rail's name. Out of the row's flow and unclickable — the row
+          above it is the target — so it can never displace a glyph. A long name
+          (Marketplace) is shortened rather than wrapped; two lines would reach
+          the next row. */}
+      <span
+        aria-hidden
+        className={`pointer-events-none absolute inset-x-0 truncate px-0.5 text-center text-[11px] leading-none ${
+          active ? "font-semibold" : "font-medium"
+        }`}
+        style={{ top: LABEL_TOP, color: rowColor(active), ...labelFade(!expanded, reduced) }}
+      >
+        {shortLabel ?? label}
+      </span>
+    </div>
+  );
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen: createOpen } = useCreateModal();
   const createSurface = useCreateSurface();
-  const { expanded, setExpanded, reduced } = useSidebar();
+  const { expanded, setHovered, reduced } = useSidebar();
   const { currentSpace, isAdmin, loading: spaceLoading } = useSpace();
-  const { setHost, contextOpen, dockTopInset } = useContextPanel();
+  const { setHost, dockTopInset } = useContextPanel();
 
   const ease = DOCK_EASE;
 
@@ -81,20 +228,15 @@ export default function Sidebar() {
   const installedTools = currentSpace?.installedTools;
   // No space selected (and not merely still loading one): the tools and the
   // Create button all act on the current space, so none of them belong on the
-  // rail. The empty rail card stays — the L-shell and the content inset are
-  // sized around it. During the initial load the tools render as usual so the
-  // rail doesn't flash empty on every page load.
+  // rail. The head and foot stay — the space switcher is how you get back into
+  // one. During the initial load the tools render as usual so the rail doesn't
+  // flash empty on every page load.
   const noSpace = !spaceLoading && !currentSpace;
-  const allNav = noSpace ? [] : railFeatures(featureConfig, isAdmin, installedTools);
-  const moreNav = noSpace ? [] : moreFeatures(featureConfig, isAdmin, installedTools);
-  // The marketplace is a member surface — installing is what's admin-gated, and
-  // that happens inside. What hides the row is the space switching Tools off (or
-  // locking the key to admins); with no space chosen the catalogue is still
-  // browsable, since the registry itself is global. It sits at the rail's bottom
-  // edge rather than in the nav block: it is the shop the space installs from,
-  // not one of the installed tools above it.
-  const canAccessTools = !currentSpace || canAccessFeature(featureConfig, "tools", isAdmin);
-  const toolsActive = pathname.startsWith("/tools");
+  // Whatever the top group already carries is dropped from the space's own
+  // list — Directory is up there, so the rail below never shows it twice.
+  const notInTopGroup = ({ key }: { key: string }) => !GLOBAL_NAV_KEYS.has(key);
+  const allNav = noSpace ? [] : railFeatures(featureConfig, isAdmin, installedTools).filter(notInTopGroup);
+  const moreNav = noSpace ? [] : moreFeatures(featureConfig, isAdmin, installedTools).filter(notInTopGroup);
   // An install whose requirements this space doesn't meet still runs, with the
   // unsatisfied parts returning nothing — so its row gets a dot rather than
   // disappearing. Keyed by href because that is what a FeatureDef carries
@@ -102,10 +244,11 @@ export default function Sidebar() {
   const degradedHrefs = new Set(
     (installedTools ?? []).filter((tool) => tool.degraded).map((tool) => tool.href),
   );
+
   // A tool stays lit on its sub-routes too (e.g. /channels redirects straight
   // to /channels/<conversationId>, which used to drop the pill right after the
   // click). Longest matching href wins so /directory/note/index.md beats /directory.
-  const activeHref = [...allNav, ...moreNav]
+  const activeHref = [...GLOBAL_NAV, ...allNav, ...moreNav]
     .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
     .reduce<string | null>((best, { href }) => (href.length > (best?.length ?? -1) ? href : best), null);
   const moreActive = moreNav.some(({ href }) => href === activeHref);
@@ -130,12 +273,12 @@ export default function Sidebar() {
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
-  // Channels honours the navbar's panel toggle (open by default) — the page
-  // raises dockRequested so the toggle shows, and closing hides the list.
+  // Channels honours the shell band's panel switch (open by default) — the
+  // page registers the panel so the switch shows, and closing hides the list.
   // The Space Console and Settings carry a pane-top tab bar instead (see
   // ConsoleShell), and the context tree is a column inside the note pane, so
   // every other route gets the plain rail.
-  const docked = pathname.startsWith("/channels") && wide && contextOpen;
+  const docked = pathname.startsWith("/channels") && wide;
   const panelW = CHANNELS_PANEL_W;
 
   // "Create new" takes over this same column: it replaces whatever panel is
@@ -151,201 +294,180 @@ export default function Sidebar() {
   // (the grid's card cascade) is mid-animation beside it.
   const dur = reduced ? "0s" : `${docked || createOpen ? DOCK_MS : DOCK_CLOSE_MS}ms`;
 
-  // The icon rail's inner content — reused by both the floating and docked cards.
-  // Active is carried by weight and colour, not by a coloured pill: the current
-  // surface is the dark, semibold row; everything else sits muted until hovered.
-  const rowColor = (active: boolean) =>
-    active ? "var(--shell-fg-strong, #111827)" : "var(--shell-fg-muted, #111827)";
 
   const railInner = (
     <>
-      {/* The nav block rides the vertical centre of the rail (Instagram's
-          layout): the navbar carries the space identity above it, and More
-          is pinned to the bottom edge below. */}
-      <div className="flex flex-col" style={{ gap: RAIL_GAP }}>
-        {/* Create — creates things INSIDE the current space, so it goes with the
-            tools when no space is selected (creating a space itself lives on the
-            switcher, not here). No menu hangs off it: every type is a choice in
-            the draft surface's own Type row, so it is one click to a surface you
+      {/* Head — which space you are looking at. Nothing switches here: the
+          rail opens under the pointer, and the page's own side panel is
+          switched from the shell's top band (ShellTopBar). */}
+      <div className="flex shrink-0 flex-col" style={{ gap: ITEM_GAP }}>
+        <div style={{ paddingLeft: HEAD_INSET, paddingRight: HEAD_INSET }}>
+          <SpaceSelector />
+        </div>
+
+        {/* The top group — Create new, then Discover and Marketplace. It rides
+            with the head rather than the nav below because it never scrolls:
+            the one thing you come here to DO and the two ways out of this
+            space stay put however many tools it has switched on.
+
+            Create acts on the current space, so with none selected there is
+            nothing for it to make (creating a space itself lives on the
+            switcher above). No menu hangs off it: every type is a choice in the
+            draft surface's own Type row, so it is one click to a surface you
             can type into rather than a list of decisions. */}
-        {!noSpace && (
-          <div className="relative group" style={{ paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
-            <button onClick={() => createSurface()} className={ROW_CLASS} style={{ height: ROW_H, color: rowColor(false) }}>
-              <span className="flex items-center justify-center shrink-0" style={{ width: ROW_H, height: ROW_H }}>
-                <svg fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" viewBox="0 0 24 24" className="h-9 w-9">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              </span>
-              <span className={ROW_TEXT} style={{ marginLeft: LABEL_ML }}>Create new</span>
-            </button>
-            {!expanded && (
-              <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
-                style={{ left: COLLAPSED_W + 4 }}
-              >
-                Create new
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Nav items */}
-        <nav className="relative flex flex-col" style={{ gap: ITEM_GAP }}>
-          {allNav.map(({ href, label, icon }) => {
-            const active = href === activeHref;
-            return (
-              <div key={href} className="relative group" style={{ paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
-                <Link
-                  href={href}
-                  className={ROW_CLASS}
-                  style={{ height: ROW_H, color: rowColor(active), transition: "color 0.2s, background-color 0.15s" }}
+        <div className="flex flex-col" style={{ gap: ITEM_GAP, paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
+          {!noSpace && (
+            <Row
+              expanded={expanded}
+              reduced={reduced}
+              label="Create new"
+              shortLabel="Create"
+              onClick={() => createSurface()}
+              icon={
+                // The one row that MAKES something, so it is the one row that
+                // is painted: a filled disc in the space's own accent rather
+                // than a bare glyph. It takes EXACTLY the box a glyph takes
+                // (the rail's 32px), so the row's name sits the same distance
+                // from it as every other name — a bigger disc would close that
+                // gap on this row alone.
+                <span
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-white"
+                  style={{ background: "var(--theme-accent-color, #78d870)" }}
                 >
-                  {/* Icon: square cell, centered — collapsed it IS the row */}
-                  <span className={`relative flex items-center justify-center shrink-0 ${GLYPH}`} style={{ width: ROW_H, height: ROW_H }}>
-                    {icon}
-                    {/* Degraded install marker. Ringed in the rail's own
-                        background so it reads as a badge on the icon rather than
-                        part of the glyph, and it sits inside the icon cell so it
-                        travels with the row whether the rail is collapsed or open. */}
-                    {degradedHrefs.has(href) && (
-                      <span
-                        title={`${label} is missing something it needs in this space — it runs with those parts switched off.`}
-                        className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full"
-                        style={{ background: "#f59e0b", boxShadow: "0 0 0 2px rgba(255,255,255,0.9)" }}
-                      />
-                    )}
-                  </span>
-                  {/* Label: always present, clipped by container overflow-hidden when collapsed */}
-                  <span className={`${ROW_TEXT} ${active ? "font-semibold" : "font-normal"}`} style={{ marginLeft: LABEL_ML }}>
-                    {label}
-                  </span>
-                </Link>
+                  <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" viewBox="0 0 24 24">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </span>
+              }
+            />
+          )}
 
-                {/* Tooltip only when collapsed */}
-                {!expanded && (
-                  <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
-                    style={{ left: COLLAPSED_W + 4 }}
-                  >
-                    {label}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-
-        </nav>
+          {GLOBAL_NAV.map(({ key, href, label, shortLabel, icon }) => (
+            <Row
+              expanded={expanded}
+              reduced={reduced}
+              key={key}
+              href={href}
+              label={label}
+              shortLabel={shortLabel}
+              icon={icon}
+              active={href === activeHref}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* Bottom edge of the rail, out of the centred block's flow: the Tools
-          marketplace, then "More" (the tools the space tucked out of the rail,
-          featureConfig.more — hidden when nothing is tucked away). */}
-      <div
-        className="absolute inset-x-0 flex flex-col"
-        style={{ bottom: RAIL_PAD_Y, gap: ITEM_GAP, paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}
+      {/* Nav — what this space can do. It scrolls on its own when a space has
+          more tools than the viewport is tall; the head and foot never move. */}
+      <nav
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden border-t"
+        style={{
+          paddingLeft: ROW_INSET,
+          paddingRight: ROW_INSET,
+          paddingTop: ITEM_GAP,
+          paddingBottom: ITEM_GAP,
+          marginTop: BAND_TOP,
+          // The one hairline between the surfaces that are yours and the ones
+          // the space switched on — the same seam the foot uses.
+          borderTopColor: "var(--shell-border, #e5e7eb)",
+        }}
       >
-        {canAccessTools && (
-          <div className="relative group">
-            <Link
-              href="/tools"
-              className={ROW_CLASS}
-              style={{ height: ROW_H, color: rowColor(toolsActive), transition: "color 0.2s, background-color 0.15s" }}
-            >
-              <span className="flex items-center justify-center shrink-0" style={{ width: ROW_H, height: ROW_H }}>
-                <svg className="h-7 w-7 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-                  <rect x="3" y="3" width="8" height="8" rx="1.5" />
-                  <rect x="13" y="3" width="8" height="8" rx="1.5" />
-                  <rect x="3" y="13" width="8" height="8" rx="1.5" />
-                  <path d="M17 13v8M13 17h8" />
-                </svg>
-              </span>
-              <span className={`${ROW_TEXT} ${toolsActive ? "font-semibold" : "font-normal"}`} style={{ marginLeft: LABEL_ML }}>
-                Tools
-              </span>
-            </Link>
+        <div className="flex flex-col" style={{ gap: ITEM_GAP }}>
+          {allNav.map(({ href, label, icon }) => (
+            <Row
+            expanded={expanded}
+            reduced={reduced}
+              key={href}
+              href={href}
+              label={label}
+              icon={icon}
+              active={href === activeHref}
+              badge={
+                // Degraded install marker. Ringed in the rail's own background
+                // so it reads as a badge on the icon rather than part of the
+                // glyph, and it sits inside the icon cell so it travels with the
+                // row whether the rail is collapsed or open.
+                degradedHrefs.has(href) ? (
+                  <span
+                    title={`${label} is missing something it needs in this space — it runs with those parts switched off.`}
+                    className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full"
+                    style={{ background: "#f59e0b", boxShadow: "0 0 0 2px rgba(255,255,255,0.9)" }}
+                  />
+                ) : undefined
+              }
+            />
+          ))}
 
-            {!expanded && (
-              <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
-                style={{ left: COLLAPSED_W + 4 }}
-              >
-                Tools
-              </span>
-            )}
-          </div>
-        )}
+        </div>
+      </nav>
 
-        {moreNav.length > 0 && (
-          <div className="relative group">
-            <button
-              type="button"
-              onClick={() => setMoreOpen(true)}
-              aria-expanded={moreOpen}
-              aria-haspopup="dialog"
-              className={ROW_CLASS}
-              style={{ height: ROW_H, color: rowColor(moreActive), transition: "color 0.2s, background-color 0.15s" }}
-            >
-              {/* Three stacked bars — the same "more" glyph the flyout opens from */}
-              <span className="flex items-center justify-center shrink-0" style={{ width: ROW_H, height: ROW_H }}>
-                <svg className="h-7 w-7 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" viewBox="0 0 24 24">
-                  <path d="M4 7h16M4 12h16M4 17h16" />
-                </svg>
-              </span>
-              <span className={`${ROW_TEXT} ${moreActive ? "font-semibold" : "font-normal"}`} style={{ marginLeft: LABEL_ML }}>
-                More
-              </span>
-            </button>
-
-            {!expanded && !moreOpen && (
-              <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
-                style={{ left: COLLAPSED_W + 4 }}
-              >
-                More
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Foot — the tools the space tucked out of the rail (featureConfig.more).
+          The space's own settings are not here: they hang off the space in the
+          switcher at the head, the way the account's do off the avatar. */}
+      {moreNav.length > 0 && (
+        <div
+          className="flex shrink-0 flex-col border-t"
+          style={{
+            gap: ITEM_GAP,
+            marginTop: BAND_TOP,
+            paddingTop: ITEM_GAP,
+            paddingLeft: ROW_INSET,
+            paddingRight: ROW_INSET,
+            borderTopColor: "var(--shell-border, #e5e7eb)",
+          }}
+        >
+          <Row
+            expanded={expanded}
+            reduced={reduced}
+            label="More"
+            onClick={() => setMoreOpen(true)}
+            active={moreActive}
+            aria-expanded={moreOpen}
+            aria-haspopup="dialog"
+            icon={
+              <svg fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" viewBox="0 0 24 24">
+                <circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+                <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+                <circle cx="19" cy="12" r="1.4" fill="currentColor" stroke="none" />
+              </svg>
+            }
+          />
+        </div>
+      )}
     </>
   );
 
   // ONE <aside> for both modes, so it's the same persistent element across
-  // navigation — identical placement (card top flush under the navbar at 64px =
-  // top-16), never re-mounting. The top edge and
-  // top-right corner are squared off (no top border) so the rail reads as one
-  // continuous L-shaped shell with the navbar. On the docked routes the card
-  // gains a panel column beside the rail; the page portals its panel content
-  // into the host below.
+  // navigation — identical placement, never re-mounting. On the docked routes
+  // the card gains a panel column beside the rail; the page portals its panel
+  // content into the host below.
   return (
-    <aside className="fixed left-0 top-16 z-40">
-      {/* The card always runs from the navbar to the bottom of the viewport, flush
-          against the left/bottom screen edges: those corners and borders are dropped
-          so it reads as attached to the shell rather than floating.
+    <aside className="fixed left-0 top-0 z-40">
+      {/* The card runs the viewport's full height, flush against the left and
+          bottom screen edges: those corners and borders are dropped so it reads
+          as attached to the shell rather than floating.
           No paint on this wrapper (no white, no border): the panel column
           starts below a page's pinned tab bar, so a full-height rectangle or
           edge here would cut through the bar's band. The rail carries the
           card's left seam; the column carries its own right edge. */}
       <div className="flex overflow-hidden" style={{ height: RAIL_H }}>
-        {/* Icon rail column — hover-expands; the only width that animates. Hover
-            lives here (not the aside) so hovering the tree never expands the rail.
-            Its border-r is the card's constant vertical seam: the closed card's
-            right edge, the rail/panel divider when a panel is docked, and the
-            line beside the pane tab bar (which starts one pixel in — PaneTabBar's
-            -ml-[23px] — so this stays visible). */}
+        {/* Icon rail column — the only width that animates, and only on the
+            hover. Its border-r is the card's constant vertical seam: the closed
+            card's right edge, the rail/panel divider when a panel is docked, and
+            the line beside the pane tab bar (which starts one pixel in —
+            PaneTabBar's -ml-[23px] — so this stays visible). */}
         <div
           className="relative flex shrink-0 flex-col overflow-hidden border-r"
           style={{
             background: "var(--shell-bg, #ffffff)",
             borderRightColor: "var(--shell-border, #e5e7eb)",
             width: expanded ? EXPANDED_W : COLLAPSED_W,
-            paddingTop: RAIL_PAD_Y,
-            // The nav block centres on the VIEWPORT, not on the rail: the rail
-            // starts NAVBAR_H below the top, so padding the same amount onto its
-            // bottom lifts the centred block by half the navbar and the column
-            // reads as centred on screen.
-            paddingBottom: RAIL_PAD_Y + NAVBAR_H,
-            justifyContent: "center",
-            transition: "width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
+            paddingTop: RAIL_PAD_TOP,
+            paddingBottom: RAIL_PAD_Y,
+            transition: reduced ? "none" : "width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
           }}
-          onMouseEnter={() => setExpanded(true)}
-          onMouseLeave={() => setExpanded(false)}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
         >
           {railInner}
         </div>
@@ -369,7 +491,9 @@ export default function Sidebar() {
           className="relative shrink-0 overflow-hidden"
           style={{
             width: columnW,
-            marginTop: dockTopInset + SHELL_FRAME_GAP,
+            // dockTopInset is measured from <main>'s top; this column hangs in
+            // the full-height aside, so it clears the shell's band as well.
+            marginTop: SHELL_TOP_BAR_H + dockTopInset + SHELL_FRAME_GAP,
             marginBottom: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN,
             // Rail is railW wide (no +1 border column), so the full GAP closes
             // the distance to the card's left edge.

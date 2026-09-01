@@ -38,7 +38,6 @@ export default function InstalledTab({
   loading,
   onChanged,
   onToast,
-  onBrowse,
 }: {
   spaceId: string | null;
   installs: InstallSummary[];
@@ -46,7 +45,6 @@ export default function InstalledTab({
   loading: boolean;
   onChanged: () => void;
   onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
-  onBrowse: () => void;
 }) {
   const [removing, setRemoving] = useState<InstallSummary | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -72,10 +70,9 @@ export default function InstalledTab({
         title="This space runs no tools yet"
         description={
           isAdmin
-            ? 'This space runs no tools yet. Find one on Browse and install it, or build your own — see the Mine tab.'
-            : 'This space runs no tools yet. An admin installs them; browse what is available meanwhile.'
+            ? 'This space runs no tools yet. Build one — see the Build section — or install one with the install_tool action.'
+            : 'This space runs no tools yet. An admin installs them.'
         }
-        action={{ label: 'Browse tools', onClick: onBrowse }}
       />
     );
   }

@@ -36,6 +36,7 @@ import {
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
 import { entityKindOf, isEntityFolderIndex } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
+import { filterTree, folderPathsIn } from '@/lib/notes/shared/context'
 import {
   TRASH_PATH,
   treeScrollMemory as scrollMemory,
@@ -152,6 +153,12 @@ interface NoteSidebarProps {
    *  changes the saved expansion â€” clearing it collapses the peek back to
    *  whatever the user had open. */
   revealPath?: string | null
+  /** The Directory's search box, applied to the tree: the tree is pruned to
+   *  what matches and every surviving folder is opened, so a match is never
+   *  hidden inside a collapsed ancestor. Starred and Trash step aside while
+   *  it runs — a search says "here is what matches", not "here is everything
+   *  plus what matches". */
+  query?: string
 }
 
 export function NoteSidebar({
@@ -178,7 +185,9 @@ export function NoteSidebar({
   root,
   storageKey = null,
   revealPath = null,
+  query = '',
 }: NoteSidebarProps) {
+  const searching = query.trim().length > 0
   const starredSet = useMemo(() => new Set(starred), [starred])
   const titleFor = useMemo(() => {
     const map = new Map<string, string>()
@@ -231,6 +240,15 @@ export function NoteSidebar({
   // Which folders are expanded â€” persisted per scope, with the reveal peek
   // layered on top (see useContextTreeState for the full story).
   const { effectiveOpenPaths, toggleFolder, openFolder } = useContextTreeState(storageKey, revealPath)
+
+  // Searching is a peek, like the reveal: it never writes the saved expansion,
+  // so clearing the box puts the tree back exactly as the user left it.
+  const shownTree = useMemo(() => (searching ? filterTree(tree, query) : tree), [tree, query, searching])
+  const openPaths = useMemo(
+    () => (searching ? folderPathsIn(shownTree) : effectiveOpenPaths),
+    [searching, shownTree, effectiveOpenPaths],
+  )
+  const noMatches = searching && (shownTree.children ?? []).length === 0
 
   // Keep the selected row in view when selection changes from outside the tree
   // (context search focus, profile navigation). An off-screen row is centred so it
@@ -299,7 +317,7 @@ export function NoteSidebar({
             bands still bleed past it; a matching pr would pull the bands'
             right edge in and break the full-width look. */}
         <div className="pl-2">
-          {starredNotes.length > 0 && (
+          {starredNotes.length > 0 && !searching && (
             <div className="mb-2">
               <SectionLabel>Starred</SectionLabel>
               {starredNotes.map((n) => (
@@ -326,10 +344,10 @@ export function NoteSidebar({
             // chrome as any other folder, so nesting reads uniformly from the
             // space down.
             <FolderRow
-              node={tree}
+              node={shownTree}
               label={root.label}
               icon={root.icon ?? null}
-              openPaths={effectiveOpenPaths}
+              openPaths={openPaths}
               onToggleFolder={toggleFolder}
               onOpenFolder={openFolder}
               selectedPath={selectedPath}
@@ -346,8 +364,8 @@ export function NoteSidebar({
             />
           ) : (
             <Tree
-              node={tree}
-              openPaths={effectiveOpenPaths}
+              node={shownTree}
+              openPaths={openPaths}
               onToggleFolder={toggleFolder}
               onOpenFolder={openFolder}
               selectedPath={selectedPath}
@@ -364,10 +382,14 @@ export function NoteSidebar({
             />
           )}
 
+          {noMatches && (
+            <p className="px-3 py-4 text-sm text-text-muted">No notes match “{query.trim()}”.</p>
+          )}
+
           {/* Trash sits at the very bottom of every context, below the whole tree
               â€” a folder-shaped row rather than a modal, so restoring reads as
               moving a note back rather than a separate admin surface. */}
-          {trash && (
+          {trash && !searching && (
             <TrashFolder
               entries={trash}
               open={effectiveOpenPaths.has(TRASH_PATH)}

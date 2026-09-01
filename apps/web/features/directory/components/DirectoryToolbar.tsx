@@ -1,10 +1,10 @@
 'use client';
 
-// The Directory grid's toolbar: search, filters, sort and the result count on
-// one left-aligned line, with the active filters restated underneath as chips.
+// The Directory grid's toolbar: search and filters on one left-aligned line,
+// with the active filters restated underneath as chips.
 //
 // The shape is the one every data grid converges on — search first, filter
-// controls beside it, sort and count pushed right — because a filter control is
+// controls beside it — because a filter control is
 // only useful next to the thing it filters, and a filtered grid has to say so.
 // The chip row is the "say so": it names what is being filtered and lets one
 // value go without reopening a menu. It exists only while something is active,
@@ -12,10 +12,11 @@
 //
 // The Table view has its own, slimmer bar (table/TableToolbar.tsx): the type
 // is a tab there and the header sorts, so this one belongs to the grid alone.
+// The grid is always A→Z.
 //
 // All state lives in the passed-in useDirectoryBrowse() instance.
 
-import { FilterDropdown, SortToggle } from '@/features/directory/components/FilterDropdown';
+import { FilterDropdown } from '@/features/directory/components/FilterDropdown';
 import Chip from '@/components/ui/Chip';
 import SearchInput from '@/components/ui/SearchInput';
 import { tagPalette } from '@/lib/tagColors';
@@ -47,7 +48,6 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
     filterTypes, setFilterTypes,
     filterAliases, setFilterAliases,
     filterTags, setFilterTags,
-    sortOrder, setSortOrder,
     presentTypes, presentTags,
   } = browse;
 
@@ -66,24 +66,23 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
     setFilterTypes(new Set());
     setFilterAliases(new Set());
     setFilterTags(new Set());
-    setSortOrder('az');
   };
 
   return (
-    // Sticky at 32px: the pane tab bar above is `sticky -top-4` around a 48px
-    // row, so it comes to rest with its bottom exactly there — the two bars
-    // meet with no seam, and neither draws one. `-ml-6` bleeds into <main>'s
-    // gutter so the opaque white runs edge to edge. That background is
-    // load-bearing (cards scroll under it), and nothing here may get
-    // overflow-hidden or the filter menus clip.
+    // Sticky at 0: the tab set lives in the shell band now, so the only pane
+    // chrome above is the 24px painted strip — the toolbar pins flush under
+    // it, and the two meet with no seam, neither drawing one. `-ml-6`
+    // bleeds into <main>'s gutter so the opaque white runs edge to edge. That
+    // background is load-bearing (cards scroll under it), and nothing here may
+    // get overflow-hidden or the filter menus clip.
     //
-    // pt-9 / pb-2 is the vertical rhythm, not a guess: the row sits 36px below
-    // the tab bar, and the 8px here plus the grid's pt-7 puts it 36px above the
-    // first card — the search line reads centred between the nav and the
-    // content instead of hanging off the nav. The split is lopsided because the
-    // gap below is shared: the card's hover glow reaches ~24px past its top
+    // pt-1 / pb-2 is the vertical rhythm, not a guess: the row rides close under
+    // the shell band, and the 8px below plus the grid's pt-7 puts it 36px above
+    // the first card — the filter line reads as its own band between the nav and
+    // the content instead of hanging off the nav. The split is lopsided because
+    // the gap below is shared: the card's hover glow reaches ~24px past its top
     // edge, so the toolbar's opaque edge has to stay clear of it.
-    <div className="sticky top-8 z-10 -ml-6 bg-glass pt-9 pb-2 pl-12 pr-6">
+    <div className="sticky top-0 z-10 -ml-6 bg-glass pt-1 pb-2 pl-12 pr-6">
       <div className="flex flex-wrap items-center gap-2">
         <SearchInput
           value={searchTerm}
@@ -129,10 +128,6 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
           onChange={setFilterTags}
           getColor={t => tagPalette(t, tagColors).base}
         />
-
-        <div className="ml-auto">
-          <SortToggle value={sortOrder} onChange={setSortOrder} />
-        </div>
       </div>
 
       {activeCount > 0 && (

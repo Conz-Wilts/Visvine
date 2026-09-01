@@ -4,8 +4,13 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { prefersReducedMotion } from "@/lib/motion";
 
 interface SidebarContextValue {
+  /** Whether the rail is open. The rail has no switch: it opens under the
+   *  pointer and closes when you leave it, so it is never a thing to put away.
+   *  The shell's switch belongs to the surface's own side panel — the context
+   *  tree, the channel list — see ContextPanelContext. */
   expanded: boolean;
-  setExpanded: (v: boolean) => void;
+  /** Pointer is over the rail: it opens for as long as you are on it. */
+  setHovered: (v: boolean) => void;
   /** Honours prefers-reduced-motion — consumers collapse transitions to 0s. */
   reduced: boolean;
 }
@@ -24,25 +29,24 @@ export const DOCK_MS = 320;
 export const DOCK_CLOSE_MS = 200;
 export const DOCK_EASE = "cubic-bezier(0.25, 0.1, 0.25, 1)";
 
-// The navbar + rail used to drift in diagonally on load behind a shared
-// `shellEntranceStyle(entered, reduced)`. The entrance was cut for the colour
-// frame — the shell is the frame's still backdrop now — so both the helper and
-// the `entered` flag are gone rather than left returning a constant.
-
 const SidebarContext = createContext<SidebarContextValue>({
   expanded: false,
-  setExpanded: () => {},
+  setHovered: () => {},
   reduced: false,
 });
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-  const [expanded, setExpanded] = useState(false);
+  // One way in, one state out: the rail opens while the pointer is on it. It is
+  // the shell's own chrome — the space switcher and the tool list — so it costs
+  // nothing to leave closed, and the switch in the top band opens the panel the
+  // PAGE brought instead.
+  const [hovered, setHovered] = useState(false);
   const [reduced, setReduced] = useState(false);
 
   useEffect(() => setReduced(prefersReducedMotion()), []);
 
   return (
-    <SidebarContext.Provider value={{ expanded, setExpanded, reduced }}>
+    <SidebarContext.Provider value={{ expanded: hovered, setHovered, reduced }}>
       {children}
     </SidebarContext.Provider>
   );

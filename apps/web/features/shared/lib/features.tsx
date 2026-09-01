@@ -8,7 +8,6 @@ import {
   NavDirectoryIcon,
   NavContextIcon,
   NavChannelsIcon,
-  NavEventsIcon,
   NavResourcesIcon,
   NavConnectorsIcon,
   NavToolsIcon,
@@ -33,7 +32,7 @@ export {
 /**
  * Space feature registry — the single source of truth for the optional
  * surfaces a space builder can switch on or off (directory, context,
- * events, resources). The Sidebar renders its nav items from this list, so
+ * channels, resources). The Sidebar renders its nav items from this list, so
  * the nav and the per-space feature toggles never drift.
  */
 export interface FeatureDef {
@@ -74,13 +73,6 @@ export const FEATURES: FeatureDef[] = [
     icon: <NavChannelsIcon className={iconClass} />,
   },
   {
-    key: 'events',
-    label: 'Events',
-    href: '/events',
-    description: 'Create and RSVP to events, manage guests and invitations.',
-    icon: <NavEventsIcon className={iconClass} />,
-  },
-  {
     key: 'resources',
     label: 'Resources',
     href: '/directory?view=resources',
@@ -104,12 +96,12 @@ export const FEATURES: FeatureDef[] = [
   {
     key: 'tools',
     label: 'Tools',
-    href: '/tools',
-    description: 'Tools built by members and installed from the marketplace.',
-    // Nav-less AND core: the marketplace is reached from the navbar icon, each
-    // INSTALLED Tool gets its own rail row keyed `tool:<slug>`, and there is no
-    // on/off switch — what a space runs is decided by review + install (admins
-    // install; members request). See CORE_FEATURE_KEYS in lib/featureAccess.ts.
+    href: '/admin?section=tools',
+    description: 'Tools built in this space and the versions it runs.',
+    // Nav-less AND core: tools are managed in the Space Console, each INSTALLED
+    // Tool gets its own rail row keyed `tool:<slug>`, and there is no on/off
+    // switch — what a space runs is decided by publish + approve + install.
+    // See CORE_FEATURE_KEYS in lib/featureAccess.ts.
     core: true,
     icon: <NavToolsIcon className={iconClass} />,
   },

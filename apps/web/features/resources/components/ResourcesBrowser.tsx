@@ -1,7 +1,7 @@
 'use client';
 // The Resources tab of the Directory: a space's Drive — folder tiles, file
 // cards, upload by dropping onto the page, preview in a drawer. The toolbar is
-// the breadcrumb and the search box and nothing else. It renders inside the
+// the search box and the breadcrumb and nothing else. It renders inside the
 // directory pane under the Grid / Context / Resources tab bar
 // (app/(auth)/directory/page.tsx), so its toolbar sits exactly where the
 // Directory's own does; `/resources/<id>` is still a file's full page, and
@@ -193,18 +193,29 @@ export default function ResourcesBrowser() {
       onDragLeave={e => { if (e.currentTarget === e.target) setOsDrop(false); }}
       onDrop={onPageDrop}
     >
-      {/* ── Toolbar: breadcrumb and search ──────────────────────────────
-          The Directory toolbar's chrome to the pixel — sticky at top-8 under
-          the pane tab bar, the same -ml-6 bleed, pl-12 inset and pt-9 / pb-2
+      {/* ── Toolbar: search and breadcrumb ──────────────────────────────
+          The Directory toolbar's chrome to the pixel — sticky flush under
+          the shell band's strip, the same -ml-6 bleed, pl-12 inset and pt-1 / pb-2
           rhythm — so switching Grid → Resources moves nothing but the content.
-          Opaque: the grid scrolls under it. */}
-      <div className="sticky top-8 z-10 -ml-6 bg-glass pt-9 pb-2 pl-12 pr-6">
+          The search box comes first, where it sits on every other tab; the
+          breadcrumb follows it. Opaque: the grid scrolls under it. */}
+      <div className="sticky top-0 z-10 -ml-6 bg-glass pt-1 pb-2 pl-12 pr-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search all resources…"
+            size="lg"
+            className="w-full max-w-[420px] flex-1 sm:min-w-[280px]"
+          />
+          {uploading && <span className="text-xs text-text-muted">Uploading…</span>}
+        </div>
 
         {/* Breadcrumb only once there is somewhere to go back to — at the root
             it would be a one-word title of the page you can see you are on.
             The root crumb is a drop target, so a file can be dragged up. */}
         {(trail.length > 0 || searching) && (
-          <nav aria-label="Folder" className="flex min-w-0 flex-wrap items-center gap-0.5 pb-2">
+          <nav aria-label="Folder" className="flex min-w-0 flex-wrap items-center gap-0.5 pt-2">
             <Crumb
               label="Resources"
               active={false}
@@ -230,17 +241,6 @@ export default function ResourcesBrowser() {
             )}
           </nav>
         )}
-
-        <div className="flex flex-wrap items-center gap-2">
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search all resources…"
-            size="lg"
-            className="w-full max-w-[420px] flex-1 sm:min-w-[280px]"
-          />
-          {uploading && <span className="text-xs text-text-muted">Uploading…</span>}
-        </div>
       </div>
 
       {actionError && (

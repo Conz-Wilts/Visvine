@@ -741,7 +741,7 @@ const ALL_SCOPES: readonly string[] = [
 /** Read the feature flags the recipes reason about off a space's config. */
 export function planFeatures(config: SpaceFeatureConfig | null | undefined): Record<string, boolean> {
   return Object.fromEntries(
-    ['directory', 'notes', 'connectors', 'tools', 'events', 'resources', 'channels'].map((key) => [
+    ['directory', 'notes', 'connectors', 'tools', 'resources', 'channels'].map((key) => [
       key,
       isFeatureEnabled(config, key),
     ]),

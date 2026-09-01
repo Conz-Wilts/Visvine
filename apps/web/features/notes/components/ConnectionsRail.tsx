@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { CONNECTIONS_RAIL_W, useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
-import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from '@/features/shared/contexts/ThemeContext';
+import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
 import { toContextItems, titleOfPath } from '@/features/notes/lib/contextItems';
 import { useDirectoryEntities } from '@/features/notes/lib/useDirectoryEntities';
 import { contextKeys, prefetchNoteContext, swrFetch } from '@/features/notes/lib/contextPrefetch';
@@ -110,7 +110,7 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
     <div
       className="pointer-events-none fixed z-30 hidden overflow-hidden xl:block"
       style={{
-        top: 64 + SHELL_FRAME_GAP + dockTopInset,
+        top: SHELL_TOP_BAR_H + SHELL_FRAME_GAP + dockTopInset,
         right: SHELL_FRAME_MARGIN + SHELL_FRAME_GAP,
         bottom: SHELL_FRAME_MARGIN + SHELL_FRAME_GAP,
         width: CONNECTIONS_RAIL_W,

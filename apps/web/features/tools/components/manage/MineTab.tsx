@@ -33,7 +33,7 @@ import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import { toolDiagnosticLine } from '@/features/tools/components/BuildDiagnostics';
-import ToolIconPicker from '@/features/tools/components/marketplace/ToolIconPicker';
+import ToolIconPicker from './ToolIconPicker';
 import {
   deleteAuthoredTool,
   listOnMarketplace,

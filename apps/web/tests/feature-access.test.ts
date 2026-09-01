@@ -73,9 +73,12 @@ describe('isFeatureEnabled', () => {
     assert.equal(isFeatureEnabled({ enabled: {} }, 'notes'), true);
     assert.equal(isFeatureEnabled({ enabled: { notes: false } }, 'notes'), true);
     assert.equal(canAccessFeature({ enabled: { notes: false } }, 'notes', false), true);
-    // events is a toggleable tool: switching it off closes the surface.
-    assert.equal(isFeatureEnabled({ enabled: { events: false } }, 'events'), false);
-    assert.equal(canAccessFeature({ enabled: { events: false } }, 'events', false), false);
+    // events is not a tool: it is not in the registry at all, and a stale
+    // `enabled.events: false` gates nothing.
+    assert.equal(ALL_FEATURE_KEYS.includes('events'), false);
+    // channels is a toggleable tool: switching it off closes the surface.
+    assert.equal(isFeatureEnabled({ enabled: { channels: false } }, 'channels'), false);
+    assert.equal(canAccessFeature({ enabled: { channels: false } }, 'channels', false), false);
   });
 });
 
@@ -248,11 +251,11 @@ describe('moreFeatureKeys', () => {
   });
 
   it('returns the configured keys, dropping unknowns, duplicates and nav-hidden keys', () => {
-    // notes is nav-hidden, so it can never live in "More"; events is a tool
-    // with a rail row, so it can.
+    // notes is nav-hidden, so it can never live in "More"; channels is a tool
+    // with a rail row, so it can. 'events' is no longer a key at all.
     assert.deepEqual(
       moreFeatureKeys({ more: ['channels', 'bogus', 'channels', 'events', 'notes'] }),
-      ['channels', 'events'],
+      ['channels'],
     );
   });
 
@@ -388,9 +391,10 @@ describe('mergeFeatureConfig', () => {
 describe('featureNodeTypeNames', () => {
   it('names the types a tool carries in and out with it', () => {
     assert.deepEqual(featureNodeTypeNames('channels'), ['Section', 'Channel']);
-    assert.deepEqual(featureNodeTypeNames('events'), ['Event']);
-    // Resource belongs to the Directory's Resources tab: nothing switches it off.
+    // Resource belongs to the Directory's Resources tab, and Event to the
+    // directory itself now that Events is not a tool: nothing switches either off.
     assert.deepEqual(featureNodeTypeNames('resources'), []);
+    assert.deepEqual(featureNodeTypeNames('events'), []);
 
   });
 

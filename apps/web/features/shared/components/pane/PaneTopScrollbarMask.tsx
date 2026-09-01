@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from '@/features/shared/contexts/ThemeContext';
+import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_PANE_TOP, SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
 
 /**
  * Hides the page scrollbar behind a pane-top tab bar.
  *
- * Page scroll lives in the shell's <main> (see AuthLayoutClient), which starts
- * directly under the fixed navbar — so its scrollbar track starts there too,
- * and ran up the right edge *alongside* the pinned tab bar. The bar can't cover
- * it: a scroller always paints its own scrollbar above its content.
+ * Page scroll lives in the shell's <main> (see AuthLayoutClient), whose
+ * scrollbar track starts at the top of the surface and ran up the right edge
+ * *alongside* the pinned tab bar. The bar can't cover it: a scroller always
+ * paints its own scrollbar above its content.
  *
  * A fixed element outside the scroller can, so this parks one over the
  * scrollbar gutter for exactly the bar's height. The scrollbar then reads as
@@ -22,8 +22,8 @@ import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from '@/featu
  * `--scrollbar-track-inset`), because the strip alone hides a short thumb
  * completely at rest — the thumb's travel has to start below the bar too.
  *
- * Render it from any bar pinned flush under the navbar; it mounts and unmounts
- * with that bar.
+ * Render it from any bar pinned at the top of the surface; it mounts and
+ * unmounts with that bar.
  */
 export default function PaneTopScrollbarMask({
   /** Bar height in px — the h-12 tab row by default. */
@@ -47,8 +47,11 @@ export default function PaneTopScrollbarMask({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const top = 64 + SHELL_FRAME_GAP;
-  const resolvedHeight = bottom != null ? Math.max(0, bottom - top) : height;
+  // The strip starts where <main> does — under the shell's top band — so it
+  // covers the clearance above the bar as well as the bar itself, and the track
+  // runs through both.
+  const top = SHELL_TOP_BAR_H + SHELL_FRAME_GAP;
+  const resolvedHeight = bottom != null ? Math.max(0, bottom - top) : height + SHELL_PANE_TOP;
 
   // Set on <main> itself so Chromium re-resolves the scrollbar style when it
   // changes.
@@ -84,8 +87,8 @@ export default function PaneTopScrollbarMask({
         // scrollbars are 15px wide, and a sliver of track peeked past the
         // mask's left edge.
         width: 16 - scrollbarW,
-        // Where <main> (and its scrollbar) starts: the navbar's 64px, plus any
-        // gap above the content region.
+        // Where <main> (and its scrollbar) starts: under the shell's top band,
+        // plus any gap above the content region.
         top,
         borderTopRightRadius: transparent ? 0 : SHELL_FRAME_RADIUS,
       }}

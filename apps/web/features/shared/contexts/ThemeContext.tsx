@@ -108,13 +108,24 @@ export const SHELL_FRAME_GAP = 0;      // grey showing between region edge and c
 export const SHELL_FRAME_MARGIN = 0;   // white between the region and the viewport right/bottom
 export const SHELL_FRAME_RADIUS = 0;   // corner radius of the content region
 
-// Shell chrome vars (navbar + sidebar rail). Consumed via var(--shell-*) in
-// Navbar/Sidebar and the .shell-icon-btn classes in globals.css. The list is
-// what the unmount cleanup below iterates.
+/** <main>'s top padding, and so the clearance above every bar a page pins at the
+ *  top of the surface — the bars paint it themselves (`-top-6 -mt-6` plus an
+ *  h-6 strip) so nothing scrolls through it. Anything that lines up with such a
+ *  bar's bottom edge — the docked tree, the connections rail, the scrollbar
+ *  mask — measures from here. */
+export const SHELL_PANE_TOP = 24;
+
+/** The shell's top band (ShellTopBar): the rail's switch, the page's search,
+ *  and the account button. <main> starts below it, so anything positioned
+ *  against the VIEWPORT rather than against <main> — the docked panel, the
+ *  connections rail, the scrollbar mask — offsets by this. */
+export const SHELL_TOP_BAR_H = 64;
+
+// Shell chrome vars — the sidebar rail, which is the shell's only chrome.
+// Consumed via var(--shell-*) in Sidebar. The list is what the unmount cleanup
+// below iterates.
 const SHELL_VARS = [
-  '--shell-bg', '--shell-fg', '--shell-fg-strong', '--shell-border',
-  '--shell-fg-muted', '--shell-hover', '--shell-active-fg',
-  '--shell-active-fg-hover', '--shell-active-bg',
+  '--shell-bg', '--shell-fg-strong', '--shell-border', '--shell-fg-muted',
 ] as const;
 
 interface ThemeContextValue {
@@ -142,21 +153,17 @@ function applyAll(theme: ColorTheme) {
   // own over it, and the Tool kit publishes it as `--vv-backdrop`.
   root.style.setProperty('--app-backdrop', '#ffffff');
 
-  // Shell chrome. Navbar and rail paint nothing of their own — the body's
-  // backdrop shows through — and meet the content with no seam:
-  // --shell-border stays transparent so nothing frames the page.
+  // Shell chrome. The rail paints nothing of its own — the body's backdrop
+  // shows through — and --shell-border is the one line it draws: the hairline
+  // down its right edge, so where the rail ends and the page begins is visible
+  // rather than guessed at.
   const shell: Record<(typeof SHELL_VARS)[number], string> = {
     '--shell-bg': 'transparent',
-    '--shell-fg': '#374151',
     '--shell-fg-strong': '#111827',
     // The rail's resting ink: every row sits muted until it is the current
     // surface (fg-strong + semibold) or under the pointer.
     '--shell-fg-muted': '#111827',
-    '--shell-border': 'transparent',
-    '--shell-hover': 'rgba(17, 24, 39, 0.025)',
-    '--shell-active-fg': theme.accent,
-    '--shell-active-fg-hover': theme.accentDark,
-    '--shell-active-bg': 'transparent',
+    '--shell-border': '#e5e7eb',
   };
   SHELL_VARS.forEach(v => root.style.setProperty(v, shell[v]));
 

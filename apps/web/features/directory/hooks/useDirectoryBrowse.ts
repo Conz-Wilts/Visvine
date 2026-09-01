@@ -12,8 +12,6 @@ import { isOwnSpaceNode } from '@/lib/types/context';
 import { isNodeTypeEnabled } from '@/lib/featureAccess';
 import type { NBNode } from '@/lib/types';
 
-export type SortOrder = 'az' | 'za';
-
 // Maps a directory node into the full DirectoryItem shape the grid/table consume.
 function toDirectoryItem(node: NBNode): DirectoryItem {
   return {
@@ -36,7 +34,7 @@ function toDirectoryItem(node: NBNode): DirectoryItem {
 }
 
 /**
- * Shared search/filter/sort plumbing over the space directory, used by both
+ * Shared search/filter plumbing over the space directory, used by both
  * the Directory's Grid and Table views so the two
  * stay behaviourally identical without duplicating the pipeline.
  */
@@ -45,7 +43,6 @@ export function useDirectoryBrowse() {
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
   const [filterAliases, setFilterAliases] = useState<Set<string>>(new Set());
   const [filterTags, setFilterTags] = useState<Set<string>>(new Set());
-  const [sortOrder, setSortOrder] = useState<SortOrder>('az');
   const router = useRouter();
 
   const { nodes: allNodes, loading, error, space, refresh } = useDirectoryNodes();
@@ -116,12 +113,8 @@ export function useDirectoryBrowse() {
     }
     if (filterAliases.size > 0) result = result.filter(i => i.alias != null && filterAliases.has(i.alias));
     if (filterTags.size > 0) result = result.filter(i => (i.tags ?? []).some(t => filterTags.has(t)));
-    return [...result].sort((a, b) =>
-      sortOrder === 'az'
-        ? a.name.localeCompare(b.name)
-        : b.name.localeCompare(a.name)
-    );
-  }, [searchFilteredItems, filterTypes, filterAliases, filterTags, sortOrder]);
+    return [...result].sort((a, b) => a.name.localeCompare(b.name));
+  }, [searchFilteredItems, filterTypes, filterAliases, filterTags]);
 
   const handleItemClick = useCallback((item: DirectoryItem) => {
     // Events have their own dedicated detail page (EventDetailClient); send them
@@ -145,7 +138,6 @@ export function useDirectoryBrowse() {
     filterTypes, setFilterTypes,
     filterAliases, setFilterAliases,
     filterTags, setFilterTags,
-    sortOrder, setSortOrder,
     presentTypes, presentTags,
     items, filteredItems,
     handleItemClick, handleDataChanged,

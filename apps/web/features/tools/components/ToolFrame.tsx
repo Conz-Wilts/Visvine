@@ -257,13 +257,13 @@ export default function ToolFrame({
       : Math.min(paneHeight, Math.max(MIN_FRAME_HEIGHT, contentHeight ?? MIN_FRAME_HEIGHT));
 
   // Where a viewer goes to look into a Tool that failed: the author's own Tool
-  // page for a working copy, the marketplace entry for an installed one.
+  // page for a working copy, the console's install row for an installed one.
   const install = mint?.install;
   const reportHref = !install
-    ? '/tools'
+    ? '/admin?section=tools'
     : 'preview' in install
       ? `/directory/tool:${install.name}`
-      : `/tools?tab=installed&tool=${encodeURIComponent(install.key)}`;
+      : `/admin?section=tools&tool=${encodeURIComponent(install.key)}`;
 
   return (
     <div ref={containerRef} className={clsx('flex w-full flex-col', mode === 'page' ? 'gap-0' : 'gap-3', className)}>

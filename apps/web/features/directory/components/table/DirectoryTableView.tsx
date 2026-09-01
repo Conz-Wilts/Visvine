@@ -1,7 +1,7 @@
 'use client';
 
-// The Directory's Table view: a slim control bar (TableToolbar) and one
-// type's table. A table is per type because the columns are — a Person has
+// The Directory's Table view: the Directory's search box, a slim control bar
+// (TableToolbar) and one type's table. A table is per type because the columns are — a Person has
 // a role and a company, an Event has a date and a capacity — so the type
 // filter of the grid becomes the bar's type menu here, and the bar's
 // remaining filters (search, alias, tag) narrow within it. The menu is the
@@ -14,7 +14,7 @@
 // row must not flicker backwards. The overrides live as long as this view.
 
 import { useCallback, useMemo, useState } from 'react';
-import { Alert } from '@/components/ui';
+import { Alert, SearchInput } from '@/components/ui';
 import ColumnsMenu from './ColumnsMenu';
 import TableToolbar from './TableToolbar';
 import DirectoryTable from './DirectoryTable';
@@ -161,12 +161,24 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   // scroll box, not the page.
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
-      <div className="shrink-0 px-6 pt-2">
+      <div className="shrink-0 px-6 pt-1">
+        {/* The Directory's one search box, in the one place it lives on every
+            tab: first thing under the tab bar, the same `lg` field at the same
+            width. Switching Grid → Table moves the cursor nowhere. */}
+        <div className="flex flex-wrap items-center gap-2 pb-2">
+          <SearchInput
+            value={browse.searchTerm}
+            onChange={browse.setSearchTerm}
+            placeholder={activeName ? `Search ${activeName.toLowerCase()}s…` : 'Search the directory…'}
+            size="lg"
+            className="w-full max-w-[420px] flex-1 sm:min-w-[280px]"
+          />
+        </div>
+
         <TableToolbar
           browse={browse}
           types={types}
           typeKey={activeKey ?? ''}
-          typeName={activeName}
           onTypeChange={onTypeChange}
           columns={table.visible}
           sort={table.view.sort}

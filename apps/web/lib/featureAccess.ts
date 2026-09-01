@@ -32,7 +32,7 @@ export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'resources', '
  * reject unknown keys from a client-submitted `order`, alongside the dynamic
  * `tool:<slug>` rail keys below (see isPersistableFeatureKey).
  */
-export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'connectors', 'tools'];
+export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'resources', 'connectors', 'tools'];
 
 /**
  * The `featureConfig` a freshly created space is stored with: core keys
@@ -135,19 +135,17 @@ export function isFeatureEnabled(config: SpaceFeatureConfig | null | undefined, 
  * `nodeTypes` name (matched case-insensitively, since stored `node.type` casing
  * drifts — 'section' vs 'Section'), valued by the feature slug that owns them.
  *
- * Person, Space (the org type), Resource, Agent and Connector all belong to the
- * always-on directory — Resources is one of its tabs, an agent is watched on its
- * own node page, and a connector is a record whose note the console edits — and
- * Tool to the always-on marketplace, so none of them appears here and they're
- * never hidden. Event does: Events is a toggleable tool, so a space that has it
- * off loses the type with it.
+ * Person, Space (the org type), Resource, Event, Agent and Connector all belong
+ * to the always-on directory — Resources is one of its tabs, an event is a
+ * record with its own page, an agent is watched on its node page, and a
+ * connector is a record whose note the console edits — and Tool to the
+ * always-on marketplace, so none of them appears here and they're never hidden.
  * In particular 'space' must NOT be added: it would hide every org record
  * whenever the Channels tool is off.
  */
 const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   section: 'channels',
   channel: 'channels',
-  event: 'events',
 };
 
 /** The feature slug a node type belongs to, or null if it isn't feature-gated. */

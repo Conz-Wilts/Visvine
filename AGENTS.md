@@ -571,7 +571,11 @@ guide. The one invariant to hold before touching any of it:
   which verdict it is asking about.
 - **Publishing is a member act; approving is the admin's.** An admin's publish
   lands approved (they are the approver); a member's lands pending and notifies
-  the space's admins — that is the update queue, on `/tools?tab=approvals`. A
+  the space's admins — that is the update queue, in the Space Console
+  (`/admin?section=approvals`). There is no `/tools` destination and no rail
+  row: the console owns tools (Tools = rail placement + the installed versions,
+  Build = the working copies written here, Approvals = the queue), and
+  cross-space install is the `install_tool` action rather than a catalogue. A
   re-publish supersedes the author's earlier pending submission rather than
   being refused.
 - The working copy renders live at `/tools/preview/<name>` for anyone who can

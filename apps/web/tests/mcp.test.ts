@@ -550,13 +550,10 @@ test('switching a feature off disables its node types, with the feature named', 
     assert.match(e.disabled_reason!, /'channels'/)
     assert.equal(e.creatable_via_add_context, false)
   }
-  // Event belongs to the Events tool, which this config leaves on.
-  const event = entries.find((x) => x.type === 'event')!
-  assert.equal(event.enabled, true)
-  assert.equal(event.feature, 'events')
-  // Always-on types are untouched by any config — 'space' (the org type)
-  // must never be gated behind channels.
-  for (const type of ['person', 'space']) {
+  // Always-on types are untouched by any config — 'event' belongs to the
+  // directory rather than a tool, and 'space' (the org type) must never be
+  // gated behind channels.
+  for (const type of ['person', 'space', 'event']) {
     const e = entries.find((x) => x.type === type)!
     assert.equal(e.enabled, true)
     assert.equal(e.disabled_reason, null)
