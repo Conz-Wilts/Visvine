@@ -25,7 +25,7 @@
 //
 // Pure — no DOM, no Prisma — so tests/directory-table.test.ts covers it directly.
 
-import { fieldsForType } from '@/lib/create/typeFields'
+import { canonicalType, fieldsForType } from '@/lib/create/typeFields'
 import type { DirectoryItem, NodeTypeConfig, TrackedField, TrackedFieldKind } from '@/lib/types'
 
 type ColumnKind = TrackedFieldKind | 'location' | 'tags' | 'alias'
@@ -47,6 +47,8 @@ export interface TableColumn {
   options?: string[]
   /** A column-backed value that ALSO lands in metadata under this key (typeFields.mirrorMetadataKey). */
   mirror?: string
+  /** Present, but out of the way until a viewer asks for it. */
+  defaultHidden?: boolean
 }
 
 export const TRACKED_FIELD_KINDS: ReadonlyArray<{ value: TrackedFieldKind; label: string }> = [
@@ -61,17 +63,58 @@ export const TRACKED_FIELD_KINDS: ReadonlyArray<{ value: TrackedFieldKind; label
 
 const CORE_HEAD: TableColumn[] = [
   { key: 'name', label: 'Name', kind: 'text', source: 'name', origin: 'core', editable: true },
+  // The alias column reads **Type**: an alias IS what this space calls this
+  // kind of record — Founder, Investor, Portfolio — and that is the question
+  // the column answers. The node type isn't a column; it is the table you are
+  // in, named by the rail. The key stays `alias`: it is what a stored
+  // arrangement and the alias filters name. Assigned, not typed — manage_alias
+  // and the Members console own it — and it sits beside the name because it is
+  // what the row IS.
+  { key: 'alias', label: 'Type', kind: 'alias', source: 'alias', origin: 'core', editable: false },
 ]
 
 const CORE_TAIL: TableColumn[] = [
-  // Alias is assigned, not typed: manage_alias / the Members console own it.
-  { key: 'alias', label: 'Alias', kind: 'alias', source: 'alias', origin: 'core', editable: false },
   { key: 'tags', label: 'Tags', kind: 'tags', source: 'tags', origin: 'core', editable: true },
-  { key: 'created', label: 'Added', kind: 'date', source: 'created', origin: 'core', editable: false },
+  { key: 'created', label: 'Added', kind: 'date', source: 'created', origin: 'core', editable: false, defaultHidden: true },
 ]
 
-/** Columns hidden until a viewer asks for them: present, not in the way. */
-const HIDDEN_BY_DEFAULT = new Set(['created'])
+/**
+ * The order a type's own columns read in — its page's order, near enough:
+ * who someone is and where they work before how to reach them, an event's
+ * when before its where. A key the list doesn't name keeps its place after
+ * the ones it does, so a property row added to typeFields still appears.
+ */
+const TYPE_COLUMN_ORDER: Record<string, string[]> = {
+  person: ['subtitle', 'companyName', 'email', 'phone', 'location', 'linkedinUrl', 'twitterUrl', 'website', 'pronouns', 'bio'],
+  space: ['subtitle', 'url', 'location', 'founded', 'memberCount'],
+  event: ['start_at', 'end_at', 'location', 'capacity', 'organizerEmail'],
+  resource: ['subtitle', 'url'],
+}
+
+/**
+ * What an entity's own page keeps that its property rows don't. A person's
+ * profile fields ride the directory feed already — lib/eventRepo.ts overlays
+ * the `Person` row onto a person node's metadata — so the table can show them
+ * beside the node's own.
+ *
+ * They are READ-ONLY here, and so is every profile-owned key among the
+ * property rows (PROFILE_OWNED_KEYS): the writer is the member's own profile
+ * (PATCH /api/profile/<personId>), while PATCH /api/nodes/<id> writes the
+ * node. A cell edit would land on the node and the next fetch would overlay
+ * it straight back off.
+ */
+const PAGE_COLUMNS: Record<string, TableColumn[]> = {
+  person: [
+    { key: 'phone', label: 'Phone', kind: 'text', source: 'metadata', origin: 'type', editable: false, defaultHidden: true },
+    { key: 'twitterUrl', label: 'X', kind: 'url', source: 'metadata', origin: 'type', editable: false, defaultHidden: true },
+    { key: 'website', label: 'Website', kind: 'url', source: 'metadata', origin: 'type', editable: false, defaultHidden: true },
+    { key: 'pronouns', label: 'Pronouns', kind: 'text', source: 'metadata', origin: 'type', editable: false, defaultHidden: true },
+    { key: 'bio', label: 'Bio', kind: 'text', source: 'metadata', origin: 'type', editable: false, defaultHidden: true },
+  ],
+}
+
+/** Person keys the profile owns, whichever list they came from. */
+const PROFILE_OWNED_KEYS = new Set(['bio', 'website', 'linkedinUrl', 'twitterUrl', 'phone', 'pronouns'])
 
 /**
  * The columns a type has, in their canonical order. `config` is the space's
@@ -79,19 +122,33 @@ const HIDDEN_BY_DEFAULT = new Set(['created'])
  * without it the type still has its core and property-row columns.
  */
 export function columnsForType(type: string, config?: NodeTypeConfig | null): TableColumn[] {
-  const typeColumns: TableColumn[] = fieldsForType(type)
-    // The photo is the name cell's avatar, not a column of its own.
-    .filter((f) => f.kind !== 'image')
-    .map((f) => ({
-      key: f.key,
-      label: f.label,
-      kind: f.kind as ColumnKind,
-      source: f.target === 'column' ? 'column' : 'metadata',
-      ...(f.target === 'column' && f.column && f.column !== 'image_url' ? { column: f.column } : {}),
-      origin: 'type',
-      editable: true,
-      ...(f.mirrorMetadataKey ? { mirror: f.mirrorMetadataKey } : {}),
-    }))
+  const canonical = canonicalType(type)
+  const order = TYPE_COLUMN_ORDER[canonical] ?? []
+  const rank = (key: string) => {
+    const i = order.indexOf(key)
+    return i === -1 ? order.length : i
+  }
+  const typeColumns: TableColumn[] = [
+    ...fieldsForType(type)
+      // The photo is the name cell's avatar, not a column of its own.
+      .filter((f) => f.kind !== 'image')
+      .map((f): TableColumn => ({
+        key: f.key,
+        label: f.label,
+        kind: f.kind as ColumnKind,
+        source: f.target === 'column' ? 'column' : 'metadata',
+        ...(f.target === 'column' && f.column && f.column !== 'image_url' ? { column: f.column } : {}),
+        origin: 'type',
+        editable: true,
+        ...(f.mirrorMetadataKey ? { mirror: f.mirrorMetadataKey } : {}),
+      })),
+    ...(PAGE_COLUMNS[canonical] ?? []),
+  ]
+    .map((c) => (canonical === 'person' && PROFILE_OWNED_KEYS.has(c.key) ? { ...c, editable: false } : c))
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => rank(a.c.key) - rank(b.c.key) || a.i - b.i)
+    .map((x) => x.c)
+
   const seen = new Set([...CORE_HEAD, ...typeColumns, ...CORE_TAIL].map((c) => c.key))
   const tracked: TableColumn[] = []
   for (const field of config?.fields ?? []) {
@@ -111,6 +168,17 @@ export function columnsForType(type: string, config?: NodeTypeConfig | null): Ta
     })
   }
   return [...CORE_HEAD, ...typeColumns, ...tracked, ...CORE_TAIL]
+}
+
+/**
+ * The rows with a non-alias `alias` cleared. `Node.alias` is not always an
+ * alias: an event's is its `/e/<slug>` URL slug (lib/eventRepo.ts), and a slug
+ * is not what the space calls that kind of record. Only a name the space
+ * defines as an alias counts as one — everything else reads as no alias, and
+ * the Type cell says what the row IS instead.
+ */
+export function withKnownAliases(items: DirectoryItem[], aliasNames: ReadonlySet<string>): DirectoryItem[] {
+  return items.map((i) => (i.alias && !aliasNames.has(i.alias) ? { ...i, alias: null } : i))
 }
 
 // ── cells ───────────────────────────────────────────────────────────────────
@@ -330,7 +398,7 @@ export function defaultWidth(column: TableColumn): number {
  * never seen.
  */
 export function visibleColumns(view: TableView, columns: TableColumn[]): TableColumn[] {
-  return arrangeColumns(view, columns).filter((c) => !isHidden(view, c.key))
+  return arrangeColumns(view, columns).filter((c) => !isHidden(view, c))
 }
 
 /** Every column in the viewer's order, hidden ones included. */
@@ -365,17 +433,19 @@ export function arrangeColumns(view: TableView, columns: TableColumn[]): TableCo
 }
 
 /** Hidden by the viewer, or by default for a column the viewer never touched. */
-export function isHidden(view: TableView, key: string): boolean {
-  if (view.hidden.includes(key)) return true
+export function isHidden(view: TableView, column: TableColumn): boolean {
+  if (view.hidden.includes(column.key)) return true
   // A viewer who ordered a column has met it; the default only applies before that.
-  if (view.order.includes(key)) return false
-  return HIDDEN_BY_DEFAULT.has(key)
+  if (view.order.includes(column.key)) return false
+  return column.defaultHidden === true
 }
 
 /** Show or hide one column. Naming it in `order` records that it has been met. */
 export function toggleColumn(view: TableView, columns: TableColumn[], key: string): TableView {
+  const column = columns.find((c) => c.key === key)
+  if (!column) return view
   const order = arrangeColumns(view, columns).map((c) => c.key)
-  const hidden = isHidden(view, key)
+  const hidden = isHidden(view, column)
     ? view.hidden.filter((k) => k !== key)
     : [...view.hidden.filter((k) => k !== key), key]
   return { ...view, order, hidden }

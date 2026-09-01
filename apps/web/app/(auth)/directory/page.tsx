@@ -152,9 +152,12 @@ function DirectoryPane() {
 
   if (view === 'table') {
     return (
-      // A fixed height, not a minimum: the table is its own scroll box and
-      // has to know where the pane ends (DirectoryTableView).
-      <div className="relative w-full" style={{ height: 'calc(100dvh - 136px)' }}>
+      // A fixed height, not a minimum: the table is its own scroll box and has
+      // to know where the pane ends (DirectoryTableView). It ends at the
+      // VIEWPORT, not at <main>'s padding: 64px of navbar + 16 of pt-4 + the
+      // 32 the pane tab row takes in flow, with `-mb-6` eating <main>'s pb-6 so
+      // the last row sits on the bottom edge rather than 24px above it.
+      <div className="relative -mb-6 w-full" style={{ height: 'calc(100dvh - 112px)' }}>
         <div id="panel-table" role="tabpanel" className="h-full">
           <DirectoryTableView browse={browse} type={typeParam} onTypeChange={handleTypeChange} />
         </div>

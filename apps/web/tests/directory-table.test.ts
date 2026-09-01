@@ -30,6 +30,7 @@ import {
   toggleColumn,
   updateTrackedField,
   visibleColumns,
+  withKnownAliases,
   type TableColumn,
 } from '../lib/directory/table'
 import type { DirectoryItem, NodeTypeConfig } from '../lib/types'
@@ -57,10 +58,48 @@ const col = (key: string, type = 'person', config: NodeTypeConfig | null = perso
 }
 
 describe('columnsForType', () => {
-  test('name first, the type rows, then the tracked fields, then alias · tags · added', () => {
+  test('name · alias-as-Type, the type rows in the page\'s order, the tracked fields, then tags · added', () => {
     assert.deepEqual(
       columnsForType('person', personWithFields).map((c) => c.key),
-      ['name', 'subtitle', 'email', 'companyName', 'linkedinUrl', 'location', 'deal_stage', 'net_worth', 'alias', 'tags', 'created'],
+      [
+        'name', 'alias',
+        'subtitle', 'companyName', 'email', 'phone', 'location', 'linkedinUrl', 'twitterUrl', 'website', 'pronouns', 'bio',
+        'deal_stage', 'net_worth',
+        'tags', 'created',
+      ],
+    )
+  })
+
+  test('the profile owns a person\'s contact fields, so the table only shows them', () => {
+    for (const key of ['bio', 'website', 'linkedinUrl', 'twitterUrl', 'phone', 'pronouns']) {
+      assert.equal(col(key, 'person', personWithFields).editable, false, key)
+    }
+    assert.equal(col('subtitle', 'person', personWithFields).editable, true)
+    assert.equal(col('email', 'person', personWithFields).editable, true)
+  })
+
+  test("the alias column is the row's Type", () => {
+    const alias = col('alias', 'person', person)
+    assert.equal(alias.label, 'Type')
+    assert.equal(alias.editable, false)
+  })
+
+  test("an event's slug is not an alias, so it never reads as one", () => {
+    const rows = [
+      item({ id: 'person:craig', alias: 'Founder' }),
+      item({ id: 'event:dinner', type: 'event', alias: 'founders-dinner-2026' }),
+      item({ id: 'person:anna', alias: null }),
+    ]
+    assert.deepEqual(
+      withKnownAliases(rows, new Set(['Founder', 'Investor'])).map((r) => r.alias ?? null),
+      ['Founder', null, null],
+    )
+  })
+
+  test('an event reads when · where · how many', () => {
+    assert.deepEqual(
+      columnsForType('event', null).map((c) => c.key).filter((k) => !['name', 'alias', 'tags', 'created'].includes(k)),
+      ['start_at', 'end_at', 'location', 'capacity', 'organizerEmail'],
     )
   })
 
@@ -169,14 +208,20 @@ describe('cells', () => {
 describe('the viewer\'s arrangement', () => {
   const columns = columnsForType('person', personWithFields)
 
-  test('an empty view is the canonical order with Added hidden', () => {
-    assert.deepEqual(visibleColumns(EMPTY_VIEW, columns).map((c) => c.key), columns.map((c) => c.key).filter((k) => k !== 'created'))
+  test('an empty view is the canonical order, less what starts hidden', () => {
+    assert.deepEqual(
+      visibleColumns(EMPTY_VIEW, columns).map((c) => c.key),
+      columns.filter((c) => !c.defaultHidden).map((c) => c.key),
+    )
   })
 
   test('a column the view never met appears at its canonical place', () => {
     const view = { ...EMPTY_VIEW, order: ['name', 'location', 'subtitle', 'alias', 'tags', 'created'] }
     const keys = arrangeColumns(view, columns).map((c) => c.key)
-    assert.deepEqual(keys, ['name', 'location', 'subtitle', 'email', 'companyName', 'linkedinUrl', 'deal_stage', 'net_worth', 'alias', 'tags', 'created'])
+    assert.deepEqual(keys, [
+      'name', 'location', 'subtitle', 'alias', 'companyName', 'email', 'phone', 'linkedinUrl', 'twitterUrl',
+      'website', 'pronouns', 'bio', 'deal_stage', 'net_worth', 'tags', 'created',
+    ])
   })
 
   test('a key the view names that no longer exists is ignored', () => {
@@ -185,9 +230,10 @@ describe('the viewer\'s arrangement', () => {
   })
 
   test('toggle hides and shows, and showing Added records that it was met', () => {
-    assert.equal(isHidden(EMPTY_VIEW, 'created'), true)
+    const created = col('created', 'person', personWithFields)
+    assert.equal(isHidden(EMPTY_VIEW, created), true)
     const shown = toggleColumn(EMPTY_VIEW, columns, 'created')
-    assert.equal(isHidden(shown, 'created'), false)
+    assert.equal(isHidden(shown, created), false)
     assert.ok(shown.order.includes('created'))
     const hidden = toggleColumn(shown, columns, 'email')
     assert.ok(!visibleColumns(hidden, columns).some((c) => c.key === 'email'))
@@ -196,7 +242,7 @@ describe('the viewer\'s arrangement', () => {
 
   test('move and placeBefore reorder in the full order, hidden columns included', () => {
     const moved = moveColumn(EMPTY_VIEW, columns, 'email', -1)
-    assert.deepEqual(moved.order.slice(0, 3), ['name', 'email', 'subtitle'])
+    assert.deepEqual(moved.order.slice(0, 5), ['name', 'alias', 'subtitle', 'email', 'companyName'])
     assert.equal(moveColumn(EMPTY_VIEW, columns, 'name', -1), EMPTY_VIEW, 'cannot move off the start')
     const placed = placeColumnBefore(EMPTY_VIEW, columns, 'created', 'name')
     assert.equal(placed.order[0], 'created')

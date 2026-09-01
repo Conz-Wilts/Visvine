@@ -21,8 +21,10 @@ import { cellHref, editValue, formatCell, parseCellInput, type TableColumn } fro
 interface TableCellProps {
   column: TableColumn;
   value: unknown;
-  /** Colour for an alias chip. */
+  /** Colour for the Type chip. */
   aliasColor?: string | null;
+  /** What the row's type is called, for a row wearing no alias. */
+  typeLabel?: string | null;
   tagColors?: Record<string, string> | null;
   /** Absent when the viewer can't edit here (a global record, say). */
   onSave?: (value: unknown) => Promise<void>;
@@ -35,7 +37,7 @@ interface TableCellProps {
 const INPUT_CLASS =
   'h-8 w-full rounded-md bg-surface-1 px-2 text-sm text-text-primary outline-none ring-1 ring-border-default';
 
-export default function TableCell({ column, value, aliasColor, tagColors, onSave, autoEdit = false, onDone }: TableCellProps) {
+export default function TableCell({ column, value, aliasColor, typeLabel, tagColors, onSave, autoEdit = false, onDone }: TableCellProps) {
   const [draft, setDraft] = useState<string | null>(autoEdit ? editValue(value, column) : null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -160,7 +162,11 @@ export default function TableCell({ column, value, aliasColor, tagColors, onSave
 
   let body: React.ReactNode;
   if (column.kind === 'alias') {
-    body = text ? <Chip color={aliasColor ?? undefined} size="xs">{text}</Chip> : null;
+    // The alias the space gave the row — Founder, Portfolio Company — or, for
+    // a row wearing none, what its type is called. The column is Type either
+    // way, so it is never blank.
+    const label = text || typeLabel;
+    body = label ? <Chip color={aliasColor ?? undefined} size="xs">{label}</Chip> : null;
   } else if (column.kind === 'tags' && Array.isArray(value) && value.length > 0) {
     body = (
       <span className="flex min-w-0 items-center gap-1 overflow-hidden">
@@ -174,16 +180,21 @@ export default function TableCell({ column, value, aliasColor, tagColors, onSave
     // its own text, so every row's "Won" is the same pill.
     body = <Chip color={tagPalette(text, null).base} size="xs">{text}</Chip>;
   } else if (href) {
+    // A mail or web cell wears a standing underline, the way an address in a
+    // CRM row does: it is the one kind of cell that leaves the app, and a
+    // hover-only underline makes a column of them read as plain text. The
+    // arrow is the confirmation that it opens elsewhere and only appears
+    // under the pointer, where it can't crowd every row's value.
     body = (
       <a
         href={href}
         target="_blank"
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
-        className="inline-flex min-w-0 items-center gap-1 truncate text-text-primary hover:underline"
+        className="group/link inline-flex min-w-0 items-center gap-1 truncate text-text-primary underline decoration-border-default decoration-1 underline-offset-[3px] transition-colors hover:decoration-text-muted"
       >
         <span className="truncate">{text}</span>
-        <ExternalLinkIcon className="h-3 w-3 shrink-0 text-text-muted" />
+        <ExternalLinkIcon className="h-3 w-3 shrink-0 text-text-muted opacity-0 transition-opacity group-hover/link:opacity-100" />
       </a>
     );
   } else {

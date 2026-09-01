@@ -65,14 +65,18 @@ export function TreeGuide({ guide, active = false }: { guide: TreeGuideKind; act
  * line and can grow downward when the set is revealed.
  *
  * `ml-[14px]` puts it under the centre of the 20px glyph column on the row
- * above (4px of margin + half of 20), and the stem is the 18px from that
- * glyph's bottom edge down to the row's own (a `py-4` list row). Pass `animate`
- * when the list is being revealed: the stroke draws down and each row lands as
- * it is reached.
+ * above (4px of margin + half of 20), and the stem is the climb from that
+ * glyph's bottom edge down to the row's own — 18px on a `py-4` list row, which
+ * is the default. A tighter row (a menu's) needs its own: pass `stem` = half
+ * the row's height minus half the glyph, or the stroke starts inside the glyph
+ * instead of under it. Pass `animate` when the list is being revealed: the
+ * stroke draws down and each row lands as it is reached.
  */
-export function TreeSpine({ children, animate = false }: {
+export function TreeSpine({ children, animate = false, stem: stemPx = 18 }: {
   children: React.ReactNode;
   animate?: boolean;
+  /** Pixels from the branch's top up to the glyph it hangs from. */
+  stem?: number;
 }) {
   const rows = Children.toArray(children);
   const last = rows.pop();
@@ -91,8 +95,8 @@ export function TreeSpine({ children, animate = false }: {
     <div className={`relative ml-[14px] ${animate ? 'tree-spine-enter' : ''}`}>
       <span
         aria-hidden
-        style={stem}
-        className="tree-line pointer-events-none absolute -top-[18px] left-0 h-[18px] w-px bg-border-default/70"
+        style={{ ...stem, top: -stemPx, height: stemPx }}
+        className="tree-line pointer-events-none absolute left-0 w-px bg-border-default/70"
       />
       {rows.length > 0 && (
         <div className="relative">

@@ -1,8 +1,9 @@
 'use client';
 
-// The Table view's control bar, one quiet line: the type menu on the left
-// (the table is per type, so the menu is the view switcher — each type row
-// opens to its aliases, so "Founders" is one pick, not two), then active
+// The Table view's control bar, one quiet line: the table's name and its
+// record count on the left — or, below `lg` where the type rail is hidden,
+// the type menu that is the same choice folded into a button (each type row
+// opens to its aliases, so "Founders" is one pick, not two) — then active
 // filters as removable pills beside a "+ Filter" menu; search, sort and the
 // view's Columns menu on the right. The shape is the data-grid one (Attio,
 // Linear): every control is a small text button that only shows chrome when
@@ -26,20 +27,17 @@ import {
   ArrowUpIcon,
   CheckIcon,
   ChevronDownIcon,
-  ChevronRightIcon,
   ChevronsUpDownIcon,
   PlusIcon,
   SearchIcon,
   XIcon,
 } from '@/features/shared/icons';
 import { tagPalette } from '@/lib/tagColors';
-import type { SpaceAlias } from '@/lib/types';
+import { getTypeColor } from '@/features/directory/components/typeStyles';
+import { TreeSpine, TreeSpineJoin } from '@/components/ui/TreeChrome';
+import type { NodeTypeConfig, SpaceAlias } from '@/lib/types';
 import type { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 import type { TableColumn, TableSort } from '@/lib/directory/table';
-
-/** The bar's one button shape — borderless, hover fill, 28px tall. */
-export const TABLE_TOOLBAR_BTN =
-  'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary';
 
 interface TableType {
   /** Lowercased id, the `?type=` value. */
@@ -48,11 +46,17 @@ interface TableType {
   count: number;
 }
 
+/** The bar's one button shape — borderless, hover fill, 28px tall. */
+export const TABLE_TOOLBAR_BTN =
+  'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary';
+
 interface TableToolbarProps {
   browse: ReturnType<typeof useDirectoryBrowse>;
   /** Every type with rows, for the type menu. */
   types: TableType[];
-  /** The current type — whose aliases the type menu offers, whose rows are counted. */
+  /** The current type's id — the `?type=` value. */
+  typeKey: string;
+  /** The current type's display name, for the search placeholder. */
   typeName: string;
   onTypeChange: (type: string) => void;
   /** The columns the sort menu offers (the visible ones). */
@@ -63,7 +67,7 @@ interface TableToolbarProps {
   trailing?: ReactNode;
 }
 
-export default function TableToolbar({ browse, types, typeName, onTypeChange, columns, sort, onSortChange, trailing }: TableToolbarProps) {
+export default function TableToolbar({ browse, types, typeKey, typeName, onTypeChange, columns, sort, onSortChange, trailing }: TableToolbarProps) {
   const {
     nodes, space,
     searchTerm, setSearchTerm,
@@ -76,7 +80,6 @@ export default function TableToolbar({ browse, types, typeName, onTypeChange, co
 
   // Options and counts come from this type's rows: a tag no Person wears
   // would only ever filter the People table to nothing.
-  const typeKey = typeName.toLowerCase();
   const typeNodes = nodes.filter((n) => n.type.toLowerCase() === typeKey);
   const typeAliases = aliases.filter((a) => a.nodeType.toLowerCase() === typeKey);
   const typeTags = [...new Set(typeNodes.flatMap((n) => n.tags ?? []))].sort();
@@ -94,15 +97,23 @@ export default function TableToolbar({ browse, types, typeName, onTypeChange, co
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 py-1.5">
+      {/* Which table this is, and the choice of table, are the same control:
+          the menu names the type and opens the list of them, each type opening
+          to its aliases so "Founders" is one pick. Then the search, then the
+          three menus that act on the table — Filter, Sort, Columns — as one
+          run, because they are one job; nothing is parked at the far end. The
+          active filters trail them as removable chips. */}
       <TypeMenu
         types={types}
-        activeName={typeName}
+        activeKey={typeKey}
         nodes={nodes}
         aliases={aliases}
+        nodeTypes={space?.nodeTypes}
         selectedAliases={filterAliases}
         onChangeAliases={setFilterAliases}
         onTypeChange={onTypeChange}
       />
+      <ToolbarSearch value={searchTerm} onChange={setSearchTerm} typeName={typeName} />
 
       <div className="h-4 w-px shrink-0 bg-border-subtle" />
 
@@ -115,6 +126,9 @@ export default function TableToolbar({ browse, types, typeName, onTypeChange, co
         selectedTags={filterTags}
         onChangeTags={setFilterTags}
       />
+
+      <SortMenu columns={columns} sort={sort} onChange={onSortChange} />
+      {trailing}
 
       {[...filterAliases].map((alias) => (
         <Chip key={`alias-${alias}`} color={aliasColor(alias)} onRemove={() => setFilterAliases(without(filterAliases, alias))} removeLabel={`Remove ${alias} filter`}>
@@ -135,12 +149,6 @@ export default function TableToolbar({ browse, types, typeName, onTypeChange, co
           Clear
         </button>
       )}
-
-      <div className="ml-auto flex items-center gap-1">
-        <ToolbarSearch value={searchTerm} onChange={setSearchTerm} typeName={typeName} />
-        <SortMenu columns={columns} sort={sort} onChange={onSortChange} />
-        {trailing}
-      </div>
     </div>
   );
 }
@@ -275,27 +283,34 @@ function SortMenu({ columns, sort, onChange }: {
 
 // ── Type: which table, and which of its aliases ──────────────────────────────
 
-function TypeMenu({ types, activeName, nodes, aliases, selectedAliases, onChangeAliases, onTypeChange }: {
+function TypeMenu({ types, activeKey, nodes, aliases, nodeTypes, selectedAliases, onChangeAliases, onTypeChange }: {
   types: TableType[];
-  activeName: string;
+  activeKey: string;
   nodes: ReturnType<typeof useDirectoryBrowse>['nodes'];
   aliases: SpaceAlias[];
+  /** The space's own type colours; without them a type still has its default. */
+  nodeTypes?: NodeTypeConfig[];
   selectedAliases: Set<string>;
   onChangeAliases: (next: Set<string>) => void;
   onTypeChange: (type: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState('');
+  // A type opens to its aliases when it is the one being looked at. The
+  // chevron overrides that for that type — including shutting the active one —
+  // and is kept as an override rather than a set of open ids, so the default
+  // can still move with the selection.
+  const [openOverride, setOpenOverride] = useState<Map<string, boolean>>(new Map());
   const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   useClickOutside(ref, () => setOpen(false));
 
-  const activeKey = activeName.toLowerCase();
   const active = types.find((t) => t.id === activeKey);
 
-  // The active type's aliases start open — they are the reason to look here.
   useEffect(() => {
-    if (open) setExpanded(new Set([activeKey]));
-  }, [open, activeKey]);
+    if (open) setTimeout(() => searchRef.current?.focus(), 50);
+    else { setQuery(''); setOpenOverride(new Map()); }
+  }, [open]);
 
   const aliasesFor = (type: TableType) =>
     aliases
@@ -308,6 +323,21 @@ function TypeMenu({ types, activeName, nodes, aliases, selectedAliases, onChange
       // An alias nobody in the type wears would only filter to nothing;
       // a selected one stays listed so it can be unticked.
       .filter((a) => a.count > 0 || (type.id === activeKey && selectedAliases.has(a.name)));
+
+  // The search reaches both levels: a type matches by its own name, and so
+  // does one whose alias matches — showing only the aliases that did, and
+  // opening it, because a hit nobody can see is not a hit.
+  const q = query.trim().toLowerCase();
+  const shown = types
+    .map((type) => {
+      const typeAliases = aliasesFor(type);
+      if (!q) return { type, typeAliases, forceOpen: false };
+      const hitName = type.name.toLowerCase().includes(q);
+      const hitAliases = typeAliases.filter((a) => a.name.toLowerCase().includes(q));
+      if (!hitName && hitAliases.length === 0) return null;
+      return { type, typeAliases: hitName ? typeAliases : hitAliases, forceOpen: hitAliases.length > 0 };
+    })
+    .filter((r): r is { type: TableType; typeAliases: ReturnType<typeof aliasesFor>; forceOpen: boolean } => r !== null);
 
   const pickType = (type: TableType) => {
     if (type.id !== activeKey) {
@@ -340,83 +370,119 @@ function TypeMenu({ types, activeName, nodes, aliases, selectedAliases, onChange
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span>{active?.name ?? activeName}</span>
-        {active && <span className="font-normal tabular-nums text-text-muted">{active.count}</span>}
+        {active && <Swatch color={getTypeColor(active.name, nodeTypes)} />}
+        <span>{active?.name ?? 'Types'}</span>
         <ChevronDownIcon className={clsx('h-3.5 w-3.5 text-text-muted transition-transform duration-200', open && 'rotate-180')} />
       </button>
 
+      {/* The menu is the space's vocabulary as a tree: a search, then every
+          type, each opening to its aliases on the app's shared spine
+          (components/ui/TreeChrome) — the same object the Context sidebar and
+          the console's Types screen draw. The chevron leads the row and points
+          into the type while shut, the way that screen's does. The current
+          type is bold on its own band, which is what a menu's selection looks
+          like — no tick. */}
       {open && (
-        <div className={clsx(DROPDOWN_MENU_CLASS, 'w-[240px]')} role="menu">
-          <div className="max-h-[360px] overflow-y-auto overscroll-contain custom-scrollbar py-1">
-            {types.map((type) => {
-              const isActive = type.id === activeKey;
-              const typeAliases = aliasesFor(type);
-              const isExpanded = expanded.has(type.id);
-              return (
-                <div key={type.id}>
-                  <div className="flex w-full items-center">
-                    {typeAliases.length > 0 ? (
+        <div className={clsx(DROPDOWN_MENU_CLASS, 'w-[252px]')} role="menu">
+          <div className="px-2 pb-1 pt-1.5">
+            <div className="flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-1.5">
+              <SearchIcon className="h-3 w-3 shrink-0 text-text-muted" />
+              <input
+                ref={searchRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape') setQuery(''); }}
+                placeholder="Search types…"
+                aria-label="Search types"
+                className="min-w-0 flex-1 bg-transparent text-xs text-text-primary outline-none placeholder:text-text-muted"
+              />
+            </div>
+          </div>
+
+          <div className="max-h-[320px] overflow-y-auto overscroll-contain custom-scrollbar py-1 pl-2.5 pr-1.5">
+            {shown.length === 0 ? (
+              <p className="px-1.5 py-2 text-xs text-text-muted">No type matches.</p>
+            ) : (
+              shown.map(({ type, typeAliases, forceOpen }) => {
+                const isActive = type.id === activeKey;
+                const hasAliases = typeAliases.length > 0;
+                const isOpen =
+                  hasAliases && (forceOpen || (openOverride.get(type.id) ?? isActive));
+                return (
+                  <div key={type.id}>
+                    <div
+                      className={clsx(
+                        'flex items-center rounded-md transition-colors',
+                        isActive ? 'bg-brand-green/15' : 'hover:bg-surface-2',
+                      )}
+                    >
+                      {hasAliases ? (
+                        <button
+                          type="button"
+                          onClick={() => setOpenOverride((prev) => new Map(prev).set(type.id, !isOpen))}
+                          aria-expanded={isOpen}
+                          aria-label={isOpen ? `Hide ${type.name} aliases` : `Show ${type.name} aliases`}
+                          className="ml-1.5 box-content grid h-4 w-4 shrink-0 place-items-center py-1.5 text-text-muted transition-colors hover:text-text-secondary"
+                        >
+                          <ChevronDownIcon className={clsx('h-3.5 w-3.5 transition-transform duration-150', !isOpen && '-rotate-90')} />
+                        </button>
+                      ) : (
+                        <span className="ml-1.5 w-4 shrink-0" aria-hidden />
+                      )}
                       <button
                         type="button"
-                        onClick={() =>
-                          setExpanded((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(type.id)) next.delete(type.id);
-                            else next.add(type.id);
-                            return next;
-                          })
-                        }
-                        className="flex shrink-0 items-center justify-center py-2 pl-2.5 pr-0.5 text-text-muted transition-colors hover:text-text-secondary"
-                        aria-label={isExpanded ? `Hide ${type.name} aliases` : `Show ${type.name} aliases`}
+                        role="menuitemradio"
+                        aria-checked={isActive}
+                        onClick={() => pickType(type)}
+                        className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 pr-2 text-[13px]"
                       >
-                        <ChevronRightIcon className={clsx('h-3 w-3 transition-transform duration-150', isExpanded && 'rotate-90')} />
+                        <Swatch color={getTypeColor(type.name, nodeTypes)} />
+                        <span className={clsx('min-w-0 flex-1 truncate text-left', isActive ? 'font-semibold text-text-primary' : 'text-text-secondary')}>
+                          {type.name}
+                        </span>
+                        <span className="shrink-0 text-[11px] tabular-nums text-text-muted">{type.count}</span>
                       </button>
-                    ) : (
-                      <span className="w-6 shrink-0" aria-hidden />
-                    )}
-                    <button
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={isActive}
-                      onClick={() => pickType(type)}
-                      className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-0.5 pr-3.5 text-[13px] transition-colors hover:bg-surface-2"
-                    >
-                      <span className={clsx('min-w-0 flex-1 truncate text-left', isActive ? 'font-semibold text-text-primary' : 'text-text-secondary')}>
-                        {type.name}
-                      </span>
-                      <span className="shrink-0 text-[11px] tabular-nums text-text-muted">{type.count}</span>
-                      {isActive && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-brand-green" />}
-                    </button>
-                  </div>
+                    </div>
 
-                  {isExpanded &&
-                    typeAliases.map((alias) => {
-                      const checked = isActive && selectedAliases.has(alias.name);
-                      return (
-                        <button
-                          key={alias.name}
-                          type="button"
-                          role="menuitemcheckbox"
-                          aria-checked={checked}
-                          onClick={() => pickAlias(type, alias.name)}
-                          className="flex w-full items-center gap-2.5 py-1.5 pl-8 pr-3.5 transition-colors hover:bg-surface-2"
-                        >
-                          <span className="flex min-w-0 flex-1 justify-start">
-                            <Chip color={alias.color} size="sm">{alias.name}</Chip>
-                          </span>
-                          <span className="shrink-0 text-[11px] tabular-nums text-text-muted">{alias.count}</span>
-                          <span
-                            className={clsx('flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded transition-colors', !checked && 'border-[1.5px] border-border-default bg-surface-1')}
-                            style={checked ? { backgroundColor: alias.color } : undefined}
-                          >
-                            {checked && <CheckIcon className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
-                          </span>
-                        </button>
-                      );
-                    })}
-                </div>
-              );
-            })}
+                    {isOpen && (
+                      // The line drops out of the CHEVRON, the way the console's
+                      // Types screen draws it: the spine's own 14px left margin
+                      // is the chevron's centre here too (6px of margin + half
+                      // of the 16px glyph), so the branch needs no offset. The
+                      // stem is short because the row is: 14px of half-row less
+                      // the 8px half-glyph, so it starts under the arrow rather
+                      // than through it.
+                      <TreeSpine animate stem={6}>
+                        {typeAliases.map((alias, i) => {
+                          const checked = isActive && selectedAliases.has(alias.name);
+                          return (
+                            <button
+                              key={alias.name}
+                              type="button"
+                              role="menuitemcheckbox"
+                              aria-checked={checked}
+                              onClick={() => pickAlias(type, alias.name)}
+                              className={clsx(
+                                'flex w-full min-w-0 items-center gap-2 rounded-md py-1.5 pr-2 text-[13px] transition-colors',
+                                checked ? 'bg-surface-3 text-text-primary' : 'text-text-secondary hover:bg-surface-2',
+                              )}
+                            >
+                              <TreeSpineJoin kind={i === typeAliases.length - 1 ? 'last' : 'mid'} />
+                              <Swatch color={alias.color ?? 'var(--color-brand-green)'} />
+                              <span className={clsx('min-w-0 flex-1 truncate text-left', checked && 'font-medium')}>
+                                {alias.name}
+                              </span>
+                              <span className="shrink-0 text-[11px] tabular-nums text-text-muted">{alias.count}</span>
+                            </button>
+                          );
+                        })}
+                      </TreeSpine>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -523,4 +589,11 @@ function FilterMenu({ tags, selectedTags, onChangeTags }: {
       )}
     </div>
   );
+}
+
+/** A type's colour, as the square the rest of the Directory paints it in.
+ *  Square, not a dot: a tag and an alias are already rounded squares
+ *  everywhere else in the app (Chip), and this is a list of the same idea. */
+function Swatch({ color }: { color: string }) {
+  return <span aria-hidden className="h-3 w-3 shrink-0 rounded-[4px]" style={{ background: color }} />;
 }

@@ -42,7 +42,7 @@ export interface TypeFieldDef {
 // mirrors `entityKindOf` in lib/notes/entities.ts — 'organization'/'org'/
 // 'group'/'company'/'space' are all the same thing wearing different legacy
 // prefixes, and that thing is now a space.
-function canonicalType(type: string | null | undefined): string {
+export function canonicalType(type: string | null | undefined): string {
   const t = (type ?? '').trim().toLowerCase()
   if (t === 'people') return 'person'
   if (t.startsWith('org') || t === 'group' || t === 'groups' || t === 'company' || t === 'companies') return 'space'

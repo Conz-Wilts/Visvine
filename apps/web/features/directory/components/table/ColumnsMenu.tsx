@@ -51,7 +51,7 @@ export default function ColumnsMenu({ typeName, arranged, view, onToggle, onMove
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const hiddenCount = arranged.filter((c) => isHidden(view, c.key)).length;
+  const hiddenCount = arranged.filter((c) => isHidden(view, c)).length;
   const customised = view.order.length > 0 || view.hidden.length > 0 || Object.keys(view.widths).length > 0;
 
   return (
@@ -72,7 +72,7 @@ export default function ColumnsMenu({ typeName, arranged, view, onToggle, onMove
         <div className={clsx(DROPDOWN_MENU_CLASS, 'left-auto right-0 w-[320px]')} role="menu">
           <div className="max-h-[360px] overflow-y-auto overscroll-contain custom-scrollbar py-1">
             {arranged.map((column, index) => {
-              const shown = !isHidden(view, column.key);
+              const shown = !isHidden(view, column);
               return (
                 <div
                   key={column.key}

@@ -40,7 +40,7 @@ import {
   type TableColumn,
   type TableSort,
 } from '@/lib/directory/table';
-import type { DirectoryItem, NodeTypeConfig, SpaceAlias } from '@/lib/types';
+import { getNodeTypeConfig, type DirectoryItem, type NodeTypeConfig, type SpaceAlias } from '@/lib/types';
 
 interface DirectoryTableProps {
   items: DirectoryItem[];
@@ -331,6 +331,9 @@ export default function DirectoryTable({
         )}
         itemContent={(_, item) => {
             const typeColor = getTypeColor(item.type, nodeTypes);
+            // What the row is, in the space's own words — the Type cell's
+            // reading for a row wearing no alias.
+            const typeLabel = getNodeTypeConfig(item.type, nodeTypes).name;
             const alias = item.alias ? aliases?.find((a) => a.name === item.alias) : undefined;
             return (
               <>
@@ -376,6 +379,7 @@ export default function DirectoryTable({
                         column={column}
                         value={value}
                         aliasColor={alias?.color ?? typeColor}
+                        typeLabel={typeLabel}
                         tagColors={tagColors}
                         onSave={onSaveCell && column.editable ? (v) => onSaveCell(item, column, v) : undefined}
                       />

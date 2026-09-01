@@ -4,7 +4,9 @@
 // type's table. A table is per type because the columns are — a Person has
 // a role and a company, an Event has a date and a capacity — so the type
 // filter of the grid becomes the bar's type menu here, and the bar's
-// remaining filters (search, alias, tag) narrow within it.
+// remaining filters (search, alias, tag) narrow within it. The menu is the
+// whole navigation: it names the table you are in and opens the list of the
+// others, each type opening to its own aliases.
 //
 // Edits go straight to the record (`PATCH /api/nodes/<id>`) and are held
 // optimistically over the fetched rows: the directory response is cached for
@@ -26,6 +28,7 @@ import {
   cellPatch,
   columnsForType,
   sortItems,
+  withKnownAliases,
   type CellPatch,
   type TableColumn,
 } from '@/lib/directory/table';
@@ -69,7 +72,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   // giving up and taking the first table there is.
   const activeKey = useMemo(() => {
     if (type) {
-      const exact = types.find((t) => t.id === type);
+      const exact = types.find((t) => t.id === type.toLowerCase());
       if (exact) return exact.id;
       const kind = entityKindOf(type);
       const sameKind = kind ? types.find((t) => entityKindOf(t.name) === kind) : undefined;
@@ -116,13 +119,14 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   // type (the grid's type filter is not consulted here — the tab IS it),
   // with this view's edits laid over, in the header's sort.
   const [overrides, setOverrides] = useState<Map<string, CellPatch[]>>(new Map());
+  const aliasNames = useMemo(() => new Set((space?.aliases ?? []).map((a) => (a as SpaceAlias).name)), [space?.aliases]);
   const items = useMemo(() => {
     if (!activeKey) return [];
     const rows = filteredItems
       .filter((i) => i.type.toLowerCase() === activeKey)
       .map((i) => (overrides.get(i.id) ?? []).reduce(applyCellPatch, i));
-    return sortItems(rows, columns, table.view.sort);
-  }, [filteredItems, activeKey, overrides, columns, table.view.sort]);
+    return sortItems(withKnownAliases(rows, aliasNames), columns, table.view.sort);
+  }, [filteredItems, activeKey, aliasNames, overrides, columns, table.view.sort]);
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const spaceId = space?.id ?? null;
@@ -150,17 +154,18 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
 
   const aliases = (space?.aliases ?? []) as SpaceAlias[];
 
-  // The view is a column exactly the pane's height: toolbar and tabs sit
-  // still, the table is the one thing that scrolls — in both directions —
-  // so its head can stick to its own top and its name column to its own
-  // left. A page-scrolled table cannot have both: the horizontal scroller
-  // would be the head's containing scroll box, not the page.
+  // A column exactly the pane's height: toolbar and tabs sit still, the table
+  // is the one thing that scrolls — in both directions — so its head can stick
+  // to its own top and its name column to its own left. A page-scrolled table
+  // cannot have both: the horizontal scroller would be the head's containing
+  // scroll box, not the page.
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
       <div className="shrink-0 px-6 pt-2">
         <TableToolbar
           browse={browse}
           types={types}
+          typeKey={activeKey ?? ''}
           typeName={activeName}
           onTypeChange={onTypeChange}
           columns={table.visible}
@@ -190,7 +195,8 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
         )}
       </div>
 
-      {/* The table bleeds to the pane's right and bottom edges; only the left
+      {/* The table bleeds to the pane's right and bottom edges — <main>'s own
+          bottom padding is cancelled by the page's `-mb-6` — and only the left
           margin holds, keeping the name column on the toolbar's line. */}
       <div className="min-h-0 flex-1 pl-6">
         <DirectoryTable
