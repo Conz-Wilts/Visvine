@@ -1897,8 +1897,9 @@ export const CONTEXT_ACTIONS = [
         'Trigger an agent run now.',
       description:
         "Trigger a run of an ACTIVE agent now (see list_agents). Anyone who can edit the brief may — its author, a space admin, " +
-        'or a member with edit access to its folder; an inactive agent is refused. Shares the scheduler\'s claim path so it cannot double-fire, and ' +
-        "does not advance the schedule. Returns the run id and, when the run completes within this call, its outcome.",
+        'or a member with edit access to its folder; an inactive agent is refused. The run acts as YOU, the caller — a `mode: user` ' +
+        "connector spends your own linked account, not the author's. Shares the scheduler's claim path so it cannot double-fire, and " +
+        'does not advance the schedule. Returns the run id and, when the run completes within this call, its outcome.',
       input: {
         space_id: spaceArg,
         agent: z.string().describe("The agent's name, e.g. 'weekly-digest' for agents/weekly-digest/"),

@@ -29,6 +29,7 @@ import { decryptSecret, encryptSecret } from '@/lib/crypto/secrets'
 import { ConnectorError } from './config'
 import { connectionOwner, type ConnectorAuth } from './auth'
 import { refreshTokens, resolveEndpoints, type TokenSet } from './oauth'
+import { platformClientRef, resolvePlatformClient } from './platformClients'
 
 /** Renew this far ahead of expiry, so a long run doesn't age out mid-flight. */
 const REFRESH_MARGIN_MS = 5 * 60 * 1000
@@ -213,10 +214,27 @@ async function renew(
     throw stepUp(auth, connectUrl, `The ${auth.provider} connection expired.`)
   }
 
-  const client = await prisma.connectorOAuthClient.findFirst({ where: { spaceId, provider: auth.provider } })
-  if (!client) {
-    await markBroken(row.id, 'the registered OAuth client is missing')
-    throw stepUp(auth, connectUrl, `The ${auth.provider} client registration is missing.`)
+  // A platform client's credentials live in env, not in connector_oauth_clients
+  // — this is the path an unattended agent renews a member's Google token on.
+  const platformRef = platformClientRef(auth.clientId)
+  let clientId: string
+  let clientSecret: string | null
+  if (platformRef) {
+    const platform = resolvePlatformClient(platformRef)
+    if (!platform) {
+      await markBroken(row.id, 'the platform OAuth client is not configured on this deployment')
+      throw stepUp(auth, connectUrl, `The ${auth.provider} platform client is missing.`)
+    }
+    clientId = platform.clientId
+    clientSecret = platform.clientSecret
+  } else {
+    const client = await prisma.connectorOAuthClient.findFirst({ where: { spaceId, provider: auth.provider } })
+    if (!client) {
+      await markBroken(row.id, 'the registered OAuth client is missing')
+      throw stepUp(auth, connectUrl, `The ${auth.provider} client registration is missing.`)
+    }
+    clientId = client.clientId
+    clientSecret = client.clientSecret ? decryptSecret(client.clientSecret) : null
   }
 
   const endpoints = await resolveEndpoints(auth)
@@ -224,8 +242,8 @@ async function renew(
   try {
     tokens = await refreshTokens({
       endpoints,
-      clientId: client.clientId,
-      clientSecret: client.clientSecret ? decryptSecret(client.clientSecret) : null,
+      clientId,
+      clientSecret,
       refreshToken: decryptSecret(row.refreshToken),
       scopes: row.scopes,
     })

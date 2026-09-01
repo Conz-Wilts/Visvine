@@ -149,6 +149,18 @@ tree. The parts that constrain code:
   `directory` are as before — and a machine comes with any space that has one,
   no brief key needed, which is what reads a page `fetch_url` cannot
   (`docs/machines.md` holds the boundary that makes that safe).
+- **One agent can run FOR many people.** The brief stays one note; identity is
+  per RUN (`agent_runs.run_as_user_id`). A scheduled fire runs first as the
+  brief's author (or `runs_as`), then once per **subscriber** — a member who put
+  their name down on the agent's page (`agent_subscriptions`, self-service for
+  anyone who can read the brief; capped by `MAX_FANOUT_SUBSCRIBERS`) — each
+  under that person's principal, so a `mode: user` connector spends THEIR
+  linked account. A manual run acts as whoever pressed Run. Event payloads ride
+  only the author's run; fan-out runs carry the summaries. The page's Runs-for
+  section and Turn-on line surface **connector readiness** per person
+  (`lib/connectors/service.ts#connectorReadiness`): missing/disabled notes and
+  unconnected or broken OAuth accounts, with the connect link — checked before
+  a 3am run discovers it. Bare `user_id`, so `deleteAccount` clears it.
 - **An agent is watched on its own node page** — `/directory/agent:<name>`, the
   Agent tab beside Context and Raw (`features/profile/components/AgentPageContent.tsx`),
   the way Profile is a tab of a person node. There is no agents tool: no rail

@@ -185,6 +185,10 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     // keeps the record of who set one up.
     await tx.connectorConnection.deleteMany({ where: { userId } })
 
+    // Agent subscriptions — runs the agents fan out FOR this person. Without
+    // this the tick would keep minting runs for a user who no longer exists.
+    await tx.agentSubscription.deleteMany({ where: { userId } })
+
     if (nodeIds.length) await tx.node.deleteMany({ where: { id: { in: nodeIds } } })
     await tx.identity.deleteMany({ where: { userId } })
     await tx.person.deleteMany({ where: { userId } })

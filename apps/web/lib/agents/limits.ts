@@ -32,6 +32,13 @@ export const DELAYED_AFTER_MS = 2 * TICK_INTERVAL_MS
 /** Runs claimed per tick, across all spaces (each is its own HTTP request). */
 export const MAX_RUNS_PER_TICK = 20
 /**
+ * Subscribers one fire fans out to, beyond the author's run. The fan-out runs
+ * SEQUENTIALLY inside the tick's claim, so the group's wall clock is bounded by
+ * this times the run cap — keep it small enough that a slow group cannot outlive
+ * the tick request itself.
+ */
+export const MAX_FANOUT_SUBSCRIBERS = 10
+/**
  * Consecutive failed runs before an agent is switched off. Generous on
  * purpose: a run that fails is usually a service having a bad ten minutes, and
  * switching an agent off is a thing a person then has to notice and undo.

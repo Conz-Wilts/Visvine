@@ -194,6 +194,27 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   Scheduler's `attemptDeadline` cannot exceed 30), turns (`max_turns`, ≤ 200), spend (per-agent
   monthly cap + a 2M-token per-run backstop). Not resumable: a dead run is failed and the agent waits for its
   next occurrence; partial note writes are revisions with origin `agent`, model `agent:<name>`.
+- What a token costs comes from a chain, strongest claim first — declared → shipped → discovered
+  (`lib/agents/providers.ts#resolveModelPricing`): the model connector note's `pricing:` (any
+  provider, not just `custom`), then the registry's pinned prices, then `agent_model_prices` —
+  refreshed nightly from OpenRouter's models API and LiteLLM's community price map
+  (`lib/agents/prices.ts`, by hand `pnpm db:prices`), which is how an arbitrary model id still
+  meters in dollars. No price anywhere = tokens only, and the 2M-token backstop is the ceiling.
+  Cache-read tokens bill at the price's `cached_input_per_m` when it declares one, at the full
+  input rate otherwise.
+- Every finished run (failed too — the provider billed it) is added to `agent_model_usage`, the
+  durable ledger keyed (space, UTC month, agent, model) — run rows are pruned, these survive
+  (`runs.ts#finishRun`; `pnpm db:usage:backfill` recomputes months from retained runs, run it once
+  after deploying). Teaching (`vm/teach`) meters onto the same ledger under the agent's name —
+  it spends the space's key like a run does. The Space Console's **Usage** section
+  (`/admin?section=usage`, admin-only like the budget route) renders it per month, by model and
+  by agent, via `GET /api/communities/<id>/usage` and the pure shaper `lib/agents/shared/usage.ts`;
+  a model connector's page shows its provider's slice as a Spend section.
+- **The space-wide monthly cap** is `agentBudgetMonthlyCents` in the space's featureConfig
+  (set inline in the Usage section, `PUT …/usage` — no schema, no deploy, like `vmMonthlyHours`),
+  compared against the whole ledger, so every agent and every teaching counts toward it. Checked
+  beside the agent's own cap before every run and between turns (`budget.ts#preRunStop` says which
+  cap bound, so the failure message does too); reaching it pauses runs, never deactivates.
 - Failure policy: 401/403 from the provider → `key_rejected`, deactivated; 429/402/5xx → wait for
   the next occurrence; ten consecutive failures → deactivated; budget reached → paused (not
   deactivated), resumes next month or when the cap is raised.
@@ -398,5 +419,5 @@ points (`lib/notes/entities.ts`, `entityLinks.ts`, `context/entityNodes.ts`), UI
 `features/profile/components/AgentPageContent.tsx`. Tests: `tests/agents-config.test.ts` (grammar, globs, cron, interval math),
 `tests/agents-tick.test.ts` (claim / reclaim / release / events, against the local Docker DB),
 `tests/agents-tools.test.ts` (tool surface, caps, depth guard, dry run, write collector — against fakes),
-`tests/agents-budget.test.ts`, `tests/agents-templates.test.ts` (starter briefs + settings rewrite), `tests/agents-options.test.ts` (against the local Docker DB), `tests/tool-loop.test.ts`, plus the gate cases in
+`tests/agents-budget.test.ts`, `tests/model-prices.test.ts` (the catalogue → price-row mappers), `tests/model-usage.test.ts` (the usage rollup shaper), `tests/agents-templates.test.ts` (starter briefs + settings rewrite), `tests/agents-options.test.ts` (against the local Docker DB), `tests/tool-loop.test.ts`, plus the gate cases in
 `tests/clean-context.test.ts`.

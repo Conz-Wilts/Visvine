@@ -4,6 +4,7 @@
  * nothing else reads the tables directly.
  */
 import prisma from '@/lib/prisma'
+import { connectorReadiness, type ConnectorReadiness } from '@/lib/connectors/service'
 import { logAudit } from '@/lib/notes/audit'
 import { readVisible, visibleVault, writeDenial, writeDenialFull, writeGated } from '@/lib/notes/contextService'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
@@ -65,6 +66,8 @@ export interface AgentSummary {
   /** The brief's parse error, or null. A broken brief still lists. */
   invalid: string | null
   authorUserId: string | null
+  /** Whose principal a scheduled run acts as: `runs_as`, else the author. */
+  runAsUserId: string | null
   activation: {
     active: boolean
     schedule: AgentSchedule | null
@@ -187,6 +190,7 @@ async function summarise(
     tools: brief?.tools ?? [],
     invalid: parsedBrief.ok ? null : parsedBrief.error,
     authorUserId: briefRow?.createdBy ?? null,
+    runAsUserId: activation?.runsAs ?? state?.runAsUserId ?? briefRow?.createdBy ?? null,
     activation: {
       active: !!activation?.active,
       schedule: activation?.schedule ?? null,
@@ -215,7 +219,14 @@ async function summarise(
   summary.rowState = rowStateOf(summary, opts.now, opts.heartbeatAt)
   if (opts.includeSpend) {
     const month = await spendForMonth(spaceId, name, opts.now)
-    summary.spend = { monthCents: brief?.modelRef.pricing ? microsToCents(month) : null, budgetMonthlyCents: state?.budgetMonthlyCents ?? null }
+    // Recorded cost is shown whatever the brief runs on NOW — past runs priced
+    // at run time keep their dollars when the model changes. Null only when
+    // nothing was ever priced AND the current model has no registry price:
+    // that agent is genuinely tokens-only.
+    summary.spend = {
+      monthCents: month > BigInt(0) || brief?.modelRef.pricing ? microsToCents(month) : null,
+      budgetMonthlyCents: state?.budgetMonthlyCents ?? null,
+    }
   }
   return summary
 }
@@ -261,19 +272,113 @@ export async function listAgents(
   }
 }
 
+export interface AgentSubscriber {
+  userId: string
+  name: string | null
+}
+
+/**
+ * What one person's runs of this agent would need, judged before anything
+ * fires: `viewer` is the person looking at the page (what THEY still have to
+ * connect before putting their name down), `runAs` is the identity scheduled
+ * runs act as — the Turn-on preflight — or null when that is the viewer.
+ */
+export interface AgentReadiness {
+  viewer: ConnectorReadiness[]
+  runAs: ConnectorReadiness[] | null
+  runAsUserId: string | null
+  runAsName: string | null
+}
+
 export async function describeAgent(
   p: ContextPrincipal,
   context: Context,
   name: string,
   opts: { includeSpend?: boolean } = {},
-): Promise<(AgentSummary & { brief: string; heartbeatAt: string | null }) | null> {
+): Promise<
+  | (AgentSummary & {
+      brief: string
+      heartbeatAt: string | null
+      subscribers: AgentSubscriber[]
+      viewerSubscribed: boolean
+      readiness: AgentReadiness
+    })
+  | null
+> {
   if (!AGENT_NAME_RE.test(name)) return null
   const row = await findAgentBrief(context.spaceId, name)
   const content = row ? await readVisible(p, context, row.path) : null
   if (!row || content === null) return null
   const heartbeatAt = await lastHeartbeat()
   const summary = await summarise(p, context, name, row.path, content, { includeSpend: !!opts.includeSpend, now: new Date(), heartbeatAt })
-  return { ...summary, brief: content, heartbeatAt: heartbeatAt?.toISOString() ?? null }
+
+  const subRows = await prisma.agentSubscription.findMany({
+    where: { spaceId: context.spaceId, name },
+    orderBy: { createdAt: 'asc' },
+    select: { userId: true },
+  })
+  const runAsUserId = summary.runAsUserId
+  const userIds = [...new Set([...subRows.map((s) => s.userId), ...(runAsUserId ? [runAsUserId] : [])])]
+  const users = userIds.length
+    ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+    : []
+  const nameOf = new Map(users.map((u) => [u.id, u.name]))
+
+  const viewer = await connectorReadiness(p, context, summary.connectors, p.userId)
+  const runAs =
+    runAsUserId && runAsUserId !== p.userId ? await connectorReadiness(p, context, summary.connectors, runAsUserId) : null
+
+  return {
+    ...summary,
+    brief: content,
+    heartbeatAt: heartbeatAt?.toISOString() ?? null,
+    subscribers: subRows.map((s) => ({ userId: s.userId, name: nameOf.get(s.userId) ?? null })),
+    viewerSubscribed: subRows.some((s) => s.userId === p.userId),
+    readiness: { viewer, runAs, runAsUserId, runAsName: runAsUserId ? (nameOf.get(runAsUserId) ?? null) : null },
+  }
+}
+
+/**
+ * Put your own name down: each fire of this agent then runs once FOR you, as
+ * your principal, so a `mode: user` connector spends YOUR linked account.
+ * Anyone who can READ the brief may subscribe THEMSELVES — the run reaches
+ * only what they can already reach, so there is nothing here to approve.
+ */
+export async function subscribeToAgent(p: ContextPrincipal, context: Context, name: string): Promise<ActivateResult> {
+  if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
+  const row = await findAgentBrief(context.spaceId, name)
+  const content = row ? await readVisible(p, context, row.path) : null
+  if (!row || content === null) return { ok: false, status: 404, error: 'No such agent.' }
+  await prisma.agentSubscription.upsert({
+    where: { agent_subscription_identity: { spaceId: context.spaceId, name, userId: p.userId } },
+    create: { spaceId: context.spaceId, name, userId: p.userId },
+    update: {},
+  })
+  await logAudit(context.spaceId, {
+    userId: p.userId,
+    name: p.name,
+    action: 'agent',
+    path: row.path,
+    detail: 'subscribed to runs',
+  })
+  return { ok: true, warning: null }
+}
+
+/** Take a name off the list: your own, or anyone's if you are a space admin. */
+export async function unsubscribeFromAgent(
+  p: ContextPrincipal,
+  context: Context,
+  name: string,
+  userId: string,
+): Promise<ActivateResult> {
+  if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
+  if (userId !== p.userId && !principalIsSuperAdmin(p)) {
+    return { ok: false, status: 403, error: 'Only a space admin can remove someone else.' }
+  }
+  await prisma.agentSubscription
+    .delete({ where: { agent_subscription_identity: { spaceId: context.spaceId, name, userId } } })
+    .catch(() => undefined)
+  return { ok: true, warning: null }
 }
 
 export type ActivateResult =

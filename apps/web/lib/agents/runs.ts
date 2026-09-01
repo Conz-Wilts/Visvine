@@ -10,6 +10,7 @@
  */
 import prisma from '@/lib/prisma'
 import type { AgentRun } from '@prisma/client'
+import { logger } from '@/lib/logger'
 import { monthBounds } from './budget'
 import { pruneEvents } from './events'
 
@@ -97,6 +98,8 @@ export async function createRun(input: {
   name: string
   trigger: RunTrigger
   startedBy?: string | null
+  /** Whose principal the run acts as; null = the state row's runAsUserId. */
+  runAsUserId?: string | null
   model?: string | null
   eventCount?: number
   input?: RunInput | null
@@ -109,6 +112,7 @@ export async function createRun(input: {
       name: input.name,
       trigger: input.trigger,
       startedBy: input.startedBy ?? null,
+      runAsUserId: input.runAsUserId ?? null,
       model: input.model ?? null,
       status: 'running',
       eventCount: input.eventCount ?? 0,
@@ -139,7 +143,7 @@ export async function finishRun(
     model?: string | null
   },
 ): Promise<void> {
-  await prisma.agentRun.update({
+  const row = await prisma.agentRun.update({
     where: { id: runId },
     data: {
       status: input.status,
@@ -153,6 +157,64 @@ export async function finishRun(
       summary: input.summary ? input.summary.slice(0, RUN_SUMMARY_CAP) : null,
       errorMessage: input.errorMessage ? input.errorMessage.slice(0, 2_000) : null,
       ...(input.model ? { model: input.model } : {}),
+    },
+    select: { spaceId: true, name: true, model: true, startedAt: true },
+  })
+  // The durable ledger, run rows being prunable. Failed runs metered too — the
+  // provider billed those tokens all the same. Its failure never fails the
+  // finish: the run record is the fact, the rollup is bookkeeping.
+  try {
+    await meterModelUsage({
+      spaceId: row.spaceId,
+      name: row.name,
+      model: input.model ?? row.model,
+      startedAt: row.startedAt,
+      promptTokens: input.promptTokens,
+      completionTokens: input.completionTokens,
+      costMicros: input.costMicros,
+    })
+  } catch (err) {
+    logger.error('agents.usage.meter_failed', { err, runId })
+  }
+}
+
+/**
+ * Add one billed model job to agent_model_usage — the month it STARTED in,
+ * like spendForMonth. A "run" here is a run OR a teaching (teach route): every
+ * time the space's key was spent under an agent's name, so the space cap has
+ * one ledger to bind against.
+ */
+export async function meterModelUsage(run: {
+  spaceId: string
+  name: string
+  model: string | null
+  startedAt: Date
+  promptTokens: number
+  completionTokens: number
+  costMicros: bigint | null
+}): Promise<void> {
+  const month = monthBounds(run.startedAt).start
+  const model = run.model ?? 'unknown'
+  const priced = run.costMicros !== null
+  await prisma.agentModelUsage.upsert({
+    where: { usage_identity: { spaceId: run.spaceId, month, name: run.name, model } },
+    create: {
+      spaceId: run.spaceId,
+      month,
+      name: run.name,
+      model,
+      runs: 1,
+      promptTokens: BigInt(run.promptTokens),
+      completionTokens: BigInt(run.completionTokens),
+      costMicros: run.costMicros ?? BigInt(0),
+      unpricedRuns: priced ? 0 : 1,
+    },
+    update: {
+      runs: { increment: 1 },
+      promptTokens: { increment: BigInt(run.promptTokens) },
+      completionTokens: { increment: BigInt(run.completionTokens) },
+      costMicros: { increment: run.costMicros ?? BigInt(0) },
+      unpricedRuns: { increment: priced ? 0 : 1 },
     },
   })
 }
@@ -172,6 +234,7 @@ export interface RunListItem {
   startedAt: Date
   endedAt: Date | null
   startedBy: string | null
+  runAsUserId: string | null
   model: string | null
   promptTokens: number
   completionTokens: number
@@ -191,6 +254,7 @@ const LIST_SELECT = {
   startedAt: true,
   endedAt: true,
   startedBy: true,
+  runAsUserId: true,
   model: true,
   promptTokens: true,
   completionTokens: true,
@@ -232,6 +296,31 @@ export async function spendForMonth(spaceId: string, name: string | null, at: Da
     _sum: { costMicros: true },
   })
   return agg._sum.costMicros ?? BigInt(0)
+}
+
+/**
+ * The space's whole model spend for the UTC month of `at`, from the ledger
+ * rather than the prunable run rows — so it includes teachings and every
+ * agent. What the space-wide cap compares against.
+ */
+export async function ledgerSpendForMonth(spaceId: string, at: Date): Promise<bigint> {
+  const agg = await prisma.agentModelUsage.aggregate({
+    where: { spaceId, month: monthBounds(at).start },
+    _sum: { costMicros: true },
+  })
+  return agg._sum.costMicros ?? BigInt(0)
+}
+
+/**
+ * The space-wide monthly model cap, in cents — `agentBudgetMonthlyCents` in
+ * the space's featureConfig (set from the Usage console section, no deploy),
+ * the way the machine quota rides `vmMonthlyHours`. Absent or invalid =
+ * uncapped: the spend is the space's own key, so the default is theirs to cap.
+ */
+export async function spaceBudgetCents(spaceId: string): Promise<number | null> {
+  const space = await prisma.space.findUnique({ where: { id: spaceId }, select: { featureConfig: true } })
+  const raw = ((space?.featureConfig ?? {}) as Record<string, unknown>).agentBudgetMonthlyCents
+  return typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : null
 }
 
 /** Retention: drop runs older than RUN_RETENTION_DAYS, keeping the newest RUN_KEEP_PER_AGENT per agent. */

@@ -8,12 +8,13 @@ import { Alert, Button, Input, Skeleton } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson } from '@/lib/fetchJson';
-import type { AgentSummary, SerializedRun } from '@/lib/agents/service';
+import type { AgentReadiness, AgentSubscriber, AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ActivateAgentDialog from '@/features/agents/components/ActivateAgentDialog';
 import AgentSettingsPanel from '@/features/agents/components/AgentSettingsPanel';
 import MachinePane from '@/features/agents/components/MachinePane';
 import MessageAgent from '@/features/agents/components/MessageAgent';
 import RunPane from '@/features/agents/components/RunPane';
+import RunsForPanel, { ConnectorReadinessNotices } from '@/features/agents/components/RunsForPanel';
 import SkillsPanel from '@/features/agents/components/SkillsPanel';
 import StatusDot from '@/features/agents/components/StatusDot';
 import { fmtAgo, fmtCents, fmtDuration, setupBlocker, statusLine, terminalLabel } from '@/features/agents/lib/rowState';
@@ -29,7 +30,13 @@ import { fmtAgo, fmtCents, fmtDuration, setupBlocker, statusLine, terminalLabel 
  * on /agents — where a run is watched, steps and machine together. This tab
  * is about the agent as a thing to configure; the window is the agent at work.
  */
-type AgentDetail = AgentSummary & { brief: string; heartbeatAt: string | null };
+type AgentDetail = AgentSummary & {
+  brief: string;
+  heartbeatAt: string | null;
+  subscribers: AgentSubscriber[];
+  viewerSubscribed: boolean;
+  readiness: AgentReadiness;
+};
 
 interface DetailResponse {
   agent: AgentDetail;
@@ -120,6 +127,10 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   // else the latest. A live run always wins — watching it is why you are here.
   const shownRun = liveRun ?? runs.find((r) => r.id === runParam) ?? runs[0] ?? null;
   const maxTurns = /^max_turns:\s*(\d+)/m.exec(agent.brief)?.[1];
+  // Who a run acted as, for the history line — a fan-out group is one row per
+  // person, and the name is what tells them apart.
+  const personOf = new Map<string, string | null>(agent.subscribers.map((s) => [s.userId, s.name]));
+  if (agent.readiness.runAsUserId) personOf.set(agent.readiness.runAsUserId, agent.readiness.runAsName);
   const editBrief = () => router.replace(`/directory/${encodeURIComponent(nodeId)}?tab=context`);
 
   const deactivate = async () => {
@@ -281,7 +292,28 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         <p className="font-mono text-[12px] text-text-muted">
           {[agent.model, ...agent.connectors, ...agent.tools].filter(Boolean).join(' · ')}
         </p>
+        {/* The Turn-on preflight for the identity SCHEDULED runs act as: when
+            that is somebody other than the viewer, say what THEY still have to
+            connect — before the 3am run discovers it instead. The viewer's own
+            check lives in the Runs-for section below. */}
+        {agent.readiness.runAs && (
+          <ConnectorReadinessNotices items={agent.readiness.runAs} mine={false} who={agent.readiness.runAsName} isAdmin={isAdmin} />
+        )}
       </section>
+
+      {spaceId && (
+        <section className="border-t border-border-subtle pt-5">
+          <RunsForPanel
+            spaceId={spaceId}
+            agentName={name}
+            subscribers={agent.subscribers}
+            viewerSubscribed={agent.viewerSubscribed}
+            readiness={agent.readiness}
+            isAdmin={isAdmin}
+            onChanged={() => void reload()}
+          />
+        </section>
+      )}
 
 
       {canManage && spaceId && (
@@ -410,6 +442,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
                       </span>
                       <span className="min-w-0 truncate text-text-muted">
                         {fmtAgo(r.startedAt)} · {r.trigger}
+                        {r.runAsUserId && personOf.get(r.runAsUserId) ? ` · for ${personOf.get(r.runAsUserId)}` : ''}
                         {r.input?.dryRun ? ' · dry run' : ''}
                         {r.input?.writes?.length ? ` · ${r.input.writes.length} note${r.input.writes.length === 1 ? '' : 's'}` : ''}
                         {r.summary ? ` — ${r.summary.split('\n')[0]}` : ''}

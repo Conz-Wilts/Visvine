@@ -227,6 +227,17 @@ from explicit `authorize_url` + `token_url`. Where the server supports dynamic r
 rather than a developer-account signup.** A hand-registered client goes in `client_id`, and
 `client_secret` must be a `{{secret:NAME}}` reference, never a literal.
 
+Two more keys:
+
+- **`client_id: platform:google`** uses the deployment's own OAuth client — the
+  `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` env pair the app's sign-in already holds — so a space
+  connects Google without registering anything. The credential never enters a note, a secret row, or
+  the isolate; `client_secret` must be omitted. A note may always carry its own client instead.
+- **`params:`** — extra literal query parameters for the authorize URL. Google needs
+  `access_type: offline` (and `prompt: consent` to re-issue) or it never returns a refresh token and
+  the connection dies after an hour. Keys the flow itself owns (`state`, `redirect_uri`,
+  `code_challenge`, `scope`, …) are refused, and no `{{secret:…}}` may appear in a value.
+
 Like `identity:`, the token is stamped by the host, never placed in `env`, and a caller-supplied
 `Authorization` header is dropped.
 
@@ -239,7 +250,7 @@ The single most consequential line in an `auth:` block.
 | Who connects | each person, their own account | an admin, once |
 | Whose data you see | yours | **whoever connected it** |
 | First use | a connect link, then retry | already connected |
-| Works for agents | no — nobody is there to click Allow | **yes** |
+| Works for agents | yes, once the member the agent runs as has connected | **yes** |
 | Right for | Notion, Gmail, personal drives | shared workspaces, service accounts |
 
 **`mode: space` transfers privilege.** Everyone who can run the connector acts as the account that
@@ -299,9 +310,11 @@ fact.
 
 **Two consequences worth stating plainly:**
 
-1. **An agent can only use `mode: space` connections.** A `mode: user` connector has nothing to
-   offer an unattended run, and it fails with the same step-up message rather than silently
-   borrowing whoever's token is nearest.
+1. **A `mode: user` connector works unattended once its person has connected.** A run resolves the
+   connection of the member it runs as (`runs_as`, else the brief's author): if that member has
+   clicked Connect once — with a provider that grants offline access, see `params:` above — every
+   later run renews and spends their token with nobody present. A member who never connected fails
+   with the step-up message rather than silently borrowing whoever's token is nearest.
 2. **The far side's audit log will name that person.** If an agent runs on Tom's connection, Notion
    records Tom. Point `runs_as` at a service account wherever the provider offers one.
 

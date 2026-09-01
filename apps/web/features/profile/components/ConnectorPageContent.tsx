@@ -27,6 +27,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from 'next/link';
 import { CheckIcon, CopyIcon, KeyRoundIcon, PencilIcon, PlayIcon, PlusIcon, RefreshCwIcon, Trash2Icon, TriangleAlertIcon } from '@/features/shared/icons';
@@ -616,6 +617,8 @@ function ModelSection({
         )}
       </Section>
 
+      <ModelSpendSection spaceId={spaceId} provider={model.provider} />
+
       <Section title="Key" meta={key.set ? 'set' : 'not set'}>
         <button
           type="button"
@@ -640,6 +643,52 @@ function ModelSection({
         </p>
       </Section>
     </>
+  );
+}
+
+/**
+ * What this provider's key spent this month — the space's usage rollup
+ * (GET …/usage) filtered to models under `<provider>/`. Admin-only data, so a
+ * 403 renders nothing rather than an error: the page is readable by people the
+ * bill is not for.
+ */
+function ModelSpendSection({ spaceId, provider }: { spaceId: string; provider: string }) {
+  const [spend, setSpend] = useState<{ costCents: number; runs: number; unpricedRuns: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchJson<{ months: { byModel: { key: string; runs: number; costCents: number; unpricedRuns: number }[] }[] }>(
+      `/api/communities/${spaceId}/usage`,
+    )
+      .then((data) => {
+        if (cancelled) return;
+        const lines = (data.months[0]?.byModel ?? []).filter((l) => l.key.startsWith(`${provider}/`));
+        setSpend({
+          costCents: lines.reduce((n, l) => n + l.costCents, 0),
+          runs: lines.reduce((n, l) => n + l.runs, 0),
+          unpricedRuns: lines.reduce((n, l) => n + l.unpricedRuns, 0),
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [spaceId, provider]);
+
+  if (!spend || spend.runs === 0) return null;
+  const dollars = spend.costCents > 0 && spend.costCents < 1 ? '<$0.01' : `$${(spend.costCents / 100).toFixed(2)}`;
+  return (
+    <Section title="Spend" meta="this month">
+      <p className="text-sm text-text-primary">
+        <span className="font-semibold tabular-nums">{spend.unpricedRuns === spend.runs ? 'tokens only' : dollars}</span>
+        <span className="ml-2 text-text-muted">
+          across {spend.runs} run{spend.runs === 1 ? '' : 's'} on {provider}/ models
+          {spend.unpricedRuns > 0 && spend.unpricedRuns < spend.runs ? ` (${spend.unpricedRuns} unpriced)` : ''}
+        </span>
+      </p>
+      <p className="mt-1.5 text-xs text-text-muted">
+        Billed to this space&apos;s own key. The whole bill, by model and by agent, is in the console&apos;s{' '}
+        <Link href="/admin?section=usage" className="underline">Usage</Link> section.
+      </p>
+    </Section>
   );
 }
 
@@ -684,6 +733,10 @@ function ConnectionsSection({
   // Which row's Disconnect is awaiting confirmation, by row key.
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // The OAuth callback lands back here with the outcome in the query string.
+  const searchParams = useSearchParams();
+  const connectedMessage = searchParams.get('connected');
+  const connectErrorMessage = searchParams.get('connect_error');
 
   const load = useCallback(async () => {
     try {
@@ -749,6 +802,12 @@ function ConnectionsSection({
       }
     >
       <div className="flex flex-col gap-3">
+        {connectedMessage && (
+          <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">{connectedMessage}</p>
+        )}
+        {connectErrorMessage && (
+          <p className="text-xs font-medium text-red-600 dark:text-red-400">{connectErrorMessage}</p>
+        )}
         <p className="text-xs text-text-muted">{explainer}</p>
         {rows === null ? (
           <Skeleton className="h-10 w-full rounded-lg" />

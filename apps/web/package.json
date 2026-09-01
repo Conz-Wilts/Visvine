@@ -45,6 +45,8 @@
     "db:agents:folders": "tsx scripts/migrate-agent-folders.ts",
     "db:agents:activation": "tsx scripts/fold-agent-activation.ts",
     "db:actions:sync": "tsx scripts/sync-action-notes.ts",
+    "db:prices": "tsx scripts/sync-model-prices.ts",
+    "db:usage:backfill": "tsx scripts/backfill-model-usage.ts",
     "db:secrets:rotate": "tsx scripts/rotate-secrets-key.ts",
     "db:connectors:demo": "tsx scripts/add-connector-demo.ts",
     "db:connectors:funds": "tsx scripts/add-fund-metrics-demo.ts",

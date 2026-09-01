@@ -17,7 +17,8 @@ import { decryptSecret } from '@/lib/crypto/secrets';
 import { principalOf, resolveContext } from '@/lib/notes/resolve';
 import { describeConnector } from '@/lib/connectors/service';
 import { exchangeCode, resolveEndpoints, statesMatch } from '@/lib/connectors/oauth';
-import { oauthRedirectUri } from '@/lib/connectors/connectUrl';
+import { appOrigin, oauthRedirectUri } from '@/lib/connectors/connectUrl';
+import { platformClientRef, resolvePlatformClient } from '@/lib/connectors/platformClients';
 import { saveConnection } from '@/lib/connectors/connections';
 import { ConnectorError } from '@/lib/connectors/config';
 import { PENDING_COOKIE, readPending } from '@/lib/connectors/pending';
@@ -34,20 +35,34 @@ function page(message: string, status = 200): NextResponse {
   return response;
 }
 
+/**
+ * When the pending cookie names the connector, land the browser back on its
+ * page with the outcome in the query string rather than on a bare text page.
+ * Failures with no pending cookie have nowhere to go back to and keep the page.
+ */
+function done(connector: string | null, ok: boolean, message: string): NextResponse {
+  if (!connector) return page(message, ok ? 200 : 400);
+  const url = new URL(`${appOrigin()}/directory/${encodeURIComponent(`connector:${connector}`)}`);
+  url.searchParams.set(ok ? 'connected' : 'connect_error', message);
+  const response = NextResponse.redirect(url);
+  response.cookies.set(PENDING_COOKIE, '', { path: '/api/connectors/oauth', maxAge: 0 });
+  return response;
+}
+
 export async function GET(req: NextRequest) {
   const session = await requireSession();
   if (session instanceof Response) return session;
 
   const params = req.nextUrl.searchParams;
+  const pending = await readPending(req.cookies.get(PENDING_COOKIE)?.value);
 
   // A provider that refuses reports it here rather than by status code.
   const providerError = params.get('error');
   if (providerError) {
     const detail = params.get('error_description');
-    return page(`The provider refused the connection: ${detail ?? providerError}`, 400);
+    return done(pending?.connector ?? null, false, `The provider refused the connection: ${detail ?? providerError}`);
   }
 
-  const pending = await readPending(req.cookies.get(PENDING_COOKIE)?.value);
   if (!pending) return page('This connection attempt expired. Start it again.', 400);
 
   const state = params.get('state') ?? '';
@@ -80,21 +95,36 @@ export async function GET(req: NextRequest) {
     }
 
     const endpoints = await resolveEndpoints(auth);
-    const client = await prisma.connectorOAuthClient.findUnique({
-      where: {
-        oauth_client_identity: {
-          spaceId: pending.spaceId,
-          provider: pending.provider,
-          issuer: endpoints.issuer,
+
+    // The note is re-read live, so the platform ref comes from the note as it
+    // stands now, the same as every other auth decision here.
+    const platformRef = platformClientRef(auth.clientId);
+    let clientId: string;
+    let clientSecret: string | null;
+    if (platformRef) {
+      const platform = resolvePlatformClient(platformRef);
+      if (!platform) return done(pending.connector, false, 'This deployment has no platform client for that service any more. Start again.');
+      clientId = platform.clientId;
+      clientSecret = platform.clientSecret;
+    } else {
+      const client = await prisma.connectorOAuthClient.findUnique({
+        where: {
+          oauth_client_identity: {
+            spaceId: pending.spaceId,
+            provider: pending.provider,
+            issuer: endpoints.issuer,
+          },
         },
-      },
-    });
-    if (!client) return page('The client registration is missing. Start again.', 409);
+      });
+      if (!client) return done(pending.connector, false, 'The client registration is missing. Start again.');
+      clientId = client.clientId;
+      clientSecret = client.clientSecret ? decryptSecret(client.clientSecret) : null;
+    }
 
     const tokens = await exchangeCode({
       endpoints,
-      clientId: client.clientId,
-      clientSecret: client.clientSecret ? decryptSecret(client.clientSecret) : null,
+      clientId,
+      clientSecret,
       redirectUri: oauthRedirectUri(),
       code,
       verifier: pending.verifier,
@@ -115,10 +145,10 @@ export async function GET(req: NextRequest) {
       pending.mode === 'space'
         ? `This space now acts as ${tokens.accountLabel ?? 'the connected account'} for ${pending.provider}.`
         : `Connected ${tokens.accountLabel ?? 'your account'} for ${pending.provider}.`;
-    return page(`${who}\n\nYou can close this tab and retry what you were doing.`);
+    return done(pending.connector, true, who);
   } catch (e) {
-    if (e instanceof ConnectorError) return page(e.message, 400);
+    if (e instanceof ConnectorError) return done(pending.connector, false, e.message);
     logger.error('connectors.oauth.callback_failed', { err: e });
-    return page('The connection could not be completed.', 502);
+    return done(pending.connector, false, 'The connection could not be completed.');
   }
 }

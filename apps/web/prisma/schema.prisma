@@ -62,11 +62,13 @@ model Space {
   publicationsIn  ContextPublication[]   @relation("PublicationTarget")
   agentStates     AgentState[]
   agentRuns       AgentRun[]
+  agentSubscriptions AgentSubscription[]
   agentEvents     AgentEvent[]
   agentEgressLog  AgentEgressLog[]
   agentVms        AgentVm[]
   agentVmEvents   AgentVmEvent[]
   agentVmUsage    AgentVmUsage[]
+  agentModelUsage AgentModelUsage[]
 
   channels        Conversation[]
   channelSections ChannelSection[]
@@ -360,6 +362,23 @@ model AgentState {
   @@map("agent_state")
 }
 
+/// A member who has put their name down to have an agent run FOR them: each
+/// scheduled fire runs once per subscriber, as that subscriber's principal, so
+/// a `mode: user` connector resolves THEIR linked account (lib/agents/schedule.ts
+/// fan-out). Keyed by a bare user_id, so lib/account/deleteAccount.ts clears it.
+model AgentSubscription {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String   @map("space_id")
+  name      String // agent name = folder basename under agents/
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, name, userId], name: "agent_subscription_identity")
+  @@index([spaceId, name])
+  @@map("agent_subscriptions")
+}
+
 /// One execution of a Space agent — the run record and its transcript. Written
 /// first-hand by the executor (lib/agents/runner.ts): usage, cost, terminal
 /// reason and the `AgentEvent` trace (tool results clipped, secrets already
@@ -374,6 +393,7 @@ model AgentRun {
   startedAt        DateTime  @default(now()) @map("started_at")
   endedAt          DateTime? @map("ended_at")
   startedBy        String?   @map("started_by") // userId for manual runs
+  runAsUserId      String?   @map("run_as_user_id") // whose principal this run acted as; null = the state row's runAsUserId
   model            String?
   promptTokens     Int       @default(0) @map("prompt_tokens")
   completionTokens Int       @default(0) @map("completion_tokens")
@@ -482,6 +502,55 @@ model AgentVmUsage {
 
   @@unique([spaceId, month], name: "usage_identity")
   @@map("agent_vm_usage")
+}
+
+/// The durable spend record: what each agent spent on each model, per space per
+/// UTC month, incremented when a run finishes (lib/agents/runs.ts#finishRun) the
+/// way the tick increments AgentVmUsage. agent_runs rows are pruned (90 days /
+/// 100 per agent); these survive, so "what did March cost" has an answer.
+/// Tokens are BigInt because a month of runs outgrows what one run never will.
+/// No user key — spend belongs to the space — so deleteAccount owes it nothing.
+model AgentModelUsage {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId          String   @map("space_id")
+  /// First instant of the UTC month, attributed by run start like spendForMonth.
+  month            DateTime
+  name             String
+  /// The brief's `provider/modelId`, as agent_runs.model records it.
+  model            String
+  runs             Int      @default(0)
+  promptTokens     BigInt   @default(0) @map("prompt_tokens")
+  completionTokens BigInt   @default(0) @map("completion_tokens")
+  /// Sum of known costs; unpriced runs add tokens here but no dollars.
+  costMicros       BigInt   @default(0) @map("cost_micros")
+  /// How many of `runs` had no price — what "tokens only" means in a bill.
+  unpricedRuns     Int      @default(0) @map("unpriced_runs")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  space            Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, month, name, model], name: "usage_identity")
+  @@map("agent_model_usage")
+}
+
+/// Platform-wide model prices, USD per million tokens, refreshed nightly from
+/// public catalogues (OpenRouter's models API, LiteLLM's community price map —
+/// lib/agents/prices.ts). The last resort of the pricing chain: a connector
+/// note's `pricing:` and the code registry are both consulted first
+/// (lib/agents/providers.ts#resolveModelPricing), so nothing fetched can
+/// override a price an admin declared or the registry pinned. No space key —
+/// prices are facts about providers, not about tenants.
+model AgentModelPrice {
+  provider        String
+  model           String
+  inputPerM       Float    @map("input_per_m")
+  outputPerM      Float    @map("output_per_m")
+  cachedInputPerM Float?   @map("cached_input_per_m")
+  /// Which catalogue this row came from: openrouter | litellm.
+  source          String
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@id([provider, model], name: "price_identity")
+  @@map("agent_model_prices")
 }
 
 /// What an agent's machine did, in order — the window's durable half.

@@ -132,6 +132,7 @@ export function parseModelConnector(fm: NoteFrontmatter): ParseModelConnectorRes
  *     pricing:
  *       z-ai/glm-5.3-flash: { input_per_m: 0.05, output_per_m: 0.2 }
  *
+ * `cached_input_per_m` may be added for a provider that discounts cache reads.
  * Optional, and refused rather than coerced when malformed: a price the parser
  * guessed at would produce a cap nobody can predict.
  */
@@ -150,10 +151,14 @@ export function parseModelPricing(
     const entry = value as Record<string, unknown>
     const input = entry.input_per_m
     const output = entry.output_per_m
+    const cached = entry.cached_input_per_m
     if (!isPrice(input) || !isPrice(output)) {
       return { ok: false, error: `\`pricing.${modelId}\` needs numeric input_per_m and output_per_m (USD per million tokens)` }
     }
-    out[modelId] = { inputPerM: input, outputPerM: output }
+    if (cached !== undefined && !isPrice(cached)) {
+      return { ok: false, error: `\`pricing.${modelId}.cached_input_per_m\` must be a number (USD per million tokens)` }
+    }
+    out[modelId] = { inputPerM: input, outputPerM: output, ...(cached !== undefined ? { cachedInputPerM: cached } : {}) }
   }
   return { ok: true, pricing: out }
 }

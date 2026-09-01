@@ -67,9 +67,13 @@ export interface ToolLoopResult {
 
 function addUsage(total: ChatUsage, more: ChatUsage | null): ChatUsage {
   if (!more) return total
+  const cached = (total.cachedTokens ?? 0) + (more.cachedTokens ?? 0)
+  const reasoning = (total.reasoningTokens ?? 0) + (more.reasoningTokens ?? 0)
   return {
     promptTokens: total.promptTokens + more.promptTokens,
     completionTokens: total.completionTokens + more.completionTokens,
+    ...(cached > 0 ? { cachedTokens: cached } : {}),
+    ...(reasoning > 0 ? { reasoningTokens: reasoning } : {}),
   }
 }
 

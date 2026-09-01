@@ -17,6 +17,7 @@ import { encryptSecret, decryptSecret } from '@/lib/crypto/secrets';
 import { principalOf, resolveContext } from '@/lib/notes/resolve';
 import { describeConnector } from '@/lib/connectors/service';
 import { connectionOwner } from '@/lib/connectors/auth';
+import { platformClientEnvNames, platformClientRef, resolvePlatformClient } from '@/lib/connectors/platformClients';
 import { authorizeUrl, createPkce, randomState, registerClient, resolveEndpoints } from '@/lib/connectors/oauth';
 import { oauthRedirectUri } from '@/lib/connectors/connectUrl';
 import { ConnectorError, findSecretRefs } from '@/lib/connectors/config';
@@ -56,47 +57,65 @@ export async function GET(req: NextRequest) {
     const endpoints = await resolveEndpoints(auth);
     const redirectUri = oauthRedirectUri();
 
-    // Reuse the client registered for this (space, provider, issuer), or make
-    // one. Dynamic registration is what makes adding an MCP server a URL rather
-    // than a developer-account signup.
-    let record = await prisma.connectorOAuthClient.findUnique({
-      where: { oauth_client_identity: { spaceId, provider: auth.provider, issuer: endpoints.issuer } },
-    });
-
-    if (!record) {
-      let clientId: string;
-      let clientSecret: string | null = null;
-
-      if (auth.clientId) {
-        // A hand-registered client. Both fields may be secret references, since
-        // a client secret must never be legible in a note.
-        const refs = [...findSecretRefs(auth.clientId), ...(auth.clientSecret ? findSecretRefs(auth.clientSecret) : [])];
-        const stored = refs.length
-          ? await prisma.connectorSecret.findMany({ where: { spaceId, name: { in: refs } } })
-          : [];
-        const values = new Map(stored.map((row) => [row.name, decryptSecret(row.ciphertext)]));
-        const missing = refs.filter((name) => !values.has(name));
-        if (missing.length) return fail(`Store these secrets first: ${missing.join(', ')}`);
-
-        const fill = (template: string) =>
-          template.replace(/\{\{\s*secret:([A-Za-z0-9_]+)\s*\}\}/g, (_, name: string) => values.get(name) ?? '');
-        clientId = fill(auth.clientId);
-        clientSecret = auth.clientSecret ? fill(auth.clientSecret) : null;
-      } else {
-        const registered = await registerClient(endpoints, redirectUri, auth.scopes);
-        clientId = registered.clientId;
-        clientSecret = registered.clientSecret;
+    // A platform client lives in env and never touches the database — rotating
+    // it stays one env var, with no per-space encrypted copies to strand.
+    const platformRef = platformClientRef(auth.clientId);
+    let clientId: string;
+    if (platformRef) {
+      const platform = resolvePlatformClient(platformRef);
+      if (!platform) {
+        const names = platformClientEnvNames(platformRef);
+        return fail(
+          names
+            ? `This deployment has no ${platformRef} platform client — set ${names.id} and ${names.secret}, or register your own OAuth app and put its id in the note.`
+            : `Unknown platform client "${platformRef}".`,
+        );
       }
-
-      record = await prisma.connectorOAuthClient.create({
-        data: {
-          spaceId,
-          provider: auth.provider,
-          issuer: endpoints.issuer,
-          clientId,
-          clientSecret: clientSecret ? encryptSecret(clientSecret) : null,
-        },
+      clientId = platform.clientId;
+    } else {
+      // Reuse the client registered for this (space, provider, issuer), or make
+      // one. Dynamic registration is what makes adding an MCP server a URL rather
+      // than a developer-account signup.
+      let record = await prisma.connectorOAuthClient.findUnique({
+        where: { oauth_client_identity: { spaceId, provider: auth.provider, issuer: endpoints.issuer } },
       });
+
+      if (!record) {
+        let registeredId: string;
+        let clientSecret: string | null = null;
+
+        if (auth.clientId) {
+          // A hand-registered client. Both fields may be secret references, since
+          // a client secret must never be legible in a note.
+          const refs = [...findSecretRefs(auth.clientId), ...(auth.clientSecret ? findSecretRefs(auth.clientSecret) : [])];
+          const stored = refs.length
+            ? await prisma.connectorSecret.findMany({ where: { spaceId, name: { in: refs } } })
+            : [];
+          const values = new Map(stored.map((row) => [row.name, decryptSecret(row.ciphertext)]));
+          const missing = refs.filter((name) => !values.has(name));
+          if (missing.length) return fail(`Store these secrets first: ${missing.join(', ')}`);
+
+          const fill = (template: string) =>
+            template.replace(/\{\{\s*secret:([A-Za-z0-9_]+)\s*\}\}/g, (_, name: string) => values.get(name) ?? '');
+          registeredId = fill(auth.clientId);
+          clientSecret = auth.clientSecret ? fill(auth.clientSecret) : null;
+        } else {
+          const registered = await registerClient(endpoints, redirectUri, auth.scopes);
+          registeredId = registered.clientId;
+          clientSecret = registered.clientSecret;
+        }
+
+        record = await prisma.connectorOAuthClient.create({
+          data: {
+            spaceId,
+            provider: auth.provider,
+            issuer: endpoints.issuer,
+            clientId: registeredId,
+            clientSecret: clientSecret ? encryptSecret(clientSecret) : null,
+          },
+        });
+      }
+      clientId = record.clientId;
     }
 
     const { verifier, challenge } = createPkce();
@@ -104,12 +123,13 @@ export async function GET(req: NextRequest) {
 
     const target = authorizeUrl({
       endpoints,
-      clientId: record.clientId,
+      clientId,
       redirectUri,
       scopes: auth.scopes,
       state,
       challenge,
       resource: auth.discovery.kind === 'discover' ? auth.discovery.url : null,
+      params: auth.params,
     });
 
     const response = NextResponse.redirect(target);

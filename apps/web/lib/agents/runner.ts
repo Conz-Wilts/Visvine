@@ -2,8 +2,9 @@
  * The executor: carries ONE run to completion. Invoked by the internal run
  * route (self-dispatched by the tick, or inline in dev). Everything a run
  * touches goes through the shared loop with the agent's tool surface under
- * the author's principal, on the Space's model key, metered against the
- * budget, and written back to the run row as it goes.
+ * the run's principal — the author's, or the person the run acts FOR (a
+ * manual run's presser, a fan-out run's subscriber) — on the Space's model
+ * key, metered against the budget, and written back to the run row as it goes.
  *
  * Failure policy (W11/W13):
  * - not resumable: a run that dies is failed and the agent waits for its
@@ -32,7 +33,7 @@ import { deactivateAgent, effectiveTimezone, type DeactivationReason } from './h
 import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS } from './limits'
 import { principalForUser } from './principal'
 import { resolveAgentChatConfig } from './providers'
-import { clipEventText, finishRun, flushRunEvents, recordRunInput, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
+import { clipEventText, finishRun, flushRunEvents, ledgerSpendForMonth, recordRunInput, spaceBudgetCents, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
 import { agentPreamble } from './shared/prompt'
 import { skillsForRun, skillsMessage } from './skills'
 import { agentTools } from './tools'
@@ -182,13 +183,22 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     const brief: AgentBrief = parsed.brief
     dryRun = brief.dryRun
 
-    // 2. Who the run acts as: the author.
-    if (!state.runAsUserId) return fail('author_gone', 'The agent has no author on record.', { deactivate: { reason: 'author_gone', detail: null } })
-    const principal = await principalForUser(spaceId, state.runAsUserId)
-    if (!principal) return fail('author_gone', 'The brief\'s author is no longer a member of this space.', { deactivate: { reason: 'author_gone', detail: null } })
-    // Sanity: the author must still be able to see their own brief.
-    if ((await readVisible(principal, context, briefRow.path)) === null) {
-      return fail('author_gone', 'The brief\'s author can no longer read the brief.', { deactivate: { reason: 'author_gone', detail: null } })
+    // 2. Who the run acts as: the run's own identity when it carries one (a
+    // manual run acts as whoever pressed Run; a fan-out run acts as its
+    // subscriber), else the state row's — the brief's author. A gone SUBSCRIBER
+    // says nothing about the agent: their subscription is dropped and the run
+    // fails quietly; only a gone AUTHOR deactivates.
+    const runAsUserId = run.runAsUserId ?? state.runAsUserId
+    if (!runAsUserId) return fail('author_gone', 'The agent has no author on record.', { deactivate: { reason: 'author_gone', detail: null } })
+    const principal = await principalForUser(spaceId, runAsUserId)
+    if (!principal || (await readVisible(principal, context, briefRow.path)) === null) {
+      if (run.runAsUserId && run.runAsUserId !== state.runAsUserId) {
+        await prisma.agentSubscription
+          .deleteMany({ where: { spaceId, name, userId: run.runAsUserId } })
+          .catch(() => undefined)
+        return fail('config', 'The person this run acts for can no longer read the brief in this space.', { countsAsFailure: false })
+      }
+      return fail('author_gone', "The brief's author can no longer read the brief.", { deactivate: { reason: 'author_gone', detail: null } })
     }
 
     // 3. The model, on the space's key.
@@ -209,14 +219,28 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     const { config, ref } = resolved
     await flushRunEvents(runId, events, { model: brief.model })
 
-    // 4. Budget before we spend a token.
+    // 4. Budget before we spend a token — the agent's cap AND the space's.
+    const [spentMicros, spaceSpentMicros, spaceCapCents] = await Promise.all([
+      spendForMonth(spaceId, name, now),
+      ledgerSpendForMonth(spaceId, now),
+      spaceBudgetCents(spaceId),
+    ])
     const budget: BudgetState = {
-      spentThisMonthMicros: await spendForMonth(spaceId, name, now),
+      spentThisMonthMicros: spentMicros,
       monthlyCapCents: state.budgetMonthlyCents,
       pricing: ref.pricing,
+      spaceSpentThisMonthMicros: spaceSpentMicros,
+      spaceCapCents,
     }
-    if (preRunStop(budget)) {
-      return fail('budget', 'Monthly budget reached — the run was not started.', { countsAsFailure: false, model: brief.model })
+    const capHit = preRunStop(budget)
+    if (capHit) {
+      return fail(
+        'budget',
+        capHit.cap === 'space'
+          ? "The space's monthly model budget is reached — the run was not started."
+          : 'Monthly budget reached — the run was not started.',
+        { countsAsFailure: false, model: brief.model },
+      )
     }
 
     // 5. The loop.

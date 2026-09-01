@@ -192,3 +192,65 @@ test('a model recipe stamps its service too', () => {
   assert.equal(fm.recipe, 'openrouter')
   assert.ok(parseModelConnector(fm).ok)
 })
+
+test('google recipes: blank credential fields fall back to the platform client', () => {
+  for (const id of ['google', 'google-drive']) {
+    const entry = CONNECTOR_CATALOG.find((e) => e.id === id)
+    assert.ok(entry)
+    const { content, secrets } = connectorFromCatalog(entry, {
+      name: entry.id,
+      title: entry.name,
+      description: '',
+      values: {},
+    })
+    const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+    assert.ok(parsed.ok, `${id}: ${parsed.ok ? '' : parsed.error}`)
+    const auth = parsed.perimeter.auth
+    assert.ok(auth, `${id} keeps its auth block`)
+    // The deployment's own client: nothing to paste, nothing stored, and no
+    // dangling {{secret:…}} the space never filled in.
+    assert.equal(auth.clientId, 'platform:google')
+    assert.equal(auth.clientSecret, null)
+    assert.deepEqual(secrets, [])
+    assert.ok(!content.includes('{{secret:'), `${id} references no secrets`)
+    // Offline access is what keeps an agent's run alive past the first hour.
+    assert.equal(auth.params.access_type, 'offline')
+    assert.equal(auth.params.prompt, 'consent')
+  }
+})
+
+test('google recipes: filled credential fields still produce an own-app note', () => {
+  const entry = CONNECTOR_CATALOG.find((e) => e.id === 'google-drive')
+  assert.ok(entry)
+  const values = sampleValues(entry)
+  const { content, secrets } = connectorFromCatalog(entry, {
+    name: entry.id,
+    title: entry.name,
+    description: '',
+    values,
+  })
+  const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+  assert.ok(parsed.ok)
+  assert.equal(parsed.perimeter.auth?.clientId, values.GOOGLE_DRIVE_CLIENT_ID)
+  assert.equal(parsed.perimeter.auth?.clientSecret, '{{secret:GOOGLE_DRIVE_CLIENT_SECRET}}')
+  assert.ok(secrets.some((s) => s.name === 'GOOGLE_DRIVE_CLIENT_SECRET'))
+})
+
+test('google: extra scopes append to the defaults and never reach env', () => {
+  const entry = CONNECTOR_CATALOG.find((e) => e.id === 'google')
+  assert.ok(entry)
+  const { content } = connectorFromCatalog(entry, {
+    name: 'google',
+    title: 'Google',
+    description: '',
+    values: { extra_scopes: 'https://www.googleapis.com/auth/gmail.send' },
+  })
+  const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error)
+  const scopes = parsed.perimeter.auth?.scopes ?? []
+  assert.ok(scopes.includes('https://www.googleapis.com/auth/gmail.readonly'))
+  assert.ok(scopes.includes('https://www.googleapis.com/auth/gmail.send'))
+  // A scope list is authorization config, not something an agent reads at run time.
+  assert.equal(parsed.perimeter.env.extra_scopes, undefined)
+  assert.ok(!JSON.stringify(parsed.perimeter.env).includes('gmail.send'))
+})

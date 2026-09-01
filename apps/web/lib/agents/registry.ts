@@ -25,10 +25,15 @@
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 const DEFAULT_GEMINI_MODEL = 'gemma-4-31b-it'
 
-/** USD per one million tokens. */
+/**
+ * USD per one million tokens. `cachedInputPerM` is the discounted rate for
+ * cache-read input tokens; when absent they bill at `inputPerM` (conservative:
+ * the cap over-counts rather than under-counts).
+ */
 export interface ModelPricing {
   inputPerM: number
   outputPerM: number
+  cachedInputPerM?: number
 }
 
 interface RegistryModel {

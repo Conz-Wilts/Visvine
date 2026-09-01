@@ -14,9 +14,11 @@
  * tokens. Two modes, and the difference is the whole design:
  *
  *   mode: user    each person connects their own account. Sarah's runs use
- *                 Sarah's token. Nobody borrows anybody's access. Requires a
- *                 person to be present the first time — so it cannot serve an
- *                 unattended agent.
+ *                 Sarah's token. Nobody borrows anybody's access. A person is
+ *                 present the FIRST time only; after that the stored refresh
+ *                 token serves their scheduled runs unattended
+ *                 (connections.ts#renew), which is what lets one agent fan out
+ *                 to every subscriber on their own accounts.
  *
  *   mode: space   an admin connects once and the whole space shares it. Works
  *                 unattended, which is what makes agents and scheduled jobs
@@ -30,6 +32,7 @@
  * the perimeter does not allow.
  */
 import { findSecretRefs } from './config'
+import { platformClientRef } from './platformClients'
 
 /** How the connection is shared. */
 type ConnectorAuthMode = 'user' | 'space'
@@ -60,6 +63,13 @@ export interface ConnectorAuth {
   clientSecret: string | null
   scopes: string[]
   /**
+   * Extra literal query parameters for the authorization URL — Google's
+   * `access_type: offline` / `prompt: consent`, without which it never issues
+   * a refresh token. Literals only, and never a parameter the flow itself
+   * owns; they can widen a consent screen, not the protocol.
+   */
+  params: Record<string, string>
+  /**
    * Hosts the bearer may be sent to. Empty means every host in the perimeter.
    * Narrow it whenever a note reaches more than one service — an access token
    * handed to the wrong host is a credential leak, not a privacy nuisance.
@@ -73,6 +83,28 @@ export type ParseAuthResult =
 
 const PROVIDER_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 const SECRET_REF_ONLY_RE = /^\{\{\s*secret:([A-Z][A-Z0-9_]{0,63})\s*\}\}$/
+const PARAM_KEY_RE = /^[a-z0-9_]{1,64}$/
+const MAX_PARAMS = 10
+const MAX_PARAM_VALUE_LENGTH = 256
+
+/**
+ * Parameters the flow itself sets. A note naming one is confused at best and
+ * an attempt to redirect the code or drop PKCE at worst; either way the answer
+ * is a refusal that names the proper key, not a silent override.
+ */
+const RESERVED_AUTHORIZE_PARAMS = new Set([
+  'response_type',
+  'client_id',
+  'client_secret',
+  'redirect_uri',
+  'state',
+  'code_challenge',
+  'code_challenge_method',
+  'scope',
+  'resource',
+  'code',
+  'grant_type',
+])
 
 function httpsUrl(raw: unknown, field: string): { ok: true; url: string } | { ok: false; error: string } {
   if (typeof raw !== 'string' || !raw.trim()) {
@@ -168,6 +200,15 @@ export function parseConnectorAuth(raw: unknown): ParseAuthResult {
     clientSecret = value
   }
 
+  // A platform client's secret comes from env; a note pairing the platform id
+  // with its own secret is describing two different clients at once.
+  if (clientId && platformClientRef(clientId) && clientSecret) {
+    return {
+      ok: false,
+      error: '`auth.client_secret` must be omitted when `client_id` names a platform client — the deployment holds that secret',
+    }
+  }
+
   const scopes: string[] = []
   if (block.scopes !== undefined && block.scopes !== null) {
     if (!Array.isArray(block.scopes)) {
@@ -179,6 +220,35 @@ export function parseConnectorAuth(raw: unknown): ParseAuthResult {
         return { ok: false, error: `Bad scope entry ${JSON.stringify(entry)} — scopes are space-delimited tokens` }
       }
       scopes.push(value)
+    }
+  }
+
+  const params: Record<string, string> = {}
+  if (block.params !== undefined && block.params !== null) {
+    if (typeof block.params !== 'object' || Array.isArray(block.params)) {
+      return { ok: false, error: '`auth.params` must be a mapping of literal query parameters' }
+    }
+    const entries = Object.entries(block.params as Record<string, unknown>)
+    if (entries.length > MAX_PARAMS) {
+      return { ok: false, error: `\`auth.params\` may carry at most ${MAX_PARAMS} entries` }
+    }
+    for (const [rawKey, rawValue] of entries) {
+      const key = rawKey.trim().toLowerCase()
+      if (!PARAM_KEY_RE.test(key)) {
+        return { ok: false, error: `Bad auth.params key ${JSON.stringify(rawKey)} — lowercase letters, digits and underscores` }
+      }
+      if (RESERVED_AUTHORIZE_PARAMS.has(key)) {
+        return { ok: false, error: `\`auth.params.${key}\` is reserved — the flow sets it itself` }
+      }
+      const value = typeof rawValue === 'string' ? rawValue.trim() : ''
+      if (!value || value.length > MAX_PARAM_VALUE_LENGTH) {
+        return { ok: false, error: `\`auth.params.${key}\` must be a short literal string` }
+      }
+      // A secret in a query string is a credential in a browser history.
+      if (findSecretRefs(value).length > 0) {
+        return { ok: false, error: `\`auth.params.${key}\` must be written literally, not interpolated from a secret` }
+      }
+      params[key] = value
     }
   }
 
@@ -194,7 +264,7 @@ export function parseConnectorAuth(raw: unknown): ParseAuthResult {
     }
   }
 
-  return { ok: true, auth: { provider, mode, discovery, clientId, clientSecret, scopes, hosts } }
+  return { ok: true, auth: { provider, mode, discovery, clientId, clientSecret, scopes, params, hosts } }
 }
 
 /** Secret names an `auth:` block references, for the run's secret resolution. */

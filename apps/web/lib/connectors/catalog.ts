@@ -85,6 +85,13 @@ export interface CatalogEntry {
     tokenUrl?: string
     discover?: string
     scopes: readonly string[]
+    /** Extra authorize params — Google's offline-access dance. */
+    params?: Readonly<Record<string, string>>
+    /**
+     * `platform:<name>` — fall back to the deployment's own OAuth client when
+     * the form's credential fields are left blank, making Connect zero-field.
+     */
+    clientId?: string
   }
   /** Markdown body: how an agent calls the service, with working example code. */
   body: string
@@ -121,11 +128,18 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
         'https://www.googleapis.com/auth/calendar.readonly',
         'https://www.googleapis.com/auth/contacts.readonly',
       ],
+      // Google issues a refresh token only when asked for offline access, and
+      // re-issues one only under prompt=consent — one extra consent screen on
+      // reconnect, against connections that otherwise die after an hour.
+      params: { access_type: 'offline', prompt: 'consent' },
+      clientId: 'platform:google',
     },
     fields: [
-      { key: 'GOOGLE_CLIENT_ID', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com', required: true,
-        hint: 'Google Cloud console → APIs & Services → Credentials → OAuth client (Web application). Add this space’s callback URL as an authorised redirect URI.' },
-      { key: 'GOOGLE_CLIENT_SECRET', label: 'OAuth client secret', placeholder: 'GOCSPX-…', secret: true, required: true },
+      { key: 'extra_scopes', label: 'Extra scopes', required: false,
+        hint: 'Optional space-separated additional Google scopes, e.g. https://www.googleapis.com/auth/gmail.send. The defaults are read-only.' },
+      { key: 'GOOGLE_CLIENT_ID', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com', required: false,
+        hint: 'Optional — leave blank to use Visvine’s own Google app. To use your own: Google Cloud console → APIs & Services → Credentials → OAuth client (Web application), with this deployment’s /api/connectors/oauth/callback as an authorised redirect URI.' },
+      { key: 'GOOGLE_CLIENT_SECRET', label: 'OAuth client secret', placeholder: 'GOCSPX-…', secret: true, required: false },
     ],
     body: [
       'Each member connects their own Google account from this connector’s page; Visvine then sends their bearer on every call to the hosts above.',
@@ -152,11 +166,13 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
       authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
       tokenUrl: 'https://oauth2.googleapis.com/token',
       scopes: ['https://www.googleapis.com/auth/drive.file'],
+      params: { access_type: 'offline', prompt: 'consent' },
+      clientId: 'platform:google',
     },
     fields: [
-      { key: 'GOOGLE_DRIVE_CLIENT_ID', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com', required: true,
-        hint: 'Google Cloud console → APIs & Services → Credentials → OAuth client (Web application), with the Drive API enabled.' },
-      { key: 'GOOGLE_DRIVE_CLIENT_SECRET', label: 'OAuth client secret', placeholder: 'GOCSPX-…', secret: true, required: true },
+      { key: 'GOOGLE_DRIVE_CLIENT_ID', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com', required: false,
+        hint: 'Optional — leave blank to use Visvine’s own Google app. To use your own: Google Cloud console → APIs & Services → Credentials → OAuth client (Web application) with the Drive API enabled and this deployment’s /api/connectors/oauth/callback as an authorised redirect URI.' },
+      { key: 'GOOGLE_DRIVE_CLIENT_SECRET', label: 'OAuth client secret', placeholder: 'GOCSPX-…', secret: true, required: false },
     ],
     body: [
       'Members connect their own Drive from this connector’s page. The `drive.file` scope reaches only files the person opened or created through Visvine.',
@@ -1024,13 +1040,23 @@ export function connectorFromCatalog(
     const provider = input.name
     const clientId = entry.fields.find((f) => /CLIENT_ID$/.test(f.key) && !f.secret)
     const clientSecret = entry.fields.find((f) => /CLIENT_SECRET$/.test(f.key))
+    const ownClient = Boolean(clientId && v(clientId.key))
     const auth = [`auth:`, `  provider: ${provider}`, `  mode: ${o.mode}`]
     if (o.discover) auth.push(`  discover: ${o.discover}`)
     else if (v('url')) auth.push(`  discover: ${v('url')}`)
     else if (o.authorizeUrl && o.tokenUrl) auth.push(`  authorize_url: ${o.authorizeUrl}`, `  token_url: ${o.tokenUrl}`)
-    if (clientId && v(clientId.key)) auth.push(`  client_id: ${yamlStr(v(clientId.key))}`)
-    if (clientSecret) auth.push(`  client_secret: "{{secret:${secretName(clientSecret.key)}}}"`)
-    if (o.scopes.length > 0) auth.push(yamlList('scopes', o.scopes, '  '))
+    if (ownClient && clientId) auth.push(`  client_id: ${yamlStr(v(clientId.key))}`)
+    // Blank credential fields fall back to the deployment's own OAuth client,
+    // which is what makes Connect zero-field for Google.
+    else if (o.clientId) auth.push(`  client_id: ${o.clientId}`)
+    // Only alongside an own client id, and only with a value — an empty field
+    // must not leave a dangling {{secret:…}} nothing ever stored.
+    if (ownClient && clientSecret && v(clientSecret.key)) auth.push(`  client_secret: "{{secret:${secretName(clientSecret.key)}}}"`)
+    const scopes = [...o.scopes, ...v('extra_scopes').split(/\s+/).filter(Boolean)]
+    if (scopes.length > 0) auth.push(yamlList('scopes', scopes, '  '))
+    if (o.params && Object.keys(o.params).length > 0) {
+      auth.push('  params:', ...Object.entries(o.params).map(([k, val]) => `    ${k}: ${yamlStr(val)}`))
+    }
     auth.push(yamlList('hosts', Array.from(new Set(hosts)), '  '))
     front.push(auth.join('\n'))
   }

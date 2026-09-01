@@ -4,34 +4,39 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   BotIcon,
+  CircleCheckIcon,
+  ClockIcon,
   CodeIcon,
   FileTextIcon,
   GlobeIcon,
   ListIcon,
+  MailIcon,
   PencilIcon,
+  PlayIcon,
   PlugIcon,
   PlusIcon,
   SearchIcon,
   SparklesIcon,
   TriangleAlertIcon,
   WaypointsIcon,
+  XIcon,
 } from '@/features/shared/icons';
-import type { AgentRunEvent } from '@/lib/agents/runs';
+import type { AgentRunEvent, RunInput } from '@/lib/agents/runs';
 import { attachMachine, stepsOf, type MachineEvent, type Step } from '@/lib/agents/shared/trace';
 import { hrefForNotePath } from '@/lib/notes/entities';
 import { TONE_DOT } from '../lib/rowState';
 
 /**
- * A run's trace as STEPS: each tool call and its result folded into one row
- * with a verb, what it touched, how long it took and whether it went well —
- * the model's own text between them as thoughts, the executor's notes as
- * asides. When the agent used its machine, the machine's own record of that
- * step — the command, what it printed, how it exited, what the boundary
- * refused — is nested under the step that asked for it, so the two logs read
- * as one (lib/agents/shared/trace.ts is the fold; it is pure and tested).
+ * A run as a CHAIN OF NODES: what woke it at the top, one node per tool call —
+ * verb, what it touched, how long, whether it went well, with the result (or
+ * the machine's own record) folded inside the node — and how it ended at the
+ * bottom. One hairline rail runs behind the chain; the nodes are opaque, so
+ * the rail reads as the connector between them. The model's own text sits
+ * beside the rail between nodes, as the reasoning that led from one to the
+ * next, and the executor's notes as amber asides.
  *
  * Pure over its input: the same component renders a finished transcript and a
- * run in flight — `live` only decides whether the last open step breathes and
+ * run in flight — `live` only decides whether the open node breathes and
  * whether the view follows the tail.
  */
 
@@ -50,6 +55,28 @@ const TOOL_VERB: Record<string, { verb: string; Icon: (props: { className?: stri
   run_agent: { verb: 'Started agent', Icon: BotIcon },
   create_node: { verb: 'Created', Icon: PlusIcon },
   link_nodes: { verb: 'Linked', Icon: WaypointsIcon },
+};
+
+/** What woke the run, as the chain's first node. */
+export interface TriggerNode {
+  /** 'scheduled' | 'interval' | 'manual' | 'event' | 'webhook' — decides the icon. */
+  kind: string;
+  label: string;
+  events: NonNullable<RunInput['events']> | null;
+}
+
+/** How the run ended, as the chain's last node. Absent while it is still going. */
+export interface EndNode {
+  tone: 'ok' | 'bad';
+  label: string;
+}
+
+const TRIGGER_ICON: Record<string, (props: { className?: string }) => React.ReactNode> = {
+  scheduled: ClockIcon,
+  interval: ClockIcon,
+  manual: PlayIcon,
+  event: MailIcon,
+  webhook: MailIcon,
 };
 
 /** A result that begins with "error" is a refusal the model had to work around. */
@@ -76,6 +103,7 @@ function duration(ms: number): string {
 }
 
 const RESULT_PREVIEW = 160;
+const TRIGGER_EVENTS_SHOWN = 5;
 
 /** One line of the machine's record, in the terminal's own words. */
 function machineLine(event: MachineEvent): { text: string; tone: 'cmd' | 'out' | 'bad' | 'meta' } | null {
@@ -125,7 +153,55 @@ function MachineRecord({ events }: { events: MachineEvent[] }) {
   );
 }
 
-function ToolStep({ step, live, now }: { step: Step; live: boolean; now: number }) {
+/**
+ * The chain's box: opaque so the rail passes visually THROUGH the gaps, not
+ * behind the content. `tone` colours the dot; the border stays a hairline for
+ * every node but a live or failed one, which is the one place the chain is
+ * allowed a louder edge.
+ */
+function Node({ tone, children }: { tone: 'ok' | 'bad' | 'live' | 'muted'; children: React.ReactNode }) {
+  const border =
+    tone === 'live' ? 'border-sky-300' : tone === 'bad' ? 'border-red-300' : 'border-border-subtle';
+  return <div className={`relative rounded-md border ${border} bg-surface-1 px-3 py-2`}>{children}</div>;
+}
+
+function NodeHeader({
+  tone,
+  Icon,
+  title,
+  detail,
+  detailHref,
+  right,
+}: {
+  tone: 'ok' | 'bad' | 'live' | 'muted';
+  Icon: (props: { className?: string }) => React.ReactNode;
+  title: string;
+  detail?: string | null;
+  detailHref?: string | null;
+  right?: string | null;
+}) {
+  return (
+    <div className="flex items-baseline gap-2 text-[13px]">
+      <span className={`relative top-[-1px] h-2 w-2 shrink-0 self-center rounded-full ${TONE_DOT[tone]}`} aria-hidden />
+      <Icon className="relative top-[2px] h-3.5 w-3.5 shrink-0 text-text-muted" />
+      <span className={`font-medium ${tone === 'bad' ? 'text-red-600' : 'text-text-primary'}`}>{title}</span>
+      {detail && (
+        <span className="min-w-0 truncate font-mono text-[12px] text-text-secondary" title={detail}>
+          {detailHref ? (
+            <Link className="hover:text-brand-dark-green hover:underline" href={detailHref}>
+              {detail}
+            </Link>
+          ) : (
+            detail
+          )}
+        </span>
+      )}
+      {right && <span className="ml-auto shrink-0 tabular-nums text-[11px] text-text-muted">{right}</span>}
+    </div>
+  );
+}
+
+function ToolNode({ step, live, now }: { step: Step; live: boolean; now: number }) {
   const [open, setOpen] = useState(false);
   const meta = TOOL_VERB[step.tool ?? ''] ?? { verb: step.tool ?? 'Did', Icon: SparklesIcon };
   const running = live && step.result === undefined;
@@ -137,45 +213,37 @@ function ToolStep({ step, live, now }: { step: Step; live: boolean; now: number 
   const preview = firstLine.length > RESULT_PREVIEW ? `${firstLine.slice(0, RESULT_PREVIEW)}…` : firstLine;
   const more = result.length > preview.length;
   const tone = running ? 'live' : failed ? 'bad' : 'ok';
-  const { Icon } = meta;
   // The machine's record says more than the tool's one-line result, so a
   // machine step shows the terminal and folds the result away.
   const hasMachine = !!step.machine?.length;
 
   return (
-    <li className="relative pl-6">
-      <span className={`absolute left-0 top-[7px] h-2 w-2 rounded-full ${TONE_DOT[tone]}`} aria-hidden />
-      <div className="flex items-baseline gap-2 text-[13px]">
-        <Icon className="relative top-[2px] h-3.5 w-3.5 shrink-0 text-text-muted" />
-        <span className={`font-medium ${failed ? 'text-red-600' : 'text-text-primary'}`}>{meta.verb}</span>
-        {step.detail && (
-          <span className="min-w-0 truncate font-mono text-[12px] text-text-secondary" title={step.detail}>
-            {path ? (
-              <Link className="hover:text-brand-dark-green hover:underline" href={hrefForNotePath(path, null)}>
-                {step.detail}
-              </Link>
-            ) : (
-              step.detail
-            )}
-          </span>
+    <li>
+      <Node tone={tone}>
+        <NodeHeader
+          tone={tone}
+          Icon={meta.Icon}
+          title={meta.verb}
+          detail={step.detail}
+          detailHref={path ? hrefForNotePath(path, null) : null}
+          right={took !== null ? duration(took) : null}
+        />
+        {hasMachine && <MachineRecord events={step.machine!} />}
+        {result && !hasMachine && (
+          <button
+            type="button"
+            className="mt-0.5 block max-w-full pl-8 text-left font-mono text-[12px] leading-relaxed text-text-muted hover:text-text-secondary"
+            onClick={() => more && setOpen((o) => !o)}
+            aria-expanded={open}
+          >
+            {open ? <span className="whitespace-pre-wrap break-words">{result}</span> : <span className="block truncate">{preview}</span>}
+            {more && !open && <span className="ml-1 text-brand-dark-green">more</span>}
+            {open && <span className="ml-1 text-brand-dark-green">less</span>}
+          </button>
         )}
-        <span className="ml-auto shrink-0 tabular-nums text-[11px] text-text-muted">{took !== null ? duration(took) : ''}</span>
-      </div>
-      {hasMachine && <MachineRecord events={step.machine!} />}
-      {result && !hasMachine && (
-        <button
-          type="button"
-          className="mt-0.5 block max-w-full text-left font-mono text-[12px] leading-relaxed text-text-muted hover:text-text-secondary"
-          onClick={() => more && setOpen((o) => !o)}
-          aria-expanded={open}
-        >
-          {open ? <span className="whitespace-pre-wrap break-words">{result}</span> : <span className="block truncate">{preview}</span>}
-          {more && !open && <span className="ml-1 text-brand-dark-green">more</span>}
-          {open && <span className="ml-1 text-brand-dark-green">less</span>}
-        </button>
-      )}
-      {result && hasMachine && failed && <p className="mt-0.5 font-mono text-[12px] text-red-600">{preview}</p>}
-      {running && !result && !hasMachine && <p className="mt-0.5 font-mono text-[12px] text-text-muted">working…</p>}
+        {result && hasMachine && failed && <p className="mt-0.5 pl-8 font-mono text-[12px] text-red-600">{preview}</p>}
+        {running && !result && !hasMachine && <p className="mt-0.5 pl-8 font-mono text-[12px] text-text-muted">working…</p>}
+      </Node>
     </li>
   );
 }
@@ -185,6 +253,8 @@ export default function RunSteps({
   machine,
   live,
   startedAt,
+  trigger,
+  end,
   /** Words for an empty trace — "Starting…" while live, "Nothing recorded." after. */
   emptyText,
   /** Cap the height and scroll inside, following the tail while live. */
@@ -195,6 +265,10 @@ export default function RunSteps({
   machine?: MachineEvent[] | null;
   live: boolean;
   startedAt: number;
+  /** The chain's first node — what woke the run. Omitted, the chain starts at the first step. */
+  trigger?: TriggerNode | null;
+  /** The chain's last node — how it ended. Omitted while the run is going. */
+  end?: EndNode | null;
   emptyText?: string;
   scroll?: boolean;
 }) {
@@ -212,7 +286,7 @@ export default function RunSteps({
   // Follow the tail while live, the way a terminal does — unless the person
   // has scrolled up to read something, in which case leave them there.
   const tail = useRef<HTMLLIElement | null>(null);
-  const box = useRef<HTMLOListElement | null>(null);
+  const box = useRef<HTMLDivElement | null>(null);
   const machineCount = machine?.length ?? 0;
   useEffect(() => {
     if (!live || !box.current || !tail.current) return;
@@ -221,35 +295,73 @@ export default function RunSteps({
     if (nearBottom) tail.current.scrollIntoView({ block: 'end' });
   }, [live, steps.length, machineCount]);
 
-  if (steps.length === 0) {
+  if (steps.length === 0 && !trigger) {
     return <p className="text-[13px] text-text-muted">{emptyText ?? (live ? 'Starting…' : 'Nothing recorded.')}</p>;
   }
 
+  const TriggerIcon = trigger ? (TRIGGER_ICON[trigger.kind] ?? PlayIcon) : PlayIcon;
+  const extraEvents = trigger?.events ? trigger.events.length - TRIGGER_EVENTS_SHOWN : 0;
+
   return (
-    <ol ref={box} className={`flex flex-col gap-2.5 border-l border-border-subtle pl-3 ${scroll ? 'max-h-[32rem] overflow-y-auto' : ''}`}>
-      {steps.map((step, i) => {
-        if (step.kind === 'tool') return <ToolStep key={i} step={step} live={live} now={now} />;
-        if (step.kind === 'thought') {
+    <div ref={box} className={scroll ? 'max-h-[32rem] overflow-y-auto' : ''}>
+      <ol className="relative flex flex-col gap-2.5">
+        {/* The rail: one hairline behind the whole chain. The nodes are opaque,
+            so what shows through the gaps between them IS the connector. */}
+        {/* left = the node's border (1px) + padding (12px) + half the 8px dot,
+            so the connector lines up under the dots it joins. */}
+        <span aria-hidden className="absolute bottom-4 left-[16px] top-4 w-px bg-border-default" />
+
+        {trigger && (
+          <li>
+            <Node tone={live && steps.length === 0 ? 'live' : 'muted'}>
+              <NodeHeader tone={live && steps.length === 0 ? 'live' : 'muted'} Icon={TriggerIcon} title={trigger.label} />
+              {trigger.events && trigger.events.length > 0 && (
+                <ol className="mt-1 flex flex-col gap-0.5 pl-8 font-mono text-[12px]">
+                  {trigger.events.slice(0, TRIGGER_EVENTS_SHOWN).map((e, i) => (
+                    <li key={i} className="truncate" title={`${e.source} — ${e.summary}`}>
+                      <span className="text-sky-700">{e.kind}</span> {e.source} <span className="text-text-muted">— {e.summary}</span>
+                    </li>
+                  ))}
+                  {extraEvents > 0 && <li className="text-text-muted">+{extraEvents} more</li>}
+                </ol>
+              )}
+            </Node>
+          </li>
+        )}
+
+        {steps.map((step, i) => {
+          if (step.kind === 'tool') return <ToolNode key={i} step={step} live={live} now={now} />;
+          if (step.kind === 'thought') {
+            // The model's words are the connector's annotation, not a node:
+            // they sit beside the rail, between the step that ended and the
+            // one they led to.
+            return (
+              <li key={i} className="py-0.5 pl-10">
+                <p className="whitespace-pre-wrap break-words text-[13px] text-text-secondary">{step.text}</p>
+              </li>
+            );
+          }
           return (
-            <li key={i} className="relative pl-6">
-              <span className="absolute left-0 top-[6px] font-mono text-[12px] text-brand-dark-green" aria-hidden>
-                ›
-              </span>
-              <p className="whitespace-pre-wrap break-words text-[13px] text-text-primary">{step.text}</p>
+            <li key={i} className="py-0.5 pl-10">
+              <p className="text-[12px] text-amber-700">
+                <TriangleAlertIcon className="relative top-[2px] mr-1.5 inline h-3 w-3" />
+                {step.text}
+                <span className="ml-2 tabular-nums text-text-muted">{offset(step.at - startedAt)}</span>
+              </p>
             </li>
           );
-        }
-        return (
-          <li key={i} className="relative pl-6">
-            <TriangleAlertIcon className="absolute left-0 top-[4px] h-3 w-3 text-amber-600" />
-            <p className="text-[12px] text-amber-700">
-              {step.text}
-              <span className="ml-2 tabular-nums text-text-muted">{offset(step.at - startedAt)}</span>
-            </p>
+        })}
+
+        {end && (
+          <li>
+            <Node tone={end.tone}>
+              <NodeHeader tone={end.tone} Icon={end.tone === 'bad' ? XIcon : CircleCheckIcon} title={end.label} />
+            </Node>
           </li>
-        );
-      })}
-      <li ref={tail} aria-hidden className="h-px" />
-    </ol>
+        )}
+
+        <li ref={tail} aria-hidden className="h-px" />
+      </ol>
+    </div>
   );
 }

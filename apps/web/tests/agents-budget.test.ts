@@ -30,11 +30,68 @@ test('costMicros meters tokens at list price, null without pricing', () => {
   assert.equal(formatUsd(null), '—')
 })
 
-test('preRunStop only when the month is already at the cap', () => {
+test('cache-read tokens bill at the discounted rate, full rate when none is declared', () => {
+  const withCache = { inputPerM: 3, outputPerM: 15, cachedInputPerM: 0.3 }
+  // 1M prompt of which 500k cached: 500k at $3 + 500k at $0.30 = $1.65
+  assert.equal(
+    costMicros({ promptTokens: 1_000_000, completionTokens: 0, cachedTokens: 500_000 }, withCache),
+    BigInt(1_650_000),
+  )
+  // No discounted rate declared: cached tokens bill at inputPerM — the cap
+  // over-counts rather than under-counts.
+  assert.equal(
+    costMicros({ promptTokens: 1_000_000, completionTokens: 0, cachedTokens: 500_000 }, pricing),
+    BigInt(3_000_000),
+  )
+  // A cached count beyond promptTokens (a provider quirk) is clamped, never negative.
+  assert.equal(
+    costMicros({ promptTokens: 100, completionTokens: 0, cachedTokens: 1_000 }, withCache),
+    costMicros({ promptTokens: 100, completionTokens: 0, cachedTokens: 100 }, withCache),
+  )
+})
+
+test('preRunStop only when the month is already at the cap, and it says which cap', () => {
   assert.equal(preRunStop({ spentThisMonthMicros: BigInt(0), monthlyCapCents: 500, pricing }), null)
-  assert.equal(preRunStop({ spentThisMonthMicros: BigInt(5_000_000), monthlyCapCents: 500, pricing }), 'budget')
+  assert.deepEqual(preRunStop({ spentThisMonthMicros: BigInt(5_000_000), monthlyCapCents: 500, pricing }), { cap: 'agent' })
   assert.equal(preRunStop({ spentThisMonthMicros: BigInt(9_999_999), monthlyCapCents: null, pricing }), null, 'uncapped')
   assert.equal(preRunStop({ spentThisMonthMicros: BigInt(9_999_999), monthlyCapCents: 1, pricing: null }), null, 'no pricing = tokens only')
+
+  // The space's ledger cap binds even when the agent's own cap is fine — and
+  // the agent's cap is named first when both bind, because it is the one the
+  // agent's admin strip shows.
+  const underAgentCap = { spentThisMonthMicros: BigInt(0), monthlyCapCents: null, pricing }
+  assert.deepEqual(
+    preRunStop({ ...underAgentCap, spaceSpentThisMonthMicros: BigInt(10_000_000), spaceCapCents: 1000 }),
+    { cap: 'space' },
+  )
+  assert.equal(
+    preRunStop({ ...underAgentCap, spaceSpentThisMonthMicros: BigInt(5_000_000), spaceCapCents: 1000 }),
+    null,
+    'space cap not yet reached',
+  )
+  assert.deepEqual(
+    preRunStop({
+      spentThisMonthMicros: BigInt(5_000_000),
+      monthlyCapCents: 500,
+      pricing,
+      spaceSpentThisMonthMicros: BigInt(10_000_000),
+      spaceCapCents: 1000,
+    }),
+    { cap: 'agent' },
+  )
+})
+
+test('perTurnStop: the space cap stops a run mid-flight too', () => {
+  const state: BudgetState = {
+    spentThisMonthMicros: BigInt(0),
+    monthlyCapCents: null,
+    pricing,
+    spaceSpentThisMonthMicros: BigInt(9_000_000), // $9 of a $10 space cap
+    spaceCapCents: 1000,
+  }
+  assert.equal(perTurnStop(state, { promptTokens: 0, completionTokens: 0 }), null)
+  // $1 more in this run reaches the space's $10.
+  assert.equal(perTurnStop(state, { promptTokens: 0, completionTokens: 66_667 }), 'budget')
 })
 
 test('perTurnStop: monthly cap counts this run so far; the run cap is a fixed backstop', () => {
@@ -97,11 +154,16 @@ test('a model connector may declare what its endpoint charges', () => {
   if (ok.ok) assert.deepEqual(ok.pricing['z-ai/glm-5.3-flash'], { inputPerM: 0.05, outputPerM: 0.2 })
   assert.ok(parseModelPricing(undefined).ok, 'pricing is optional')
 
+  const cached = parseModelPricing({ 'a/b': { input_per_m: 1, output_per_m: 2, cached_input_per_m: 0.1 } })
+  assert.ok(cached.ok)
+  if (cached.ok) assert.deepEqual(cached.pricing['a/b'], { inputPerM: 1, outputPerM: 2, cachedInputPerM: 0.1 })
+
   // Refused rather than coerced: a guessed price is a cap nobody can predict.
   for (const bad of [
     { 'a/b': { input_per_m: 1 } },
     { 'a/b': { input_per_m: 'free', output_per_m: 1 } },
     { 'a/b': { input_per_m: -1, output_per_m: 1 } },
+    { 'a/b': { input_per_m: 1, output_per_m: 1, cached_input_per_m: 'cheap' } },
     { 'a/b': [0.1, 0.2] },
     ['a/b'],
   ]) {

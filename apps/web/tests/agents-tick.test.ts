@@ -107,6 +107,7 @@ async function setup() {
 async function teardown() {
   const p = prisma!
   await p.agentEvent.deleteMany({ where: { spaceId: SPACE } })
+  await p.agentSubscription.deleteMany({ where: { spaceId: SPACE } })
   await p.connectorSecret.deleteMany({ where: { spaceId: SPACE } })
   await p.agentRun.deleteMany({ where: { spaceId: SPACE } })
   await p.agentState.deleteMany({ where: { spaceId: SPACE } })
@@ -570,6 +571,68 @@ test('event chains: depth rides payload → run input → next hop, and chains s
     const [aEv] = await claimEvents(SPACE, 'a', 'run-a2')
     assert.equal(aEv.source, 'people/q.md')
     assert.deepEqual((aEv.payload as { chain: unknown }).chain, { depth: 1, via: 'b' })
+  } finally {
+    await prisma!.agentEvent.deleteMany({ where: { spaceId: SPACE } })
+    await teardown()
+  }
+})
+
+test('a fire fans out: one run per subscriber, each acting as that person', async (t) => {
+  const reason = await probe()
+  if (reason) return t.skip(reason)
+  const { enqueueAgentEvent } = await import('@/lib/agents/events')
+  const { tick } = await import('@/lib/agents/schedule')
+  const { parseAgentActivation, scheduleHash } = await import('@/lib/agents/config')
+  const { parseFrontmatter } = await import('@/lib/notes/shared/markdown')
+  process.env.AGENT_DISPATCH = 'inline'
+  await setup()
+  try {
+    const activationNote = '---\ntype: agent-activation\nactive: true\non:\n  context: ["people/**"]\ndebounce: 5s\n---\n'
+    const parsed = parseAgentActivation(parseFrontmatter(activationNote))
+    assert.ok(parsed.ok)
+    if (!parsed.ok) return
+    const st = await prisma!.agentState.create({
+      data: {
+        spaceId: SPACE,
+        name: 'fan',
+        runAsUserId: AUTHOR,
+        active: true,
+        triggersJson: { context: ['people/**'], webhook: null },
+        debounceMs: 5_000,
+        scheduleHash: scheduleHash(parsed.activation, 'UTC'),
+      },
+    })
+    await prisma!.contextNote.createMany({
+      data: [
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/fan/index.md', content: '---\ntype: agent\nmodel: openai/gpt-4o-mini\n---\nSummarise.\n', createdBy: AUTHOR },
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/fan/activation.md', content: activationNote, createdBy: ADMIN },
+      ],
+    })
+    await prisma!.agentSubscription.create({ data: { spaceId: SPACE, name: 'fan', userId: MEMBER } })
+    // An undecryptable model key: the inline runs then fail `bad_key` — a
+    // platform fault that neither deactivates nor calls a provider — so the
+    // group keeps claiming, which is the behaviour under test.
+    await prisma!.connectorSecret.create({ data: { spaceId: SPACE, name: 'MODEL_KEY_OPENAI', ciphertext: 'aes256gcm$AAAA$AAAA$AAAA' } })
+
+    await enqueueAgentEvent({ spaceId: SPACE, agentName: 'fan', kind: 'note_written', source: 'people/p.md', summary: 'saved', payload: {} })
+    const armed = await state(st.id)
+    assert.ok(armed.nextRunAt)
+    const later = new Date(armed.nextRunAt!.getTime() + 1_000)
+    const otherDue = await prisma!.agentState.count({ where: { active: true, status: 'idle', nextRunAt: { lte: later }, NOT: { spaceId: SPACE } } })
+    if (otherDue > 0) return t.skip(`${otherDue} other due agent(s) in the local DB — not running the global tick`)
+
+    const report = await tick(later)
+    assert.equal(report.dispatched.length, 2, 'the author run, then one per subscriber')
+    const runs = await Promise.all(report.dispatched.map((d) => run(d.runId)))
+    assert.equal(runs[0].runAsUserId, null, 'the first run is the state row identity (the author)')
+    assert.equal(runs[1].runAsUserId, MEMBER, 'the fan-out run acts as the subscriber')
+    assert.equal(runs[1].trigger, runs[0].trigger, 'a fan-out run keeps the fire that woke it')
+    const input = runs[1].input as { events: { source: string }[] }
+    assert.equal(input.events[0].source, 'people/p.md', 'event summaries ride the subscriber run input')
+    assert.equal(runs[1].eventCount, 0, 'payloads were consumed by the first run only')
+    // Both inline runs failed fast (no model key) and released; one row, idle.
+    const after = await state(st.id)
+    assert.equal(after.status, 'idle')
   } finally {
     await prisma!.agentEvent.deleteMany({ where: { spaceId: SPACE } })
     await teardown()

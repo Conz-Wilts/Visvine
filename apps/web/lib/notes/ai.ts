@@ -32,10 +32,18 @@ export interface ChatConfig {
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 const DEFAULT_GEMINI_MODEL = 'gemma-4-31b-it'
 
-/** Token usage as the endpoint reports it (`usage` on the completion). */
+/**
+ * Token usage as the endpoint reports it (`usage` on the completion).
+ * `cachedTokens` is the cache-read subset of `promptTokens` (billed at the
+ * provider's discounted rate); `reasoningTokens` is the reasoning subset of
+ * `completionTokens` (billed as output). Both are absent when the endpoint
+ * doesn't break them out.
+ */
 export interface ChatUsage {
   promptTokens: number
   completionTokens: number
+  cachedTokens?: number
+  reasoningTokens?: number
 }
 
 export type ModelErrorKind = 'auth' | 'quota' | 'upstream' | 'config'
@@ -207,7 +215,12 @@ export async function chatWithTools(
         tool_calls?: { id?: string; function?: { name?: string; arguments?: string } }[]
       }
     }[]
-    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown }
+    usage?: {
+      prompt_tokens?: unknown
+      completion_tokens?: unknown
+      prompt_tokens_details?: { cached_tokens?: unknown }
+      completion_tokens_details?: { reasoning_tokens?: unknown }
+    }
   }
   const message = data.choices?.[0]?.message
   if (!message) throw new ModelError('config', 'The model returned an empty response.')
@@ -219,9 +232,16 @@ export async function chatWithTools(
       arguments: c.function!.arguments ?? '{}',
     }))
   const content = typeof message.content === 'string' ? stripReasoning(message.content) : null
+  const cached = data.usage?.prompt_tokens_details?.cached_tokens
+  const reasoning = data.usage?.completion_tokens_details?.reasoning_tokens
   const usage =
     typeof data.usage?.prompt_tokens === 'number' && typeof data.usage?.completion_tokens === 'number'
-      ? { promptTokens: data.usage.prompt_tokens, completionTokens: data.usage.completion_tokens }
+      ? {
+          promptTokens: data.usage.prompt_tokens,
+          completionTokens: data.usage.completion_tokens,
+          ...(typeof cached === 'number' && cached > 0 ? { cachedTokens: cached } : {}),
+          ...(typeof reasoning === 'number' && reasoning > 0 ? { reasoningTokens: reasoning } : {}),
+        }
       : null
   return { content, toolCalls, usage }
 }

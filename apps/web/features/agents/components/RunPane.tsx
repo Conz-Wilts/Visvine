@@ -5,7 +5,7 @@ import { hrefForNotePath } from '@/lib/notes/entities';
 import { useRun, type RunDetail } from '../lib/useRun';
 import { fmtCents, fmtDuration, terminalLabel } from '../lib/rowState';
 import { stepsOf } from '@/lib/agents/shared/trace';
-import RunSteps from './RunSteps';
+import RunSteps, { type EndNode, type TriggerNode } from './RunSteps';
 import StatusDot from './StatusDot';
 import { useEffect, useState } from 'react';
 
@@ -56,6 +56,27 @@ export default function RunPane({
   const current = [...steps].reverse().find((s) => s.kind === 'tool' && s.result === undefined);
   const writes = run?.input?.writes?.length ?? 0;
 
+  const outcome = !run
+    ? null
+    : run.status === 'failed'
+      ? `Failed — ${terminalLabel(run.terminalReason) || 'error'}`
+      : run.terminalReason && run.terminalReason !== 'finished'
+        ? `Finished — ${terminalLabel(run.terminalReason)}`
+        : 'Finished';
+
+  // The chain's first and last nodes: what woke the run, and how it ended.
+  const triggerEvents = run?.input?.events ?? null;
+  const trigger: TriggerNode | null = run
+    ? {
+        kind: run.trigger,
+        label: triggerEvents?.length
+          ? `Woken by ${triggerEvents.length} event${triggerEvents.length === 1 ? '' : 's'}${run.eventCount > triggerEvents.length ? ` · ${run.eventCount} consumed` : ''}`
+          : ({ scheduled: 'On schedule', interval: 'On its interval', manual: 'Run by hand', webhook: 'Woken by a webhook' } as Record<string, string>)[run.trigger] ?? run.trigger,
+        events: triggerEvents,
+      }
+    : null;
+  const end: EndNode | null = run && !running && outcome ? { tone: run.status === 'failed' ? 'bad' : 'ok', label: outcome } : null;
+
   const line = !run
     ? 'Starting…'
     : running
@@ -67,11 +88,7 @@ export default function RunPane({
           .filter(Boolean)
           .join(' · ')
       : [
-          run.status === 'failed'
-            ? `Failed — ${terminalLabel(run.terminalReason) || 'error'}`
-            : run.terminalReason && run.terminalReason !== 'finished'
-              ? `Finished — ${terminalLabel(run.terminalReason)}`
-              : 'Finished',
+          outcome,
           fmtDuration(run.startedAt, run.endedAt),
           `${run.turns} turn${run.turns === 1 ? '' : 's'}`,
           toolCalls ? `${toolCalls} step${toolCalls === 1 ? '' : 's'}` : null,
@@ -108,29 +125,21 @@ export default function RunPane({
 
       {run?.errorMessage && <p className="border-l-2 border-red-500 pl-3 text-[13px] text-red-700">{run.errorMessage}</p>}
 
-      {run?.input?.events?.length ? (
-        <div>
-          <Caption>
-            Triggered by {run.input.events.length} event{run.input.events.length === 1 ? '' : 's'}
-            {run.eventCount > run.input.events.length ? ` · ${run.eventCount} consumed` : ''}
-          </Caption>
-          <ol className="mt-1 flex flex-col gap-0.5 font-mono text-[12px]">
-            {run.input.events.map((e, i) => (
-              <li key={i} className="break-words">
-                <span className="text-sky-700">{e.kind}</span> {e.source} <span className="text-text-muted">— {e.summary}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      ) : null}
-
       <div>
         <Caption>Steps</Caption>
         <div className="mt-2">
           {run?.transcriptHidden ? (
             <p className="text-[13px] text-text-muted">The steps are visible to the agent&apos;s author and admins only.</p>
           ) : (
-            <RunSteps events={run?.events ?? []} machine={run?.machine?.events ?? null} live={running} startedAt={startedAt} scroll={running} />
+            <RunSteps
+              events={run?.events ?? []}
+              machine={run?.machine?.events ?? null}
+              live={running}
+              startedAt={startedAt}
+              trigger={trigger}
+              end={end}
+              scroll={running}
+            />
           )}
         </div>
       </div>

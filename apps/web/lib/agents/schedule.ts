@@ -20,7 +20,7 @@ import { findAgentActivation } from './briefs'
 import { dispatchRun, type DispatchResult } from './dispatch'
 import { claimEvents, eventDepthOf, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, syncAgentState } from './hooks'
-import { MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS, MAX_RUNS_PER_TICK, RECLAIM_GRACE_MS } from './limits'
+import { MAX_CONSECUTIVE_FAILURES, MAX_FANOUT_SUBSCRIBERS, MAX_RUN_MS, MAX_RUNS_PER_TICK, RECLAIM_GRACE_MS } from './limits'
 import { createRun, failStaleRun, pruneRuns, type RunInput, type RunTrigger } from './runs'
 
 export interface TickReport {
@@ -134,7 +134,15 @@ export async function tick(now = new Date()): Promise<TickReport> {
     take: MAX_RUNS_PER_TICK * 4,
   })
   const busy = await busySpaces()
-  const claimed: { runId: string; stateId: string }[] = []
+  const claimed: {
+    runId: string
+    stateId: string
+    spaceId: string
+    name: string
+    runAsUserId: string | null
+    trigger: RunTrigger
+    input: RunInput | null
+  }[] = []
 
   for (const row of due) {
     if (claimed.length >= MAX_RUNS_PER_TICK) break
@@ -182,15 +190,49 @@ export async function tick(now = new Date()): Promise<TickReport> {
       : schedule?.kind === 'interval' || schedule?.kind === 'cron'
         ? 'interval'
         : 'scheduled'
-    const run = await createRun({ id: runId, stateId: row.id, spaceId: row.spaceId, name: row.name, trigger, eventCount: events.length, input: runInputOf(events) })
-    claimed.push({ runId: run.id, stateId: row.id })
+    const input = runInputOf(events)
+    const run = await createRun({ id: runId, stateId: row.id, spaceId: row.spaceId, name: row.name, trigger, eventCount: events.length, input })
+    claimed.push({ runId: run.id, stateId: row.id, spaceId: row.spaceId, name: row.name, runAsUserId: row.runAsUserId, trigger, input })
     busy.add(row.spaceId)
   }
 
-  const dispatched = await Promise.all(
-    claimed.map(async ({ runId }) => ({ runId, result: await dispatchRun(runId) })),
-  )
-  return { reclaimed, pruned, considered: due.length, claimed: claimed.map((c) => c.runId), dispatched }
+  // One fire runs once per identity: the author's run first, then one run per
+  // SUBSCRIBER — a member who put their name down to have the agent run for
+  // them — each under that person's principal, so a `mode: user` connector
+  // resolves THEIR linked account. Sequential, each through the same claim CAS
+  // (a deactivation mid-group stops it). Event PAYLOADS ride only the first
+  // run — it claimed the mail; subscriber runs carry the summaries via `input`.
+  const dispatched = (
+    await Promise.all(
+      claimed.map(async (c) => {
+        const results = [{ runId: c.runId, result: await dispatchRun(c.runId) }]
+        const subscribers = await prisma.agentSubscription.findMany({
+          where: { spaceId: c.spaceId, name: c.name, userId: { not: c.runAsUserId ?? '' } },
+          orderBy: { createdAt: 'asc' },
+          select: { userId: true },
+          take: MAX_FANOUT_SUBSCRIBERS,
+        })
+        for (const sub of subscribers) {
+          const subRunId = newRunId()
+          // 'manual' mode: the row is no longer due (the scheduled claim
+          // advanced next_run_at), it just has to be active and idle.
+          if (!(await claim(c.stateId, 'manual', new Date(), null, subRunId))) break
+          const run = await createRun({
+            id: subRunId,
+            stateId: c.stateId,
+            spaceId: c.spaceId,
+            name: c.name,
+            trigger: c.trigger,
+            runAsUserId: sub.userId,
+            input: c.input,
+          })
+          results.push({ runId: run.id, result: await dispatchRun(run.id) })
+        }
+        return results
+      }),
+    )
+  ).flat()
+  return { reclaimed, pruned, considered: due.length, claimed: dispatched.map((c) => c.runId), dispatched }
 }
 
 export type RunNowResult =
@@ -234,7 +276,11 @@ export async function claimManualRun(
   const next = await nextClockOccurrence(spaceId, name, now)
   await prisma.agentState.updateMany({ where: { id: row.id, currentRunId: runId }, data: { nextRunAt: next } })
   const input: RunInput | null = opts.chain ? { events: runInputOf(events)?.events ?? [], chain: opts.chain } : runInputOf(events)
-  const run = await createRun({ id: runId, stateId: row.id, spaceId, name, trigger: 'manual', startedBy, eventCount: events.length, input })
+  // A manual run acts as WHOEVER PRESSED RUN, not as the brief's author — the
+  // gate (canTriggerRun) already limits that to people who can edit the brief,
+  // and it means a `mode: user` connector spends the presser's own linked
+  // account rather than borrowing the author's.
+  const run = await createRun({ id: runId, stateId: row.id, spaceId, name, trigger: 'manual', startedBy, runAsUserId: startedBy, eventCount: events.length, input })
   const dispatch = dispatchRun(run.id)
   return { ok: true, runId: run.id, dispatch }
 }

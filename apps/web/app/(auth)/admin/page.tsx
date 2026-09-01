@@ -9,6 +9,7 @@ import SpaceSettingsPanel from '@/features/admin/components/SpaceSettingsPanel';
 import TypesPanel from '@/features/admin/components/TypesPanel';
 import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
 import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
+import UsagePanel from '@/features/agents/components/UsagePanel';
 import ToolReviewPanel, { useToolReviewQueue } from '@/features/admin/components/ToolReviewPanel';
 import {
   AuthoredToolsPanel,
@@ -66,6 +67,8 @@ function AdminConsole({ space, onSaved }: {
     // Connectors has no rail row of its own — it is admins-only by nature, so
     // this console IS its surface (lib/featureAccess NAV_HIDDEN_FEATURE_KEYS).
     { id: 'connectors', label: 'Connectors', width: 'form' },
+    // The model bill: what agents spent, per month, by model and by agent.
+    { id: 'usage', label: 'Usage', width: 'form' },
     // Both queues a person can be waiting in — to join, and for context access —
     // are resolved here, so one badge counts them both.
     { id: 'members', label: 'Members', width: 'wide', badge: pending.members + pending.requests },
@@ -107,6 +110,8 @@ function AdminConsole({ space, onSaved }: {
               );
             case 'connectors':
               return <ConnectorsPanel key={space.id} />;
+            case 'usage':
+              return <UsagePanel key={space.id} spaceId={space.id} />;
             case 'members':
               return <MembersPanel key={space.id} />;
             case 'types':

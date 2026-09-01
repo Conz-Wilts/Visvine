@@ -3,9 +3,12 @@
  * when a run must stop. Costs are USD in MICRO-dollars (integers) so nothing
  * here rounds; the panel converts to cents/dollars at the edge.
  *
- * Two ceilings, both soft-but-close (overshoot bounded by one model turn):
+ * Three ceilings, all soft-but-close (overshoot bounded by one model turn):
  * - the agent's monthly cap (`AgentState.budgetMonthlyCents`, admin-set,
  *   null = uncapped) — checked before the run and between turns;
+ * - the space's monthly cap (`featureConfig.agentBudgetMonthlyCents`, set from
+ *   the Usage console section), compared against the whole ledger
+ *   (`agent_model_usage`) so every agent and every teaching counts toward it;
  * - a fixed per-run backstop (`MAX_RUN_COST_CENTS`) so a runaway loop on an
  *   uncapped agent cannot spend without bound.
  * With BYO keys the softness is tolerable: it is the Space capping its own
@@ -32,12 +35,18 @@ export const MAX_RUN_TOKENS = 2_000_000
 const MICROS_PER_CENT = 10_000
 const MICROS_PER_DOLLAR = 1_000_000
 
-/** Cost of `usage` at `pricing`, in micro-dollars; null when pricing is unknown. */
+/**
+ * Cost of `usage` at `pricing`, in micro-dollars; null when pricing is unknown.
+ * Cache-read tokens (a subset of promptTokens) bill at the discounted rate when
+ * the pricing declares one, at the full input rate otherwise.
+ */
 export function costMicros(usage: ChatUsage, pricing: ModelPricing | null): bigint | null {
   if (!pricing) return null
-  const input = (usage.promptTokens * pricing.inputPerM * MICROS_PER_DOLLAR) / 1_000_000
+  const cached = Math.min(usage.cachedTokens ?? 0, usage.promptTokens)
+  const input = ((usage.promptTokens - cached) * pricing.inputPerM * MICROS_PER_DOLLAR) / 1_000_000
+  const cachedCost = (cached * (pricing.cachedInputPerM ?? pricing.inputPerM) * MICROS_PER_DOLLAR) / 1_000_000
   const output = (usage.completionTokens * pricing.outputPerM * MICROS_PER_DOLLAR) / 1_000_000
-  return BigInt(Math.round(input + output))
+  return BigInt(Math.round(input + cachedCost + output))
 }
 
 export function microsToCents(micros: bigint | null): number | null {
@@ -57,17 +66,28 @@ export interface BudgetState {
   monthlyCapCents: number | null
   /** Pricing for the run's model; null = tokens only, no dollar enforcement. */
   pricing: ModelPricing | null
+  /** The whole space's ledger spend this month (agent_model_usage — every agent, plus teaching). */
+  spaceSpentThisMonthMicros?: bigint | null
+  /** The space-wide cap (`featureConfig.agentBudgetMonthlyCents`); null/absent = uncapped. */
+  spaceCapCents?: number | null
+}
+
+function atCap(spentMicros: bigint | null | undefined, capCents: number | null | undefined, extraMicros = BigInt(0)): boolean {
+  if (capCents === null || capCents === undefined || spentMicros === null || spentMicros === undefined) return false
+  return spentMicros + extraMicros >= BigInt(capCents) * BigInt(MICROS_PER_CENT)
 }
 
 /**
- * Should a run start? Null = go; otherwise the terminal reason to record.
- * With unknown pricing there is nothing to compare, so the run goes ahead
- * (the panel says "tokens only").
+ * Should a run start? Null = go; otherwise which cap said no — the message
+ * differs, because raising an agent's cap does nothing when the space's is the
+ * one that bound. With unknown pricing there is nothing to compare, so the run
+ * goes ahead (the panel says "tokens only").
  */
-export function preRunStop(state: BudgetState): 'budget' | null {
-  if (state.monthlyCapCents === null || state.pricing === null || state.spentThisMonthMicros === null) return null
-  const cap = BigInt(state.monthlyCapCents) * BigInt(MICROS_PER_CENT)
-  return state.spentThisMonthMicros >= cap ? 'budget' : null
+export function preRunStop(state: BudgetState): { cap: 'agent' | 'space' } | null {
+  if (state.pricing === null) return null
+  if (atCap(state.spentThisMonthMicros, state.monthlyCapCents)) return { cap: 'agent' }
+  if (atCap(state.spaceSpentThisMonthMicros, state.spaceCapCents)) return { cap: 'space' }
+  return null
 }
 
 /**
@@ -82,10 +102,8 @@ export function perTurnStop(state: BudgetState, runUsage: ChatUsage): 'budget' |
   const runCost = costMicros(runUsage, state.pricing)
   if (runCost === null) return null
   if (runCost >= BigInt(MAX_RUN_COST_CENTS) * BigInt(MICROS_PER_CENT)) return 'run_cap'
-  if (state.monthlyCapCents !== null && state.spentThisMonthMicros !== null) {
-    const cap = BigInt(state.monthlyCapCents) * BigInt(MICROS_PER_CENT)
-    if (state.spentThisMonthMicros + runCost >= cap) return 'budget'
-  }
+  if (atCap(state.spentThisMonthMicros, state.monthlyCapCents, runCost)) return 'budget'
+  if (atCap(state.spaceSpentThisMonthMicros, state.spaceCapCents, runCost)) return 'budget'
   return null
 }
 

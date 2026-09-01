@@ -3,6 +3,8 @@ import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import { resolveAgentChatConfig } from '@/lib/agents/providers';
+import { costMicros } from '@/lib/agents/budget';
+import { meterModelUsage } from '@/lib/agents/runs';
 import { findAgentBrief } from '@/lib/agents/briefs';
 import { draftSkill, type Demonstration, type TraceStep } from '@/lib/agents/teach';
 import { statusOnPublish } from '@/lib/agents/shared/skills';
@@ -80,7 +82,20 @@ export async function POST(
     runId: event.runId,
   };
 
-  const draft = await draftSkill(model.config, demo, statusOnPublish(false));
+  const { draft, usage } = await draftSkill(model.config, demo, statusOnPublish(false));
+  // The teaching spent the space's key, so it goes on the same ledger as a run
+  // — under the agent's name, this month, whether or not the draft was usable.
+  if (usage) {
+    await meterModelUsage({
+      spaceId,
+      name: agent,
+      model: `${model.ref.provider.id}/${model.ref.modelId}`,
+      startedAt: new Date(),
+      promptTokens: usage.promptTokens,
+      completionTokens: usage.completionTokens,
+      costMicros: costMicros(usage, model.ref.pricing),
+    }).catch((err) => logger.error('agents.teach.meter_failed', { err, spaceId, agent }));
+  }
   if (!draft) {
     return NextResponse.json(
       { error: 'The agent could not describe that demonstration. Try a shorter, more deliberate one.' },

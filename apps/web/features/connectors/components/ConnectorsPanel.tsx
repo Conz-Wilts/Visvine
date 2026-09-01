@@ -11,6 +11,7 @@ import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contextPrefetch';
 import { fetchJson } from '@/lib/fetchJson';
 import { connectorSlug } from '@/lib/create/noteSlug';
+import { connectorConnectUrl } from '@/lib/connectors/connectUrl';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 import {
   allowsManyConnectors,
@@ -106,6 +107,56 @@ function statusOf(connector: ExistingConnector): { label: string; tone: Tone } |
   if (connector.warnings.length > 0) return { label: 'Needs migration', tone: 'warn' };
   if (connector.kind !== 'model' && connector.hosts.length === 0) return { label: 'No network', tone: 'warn' };
   return null;
+}
+
+/** One row of GET …/connectors/<name>/connections, as Manage shows it. */
+interface ManageConnectionRow {
+  actsAs: string | null;
+  isMine: boolean;
+  isShared: boolean;
+  broken: { at: string; reason: string | null } | null;
+}
+
+/**
+ * The caller's own connection status inside Manage, for a connector with an
+ * `auth:` block — connected as whom, or the Connect link. Fetched only when the
+ * dialog opens (one request per open, never per row), and silent for a
+ * connector without OAuth: the endpoint 404s and this renders nothing.
+ */
+function ManageConnections({ spaceId, name }: { spaceId: string; name: string }) {
+  const [state, setState] = useState<{ mode: 'user' | 'space'; rows: ManageConnectionRow[] } | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchJson<{ mode: 'user' | 'space'; connections: ManageConnectionRow[] }>(
+      `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}/connections`,
+    )
+      .then((data) => { if (!cancelled) setState({ mode: data.mode, rows: data.connections }); })
+      .catch(() => { if (!cancelled) setState(null); });
+    return () => { cancelled = true; };
+  }, [spaceId, name]);
+
+  if (!state) return null;
+  const mine = state.mode === 'space' ? state.rows.find((r) => r.isShared) : state.rows.find((r) => r.isMine);
+  const whose = state.mode === 'space' ? 'Space account' : 'Your account';
+  return (
+    <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      <span className="text-text-muted">{whose}:</span>
+      {mine ? (
+        <span>
+          connected as <span className="font-mono text-xs">{mine.actsAs ?? 'unknown account'}</span>
+        </span>
+      ) : (
+        <span className="text-text-muted">not connected</span>
+      )}
+      {mine?.broken && (
+        <span className="text-red-600">stopped working{mine.broken.reason ? ` — ${mine.broken.reason}` : ''}</span>
+      )}
+      <a href={connectorConnectUrl(spaceId, name)} className="font-medium text-text-primary underline underline-offset-2">
+        {mine ? 'Reconnect' : 'Connect'}
+      </a>
+    </div>
+  );
 }
 
 const TABS: Array<{ id: Tab; label: string }> = [
@@ -370,6 +421,9 @@ export default function ConnectorsPanel() {
             The key is the space’s, one per provider — every {service?.name ?? 'provider'} agent
             uses it. Replace it on this connector’s page.
           </p>
+        )}
+        {connected.kind !== 'model' && spaceId && (
+          <ManageConnections spaceId={spaceId} name={connected.name} />
         )}
         {connected.invalid && <p className="mt-2 text-red-600">Not working: {connected.invalid}</p>}
         {!connected.enabled && (

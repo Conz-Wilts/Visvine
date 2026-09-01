@@ -32,6 +32,7 @@ import { connectorCryptoCapabilities } from './hostCrypto'
 import { connectorStateCapabilities } from './hostState'
 import { acquireConnectorRun, takeConnectorRun } from './quota'
 import { identitySecretName, type ResolvedIdentity } from './identity'
+import { connectionOwner } from './auth'
 import { resolveConnection } from './connections'
 import { connectorConnectUrl } from './connectUrl'
 import { runInIsolate, type IsolateRunResult } from './isolate'
@@ -281,6 +282,68 @@ export async function loadConnector(
   const parsed = parseConnectorPerimeter(fm)
   if (!parsed.ok) throw new ConnectorError('config', parsed.error)
   return { perimeter: parsed.perimeter, path, warnings: parsed.warnings }
+}
+
+type ConnectorReadinessStatus = 'ok' | 'missing' | 'disabled' | 'invalid' | 'needs_connection' | 'broken'
+
+/** One declared connector, judged for ONE person's runs. */
+export interface ConnectorReadiness {
+  connector: string
+  status: ConnectorReadinessStatus
+  /** Set for an `auth:` connector — which provider, and whether each person connects their own account. */
+  auth: { provider: string; mode: 'user' | 'space'; accountLabel: string | null } | null
+  /** The OAuth start link, when connecting (or reconnecting) is the fix. */
+  connectUrl: string | null
+  detail: string | null
+}
+
+/**
+ * Would this person's runs of these connectors work? The check the agent page
+ * asks before someone turns an agent on or puts their name down to run it:
+ * the note exists, is on and parses, and — for an `auth:` connector — the
+ * connection its runs would spend (THEIRS for `mode: user`, the space's for
+ * `mode: space`) is present and not broken. Read through the CALLER's lens;
+ * `forUserId` only decides whose connection row is judged.
+ */
+export async function connectorReadiness(
+  p: ContextPrincipal,
+  context: Context,
+  names: readonly string[],
+  forUserId: string,
+): Promise<ConnectorReadiness[]> {
+  return Promise.all(
+    names.map(async (name): Promise<ConnectorReadiness> => {
+      const none = { auth: null, connectUrl: null, detail: null }
+      if (!NAME_RE.test(name)) return { connector: name, status: 'invalid', ...none, detail: 'not a connector name' }
+      const content = await readVisible(p, context, `${CONNECTORS_DIR}${name}.md`)
+      if (content === null) return { connector: name, status: 'missing', ...none }
+      const fm = parseFrontmatter(content)
+      if (!isConnectorNote(fm)) return { connector: name, status: 'invalid', ...none, detail: 'the note is not a connector' }
+      // A model connector names the provider the agent runs on; the model-key
+      // check (keyStored) owns that half, so it never blocks here.
+      if (connectorKind(fm) === 'model') return { connector: name, status: 'ok', ...none }
+      if (!isConnectorEnabled(fm)) return { connector: name, status: 'disabled', ...none }
+      const parsed = parseConnectorPerimeter(fm)
+      if (!parsed.ok) return { connector: name, status: 'invalid', ...none, detail: parsed.error }
+      const auth = parsed.perimeter.auth
+      if (!auth) return { connector: name, status: 'ok', ...none }
+      const connectUrl = connectorConnectUrl(context.spaceId, name)
+      const row = await prisma.connectorConnection.findUnique({
+        where: {
+          connection_identity: { spaceId: context.spaceId, provider: auth.provider, userId: connectionOwner(auth, forUserId) },
+        },
+        select: { mode: true, accountLabel: true, brokenAt: true, brokenReason: true },
+      })
+      const authInfo = { provider: auth.provider, mode: auth.mode, accountLabel: row?.accountLabel ?? null }
+      if (!row || row.mode !== auth.mode) {
+        return { connector: name, status: 'needs_connection', auth: authInfo, connectUrl, detail: null }
+      }
+      if (row.brokenAt) {
+        return { connector: name, status: 'broken', auth: authInfo, connectUrl, detail: row.brokenReason }
+      }
+      return { connector: name, status: 'ok', auth: authInfo, connectUrl: null, detail: null }
+    }),
+  )
 }
 
 /**

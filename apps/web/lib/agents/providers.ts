@@ -12,6 +12,7 @@ import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { connectorKind, parseModelBaseUrl, parseModelConnector } from '@/lib/connectors/model'
 import { isConnectorEnabled } from '@/lib/connectors/config'
 import { parseModelRef, type ModelPricing, type ModelRef, type ProviderEntry } from './registry'
+import { fetchedPricing } from './prices'
 
 export * from './registry'
 
@@ -87,6 +88,54 @@ export async function validateCustomEndpoint(raw: string): Promise<string> {
   return parsed.url
 }
 
+/**
+ * The `pricing:` maps declared on the Space's enabled model connector notes for
+ * one provider, merged (first note wins per model id). Same raw read as
+ * {@link findCustomModelEndpoint} and for the same reason: the run may act for
+ * someone who can't see `connectors/`, and the folder is admin-written.
+ */
+async function declaredPricingFor(spaceId: string, providerId: string): Promise<Record<string, ModelPricing>> {
+  const rows = await prisma.contextNote.findMany({
+    where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { startsWith: 'connectors/', endsWith: '.md' } },
+    select: { content: true },
+    orderBy: { path: 'asc' },
+  })
+  const out: Record<string, ModelPricing> = {}
+  for (const row of rows) {
+    const fm = parseFrontmatter(row.content)
+    if (fm.type !== 'connector' || connectorKind(fm) !== 'model') continue
+    if (!isConnectorEnabled(fm)) continue
+    if (typeof fm.provider !== 'string' || fm.provider.trim().toLowerCase() !== providerId) continue
+    const parsed = parseModelConnector(fm)
+    if (!parsed.ok) continue
+    for (const [modelId, price] of Object.entries(parsed.config.pricing)) {
+      if (!(modelId in out)) out[modelId] = price
+    }
+  }
+  return out
+}
+
+/**
+ * The price a run of `ref` meters at, for a space. The chain, strongest claim
+ * first — declared → shipped → discovered:
+ *
+ *   1. the connector note's `pricing:` (the admin said so — for a custom
+ *      endpoint pass its already-read map as `declared`, for registry
+ *      providers the notes are read here);
+ *   2. the registry's pinned price (the release said so);
+ *   3. `agent_model_prices`, refreshed nightly from public catalogues
+ *      (lib/agents/prices.ts — how an arbitrary model id still gets a price);
+ *   4. null — the run meters tokens only and MAX_RUN_TOKENS is the ceiling.
+ */
+async function resolveModelPricing(
+  spaceId: string,
+  ref: ModelRef,
+  declared?: Readonly<Record<string, ModelPricing>>,
+): Promise<ModelPricing | null> {
+  const notePricing = declared ?? (await declaredPricingFor(spaceId, ref.provider.id))
+  return notePricing[ref.modelId] ?? ref.pricing ?? (await fetchedPricing(ref.provider.id, ref.modelId))
+}
+
 export type ResolveModelResult =
   | { ok: true; config: ChatConfig; ref: ModelRef }
   | { ok: false; reason: 'no_key' | 'no_endpoint' | 'bad_key' | 'invalid_model'; message: string }
@@ -102,17 +151,17 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
   const { ref } = parsed
 
   let baseURL = ref.provider.baseURL
-  let pricing = ref.pricing
+  let declared: Readonly<Record<string, ModelPricing>> | undefined
   if (!baseURL) {
     const endpoint = await findCustomModelEndpoint(spaceId)
     if (!endpoint.ok) return { ok: false, reason: 'no_endpoint', message: endpoint.message }
     baseURL = endpoint.baseURL
-    // A custom endpoint's prices are whatever its note declares. Without them
-    // the run is metered in tokens only and the space's dollar cap cannot bind
-    // — see MAX_RUN_TOKENS, which is why that is a degraded cap and not an
-    // absent one.
-    pricing = endpoint.pricing[ref.modelId] ?? null
+    declared = endpoint.pricing
   }
+  // Without a resolved price the run is metered in tokens only and the space's
+  // dollar cap cannot bind — see MAX_RUN_TOKENS, which is why that is a
+  // degraded cap and not an absent one.
+  const pricing = await resolveModelPricing(spaceId, ref, declared)
 
   const row = await prisma.connectorSecret.findUnique({
     where: { secret_identity: { spaceId, name: ref.provider.keySecret } },

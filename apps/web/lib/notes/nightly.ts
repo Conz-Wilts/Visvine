@@ -56,6 +56,17 @@ export async function runNightlyMaintenance(): Promise<{ ran: boolean; ms: numbe
     } catch (err) {
       logger.warn('notes.nightly.action_notes_failed', { err })
     }
+    // Model prices, from the public catalogues. The fetched tier of the
+    // pricing chain (lib/agents/prices.ts): without it any model outside the
+    // registry meters in tokens only. Needs no API key, and a catalogue being
+    // down costs freshness, never the sweep.
+    try {
+      const { syncModelPrices } = await import('@/lib/agents/prices')
+      const prices = await syncModelPrices()
+      logger.info('notes.nightly.model_prices', prices)
+    } catch (err) {
+      logger.warn('notes.nightly.model_prices_failed', { err })
+    }
     // Drain before the sweeps, and unconditionally: they read derived state, so
     // running them over projections that were never rebuilt would embed the
     // staleness (an un-synced mention has no edge for the link-reason pass to

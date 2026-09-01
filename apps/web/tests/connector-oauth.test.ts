@@ -5,6 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { connectionOwner, parseConnectorAuth, authSecretRefs } from '@/lib/connectors/auth'
+import { platformClientRef, resolvePlatformClient } from '@/lib/connectors/platformClients'
 import { createPkce, randomState, statesMatch, authorizeUrl } from '@/lib/connectors/oauth'
 import { readPending, signPending } from '@/lib/connectors/pending'
 import { parseConnectorPerimeter, perimeterSecretRefs } from '@/lib/connectors/config'
@@ -75,6 +76,44 @@ test('auth: a literal client secret is refused', () => {
   const good = parseConnectorAuth({ ...OK_BLOCK, client_secret: '{{secret:NOTION_CLIENT_SECRET}}' })
   assert.ok(good.ok)
   assert.deepEqual(authSecretRefs(good.auth!), ['NOTION_CLIENT_SECRET'])
+})
+
+test('auth.params: parses a literal map, lowercases keys, defaults to empty', () => {
+  const absent = parseConnectorAuth(OK_BLOCK)
+  assert.ok(absent.ok)
+  assert.deepEqual(absent.auth?.params, {})
+
+  const parsed = parseConnectorAuth({ ...OK_BLOCK, params: { ACCESS_TYPE: 'offline', prompt: ' consent ' } })
+  assert.ok(parsed.ok)
+  assert.deepEqual(parsed.auth?.params, { access_type: 'offline', prompt: 'consent' })
+
+  assert.ok(!parseConnectorAuth({ ...OK_BLOCK, params: ['offline'] }).ok)
+  assert.ok(!parseConnectorAuth({ ...OK_BLOCK, params: 'access_type=offline' }).ok)
+})
+
+test('auth.params: reserved keys are refused by name', () => {
+  for (const key of ['client_id', 'redirect_uri', 'state', 'code_challenge', 'scope', 'response_type']) {
+    const bad = parseConnectorAuth({ ...OK_BLOCK, params: { [key]: 'evil' } })
+    assert.ok(!bad.ok)
+    assert.match(bad.error, new RegExp(key))
+  }
+})
+
+test('auth.params: secret references, empty and oversize values are refused', () => {
+  assert.ok(!parseConnectorAuth({ ...OK_BLOCK, params: { login_hint: '{{secret:EMAIL}}' } }).ok)
+  assert.ok(!parseConnectorAuth({ ...OK_BLOCK, params: { login_hint: '' } }).ok)
+  assert.ok(!parseConnectorAuth({ ...OK_BLOCK, params: { login_hint: 'x'.repeat(300) } }).ok)
+  assert.ok(!parseConnectorAuth({ ...OK_BLOCK, params: { 'Bad Key!': 'x' } }).ok)
+})
+
+test('auth: a platform client_id refuses a client_secret alongside it', () => {
+  const bad = parseConnectorAuth({ ...OK_BLOCK, client_id: 'platform:google', client_secret: '{{secret:X}}' })
+  assert.ok(!bad.ok)
+  assert.match(bad.error, /platform/)
+
+  const good = parseConnectorAuth({ ...OK_BLOCK, client_id: 'platform:google' })
+  assert.ok(good.ok)
+  assert.equal(good.auth?.clientId, 'platform:google')
 })
 
 test('auth: scopes must be single tokens', () => {
@@ -168,6 +207,48 @@ test('authorize url: carries PKCE, state and the resource, never the verifier', 
   assert.equal(url.searchParams.get('resource'), 'https://acme.test/mcp')
   // The verifier is the whole point of PKCE — it must never leave the server.
   assert.ok(!url.toString().includes(verifier))
+})
+
+test('authorize url: extra params ride along and can never shadow the protocol', () => {
+  const { challenge } = createPkce()
+  const url = new URL(
+    authorizeUrl({
+      endpoints: {
+        issuer: 'https://accounts.google.com',
+        authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+        tokenEndpoint: 'https://oauth2.googleapis.com/token',
+        registrationEndpoint: null,
+        scopesSupported: [],
+      },
+      clientId: 'client-123',
+      redirectUri: 'https://app.test/api/connectors/oauth/callback',
+      scopes: ['a'],
+      state: 'state-abc',
+      challenge,
+      // client_id here bypasses parse validation on purpose: even then the
+      // protocol value must win.
+      params: { access_type: 'offline', prompt: 'consent', client_id: 'evil' },
+    }),
+  )
+  assert.equal(url.searchParams.get('access_type'), 'offline')
+  assert.equal(url.searchParams.get('prompt'), 'consent')
+  assert.equal(url.searchParams.get('client_id'), 'client-123')
+})
+
+// ── the platform client ───────────────────────────────────────────────────────
+
+test('platform client: refs parse, resolve from env, and fail closed', () => {
+  assert.equal(platformClientRef('platform:google'), 'google')
+  assert.equal(platformClientRef('client-123'), null)
+  assert.equal(platformClientRef(null), null)
+  assert.equal(platformClientRef('platform:Not Valid'), null)
+
+  const env = { GOOGLE_CLIENT_ID: 'id-1', GOOGLE_CLIENT_SECRET: 'sec-1' }
+  assert.deepEqual(resolvePlatformClient('google', env), { clientId: 'id-1', clientSecret: 'sec-1' })
+  // No secret is a public client, not a failure.
+  assert.deepEqual(resolvePlatformClient('google', { GOOGLE_CLIENT_ID: 'id-1' }), { clientId: 'id-1', clientSecret: null })
+  assert.equal(resolvePlatformClient('google', {}), null)
+  assert.equal(resolvePlatformClient('unknown', env), null)
 })
 
 // ── the pending cookie ────────────────────────────────────────────────────────

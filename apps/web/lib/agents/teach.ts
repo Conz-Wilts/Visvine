@@ -16,7 +16,7 @@
  * approving one is agreeing to the reach it claims, and that is an admin's
  * decision (`statusOnPublish`).
  */
-import { chatWithTools, extractJsonObject, type ChatConfig } from '@/lib/notes/ai'
+import { chatWithTools, extractJsonObject, type ChatConfig, type ChatUsage } from '@/lib/notes/ai'
 import { logger } from '@/lib/logger'
 import { skillIndexPath, skillStepsPath, slugify, type SkillStatus } from '@/lib/agents/shared/skills'
 
@@ -159,15 +159,17 @@ export function renderSkill(demo: Demonstration, draft: DraftJson, status: Skill
 /**
  * Ask the agent's own model to write the skill. The model is the space's
  * (`lib/agents/providers.ts`), so teaching costs the space's key like any other
- * run — the platform never spends on this.
+ * run — the platform never spends on this. Usage rides back beside the draft
+ * (even an unreadable one — the tokens were billed) so the caller can put the
+ * spend on the ledger.
  */
 export async function draftSkill(
   config: ChatConfig,
   demo: Demonstration,
   status: SkillStatus,
-): Promise<SkillDraft | null> {
+): Promise<{ draft: SkillDraft | null; usage: ChatUsage | null }> {
   const trace = describeTrace(demo)
-  if (!trace.trim()) return null
+  if (!trace.trim()) return { draft: null, usage: null }
 
   const answer = await chatWithTools(
     [
@@ -180,7 +182,7 @@ export async function draftSkill(
   const draft = coerceDraft(answer.content ?? '')
   if (!draft) {
     logger.warn('agents.teach.unreadable_draft', { agent: demo.agent, chars: (answer.content ?? '').length })
-    return null
+    return { draft: null, usage: answer.usage }
   }
-  return renderSkill(demo, draft, status)
+  return { draft: renderSkill(demo, draft, status), usage: answer.usage }
 }

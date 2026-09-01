@@ -274,8 +274,15 @@ export function authorizeUrl(args: {
   challenge: string
   /** RFC 8707 — names the API the token is for, so it cannot be replayed elsewhere. */
   resource?: string | null
+  /** The note's `auth.params:` — provider extras like Google's access_type. */
+  params?: Record<string, string>
 }): string {
   const url = new URL(args.endpoints.authorizationEndpoint)
+  // Extras first, protocol params after: even a params map that slipped past
+  // validation cannot shadow the values the flow depends on.
+  if (args.params) {
+    for (const [key, value] of Object.entries(args.params)) url.searchParams.set(key, value)
+  }
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('client_id', args.clientId)
   url.searchParams.set('redirect_uri', args.redirectUri)
