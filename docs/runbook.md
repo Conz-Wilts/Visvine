@@ -57,6 +57,26 @@ Reads through the old flat path keep answering throughout (the alias), so the
 window costs nothing but stale child lists. A node it reports as *ambiguous*
 holds both forms; merge that one by hand before re-running.
 
+After the release that added `agent_state.brief_note_id`, one optional pass
+binds the rows written before it, so the next time a name is reused the old
+agent's runs and subscribers are retired rather than inherited. Untouched
+agents bind themselves the next time their brief is written, so this only
+shortens that window:
+
+```
+pnpm --filter @visvine/web db:agents:stamp --dry-run   # what it would bind
+pnpm --filter @visvine/web db:agents:stamp
+```
+
+`--drop-stale` additionally deletes runs that started before their brief note
+existed — correct in production, where a run's timestamp is real, but it eats
+backdated seed data, so read the dry run first.
+
+The action notes are the other post-deploy pass: `db:actions:sync` renders a new
+or changed action into `actions/<name>.md` in the Visvine space. The surface
+answers from the shipped catalogue either way, so this is never a prerequisite —
+it is what makes the manual editable in the app.
+
 ### Requiring an approval
 
 `deploy.yml` names the `Production` GitHub environment, which gives the deploy a
