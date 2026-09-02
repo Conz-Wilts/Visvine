@@ -36,7 +36,9 @@ a brief carries no activation keys, so an agent from before the merge keeps runn
 type: agent
 title: Weekly digest
 description: Summarises the week into reports/weekly.md
-model: gemini/gemma-4-31b-it       # <provider>/<model-id> — a registry name, never a URL
+# model:                           # OPTIONAL — omit to run on the space's model.
+                                   # Pin `<provider>/<model-id>` only for a different one
+                                   # the space also has (Connectors → Models).
 connectors: [hubspot]              # declared reach
 tools: [web, actions]              # optional: web, sandbox, messages, directory, actions
 agents: [crm-sync]                 # optional: the agents this one has in mind for run_agent

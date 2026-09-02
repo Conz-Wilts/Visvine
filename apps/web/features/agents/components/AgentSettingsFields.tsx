@@ -7,7 +7,6 @@ import Toggle from '@/components/ui/Toggle';
 import type { AgentOptions } from '@/lib/agents/options';
 import type { BriefSettings } from '@/lib/agents/briefEdit';
 import type { AgentToolExtra } from '@/lib/agents/config';
-import { splitModelRef } from '../lib/useAgentOptions';
 
 /**
  * The settings a brief's frontmatter holds, as a form on the agent's page:
@@ -36,66 +35,68 @@ export default function AgentSettingsFields({
   // Unfolded only when something non-default is set: every scaffolded brief
   // carries `max_turns: 16`, which is the default and not worth a fold.
   const [advanced, setAdvanced] = useState(value.dryRun || (value.maxTurns !== null && value.maxTurns !== 16));
-  const { provider: providerId, modelId } = splitModelRef(value.model);
-  const provider = options?.providers.find((p) => p.id === providerId) ?? null;
-  const knownModel = provider?.models.some((m) => m.id === modelId) ?? false;
-  const keyMissing = provider ? !provider.keyStored : false;
-  const endpointMissing = provider ? !provider.endpointConfigured : false;
 
-  const setProvider = (id: string) => {
-    const next = options?.providers.find((p) => p.id === id);
-    const first = next?.models[0]?.id ?? '';
-    onChange({ ...value, model: first ? `${id}/${first}` : `${id}/` });
-  };
-  const setModelId = (id: string) => onChange({ ...value, model: `${providerId || 'gemini'}/${id}` });
   const toggleTool = (id: AgentToolExtra, on: boolean) =>
     onChange({ ...value, tools: on ? [...new Set([...value.tools, id])] : value.tools.filter((t) => t !== id) });
   const toggleConnector = (name: string, on: boolean) =>
     onChange({ ...value, connectors: on ? [...new Set([...value.connectors, name])] : value.connectors.filter((c) => c !== name) });
 
   const usableConnectors = (options?.connectors ?? []).filter((c) => c.kind !== 'model');
-  const modelHint = !provider
-    ? undefined
-    : endpointMissing
-      ? 'Needs a custom model connector with a base_url before it can run.'
-      : keyMissing
-        ? isAdmin
-          ? `No ${provider.label} key stored yet — add MODEL_KEY_${provider.id.toUpperCase()} under Connectors before turning it on.`
-          : `No ${provider.label} key stored yet — an admin adds it under Connectors.`
-        : undefined;
+
+  // The models this space HAS, and the one an agent that picks none runs on.
+  // There is no provider picker any more: a provider is a place to send a
+  // request, and picking one the space has no key for is how a brief came to
+  // name a model nobody could run.
+  const models = options?.models ?? [];
+  const pinned = value.model.trim();
+  // A pin that names something the space no longer has still has to show, or
+  // the form would silently rewrite the brief to "the space's model" the first
+  // time somebody opened it to change the description.
+  const orphanPin = pinned && !models.some((m) => m.ref === pinned) ? pinned : null;
 
   return (
     <div className="flex flex-col gap-5">
-      <Field label="Model" hint={modelHint}>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Select value={providerId} onChange={(e) => setProvider(e.target.value)} aria-label="Model provider">
-            {!provider && <option value="">Pick a provider</option>}
-            {(options?.providers ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-                {p.keyStored ? '' : ' — no key yet'}
+      <Field
+        label="Model"
+        hint={
+          options?.spaceModel
+            ? `The space's model is ${options.spaceModel.label}, from connectors/${options.spaceModel.connector}.md. Pick another only if this agent needs one.`
+            : undefined
+        }
+      >
+        {options && models.length === 0 ? (
+          // Nothing to choose. Saying so beats a picker offering providers the
+          // space has never signed up for — which is what put "gemini" in
+          // briefs written in spaces that had no Gemini key.
+          <p className="text-[13px] text-text-secondary">
+            {options.noModels}{' '}
+            {isAdmin && (
+              <a href="/admin?section=connectors" className="font-medium text-text-primary underline underline-offset-2">
+                Add a model
+              </a>
+            )}
+          </p>
+        ) : (
+          <Select
+            value={pinned}
+            onChange={(e) => onChange({ ...value, model: e.target.value })}
+            aria-label="Model"
+          >
+            <option value="">
+              {options?.spaceModel ? `The space's model — ${options.spaceModel.label}` : 'The space\u2019s model'}
+            </option>
+            {models.map((m) => (
+              <option key={m.connector} value={m.ref ?? ''} disabled={!m.ref || m.problem !== null}>
+                {m.providerLabel} · {m.label}
+                {m.pricing ? ` · $${m.pricing.inputPerM}/$${m.pricing.outputPerM} per M` : ''}
+                {m.problem ? ` — ${m.problem}` : ''}
               </option>
             ))}
+            {orphanPin && (
+              <option value={orphanPin}>{orphanPin} — not a model this space has</option>
+            )}
           </Select>
-          {provider && provider.models.length > 0 && knownModel ? (
-            <Select value={modelId} onChange={(e) => setModelId(e.target.value)} aria-label="Model">
-              {provider.models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                  {m.pricing ? ` · $${m.pricing.inputPerM}/$${m.pricing.outputPerM} per M` : ''}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            <Input
-              value={modelId}
-              onChange={(e) => setModelId(e.target.value.trim())}
-              placeholder={provider?.id === 'custom' ? 'model id at your endpoint' : 'model id'}
-              aria-label="Model id"
-              className="font-mono text-sm"
-            />
-          )}
-        </div>
+        )}
       </Field>
 
       <Field label="Tools" hint="Reading and writing notes is always on. These add reach.">

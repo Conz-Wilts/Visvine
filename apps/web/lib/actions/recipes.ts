@@ -168,7 +168,6 @@ agent is a folder, agents/<name>/, and the brief is its index.md:
 type: agent
 title: "Weekly digest"
 description: "Summarises the week's context changes"
-model: gemini/gemma-4-31b-it   # must name a \`kind: model\` connector the space has
 connectors: [stripe, hubspot]  # names from list_connectors — its whole external reach
 tools: []
 max_turns: 12
@@ -177,6 +176,14 @@ You are the weekly digest. Each run, read what changed in the last seven days
 and write a digest to your own folder as a dated note (agents/weekly-digest/<date>.md):
 an H1, a "What changed" section grouped by theme, and a "People" list linking
 every person involved to their note.
+
+Note what is NOT there: \`model:\`. An agent runs on the SPACE's model — the
+first \`kind: model\` connector it has — because which model a space runs on is
+one decision it makes once, beside the key that pays for it. Omit \`model:\`
+unless this particular agent must run on a different one the space ALSO has,
+and never invent a provider: a space with no model connector has no model, and
+the right answer is to say so and create the agent anyway. It will run as soon
+as somebody adds one, with no edit to the brief.
 
 The body after the frontmatter IS the system prompt. Say what to read, what to
 produce (and its shape), and where to write it.
@@ -345,7 +352,7 @@ const RECIPES: Recipe[] = [
       {
         n: 2,
         tool: 'list_connectors',
-        why: "The brief's `connectors` list is the agent's entire external reach, and every name must be a connector that exists. `model` must name a `kind: model` connector the space has — omit it for the space default.",
+        why: "The brief's `connectors` list is the agent's entire external reach, and every name must be a connector that exists. It also shows the space's `kind: model` connectors — but leave `model` out of the brief: the agent runs on the space's model. If there are none, say so and create it anyway.",
         args: { space_id: spaceId(ctx) },
       },
       {
@@ -374,6 +381,7 @@ const RECIPES: Recipe[] = [
       "The `instructions` you pass IS the agent's system prompt. Be concrete: what to read, what to produce, where to write it.",
       'create_agent CREATES only. An existing name is refused rather than overwritten — a live agent runs the brief a person approved. Briefs are edited on the note itself.',
       'A clock schedule needs a timezone. Ask which one rather than assuming; "daily at 07:00" is meaningless without it.',
+      "NEVER put a model in the brief unless the person asked for a specific one. If the space has no `kind: model` connector, create_agent says so in `model_problem` — repeat that to them (\"there is no model in this space yet, so I have left it unset; add one under Connectors and this will run\") rather than naming a provider they never signed up for.",
       'Once it is active, run_agent triggers it now without waiting for the schedule.',
       // agents/ refuses generic AI writes (contextService.lockedDenial), and
       // create_agent is the ONE way past it — it writes at a human origin.

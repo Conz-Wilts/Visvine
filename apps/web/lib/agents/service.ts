@@ -4,6 +4,7 @@
  * nothing else reads the tables directly.
  */
 import prisma from '@/lib/prisma'
+import { defaultModelOf, noModelReason, spaceModels, type SpaceModel } from './spaceModels'
 import { connectorReadiness, type ConnectorReadiness } from '@/lib/connectors/service'
 import { logAudit } from '@/lib/notes/audit'
 import { readVisible, visibleVault, writeDenial, writeDenialFull, writeGated } from '@/lib/notes/contextService'
@@ -91,8 +92,20 @@ export interface AgentSummary {
     consecutiveFailures: number
   }
   lastRun: SerializedRun | null
-  /** Whether MODEL_KEY_<PROVIDER> is stored for the brief's provider. */
-  keyStored: boolean
+  /**
+   * What this agent would actually run on now, `<provider>/<id>` — the brief's
+   * pin, or the space's model when it carries none. Null when the space has no
+   * model at all.
+   */
+  modelEffective: string | null
+  /** The connector supplying it, when the model is the space's rather than pinned. */
+  modelConnector: string | null
+  /**
+   * Why it cannot run at all — no model in the space, no key, a connector
+   * switched off — or null when it can. One sentence, already phrased for
+   * whoever is about to be stopped by it.
+   */
+  modelProblem: string | null
   rowState: AgentRowState
   /** Admin-only; stripped for members by the route. */
   spend: { monthCents: number | null; budgetMonthlyCents: number | null } | null
@@ -116,7 +129,7 @@ export function serializeRun(run: RunListItem): SerializedRun {
 }
 
 function rowStateOf(
-  s: Pick<AgentSummary, 'invalid' | 'activation' | 'state' | 'lastRun' | 'keyStored'>,
+  s: Pick<AgentSummary, 'invalid' | 'activation' | 'state' | 'lastRun' | 'modelProblem'>,
   now: Date,
   heartbeatAt: Date | null,
 ): AgentRowState {
@@ -126,7 +139,7 @@ function rowStateOf(
     if (s.state.deactivatedReason && s.state.deactivatedReason !== 'admin') return 'deactivated'
     return 'off'
   }
-  if (!s.keyStored) return 'needs_key'
+  if (s.modelProblem) return 'needs_key'
   const last = s.lastRun
   if (last?.terminalReason === 'budget' || last?.terminalReason === 'run_cap') {
     // Paused for the month if the budget hit is the latest word.
@@ -143,13 +156,37 @@ function rowStateOf(
   return 'scheduled'
 }
 
-async function keyStoredFor(spaceId: string, brief: AgentBrief | null): Promise<boolean> {
-  if (!brief) return false
-  const row = await prisma.connectorSecret.findUnique({
-    where: { secret_identity: { spaceId, name: brief.modelRef.provider.keySecret } },
-    select: { name: true },
-  })
-  return row !== null
+/**
+ * Which model this agent runs on, and whether it can.
+ *
+ * Two cases, and they fail differently. A brief that PINS a model is asking
+ * for that one, so the answer is about its provider's key. A brief that names
+ * none runs on the space's model, so the answer is about whether the space has
+ * one at all — and if it does not, saying "no key for Google Gemini" names a
+ * provider nobody here ever chose. That is the whole reason this reads the
+ * space's connectors rather than a secret row.
+ */
+function modelStateOf(
+  brief: AgentBrief | null,
+  models: readonly SpaceModel[],
+): Pick<AgentSummary, 'modelEffective' | 'modelConnector' | 'modelProblem'> {
+  if (!brief) return { modelEffective: null, modelConnector: null, modelProblem: null }
+  if (brief.modelRef) {
+    const ref = `${brief.modelRef.provider.id}/${brief.modelRef.modelId}`
+    // A pinned model is served by whichever connector names that provider; the
+    // key is per provider, so any of them proves it is payable.
+    const behind = models.find((m) => m.provider.id === brief.modelRef!.provider.id && m.problem === null)
+    return {
+      modelEffective: ref,
+      modelConnector: null,
+      modelProblem: behind
+        ? null
+        : `This brief pins ${ref}, and this space has no working ${brief.modelRef.provider.label} connector. Add one under Connectors → Models, or clear \`model:\` to use the space's.`,
+    }
+  }
+  const fallback = defaultModelOf(models)
+  if (!fallback) return { modelEffective: null, modelConnector: null, modelProblem: noModelReason(models) }
+  return { modelEffective: fallback.ref, modelConnector: fallback.connector, modelProblem: null }
 }
 
 async function summarise(
@@ -158,7 +195,7 @@ async function summarise(
   name: string,
   path: string,
   briefContent: string,
-  opts: { includeSpend: boolean; now: Date; heartbeatAt: Date | null },
+  opts: { includeSpend: boolean; now: Date; heartbeatAt: Date | null; models: readonly SpaceModel[] },
 ): Promise<AgentSummary> {
   const spaceId = context.spaceId
   const fm = parseFrontmatter(briefContent)
@@ -169,10 +206,9 @@ async function summarise(
   const parsedLive = hasActivationFrontmatter(fm) ? parseAgentActivation(fm) : (await findAgentActivation(spaceId, name)).parsed
   const activation: AgentActivation | null = parsedLive?.ok ? parsedLive.activation : null
 
-  const [state, last, keyStored, briefRow] = await Promise.all([
+  const [state, last, briefRow] = await Promise.all([
     prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } } }),
     latestRun(spaceId, name),
-    keyStoredFor(spaceId, brief),
     prisma.contextNote.findFirst({
       where: { spaceId, ownerKey: 'shared', path, deletedAt: null },
       select: { createdBy: true },
@@ -212,7 +248,7 @@ async function summarise(
       consecutiveFailures: state?.consecutiveFailures ?? 0,
     },
     lastRun: last ? serializeRun(last) : null,
-    keyStored,
+    ...modelStateOf(brief, opts.models),
     rowState: 'off',
     spend: null,
   }
@@ -224,7 +260,7 @@ async function summarise(
     // nothing was ever priced AND the current model has no registry price:
     // that agent is genuinely tokens-only.
     summary.spend = {
-      monthCents: month > BigInt(0) || brief?.modelRef.pricing ? microsToCents(month) : null,
+      monthCents: month > BigInt(0) || brief?.modelRef?.pricing ? microsToCents(month) : null,
       budgetMonthlyCents: state?.budgetMonthlyCents ?? null,
     }
   }
@@ -247,7 +283,13 @@ export async function listAgents(
   opts: { includeSpend?: boolean } = {},
 ): Promise<AgentRoster> {
   const now = new Date()
-  const [heartbeatAt, { raws }] = await Promise.all([lastHeartbeat(), visibleVault(p, context)])
+  // One read of the space's models for the whole roster: every row's answer to
+  // "can this run" comes out of the same list.
+  const [heartbeatAt, { raws }, models] = await Promise.all([
+    lastHeartbeat(),
+    visibleVault(p, context),
+    spaceModels(context.spaceId),
+  ])
   const briefs: { name: string; path: string; content: string }[] = []
   const seen = new Set<string>()
   // Folder briefs first, so a leftover alias never shadows the real one.
@@ -264,7 +306,7 @@ export async function listAgents(
     briefs.push({ name, path: raw.path, content: raw.content })
   }
   const out = await Promise.all(
-    briefs.map((b) => summarise(p, context, b.name, b.path, b.content, { includeSpend: !!opts.includeSpend, now, heartbeatAt })),
+    briefs.map((b) => summarise(p, context, b.name, b.path, b.content, { includeSpend: !!opts.includeSpend, now, heartbeatAt, models })),
   )
   return {
     agents: out.sort((a, b) => a.path.localeCompare(b.path)),
@@ -310,7 +352,12 @@ export async function describeAgent(
   const content = row ? await readVisible(p, context, row.path) : null
   if (!row || content === null) return null
   const heartbeatAt = await lastHeartbeat()
-  const summary = await summarise(p, context, name, row.path, content, { includeSpend: !!opts.includeSpend, now: new Date(), heartbeatAt })
+  const summary = await summarise(p, context, name, row.path, content, {
+    includeSpend: !!opts.includeSpend,
+    now: new Date(),
+    heartbeatAt,
+    models: await spaceModels(context.spaceId),
+  })
 
   const subRows = await prisma.agentSubscription.findMany({
     where: { spaceId: context.spaceId, name },

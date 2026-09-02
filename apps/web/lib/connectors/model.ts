@@ -26,8 +26,21 @@
  *   type: connector
  *   kind: model
  *   provider: gemini | openai | anthropic | openrouter | custom
+ *   model: claude-sonnet-5   (the model this connector runs; see below)
  *   base_url: https://…      (custom only, required; refused on the others)
  *   description: …           (optional)
+ *
+ * `model:` is the point of the note: a provider is a place to send a request,
+ * and a MODEL is the thing an agent actually runs on. It lives here rather
+ * than in every brief because it is one decision the space makes once, beside
+ * the key that pays for it — a brief that names no model runs on the space's
+ * (lib/agents/spaceModels.ts). A brief may still pin its own, which is what a
+ * space running two models is for.
+ *
+ * Absent, a registry provider falls back to the first model it ships; a custom
+ * endpoint has nothing to fall back to and reports that it names no model,
+ * rather than failing to parse — a note written before `model:` existed must
+ * still load.
  *
  * The key is `MODEL_KEY_<PROVIDER>` — fixed by the provider, one per Space —
  * so two model connectors for the same provider share a key. That is on
@@ -48,6 +61,12 @@ export interface ModelConnectorConfig {
   provider: ProviderEntry
   /** Where requests go: the registry's pinned URL, or the note's `base_url:` for `custom`. */
   baseURL: string
+  /**
+   * The model id this connector runs — the note's `model:`, else the first the
+   * registry ships for the provider. Null only for a custom endpoint that
+   * names none, which nothing can guess.
+   */
+  modelId: string | null
   /**
    * What the endpoint charges, per model id, in USD per million tokens.
    *
@@ -88,6 +107,25 @@ export function parseModelBaseUrl(raw: unknown): { ok: true; url: string } | { o
   return { ok: true, url: text.endsWith('/') ? text : `${text}/` }
 }
 
+/**
+ * `model:` — the id sent in the request body, never in a URL path.
+ *
+ * The same character rule the brief's `<provider>/<model-id>` half uses, and
+ * for the same reason: a gateway namespaces its models by vendor
+ * (`z-ai/glm-5.3-flash`), so interior slashes are ordinary. The endpoint is
+ * the registry's or the note's `base_url:` — pinned and SSRF-checked — so an
+ * id can never steer a request anywhere.
+ */
+function parseModelId(raw: unknown): { ok: true; id: string | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, id: null }
+  if (typeof raw !== 'string' || !raw.trim()) return { ok: false, error: '`model:` must be a model id, e.g. claude-sonnet-5' }
+  const id = raw.trim()
+  if (!/^[A-Za-z0-9._:-]+(\/[A-Za-z0-9._:-]+)*$/.test(id) || id.length > 128) {
+    return { ok: false, error: `\`model:\` has unexpected characters: ${id}` }
+  }
+  return { ok: true, id }
+}
+
 /** Frontmatter → model connector config. Never throws; errors are admin-readable. */
 export function parseModelConnector(fm: NoteFrontmatter): ParseModelConnectorResult {
   const raw = typeof fm.provider === 'string' ? fm.provider.trim().toLowerCase() : ''
@@ -112,6 +150,12 @@ export function parseModelConnector(fm: NoteFrontmatter): ParseModelConnectorRes
   const pricing = parseModelPricing(fm.pricing)
   if (!pricing.ok) return pricing
 
+  const model = parseModelId(fm.model)
+  if (!model.ok) return model
+  // A registry provider ships models, so a note that names none still runs —
+  // on the first one. A custom endpoint has nothing to fall back to.
+  const modelId = model.id ?? provider.models[0]?.id ?? null
+
   if (provider.baseURL) {
     if (fm.base_url !== undefined) {
       return {
@@ -119,11 +163,11 @@ export function parseModelConnector(fm: NoteFrontmatter): ParseModelConnectorRes
         error: `A ${provider.label} connector must not declare \`base_url:\` — its endpoint is pinned by Visvine. Use \`provider: custom\` for your own endpoint`,
       }
     }
-    return { ok: true, config: { provider, baseURL: provider.baseURL, pricing: pricing.pricing } }
+    return { ok: true, config: { provider, baseURL: provider.baseURL, modelId, pricing: pricing.pricing } }
   }
   const base = parseModelBaseUrl(fm.base_url)
   if (!base.ok) return base
-  return { ok: true, config: { provider, baseURL: base.url, pricing: pricing.pricing } }
+  return { ok: true, config: { provider, baseURL: base.url, modelId, pricing: pricing.pricing } }
 }
 
 /**
@@ -175,6 +219,10 @@ export interface ModelConnectorInfo {
   /** True when `base_url:` is the note's own (custom) rather than pinned by the registry. */
   customEndpoint: boolean
   keySecret: string
+  /** The model this connector runs, as `<provider>/<id>` — null when it names none. */
+  modelRef: string | null
+  /** The model id alone, for a surface that already says the provider. */
+  modelId: string | null
   models: { id: string; label: string }[]
 }
 
@@ -186,6 +234,8 @@ export function modelConnectorInfo(config: ModelConnectorConfig): ModelConnector
     baseURL: config.baseURL,
     customEndpoint: p.baseURL === null,
     keySecret: p.keySecret,
+    modelRef: config.modelId ? `${p.id}/${config.modelId}` : null,
+    modelId: config.modelId,
     models: p.models.map((m) => ({ id: m.id, label: m.label })),
   }
 }
@@ -198,6 +248,8 @@ export function newModelConnectorNote(input: {
   name: string
   provider: string
   baseUrl?: string
+  /** The model this connector runs. Blank falls back to the provider's first. */
+  model?: string
   description?: string
   /** The catalog recipe this came from — display only (lib/connectors/catalog.ts). */
   recipe?: string
@@ -210,6 +262,10 @@ export function newModelConnectorNote(input: {
     if (!parsed.ok) throw new Error(parsed.error)
     baseURL = parsed.url
   }
+  const model = parseModelId(input.model?.trim() || undefined)
+  if (!model.ok) throw new Error(model.error)
+  const modelId = model.id ?? provider.models[0]?.id ?? null
+  if (!modelId) throw new Error('This provider ships no models, so the connector must name one — set `model:`')
   const description = (input.description ?? '').trim()
   const front = [
     `type: connector`,
@@ -217,6 +273,7 @@ export function newModelConnectorNote(input: {
     `title: ${JSON.stringify(input.name)}`,
     `alias: model`,
     `provider: ${provider.id}`,
+    `model: ${modelId}`,
   ]
   if (input.recipe) front.push(`recipe: ${input.recipe}`)
   if (!provider.baseURL) front.push(`base_url: ${baseURL}`)
@@ -228,10 +285,11 @@ export function newModelConnectorNote(input: {
       ? `Requests go to ${provider.baseURL} (pinned by Visvine, not by this note).`
       : `Requests go to ${baseURL} — the \`base_url:\` above, which only an admin can change.`,
     `The key is the ${provider.keySecret} secret, set on this connector's page and`,
-    `never written into a note. Agents pick a model with`,
-    provider.models.length > 0
-      ? `\`model: ${provider.id}/${provider.models[0].id}\` in their brief.`
-      : `\`model: ${provider.id}/<model-id>\` in their brief.`,
+    `never written into a note.`,
+    ``,
+    `This connector runs \`${modelId}\`. An agent that names no \`model:\` of its own`,
+    `runs on the space's model, which is this one unless the space has another;`,
+    `an agent that needs a different one pins \`model: ${provider.id}/<model-id>\`.`,
     ``,
     `This connector is not runnable — \`run_connector\` refuses it, so no note`,
     `or agent can read or spend the key directly.`,

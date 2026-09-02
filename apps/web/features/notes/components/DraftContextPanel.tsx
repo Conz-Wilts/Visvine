@@ -49,7 +49,7 @@ import { useContextFolderTree, FolderDropBoard, PathPreview } from '@/features/c
 import { FileForm, type FileEntry, type FileFormData } from '@/features/create/components/CreateModalForms'
 import { agentSlug, connectorSlug } from '@/lib/create/noteSlug'
 import { newConnectorNote } from '@/lib/connectors/config'
-import { agentBriefPath, DEFAULT_AGENT_MODEL, newAgentNote } from '@/lib/agents/config'
+import { agentBriefPath, newAgentNote } from '@/lib/agents/config'
 import type { BriefSettings } from '@/lib/agents/briefEdit'
 import type { AgentTemplate } from '@/lib/agents/templates'
 import AgentDraftSetup from '@/features/agents/components/AgentDraftSetup'
@@ -217,7 +217,8 @@ interface Extras {
 const EMPTY_EXTRAS: Extras = {
   viewMode: 'CHAT',
   sectionId: '',
-  agent: { model: DEFAULT_AGENT_MODEL, description: '', connectors: [], tools: [], dryRun: false, maxTurns: null },
+  // No model: a new agent runs on the space's (lib/agents/spaceModels.ts).
+  agent: { model: '', description: '', connectors: [], tools: [], dryRun: false, maxTurns: null },
   agentTemplate: null,
 }
 
@@ -981,7 +982,6 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
             spaceId={spaceId}
             templateId={extras.agentTemplate}
             onApplyTemplate={applyAgentTemplate}
-            onDefaultModel={(model) => setExtras((prev) => ({ ...prev, agent: { ...prev.agent, model } }))}
             accent={theme.base}
           />
           {agentSlug(title) && (

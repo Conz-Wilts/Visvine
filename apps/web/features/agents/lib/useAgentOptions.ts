@@ -41,10 +41,3 @@ export function useAgentOptions(spaceId: string | null): { options: AgentOptions
 
   return { options, loading, error };
 }
-
-/** `provider/model` split for the picker; a bare or empty value reads as no provider. */
-export function splitModelRef(model: string): { provider: string; modelId: string } {
-  const slash = model.indexOf('/');
-  if (slash <= 0) return { provider: '', modelId: model };
-  return { provider: model.slice(0, slash), modelId: model.slice(slash + 1) };
-}

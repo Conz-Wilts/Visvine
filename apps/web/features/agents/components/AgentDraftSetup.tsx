@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
 import { Chip } from '@/components/ui';
 import { AGENT_TEMPLATES, type AgentTemplate } from '@/lib/agents/templates';
 import { useAgentOptions } from '../lib/useAgentOptions';
@@ -16,33 +15,23 @@ import { useAgentOptions } from '../lib/useAgentOptions';
  * Picking a template is a one-shot fill (title, body, tools, roster line), not
  * a mode: the person edits freely from there, and the chip only shows as
  * selected until they change something.
+ *
+ * No model is chosen here, or written into the brief at all. A new agent runs
+ * on the SPACE's model — the first `kind: model` connector it has — so the
+ * only thing worth saying at this point is when there isn't one.
  */
 export default function AgentDraftSetup({
   spaceId,
   templateId,
   onApplyTemplate,
-  onDefaultModel,
   accent,
 }: {
   spaceId: string | null;
   templateId: string | null;
   onApplyTemplate: (template: AgentTemplate | null) => void;
-  /** The model the brief is scaffolded on, once the space's options are known. */
-  onDefaultModel: (model: string) => void;
   accent: string;
 }) {
   const { options } = useAgentOptions(spaceId);
-
-  // `defaultModel` is the first provider the space actually holds a key for,
-  // so the usual agent needs no model decision at all — and the one that does
-  // makes it on its own page. Once per draft: a later re-render must not undo
-  // a model set anywhere else.
-  const seeded = useRef(false);
-  useEffect(() => {
-    if (seeded.current || !options?.defaultModel) return;
-    seeded.current = true;
-    onDefaultModel(options.defaultModel);
-  }, [options, onDefaultModel]);
 
   return (
     <div className="mt-5 flex flex-col gap-4">
@@ -58,9 +47,19 @@ export default function AgentDraftSetup({
       </div>
 
       <p className="text-[13px] text-text-muted">
-        Write the brief below: what to read, what to produce, where to write it. Its model, tools and connectors are on its page. It does
+        Write the brief below: what to read, what to produce, where to write it. Its tools and connectors are on its page. It does
         nothing until it is turned on — from its page, by anyone who can edit it.
       </p>
+
+      {/* Said here rather than discovered at the switch: an agent in a space
+          with no model is a brief that can be written and never run. It is not
+          a blocker — the brief is still worth writing, and adding a model
+          later needs no edit to it. */}
+      {options?.noModels && (
+        <p className="text-[13px] text-amber-700">
+          {options.noModels} You can write the brief now — it will run once there is one.
+        </p>
+      )}
     </div>
   );
 }

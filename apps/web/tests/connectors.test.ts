@@ -558,15 +558,29 @@ test('newModelConnectorNote round-trips through parseModelConnector', () => {
   assert.ok(parsed.ok)
   assert.equal(parsed.config.provider.id, 'anthropic')
   assert.match(note, /MODEL_KEY_ANTHROPIC/)
-  assert.match(note, /model: anthropic\/claude-opus-5/)
   assert.doesNotMatch(note, /hosts:/)
 
-  const custom = newModelConnectorNote({ name: 'ollama', provider: 'custom', baseUrl: 'https://llm.example.com/v1' })
+  // A registry provider with no `model:` given falls back to its first.
+  assert.equal(parsed.config.modelId, 'claude-opus-5')
+  assert.match(note, /^model: claude-opus-5$/m)
+
+  // Named explicitly, it is what the note says and what the connector runs.
+  const pinned = newModelConnectorNote({ name: 'anthropic', provider: 'anthropic', model: 'claude-haiku-4-5' })
+  assert.match(pinned, /^model: claude-haiku-4-5$/m)
+  const pinnedParsed = parseModelConnector(parseFrontmatter(pinned))
+  assert.ok(pinnedParsed.ok && pinnedParsed.config.modelId === 'claude-haiku-4-5')
+
+  const custom = newModelConnectorNote({ name: 'ollama', provider: 'custom', baseUrl: 'https://llm.example.com/v1', model: 'llama-4-70b' })
   assert.match(custom, /^base_url: https:\/\/llm\.example\.com\/v1\/$/m)
-  assert.match(custom, /model: custom\/<model-id>/)
+  assert.match(custom, /^model: llama-4-70b$/m)
   const customParsed = parseModelConnector(parseFrontmatter(custom))
   assert.ok(customParsed.ok && customParsed.config.baseURL === 'https://llm.example.com/v1/')
-  assert.throws(() => newModelConnectorNote({ name: 'ollama', provider: 'custom' }), /base_url:/)
+  assert.throws(() => newModelConnectorNote({ name: 'ollama', provider: 'custom', model: 'x' }), /base_url:/)
+  // A custom endpoint ships no models, so it has nothing to fall back to.
+  assert.throws(
+    () => newModelConnectorNote({ name: 'ollama', provider: 'custom', baseUrl: 'https://llm.example.com/v1' }),
+    /must name one/,
+  )
   assert.throws(() => newModelConnectorNote({ name: 'x', provider: 'nope' }), /unknown model provider/)
 })
 

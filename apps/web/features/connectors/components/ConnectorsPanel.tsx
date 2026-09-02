@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button, ConfirmDialog, Field, Input, SearchInput, Skeleton, Alert } from '@/components/ui';
+import Select from '@/components/ui/Select';
 import { ArrowLeftIcon, Trash2Icon } from '@/features/shared/icons';
 import ConnectorLogo from './ConnectorLogo';
 import ConnectorToolPermissions from './ConnectorToolPermissions';
@@ -82,8 +83,8 @@ interface ExistingConnector {
   /** Frontmatter `recipe` — which catalog service it is to, where it says. */
   recipe: string | null;
   kind: 'http' | 'model';
-  /** Set for `kind: model` — the registry provider the note names. */
-  model: { provider: string; providerLabel: string } | null;
+  /** Set for `kind: model` — the provider the note names and the model it runs. */
+  model: { provider: string; providerLabel: string; modelId: string | null } | null;
   alias: string | null;
   description: string | null;
   hosts: string[];
@@ -300,6 +301,8 @@ export default function ConnectorsPanel({
   // the page has to show what the space now has rather than a snapshot.
   const [manage, setManage] = useState<{ name: string; about: string | null } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ExistingConnector | null>(null);
+  /** The Models + is open: the five providers, and nothing else. */
+  const [modelPicker, setModelPicker] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // The connector whose on/off write is in flight, and what went wrong if it did.
   const [toggling, setToggling] = useState<string | null>(null);
@@ -363,12 +366,31 @@ export default function ConnectorsPanel({
   /** What Connected lists ({@link isConnected}), before the search box. */
   const connected = useMemo(() => existing.filter((c) => isConnected(c, scope)), [existing, scope]);
 
+  /**
+   * The space's models, and the rest.
+   *
+   * A model connector is the same note as any other — `connectors/<name>.md`,
+   * `kind: model` — but it answers a different question. Every other connector
+   * is somewhere the space can REACH; a model is what its agents RUN ON, and
+   * an agent that names none runs on the first of these. Filed among thirty
+   * services, that decision is invisible; given its own line with a + beside
+   * it, it is one press to make.
+   *
+   * Personal scope has none: a model is the space's key, one per provider, and
+   * you do not run agents in your own space.
+   */
+  const modelRows = useMemo(
+    () => (personal ? [] : connected.filter((c) => c.kind === 'model')),
+    [connected, personal],
+  );
+  const nonModelRows = useMemo(() => connected.filter((c) => c.kind !== 'model'), [connected]);
+
   // A connector matches on what a reader would type: its own name or title, or
   // the service it is to.
   const mine = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return connected;
-    return connected.filter((c) => {
+    if (!q) return nonModelRows;
+    return nonModelRows.filter((c) => {
       const service = catalogEntryFor(c.name, c.model?.provider, c.recipe);
       return (
         c.name.toLowerCase().includes(q) ||
@@ -377,7 +399,7 @@ export default function ConnectorsPanel({
         (service?.name.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [connected, query]);
+  }, [nonModelRows, query]);
 
   // The catalogue this surface offers, searched. Your own settings offer the
   // vetted MCP servers; a space's console offers everything else
@@ -645,8 +667,86 @@ export default function ConnectorsPanel({
     );
   }
 
+  // The catalogue's model recipes — what + offers.
+  const modelServices = catalogForScope(scope).filter((e) => e.shape === 'model');
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Models first, and above the search box: what this space's agents run
+          on is one line, not a row buried among the services it reaches. */}
+      {!personal && (
+        <section className="flex flex-col">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-text-primary">Models</h3>
+              <p className="text-xs text-text-muted">
+                {modelRows.length === 0
+                  ? 'What this space’s agents run on. Add one and they can run.'
+                  : `Agents run on the first of these unless their brief names another.`}
+              </p>
+            </div>
+            <Button
+              variant={modelRows.length === 0 ? 'brand' : 'neutral'}
+              size="sm"
+              className={ACTION_SLOT}
+              onClick={() => { setQuery(''); setModelPicker(true); }}
+            >
+              {modelRows.length === 0 ? 'Add model' : '+ Add'}
+            </Button>
+          </div>
+
+          {modelRows.length > 0 && (
+            <ul className="mt-2 divide-y divide-border-subtle border-t border-border-subtle">
+              {modelRows.map((c) => {
+                const status = statusOf(c, scope);
+                return (
+                  <li key={c.path} className="py-1">
+                    <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
+                      <button onClick={() => openManage(c)} className="flex min-w-0 flex-1 items-center gap-4 text-left">
+                        <ConnectorLogo name={c.name} provider={c.model?.provider} recipe={c.recipe} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-text-primary">
+                            {c.model?.modelId ?? c.title ?? c.name}
+                          </p>
+                          <p className="truncate text-xs text-text-muted">
+                            {c.model?.providerLabel ?? 'Model'} · {c.name}
+                          </p>
+                        </div>
+                      </button>
+                      {status && <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>{status.label}</span>}
+                      <Button variant="neutral" size="sm" className={ACTION_SLOT} onClick={() => openManage(c)}>
+                        Manage
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {/* The + opens the providers, and nothing else: choosing a model is
+              choosing among five, not searching a catalogue of forty. */}
+          {modelPicker && (
+            <ul className="mt-2 divide-y divide-border-subtle border-t border-border-subtle">
+              {modelServices.map((e) => (
+                <li key={e.id} className="py-1">
+                  <button
+                    onClick={() => { setModelPicker(false); setEntry(e); }}
+                    className="-mx-3 flex min-h-14 w-[calc(100%+1.5rem)] items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+                  >
+                    <ConnectorLogo entry={e} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-text-primary">{e.name}</p>
+                      <p className="truncate text-xs text-text-muted">{e.description}</p>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       <SearchInput
         value={query}
         onChange={setQuery}
@@ -673,8 +773,8 @@ export default function ConnectorsPanel({
             }`}
           >
             {t.label}
-            {t.id === 'mine' && connected.length > 0 && (
-              <span className="ml-1.5 text-xs text-text-muted">{connected.length}</span>
+            {t.id === 'mine' && nonModelRows.length > 0 && (
+              <span className="ml-1.5 text-xs text-text-muted">{nonModelRows.length}</span>
             )}
           </button>
         ))}
@@ -928,7 +1028,13 @@ function EntryForm({
 }) {
   const suggestion = useMemo(() => suggestConnector(entry, taken), [entry, taken]);
   const [title, setTitle] = useState(suggestion.title);
-  const [values, setValues] = useState<Record<string, string>>({});
+  // A field with choices starts on its first one: a model recipe should not
+  // make somebody pick the obvious model before it will let them paste a key.
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      entry.fields.flatMap((f) => (f.choices && f.choices.length > 0 ? [[f.key, f.choices[0].value]] : [])),
+    ),
+  );
   const [saving, setSaving] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -986,14 +1092,41 @@ function EntryForm({
       }
       hint={f.hint}
     >
-      <Input
-        type={f.secret ? 'password' : 'text'}
-        autoComplete="off"
-        placeholder={f.placeholder}
-        value={values[f.key] ?? ''}
-        onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-        className={f.secret ? 'font-mono' : undefined}
-      />
+      {/* A field with choices offers them and still takes anything: a model
+          recipe lists the ids the registry ships, and a provider releases new
+          ones faster than that list is edited. */}
+      {f.choices && f.choices.length > 0 ? (
+        <>
+          <Select
+            value={f.choices.some((c) => c.value === (values[f.key] ?? '')) ? (values[f.key] ?? '') : ''}
+            onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+            aria-label={f.label}
+          >
+            <option value="">Something else…</option>
+            {f.choices.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </Select>
+          {!f.choices.some((c) => c.value === (values[f.key] ?? '')) && (
+            <Input
+              autoComplete="off"
+              placeholder={f.placeholder}
+              value={values[f.key] ?? ''}
+              onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value.trim() }))}
+              className="mt-2 font-mono text-sm"
+            />
+          )}
+        </>
+      ) : (
+        <Input
+          type={f.secret ? 'password' : 'text'}
+          autoComplete="off"
+          placeholder={f.placeholder}
+          value={values[f.key] ?? ''}
+          onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+          className={f.secret ? 'font-mono' : undefined}
+        />
+      )}
     </Field>
   );
 

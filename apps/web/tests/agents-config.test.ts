@@ -107,8 +107,10 @@ test('parseAgentBrief reads a well-formed brief', () => {
 test('parseAgentBrief describes what is wrong instead of vanishing', () => {
   const cases: [Record<string, unknown>, string, RegExp][] = [
     [{ type: 'connector', model: 'gemini/x' }, 'body', /type: agent/],
-    [{ type: 'agent' }, 'body', /model/],
+    // `model:` is optional — an agent runs on the space's — but a model it
+    // DOES name has to be one, so a typo is refused here rather than at 3am.
     [{ type: 'agent', model: 'https://evil/v1' }, 'body', /provider/],
+    [{ type: 'agent', model: 'gemma-4-31b-it' }, 'body', /provider/],
     [{ type: 'agent', model: 'gemini/x', tools: ['shell'] }, 'body', /unknown tool/],
     [{ type: 'agent', model: 'gemini/x', max_turns: 500 }, 'body', /max_turns/],
     [{ type: 'agent', model: 'gemini/x', connectors: ['bad name!'] }, 'body', /connector name/],

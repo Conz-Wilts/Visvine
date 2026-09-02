@@ -217,7 +217,15 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       return fail('config', resolved.message, { deactivate })
     }
     const { config, ref } = resolved
-    await flushRunEvents(runId, events, { model: brief.model })
+    // What the run ACTUALLY used, not what the brief asked for: a brief that
+    // names no model still has to leave a record saying which one spent the
+    // money, and a run priced at run time keeps its dollars when the space's
+    // model changes later.
+    const modelUsed = `${ref.provider.id}/${ref.modelId}`
+    if (resolved.connector) {
+      events.push({ at: Date.now(), type: 'system', text: `Running on the space's model: ${modelUsed} (connectors/${resolved.connector}.md).` })
+    }
+    await flushRunEvents(runId, events, { model: modelUsed })
 
     // 4. Budget before we spend a token — the agent's cap AND the space's.
     const [spentMicros, spaceSpentMicros, spaceCapCents] = await Promise.all([
@@ -239,7 +247,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
         capHit.cap === 'space'
           ? "The space's monthly model budget is reached — the run was not started."
           : 'Monthly budget reached — the run was not started.',
-        { countsAsFailure: false, model: brief.model },
+        { countsAsFailure: false, model: modelUsed },
       )
     }
 
@@ -337,7 +345,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       },
     })
     const cost = costMicros(result.usage, ref.pricing)
-    const common = { usage: result.usage, cost, turns: result.turns, model: brief.model }
+    const common = { usage: result.usage, cost, turns: result.turns, model: modelUsed }
 
     switch (result.reason) {
       case 'finished':
@@ -354,7 +362,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
           costMicros: cost,
           summary: result.finalText ?? (result.reason === 'max_turns' ? 'Ran out of turns.' : null),
           errorMessage: null,
-          model: brief.model,
+          model: modelUsed,
         })
         await recordRunInput(runId, { writes, dryRun }).catch(() => {})
         const deactivated = await release(state.id, runId, spaceId, name, { failed: false, countsAsFailure: false, deactivate: null })

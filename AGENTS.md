@@ -628,11 +628,34 @@ hangs off it. Logos live in `public/images/connectors/`. `tests/connector-catalo
 runs every recipe through the real parsers, so a new entry that would write an
 invalid note fails there.
 
-**Model connectors** (`kind: model`, `provider: gemini|openai|anthropic|openrouter|custom`;
-`lib/connectors/model.ts`) are the one non-perimeter kind: they represent the
-LLM provider a Space's agents run on, keyed by the reserved `MODEL_KEY_<PROVIDER>`
-secret, with the base URL from `lib/agents/registry.ts` (never the note). They
-list beside HTTP connectors and may appear in a brief's `connectors:`, but
+**A model is a connector, and the space's models are the only models there are.**
+`kind: model` + `provider: gemini|openai|anthropic|openrouter|custom` +
+**`model:`, the id it runs** (`lib/connectors/model.ts`) — keyed by the reserved
+`MODEL_KEY_<PROVIDER>` secret, with the base URL from `lib/agents/registry.ts`
+(never the note). Consequences, all load-bearing:
+
+- **A brief's `model:` is OPTIONAL and usually absent.** An agent runs on the
+  SPACE's model — the first runnable model connector in note order — because
+  which model a space runs on is one decision it makes once, beside the key that
+  pays for it. A brief pins one only when it needs a different one the space
+  also has; `parseAgentBrief` gives `modelRef: null` otherwise, and a pin that
+  is malformed is still refused at parse.
+- **There is no platform default.** `DEFAULT_AGENT_MODEL` is gone.
+  `create_agent` writes no `model:` and reports `model_problem` when the space
+  has none, the settings picker offers the space's models rather than the
+  registry's providers, and `noModelReason` is the one sentence every surface
+  says. A space with no model connector had briefs written pointing at Gemini —
+  a provider it had never signed up for — which is what all of this is for.
+- **`lib/agents/spaceModels.ts` is the one read of those notes.** The custom
+  endpoint, the declared pricing and the options surface each swept
+  `connectors/` separately before, which is how they came to disagree about
+  what "configured" meant. `spaceModels()` → `defaultModelOf` / `noModelReason`
+  / `customEndpointOf` / `declaredPricingFor`, all pure over the parsed rows.
+- A run records the model it ACTUALLY used, not the brief's (absent) pin.
+- Adding one is **Connectors → Models**, its own section above the service list
+  with a `+`, because what agents run on is not a row among forty services.
+
+They list beside HTTP connectors and may appear in a brief's `connectors:`, but
 `loadConnector` refuses them — `run_connector` hands caller-authored JS the
 plaintext of every secret its env binds, so a runnable model connector would let
 any `connectors:use` member exfiltrate or spend the key. Keep it that way.

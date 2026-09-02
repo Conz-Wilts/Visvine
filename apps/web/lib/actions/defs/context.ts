@@ -83,6 +83,7 @@ import { coverUrlFromResource } from '@/lib/events/cover'
 import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth'
 import { eventCreateInputSchema, eventUpdateInputSchema } from '@/lib/schemas/eventSchemas'
 import { activateAgent, canTriggerRun, createAgentBrief, listAgents, switchOffAgent } from '@/lib/agents/service'
+import { defaultModelOf, noModelReason, spaceModels } from '@/lib/agents/spaceModels'
 import {
   AGENT_TOOL_EXTRAS,
   agentPageHref,
@@ -1960,7 +1961,12 @@ export const CONTEXT_ACTIONS = [
         model: z
           .string()
           .optional()
-          .describe("The model connector it runs on, from list_connectors (kind: model). Omit for the space default"),
+          .describe(
+            'USUALLY OMIT THIS. An agent runs on the space\'s model — the first `kind: model` connector it has — ' +
+              'so the model is a decision the space already made. Pass `<provider>/<model-id>` only when this ' +
+              'particular agent must run on a different one the space also has. NEVER invent a provider: a space ' +
+              'with no model connector has no model, and the agent should be created without one',
+          ),
         connectors: z
           .array(z.string())
           .optional()
@@ -1985,16 +1991,27 @@ export const CONTEXT_ACTIONS = [
           body: args.instructions,
         })
         if (!r.ok) throw new ActionError(r.status, r.error)
+        // What it would actually run on, said back plainly. A space with no
+        // model connector gets told so HERE, at the moment the agent is
+        // written, rather than at the switch — and the caller can repeat it to
+        // the person instead of guessing a provider on their behalf.
+        const models = await spaceModels(context.spaceId)
+        const fallback = defaultModelOf(models)
+        const problem = r.brief.model ? null : noModelReason(models)
         return {
           name: r.name,
           path: r.path,
           title: r.brief.title,
-          model: r.brief.model,
+          model: r.brief.model ?? fallback?.ref ?? null,
+          model_source: r.brief.model ? 'pinned in the brief' : fallback ? `the space's model (connectors/${fallback.connector}.md)` : 'none',
+          ...(problem ? { model_problem: problem } : {}),
           connectors: r.brief.connectors,
           tools: r.brief.tools,
           active: false,
           page: agentPageHref(r.name),
-          next: 'Turn it on before it runs — activate_agent, or the Turn on button on its page.',
+          next: problem
+            ? `${problem} The brief is written and will run once there is one — then turn it on with activate_agent.`
+            : 'Turn it on before it runs — activate_agent, or the Turn on button on its page.',
         }
       },
     }),

@@ -40,6 +40,7 @@
  */
 
 import { SANDBOX_LIMITS } from './config'
+import { PROVIDERS } from '@/lib/agents/registry'
 import { newModelConnectorNote } from './model'
 import { platformClientRef } from './platformClients'
 
@@ -76,6 +77,13 @@ interface CatalogField {
   required?: boolean
   /** A multi-line value (e.g. a list of hosts). */
   multiline?: boolean
+  /**
+   * A fixed set of values, rendered as a picker. The list is a suggestion, not
+   * a gate — a model recipe offers the ids the registry ships and still lets
+   * a newer one be typed, because a provider releases models faster than this
+   * file is edited.
+   */
+  choices?: readonly { value: string; label: string }[]
   /**
    * Not part of the ordinary path — the form keeps it behind a disclosure, and
    * a service whose every field is advanced connects in one click
@@ -124,6 +132,12 @@ export interface CatalogEntry {
   }
   /** Markdown body: how an agent calls the service, with working example code. */
   body: string
+}
+
+/** The model ids a registry provider ships, as picker choices. */
+function modelChoices(providerId: string): { value: string; label: string }[] {
+  const provider = PROVIDERS.find((p) => p.id === providerId)
+  return (provider?.models ?? []).map((m) => ({ value: m.id, label: m.label }))
 }
 
 const apiKey = (hint: string, placeholder = 'paste the key'): CatalogField => ({
@@ -846,7 +860,11 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     shape: 'model',
     provider: 'openai',
     hosts: [],
-    fields: [{ key: 'MODEL_KEY_OPENAI', label: 'API key', placeholder: 'sk-…', secret: true, required: true, hint: 'platform.openai.com → API keys.' }],
+    fields: [
+      { key: 'MODEL_KEY_OPENAI', label: 'API key', placeholder: 'sk-…', secret: true, required: true, hint: 'platform.openai.com → API keys.' },
+      { key: 'model', label: 'Model', required: true, hint: 'Which model this connector runs. Agents use it unless they pin another.',
+        choices: modelChoices('openai'), placeholder: 'model id' },
+    ],
     body: '',
   },
   {
@@ -858,7 +876,11 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     shape: 'model',
     provider: 'anthropic',
     hosts: [],
-    fields: [{ key: 'MODEL_KEY_ANTHROPIC', label: 'API key', placeholder: 'sk-ant-…', secret: true, required: true, hint: 'console.anthropic.com → API keys.' }],
+    fields: [
+      { key: 'MODEL_KEY_ANTHROPIC', label: 'API key', placeholder: 'sk-ant-…', secret: true, required: true, hint: 'console.anthropic.com → API keys.' },
+      { key: 'model', label: 'Model', required: true, hint: 'Which model this connector runs. Agents use it unless they pin another.',
+        choices: modelChoices('anthropic'), placeholder: 'model id' },
+    ],
     body: '',
   },
   {
@@ -870,7 +892,11 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     shape: 'model',
     provider: 'gemini',
     hosts: [],
-    fields: [{ key: 'MODEL_KEY_GEMINI', label: 'API key', placeholder: 'AIza…', secret: true, required: true, hint: 'aistudio.google.com → Get API key.' }],
+    fields: [
+      { key: 'MODEL_KEY_GEMINI', label: 'API key', placeholder: 'AIza…', secret: true, required: true, hint: 'aistudio.google.com → Get API key.' },
+      { key: 'model', label: 'Model', required: true, hint: 'Which model this connector runs. Agents use it unless they pin another.',
+        choices: modelChoices('gemini'), placeholder: 'model id' },
+    ],
     body: '',
   },
   {
@@ -882,7 +908,11 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     shape: 'model',
     provider: 'openrouter',
     hosts: [],
-    fields: [{ key: 'MODEL_KEY_OPENROUTER', label: 'API key', placeholder: 'sk-or-v1-…', secret: true, required: true, hint: 'openrouter.ai/keys → Create key.' }],
+    fields: [
+      { key: 'MODEL_KEY_OPENROUTER', label: 'API key', placeholder: 'sk-or-v1-…', secret: true, required: true, hint: 'openrouter.ai/keys → Create key.' },
+      { key: 'model', label: 'Model', required: true, hint: 'Which model this connector runs. Agents use it unless they pin another.',
+        choices: modelChoices('openrouter'), placeholder: 'model id' },
+    ],
     body: '',
   },
   {
@@ -897,6 +927,9 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     fields: [
       { key: 'base_url', label: 'Base URL', placeholder: 'https://llm.example.com/v1/', required: true, hint: 'An https endpoint; no query or fragment.' },
       { key: 'MODEL_KEY_CUSTOM', label: 'API key', secret: true, required: true },
+      // No choices: nobody but the admin knows what their gateway serves.
+      { key: 'model', label: 'Model', required: true, placeholder: 'model id at your endpoint',
+        hint: 'Which model this connector runs. Agents use it unless they pin another.' },
     ],
     body: '',
   },
@@ -1323,6 +1356,7 @@ export function connectorFromCatalog(
         name: input.name,
         provider: entry.provider ?? 'custom',
         baseUrl: v('base_url'),
+        model: v('model'),
         description,
         recipe: entry.id,
       }),

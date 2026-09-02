@@ -1,8 +1,9 @@
 /**
  * The model provider registry for Space agents.
  *
- * An agent's brief names its model as `<provider>/<modelId>` (e.g.
- * `gemini/gemma-4-31b-it`). The provider half resolves against THIS registry,
+ * A brief that PINS a model names it `<provider>/<modelId>` (e.g.
+ * `anthropic/claude-sonnet-5`) — most name none and run on the space's
+ * (lib/agents/spaceModels.ts). The provider half resolves against THIS registry,
  * whose base URLs are pinned literally in code — exactly as connector `hosts:`
  * are — because the brief is member-writable and an open URL there would let
  * any member POST the Space's whole context to a host of their choosing.
@@ -140,7 +141,9 @@ export interface ModelRef {
  * `invalid` reason instead of throwing, connector-style.
  */
 export function parseModelRef(raw: unknown): { ok: true; ref: ModelRef } | { ok: false; error: string } {
-  if (typeof raw !== 'string' || !raw.trim()) return { ok: false, error: '`model` is required (e.g. gemini/gemma-4-31b-it)' }
+  // Only reached when a brief PINS a model: an absent `model:` never gets
+  // here (lib/agents/config.ts), because the space's model answers for it.
+  if (typeof raw !== 'string' || !raw.trim()) return { ok: false, error: '`model` must be <provider>/<model-id> when it is given at all' }
   const value = raw.trim()
   const slash = value.indexOf('/')
   if (slash <= 0 || slash === value.length - 1) {

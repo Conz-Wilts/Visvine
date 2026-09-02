@@ -153,13 +153,23 @@ export function setupBlocker(a: AgentSummary, isAdmin: boolean): { text: string;
   // The message itself is already on the page as an alert; this line is the
   // way out of it, not a second copy.
   if (a.invalid) return { text: 'The brief has a problem', fix: 'brief' };
-  if (!a.keyStored) {
-    const provider = a.model?.split('/')[0] ?? '';
-    const key = provider ? `MODEL_KEY_${provider.toUpperCase()}` : 'the model key';
-    return {
-      text: isAdmin ? `Needs ${key}` : `No ${provider || 'model'} key yet — an admin adds ${key}`,
-      fix: 'key',
-    };
+  // The server already phrased this for whoever is reading it — no model in the
+  // space, no key, a connector switched off — so the line is that sentence
+  // rather than a second guess assembled from the brief's `model:`, which is
+  // usually absent now (the agent runs on the space's model).
+  if (a.modelProblem) {
+    return { text: isAdmin ? a.modelProblem : shortenForMember(a.modelProblem), fix: 'key' };
   }
   return null;
+}
+
+/**
+ * The same problem, for someone who cannot fix it: they need to know they are
+ * waiting on an admin, not what to type. The server's sentence ends in an
+ * instruction ("Add one under Connectors → Models"), which is the half that
+ * does not apply.
+ */
+function shortenForMember(problem: string): string {
+  const [first] = problem.split('. ');
+  return `${first} — an admin sets this up.`;
 }

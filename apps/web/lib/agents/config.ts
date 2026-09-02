@@ -10,7 +10,7 @@
  *   type: agent
  *   title: Weekly digest
  *   description: One line, shown on the roster
- *   model: gemini/gemma-4-31b-it      # <provider>/<model-id>, registry name never a URL
+ *   model: anthropic/claude-sonnet-5  # OPTIONAL — omit to use the space's model
  *   connectors: [hubspot]             # declared reach — names under connectors/
  *   tools: [web]                      # optional extras: web (fetch_url — any public page,
  *                                     #   a search engine's results included), sandbox (run_code),
@@ -89,7 +89,6 @@ export const AGENT_TOOL_OPTIONS: ReadonlyArray<{ id: AgentToolExtra; label: stri
     description: 'Everything else the platform can be asked to do (run_action) — events, the Drive, tools, connectors — as its author, with their access.',
   },
 ]
-export const DEFAULT_AGENT_MODEL = 'gemini/gemma-4-31b-it'
 
 /** The agent's folder: `agents/<name>`. */
 export function agentFolderPath(name: string): string {
@@ -145,9 +144,16 @@ export function agentNameOfHref(href: string | null | undefined): string | null 
 export interface AgentBrief {
   title: string
   description: string | null
-  /** The raw `model:` value, e.g. `gemini/gemma-4-31b-it`. */
-  model: string
-  modelRef: ModelRef
+  /**
+   * The raw `model:` value, e.g. `anthropic/claude-sonnet-5` — or null, which
+   * is the ordinary case: an agent runs on the SPACE's model (the first
+   * runnable `kind: model` connector, lib/agents/spaceModels.ts) unless it
+   * pins one of its own. Which model a space runs on is a decision it makes
+   * once, beside the key that pays for it.
+   */
+  model: string | null
+  /** The parsed pin, or null when the brief names none and the space decides. */
+  modelRef: ModelRef | null
   connectors: string[]
   tools: AgentToolExtra[]
   /** Agents (by name) this one may start with run_agent — empty means the tool is not offered. */
@@ -180,8 +186,12 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
   if (typeof fm.type !== 'string' || fm.type.trim().toLowerCase() !== AGENT_TYPE) {
     return { ok: false, error: 'frontmatter must include `type: agent`' }
   }
-  const model = parseModelRef(fm.model)
-  if (!model.ok) return { ok: false, error: model.error }
+  // Optional. A brief that says nothing runs on the space's model; one that
+  // says something must say it correctly, so a typo is refused here rather
+  // than discovered at 3am by the run it silently mis-pointed.
+  const pinned = typeof fm.model === 'string' && fm.model.trim().length > 0
+  const model = pinned ? parseModelRef(fm.model) : null
+  if (model && !model.ok) return { ok: false, error: model.error }
 
   const connectors = stringList(fm.connectors, 'connectors')
   if (!connectors.ok) return connectors
@@ -230,8 +240,8 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
     brief: {
       title: typeof fm.title === 'string' && fm.title.trim() ? fm.title.trim() : '',
       description: typeof fm.description === 'string' && fm.description.trim() ? fm.description.trim() : null,
-      model: String(fm.model).trim(),
-      modelRef: model.ref,
+      model: pinned ? String(fm.model).trim() : null,
+      modelRef: model?.ok ? model.ref : null,
       connectors: connectors.list,
       tools: extras,
       agents: agents.list,
@@ -834,7 +844,10 @@ export function newAgentNote(input: {
     `type: ${AGENT_TYPE}`,
     `title: ${yamlString(title)}`,
     ...(input.description?.trim() ? [`description: ${yamlString(input.description.trim())}`] : []),
-    `model: ${input.model?.trim() || DEFAULT_AGENT_MODEL}`,
+    // Only when the author pinned one. A brief with no `model:` runs on the
+    // SPACE's model, which is the ordinary case — and writing a guess here is
+    // how a new agent came to name a provider its space had never heard of.
+    ...(input.model?.trim() ? [`model: ${input.model.trim()}`] : []),
     `connectors: [${(input.connectors ?? []).join(', ')}]`,
     ...(input.tools?.length ? [`tools: [${input.tools.join(', ')}]`] : []),
     `max_turns: ${DEFAULT_MAX_TURNS}`,
