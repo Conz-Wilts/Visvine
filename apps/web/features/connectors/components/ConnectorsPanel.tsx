@@ -121,6 +121,25 @@ function signsIn(connector: ExistingConnector): boolean {
 }
 
 /**
+ * Is this connector something Connected should claim?
+ *
+ * In your own settings a connector is your ACCOUNT at a service, so one with
+ * no account linked is not connected — it is a note left behind by a sign-in
+ * nobody finished (the note is written before the browser leaves for the
+ * provider, because the OAuth start route reads the perimeter out of it). It
+ * stays reachable on Available, whose row says "Not signed in" and offers Sign
+ * in, which picks that same note back up.
+ *
+ * A space's console is the other way round: there a connector is configuration
+ * the space made and each member connects their own account afterwards, so a
+ * note with no connection is what a correctly configured connector looks like.
+ */
+function isConnected(connector: ExistingConnector, scope: ConnectorScope): boolean {
+  if (scope !== 'personal') return true;
+  return !signsIn(connector) || connector.connection !== null;
+}
+
+/**
  * A connected connector's verdict, in the order the failures actually bite: a
  * note that doesn't parse is refused before anything else is consulted, a
  * missing secret before the request is built, and an empty allowlist before it
@@ -308,7 +327,7 @@ export default function ConnectorsPanel({
         // must not move the tab out from under whoever chose it.
         if (landedRef.current !== spaceId) {
           landedRef.current = spaceId;
-          setTab(data.connectors.length > 0 ? 'mine' : 'catalog');
+          setTab(data.connectors.some((c) => isConnected(c, scope)) ? 'mine' : 'catalog');
         }
       })
       .catch((e: Error) => {
@@ -318,7 +337,7 @@ export default function ConnectorsPanel({
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [spaceId, reloadKey]);
+  }, [spaceId, reloadKey, scope]);
 
   /** The service a connector is to, where it came from a recipe. */
   const serviceOf = (c: ExistingConnector) => catalogEntryFor(c.name, c.model?.provider, c.recipe);
@@ -337,14 +356,19 @@ export default function ConnectorsPanel({
     return map;
   }, [existing]);
 
+  // Every note the space holds, including the ones Connected does not claim —
+  // this is what a new connector's name may not collide with.
   const takenNames = useMemo(() => existing.map((c) => c.name), [existing]);
+
+  /** What Connected lists ({@link isConnected}), before the search box. */
+  const connected = useMemo(() => existing.filter((c) => isConnected(c, scope)), [existing, scope]);
 
   // A connector matches on what a reader would type: its own name or title, or
   // the service it is to.
   const mine = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return existing;
-    return existing.filter((c) => {
+    if (!q) return connected;
+    return connected.filter((c) => {
       const service = catalogEntryFor(c.name, c.model?.provider, c.recipe);
       return (
         c.name.toLowerCase().includes(q) ||
@@ -353,7 +377,7 @@ export default function ConnectorsPanel({
         (service?.name.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [existing, query]);
+  }, [connected, query]);
 
   // The catalogue this surface offers, searched. Your own settings offer the
   // vetted MCP servers; a space's console offers everything else
@@ -649,8 +673,8 @@ export default function ConnectorsPanel({
             }`}
           >
             {t.label}
-            {t.id === 'mine' && existing.length > 0 && (
-              <span className="ml-1.5 text-xs text-text-muted">{existing.length}</span>
+            {t.id === 'mine' && connected.length > 0 && (
+              <span className="ml-1.5 text-xs text-text-muted">{connected.length}</span>
             )}
           </button>
         ))}
