@@ -369,6 +369,13 @@ const RECIPES: Recipe[] = [
       },
       {
         n: 4,
+        tool: 'rehearse_agent',
+        why: "Offer to try it before turning it on, and do it if they say yes. It runs nothing: it hands back the first round — preamble, brief, the model a real run would use, and whether each connector is reachable — and YOU carry that round out on your own model, writing nothing and showing the person the output in your reply. It is the only look anyone gets at what the agent produces before an unattended run produces it.",
+        args: { space_id: spaceId(ctx), agent: '<slug>' },
+        optional: true,
+      },
+      {
+        n: 5,
         tool: 'activate_agent',
         why: "Turn it on and set when it runs. Anyone who can edit the brief may — with this action or the Turn on button on the agent's page. Confirm the schedule with the person first.",
         args: { space_id: spaceId(ctx), agent: '<slug>', schedule: 'weekly', at: '09:00', weekday: 'monday', timezone: '<IANA zone>' },
@@ -381,6 +388,8 @@ const RECIPES: Recipe[] = [
       "The `instructions` you pass IS the agent's system prompt. Be concrete: what to read, what to produce, where to write it.",
       'create_agent CREATES only. An existing name is refused rather than overwritten — a live agent runs the brief a person approved. Briefs are edited on the note itself.',
       'A clock schedule needs a timezone. Ask which one rather than assuming; "daily at 07:00" is meaningless without it.',
+      'OFFER THE REHEARSAL. A brief nobody has seen run is a guess, and the first real run happens unattended. rehearse_agent hands you the round to do yourself — on your model, on your access, writing nothing — so the person reads the output and fixes the brief before it is ever switched on. It also surfaces a missing model or an unconnected connector now rather than in a failed 3am run.',
+      'A rehearsal is NOT a run: say so plainly. Nothing was recorded on the agent, nothing was billed to the space, and the notes it would have written do not exist until it runs for real.',
       "NEVER put a model in the brief unless the person asked for a specific one. If the space has no `kind: model` connector, create_agent says so in `model_problem` — repeat that to them (\"there is no model in this space yet, so I have left it unset; add one under Connectors and this will run\") rather than naming a provider they never signed up for.",
       'Once it is active, run_agent triggers it now without waiting for the schedule.',
       // agents/ refuses generic AI writes (contextService.lockedDenial), and

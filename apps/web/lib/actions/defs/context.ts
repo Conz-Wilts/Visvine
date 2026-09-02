@@ -63,7 +63,7 @@ import {
 } from '@/lib/notes/typeAliases'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { lifecycleOf, type NoteLifecycle } from '@/lib/notes/shared/lifecycle'
-import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { readFields } from '@/lib/create/typeFields'
 import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
@@ -82,7 +82,7 @@ import { createEventRecord, updateEventRecord } from '@/lib/events/write'
 import { coverUrlFromResource } from '@/lib/events/cover'
 import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth'
 import { eventCreateInputSchema, eventUpdateInputSchema } from '@/lib/schemas/eventSchemas'
-import { activateAgent, canTriggerRun, createAgentBrief, listAgents, switchOffAgent } from '@/lib/agents/service'
+import { activateAgent, canTriggerRun, createAgentBrief, describeAgent, listAgents, switchOffAgent } from '@/lib/agents/service'
 import { defaultModelOf, noModelReason, spaceModels } from '@/lib/agents/spaceModels'
 import {
   AGENT_TOOL_EXTRAS,
@@ -95,7 +95,8 @@ import {
 } from '@/lib/agents/config'
 import { claimManualRun } from '@/lib/agents/schedule'
 import { intakeSummary } from '@/lib/actions/shared/intake'
-import { AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
+import { agentPreamble, AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
+import { rehearsalPlan } from '@/lib/agents/shared/rehearsal'
 import { featureAccessForbidden } from '@/lib/auth'
 import { readNoteOrNull, type Context } from '@/lib/notes/store'
 import { runClean, applyCleanFixes, trashNotes } from '@/lib/notes/clean'
@@ -1942,7 +1943,9 @@ export const CONTEXT_ACTIONS = [
         'connectors (omit it for the space default). ' +
         `WHAT THE AGENT CAN DO, so the brief can ask for it: ${AGENT_RUN_CAPABILITIES} ` +
         'CREATING IS NOT TURNING ON: a new brief is inert. Anyone who can edit it turns it on with activate_agent (or ' +
-        "the Turn on button on the agent's page) — say so when you hand it over. " +
+        "the Turn on button on the agent's page) — say so when you hand it over, and OFFER THE REHEARSAL FIRST: " +
+        'rehearse_agent hands you its first round to carry out yourself, so the person sees the output before an ' +
+        'unattended run makes it. ' + +
         'Creates only; an existing agent is a 409, and briefs are edited on the note itself.',
       input: {
         space_id: spaceArg,
@@ -2009,9 +2012,73 @@ export const CONTEXT_ACTIONS = [
           tools: r.brief.tools,
           active: false,
           page: agentPageHref(r.name),
+          // A brief nobody has seen run is a guess. Offer the rehearsal before
+          // the switch: it costs the space nothing and it is the only look at
+          // the output anyone gets before an unattended run produces it.
+          try_it: 'Offer to try it now: rehearse_agent hands you its first round to carry out yourself, on your model — nothing runs, nothing is written and nothing is billed. Do it before turning it on.',
           next: problem
-            ? `${problem} The brief is written and will run once there is one — then turn it on with activate_agent.`
+            ? `${problem} The brief is written and will run once there is one — rehearse_agent still shows what it would do; turn it on with activate_agent once the space has a model.`
             : 'Turn it on before it runs — activate_agent, or the Turn on button on its page.',
+        }
+      },
+    }),
+    defineAction({
+      name: 'rehearse_agent',
+      scope: 'context:read',
+      summary:
+        "The agent's first round, for YOU to carry out on your own model — nothing runs, nothing is written, nothing is billed.",
+      description:
+        'Rehearse an agent before it is ever turned on. This runs NOTHING: it hands back what a real run is given — ' +
+        "the preamble, the brief, the model the run would use, and whether each connector the brief names is actually " +
+        'reachable for you — and YOU do that first round yourself, on your own model and with your own access. ' +
+        'Use it straight after create_agent, and any time somebody asks what an agent would do. It is how an author ' +
+        'sees the output before a 3am run produces it, and how a missing model or a connector nobody signed in to is ' +
+        'found now rather than in a failed run at the weekend. Follow the `rules` exactly — the important ones are ' +
+        'that you write no notes (put what the agent would have written in your reply instead) and use only what the ' +
+        'brief declares. Turning it on afterwards is activate_agent; the brief itself is edited on its own page.',
+      input: {
+        space_id: spaceArg,
+        agent: z.string().describe("The agent's name, from list_agents — e.g. 'weekly-digest'"),
+      },
+      annotations: { readOnlyHint: true },
+      run: async (ctx, args) => {
+        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const agent = await describeAgent(principal, context, args.agent)
+        if (!agent) throw new ActionError(404, `No agent '${args.agent}' in this space`)
+        if (agent.invalid) throw new ActionError(409, `That brief does not parse: ${agent.invalid}`)
+        const plan = rehearsalPlan({
+          name: agent.name,
+          title: agent.title,
+          modelEffective: agent.modelEffective,
+          modelConnector: agent.modelConnector,
+          modelProblem: agent.modelProblem,
+          // Judged for the CALLER, because the caller is who stands in: a
+          // connector only the author has signed in to is out of reach here.
+          connectors: agent.readiness.viewer,
+          tools: agent.tools,
+        })
+        return {
+          agent: agent.name,
+          title: agent.title,
+          path: agent.path,
+          page: agentPageHref(agent.name),
+          active: agent.activation.active,
+          runs_on: agent.modelEffective,
+          model_source: agent.model ? 'pinned in the brief' : agent.modelConnector ? `the space's model (connectors/${agent.modelConnector}.md)` : 'none',
+          ready_for_a_real_run: plan.ready,
+          blocking: plan.blocking,
+          out_of_reach: plan.out_of_reach,
+          rehearsal: {
+            instruction: plan.instruction,
+            rules: plan.rules,
+            report: plan.report,
+            // Exactly what a run is given, in the order it gets it.
+            preamble: agentPreamble(agent.name),
+            brief: splitFrontmatter(agent.brief).body,
+          },
+          then: agent.activation.active
+            ? 'It is already on — run it for real with run_agent.'
+            : 'When the person is happy with it, turn it on with activate_agent. The brief is edited on its own page.',
         }
       },
     }),

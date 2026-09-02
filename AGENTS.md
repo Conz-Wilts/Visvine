@@ -350,6 +350,19 @@ make a correct call cannot drift from the code, and the half explaining *when*
 to make it can be improved without a deploy — the same split connectors make
 between frontmatter and body.
 
+**A brief is rehearsed before it is switched on.** `rehearse_agent` runs
+NOTHING: it hands back what a run is given — the preamble, the brief, the model
+a real run would use, and `connectorReadiness` for the CALLER — and the model
+that asked carries that one round out itself, on its own subscription and its
+own access (`lib/agents/shared/rehearsal.ts` is the wording, pure and tested).
+Nothing is billed, no run is recorded, and the rules hold the stand-in honest:
+one round, write nothing (the notes it would have written go in the reply), use
+only what the brief declares, and report what is out of reach rather than
+substituting for it. It is the only look at an agent's output anyone gets before
+an unattended run makes it, and it is where a missing model or an unconnected
+account surfaces instead of in a 3am failure. `create_agent` offers it in
+`try_it`, and it is step 4 of the recipe, before `activate_agent`.
+
 **A recipe that BUILDS something asks first.** `create_agent` and
 `create_connector` carry an `intake` (`lib/actions/shared/intake.ts`, pure and
 rendered into the note above the steps): at most four questions, in one message,
