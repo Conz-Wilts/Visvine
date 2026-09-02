@@ -9,7 +9,7 @@
  * permission model is untouched: the note is admin-written, secrets live in
  * the secret store, and `connectors:use` is what lets an agent run it.
  *
- * Three shapes:
+ * Four shapes:
  *   - `key`: a static credential (API key, bot token, DSN) stored as a secret
  *     and bound into `env:` — the common case.
  *   - `oauth`: the note carries an `auth:` block; the secret stored here is the
@@ -17,6 +17,18 @@
  *     connector's page (lib/connectors/auth.ts).
  *   - `model`: an LLM provider the space's agents run on — never runnable
  *     (lib/connectors/model.ts).
+ *   - `mcp`: a vetted remote MCP server, by URL. Nothing to fill in: Visvine
+ *     discovers the server's OAuth endpoints, registers itself as a client and
+ *     signs the person in ({@link mcpServer}). Every server on the list has
+ *     been checked to publish that metadata and to offer dynamic registration.
+ *
+ * The shapes split across two surfaces ({@link catalogForScope}). Your own
+ * settings offer the `mcp` servers and nothing else: a personal connector is
+ * your account at a service, and a vetted MCP server is exactly the thing you
+ * sign in to once and carry into every space. A space's console offers every
+ * other shape — the credentials, OAuth apps, databases and model keys that are
+ * a team's configuration — plus the generic MCP-by-URL row for a server that
+ * isn't on the list.
  *
  * A recipe is not a slot. A space may connect one service several times — the
  * team's Drive beside your own, two Slack workspaces — so a connector's NAME
@@ -79,12 +91,14 @@ export interface CatalogEntry {
   category: CatalogCategory
   /** Path under /images/connectors. */
   logo: string
-  shape: 'key' | 'oauth' | 'model'
+  shape: 'key' | 'oauth' | 'model' | 'mcp'
   /** `host` or `host:port` entries the isolate may reach. */
   hosts: readonly string[]
   fields: readonly CatalogField[]
   /** `model` entries: the registry provider id. */
   provider?: string
+  /** `mcp` entries: the server's streamable-HTTP endpoint — also its `auth.discover`. */
+  mcp?: { url: string }
   /** `oauth` entries: the `auth:` block minus the client credentials. */
   oauth?: {
     provider: string
@@ -115,6 +129,45 @@ const apiKey = (hint: string, placeholder = 'paste the key'): CatalogField => ({
 })
 
 const fetchSnippet = (lines: string[]) => ['```js', ...lines, '```'].join('\n')
+
+/**
+ * A vetted remote MCP server, as a catalog entry.
+ *
+ * The whole recipe is the URL. The note's `auth.discover` points at it, so the
+ * OAuth start route walks the server's protected-resource and
+ * authorization-server metadata, registers Visvine as a client (RFC 7591) and
+ * sends the person to sign in — no developer account, no client id, no field
+ * to fill. The server's host is the note's entire perimeter, and the body
+ * teaches an agent the one call that matters: `mcp(url)`.
+ *
+ * `provider` in the written note is the CONNECTOR's name, as for every OAuth
+ * recipe (connectorFromCatalog); the `provider` here is the placeholder the
+ * builder overwrites.
+ */
+function mcpServer(
+  entry: Pick<CatalogEntry, 'id' | 'name' | 'description' | 'category' | 'logo'> & { url: string; notes?: string },
+): CatalogEntry {
+  const { url, notes, ...rest } = entry
+  return {
+    ...rest,
+    shape: 'mcp',
+    hosts: [new URL(url).host.toLowerCase()],
+    fields: [],
+    mcp: { url },
+    oauth: { provider: entry.id, mode: 'user', discover: url, scopes: [] },
+    body: [
+      `The official ${entry.name} MCP server. You sign in with your own ${entry.name} account; Visvine holds the token and sends it on every call.`,
+      ...(notes ? ['', notes] : []),
+      '',
+      fetchSnippet([
+        `const client = mcp('${url}')`,
+        'const tools = await client.listTools()',
+        '// then: await client.callTool(<name>, <arguments>)',
+        'return tools',
+      ]),
+    ].join('\n'),
+  }
+}
 
 export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
   // ── Email & calendar ───────────────────────────────────────────────────────
@@ -885,6 +938,139 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
       ]),
     ].join('\n'),
   },
+
+  // ── Vetted MCP servers ─────────────────────────────────────────────────────
+  // The personal catalogue: what a person signs in to for themselves and
+  // carries into every space. Each URL was checked to publish OAuth metadata
+  // and a registration endpoint, and to speak streamable HTTP at that path.
+  mcpServer({
+    id: 'notion-mcp',
+    name: 'Notion',
+    description: 'Your pages and databases, through Notion’s MCP server',
+    category: 'productivity',
+    logo: 'notion.svg',
+    url: 'https://mcp.notion.com/mcp',
+  }),
+  mcpServer({
+    id: 'linear-mcp',
+    name: 'Linear',
+    description: 'Issues, projects and cycles, through Linear’s MCP server',
+    category: 'development',
+    logo: 'linear.svg',
+    url: 'https://mcp.linear.app/mcp',
+  }),
+  mcpServer({
+    id: 'atlassian-mcp',
+    name: 'Atlassian',
+    description: 'Jira and Confluence, through Atlassian’s MCP server',
+    category: 'development',
+    logo: 'atlassian.svg',
+    url: 'https://mcp.atlassian.com/v1/mcp',
+  }),
+  mcpServer({
+    id: 'asana-mcp',
+    name: 'Asana',
+    description: 'Projects and tasks, through Asana’s MCP server',
+    category: 'productivity',
+    logo: 'asana.svg',
+    url: 'https://mcp.asana.com/mcp',
+  }),
+  mcpServer({
+    id: 'airtable-mcp',
+    name: 'Airtable',
+    description: 'Your bases and records, through Airtable’s MCP server',
+    category: 'productivity',
+    logo: 'airtable.svg',
+    url: 'https://mcp.airtable.com/mcp',
+  }),
+  mcpServer({
+    id: 'intercom-mcp',
+    name: 'Intercom',
+    description: 'Conversations and contacts, through Intercom’s MCP server',
+    category: 'productivity',
+    logo: 'intercom.svg',
+    url: 'https://mcp.intercom.com/mcp',
+  }),
+  mcpServer({
+    id: 'figma-mcp',
+    name: 'Figma',
+    description: 'Files and design context, through Figma’s MCP server',
+    category: 'productivity',
+    logo: 'figma.svg',
+    url: 'https://mcp.figma.com/mcp',
+  }),
+  mcpServer({
+    id: 'canva-mcp',
+    name: 'Canva',
+    description: 'Designs and assets, through Canva’s MCP server',
+    category: 'productivity',
+    logo: 'canva.svg',
+    url: 'https://mcp.canva.com/mcp',
+  }),
+  mcpServer({
+    id: 'webflow-mcp',
+    name: 'Webflow',
+    description: 'Sites, pages and CMS items, through Webflow’s MCP server',
+    category: 'productivity',
+    logo: 'webflow.svg',
+    url: 'https://mcp.webflow.com/mcp',
+  }),
+  mcpServer({
+    id: 'zapier-mcp',
+    name: 'Zapier',
+    description: 'Every app your Zapier account reaches, through Zapier’s MCP server',
+    category: 'productivity',
+    logo: 'zapier.svg',
+    url: 'https://mcp.zapier.com/api/mcp/mcp',
+  }),
+  mcpServer({
+    id: 'sentry-mcp',
+    name: 'Sentry',
+    description: 'Issues, errors and traces, through Sentry’s MCP server',
+    category: 'development',
+    logo: 'sentry.svg',
+    url: 'https://mcp.sentry.dev/mcp',
+  }),
+  mcpServer({
+    id: 'vercel-mcp',
+    name: 'Vercel',
+    description: 'Projects, deployments and logs, through Vercel’s MCP server',
+    category: 'development',
+    logo: 'vercel.svg',
+    url: 'https://mcp.vercel.com',
+  }),
+  mcpServer({
+    id: 'cloudflare-mcp',
+    name: 'Cloudflare',
+    description: 'Your account’s Workers, storage and settings, through Cloudflare’s MCP server',
+    category: 'development',
+    logo: 'cloudflare.svg',
+    url: 'https://mcp.cloudflare.com/mcp',
+  }),
+  mcpServer({
+    id: 'stripe-mcp',
+    name: 'Stripe',
+    description: 'Customers, payments and subscriptions, through Stripe’s MCP server',
+    category: 'data',
+    logo: 'stripe.svg',
+    url: 'https://mcp.stripe.com',
+  }),
+  mcpServer({
+    id: 'paypal-mcp',
+    name: 'PayPal',
+    description: 'Invoices, orders and payments, through PayPal’s MCP server',
+    category: 'data',
+    logo: 'paypal.svg',
+    url: 'https://mcp.paypal.com/mcp',
+  }),
+  mcpServer({
+    id: 'square-mcp',
+    name: 'Square',
+    description: 'Catalog, orders and payments, through Square’s MCP server',
+    category: 'data',
+    logo: 'square.svg',
+    url: 'https://mcp.squareup.com/mcp',
+  }),
 ]
 
 /**
@@ -943,18 +1129,20 @@ export function allowsManyConnectors(entry: CatalogEntry, scope: ConnectorScope 
 }
 
 /**
- * The services a surface offers, for the deployment it is running on.
+ * The services a surface offers.
  *
- * A space's console offers the whole catalogue: an admin configuring the team's
- * tools is doing setup, and pasting a bot token is part of that job. Your own
- * settings offer only what connects in one press — the row you sign in to and
- * are finished with. A service you would have to go and fetch a credential for
- * is a developer errand, and the honest thing is not to put it in a panel about
- * your own accounts at all.
+ * Your own settings offer the vetted MCP servers and nothing else. A personal
+ * connector is your account at a service, and an MCP server you sign in to is
+ * exactly that: one press, your own token, usable in every space you are in.
+ * A space's console offers everything else — API keys, OAuth apps, databases,
+ * model keys, and the generic MCP-by-URL row for a server that isn't vetted —
+ * because those are a team's configuration: an admin pasting a bot token or
+ * registering an OAuth app is doing setup for the space, not signing in as
+ * themselves. The two lists are disjoint, so a service is offered in one place
+ * and the place says what connecting it means.
  */
-export function catalogForScope(scope: ConnectorScope, platformClients: readonly string[]): CatalogEntry[] {
-  if (scope === 'space') return [...CONNECTOR_CATALOG]
-  return CONNECTOR_CATALOG.filter((entry) => connectsInOneClick(entry, platformClients))
+export function catalogForScope(scope: ConnectorScope): CatalogEntry[] {
+  return CONNECTOR_CATALOG.filter((entry) => (entry.shape === 'mcp') === (scope === 'personal'))
 }
 
 /**
@@ -985,7 +1173,7 @@ export function catalogConnectStyle(
   platformClients: readonly string[],
 ): 'one-click' | 'sign-in' | 'key' {
   if (connectsInOneClick(entry, platformClients)) return 'one-click'
-  return entry.shape === 'oauth' ? 'sign-in' : 'key'
+  return entry.shape === 'oauth' || entry.shape === 'mcp' ? 'sign-in' : 'key'
 }
 
 /** The fields the ordinary path asks for — everything not marked advanced. */
@@ -1003,12 +1191,17 @@ export function plainFields(entry: CatalogEntry): CatalogEntry['fields'] {
  * one-click path would send someone to a provider that refuses them, so the
  * form (where they can paste their own OAuth app) is the honest surface.
  *
+ * A vetted MCP server needs no client of the deployment's: the server
+ * registers Visvine at first connect, so the press is one click everywhere.
+ *
  * Pure: the caller passes the platform client names the server reported
  * (`availablePlatformClients`), so this stays importable from the client.
  */
 export function connectsInOneClick(entry: CatalogEntry, platformClients: readonly string[]): boolean {
-  if (entry.shape !== 'oauth' || !entry.oauth) return false
+  if (!entry.oauth) return false
   if (entry.fields.some((f) => f.required || !f.advanced)) return false
+  if (entry.shape === 'mcp') return true
+  if (entry.shape !== 'oauth') return false
   const ref = platformClientRef(entry.oauth.clientId ?? null)
   return ref !== null && platformClients.includes(ref)
 }

@@ -108,7 +108,8 @@ type Tone = 'ok' | 'warn' | 'bad' | 'muted';
  * Does this connector hold an account somebody signs in to, per its recipe?
  */
 function signsIn(connector: ExistingConnector): boolean {
-  return catalogEntryFor(connector.name, connector.model?.provider, connector.recipe)?.shape === 'oauth';
+  const shape = catalogEntryFor(connector.name, connector.model?.provider, connector.recipe)?.shape;
+  return shape === 'oauth' || shape === 'mcp';
 }
 
 /**
@@ -208,8 +209,9 @@ const TABS: Record<'space' | 'personal', Array<{ id: Tab; label: string }>> = {
  * about notes, secrets or the OAuth dance is special-cased for it. What differs
  * is where a row can lead: your personal space is not the space the app is
  * currently showing, so a row opens Manage rather than navigating to a
- * directory page that isn't there — and WHAT is offered: only the services you
- * connect in one press, one account each.
+ * directory page that isn't there — and WHAT is offered: the vetted MCP
+ * servers, one account each, and none of the credential-shaped services a
+ * space configures for its team.
  */
 export type { ConnectorScope };
 
@@ -341,13 +343,10 @@ export default function ConnectorsPanel({
     });
   }, [existing, query]);
 
-  // The catalogue this surface offers, searched. A space's console offers
-  // everything; your own settings offer only the services you connect by
-  // pressing Connect (lib/connectors/catalog.ts#catalogForScope).
-  const services = useMemo(
-    () => searchCatalog(query, catalogForScope(scope, platformClients)),
-    [query, scope, platformClients],
-  );
+  // The catalogue this surface offers, searched. Your own settings offer the
+  // vetted MCP servers; a space's console offers everything else
+  // (lib/connectors/catalog.ts#catalogForScope).
+  const services = useMemo(() => searchCatalog(query, catalogForScope(scope)), [query, scope]);
 
   const remove = async () => {
     if (!confirmDelete || !spaceId) return;
@@ -408,9 +407,9 @@ export default function ConnectorsPanel({
   /**
    * Connect a service in one press: write the note the recipe would have
    * written with everything left at its default, then send the browser to the
-   * provider. No form, because there is nothing to ask — the deployment's own
-   * OAuth client stands in for the one nobody wants to register, and the
-   * title, scopes and note are all the recipe's.
+   * provider. No form, because there is nothing to ask — a vetted MCP server
+   * registers Visvine as its client, a Google row rides the deployment's own
+   * OAuth client, and the title, scopes and note are all the recipe's.
    *
    * The note is written FIRST because the OAuth start route reads the
    * connector's perimeter out of it: the note is the connector, so there is
@@ -585,7 +584,9 @@ export default function ConnectorsPanel({
             ? personal
               ? 'Search your connectors…'
               : 'Search this space’s connectors…'
-            : 'Search services…'
+            : personal
+              ? 'Search MCP servers…'
+              : 'Search services…'
         }
       />
 
@@ -669,10 +670,10 @@ export default function ConnectorsPanel({
 
           <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4 mt-2">
             <p className="text-xs text-text-muted">
-              {personal ? 'Sign in to another service.' : 'Connect another service, or write one yourself.'}
+              {personal ? 'Sign in to another MCP server.' : 'Connect another service, or write one yourself.'}
             </p>
             <Button variant="neutral" size="sm" onClick={() => { setQuery(''); setTab('catalog'); }}>
-              {personal ? 'See services' : 'Add a connector'}
+              {personal ? 'See servers' : 'Add a connector'}
             </Button>
           </div>
         </div>
@@ -802,6 +803,8 @@ export default function ConnectorsPanel({
                         Reaches {e.hosts.length > 0 ? e.hosts.join(', ') : 'the host you give it'}.{' '}
                         {e.shape === 'model'
                           ? 'A model provider this space’s agents run on — never runnable, and no note or agent can read the key. One per space: the key is the space’s own, so a second connector would name the same key and the same endpoint.'
+                          : e.shape === 'mcp'
+                            ? `${e.name}’s own MCP server. Connect signs you in there with your ${e.name} account — Visvine registers itself as a client, holds the token, and sends it on every call. It works in every space you are in, as you.`
                           : e.shape === 'oauth'
                             ? `${oneClick ? 'Connect signs you in at the provider — there is nothing to fill in. ' : ''}Each person connects their own account; Visvine holds the tokens and sends them on every call. Connect it as many times as the space has accounts to reach — each is its own connector.`
                             : `Needs ${e.fields.map((f) => f.label.toLowerCase()).join(', ')}, stored as write-only secrets. Connect it once per set of credentials.`}

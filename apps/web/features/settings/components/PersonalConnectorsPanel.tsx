@@ -6,18 +6,22 @@ import { fetchJson } from '@/lib/fetchJson';
 import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
 
 /**
- * Your own connectors: sign in once here, and they work in every space you are
- * in.
+ * Your own connectors: the vetted MCP servers. Sign in to one here, and it
+ * works in every space you are in.
  *
  * The note lives in your personal space, so nobody else can see it, run it or
  * reach the tokens — but connector resolution looks there whenever the space
  * you are in has no connector by that name
  * (lib/connectors/service.ts#ConnectorSource). That is the whole mechanism:
- * your Drive is yours wherever you go, and it is still only ever YOUR account
+ * your Notion is yours wherever you go, and it is still only ever YOUR account
  * being spent, because a run resolves through the person it runs as.
  *
+ * Only MCP servers are offered here (lib/connectors/catalog.ts#catalogForScope).
+ * An API key, an OAuth app, a database or a model key is a space's
+ * configuration, and lives in the Space Console.
+ *
  * A space's own connector always wins its name. An admin who has configured
- * `google-drive` for the team has decided what its agents reach and whose
+ * `notion-mcp` for the team has decided what its agents reach and whose
  * credentials they use, and a personal note must never quietly displace that.
  *
  * The panel needs a real space id, and a personal space is provisioned lazily,

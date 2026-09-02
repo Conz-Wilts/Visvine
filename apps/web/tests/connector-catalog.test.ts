@@ -94,9 +94,38 @@ for (const entry of CONNECTOR_CATALOG) {
     for (const ref of perimeterSecretRefs(parsed.perimeter)) {
       assert.ok(secrets.some((s) => s.name === ref), `${entry.id} references unstored ${ref}`)
     }
-    if (entry.shape === 'oauth') assert.ok(parsed.perimeter.auth, `${entry.id} has an auth block`)
+    if (entry.shape === 'oauth' || entry.shape === 'mcp') assert.ok(parsed.perimeter.auth, `${entry.id} has an auth block`)
   })
 }
+
+test('a vetted MCP server is one URL: discovered, self-registering, and the whole perimeter', () => {
+  const servers = CONNECTOR_CATALOG.filter((e) => e.shape === 'mcp')
+  assert.ok(servers.length > 0)
+  for (const entry of servers) {
+    assert.ok(entry.mcp?.url.startsWith('https://'), `${entry.id} is https`)
+    const host = new URL(entry.mcp!.url).host
+    assert.deepEqual([...entry.hosts], [host], `${entry.id} reaches its server and nothing else`)
+    // Nothing to fill in, and no client of the deployment's to depend on — the
+    // server registers Visvine, so the press is one click on every deployment.
+    assert.deepEqual([...entry.fields], [])
+    assert.equal(connectsInOneClick(entry, []), true, entry.id)
+    assert.equal(catalogConnectStyle(entry, []), 'one-click', entry.id)
+    assert.equal(catalogRowLabel(entry), entry.name, entry.id)
+
+    const { name, title } = suggestConnector(entry, [])
+    const { content, secrets } = connectorFromCatalog(entry, { name, title, description: '', values: {} })
+    assert.deepEqual(secrets, [])
+    const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+    assert.ok(parsed.ok, `${entry.id}: ${parsed.ok ? '' : parsed.error}`)
+    const auth = parsed.perimeter.auth
+    assert.ok(auth, `${entry.id} has an auth block`)
+    assert.equal(auth.mode, 'user')
+    assert.equal(auth.provider, name)
+    assert.equal(auth.clientId, null, `${entry.id} registers dynamically`)
+    assert.deepEqual(auth.discovery, { kind: 'discover', url: entry.mcp!.url })
+    assert.ok(content.includes(`mcp('${entry.mcp!.url}')`), `${entry.id} teaches the call`)
+  }
+})
 
 test('catalogEntryFor finds a note\'s logo by name, then by model provider', () => {
   const first = CONNECTOR_CATALOG[0]
@@ -347,26 +376,31 @@ test('the link a browser is sent to is relative, and carries the same query', ()
   assert.equal(new URL(connectorConnectPath('s1', 'g', 'https://evil.example'), 'https://x.test').searchParams.get('return'), null)
 })
 
-test('your own settings offer only what you connect in one press, one account each', () => {
-  const platform = ['google']
-  const personal = catalogForScope('personal', platform)
+test('your own settings offer the vetted MCP servers; a space offers everything else', () => {
+  const personal = catalogForScope('personal')
+  const space = catalogForScope('space')
   assert.ok(personal.length > 0)
-  // Everything offered there is a press, and nothing else is offered.
-  for (const entry of personal) assert.ok(connectsInOneClick(entry, platform))
-  const drive = personal.find((e) => e.id === 'google-drive')
-  assert.ok(drive, 'Google Drive connects in one press on a deployment with a Google client')
-  // A key you have to go and fetch is a developer errand, not a settings row.
-  assert.ok(!personal.some((e) => e.shape === 'key'))
+  // Everything offered to you is an MCP server you sign in to, one press each,
+  // and it is one press on every deployment — no platform client involved.
+  for (const entry of personal) {
+    assert.equal(entry.shape, 'mcp', entry.id)
+    assert.ok(connectsInOneClick(entry, []), entry.id)
+  }
+  const notion = personal.find((e) => e.id === 'notion-mcp')
+  assert.ok(notion)
+  // A personal connector is your account at a service: one of each.
+  assert.equal(allowsManyConnectors(notion, 'personal'), false)
 
-  // A space may hold the team's Drive beside yours; you have one Google account
-  // in your own settings, so its row never offers another.
-  assert.equal(allowsManyConnectors(drive, 'space'), true)
-  assert.equal(allowsManyConnectors(drive, 'personal'), false)
-  // A deployment with no platform client offers nothing to press, rather than a
-  // Connect that would send someone to a provider that refuses them.
-  assert.deepEqual(catalogForScope('personal', []), [])
-  // The console is unchanged: the whole catalogue, every service addable again.
-  assert.equal(catalogForScope('space', platform).length, CONNECTOR_CATALOG.length)
+  // The console holds the credential-shaped world — keys, OAuth apps, models,
+  // databases and the generic MCP-by-URL row — and none of the vetted servers.
+  assert.ok(space.every((e) => e.shape !== 'mcp'))
+  for (const id of ['slack', 'google-drive', 'microsoft', 'postgres', 'openai', 'mcp']) {
+    assert.ok(space.some((e) => e.id === id), `${id} is a space connector`)
+  }
+  assert.ok(!space.some((e) => e.id === 'notion-mcp'))
+  // The two lists are the whole catalogue, and nothing is offered twice.
+  assert.equal(personal.length + space.length, CONNECTOR_CATALOG.length)
+  assert.ok(!personal.some((p) => space.some((s) => s.id === p.id)))
 })
 
 test('a service you paste a credential into is named for what it is', () => {
