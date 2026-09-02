@@ -18,12 +18,13 @@ function clock(seconds: number): string {
 }
 
 /**
- * One run, watched or read back: a status line that breathes while it is on
- * — how long, which turn, what it has touched, what it is doing right now —
- * over the steps with the machine's record nested in them, then what it was
- * handed, what it changed and how it summed itself up. The same pane follows
- * a run in flight and opens one from the history; `live` is just a fact about
- * the run.
+ * One run, watched or read back — the page's wide column.
+ *
+ * A status line that breathes while it is on — how long, which turn, what it
+ * is doing right now — over the chain of nodes it walked, with the machine's
+ * record nested in the steps that drove it, then what it changed and how it
+ * summed itself up. The same pane follows a run in flight and opens one from
+ * the sidebar's history; `live` is just a fact about the run.
  */
 export default function RunPane({
   spaceId,
@@ -126,22 +127,19 @@ export default function RunPane({
       {run?.errorMessage && <p className="border-l-2 border-red-500 pl-3 text-[13px] text-red-700">{run.errorMessage}</p>}
 
       <div>
-        <Caption>Steps</Caption>
-        <div className="mt-2">
-          {run?.transcriptHidden ? (
-            <p className="text-[13px] text-text-muted">The steps are visible to the agent&apos;s author and admins only.</p>
-          ) : (
-            <RunSteps
-              events={run?.events ?? []}
-              machine={run?.machine?.events ?? null}
-              live={running}
-              startedAt={startedAt}
-              trigger={trigger}
-              end={end}
-              scroll={running}
-            />
-          )}
-        </div>
+        {run?.transcriptHidden ? (
+          <p className="text-[13px] text-text-muted">The steps are visible to the agent&apos;s author and admins only.</p>
+        ) : (
+          <RunSteps
+            events={run?.events ?? []}
+            machine={run?.machine?.events ?? null}
+            live={running}
+            startedAt={startedAt}
+            trigger={trigger}
+            end={end}
+            scroll={running}
+          />
+        )}
       </div>
 
       {run?.machine?.refusals.length ? (

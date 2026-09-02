@@ -24,16 +24,18 @@ import {
 import type { AgentRunEvent, RunInput } from '@/lib/agents/runs';
 import { attachMachine, stepsOf, type MachineEvent, type Step } from '@/lib/agents/shared/trace';
 import { hrefForNotePath } from '@/lib/notes/entities';
-import { TONE_DOT } from '../lib/rowState';
 
 /**
  * A run as a CHAIN OF NODES: what woke it at the top, one node per tool call —
  * verb, what it touched, how long, whether it went well, with the result (or
  * the machine's own record) folded inside the node — and how it ended at the
- * bottom. One hairline rail runs behind the chain; the nodes are opaque, so
- * the rail reads as the connector between them. The model's own text sits
- * beside the rail between nodes, as the reasoning that led from one to the
- * next, and the executor's notes as amber asides.
+ * bottom.
+ *
+ * The chain reads as a graph rather than a list: a hairline rail runs down the
+ * left, each node hangs off it by an opaque round badge carrying the tool's
+ * icon, and the badge is the only thing that carries the node's tone. The
+ * model's own text sits beside the rail between nodes, as the reasoning that
+ * led from one to the next, and the executor's notes as amber asides.
  *
  * Pure over its input: the same component renders a finished transcript and a
  * run in flight — `live` only decides whether the open node breathes and
@@ -102,7 +104,7 @@ function duration(ms: number): string {
   return `${Math.floor(ms / 60_000)} m ${Math.round((ms % 60_000) / 1000)} s`;
 }
 
-const RESULT_PREVIEW = 160;
+const RESULT_PREVIEW = 120;
 const TRIGGER_EVENTS_SHOWN = 5;
 
 /** One line of the machine's record, in the terminal's own words. */
@@ -143,7 +145,7 @@ function MachineRecord({ events }: { events: MachineEvent[] }) {
   const lines = events.map(machineLine).filter((l): l is NonNullable<typeof l> => l !== null);
   if (lines.length === 0) return null;
   return (
-    <pre className="mt-1.5 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface-2 px-3 py-2 font-mono text-[12px] leading-5">
+    <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface-2 px-3 py-2 font-mono text-[12px] leading-5">
       {lines.map((l, i) => (
         <div key={i} className={MACHINE_TONE[l.tone]}>
           {l.text}
@@ -153,51 +155,72 @@ function MachineRecord({ events }: { events: MachineEvent[] }) {
   );
 }
 
-/**
- * The chain's box: opaque so the rail passes visually THROUGH the gaps, not
- * behind the content. `tone` colours the dot; the border stays a hairline for
- * every node but a live or failed one, which is the one place the chain is
- * allowed a louder edge.
- */
-function Node({ tone, children }: { tone: 'ok' | 'bad' | 'live' | 'muted'; children: React.ReactNode }) {
-  const border =
-    tone === 'live' ? 'border-sky-300' : tone === 'bad' ? 'border-red-300' : 'border-border-subtle';
-  return <div className={`relative rounded-md border ${border} bg-surface-1 px-3 py-2`}>{children}</div>;
-}
+type NodeTone = 'ok' | 'bad' | 'live' | 'muted';
 
-function NodeHeader({
+/** The badge a node hangs off the rail by — opaque, so the rail passes behind it. */
+const BADGE_TONE: Record<NodeTone, string> = {
+  ok: 'border-border-default text-text-secondary',
+  muted: 'border-border-default text-text-muted',
+  bad: 'border-red-300 text-red-600',
+  live: 'border-sky-400 text-sky-600 dot-pulse [--pulse-color:rgba(14,165,233,0.35)]',
+};
+
+const BOX_TONE: Record<NodeTone, string> = {
+  ok: 'border-border-subtle',
+  muted: 'border-border-subtle',
+  bad: 'border-red-200',
+  live: 'border-sky-200',
+};
+
+/**
+ * One node on the chain: the badge on the rail, and the box beside it. The box
+ * is opaque and hairline-bordered; the badge is what carries the tone, so a
+ * chain of twenty steps stays one colour until something is live or wrong.
+ */
+function ChainNode({
   tone,
   Icon,
   title,
   detail,
   detailHref,
   right,
+  children,
 }: {
-  tone: 'ok' | 'bad' | 'live' | 'muted';
+  tone: NodeTone;
   Icon: (props: { className?: string }) => React.ReactNode;
   title: string;
   detail?: string | null;
   detailHref?: string | null;
   right?: string | null;
+  children?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-baseline gap-2 text-[13px]">
-      <span className={`relative top-[-1px] h-2 w-2 shrink-0 self-center rounded-full ${TONE_DOT[tone]}`} aria-hidden />
-      <Icon className="relative top-[2px] h-3.5 w-3.5 shrink-0 text-text-muted" />
-      <span className={`font-medium ${tone === 'bad' ? 'text-red-600' : 'text-text-primary'}`}>{title}</span>
-      {detail && (
-        <span className="min-w-0 truncate font-mono text-[12px] text-text-secondary" title={detail}>
-          {detailHref ? (
-            <Link className="hover:text-brand-dark-green hover:underline" href={detailHref}>
-              {detail}
-            </Link>
-          ) : (
-            detail
+    <li className="relative flex gap-3">
+      <span
+        aria-hidden
+        className={`relative z-10 mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full border bg-surface-1 ${BADGE_TONE[tone]}`}
+      >
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <div className={`min-w-0 flex-1 rounded-lg border bg-surface-1 px-3 py-2 ${BOX_TONE[tone]}`}>
+        <div className="flex items-baseline gap-2 text-[13px]">
+          <span className={`shrink-0 font-medium ${tone === 'bad' ? 'text-red-600' : 'text-text-primary'}`}>{title}</span>
+          {detail && (
+            <span className="min-w-0 truncate font-mono text-[12px] text-text-secondary" title={detail}>
+              {detailHref ? (
+                <Link className="hover:text-brand-dark-green hover:underline" href={detailHref}>
+                  {detail}
+                </Link>
+              ) : (
+                detail
+              )}
+            </span>
           )}
-        </span>
-      )}
-      {right && <span className="ml-auto shrink-0 tabular-nums text-[11px] text-text-muted">{right}</span>}
-    </div>
+          {right && <span className="ml-auto shrink-0 tabular-nums text-[11px] text-text-muted">{right}</span>}
+        </div>
+        {children}
+      </div>
+    </li>
   );
 }
 
@@ -212,39 +235,35 @@ function ToolNode({ step, live, now }: { step: Step; live: boolean; now: number 
   const firstLine = result.split('\n')[0] ?? '';
   const preview = firstLine.length > RESULT_PREVIEW ? `${firstLine.slice(0, RESULT_PREVIEW)}…` : firstLine;
   const more = result.length > preview.length;
-  const tone = running ? 'live' : failed ? 'bad' : 'ok';
+  const tone: NodeTone = running ? 'live' : failed ? 'bad' : 'ok';
   // The machine's record says more than the tool's one-line result, so a
   // machine step shows the terminal and folds the result away.
   const hasMachine = !!step.machine?.length;
 
   return (
-    <li>
-      <Node tone={tone}>
-        <NodeHeader
-          tone={tone}
-          Icon={meta.Icon}
-          title={meta.verb}
-          detail={step.detail}
-          detailHref={path ? hrefForNotePath(path, null) : null}
-          right={took !== null ? duration(took) : null}
-        />
-        {hasMachine && <MachineRecord events={step.machine!} />}
-        {result && !hasMachine && (
-          <button
-            type="button"
-            className="mt-0.5 block max-w-full pl-8 text-left font-mono text-[12px] leading-relaxed text-text-muted hover:text-text-secondary"
-            onClick={() => more && setOpen((o) => !o)}
-            aria-expanded={open}
-          >
-            {open ? <span className="whitespace-pre-wrap break-words">{result}</span> : <span className="block truncate">{preview}</span>}
-            {more && !open && <span className="ml-1 text-brand-dark-green">more</span>}
-            {open && <span className="ml-1 text-brand-dark-green">less</span>}
-          </button>
-        )}
-        {result && hasMachine && failed && <p className="mt-0.5 pl-8 font-mono text-[12px] text-red-600">{preview}</p>}
-        {running && !result && !hasMachine && <p className="mt-0.5 pl-8 font-mono text-[12px] text-text-muted">working…</p>}
-      </Node>
-    </li>
+    <ChainNode
+      tone={tone}
+      Icon={meta.Icon}
+      title={meta.verb}
+      detail={step.detail}
+      detailHref={path ? hrefForNotePath(path, null) : null}
+      right={took !== null ? duration(took) : null}
+    >
+      {hasMachine && <MachineRecord events={step.machine!} />}
+      {result && !hasMachine && (
+        <button
+          type="button"
+          className="mt-1 block max-w-full text-left font-mono text-[12px] leading-relaxed text-text-muted hover:text-text-secondary"
+          onClick={() => more && setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          {open ? <span className="whitespace-pre-wrap break-words">{result}</span> : <span className="block truncate">{preview}</span>}
+          {more && <span className="ml-1 text-brand-dark-green">{open ? 'less' : 'more'}</span>}
+        </button>
+      )}
+      {result && hasMachine && failed && <p className="mt-1 font-mono text-[12px] text-red-600">{preview}</p>}
+      {running && !result && !hasMachine && <p className="mt-1 font-mono text-[12px] text-text-muted">working…</p>}
+    </ChainNode>
   );
 }
 
@@ -301,32 +320,28 @@ export default function RunSteps({
 
   const TriggerIcon = trigger ? (TRIGGER_ICON[trigger.kind] ?? PlayIcon) : PlayIcon;
   const extraEvents = trigger?.events ? trigger.events.length - TRIGGER_EVENTS_SHOWN : 0;
+  const triggerTone: NodeTone = live && steps.length === 0 ? 'live' : 'muted';
 
   return (
-    <div ref={box} className={scroll ? 'max-h-[32rem] overflow-y-auto' : ''}>
-      <ol className="relative flex flex-col gap-2.5">
-        {/* The rail: one hairline behind the whole chain. The nodes are opaque,
-            so what shows through the gaps between them IS the connector. */}
-        {/* left = the node's border (1px) + padding (12px) + half the 8px dot,
-            so the connector lines up under the dots it joins. */}
-        <span aria-hidden className="absolute bottom-4 left-[16px] top-4 w-px bg-border-default" />
+    <div ref={box} className={scroll ? 'max-h-[34rem] overflow-y-auto pr-1' : ''}>
+      <ol className="relative flex flex-col gap-2">
+        {/* The rail: one hairline down the badges' centres. The badges are
+            opaque, so what shows between them IS the connector. */}
+        <span aria-hidden className="absolute bottom-6 left-[13.5px] top-6 w-px bg-border-default" />
 
         {trigger && (
-          <li>
-            <Node tone={live && steps.length === 0 ? 'live' : 'muted'}>
-              <NodeHeader tone={live && steps.length === 0 ? 'live' : 'muted'} Icon={TriggerIcon} title={trigger.label} />
-              {trigger.events && trigger.events.length > 0 && (
-                <ol className="mt-1 flex flex-col gap-0.5 pl-8 font-mono text-[12px]">
-                  {trigger.events.slice(0, TRIGGER_EVENTS_SHOWN).map((e, i) => (
-                    <li key={i} className="truncate" title={`${e.source} — ${e.summary}`}>
-                      <span className="text-sky-700">{e.kind}</span> {e.source} <span className="text-text-muted">— {e.summary}</span>
-                    </li>
-                  ))}
-                  {extraEvents > 0 && <li className="text-text-muted">+{extraEvents} more</li>}
-                </ol>
-              )}
-            </Node>
-          </li>
+          <ChainNode tone={triggerTone} Icon={TriggerIcon} title={trigger.label}>
+            {trigger.events && trigger.events.length > 0 && (
+              <ol className="mt-1 flex flex-col gap-0.5 font-mono text-[12px]">
+                {trigger.events.slice(0, TRIGGER_EVENTS_SHOWN).map((e, i) => (
+                  <li key={i} className="truncate" title={`${e.source} — ${e.summary}`}>
+                    <span className="text-sky-700">{e.kind}</span> {e.source} <span className="text-text-muted">— {e.summary}</span>
+                  </li>
+                ))}
+                {extraEvents > 0 && <li className="text-text-muted">+{extraEvents} more</li>}
+              </ol>
+            )}
+          </ChainNode>
         )}
 
         {steps.map((step, i) => {
@@ -352,13 +367,7 @@ export default function RunSteps({
           );
         })}
 
-        {end && (
-          <li>
-            <Node tone={end.tone}>
-              <NodeHeader tone={end.tone} Icon={end.tone === 'bad' ? XIcon : CircleCheckIcon} title={end.label} />
-            </Node>
-          </li>
-        )}
+        {end && <ChainNode tone={end.tone} Icon={end.tone === 'bad' ? XIcon : CircleCheckIcon} title={end.label} />}
 
         <li ref={tail} aria-hidden className="h-px" />
       </ol>

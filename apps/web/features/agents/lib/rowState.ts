@@ -121,6 +121,11 @@ export function fmtAgo(iso: string | null, now = Date.now()): string {
   return ago(iso, now);
 }
 
+/** A moment still ahead, in the unit that reads: "in 12 min", "in 3 h". */
+export function fmtUntil(iso: string | null, now = Date.now()): string {
+  return until(iso, now);
+}
+
 /** A run's length, in the unit that reads: "42s", "2m 0s", "1h 05m". */
 export function fmtDuration(startedAt: string, endedAt: string | null): string | null {
   if (!endedAt) return null;

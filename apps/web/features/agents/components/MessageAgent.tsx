@@ -5,13 +5,13 @@ import { Alert, Button } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 
 /**
- * Say something to the agent.
+ * Say something to the agent — the box in its sidebar.
  *
  * The in-app channel. What you type lands in the agent's mailbox and is read on
  * its next run — the same path an email or a Slack mention takes, because there
  * is one loop behind all of them. It is not a chat box: the agent answers by
- * doing its work, and what it did shows up on its timeline and in the notes it
- * writes.
+ * doing its work, and what it did shows up on the run beside this box and in
+ * the notes it writes.
  */
 export default function MessageAgent({ spaceId, agentName }: { spaceId: string; agentName: string }) {
   const [text, setText] = useState('');
@@ -41,27 +41,24 @@ export default function MessageAgent({ spaceId, agentName }: { spaceId: string; 
   };
 
   return (
-    <section className="flex flex-col gap-2">
-      <p className="text-[13px] font-semibold text-text-primary">Say something to it</p>
+    <div className="flex flex-col gap-2">
       <textarea
         value={text}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void send();
         }}
-        rows={3}
+        rows={2}
         placeholder="What do you want it to do?"
         className="w-full resize-y rounded-md border border-border-subtle bg-surface-2 p-2.5 text-[13px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-border-strong"
       />
-      <div className="flex items-center gap-3">
-        <p className="min-w-0 flex-1 text-[12px] text-text-tertiary">
-          {notice ?? 'It answers by doing the work — watch its timeline, not this box.'}
-        </p>
-        <Button variant="brand" size="sm" onClick={send} disabled={busy || !text.trim()}>
+      <div className="flex items-center gap-2">
+        <p className="min-w-0 flex-1 text-[12px] text-text-tertiary">{notice ?? 'Read on its next run.'}</p>
+        <Button variant="ghost" size="sm" onClick={send} disabled={busy || !text.trim()}>
           Send
         </Button>
       </div>
-      {error && <Alert>{error}</Alert>}
-    </section>
+      {error && <Alert inline>{error}</Alert>}
+    </div>
   );
 }
