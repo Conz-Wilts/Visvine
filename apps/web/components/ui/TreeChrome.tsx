@@ -1,6 +1,6 @@
 'use client';
 
-import { Children, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Children } from 'react';
 
 /**
  * The chrome every tree in the app is drawn with: the full-bleed row band, the
@@ -40,8 +40,8 @@ export function TreeGuide({ guide, active = false }: { guide: TreeGuideKind; act
   const edge = active ? 'border-brand-green/60' : 'border-border-default/70';
   return (
     <span className="relative flex w-3 shrink-0 self-stretch" aria-hidden="true">
-      {/* `tree-line` marks the vertical strokes so a branch opening can draw
-          them downward (globals.css) rather than switching them on. */}
+      {/* `tree-line` marks the vertical strokes so a spine being revealed can
+          draw them downward (globals.css) rather than switching them on. */}
       {guide === 'last' ? (
         <span className={`tree-line absolute left-0 top-0 h-1/2 w-2.5 rounded-bl-[6px] border-b border-l ${edge}`} />
       ) : (
@@ -125,10 +125,6 @@ export function TreeSpine({ children, animate = false, stem: stemPx = 18 }: {
 // one row every STAGGER while each row lands under it. The stagger stops
 // growing after a handful of rows so a long list never holds its tail off
 // screen waiting its turn.
-//
-// The numbers are the ones the context tree's branch cascade uses (globals.css,
-// `.ctx-branch-enter`): every tree in the app grows open at one speed, so a
-// folder and an alias list are visibly the same gesture.
 const SPINE_STEM_MS = 90;
 const SPINE_STAGGER_MS = 40;
 const SPINE_ROW_MS = 190;
@@ -214,83 +210,14 @@ export function TreeFolderIcon({ open = false }: { open?: boolean }) {
   );
 }
 
-// A folder's children, revealed with a height tween instead of appearing on a
-// single frame. `grid-template-rows: 0fr -> 1fr` on the wrapper animates to the
-// content's natural height with nothing measured, and the rows inside stagger
-// in (`.ctx-branch`, globals.css). Collapsing keeps the subtree mounted for the
-// length of the tween so the fold reads in both directions; `mounted` is what
-// unmounts it afterwards, so a shut folder costs nothing.
-//
-// Two things keep it feeling instant on a big folder:
-//   - The open state is set from a LAYOUT effect after a forced reflow, not
-//     from rAF. Waiting for a frame to establish the 0fr start value put ~45ms
-//     of dead air between the click and the first pixel of movement; reading
-//     scrollHeight establishes it inside the click's own task instead.
-//   - A subtree taller than the panel skips the height tween entirely (see
-//     TALL_BRANCH_PX). Sliding 6000px of rows open takes the full duration to
-//     reveal content that was never going to be on screen, which is exactly the
-//     "opens, sits empty, then the files appear" the tween was meant to fix.
-const BRANCH_MS = 180;
-const TALL_BRANCH_PX = 640;
-
+// A folder's children. Opening a folder is not an animation: the rows are
+// there on the frame the click is handled, which is what a tree that is being
+// navigated wants — the tween's reveal cost more than it read. The wrapper
+// stays so the branch keeps its own box: `min-w-0` is load-bearing, not
+// tidying, because TREE_ROW_BLEED gives every row 999px of left padding and
+// without it the column sizes itself to that and overflows the panel to the
+// RIGHT, pushing each row's trailing menu past the panel's clipped edge.
 export function TreeBranch({ open, children }: { open: boolean; children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(open);
-  // Starts at `open` so a tree that loads with folders already expanded renders
-  // them open rather than playing an entrance for state the user never changed.
-  const [expanded, setExpanded] = useState(open);
-  const [tall, setTall] = useState(false);
-  // The row cascade is an ENTRANCE, not a style: it plays when this folder is
-  // opened, never when the tree re-mounts (which it does on every navigation)
-  // with the folder already open. Marking the branch instead of the rows keeps
-  // the flag where the open transition is known.
-  const [entering, setEntering] = useState(false);
-  const inner = useRef<HTMLDivElement | null>(null);
-
-  // Mounting in an effect would cost a frame before the rows even exist —
-  // adjusting the state during the render that opened the folder puts them in
-  // the same commit, which is what lets the layout effect below measure and
-  // expand without ever painting an empty branch.
-  if (open && !mounted) setMounted(true);
-
-  useEffect(() => {
-    if (open) return;
-    setExpanded(false);
-    const timer = setTimeout(() => setMounted(false), tall ? 0 : BRANCH_MS);
-    return () => clearTimeout(timer);
-  }, [open, tall]);
-
-  useLayoutEffect(() => {
-    if (!open || expanded || !mounted || !inner.current) return;
-    // The read is the point: it flushes layout with the wrapper still at 0fr,
-    // so flipping to 1fr on the next line is a change the transition can run.
-    const height = inner.current.scrollHeight;
-    setTall(height > TALL_BRANCH_PX);
-    setEntering(true);
-    setExpanded(true);
-  }, [open, expanded, mounted]);
-
-  if (!mounted) return null;
-  return (
-    <div
-      className={`ctx-branch-wrap grid ${entering ? 'ctx-branch-enter' : ''} ${
-        tall ? '' : 'transition-[grid-template-rows] duration-[180ms] ease-out'
-      } ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
-    >
-      {/* Clipped on the vertical axis only: rows bleed 999px to the left to
-          paint their hover band to the panel edge, and `overflow: hidden` here
-          would cut that off. `visible` pairs legally with `clip` where it
-          cannot with `hidden`.
-
-          `min-w-0` is load-bearing, not tidying: a grid item's automatic
-          minimum size is its MIN-CONTENT width, and TREE_ROW_BLEED gives every
-          row 999px of left padding — so without it the column sizes itself to
-          that and the branch overflows the panel to the RIGHT. One level of
-          nesting was enough to push each row's trailing ⋯ menu past the panel's
-          `overflow-hidden` edge, which silently took Share/Move/Delete away
-          from every note inside a folder while the top-level rows kept theirs. */}
-      <div ref={inner} className="min-h-0 min-w-0 overflow-x-visible overflow-y-clip">
-        {children}
-      </div>
-    </div>
-  );
+  if (!open) return null;
+  return <div className="min-w-0">{children}</div>;
 }

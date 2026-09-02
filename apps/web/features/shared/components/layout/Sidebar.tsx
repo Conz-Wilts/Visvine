@@ -305,7 +305,7 @@ export default function Sidebar() {
                   className="flex h-8 w-8 items-center justify-center rounded-full text-white"
                   style={{ background: "var(--theme-accent-color, #78d870)" }}
                 >
-                  <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" viewBox="0 0 24 24">
+                  <svg className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" viewBox="0 0 24 24">
                     <path d="M12 5v14M5 12h14" />
                   </svg>
                 </span>

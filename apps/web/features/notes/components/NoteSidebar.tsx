@@ -9,9 +9,8 @@
 // toolbar's star toggles, so both surfaces always agree. Nesting is shown
 // with tree guides: each nested row draws its own segment of the vertical line
 // plus an elbow into its icon, and the last child of a folder closes the line
-// off with a rounded corner, so depth reads at a glance. Expanding a folder
-// tweens its branch open and drops the rows in one after another rather than
-// swapping them in on a frame (see `Branch`). The tree scrolls with
+// off with a rounded corner, so depth reads at a glance. Expanding a folder puts
+// its rows on screen immediately (see `Branch`). The tree scrolls with
 // its scrollbar on the right (normal) edge. A Trash folder is pinned below everything: deleted
 // notes live there for a week (restore or delete-forever from the row menu)
 // before the server purges them.
@@ -480,7 +479,7 @@ function TrashFolder({
         />
       </div>
       <Branch open={open}>
-        <div className={`ctx-branch ${CHILD_INDENT}`}>
+        <div className={CHILD_INDENT}>
           {entries.length === 0 ? (
             <div className="py-1.5 pl-3 text-[13px] text-text-muted">Trash is empty.</div>
           ) : (
@@ -918,7 +917,7 @@ function FolderRow(props: {
             expanded, leaving a gap between the folder and its next sibling. */}
         <div className="relative">
           {props.guide === 'mid' && <TreeGuideRun active={props.guideActive} />}
-          <div className={`ctx-branch ${props.guide ? NESTED_CHILD_INDENT : CHILD_INDENT}`}>
+          <div className={props.guide ? NESTED_CHILD_INDENT : CHILD_INDENT}>
             <Tree
               node={props.node}
               openPaths={props.openPaths}
