@@ -3,16 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { PlugIcon } from "@/features/shared/icons";
 import Image from "next/image";
 import { useSession, signOut } from "@/features/auth/lib/auth-client";
 import { useFullProfile } from "@/features/shared/contexts/FullProfileContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
+import PersonalConnectorsDialog, { CONNECTORS_PARAM } from "@/features/settings/components/PersonalConnectorsDialog";
 
 /**
  * The account button, floated in the shell's top-right corner (AuthLayoutClient)
  * — the one piece of chrome that is not the rail. Its menu hangs down and to the
  * left of the avatar, portalled to <body> so nothing a page pins at its own top
  * edge can paint over it.
+ *
+ * Connectors are a menu entry rather than a settings section because they are
+ * yours wherever you are: the dialog opens over the page you were on and
+ * closing it leaves you there. The button sits in the shell, so `?connectors=1`
+ * re-opens it on ANY page — which is what the OAuth round trip returns to.
  */
 export default function UserMenu() {
   const { data: session, isPending } = useSession();
@@ -20,8 +27,29 @@ export default function UserMenu() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
+  const [connectorsOpen, setConnectorsOpen] = useState(false);
   const router = useRouter();
   const { openProfile } = useFullProfile();
+
+  // `?connectors=1` opens the dialog: the sign-in round trip comes back to the
+  // page it started on, and this is what re-opens what the person was in.
+  // Read off `location` rather than useSearchParams — the account button is
+  // shell chrome on every page, and a hook that forces a Suspense boundary
+  // there would be paid by all of them.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get(CONNECTORS_PARAM) === "1") setConnectorsOpen(true);
+  }, []);
+
+  const closeConnectors = () => {
+    setConnectorsOpen(false);
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has(CONNECTORS_PARAM)) return;
+    params.delete(CONNECTORS_PARAM);
+    const q = params.toString();
+    router.replace(q ? `${window.location.pathname}?${q}` : window.location.pathname, { scroll: false });
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -98,6 +126,14 @@ export default function UserMenu() {
           </button>
 
           <button
+            onClick={() => { setOpen(false); setConnectorsOpen(true); }}
+            className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors flex items-center gap-2"
+          >
+            <PlugIcon className="w-4 h-4 text-text-muted" />
+            Connectors
+          </button>
+
+          <button
             onClick={() => { setOpen(false); router.push("/settings"); }}
             className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors flex items-center gap-2"
           >
@@ -122,6 +158,8 @@ export default function UserMenu() {
         </div>,
         document.body
       )}
+
+      {connectorsOpen && <PersonalConnectorsDialog onClose={closeConnectors} />}
     </>
   );
 }

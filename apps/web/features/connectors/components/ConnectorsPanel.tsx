@@ -713,10 +713,12 @@ export default function ConnectorsPanel({
                       onClick={() =>
                         rows.length > 0 && !many
                           ? openManage(rows[0], e.description)
-                          : oneClick && personal
+                          : oneClick && (personal || e.shape === 'mcp')
                             // Nothing to fill in and nothing to choose, so the
                             // row says what it is rather than opening a form
-                            // whose every field is an OAuth app you don't have.
+                            // whose every field is an OAuth app you don't have
+                            // — and an MCP server HAS no fields, in either
+                            // scope, so its row never opens one.
                             ? setInfo(showInfo ? null : e.id)
                             : setEntry(e)
                       }

@@ -27,10 +27,12 @@ import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
  *
  * The panel needs a real space id, and a personal space is provisioned lazily,
  * so the id is fetched rather than derived (GET /api/user/personal-space).
+ *
+ * It has no page of its own — PersonalConnectorsDialog opens it from the
+ * account menu — so where the OAuth round trip lands is the caller's to say.
  */
-const RETURN_TO = '/settings?section=connectors';
 
-export default function PersonalConnectorsPanel() {
+export default function PersonalConnectorsPanel({ returnTo }: { returnTo: string }) {
   const [spaceId, setSpaceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,5 +53,5 @@ export default function PersonalConnectorsPanel() {
     );
   }
 
-  return <ConnectorsPanel space={spaceId} scope="personal" returnTo={RETURN_TO} />;
+  return <ConnectorsPanel space={spaceId} scope="personal" returnTo={returnTo} />;
 }

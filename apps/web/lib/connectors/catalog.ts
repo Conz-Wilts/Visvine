@@ -23,13 +23,13 @@
  *     been checked to publish that metadata and to offer dynamic registration.
  *
  * The catalogue splits across two surfaces ({@link catalogForScope}). Your own
- * settings offer what you connect by signing IN as yourself: every vetted `mcp`
- * server, and the Google recipes (Gmail, Calendar, Drive) that ride the
- * deployment's own OAuth client — one press each, your own account, carried
- * into every space you are in. A space's console offers those too, for the
- * team's account, plus everything that is a team's configuration: the
- * credentials, OAuth apps, databases and model keys, and the generic
- * MCP-by-URL row for a server that isn't on the list.
+ * connectors — the dialog off the account menu — offer what you connect by
+ * signing IN as yourself: every vetted `mcp` server, and the Google recipes
+ * (Gmail, Calendar, Drive) that ride the deployment's own OAuth client — one
+ * press each, your own account, carried into every space you are in. A space's
+ * console offers the whole catalogue: those same recipes for the team's
+ * account, beside everything that is a team's configuration — credentials,
+ * OAuth apps, databases and model keys.
  *
  * A recipe is not a slot. A space may connect one service several times — the
  * team's Drive beside your own, two Slack workspaces — so a connector's NAME
@@ -94,7 +94,7 @@ export interface CatalogEntry {
   logo: string
   shape: 'key' | 'oauth' | 'model' | 'mcp'
   /**
-   * Offered in your own settings as well as a space's console
+   * Offered among your own connectors, not just in a space's console
    * ({@link catalogForScope}). True of a service you connect by signing in as
    * yourself — every `mcp` server, and the one-press Google recipes.
    */
@@ -1181,20 +1181,22 @@ export function allowsManyConnectors(entry: CatalogEntry, scope: ConnectorScope 
 /**
  * The services a surface offers.
  *
- * Your own settings offer what you connect by signing in AS YOURSELF: every
+ * Your own connectors offer what you connect by signing in AS YOURSELF: every
  * vetted MCP server, and the Google recipes that ride the deployment's own
- * client — one press, your own account, usable in every space you are in. A
- * space's console offers all of those too (a team's Drive is as real as your
- * own) plus everything that is a team's configuration: API keys, OAuth apps
- * you register, databases, model keys, and the generic MCP-by-URL row.
+ * client — one press, your own account, usable in every space you are in.
+ *
+ * A space's console offers the WHOLE catalogue. A vetted MCP server belongs
+ * there beside the model providers and the API keys, because a space connects
+ * one the same way it connects anything else — each member signs in with their
+ * own account (`mode: 'user'`), and the note is the team's rather than yours.
  *
  * So the lists are not disjoint, and they don't need to be — the same recipe
- * connected in your settings spends your account, and connected in a space
- * spends the space's. What the personal list refuses is a credential someone
- * has to go and fetch: pasting a bot token is setup for a team, not signing in.
+ * connected for yourself spends your account, and connected in a space spends
+ * the space's. What the personal list refuses is a credential someone has to
+ * go and fetch: pasting a bot token is setup for a team, not signing in.
  */
 export function catalogForScope(scope: ConnectorScope): CatalogEntry[] {
-  if (scope === 'space') return CONNECTOR_CATALOG.filter((entry) => entry.shape !== 'mcp')
+  if (scope === 'space') return [...CONNECTOR_CATALOG]
   return CONNECTOR_CATALOG.filter((entry) => entry.shape === 'mcp' || entry.personal === true)
 }
 

@@ -501,7 +501,10 @@ by `safeReturnTo` at both ends and held in the signed pending cookie, never
 echoed through the provider.
 
 **A connector you connect for yourself works in every space you are in.** Sign
-in once at `/settings?section=connectors` and the note lands in your personal
+in once from **Connectors on the account menu** — a dialog over whatever page
+you were on (`PersonalConnectorsDialog`), not a settings section, because
+`?connectors=1` on ANY page opens it and that is what the OAuth round trip
+returns to — and the note lands in your personal
 space (`me:<userId>` — a full Space you are the only member and admin of, so
 nothing about notes, secrets or the OAuth dance is special-cased). What makes
 it travel is `readConnectorNote`: a name is looked up in the space you are in,
@@ -523,24 +526,24 @@ never chose to run it, and the test button is about one particular note. An
 agent run and a direct action call are acts of the person they run as, so those
 get it. `list_connectors` reports the caller's own with `personal: true`.
 
-**Your own settings offer what you sign in to; a space offers that plus its own
-configuration.** `catalogForScope` splits on `shape: 'mcp'` OR `personal: true`
-— the vetted MCP servers, and the Google recipes (Gmail, Google Calendar,
-Google Drive) that ride the deployment's own OAuth client, so they are one press
-for a person too. The lists are no longer disjoint: a space may connect the same
-Google recipes for the team's account, and what the personal list refuses is a
-credential someone has to go and fetch. The rest below still holds. The catalogue has a fourth shape, `mcp` — a remote MCP server by URL,
+**Your own connectors offer what you sign in to; a space's console offers the
+whole catalogue.** `catalogForScope('personal')` is `shape: 'mcp'` OR
+`personal: true` — the vetted MCP servers, and the Google recipes (Gmail,
+Google Calendar, Google Drive) that ride the deployment's own OAuth client, so
+they are one press for a person too. `catalogForScope('space')` is everything,
+the vetted servers included: a team connects an MCP server the same way you do,
+each member signing in with their own account, and it belongs beside the model
+providers rather than being missing from the one surface an admin configures.
+What the personal list refuses is a credential someone has to go and fetch. The
+catalogue has a fourth shape, `mcp` — a remote MCP server by URL,
 built by `mcpServer(...)` in `lib/connectors/catalog.ts`: the note's
 `auth.discover` is the URL, the host is the whole perimeter, there are no
 fields, and Visvine registers itself as the OAuth client at first connect
 (RFC 7591), so the press is one click on every deployment with no platform
-client behind it. `catalogForScope` splits on that shape and nothing else: the
-same panel in `scope: 'personal'` lists the `mcp` entries, one connector each
-(`allowsManyConnectors(entry, scope)`) — because a personal connector is your
-ACCOUNT at a service, and you sign in as yourself once — while the space
-console lists every other shape (keys, OAuth apps, databases, model keys, and
-the generic MCP-by-URL row for a server that isn't vetted), because those are
-a team's configuration. Every URL on the list was checked to publish OAuth
+client behind it. The same panel in `scope: 'personal'` lists the `mcp`
+entries, one connector each (`allowsManyConnectors(entry, scope)`) — because a
+personal connector is your ACCOUNT at a service, and you sign in as yourself
+once — while a space may hold several of anything. Every URL on the list was checked to publish OAuth
 metadata with a registration endpoint and to answer streamable HTTP at that
 path; adding one is adding an `mcpServer` entry after the same check. A row
 says whether an account is actually linked (`connection` on the list route,

@@ -5,7 +5,6 @@ import { useTheme, COLOR_THEMES, ColorTheme } from '@/features/shared/contexts/T
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import LoadingText from '@/components/ui/LoadingText';
 import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePanel';
-import PersonalConnectorsPanel from '@/features/settings/components/PersonalConnectorsPanel';
 import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPanel';
 
 /**
@@ -20,11 +19,12 @@ import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPane
 // Only the tabs that do something. Privacy was a coming-soon placeholder and is
 // gone until there's something behind it; Account is here because deleting your
 // account is something.
+// Your own connectors are NOT a section here: they are an entry on the account
+// menu that opens a dialog (PersonalConnectorsDialog), because connecting one
+// is a minute's work over whatever page you were on, not a place to navigate
+// to. `?connectors=1` on any page opens it.
 const SECTIONS: ConsoleSection[] = [
   { id: 'appearance', label: 'Appearance', width: 'form' },
-  // Connectors sit here rather than in the Space Console because these ones are
-  // yours: they live in your personal space, which has one member.
-  { id: 'connectors', label: 'Connectors', width: 'form' },
   { id: 'mcp', label: 'MCP', width: 'form' },
   { id: 'account', label: 'Account', width: 'form' },
 ];
@@ -87,8 +87,6 @@ function renderSection(id: string) {
   switch (id) {
     case 'appearance':
       return <AppearanceSection />;
-    case 'connectors':
-      return <PersonalConnectorsPanel />;
     case 'mcp':
       return <ConnectClaudePanel />;
     case 'account':

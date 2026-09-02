@@ -350,11 +350,11 @@ test('a return path is a relative path on this app or nothing', () => {
   assert.equal(safeReturnTo('/set tings'), null)
 
   // The link the console builds carries it; the link without one does not.
-  const url = new URL(connectorConnectUrl('me:u1', 'google-drive', '/settings?section=connectors'))
+  const url = new URL(connectorConnectUrl('me:u1', 'google-drive', '/directory?connectors=1'))
   assert.equal(url.pathname, '/api/connectors/oauth/start')
   assert.equal(url.searchParams.get('space'), 'me:u1')
   assert.equal(url.searchParams.get('connector'), 'google-drive')
-  assert.equal(url.searchParams.get('return'), '/settings?section=connectors')
+  assert.equal(url.searchParams.get('return'), '/directory?connectors=1')
   assert.equal(new URL(connectorConnectUrl('s1', 'gmail')).searchParams.get('return'), null)
   assert.equal(
     new URL(connectorConnectUrl('s1', 'google', 'https://evil.example')).searchParams.get('return'),
@@ -366,12 +366,12 @@ test('the link a browser is sent to is relative, and carries the same query', ()
   // NEXT_PUBLIC_APP_URL is inlined when the bundle is BUILT and set when the
   // container is RUN, so an absolute URL built in the browser is the
   // localhost fallback — every client surface uses the path instead.
-  const path = connectorConnectPath('me:u1', 'google-drive', '/settings?section=connectors')
+  const path = connectorConnectPath('me:u1', 'google-drive', '/directory?connectors=1')
   assert.ok(path.startsWith('/api/connectors/oauth/start?'))
   const url = new URL(path, 'https://example.test')
   assert.equal(url.searchParams.get('space'), 'me:u1')
   assert.equal(url.searchParams.get('connector'), 'google-drive')
-  assert.equal(url.searchParams.get('return'), '/settings?section=connectors')
+  assert.equal(url.searchParams.get('return'), '/directory?connectors=1')
   assert.equal(connectorConnectUrl('me:u1', 'google-drive'), appOrigin() + connectorConnectPath('me:u1', 'google-drive'))
   assert.equal(new URL(connectorConnectPath('s1', 'g', 'https://evil.example'), 'https://x.test').searchParams.get('return'), null)
 })
@@ -397,18 +397,19 @@ test('your own settings offer what you sign in to; a space offers that plus its 
   // Nothing you have to go and fetch a credential for is offered here.
   assert.ok(!personal.some((e) => e.shape === 'key' || e.shape === 'model'))
 
-  // The console holds the credential-shaped world — keys, OAuth apps, models,
-  // databases and the generic MCP-by-URL row — and none of the vetted servers.
-  assert.ok(space.every((e) => e.shape !== 'mcp'))
-  for (const id of ['slack', 'gmail', 'google-drive', 'microsoft', 'postgres', 'openai', 'mcp']) {
+  // The console holds everything: the credential-shaped world — keys, OAuth
+  // apps, models, databases and the generic MCP-by-URL row — and the vetted
+  // servers too, which a team connects the same way you do.
+  assert.equal(space.length, CONNECTOR_CATALOG.length)
+  assert.ok(personal.every((e) => space.some((s) => s.id === e.id)))
+  for (const id of ['slack', 'gmail', 'google-drive', 'microsoft', 'postgres', 'openai', 'mcp', 'notion-mcp']) {
     assert.ok(space.some((e) => e.id === id), `${id} is a space connector`)
   }
-  assert.ok(!space.some((e) => e.id === 'notion-mcp'))
-  // The two lists cover the whole catalogue; the overlap is exactly the
-  // sign-in-as-yourself recipes a space may also connect for the team.
+  // The personal list is a subset: every recipe you can connect for yourself,
+  // a space may also connect for the team's account.
   const overlap = personal.filter((p) => space.some((s) => s.id === p.id))
-  assert.equal(personal.length + space.length - overlap.length, CONNECTOR_CATALOG.length)
-  assert.ok(overlap.every((e) => e.personal === true && e.shape === 'oauth'))
+  assert.equal(overlap.length, personal.length)
+  assert.ok(overlap.every((e) => e.personal === true || e.shape === 'mcp'))
 })
 
 test('a service you paste a credential into is named for what it is', () => {
