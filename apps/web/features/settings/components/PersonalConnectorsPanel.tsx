@@ -16,8 +16,9 @@ import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
  * your Notion is yours wherever you go, and it is still only ever YOUR account
  * being spent, because a run resolves through the person it runs as.
  *
- * Only MCP servers are offered here (lib/connectors/catalog.ts#catalogForScope).
- * An API key, an OAuth app, a database or a model key is a space's
+ * Only what you sign in to is offered here — the vetted MCP servers and the
+ * one-press Google recipes (lib/connectors/catalog.ts#catalogForScope). An API
+ * key, an OAuth app you register, a database or a model key is a space's
  * configuration, and lives in the Space Console.
  *
  * A space's own connector always wins its name. An admin who has configured

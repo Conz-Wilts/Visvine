@@ -22,13 +22,14 @@
  *     signs the person in ({@link mcpServer}). Every server on the list has
  *     been checked to publish that metadata and to offer dynamic registration.
  *
- * The shapes split across two surfaces ({@link catalogForScope}). Your own
- * settings offer the `mcp` servers and nothing else: a personal connector is
- * your account at a service, and a vetted MCP server is exactly the thing you
- * sign in to once and carry into every space. A space's console offers every
- * other shape — the credentials, OAuth apps, databases and model keys that are
- * a team's configuration — plus the generic MCP-by-URL row for a server that
- * isn't on the list.
+ * The catalogue splits across two surfaces ({@link catalogForScope}). Your own
+ * settings offer what you connect by signing IN as yourself: every vetted `mcp`
+ * server, and the Google recipes (Gmail, Calendar, Drive) that ride the
+ * deployment's own OAuth client — one press each, your own account, carried
+ * into every space you are in. A space's console offers those too, for the
+ * team's account, plus everything that is a team's configuration: the
+ * credentials, OAuth apps, databases and model keys, and the generic
+ * MCP-by-URL row for a server that isn't on the list.
  *
  * A recipe is not a slot. A space may connect one service several times — the
  * team's Drive beside your own, two Slack workspaces — so a connector's NAME
@@ -92,6 +93,12 @@ export interface CatalogEntry {
   /** Path under /images/connectors. */
   logo: string
   shape: 'key' | 'oauth' | 'model' | 'mcp'
+  /**
+   * Offered in your own settings as well as a space's console
+   * ({@link catalogForScope}). True of a service you connect by signing in as
+   * yourself — every `mcp` server, and the one-press Google recipes.
+   */
+  personal?: boolean
   /** `host` or `host:port` entries the isolate may reach. */
   hosts: readonly string[]
   fields: readonly CatalogField[]
@@ -172,21 +179,21 @@ function mcpServer(
 export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
   // ── Email & calendar ───────────────────────────────────────────────────────
   {
-    id: 'google',
-    name: 'Google',
-    description: 'Gmail, Calendar, Contacts',
+    id: 'gmail',
+    name: 'Gmail',
+    description: 'Your mailbox — threads, search and the people you write to',
     category: 'email',
-    logo: 'google.svg',
+    logo: 'gmail.svg',
     shape: 'oauth',
-    hosts: ['gmail.googleapis.com', 'www.googleapis.com', 'people.googleapis.com'],
+    personal: true,
+    hosts: ['gmail.googleapis.com', 'people.googleapis.com'],
     oauth: {
-      provider: 'google',
+      provider: 'gmail',
       mode: 'user',
       authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
       tokenUrl: 'https://oauth2.googleapis.com/token',
       scopes: [
         'https://www.googleapis.com/auth/gmail.readonly',
-        'https://www.googleapis.com/auth/calendar.readonly',
         'https://www.googleapis.com/auth/contacts.readonly',
       ],
       // Google issues a refresh token only when asked for offline access, and
@@ -198,19 +205,61 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     fields: [
       { key: 'extra_scopes', label: 'Extra scopes', required: false, advanced: true,
         hint: 'Optional space-separated additional Google scopes, e.g. https://www.googleapis.com/auth/gmail.send. The defaults are read-only.' },
-      { key: 'GOOGLE_CLIENT_ID', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com', required: false, advanced: true,
+      { key: 'GMAIL_CLIENT_ID', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com', required: false, advanced: true,
         hint: 'Optional — leave blank to use Visvine’s own Google app. To use your own: Google Cloud console → APIs & Services → Credentials → OAuth client (Web application), with this deployment’s /api/connectors/oauth/callback as an authorised redirect URI.' },
-      { key: 'GOOGLE_CLIENT_SECRET', label: 'OAuth client secret', placeholder: 'GOCSPX-…', secret: true, required: false, advanced: true },
+      { key: 'GMAIL_CLIENT_SECRET', label: 'OAuth client secret', placeholder: 'GOCSPX-…', secret: true, required: false, advanced: true },
     ],
     body: [
-      'Each member connects their own Google account from this connector’s page; Visvine then sends their bearer on every call to the hosts above.',
+      'You connect your own Google account from this connector’s page; Visvine then sends your bearer on every call to the hosts above.',
       '',
       fetchSnippet([
         "const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&q=newer_than:7d')",
         'return JSON.parse(res.body).messages',
       ]),
       '',
-      'Calendar: `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=<ISO>`. Contacts: `https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses`.',
+      'A message: `https://gmail.googleapis.com/gmail/v1/users/me/messages/<id>?format=full`. Contacts: `https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses`.',
+    ].join('\n'),
+  },
+  {
+    id: 'google-calendar',
+    name: 'Google Calendar',
+    description: 'What is on your calendar, and who is on it with you',
+    category: 'email',
+    logo: 'googlecalendar.svg',
+    shape: 'oauth',
+    personal: true,
+    hosts: ['www.googleapis.com'],
+    oauth: {
+      provider: 'google-calendar',
+      mode: 'user',
+      authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+      tokenUrl: 'https://oauth2.googleapis.com/token',
+      scopes: [
+        'https://www.googleapis.com/auth/calendar.readonly',
+      ],
+      // Google issues a refresh token only when asked for offline access, and
+      // re-issues one only under prompt=consent — one extra consent screen on
+      // reconnect, against connections that otherwise die after an hour.
+      params: { access_type: 'offline', prompt: 'consent' },
+      clientId: 'platform:google',
+    },
+    fields: [
+      { key: 'extra_scopes', label: 'Extra scopes', required: false, advanced: true,
+        hint: 'Optional space-separated additional Google scopes, e.g. https://www.googleapis.com/auth/calendar.events to create events. The default is read-only.' },
+      { key: 'GOOGLE_CALENDAR_CLIENT_ID', label: 'OAuth client ID', placeholder: '…apps.googleusercontent.com', required: false, advanced: true,
+        hint: 'Optional — leave blank to use Visvine’s own Google app. To use your own: Google Cloud console → APIs & Services → Credentials → OAuth client (Web application), with this deployment’s /api/connectors/oauth/callback as an authorised redirect URI.' },
+      { key: 'GOOGLE_CALENDAR_CLIENT_SECRET', label: 'OAuth client secret', placeholder: 'GOCSPX-…', secret: true, required: false, advanced: true },
+    ],
+    body: [
+      'You connect your own Google account from this connector’s page; Visvine then sends your bearer on every call to the Calendar API.',
+      '',
+      fetchSnippet([
+        "const from = new Date().toISOString()",
+        "const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${from}&singleEvents=true&orderBy=startTime&maxResults=25`)",
+        'return JSON.parse(res.body).items',
+      ]),
+      '',
+      'The calendars you can see: `https://www.googleapis.com/calendar/v3/users/me/calendarList`.',
     ].join('\n'),
   },
   {
@@ -220,6 +269,7 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     category: 'email',
     logo: 'googledrive.svg',
     shape: 'oauth',
+    personal: true,
     hosts: ['www.googleapis.com'],
     oauth: {
       provider: 'google-drive',
@@ -1131,18 +1181,21 @@ export function allowsManyConnectors(entry: CatalogEntry, scope: ConnectorScope 
 /**
  * The services a surface offers.
  *
- * Your own settings offer the vetted MCP servers and nothing else. A personal
- * connector is your account at a service, and an MCP server you sign in to is
- * exactly that: one press, your own token, usable in every space you are in.
- * A space's console offers everything else — API keys, OAuth apps, databases,
- * model keys, and the generic MCP-by-URL row for a server that isn't vetted —
- * because those are a team's configuration: an admin pasting a bot token or
- * registering an OAuth app is doing setup for the space, not signing in as
- * themselves. The two lists are disjoint, so a service is offered in one place
- * and the place says what connecting it means.
+ * Your own settings offer what you connect by signing in AS YOURSELF: every
+ * vetted MCP server, and the Google recipes that ride the deployment's own
+ * client — one press, your own account, usable in every space you are in. A
+ * space's console offers all of those too (a team's Drive is as real as your
+ * own) plus everything that is a team's configuration: API keys, OAuth apps
+ * you register, databases, model keys, and the generic MCP-by-URL row.
+ *
+ * So the lists are not disjoint, and they don't need to be — the same recipe
+ * connected in your settings spends your account, and connected in a space
+ * spends the space's. What the personal list refuses is a credential someone
+ * has to go and fetch: pasting a bot token is setup for a team, not signing in.
  */
 export function catalogForScope(scope: ConnectorScope): CatalogEntry[] {
-  return CONNECTOR_CATALOG.filter((entry) => (entry.shape === 'mcp') === (scope === 'personal'))
+  if (scope === 'space') return CONNECTOR_CATALOG.filter((entry) => entry.shape !== 'mcp')
+  return CONNECTOR_CATALOG.filter((entry) => entry.shape === 'mcp' || entry.personal === true)
 }
 
 /**

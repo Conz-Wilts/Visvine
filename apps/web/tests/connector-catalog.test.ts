@@ -229,7 +229,7 @@ test('a model recipe stamps its service too', () => {
 })
 
 test('google recipes: blank credential fields fall back to the platform client', () => {
-  for (const id of ['google', 'google-drive']) {
+  for (const id of ['gmail', 'google-calendar', 'google-drive']) {
     const entry = CONNECTOR_CATALOG.find((e) => e.id === id)
     assert.ok(entry)
     const { content, secrets } = connectorFromCatalog(entry, {
@@ -272,11 +272,11 @@ test('google recipes: filled credential fields still produce an own-app note', (
 })
 
 test('google: extra scopes append to the defaults and never reach env', () => {
-  const entry = CONNECTOR_CATALOG.find((e) => e.id === 'google')
+  const entry = CONNECTOR_CATALOG.find((e) => e.id === 'gmail')
   assert.ok(entry)
   const { content } = connectorFromCatalog(entry, {
-    name: 'google',
-    title: 'Google',
+    name: 'gmail',
+    title: 'Gmail',
     description: '',
     values: { extra_scopes: 'https://www.googleapis.com/auth/gmail.send' },
   })
@@ -291,7 +291,7 @@ test('google: extra scopes append to the defaults and never reach env', () => {
 })
 
 test('one-click Connect is offered only where there is nothing to ask', () => {
-  const google = CONNECTOR_CATALOG.find((e) => e.id === 'google')
+  const google = CONNECTOR_CATALOG.find((e) => e.id === 'gmail')
   const drive = CONNECTOR_CATALOG.find((e) => e.id === 'google-drive')
   const microsoft = CONNECTOR_CATALOG.find((e) => e.id === 'microsoft')
   const slack = CONNECTOR_CATALOG.find((e) => e.id === 'slack')
@@ -355,7 +355,7 @@ test('a return path is a relative path on this app or nothing', () => {
   assert.equal(url.searchParams.get('space'), 'me:u1')
   assert.equal(url.searchParams.get('connector'), 'google-drive')
   assert.equal(url.searchParams.get('return'), '/settings?section=connectors')
-  assert.equal(new URL(connectorConnectUrl('s1', 'google')).searchParams.get('return'), null)
+  assert.equal(new URL(connectorConnectUrl('s1', 'gmail')).searchParams.get('return'), null)
   assert.equal(
     new URL(connectorConnectUrl('s1', 'google', 'https://evil.example')).searchParams.get('return'),
     null,
@@ -376,31 +376,39 @@ test('the link a browser is sent to is relative, and carries the same query', ()
   assert.equal(new URL(connectorConnectPath('s1', 'g', 'https://evil.example'), 'https://x.test').searchParams.get('return'), null)
 })
 
-test('your own settings offer the vetted MCP servers; a space offers everything else', () => {
+test('your own settings offer what you sign in to; a space offers that plus its own configuration', () => {
   const personal = catalogForScope('personal')
   const space = catalogForScope('space')
   assert.ok(personal.length > 0)
-  // Everything offered to you is an MCP server you sign in to, one press each,
-  // and it is one press on every deployment — no platform client involved.
+  // Everything offered to you is a service you sign in to as yourself — a
+  // vetted MCP server, or a Google recipe riding the deployment's own client.
   for (const entry of personal) {
-    assert.equal(entry.shape, 'mcp', entry.id)
-    assert.ok(connectsInOneClick(entry, []), entry.id)
+    assert.ok(entry.shape === 'mcp' || entry.personal === true, entry.id)
+    assert.ok(connectsInOneClick(entry, ['google']), entry.id)
+  }
+  for (const id of ['notion-mcp', 'gmail', 'google-calendar', 'google-drive']) {
+    assert.ok(personal.some((e) => e.id === id), `${id} is offered in your own settings`)
   }
   const notion = personal.find((e) => e.id === 'notion-mcp')
   assert.ok(notion)
   // A personal connector is your account at a service: one of each.
   assert.equal(allowsManyConnectors(notion, 'personal'), false)
 
+  // Nothing you have to go and fetch a credential for is offered here.
+  assert.ok(!personal.some((e) => e.shape === 'key' || e.shape === 'model'))
+
   // The console holds the credential-shaped world — keys, OAuth apps, models,
   // databases and the generic MCP-by-URL row — and none of the vetted servers.
   assert.ok(space.every((e) => e.shape !== 'mcp'))
-  for (const id of ['slack', 'google-drive', 'microsoft', 'postgres', 'openai', 'mcp']) {
+  for (const id of ['slack', 'gmail', 'google-drive', 'microsoft', 'postgres', 'openai', 'mcp']) {
     assert.ok(space.some((e) => e.id === id), `${id} is a space connector`)
   }
   assert.ok(!space.some((e) => e.id === 'notion-mcp'))
-  // The two lists are the whole catalogue, and nothing is offered twice.
-  assert.equal(personal.length + space.length, CONNECTOR_CATALOG.length)
-  assert.ok(!personal.some((p) => space.some((s) => s.id === p.id)))
+  // The two lists cover the whole catalogue; the overlap is exactly the
+  // sign-in-as-yourself recipes a space may also connect for the team.
+  const overlap = personal.filter((p) => space.some((s) => s.id === p.id))
+  assert.equal(personal.length + space.length - overlap.length, CONNECTOR_CATALOG.length)
+  assert.ok(overlap.every((e) => e.personal === true && e.shape === 'oauth'))
 })
 
 test('a service you paste a credential into is named for what it is', () => {

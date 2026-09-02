@@ -523,8 +523,13 @@ never chose to run it, and the test button is about one particular note. An
 agent run and a direct action call are acts of the person they run as, so those
 get it. `list_connectors` reports the caller's own with `personal: true`.
 
-**Your own settings offer vetted MCP servers, and a space offers everything
-else.** The catalogue has a fourth shape, `mcp` — a remote MCP server by URL,
+**Your own settings offer what you sign in to; a space offers that plus its own
+configuration.** `catalogForScope` splits on `shape: 'mcp'` OR `personal: true`
+— the vetted MCP servers, and the Google recipes (Gmail, Google Calendar,
+Google Drive) that ride the deployment's own OAuth client, so they are one press
+for a person too. The lists are no longer disjoint: a space may connect the same
+Google recipes for the team's account, and what the personal list refuses is a
+credential someone has to go and fetch. The rest below still holds. The catalogue has a fourth shape, `mcp` — a remote MCP server by URL,
 built by `mcpServer(...)` in `lib/connectors/catalog.ts`: the note's
 `auth.discover` is the URL, the host is the whole perimeter, there are no
 fields, and Visvine registers itself as the OAuth client at first connect
