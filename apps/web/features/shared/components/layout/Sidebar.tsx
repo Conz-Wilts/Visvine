@@ -36,8 +36,9 @@ import type { SpaceFeatureConfig } from "@/lib/types";
  *  └──────────────────────────────────┘
  *
  *  Every row is the same shape: a 48px glyph cell on one column, then a label
- *  the collapsed rail clips away with overflow-hidden. Only the container's
- *  width animates — nothing flips.
+ *  the collapsed rail clips away with overflow-hidden. Shut, the rail is a
+ *  column of glyphs and nothing else. Only the container's width animates —
+ *  nothing flips.
  *
  * While the /channels list or a console section is docked, the card ALSO hosts
  * that panel beside the rail (the page portals into the host below via
@@ -46,10 +47,8 @@ import type { SpaceFeatureConfig } from "@/lib/types";
 
 // Exported so the AuthLayout's content inset and the rail track the exact same
 // widths — change them here and the whole shell stays in sync.
-// Wide enough that the closed rail's tiles can spell their names out under a
-// glyph big enough to read at a glance. A label that has to truncate is one the
-// rail is not actually saying — which is what the short names are for
-// (`shortLabel`), not a narrower column.
+// The closed rail is a column of glyphs: wide enough to hold one at a size you
+// can read at a glance, with air either side of it.
 export const COLLAPSED_W = 88;
 export const EXPANDED_W = 272;
 const ROW_H = 48;      // row height, and the side of the square a row's glyph is centred in
@@ -59,19 +58,9 @@ const ROW_INSET = 6;   // row ↔ rail edge
 // both states and nothing about it moves when the rail opens.
 const GLYPH_CELL_W = COLLAPSED_W - ROW_INSET * 2;
 const LABEL_ML = 8;    // glyph cell → label, on the open row
-// Closed, each row's name hangs UNDER its glyph, the way Slack's rail reads.
-// It is drawn OUT OF FLOW (absolutely, in the gap below the row) rather than as
-// a second line of the row: a row that grew a line would push every glyph below
-// it down, and opening the rail would then slide the whole column. So the gap
-// is what carries the names — wide enough for one 11px line under every row,
-// open or closed, because the geometry has to be the same either way.
+// Row ↔ row. The same gap open or closed: the rail's geometry must not depend
+// on which state it is in, or opening it would slide the whole column.
 const ITEM_GAP = 20;
-const LABEL_TOP = ROW_H - 4; // where that name sits, measured from the row's top
-const LABEL_H = 11;          // its one line, at text-[11px]/leading-none
-// How far that name hangs past the row it belongs to. Every band boundary
-// measures from HERE rather than from the row, so the seam clears the last name
-// by the same distance a row clears the one above it.
-const LABEL_OVERHANG = LABEL_TOP + LABEL_H - ROW_H;
 // The space switcher draws its own 48px cell, so it takes its own inset to put
 // that cell — and the avatar centred in it — on the glyph column's centre line.
 const HEAD_INSET = (COLLAPSED_W - 48) / 2;
@@ -86,10 +75,10 @@ const GLYPH = "[&>svg]:h-8 [&>svg]:w-8";
 const ROW_CLASS =
   "relative z-10 flex w-full items-center rounded-[10px] transition-colors duration-150 hover:bg-surface-3";
 const ROW_TEXT = "text-[15px] whitespace-nowrap";
-// Names cross-fade between the two places they live; they never travel. The
+// A name fades in once the rail is open and is gone before it shuts. The
 // rail's width takes 300ms, and a label revealed BY that width reads as sliding
-// out from under the glyph column — so the open one is held back until the
-// width has arrived, and the shut one is gone before it starts.
+// out from under the glyph column — so it is held back until the width has
+// arrived.
 const LABEL_FADE_MS = 140;
 const LABEL_FADE_IN_DELAY_MS = 200;
 function labelFade(show: boolean, reduced: boolean) {
@@ -111,10 +100,10 @@ const RAIL_PAD_Y = SHELL_PANE_TOP;
 // SHELL_TOP_BAR_H tall and centres a 40px avatar in it, so the space avatar —
 // 40px in a 48px row — has to start where its centre lands on the same line.
 const RAIL_PAD_TOP = (SHELL_TOP_BAR_H - ROW_H) / 2;
-// A band boundary: the hairline sits ITEM_GAP below the last name and ITEM_GAP
-// above the next row, so the two bands are held apart by the rhythm the rows
+// A band boundary: the hairline sits ITEM_GAP below the last row and ITEM_GAP
+// above the next one, so the two bands are held apart by the rhythm the rows
 // already have rather than by a number of its own.
-const BAND_TOP = LABEL_OVERHANG + ITEM_GAP;
+const BAND_TOP = ITEM_GAP;
 
 // Active is carried by weight and colour, not by a coloured pill: the current
 // surface is the dark, semibold row; everything else sits muted until hovered.
@@ -124,13 +113,12 @@ function rowColor(active: boolean) {
 
 /**
  * Every row in the rail is this shape, whichever band it sits in: a glyph on the
- * rail's one icon column, and a name — beside it while the rail is open, under
- * it while the rail is shut. The glyph itself never moves. Same cell, same row
- * height, same gap in both states; only the name changes place.
+ * rail's one icon column, and a name beside it once the rail is open. Shut, the
+ * row is the glyph alone. The glyph itself never moves — same cell, same row
+ * height, same gap in both states.
  */
 function Row({
   label,
-  shortLabel,
   icon,
   href,
   onClick,
@@ -141,8 +129,6 @@ function Row({
   ...aria
 }: {
   label: string;
-  /** What the CLOSED rail calls this, when the full name is too long for a tile. */
-  shortLabel?: string;
   icon: ReactNode;
   href?: string;
   onClick?: () => void;
@@ -189,20 +175,6 @@ function Row({
           {inner}
         </button>
       )}
-
-      {/* The shut rail's name. Out of the row's flow and unclickable — the row
-          above it is the target — so it can never displace a glyph. A long name
-          (Marketplace) is shortened rather than wrapped; two lines would reach
-          the next row. */}
-      <span
-        aria-hidden
-        className={`pointer-events-none absolute inset-x-0 truncate px-0.5 text-center text-[11px] leading-none ${
-          active ? "font-semibold" : "font-medium"
-        }`}
-        style={{ top: LABEL_TOP, color: rowColor(active), ...labelFade(!expanded, reduced) }}
-      >
-        {shortLabel ?? label}
-      </span>
     </div>
   );
 }
@@ -321,7 +293,6 @@ export default function Sidebar() {
               expanded={expanded}
               reduced={reduced}
               label="Create new"
-              shortLabel="Create"
               onClick={() => createSurface()}
               icon={
                 // The one row that MAKES something, so it is the one row that
@@ -342,14 +313,13 @@ export default function Sidebar() {
             />
           )}
 
-          {GLOBAL_NAV.map(({ key, href, label, shortLabel, icon }) => (
+          {GLOBAL_NAV.map(({ key, href, label, icon }) => (
             <Row
               expanded={expanded}
               reduced={reduced}
               key={key}
               href={href}
               label={label}
-              shortLabel={shortLabel}
               icon={icon}
               active={href === activeHref}
             />

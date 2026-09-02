@@ -17,8 +17,6 @@ import { CompassIcon } from '@/features/shared/icons';
 export interface GlobalNavItem {
   key: string;
   label: string;
-  /** What the CLOSED rail calls it, when the full name outgrows a tile. */
-  shortLabel?: string;
   href: string;
   icon: ReactNode;
 }
