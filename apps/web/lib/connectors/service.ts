@@ -39,7 +39,11 @@ import { connectionOwner } from './auth'
 import { resolveConnection } from './connections'
 import { connectorConnectUrl } from './connectUrl'
 import { runInIsolate, type IsolateRunResult } from './isolate'
+import { mcpAllTools, type McpToolInfo } from './hostMcp'
+import { MAX_DENIALS } from './perimeter'
+import { toolGroup, toolPermission, type ToolGroup, type ToolPermission } from './toolPolicy'
 import { connectorKind, modelConnectorInfo, parseModelConnector, type ConnectorKind, type ModelConnectorInfo } from './model'
+import { catalogEntryFor } from './catalog'
 
 const CONNECTORS_DIR = 'connectors/'
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
@@ -170,6 +174,12 @@ export interface ConnectorSummary {
   secrets: string[]
   /** Named actions callers can run by name instead of writing code. */
   actions: ConnectorActionSummary[]
+  /**
+   * The MCP server this connector IS, when its note declares one (`mcp.url`).
+   * What tells a surface it has tools to ask about, rather than inferring it
+   * from a recipe id — which is display metadata and may be wrong or absent.
+   */
+  mcp: { url: string } | null
   docs: string
   /**
    * The caller's own connector, brought from their Settings rather than
@@ -208,6 +218,25 @@ function formatAllowRule(rule: { method: string; path: string; prefix: boolean }
   return `${rule.method} ${rule.path}${rule.prefix ? '*' : ''}`
 }
 
+/**
+ * The MCP endpoint a connector stands for, or null when it is not one.
+ *
+ * The note's own `mcp:` block first, and then — for a connection made before
+ * that block was written — the recipe's. A connector written from a vetted MCP
+ * server recipe carries `recipe:`, which names the entry, which pins the URL;
+ * so a Notion connected last month answers here without a backfill having been
+ * run first.
+ *
+ * The fallback decides only WHICH URL to ask for tools, never what may be
+ * reached: `hosts:` is in the note and the host gate reads it, so a stale or
+ * wrong recipe costs an egress denial rather than a call somewhere unlisted.
+ */
+function mcpEndpoint(name: string, recipe: string | null, declared: { url: string } | null): { url: string } | null {
+  if (declared) return declared
+  const entry = catalogEntryFor(name, null, recipe)
+  return entry?.mcp ? { url: entry.mcp.url } : null
+}
+
 /** One connector note → its summary, or null when the note isn't a connector. */
 function summariseNote(path: string, content: string): ConnectorSummary | null {
   const fm = parseFrontmatter(content)
@@ -240,6 +269,7 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
       warnings: [],
       secrets: info ? [info.keySecret] : [],
       actions: [],
+      mcp: null,
     }
   }
   const parsed = parseConnectorPerimeter(fm)
@@ -253,6 +283,7 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
     warnings: parsed.ok ? parsed.warnings : [],
     secrets: parsed.ok ? perimeterSecretRefs(parsed.perimeter) : [],
     actions: parsed.ok ? summariseActions(parsed.perimeter.actions) : [],
+    mcp: parsed.ok ? mcpEndpoint(base.name, base.recipe, parsed.perimeter.mcp) : null,
   }
 }
 
@@ -420,7 +451,10 @@ export async function loadConnector(
   const parsed = parseConnectorPerimeter(fm)
   if (!parsed.ok) throw new ConnectorError('config', parsed.error)
   return {
-    perimeter: parsed.perimeter,
+    perimeter: {
+      ...parsed.perimeter,
+      mcp: mcpEndpoint(name, typeof fm.recipe === 'string' ? fm.recipe : null, parsed.perimeter.mcp),
+    },
     path,
     warnings: parsed.warnings,
     spaceId: source.spaceId,
@@ -642,9 +676,23 @@ function resolveRun(
  * the note's `actions:` block (`{ action, args }`), whose fixed code runs with
  * `args` installed as a frozen global.
  */
+export interface ConnectorRunOptions {
+  /**
+   * Is a person present, right now, for this run?
+   *
+   * The only thing it changes is an MCP tool set to `ask`
+   * (lib/connectors/toolPolicy.ts), which runs when someone is here and is
+   * refused when nobody is. False unless a caller says otherwise, so the
+   * question every executor has to answer is "is someone watching this" rather
+   * than "did I remember to lock it down".
+   */
+  attended?: boolean
+}
+
 export async function executeConnectorScript(
   loaded: LoadedConnector,
   run: string | ConnectorRun,
+  opts: ConnectorRunOptions = {},
 ): Promise<IsolateRunResult> {
   // Both come off the loaded connector, never from the caller: a note and the
   // space whose secrets it opens are one fact, and pairing them at the call
@@ -716,6 +764,7 @@ export async function executeConnectorScript(
         redact: [...secrets.values(), ...(bearer ? [bearer.token] : [])],
         identity,
         bearer,
+        attended: opts.attended === true,
         // `visvine.crypto.*` (sigv4 reads AWS keys from `env` by NAME, host-side)
         // and `visvine.state.*` (this connector's memory between runs).
         capabilities: {
@@ -740,6 +789,124 @@ export async function executeConnectorScript(
     throw e
   } finally {
     releaseSlot()
+  }
+}
+
+/** One tool an MCP connector's server advertises, with what this note allows it. */
+export interface ConnectorTool {
+  name: string
+  /** The server's human name for it, when it gives one. */
+  title: string | null
+  description: string | null
+  /** `read` when the server annotates it `readOnlyHint`, else `writes`. */
+  group: ToolGroup
+  permission: ToolPermission
+}
+
+export interface ConnectorToolListing {
+  /** The endpoint the tools were read from. */
+  url: string
+  tools: ConnectorTool[]
+  /** What an unlisted tool is allowed — the policy's default. */
+  default: ToolPermission
+}
+
+/**
+ * The tools an MCP connector's server advertises, each carrying what this
+ * note currently allows it.
+ *
+ * Live, every time, and deliberately not cached: an MCP server may add or
+ * withdraw a tool between one call and the next, and a permissions screen
+ * showing yesterday's list is a screen someone makes a decision on that no
+ * longer applies. The cost is one round trip when the panel opens.
+ *
+ * Unfiltered — {@link mcpAllTools}, not the isolate's `listTools` — because
+ * the whole point of the screen is to decide about the tools that are
+ * currently refused.
+ *
+ * Every gate the isolate crosses is crossed here too: the run budget, the
+ * host allowlist, SSRF, the secret redaction. What is NOT here is any way to
+ * call one — this reads names.
+ */
+export async function listConnectorTools(loaded: LoadedConnector): Promise<ConnectorToolListing> {
+  const url = loaded.perimeter.mcp?.url
+  if (!url) {
+    throw new ConnectorError('config', `${connectorName(loaded.path)} is not an MCP server — its note declares no \`mcp.url\``)
+  }
+  const { spaceId, principal: p } = loaded
+
+  const budget = takeConnectorRun(spaceId)
+  if (!budget.ok) {
+    throw new ConnectorError(
+      'rate_limited',
+      `This space is over its connector run budget — try again in ${Math.ceil(budget.retryAfterMs / 1000)}s`,
+    )
+  }
+
+  // Resolved for the redact list alone: a server that echoes a header back
+  // must not be able to show a secret on the permissions screen either. A
+  // missing one is not fatal here the way it is for a run — listing tools
+  // needs the bearer, not the env.
+  const secrets = await resolveSecretValues(spaceId, perimeterSecretRefs(loaded.perimeter))
+
+  const auth = loaded.perimeter.auth
+  const bearer = auth
+    ? await (async () => {
+        const connection = await resolveConnection({
+          spaceId,
+          auth,
+          userId: p.userId,
+          connectUrl: connectorConnectUrl(spaceId, connectorName(loaded.path)),
+        })
+        return { token: connection.accessToken, hosts: auth.hosts }
+      })()
+    : null
+
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), loaded.perimeter.timeoutMs)
+  timer.unref?.()
+  const denials: string[] = []
+  try {
+    const tools = await mcpAllTools(
+      {
+        // Only the gate's own fields: hosts, allow rules, the private-host
+        // escape hatch and the tool policy. `env` never crosses, because
+        // nothing here runs caller code that could read it.
+        perimeter: {
+          hosts: loaded.perimeter.hosts,
+          allow: loaded.perimeter.allow,
+          allowPrivate: allowPrivateHosts(),
+          tools: loaded.perimeter.tools,
+        },
+        redact: [...secrets.values(), ...(bearer ? [bearer.token] : [])],
+        deadline: Date.now() + loaded.perimeter.timeoutMs,
+        signal: controller.signal,
+        deny(reason) {
+          if (denials.length < MAX_DENIALS) denials.push(reason)
+          return reason
+        },
+        bearer,
+      },
+      url,
+    )
+    auditConnectorCall(p, loaded.path, `list tools → ${tools.length} tool(s)`)
+    const policy = loaded.perimeter.tools
+    return {
+      url,
+      default: policy.default,
+      tools: tools.map((t: McpToolInfo) => ({
+        name: t.name,
+        title: t.title,
+        description: t.description,
+        group: toolGroup(t.annotations),
+        permission: toolPermission(policy, t.name),
+      })),
+    }
+  } catch (e) {
+    if (e instanceof ConnectorError) auditConnectorCall(p, loaded.path, `list tools → ${e.code}: ${e.message}`)
+    throw e
+  } finally {
+    clearTimeout(timer)
   }
 }
 

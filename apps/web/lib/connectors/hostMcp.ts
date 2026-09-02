@@ -14,6 +14,8 @@
  */
 import { ConnectorError } from './config'
 import { hostFetch, type HostContext } from './hostFetch'
+import { toolPolicyOf } from './perimeter'
+import { callableTools, refuseTool } from './toolPolicy'
 
 const PROTOCOL_VERSION = '2025-06-18'
 const CLIENT_INFO = { name: 'visvine-connector', version: '2.0.0' }
@@ -22,6 +24,14 @@ export interface McpToolInfo {
   name: string
   description: string | null
   input_schema: unknown
+  /**
+   * The server's own hints about the tool — `readOnlyHint`, `destructiveHint`
+   * and friends. Passed through untouched: it is the server's word, used to
+   * sort the permissions screen, never to decide anything.
+   */
+  annotations: unknown
+  /** `annotations.title`, when the server gives the tool a human name. */
+  title: string | null
 }
 
 interface RpcSession {
@@ -127,18 +137,38 @@ async function openSession(ctx: HostContext, url: string, headers: Record<string
   return session
 }
 
-/** The MCP server's advertised tools. */
+/**
+ * The MCP server's advertised tools.
+ *
+ * What comes back is what the caller could actually CALL: a tool the
+ * connector's policy would refuse right now is dropped rather than listed and
+ * then denied. Advertising a tool the gate will refuse teaches a model to keep
+ * asking for it, and a run has better things to spend turns on. The
+ * permissions screen reads the unfiltered list through {@link mcpAllTools},
+ * because a person deciding what to allow has to see what there is.
+ */
 export async function mcpListTools(ctx: HostContext, rawUrl: unknown, rawHeaders?: unknown): Promise<McpToolInfo[]> {
+  const policy = toolPolicyOf(ctx.perimeter)
+  const all = await mcpAllTools(ctx, rawUrl, rawHeaders)
+  return callableTools(policy, all, ctx.attended === true)
+}
+
+/** Every tool the server advertises, before the connector's policy is applied. */
+export async function mcpAllTools(ctx: HostContext, rawUrl: unknown, rawHeaders?: unknown): Promise<McpToolInfo[]> {
   const session = await openSession(ctx, requireUrl(rawUrl), requireHeaders(rawHeaders))
   const result = (await rpc(ctx, session, 'tools/list', {}, 2)) as { tools?: unknown[] } | null
   const tools = Array.isArray(result?.tools) ? result.tools : []
   return tools.flatMap((raw) => {
-    const t = raw as { name?: unknown; description?: unknown; inputSchema?: unknown }
+    const t = raw as { name?: unknown; description?: unknown; inputSchema?: unknown; annotations?: unknown; title?: unknown }
     if (typeof t?.name !== 'string') return []
+    const annotations = t.annotations ?? null
+    const title = (annotations as { title?: unknown } | null)?.title
     return [{
       name: t.name,
       description: typeof t.description === 'string' ? t.description : null,
       input_schema: t.inputSchema ?? null,
+      annotations,
+      title: typeof title === 'string' && title.trim() ? title.trim() : (typeof t.title === 'string' ? t.title : null),
     }]
   })
 }
@@ -154,6 +184,12 @@ export async function mcpCallTool(
   if (typeof rawTool !== 'string' || rawTool.length === 0) {
     throw new ConnectorError('config', 'mcp.callTool needs a tool name')
   }
+  // The tool gate, before the session is opened — the same order the host and
+  // path gates keep: a call that was never going to be allowed does not reach
+  // the upstream at all, so an `ask` tool leaves no trace of having been tried
+  // in someone else's audit log.
+  const refusal = refuseTool(toolPolicyOf(ctx.perimeter), rawTool, ctx.attended === true)
+  if (refusal) throw new ConnectorError('denied', ctx.deny(refusal))
   const session = await openSession(ctx, requireUrl(rawUrl), requireHeaders(rawHeaders))
   const result = (await rpc(ctx, session, 'tools/call', {
     name: rawTool,

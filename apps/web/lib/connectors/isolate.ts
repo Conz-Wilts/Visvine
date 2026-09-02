@@ -97,6 +97,13 @@ export interface IsolateRunOptions {
    */
   bearer?: { token: string; hosts: readonly string[] } | null
   /**
+   * Is a person present for this run? Read only by the MCP tool gate, where a
+   * tool set to `ask` runs when someone is here and is refused when nobody is
+   * (lib/connectors/toolPolicy.ts). Defaults to false: an unattended run is
+   * what a caller that says nothing most likely is.
+   */
+  attended?: boolean
+  /**
    * Extra host capabilities, installed under a single frozen `visvine` global
    * rather than as top-level names — so a caller adding capabilities can never
    * collide with `fetch`/`sql`/`sleep`/`mcp` or with each other by accident.
@@ -416,6 +423,7 @@ export async function runInIsolate(
     // the host side of the boundary, and both are in `redact` besides.
     identity: options.identity ?? null,
     bearer: options.bearer ?? null,
+    attended: options.attended === true,
   }
 
   try {

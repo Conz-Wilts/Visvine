@@ -26,6 +26,7 @@ import {
 } from './identity'
 import { authSecretRefs, parseConnectorAuth, type ConnectorAuth } from './auth'
 import { parseConnectorWebhook, type ConnectorWebhook } from './webhookConfig'
+import { OPEN_TOOL_POLICY, parseToolPolicy, type ToolPolicy } from './toolPolicy'
 
 export type ConnectorErrorCode =
   | 'denied'
@@ -593,7 +594,21 @@ export interface ConnectorPerimeter {
    * authenticates its own inbox.
    */
   webhook: ConnectorWebhook | null
+  /**
+   * The MCP server this connector IS, when it is one (`mcp:` in the
+   * frontmatter). Written by the catalog's `shape: 'mcp'` recipes; what makes
+   * a note answerable by the tool-permissions surface rather than guessed at
+   * from a host.
+   */
+  mcp: { url: string } | null
+  /**
+   * Which of that server's tools may be called, and when
+   * (lib/connectors/toolPolicy.ts). Everything allowed when the note says
+   * nothing, so a connection made before the block existed keeps working.
+   */
+  tools: ToolPolicy
 }
+
 
 /** One named action: fixed code an author wrote, run with the caller's `args`. */
 export interface ConnectorAction {
@@ -765,12 +780,12 @@ export function perimeterFromLegacy(config: ConnectorConfig): {
       // paths, so a base_url with a path prefix must be folded into each rule.
       const prefix = new URL(config.baseUrl).pathname.replace(/\/$/, '')
       const allow = config.allow.map((rule) => ({ ...rule, path: prefix + rule.path }))
-      return { perimeter: { hosts, allow, env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null }, warnings: [] }
+      return { perimeter: { hosts, allow, env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, tools: OPEN_TOOL_POLICY }, warnings: [] }
     }
     case 'postgres':
     case 'mysql':
       return {
-        perimeter: { hosts: [], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null },
+        perimeter: { hosts: [], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, tools: OPEN_TOOL_POLICY },
         warnings: [
           `This legacy ${config.alias} note keeps its database host inside the DSN secret, so the ` +
             'perimeter cannot allow it — add `hosts:` (e.g. "db.example.com:5432") or run the v2 migration',
@@ -783,9 +798,34 @@ export function perimeterFromLegacy(config: ConnectorConfig): {
               'Legacy per-tool allow rules cannot be tunnel-enforced under v2 — they become guidance in the note body after migration',
             ]
           : []
-      return { perimeter: { hosts: [hostOf(config.url)], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null }, warnings }
+      return { perimeter: { hosts: [hostOf(config.url)], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, tools: OPEN_TOOL_POLICY }, warnings }
     }
   }
+}
+
+/**
+ * `mcp:` → the server this connector stands for.
+ *
+ * Only the URL, and it is checked for shape here rather than trusted: the
+ * host gate still judges every call, so a URL that lies costs an egress
+ * denial, not a call somewhere unlisted. Absent for every connector that is
+ * not an MCP server, which is most of them.
+ */
+function parseConnectorMcp(raw: unknown): { ok: true; mcp: { url: string } | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, mcp: null }
+  if (typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, error: '`mcp:` must be a block with a `url:`' }
+  const url = (raw as { url?: unknown }).url
+  if (typeof url !== 'string' || url.trim().length === 0) return { ok: false, error: '`mcp.url` must be the server URL' }
+  let parsed: URL
+  try {
+    parsed = new URL(url.trim())
+  } catch {
+    return { ok: false, error: `\`mcp.url\` is not a URL: ${url}` }
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return { ok: false, error: '`mcp.url` must be an http(s) URL' }
+  }
+  return { ok: true, mcp: { url: parsed.toString() } }
 }
 
 /**
@@ -837,6 +877,12 @@ export function parseConnectorPerimeter(fm: NoteFrontmatter): ParsePerimeterResu
   const webhook = parseConnectorWebhook((fm as Record<string, unknown>).webhook)
   if (!webhook.ok) return { ok: false, error: webhook.error }
 
+  const mcp = parseConnectorMcp((fm as Record<string, unknown>).mcp)
+  if (!mcp.ok) return { ok: false, error: mcp.error }
+
+  const tools = parseToolPolicy((fm as Record<string, unknown>).tools)
+  if (!tools.ok) return { ok: false, error: tools.error }
+
   const { min, max, default: dflt } = SANDBOX_LIMITS.timeoutMs
   return {
     ok: true,
@@ -849,6 +895,8 @@ export function parseConnectorPerimeter(fm: NoteFrontmatter): ParsePerimeterResu
       auth: auth.auth,
       actions: actions.actions,
       webhook: webhook.webhook,
+      mcp: mcp.mcp,
+      tools: tools.policy,
     },
     legacy: null,
     warnings: [],

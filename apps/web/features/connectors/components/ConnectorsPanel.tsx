@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Button, ConfirmDialog, Field, Input, Modal, SearchInput, Skeleton, Alert } from '@/components/ui';
-import { ArrowLeftIcon, InfoIcon, Trash2Icon } from '@/features/shared/icons';
+import { Button, ConfirmDialog, Field, Input, SearchInput, Skeleton, Alert } from '@/components/ui';
+import { ArrowLeftIcon, Trash2Icon } from '@/features/shared/icons';
 import ConnectorLogo from './ConnectorLogo';
+import ConnectorToolPermissions from './ConnectorToolPermissions';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useCreateSurface } from '@/features/shared/contexts/CreateModalContext';
 import { notesApi } from '@/features/notes/lib/notesApi';
@@ -94,6 +95,13 @@ interface ExistingConnector {
   secrets: string[];
   missingSecrets: string[];
   /**
+   * The MCP server this connector IS, when its note declares one. Reported by
+   * the server rather than inferred from the recipe, because it decides
+   * whether a permissions screen appears — and `recipe:` is display metadata
+   * that may be absent on a note written by hand.
+   */
+  mcp: { url: string } | null;
+  /**
    * The linked account behind an OAuth connector, when there is one — null both
    * for a connector that uses no OAuth and for one whose sign-in was never
    * finished. What tells a connected Drive from a note left behind by an
@@ -147,9 +155,9 @@ interface ManageConnectionRow {
 }
 
 /**
- * The caller's own connection status inside Manage, for a connector with an
- * `auth:` block — connected as whom, or the Connect link. Fetched only when the
- * dialog opens (one request per open, never per row), and silent for a
+ * The caller's own connection status on a connector's page, for one with an
+ * `auth:` block — connected as whom, or the Connect link. Fetched only when
+ * that page opens (one request per open, never per row), and silent for a
  * connector without OAuth: the endpoint 404s and this renders nothing.
  */
 function ManageConnections({ spaceId, name, returnTo }: { spaceId: string; name: string; returnTo: string | null }) {
@@ -187,6 +195,11 @@ function ManageConnections({ spaceId, name, returnTo }: { spaceId: string; name:
     </div>
   );
 }
+
+// A row's action is a column, not a label: Connect, Sign in, Add another and
+// Manage all sit in the same slot, so a list of rows offering different things
+// still reads down one edge.
+const ACTION_SLOT = 'w-28 shrink-0 text-center';
 
 const TABS: Record<'space' | 'personal', Array<{ id: Tab; label: string }>> = {
   space: [
@@ -253,7 +266,6 @@ export default function ConnectorsPanel({
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('mine');
   const [entry, setEntry] = useState<CatalogEntry | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [existing, setExisting] = useState<ExistingConnector[]>([]);
   // The OAuth services this deployment can complete without the space
   // registering its own app — what makes a Connect button one click.
@@ -266,7 +278,7 @@ export default function ConnectorsPanel({
   const [error, setError] = useState<string | null>(null);
   // The connector Manage is open on, by note name, plus the recipe blurb the
   // row had to hand. The name and not the row: a toggle re-reads the list, and
-  // the dialog has to show what the space now has rather than a snapshot.
+  // the page has to show what the space now has rather than a snapshot.
   const [manage, setManage] = useState<{ name: string; about: string | null } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ExistingConnector | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -453,75 +465,78 @@ export default function ConnectorsPanel({
   };
 
   // What Manage opens: what the space actually has — which service it is to,
-  // what it reaches, which secrets it names, where the note is — and the three
-  // acts a connector's row offers: disable it, edit it, delete it. A dialog and
-  // not a row expander: these are the space's keys to somebody else's system,
-  // so the question gets the screen. Edit is a door rather than an act — the
-  // note IS the connector, so it hands over to the connector's own page, the
-  // same place the row goes.
+  // what it reaches, which secrets it names, where the note is — the tools it
+  // may use where it is an MCP server, and the three acts a connector's row
+  // offers: disable it, edit it, delete it. Edit is a door rather than an act
+  // — the note IS the connector, so it hands over to the connector's own page,
+  // the same place the row goes.
   const managed = manage ? existing.find((c) => c.name === manage.name) ?? null : null;
 
-  const managePanel = (connected: ExistingConnector, about?: string | null) => {
+  const detailView = (connected: ExistingConnector, about?: string | null) => {
     const service = serviceOf(connected);
     const siblings = service ? held.get(service.id) ?? [] : [];
+    const status = statusOf(connected, scope);
     return (
-    <Modal
-      open
-      size="sm"
-      title={connected.title ?? connected.name}
-      onClose={() => setManage(null)}
-      footer={
-        <div className="flex items-center justify-between gap-3 border-t border-border-subtle px-5 py-3">
-          <Button
-            variant="danger"
-            size="sm"
-            className="inline-flex items-center gap-2"
-            onClick={() => { setDeleteError(null); setConfirmDelete(connected); }}
-          >
-            <Trash2Icon className="h-4 w-4" />
-            Delete
-          </Button>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="neutral"
-              size="sm"
-              disabled={toggling === connected.name}
-              onClick={() => setEnabled(connected, !connected.enabled)}
-            >
-              {toggling === connected.name ? 'Saving…' : connected.enabled ? 'Disable' : 'Enable'}
-            </Button>
-            {/* The note IS the connector, so Edit is a door to its page —
-                which only exists in the directory of the space being shown. A
-                personal connector's note lives in your own space, reached from
-                your context rather than from here. */}
-            {!personal && (
-              <Button variant="neutral" size="sm" onClick={() => { setManage(null); openConnector(connected.name); }}>
-                Edit
-              </Button>
-            )}
+      <div className="flex flex-col gap-5">
+        <button
+          onClick={() => setManage(null)}
+          className="flex items-center gap-2 self-start text-sm text-text-secondary transition-colors hover:text-text-primary"
+        >
+          <ArrowLeftIcon className="h-4 w-4" />
+          {personal ? 'Your connectors' : 'Connectors'}
+        </button>
+
+        <div className="flex min-h-14 items-center gap-3">
+          <ConnectorLogo name={connected.name} provider={connected.model?.provider} recipe={connected.recipe} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-base font-semibold text-text-primary">
+                {connected.title ?? connected.name}
+              </h2>
+              {status && <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>{status.label}</span>}
+            </div>
+            <p className="truncate text-xs text-text-muted">
+              {service ? `${service.name} · ${connected.name}` : connected.name}
+              {siblings.length > 1 && ` · one of ${siblings.length} in this space`}
+            </p>
           </div>
+          <Button
+            variant="neutral"
+            size="sm"
+            className={ACTION_SLOT}
+            disabled={toggling === connected.name}
+            onClick={() => setEnabled(connected, !connected.enabled)}
+          >
+            {toggling === connected.name ? 'Saving…' : connected.enabled ? 'Disable' : 'Enable'}
+          </Button>
         </div>
-      }
-    >
-      <div className="px-5 py-4 text-[13px] text-text-secondary">
+
         {(connected.description ?? about) && (
-          <p className="font-medium text-text-primary">{connected.description ?? about}</p>
+          <p className="text-sm text-text-secondary">{connected.description ?? about}</p>
         )}
-        <dl className="mt-2 grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1">
-          {/* Which service, and how many of it the space has. The count is the
-              line that makes two Drives legible: a name alone leaves a reader
-              guessing whether google-drive-2 is a mistake. */}
-          <dt className="text-text-muted">Service</dt>
-          <dd className="min-w-0 break-words">
-            {service ? service.name : 'Written in this space'}
-            {siblings.length > 1 && (
-              <span className="text-text-muted">
-                {' '}· one of {siblings.length} in this space
-              </span>
-            )}
-          </dd>
-          <dt className="text-text-muted">Called</dt>
-          <dd className="min-w-0 break-words font-mono text-xs">{connected.name}</dd>
+
+        {connected.invalid && <Alert>Not working: {connected.invalid}</Alert>}
+        {!connected.enabled && (
+          <p className="text-sm text-text-muted">
+            Disabled. The note and its secrets are untouched — every run is refused until it is
+            switched back on.
+          </p>
+        )}
+        {toggleError && <Alert>{toggleError}</Alert>}
+
+        {connected.kind !== 'model' && spaceId && (
+          <ManageConnections spaceId={spaceId} name={connected.name} returnTo={returnTo} />
+        )}
+
+        {/* An MCP server is the one connector whose reach is a list of NAMES
+            rather than a list of hosts, so it is the one with a permissions
+            screen. Everything else is gated by `hosts:` and `allow:`, which
+            are the note's to edit. */}
+        {connected.mcp && spaceId && connected.enabled && !connected.invalid && (
+          <ConnectorToolPermissions spaceId={spaceId} name={connected.name} />
+        )}
+
+        <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1 border-t border-border-subtle pt-4 text-[13px] text-text-secondary">
           <dt className="text-text-muted">Reaches</dt>
           <dd className="min-w-0 break-words">
             {connected.kind === 'model'
@@ -549,30 +564,62 @@ export default function ConnectorsPanel({
           <dt className="text-text-muted">Note</dt>
           <dd className="min-w-0 break-words font-mono text-xs">{connected.path}</dd>
         </dl>
+
         {/* Two model connectors to one provider would name the same key and the
-            same endpoint, so the dialog says where the key really lives rather
+            same endpoint, so the page says where the key really lives rather
             than leaving an admin to discover it by adding a second. */}
         {connected.kind === 'model' && (
-          <p className="mt-2">
+          <p className="text-[13px] text-text-secondary">
             The key is the space’s, one per provider — every {service?.name ?? 'provider'} agent
             uses it. Replace it on this connector’s page.
           </p>
         )}
-        {connected.kind !== 'model' && spaceId && (
-          <ManageConnections spaceId={spaceId} name={connected.name} returnTo={returnTo} />
-        )}
-        {connected.invalid && <p className="mt-2 text-red-600">Not working: {connected.invalid}</p>}
-        {!connected.enabled && (
-          <p className="mt-2">
-            Disabled. The note and its secrets are untouched — every run is refused until it is
-            switched back on.
-          </p>
-        )}
-        {toggleError && <p className="mt-2 text-red-600">{toggleError}</p>}
+
+        <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-4">
+          <Button
+            variant="danger"
+            size="sm"
+            className="inline-flex items-center gap-2"
+            onClick={() => { setDeleteError(null); setConfirmDelete(connected); }}
+          >
+            <Trash2Icon className="h-4 w-4" />
+            Delete
+          </Button>
+          {/* The note IS the connector, so Edit is a door to its page — which
+              only exists in the directory of the space being shown. A personal
+              connector's note lives in your own space, reached from your
+              context rather than from here. */}
+          {!personal && (
+            <Button variant="neutral" size="sm" onClick={() => { setManage(null); openConnector(connected.name); }}>
+              Edit
+            </Button>
+          )}
+        </div>
       </div>
-    </Modal>
     );
   };
+
+  // Manage is a VIEW, not a dialog over the list: it is where the tools an MCP
+  // server offers are decided one by one, which is a screen's worth of rows
+  // rather than a question, and a dialog opened from inside a dialog is one
+  // Escape away from losing both.
+  if (managed) {
+    return (
+      <div className="flex flex-col gap-4">
+        {detailView(managed, manage?.about)}
+        <ConfirmDialog
+          open={confirmDelete !== null}
+          title={`Delete ${confirmDelete?.title ?? confirmDelete?.name ?? 'connector'}?`}
+          body="Removes the connector note. Its stored secrets stay in the space until an admin deletes them."
+          confirmLabel="Delete"
+          destructive
+          error={deleteError}
+          onConfirm={remove}
+          onClose={() => setConfirmDelete(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -639,7 +686,7 @@ export default function ConnectorsPanel({
               const service = serviceOf(c);
               return (
                 <li key={c.path} className="py-1">
-                  <div className="-mx-3 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
+                  <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
                     <button
                       onClick={() => (personal ? openManage(c) : openConnector(c.name))}
                       className="flex min-w-0 flex-1 items-center gap-4 text-left"
@@ -659,7 +706,12 @@ export default function ConnectorsPanel({
                     {status && (
                       <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>{status.label}</span>
                     )}
-                    <Button variant="neutral" size="sm" aria-haspopup="dialog" onClick={() => openManage(c)}>
+                    <Button
+                      variant="neutral"
+                      size="sm"
+                      className={ACTION_SLOT}
+                      onClick={() => openManage(c)}
+                    >
                       Manage
                     </Button>
                   </div>
@@ -694,7 +746,6 @@ export default function ConnectorsPanel({
             {services.map((e) => {
               const rows = held.get(e.id) ?? [];
               const many = allowsManyConnectors(e, scope);
-              const showInfo = info === e.id;
               // Nothing to ask for: Connect is the whole interaction, and the
               // form stays reachable through the row for the space that wants
               // its own OAuth app or extra scopes.
@@ -708,18 +759,18 @@ export default function ConnectorsPanel({
               const signedIn = Boolean(held0?.connection && !held0.connection.broken);
               return (
                 <li key={e.id} className="py-1">
-                  <div className="-mx-3 flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
+                  <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
                     <button
+                      // The whole row does what its button does — there is one
+                      // thing to do with a service, and no second surface
+                      // explaining it: what it is and what it reaches are on
+                      // the connector's own page once it exists.
+                      disabled={busy}
                       onClick={() =>
                         rows.length > 0 && !many
                           ? openManage(rows[0], e.description)
-                          : oneClick && (personal || e.shape === 'mcp')
-                            // Nothing to fill in and nothing to choose, so the
-                            // row says what it is rather than opening a form
-                            // whose every field is an OAuth app you don't have
-                            // — and an MCP server HAS no fields, in either
-                            // scope, so its row never opens one.
-                            ? setInfo(showInfo ? null : e.id)
+                          : oneClick
+                            ? void connectInOneClick(e)
                             : setEntry(e)
                       }
                       className="flex min-w-0 flex-1 items-center gap-4 text-left"
@@ -746,14 +797,6 @@ export default function ConnectorsPanel({
                         {style === 'one-click' ? 'One click' : style === 'sign-in' ? 'Sign in' : 'API key'}
                       </span>
                     )}
-                    <button
-                      onClick={() => setInfo(showInfo ? null : e.id)}
-                      aria-label={`About ${e.name}`}
-                      aria-expanded={showInfo}
-                      className={`rounded-lg p-1.5 transition-colors hover:bg-surface-3 hover:text-text-primary ${showInfo ? 'text-text-primary' : 'text-text-muted'}`}
-                    >
-                      <InfoIcon className="h-4 w-4" />
-                    </button>
                     {rows.length > 0 && !personal && (
                       <span className="shrink-0 text-xs text-text-muted">
                         {rows.length === 1 ? '1 connected' : `${rows.length} connected`}
@@ -764,6 +807,7 @@ export default function ConnectorsPanel({
                         variant="brand"
                         size="sm"
                         disabled={busy}
+                        className={ACTION_SLOT}
                         onClick={() => (oneClick ? void connectInOneClick(e) : setEntry(e))}
                       >
                         {busy ? 'Connecting…' : 'Connect'}
@@ -774,6 +818,7 @@ export default function ConnectorsPanel({
                       <Button
                         variant="brand"
                         size="sm"
+                        className={ACTION_SLOT}
                         onClick={() => signIn(held0.name)}
                       >
                         Sign in
@@ -783,6 +828,7 @@ export default function ConnectorsPanel({
                         variant="neutral"
                         size="sm"
                         disabled={busy}
+                        className={ACTION_SLOT}
                         onClick={() => (oneClick ? void connectInOneClick(e) : setEntry(e))}
                       >
                         {busy ? 'Connecting…' : 'Add another'}
@@ -791,28 +837,13 @@ export default function ConnectorsPanel({
                       <Button
                         variant="neutral"
                         size="sm"
-                        aria-haspopup="dialog"
+                        className={ACTION_SLOT}
                         onClick={() => openManage(rows[0], e.description)}
                       >
                         Manage
                       </Button>
                     )}
                   </div>
-                  {showInfo && (
-                    <div className="mb-2 ml-14 rounded-lg bg-surface-2 px-4 py-3 text-[13px] text-text-secondary">
-                      <p className="font-medium text-text-primary">{e.description}</p>
-                      <p className="mt-1">
-                        Reaches {e.hosts.length > 0 ? e.hosts.join(', ') : 'the host you give it'}.{' '}
-                        {e.shape === 'model'
-                          ? 'A model provider this space’s agents run on — never runnable, and no note or agent can read the key. One per space: the key is the space’s own, so a second connector would name the same key and the same endpoint.'
-                          : e.shape === 'mcp'
-                            ? `${e.name}’s own MCP server. Connect signs you in there with your ${e.name} account — Visvine registers itself as a client, holds the token, and sends it on every call. It works in every space you are in, as you.`
-                          : e.shape === 'oauth'
-                            ? `${oneClick ? 'Connect signs you in at the provider — there is nothing to fill in. ' : ''}Each person connects their own account; Visvine holds the tokens and sends them on every call. Connect it as many times as the space has accounts to reach — each is its own connector.`
-                            : `Needs ${e.fields.map((f) => f.label.toLowerCase()).join(', ')}, stored as write-only secrets. Connect it once per set of credentials.`}
-                      </p>
-                    </div>
-                  )}
                 </li>
               );
             })}
@@ -830,8 +861,6 @@ export default function ConnectorsPanel({
           )}
         </div>
       )}
-
-      {managed && managePanel(managed, manage?.about)}
 
       <ConfirmDialog
         open={confirmDelete !== null}

@@ -133,6 +133,15 @@ export interface AgentToolContext {
   /** How deep in a run_agent chain this run is (root = 0). */
   chainDepth?: number
   /**
+   * Is a person present for this run — did someone press Run?
+   *
+   * The only thing it changes is an MCP connector's tools set to `ask`
+   * (lib/connectors/toolPolicy.ts): those run when someone is here, and are
+   * refused on a scheduled, event or webhook fire. Absent means unattended,
+   * which is what every run is unless the runner says otherwise.
+   */
+  attended?: boolean
+  /**
    * The action catalogue, one line per action, for the run_action description.
    * Built by the caller (lib/agents/runner.ts) because reaching the registry
    * from here can only be a dynamic import — see run_action below.
@@ -343,7 +352,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
           const run = action
             ? { action, args: a.args !== null && typeof a.args === 'object' ? a.args : {} }
             : { code }
-          const result = await executeConnectorScript(loaded, run)
+          const result = await executeConnectorScript(loaded, run, { attended: ctx.attended === true })
           const rendered = result.value === undefined ? '' : clip(JSON.stringify(result.value, null, 2) ?? '')
           return [
             result.timedOut ? 'TIMED OUT' : result.ok ? 'ok' : `error: ${result.error?.message ?? 'unknown'}`,

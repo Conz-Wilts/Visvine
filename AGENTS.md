@@ -599,6 +599,26 @@ writing the default. The note, its secrets and its perimeter are untouched —
 connector stops being the Space's endpoint (`lib/agents/providers.ts`). It is
 configuration held in reserve, not a thing to delete and rebuild.
 
+**An MCP server's reach is a list of NAMES, so it has a tool gate.** `hosts:`
+and `allow:` say nothing useful about a server that is one host and one path —
+what a caller picks is a TOOL — so a `shape: mcp` note carries `mcp.url` and a
+`tools:` block, and `lib/connectors/toolPolicy.ts` is the pure gate on it. Three
+verdicts: `allow` (anything, including a 3am fire), `ask` (**only a run a person
+started** — Visvine cannot interrupt an unattended run to ask, so the setting
+promises presence, which the runtime can keep), `deny` (never). Absent means
+everything allowed, so a connection made before the block existed keeps working;
+`recipe:` resolves the URL for one written before `mcp:` did
+(`service.ts#mcpEndpoint`), so no backfill gates the surface. Enforcement is in
+`hostMcp.ts`, before the session opens — and `mcpListTools` drops what the gate
+would refuse right now, so a model is never taught to ask for a tool it cannot
+have (`mcpAllTools` is the unfiltered read the permissions screen uses).
+`attended` rides `executeConnectorScript(loaded, run, { attended })`, false
+unless a caller says otherwise: true for the console's Test, for a direct
+`run_connector` action call, and for an agent run whose `trigger` is `manual`.
+The screen is a VIEW inside the connectors panel, not a dialog over it
+(`ConnectorToolPermissions.tsx`), and the verdicts are written back into the
+note's own frontmatter — the note stays the connector.
+
 A connector's mark is one component on both surfaces
 (`ConnectorLogo` — the list row and the connector's own page header): the
 recipe's logo, resolved by `catalogEntryFor` on the note name and then the

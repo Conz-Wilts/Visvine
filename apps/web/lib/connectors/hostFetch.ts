@@ -99,6 +99,15 @@ export interface HostContext {
   /** Records a refusal for the run result. Returns the same text. */
   deny(reason: string): string
   /**
+   * Is a person present for this run?
+   *
+   * Read only by the tool gate (lib/connectors/toolPolicy.ts), where `ask`
+   * means "only when someone is here". False everywhere it is not deliberately
+   * set, so a caller that forgets to plumb it gets the cautious answer rather
+   * than an unattended 3am run quietly counting as attended.
+   */
+  attended?: boolean
+  /**
    * Runtime-stamped caller identity, when the note declares one and the run
    * has a person to name. Held here rather than on the perimeter because it
    * carries a resolved secret — run material, not a gate rule.

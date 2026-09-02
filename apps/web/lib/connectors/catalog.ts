@@ -1368,6 +1368,11 @@ export function connectorFromCatalog(
     `description: ${yamlStr(description)}`,
   ]
   front.push(yamlList('hosts', Array.from(new Set(hosts))))
+  // An MCP server's note says so, in the frontmatter, with its endpoint. The
+  // host gate still judges every call — this is what makes the note answerable
+  // ("which tools does this have, and which may it use") rather than a URL the
+  // reader has to infer from a host or from `auth.discover`.
+  if (entry.mcp) front.push(`mcp:\n  url: ${entry.mcp.url}`)
   if (envLines.length > 0) front.push(`env:\n${envLines.join('\n')}`)
   front.push(`timeout_ms: ${SANDBOX_LIMITS.timeoutMs.default}`)
 

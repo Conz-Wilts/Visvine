@@ -315,6 +315,10 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
         connectorActions,
         runId,
         chainDepth,
+        // A manual run is one somebody pressed Run on and is watching; every
+        // other trigger fires with nobody there. That is what an MCP tool set
+        // to `ask` turns on (lib/connectors/toolPolicy.ts).
+        attended: run.trigger === 'manual',
         actionCatalogue,
         onWrite: noteWritten,
       }),

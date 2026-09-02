@@ -73,7 +73,9 @@ export async function POST(
   if (!loaded) return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
 
   try {
-    const result = await executeConnectorScript(loaded, run);
+    // Someone is sitting in the console with their finger on the button, so a
+    // tool set to "only when someone is here" runs here (lib/connectors/toolPolicy.ts).
+    const result = await executeConnectorScript(loaded, run, { attended: true });
     return NextResponse.json({
       result: {
         ok: result.ok,

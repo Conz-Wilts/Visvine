@@ -14,6 +14,7 @@
  */
 import { assertPubliclyRoutable, SsrfError } from '@/lib/net/ssrf'
 import { hostAllowed, matchAllowlist, normalizeRequestPath, type AllowRule } from './config'
+import { OPEN_TOOL_POLICY, type ToolPolicy } from './toolPolicy'
 
 // `hostAllowed` lives in config.ts (pure, client-safe: identity.ts needs it and
 // config.ts is bundled into client components, so it cannot reach this module's
@@ -27,6 +28,21 @@ export interface GatePerimeter {
   allow: readonly AllowRule[]
   /** Dev/VPC escape hatch — mirrors CONNECTORS_ALLOW_PRIVATE_HOSTS semantics. */
   allowPrivate: boolean
+  /**
+   * Which of an MCP server's tools this connector may call, and when
+   * (lib/connectors/toolPolicy.ts). Part of the gate rather than run material:
+   * it is written literally in the note like `hosts:` and `allow:`, and the
+   * name it judges — a tool the model picked — is not.
+   *
+   * Optional so a caller that gates a plain HTTP connector need not carry a
+   * policy it has no tools for; absent reads as everything allowed.
+   */
+  tools?: ToolPolicy
+}
+
+/** The tool gate this perimeter carries, or the open one when it declares none. */
+export function toolPolicyOf(perimeter: GatePerimeter): ToolPolicy {
+  return perimeter.tools ?? OPEN_TOOL_POLICY
 }
 
 /** The most denials one run will collect before it stops recording them. */

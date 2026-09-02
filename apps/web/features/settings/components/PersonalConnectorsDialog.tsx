@@ -26,8 +26,21 @@ export default function PersonalConnectorsDialog({ onClose }: { onClose: () => v
   );
 
   return (
-    <Modal onClose={onClose} title="Your connectors" size="lg">
-      <PersonalConnectorsPanel returnTo={returnTo} />
+    <Modal
+      onClose={onClose}
+      title="Your connectors"
+      size="md"
+      // The panel is a list whose length changes with the tab — one connected
+      // server, then thirty available ones. A floor and a ceiling keep the
+      // dialog one shape across that: it never collapses onto a single row, and
+      // never grows past the viewport before the list starts scrolling.
+      panelClassName="bg-surface-1 rounded-xl shadow-float flex flex-col max-h-[85vh] min-h-[min(32rem,85vh)]"
+    >
+      {/* The panel's rows bleed 12px either side to draw their hover fill, so
+          the body it sits in owns the gutter. */}
+      <div className="px-6 py-5">
+        <PersonalConnectorsPanel returnTo={returnTo} />
+      </div>
     </Modal>
   );
 }

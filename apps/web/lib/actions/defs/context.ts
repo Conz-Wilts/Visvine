@@ -1593,6 +1593,10 @@ export const CONTEXT_ACTIONS = [
           const result = await executeConnectorScript(
             loaded,
             hasAction ? { action: args.action!.trim(), args: args.args ?? {} } : { code: args.code! },
+            // A direct action call is an act of the person making it, from
+            // their own client, right now — so an MCP tool set to `ask` is
+            // reachable here and not from a run nobody is watching.
+            { attended: true },
           )
           return {
             ok: result.ok,
