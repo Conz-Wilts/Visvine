@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
 
 interface ProfileSkeletonLoaderProps {
   /** Retained for API compatibility; the profile only renders one full layout. */
@@ -9,6 +10,19 @@ interface ProfileSkeletonLoaderProps {
 
 const block = 'rounded bg-surface-3';
 
+// The placeholder is a fixed stack of blocks, so on a short window it stands
+// taller than the surface — and taller than the profile that replaces it. That
+// is a scrollbar that appears on arrival and vanishes a moment later, on every
+// entity page. Clipping it to what the pane actually offers is what stops it:
+// the shell's band and gutters, the tab panel's own padding, and the 18px the
+// entrance animation shifts the panel down by (a transform counts towards the
+// scroller's overflow), with a few px of slack. Cutting the bottom off a
+// placeholder costs nothing — the part being cut is below the fold.
+const PANE_CHROME_PX = SHELL_TOP_BAR_H + SHELL_PANE_TOP + 24; // band, top inset, main's pb-6
+const PANEL_PADDING_PX = 24 + 40; // the tab panel's pt-6 + pb-10
+const ENTRANCE_SHIFT_PX = 24; // profile-enter's translateY(18px), plus slack
+const SKELETON_MAX_H = `calc(100dvh - ${PANE_CHROME_PX + PANEL_PADDING_PX + ENTRANCE_SHIFT_PX}px)`;
+
 /**
  * Loading placeholder mirroring ProfilePageContent's layout: an identity hero
  * (avatar card + identity card) above a two-column body (main section cards +
@@ -16,7 +30,10 @@ const block = 'rounded bg-surface-3';
  */
 export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps) {
   return (
-    <div className="flex flex-col gap-5 animate-pulse">
+    <div
+      className="flex flex-col gap-5 overflow-hidden animate-pulse"
+      style={{ maxHeight: SKELETON_MAX_H }}
+    >
       {/* ══ IDENTITY HERO — avatar + identity block ══ */}
       <div className="flex flex-col sm:flex-row gap-5 items-stretch">
         {/* avatar card */}
