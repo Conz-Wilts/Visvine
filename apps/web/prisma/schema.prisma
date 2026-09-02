@@ -339,6 +339,7 @@ model AgentState {
   spaceId             String    @map("space_id")
   name                String // agent name = basename of agents/<name>.md
   runAsUserId         String?   @map("run_as_user_id") // the brief's author; the principal a run acts as
+  briefNoteId         String?   @map("brief_note_id") // the context_notes row this state was derived from; a different id at the same name is a NEW agent, and the old one's runs go with it
   active              Boolean   @default(false)
   status              String    @default("idle") // idle | running
   nextRunAt           DateTime? @map("next_run_at")

@@ -140,6 +140,15 @@ tree. The parts that constrain code:
   earlier shapes into the folder; `db:agents:activation` folds a pre-merge
   `agents/<name>/activation.md` into the brief (it is still READ until then, so
   an older agent keeps running).
+- **A name is not an identity.** `agent_state` is keyed by `(space, name)` and
+  outlives the note, so the row carries `brief_note_id` — the `context_notes`
+  row it was derived from. A DIFFERENT note at the same name is a new agent, and
+  `syncAgentState` retires the previous incarnation: its runs, its subscribers
+  and the mail still addressed to it, so nothing is inherited by an agent nobody
+  wrote it for. A restore keeps the note's id, so it is the same agent and keeps
+  everything; what stays either way is the space's own record — the month's
+  spend, the egress and machine logs. `db:agents:stamp` binds rows written
+  before the column (`--drop-stale` also clears runs that predate their brief).
 - **What an agent can do is its `tools:` plus what the space has.** Notes,
   `run_agent` and the people tools are always on; `web` is `fetch_url` and
   nothing else — **searching is fetching a search engine's results URL**, so

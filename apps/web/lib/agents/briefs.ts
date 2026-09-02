@@ -20,6 +20,9 @@ import {
 const SHARED_OWNER_KEY = 'shared'
 
 export interface AgentBriefRow {
+  /** The note row's own id — what says this is the SAME brief and not a new
+   *  agent that happens to have taken the name back. */
+  id: string
   path: string
   content: string
   createdBy: string | null
@@ -30,7 +33,7 @@ export async function findAgentBrief(spaceId: string, name: string): Promise<Age
   const index = agentBriefPath(name)
   const rows = await prisma.contextNote.findMany({
     where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { in: [index, agentBriefAliasPath(name)] } },
-    select: { path: true, content: true, createdBy: true },
+    select: { id: true, path: true, content: true, createdBy: true },
   })
   // The folder form wins when both exist — the alias is only ever a leftover.
   return rows.find((r) => r.path === index) ?? rows[0] ?? null

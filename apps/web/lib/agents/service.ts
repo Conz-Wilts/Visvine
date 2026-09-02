@@ -330,6 +330,8 @@ export interface AgentReadiness {
   runAs: ConnectorReadiness[] | null
   runAsUserId: string | null
   runAsName: string | null
+  /** The viewer IS that identity, so every fire already runs for them. */
+  viewerIsRunAs: boolean
 }
 
 export async function describeAgent(
@@ -381,7 +383,13 @@ export async function describeAgent(
     heartbeatAt: heartbeatAt?.toISOString() ?? null,
     subscribers: subRows.map((s) => ({ userId: s.userId, name: nameOf.get(s.userId) ?? null })),
     viewerSubscribed: subRows.some((s) => s.userId === p.userId),
-    readiness: { viewer, runAs, runAsUserId, runAsName: runAsUserId ? (nameOf.get(runAsUserId) ?? null) : null },
+    readiness: {
+      viewer,
+      runAs,
+      runAsUserId,
+      runAsName: runAsUserId ? (nameOf.get(runAsUserId) ?? null) : null,
+      viewerIsRunAs: runAsUserId === p.userId,
+    },
   }
 }
 

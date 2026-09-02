@@ -72,7 +72,12 @@ export default function AgentSidebar({
   children,
 }: AgentSidebarProps) {
   const others = agent.subscribers.filter((s) => s.userId !== agent.readiness.runAsUserId);
-  const names = [agent.readiness.runAsName ?? 'its author', ...others.map((s) => s.name ?? 'a member')];
+  // The identity every fire already runs as is on the list without a
+  // subscription, so the viewer who IS it has nothing to add or remove.
+  const names = [
+    agent.readiness.viewerIsRunAs ? 'you' : (agent.readiness.runAsName ?? 'its author'),
+    ...others.map((s) => s.name ?? 'a member'),
+  ];
   const setup = [agent.model, ...agent.connectors, ...agent.tools].filter(Boolean);
   // Who a run acted as, for the history rows — a fan-out group is one row per
   // person, and the name is what tells them apart.
@@ -126,7 +131,11 @@ export default function AgentSidebar({
       <Section
         title="Runs for"
         action={
-          <LinkButton onClick={() => onSubscribe(!agent.viewerSubscribed)}>{agent.viewerSubscribed ? 'Remove me' : 'Add me'}</LinkButton>
+          agent.readiness.viewerIsRunAs ? undefined : (
+            <LinkButton onClick={() => onSubscribe(!agent.viewerSubscribed)}>
+              {agent.viewerSubscribed ? 'Remove me' : 'Add me'}
+            </LinkButton>
+          )
         }
       >
         <p className="text-text-primary">{names.join(', ')}</p>

@@ -91,6 +91,26 @@ export async function effectiveTimezone(spaceId: string, noteTz: string | null):
 }
 
 /**
+ * A brief at a name the space has used before, but a DIFFERENT note: the old
+ * agent was deleted (or its folder was) and somebody has written a new one at
+ * the same path. It is not the same agent, so it does not inherit the old
+ * one's operational life — the runs on its page, the people who put their name
+ * down on it, or the mail addressed to it. What stays is what belongs to the
+ * SPACE rather than to the agent: the month's spend (`agent_model_usage`) and
+ * the egress and machine logs, which are an audit trail and not a note's to
+ * erase.
+ *
+ * A restore of the trashed note keeps the note's id, so it lands here as the
+ * same agent and keeps everything. A row written before this column existed
+ * has no id to compare and simply adopts the one it sees.
+ */
+async function retirePreviousIncarnation(spaceId: string, name: string, stateId: string): Promise<void> {
+  await prisma.agentRun.deleteMany({ where: { stateId } })
+  await prisma.agentSubscription.deleteMany({ where: { spaceId, name } })
+  await prisma.agentEvent.deleteMany({ where: { spaceId, agentName: name, consumedBy: null } })
+}
+
+/**
  * Re-derive the state row for one agent from its brief (or from a parsed
  * activation the caller already has). Creates the row when missing.
  * Returns the row's derived facts for callers that want to render them.
@@ -133,11 +153,14 @@ export async function syncAgentState(
   const debounceMs = activation?.debounceMs ?? DEFAULT_DEBOUNCE_MS
 
   const existing = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } } })
+  const reborn = !!(brief && existing?.briefNoteId && existing.briefNoteId !== brief.id)
+  if (reborn && existing) await retirePreviousIncarnation(spaceId, name, existing.id)
   const becameActive = active && !existing?.active
   await prisma.agentState.upsert({
     where: { agent_identity: { spaceId, name } },
-    create: { spaceId, name, runAsUserId, active, nextRunAt, scheduleHash: hash, triggersJson, debounceMs },
+    create: { spaceId, name, briefNoteId: brief?.id ?? null, runAsUserId, active, nextRunAt, scheduleHash: hash, triggersJson, debounceMs },
     update: {
+      ...(brief ? { briefNoteId: brief.id } : {}),
       runAsUserId,
       active,
       scheduleHash: hash,
@@ -149,6 +172,19 @@ export async function syncAgentState(
       nextRunAt: existing?.status === 'running' && active ? existing.nextRunAt : nextRunAt,
       ...(becameActive ? { deactivatedReason: null, deactivatedDetail: null, consecutiveFailures: 0 } : {}),
       ...(!active && existing?.active ? { deactivatedReason: existing.deactivatedReason ?? 'admin' } : {}),
+      // A new agent at an old name starts with a clean page: no last run, no
+      // failure streak, and none of the previous one's deactivation reason.
+      ...(reborn
+        ? {
+            status: 'idle',
+            currentRunId: null,
+            runningSince: null,
+            lastRunAt: null,
+            consecutiveFailures: 0,
+            deactivatedReason: null,
+            deactivatedDetail: null,
+          }
+        : {}),
     },
   })
   return { active, nextRunAt, invalid }
