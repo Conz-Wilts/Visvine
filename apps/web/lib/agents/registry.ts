@@ -57,6 +57,8 @@ export interface ProviderEntry {
   models: RegistryModel[]
 }
 
+import { LOCAL_PROVIDER, LOCAL_PROVIDER_ID } from './local'
+
 const MODEL_KEY_PREFIX = 'MODEL_KEY_'
 
 // Anthropic model ids and list prices per the claude-api skill (2026-06):
@@ -151,6 +153,13 @@ export function parseModelRef(raw: unknown): { ok: true; ref: ModelRef } | { ok:
   }
   const providerId = value.slice(0, slash).toLowerCase()
   const modelId = value.slice(slash + 1)
+  // `local/<runtime>` is a member's own plan, run from the desktop app — a
+  // provider the server can name but never call (lib/agents/local.ts).
+  if (providerId === LOCAL_PROVIDER_ID) {
+    const runtime = LOCAL_PROVIDER.models.find((m) => m.id === modelId.toLowerCase())
+    if (!runtime) return { ok: false, error: `\`model: local/…\` must name a runtime — ${LOCAL_PROVIDER.models.map((m) => `local/${m.id}`).join(' or ')}` }
+    return { ok: true, ref: { provider: LOCAL_PROVIDER, modelId: runtime.id, pricing: null } }
+  }
   const provider = providerById(providerId)
   if (!provider) {
     return {

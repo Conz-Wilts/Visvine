@@ -697,6 +697,23 @@ the memory sweep. Consequences, all load-bearing:
   PROVIDER (one key), so a brief pinning a sibling model on the same key
   is on this page too. `GET/PATCH /api/communities/<id>/models/<name>` and
   `lib/models/service.ts` are the read; `list_models` is the action.
+- **A member's own plan is a model only the desktop app can run.** A brief
+  may pin `model: local/claude` or `local/codex` (`lib/agents/local.ts`,
+  `LOCAL_PROVIDER` in `parseModelRef`). The server can name it and never call
+  it: `resolveAgentChatConfig` answers `local_runtime`, activation refuses
+  it, the tick never tries it, and nothing is deactivated for it. It runs
+  when a person presses Run in the desktop app: the page fetches the prompt
+  from `GET …/agents/<name>/local-runs` (local preamble + brief + memory),
+  the shell spawns the vendor's own binary (`apps/desktop/src/runtimes`,
+  signed in by the member in the binary's own login — the one route Anthropic
+  permits and OpenAI blesses), events stream over the preload bridge into
+  `LocalRunPane`, and `POST …/local-runs` records the run under the agent
+  with `model: local/<runtime>`, tokens metered, `costMicros` null — the plan
+  paid, not the space. The Models dialog's **Your plan** section shows
+  whether each binary is installed and signed in (in a browser, it says to use
+  the desktop app). `LOCAL_RUNTIMES_OFF=claude,codex` is the kill switch,
+  surfaced by `GET …/models`; the vendors changed their position on this
+  four times in 2026, so it stays an env change rather than a release.
 - **Models is its own row in the account band**, beside Connectors — the same
   dialog holding `ModelsPanel` (`features/models/components/`) with no tab bar
   and a `+` offering the five providers of `lib/models/catalog.ts`. Adding one

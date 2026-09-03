@@ -12,6 +12,7 @@ import { decryptSecret } from '@/lib/crypto/secrets'
 import { assertPubliclyRoutable } from '@/lib/net/ssrf'
 import { classifyModelStatus, type ChatConfig } from '@/lib/notes/ai'
 import { parseModelBaseUrl } from '@/lib/models/config'
+import { localRuntimeOf, localRuntimeRefusal } from './local'
 import { parseModelRef, type ModelPricing, type ModelRef, type ProviderEntry } from './registry'
 import { customEndpointOf, declaredPricingFor, defaultModelOf, noModelReason, spaceModels, type SpaceModel } from './spaceModels'
 import { fetchedPricing } from './prices'
@@ -48,7 +49,7 @@ async function resolveModelPricing(models: readonly SpaceModel[], ref: ModelRef)
 
 export type ResolveModelResult =
   | { ok: true; config: ChatConfig; ref: ModelRef; /** The note it came from (its path), when the brief named no model. */ modelNote: string | null }
-  | { ok: false; reason: 'no_model' | 'no_key' | 'no_endpoint' | 'bad_key' | 'invalid_model'; message: string }
+  | { ok: false; reason: 'no_model' | 'no_key' | 'no_endpoint' | 'bad_key' | 'invalid_model' | 'local_runtime'; message: string }
 
 /**
  * Resolve the ChatConfig an agent run uses.
@@ -77,6 +78,9 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
     const parsed = parseModelRef(modelRaw)
     if (!parsed.ok) return { ok: false, reason: 'invalid_model', message: parsed.error }
     ref = parsed.ref
+    // A member's own plan: only the desktop app may spend it (lib/agents/local.ts).
+    const local = localRuntimeOf(`${ref.provider.id}/${ref.modelId}`)
+    if (local) return { ok: false, reason: 'local_runtime', message: localRuntimeRefusal(local) }
   } else {
     const fallback = defaultModelOf(models)
     if (!fallback || !fallback.ref) {

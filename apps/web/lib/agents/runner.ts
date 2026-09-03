@@ -211,7 +211,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       // every space on a single misconfigured deploy — it fails the run and
       // counts toward repeated_failure, no more.
       const deactivate =
-        resolved.reason === 'invalid_model' || resolved.reason === 'bad_key'
+        resolved.reason === 'invalid_model' || resolved.reason === 'bad_key' || resolved.reason === 'local_runtime'
           ? null
           : { reason: 'config' as const, detail: resolved.message }
       return fail('config', resolved.message, { deactivate })

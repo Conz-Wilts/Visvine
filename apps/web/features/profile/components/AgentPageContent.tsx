@@ -16,7 +16,10 @@ import MessageAgent from '@/features/agents/components/MessageAgent';
 import RunPane from '@/features/agents/components/RunPane';
 import SkillsPanel from '@/features/agents/components/SkillsPanel';
 import StatusDot from '@/features/agents/components/StatusDot';
+import LocalRunPane from '@/features/agents/components/LocalRunPane';
 import { setupBlocker, statusLine, terminalLabel } from '@/features/agents/lib/rowState';
+import { desktopRuntimes } from '@/features/desktop/lib/desktop';
+import { LOCAL_RUNTIMES, localRuntimeOf } from '@/lib/agents/local';
 
 /**
  * The first tab of an agent's node page: what the note alone can't say.
@@ -64,6 +67,9 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const [panel, setPanel] = useState<Panel | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // A run on the member's own plan, in flight on this machine — keyed by the
+  // press that started it, so each Run is its own pane.
+  const [localRun, setLocalRun] = useState<number | null>(null);
 
   // The run being watched rides the URL beside `?tab=`, so a `watch` href from
   // an action or a teammate opens exactly the run it names, and
@@ -114,10 +120,19 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   if (error || !data) return <Alert>{error ?? 'Not found'}</Alert>;
 
   const { agent, runs, isAdmin, canManage } = data;
-  const line = statusLine(agent);
+  const localRuntime = localRuntimeOf(agent.modelEffective);
+  const localLabel = LOCAL_RUNTIMES.find((r) => r.id === localRuntime)?.label.replace(/^Your/, 'your') ?? 'your plan';
+  const line = localRuntime
+    ? { tone: 'muted' as const, text: `Runs on ${localLabel} from the desktop app`, problem: false }
+    : statusLine(agent);
   const liveRun = runs.find((r) => r.status === 'running') ?? null;
   const blocker = agent.activation.active ? null : setupBlocker(agent, isAdmin);
-  const runnable = canManage && agent.activation.active && agent.state.status !== 'running' && !agent.invalid;
+  // A brief on a member's own plan runs from the desktop app when a person
+  // presses Run — no activation, no schedule (lib/agents/local.ts).
+  const desktop = localRuntime ? desktopRuntimes() : null;
+  const runnable = localRuntime
+    ? canManage && !agent.invalid && desktop !== null && localRun === null
+    : canManage && agent.activation.active && agent.state.status !== 'running' && !agent.invalid;
   // What the run column shows: the run in flight, else the one the URL names,
   // else the latest. A live run always wins — watching it is why you are here.
   const shownRun = liveRun ?? runs.find((r) => r.id === runParam) ?? runs[0] ?? null;
@@ -160,6 +175,11 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
 
   const runNow = async () => {
     if (!spaceId) return;
+    if (localRuntime) {
+      setNotice(null);
+      setLocalRun(Date.now());
+      return;
+    }
     setBusy(true);
     setNotice(null);
     // The run row exists before the executor starts, so the first reload puts
@@ -208,18 +228,24 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
               className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] font-semibold text-text-secondary hover:bg-surface-3 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               disabled={!runnable || busy}
               onClick={runNow}
-              title={agent.activation.active ? 'Run now' : 'Turn it on first'}
+              title={localRuntime ? (desktop ? 'Run on your plan, from this machine' : 'Runs from the desktop app') : agent.activation.active ? 'Run now' : 'Turn it on first'}
             >
               <PlayIcon className="h-3 w-3" /> Run
             </button>
           )}
-          <Toggle
+          {!localRuntime && <Toggle
             checked={agent.activation.active}
             disabled={!canManage || busy || !!agent.invalid}
             aria-label={canManage ? (agent.activation.active ? 'Turn off' : 'Turn on') : 'Someone who can edit the brief turns it on'}
             onChange={(next) => (next ? setActivating(true) : patchActive(false))}
-          />
+          />}
         </div>
+        {localRuntime && (
+          <p className="pl-5 text-[13px] text-text-muted">
+            Runs on {localLabel}, from this machine, when you press Run. Usage counts against that plan, not the space’s key.
+            {!desktop && ' Open Visvine in the desktop app to run it.'}
+          </p>
+        )}
         {agent.description && <p className="pl-5 text-[13px] text-text-muted">{agent.description}</p>}
         {notice && (
           <Alert inline variant="warning" className="ml-5">
@@ -240,7 +266,23 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
 
       <div className="grid gap-8 border-t border-border-subtle pt-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
         <main className="min-w-0">
-          {shownRun && spaceId ? (
+          {localRun !== null && spaceId ? (
+            <LocalRunPane
+              key={localRun}
+              spaceId={spaceId}
+              agentName={name}
+              onRecorded={(runId) => {
+                setLocalRun(null);
+                selectRun(runId);
+                void reload();
+              }}
+              onFailed={(message) => {
+                setLocalRun(null);
+                setNotice(message);
+                void reload();
+              }}
+            />
+          ) : shownRun && spaceId ? (
             <RunPane
               key={shownRun.id}
               spaceId={spaceId}
@@ -255,7 +297,9 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
               No runs yet.{' '}
               {runnable
                 ? 'Press Run to watch its first one here.'
-                : agent.activation.active
+                : localRuntime
+                  ? 'Its runs appear here.'
+                  : agent.activation.active
                   ? 'The first one appears here when it fires.'
                   : 'Turn it on and its runs appear here.'}
             </p>
@@ -276,7 +320,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
           onOpen={setPanel}
           onEditBrief={editBrief}
         >
-          {spaceId && agent.activation.active ? <MessageAgent spaceId={spaceId} agentName={name} /> : null}
+          {spaceId && agent.activation.active && !localRuntime ? <MessageAgent spaceId={spaceId} agentName={name} /> : null}
         </AgentSidebar>
       </div>
 

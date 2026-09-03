@@ -56,6 +56,31 @@ links and off-origin server redirects leave the shell (`shell.openExternal` is s
 window-state persistence, cold-start deep links (`visvine-desktop://open/directory`)
 and the offline fallback.
 
+## Your own plan (local runtimes)
+
+`src/runtimes/` lets a member run an agent on their own Claude or ChatGPT plan
+from this machine. The shell spawns the vendor's own binary — `claude` (Claude
+Code) or `codex` — signed in by the member in the binary's own login, and
+streams what it says back to the web app over the preload bridge
+(`window.visvineDesktop.runtimes`: `list`, `login`, `run`, `cancel`,
+`onEvent`). The shell never reads `~/.claude` or `~/.codex`, never passes a
+token anywhere, strips `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` from the child so
+a key cannot outrank the plan, and refuses IPC from any origin but the app's.
+That boundary is what the vendors permit (the web side documents the policy in
+`apps/web/lib/agents/local.ts`).
+
+- `claude -p --output-format stream-json` with `WebFetch`/`WebSearch` and the
+  Visvine MCP server (`/api/mcp` on the app origin) as its only tools; never
+  `--bare`, which drops the plan sign-in.
+- `codex exec --json --sandbox read-only`, the prompt on stdin, the MCP server
+  as a per-run config override.
+- `login` opens the OS terminal running `claude auth login` / `codex login`.
+- A GUI app's PATH has not seen the shell profile, so `path.ts` asks the login
+  shell once and adds the usual per-user bin dirs.
+
+The parsers for both binaries' JSONL are pure (`events.ts`) and unit-tested
+against their real shapes (`tests/runtimes.test.mjs`).
+
 ## Package
 
 ```bash
@@ -74,7 +99,8 @@ src/config.ts        app URL resolution + persisted settings
 src/urls.ts          pure navigation policy + UA/deep-link helpers (unit-tested)
 src/window-state.ts  window bounds persistence
 src/menu.ts          native application menu
-src/preload.ts       contextBridge → window.visvineDesktop (read-only)
+src/preload.ts       contextBridge → window.visvineDesktop (+ runtimes bridge)
+src/runtimes/        the member's own Claude / Codex on this machine (see above)
 resources/           offline.html
 assets/              icon.png (from apps/web/app/icon.png)
 tests/               node:test unit tests (run against dist/)

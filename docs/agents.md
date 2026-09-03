@@ -78,6 +78,11 @@ Read this week's notes under updates/ and write a digest to reports/weekly.md �
   nothing runs it directly. Base URL always comes from the registry, never the note
   (`lib/models/config.ts`). The shape before `models/` — `connectors/<name>.md` with `kind: model` —
   is still read by `spaceModels` until `pnpm db:models:migrate` moves it.
+- **A member's own plan** — `model: local/claude` or `local/codex` runs the agent from the desktop
+  app on that member's Claude or ChatGPT plan (`lib/agents/local.ts`, `apps/desktop/src/runtimes`).
+  Never scheduled, never run by the server: Run in the desktop app fetches the prompt from
+  `GET …/agents/<name>/local-runs`, the shell runs the vendor's binary, and `POST …/local-runs`
+  records the run with tokens and no dollars. `LOCAL_RUNTIMES_OFF` switches a runtime off.
 - **Run now** shares the scheduler's compare-and-swap claim, requires the agent to be **active**,
   does not advance the schedule, takes any waiting events with it, and is open to anyone who can
   edit the brief.

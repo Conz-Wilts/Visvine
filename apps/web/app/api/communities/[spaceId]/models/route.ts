@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAgentsAccess } from '@/lib/agents/route'
 import { spaceModels } from '@/lib/agents/spaceModels'
+import { localRuntimesEnabled } from '@/lib/agents/local'
 
 /**
  * The space's models — every parseable note under models/ (and, until
@@ -18,6 +19,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
   const models = await spaceModels(spaceId)
   return NextResponse.json({
     canManage: ctx.resolved.isAdmin,
+    // Which of a member's own plans this deployment lets the desktop app run
+    // on — the kill switch, read here so the dialog and the brief's picker
+    // agree (lib/agents/local.ts).
+    localRuntimes: localRuntimesEnabled(),
     models: models.map((m) => ({
       name: m.name,
       path: m.path,

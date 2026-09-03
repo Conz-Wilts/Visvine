@@ -41,6 +41,7 @@ import { findAgentActivation, findAgentBrief } from './briefs'
 import { deactivateAgent, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
+import { localRuntimeOf, localRuntimeRefusal } from './local'
 import { latestRun, spendForMonth, type RunListItem } from './runs'
 import { lastHeartbeat } from './schedule'
 
@@ -174,6 +175,9 @@ function modelStateOf(
   if (!brief) return { modelEffective: null, modelNote: null, modelProblem: null }
   if (brief.modelRef) {
     const ref = `${brief.modelRef.provider.id}/${brief.modelRef.modelId}`
+    // A member's own plan needs no key here: whether it can run is the
+    // desktop app's to say, on the page, for the person looking at it.
+    if (localRuntimeOf(ref)) return { modelEffective: ref, modelNote: null, modelProblem: null }
     // A pinned model is served by whichever model note names that provider; the
     // key is per provider, so any of them proves it is payable.
     const behind = models.find((m) => m.provider.id === brief.modelRef!.provider.id && m.problem === null)
@@ -482,6 +486,10 @@ export async function activateAgent(
   const parsed = parseAgentBrief(parseFrontmatter(content), splitFrontmatter(content).body)
   if (!parsed.ok) return { ok: false, status: 400, error: `The brief is invalid: ${parsed.error}` }
 
+  // A brief on a member's own plan runs only when that person presses Run in
+  // the desktop app; switching it on would promise a schedule nothing can keep.
+  const localRuntime = localRuntimeOf(parsed.brief.model)
+  if (localRuntime) return { ok: false, status: 400, error: localRuntimeRefusal(localRuntime) }
   const resolved = await resolveAgentChatConfig(context.spaceId, parsed.brief.model)
   if (!resolved.ok) return { ok: false, status: 400, error: resolved.message }
   const probe = await probeModelKey(resolved.config, resolved.ref.provider)

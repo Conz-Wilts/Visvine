@@ -1,5 +1,6 @@
 'use client';
 
+import { LOCAL_RUNTIMES, localModelRef, localRuntimeOf } from '@/lib/agents/local';
 import { useState } from 'react';
 import { Chip, Field, Input } from '@/components/ui';
 import Select from '@/components/ui/Select';
@@ -52,7 +53,8 @@ export default function AgentSettingsFields({
   // A pin that names something the space no longer has still has to show, or
   // the form would silently rewrite the brief to "the space's model" the first
   // time somebody opened it to change the description.
-  const orphanPin = pinned && !models.some((m) => m.ref === pinned) ? pinned : null;
+  const localPin = localRuntimeOf(pinned);
+  const orphanPin = pinned && !localPin && !models.some((m) => m.ref === pinned) ? pinned : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -64,11 +66,12 @@ export default function AgentSettingsFields({
             : undefined
         }
       >
-        {options && models.length === 0 ? (
-          // Nothing to choose. Saying so beats a picker offering providers the
-          // space has never signed up for — which is what put "gemini" in
-          // briefs written in spaces that had no Gemini key.
-          <p className="text-[13px] text-text-secondary">
+        {options && models.length === 0 && (
+          // Nothing of the space's to choose. Saying so beats a picker offering
+          // providers the space has never signed up for — which is what put
+          // "gemini" in briefs written in spaces that had no Gemini key. A
+          // member's own plan is still offered below: it needs nothing here.
+          <p className="mb-2 text-[13px] text-text-secondary">
             {options.noModels}{' '}
             {isAdmin && (
               <a href="/admin?section=connectors" className="font-medium text-text-primary underline underline-offset-2">
@@ -76,7 +79,8 @@ export default function AgentSettingsFields({
               </a>
             )}
           </p>
-        ) : (
+        )}
+        {(
           <Select
             value={pinned}
             onChange={(e) => onChange({ ...value, model: e.target.value })}
@@ -95,6 +99,15 @@ export default function AgentSettingsFields({
             {orphanPin && (
               <option value={orphanPin}>{orphanPin} — not a model this space has</option>
             )}
+            {/* A member's own plan, run from the desktop app: the brief pins
+                it here, and it runs when that person presses Run there. */}
+            <optgroup label="Your own plan (desktop app)">
+              {LOCAL_RUNTIMES.map((r) => (
+                <option key={r.id} value={localModelRef(r.id)}>
+                  {r.label} · via {r.binary} on your machine
+                </option>
+              ))}
+            </optgroup>
           </Select>
         )}
       </Field>

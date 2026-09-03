@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, net, screen, session, shell, type WebContents } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, net, screen, session, shell, type WebContents } from "electron";
 import path from "node:path";
 import { isDevMode, readSettings, resolveAppUrl } from "./config";
 import { buildMenu } from "./menu";
@@ -13,6 +13,7 @@ import {
   navigationDecision,
 } from "./urls";
 import { loadWindowState, saveWindowState } from "./window-state";
+import { cancelRun, isRuntimeId, listRuntimes, loginRuntime, startRun, type RunInput } from "./runtimes";
 
 const APP_NAME = "Visvine";
 const OFFLINE_PAGE = path.join(__dirname, "..", "resources", "offline.html");
@@ -185,6 +186,43 @@ function createWindow(): BrowserWindow {
 }
 
 // ---------------------------------------------------------------------------
+// Local runtimes (the member's own Claude / ChatGPT plan)
+// ---------------------------------------------------------------------------
+
+/**
+ * The bridge the web app reaches the runtimes through (src/runtimes). Only
+ * the app itself may call it: a request from any other origin — an auth
+ * provider page, the offline page — is refused before it is looked at, so
+ * nothing loaded in the shell but Visvine can spawn a process here.
+ */
+function fromApp(event: Electron.IpcMainInvokeEvent): boolean {
+  return isSameApp(event.senderFrame?.url ?? event.sender.getURL(), appUrl);
+}
+
+function registerRuntimeIpc() {
+  ipcMain.handle("runtimes:list", (event) => (fromApp(event) ? listRuntimes() : []));
+  ipcMain.handle("runtimes:login", (event, id: unknown) => {
+    if (!fromApp(event) || !isRuntimeId(id)) return { ok: false, detail: "Refused." };
+    return loginRuntime(id);
+  });
+  ipcMain.handle("runtimes:run", (event, raw: unknown) => {
+    if (!fromApp(event)) return { error: "Refused." };
+    const input = raw as Partial<RunInput> | null;
+    if (!input || !isRuntimeId(input.runtime) || typeof input.prompt !== "string" || !input.prompt.trim()) return { error: "A runtime and a prompt are required." };
+    const mcp = input.mcp && typeof input.mcp.url === "string" && isSameApp(input.mcp.url, appUrl) && /^[a-z][a-z0-9_-]{0,31}$/i.test(String(input.mcp.name)) ? { name: String(input.mcp.name), url: input.mcp.url } : null;
+    const sender = event.sender;
+    const started = startRun(
+      { runtime: input.runtime, prompt: input.prompt, mcp, maxTurns: typeof input.maxTurns === "number" ? Math.min(50, Math.max(1, Math.floor(input.maxTurns))) : undefined },
+      (runId, e) => {
+        if (!sender.isDestroyed()) sender.send("runtimes:event", { runId, event: e });
+      },
+    );
+    return "error" in started ? { error: started.error } : { runId: started.runId };
+  });
+  ipcMain.handle("runtimes:cancel", (event, runId: unknown) => fromApp(event) && typeof runId === "string" && cancelRun(runId));
+}
+
+// ---------------------------------------------------------------------------
 // App lifecycle
 // ---------------------------------------------------------------------------
 
@@ -235,6 +273,7 @@ if (!app.requestSingleInstanceLock()) {
     session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => permitted(permission, origin));
 
     Menu.setApplicationMenu(buildMenu({ appUrl, getWindow: () => mainWindow }));
+    registerRuntimeIpc();
 
     const initialLink = deepLinkIn(process.argv);
     if (initialLink) pendingDeepLink = deepLinkToPath(initialLink);
