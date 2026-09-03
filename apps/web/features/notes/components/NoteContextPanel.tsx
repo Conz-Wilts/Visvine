@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { RadioIcon } from '@/features/shared/icons';
+import { BlocksIcon, RadioIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { entityNotePath, entityStub, hrefForNotePath, noteHref } from '@/lib/notes/entities'
 import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
@@ -401,6 +401,15 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         aliases={currentSpace?.aliases as SpaceAlias[] | undefined}
         tagColors={currentSpace?.designConfig?.tagColors ?? null}
       />
+      {access?.subspace && (
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
+          <BlocksIcon className="h-4 w-4 shrink-0 text-brand-green" />
+          <span>
+            From <span className="font-medium">{access.subspace.name}</span>, a sub-space of this one —
+            its own context, read here as it is now. To edit it, open that space.
+          </span>
+        </div>
+      )}
       {isReplica && pubs?.asTarget && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
           <RadioIcon className="h-4 w-4 shrink-0 text-brand-green" />

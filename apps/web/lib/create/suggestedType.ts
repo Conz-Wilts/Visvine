@@ -7,8 +7,6 @@ export interface CreateSuggestion {
    * sections) lists them all, so the panel isn't narrower than the page.
    */
   types: CreateableType[];
-  /** Short human reason shown next to the suggested option ("You're on Events"). */
-  reason: string;
 }
 
 /**
@@ -17,19 +15,20 @@ export interface CreateSuggestion {
  * rather than falling through to the bare `/directory` → person entry.
  */
 const ROUTE_SUGGESTIONS: Array<{ prefix: string; suggestion: CreateSuggestion }> = [
-  { prefix: '/directory/note/agents', suggestion: { types: ['agent'], reason: "You're in agents/" } },
-  { prefix: '/directory/note', suggestion: { types: ['context', 'file'], reason: "You're in Context" } },
-  { prefix: '/directory/source', suggestion: { types: ['context', 'file'], reason: "You're in Context" } },
-  { prefix: '/directory', suggestion: { types: ['person'], reason: "You're in the Directory" } },
-  { prefix: '/events', suggestion: { types: ['event'], reason: "You're on Events" } },
-  { prefix: '/resources', suggestion: { types: ['resource'], reason: "You're on Resources" } },
-  { prefix: '/channels', suggestion: { types: ['channel', 'section'], reason: "You're on Channels" } },
+  { prefix: '/directory/note/agents', suggestion: { types: ['agent'] } },
+  { prefix: '/directory/note', suggestion: { types: ['context', 'file'] } },
+  { prefix: '/directory/source', suggestion: { types: ['context', 'file'] } },
+  { prefix: '/directory', suggestion: { types: ['person'] } },
+  { prefix: '/events', suggestion: { types: ['event'] } },
+  { prefix: '/resources', suggestion: { types: ['resource'] } },
+  { prefix: '/channels', suggestion: { types: ['channel', 'section'] } },
 ];
 
 /**
- * The create types to pin at the top of the "Create new" panel for the page the
- * user is on, or null where no type is an obvious fit (/home, /settings, …) —
- * in which case the panel just lists everything unranked.
+ * The create types the Create panel lists first for the page the user is on,
+ * or null where no type is an obvious fit (/home, /settings, …) — in which
+ * case the panel lists everything in its own order. Order is the whole
+ * suggestion: nothing renders a reason.
  */
 export function suggestedCreateType(pathname: string | null | undefined): CreateSuggestion | null {
   if (!pathname) return null;

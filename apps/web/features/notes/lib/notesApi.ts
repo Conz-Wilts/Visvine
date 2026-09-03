@@ -43,6 +43,9 @@ export interface PathAccessResponse {
     members: Array<{ userId: string; name: string; email: string | null; image: string | null }>
     aliases: Array<{ id: string; name: string; color: string; admin: boolean; system: boolean; holderCount: number }>
   } | null
+  /** Set when `path` is a sub-space's note read through this space
+   *  (`spaces/<id>/…`): which sub-space. Read-only here by construction. */
+  subspace?: { id: string; name: string } | null
 }
 
 /** GET /api/notes/access (no path) — the context-wide overview for tree badges

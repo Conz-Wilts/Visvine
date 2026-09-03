@@ -17,7 +17,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireContext, fail, failFromError } from '@/lib/notes/api'
 import { canRemove, principalOf } from '@/lib/notes/resolve'
-import { readVisible, writeDenial, writeDenialFull, moveGated } from '@/lib/notes/contextService'
+import { writeDenial, writeDenialFull, moveGated } from '@/lib/notes/contextService'
+import { readFederated } from '@/lib/notes/federation'
+import { isSubspacePath } from '@/lib/spaces/subspaces'
 import {
   writeNote,
   canonicalEntityWritePath,
@@ -45,8 +47,11 @@ export async function GET(req: NextRequest) {
   // index (people/x.md → people/x/index.md): a client holding the old path (a
   // stale profile cache, an old link) reads the live note, and `path` says
   // where it really is. Writes redirect the same way (store.writeNote).
-  const canonical = await canonicalEntityWritePath(context, path)
-  const content = await readVisible(p, context, canonical)
+  // A path under spaces/<id>/ is a sub-space's note read through this one
+  // (lib/notes/federation.ts) — its own, already-canonical path, never this
+  // context's entity map.
+  const canonical = isSubspacePath(path) ? path : await canonicalEntityWritePath(context, path)
+  const content = await readFederated(p, context, canonical)
   if (content === null) return fail(`Note not found: ${path}`, 404)
   return NextResponse.json({ content, path: canonical })
 }

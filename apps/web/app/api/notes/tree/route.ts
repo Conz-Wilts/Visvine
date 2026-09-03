@@ -4,11 +4,17 @@
 // built over the visibility-filtered vault, and explicitly-created empty
 // folders are grafted only when the caller may see them (a grant reaches the
 // folder or starts inside it — restricted subtrees stay fully hidden).
+//
+// A public sub-space's own tree is grafted in under `spaces/<id>/`
+// (lib/notes/federation.ts), read under the sub-space's everyone-principal.
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireSession } from '@/lib/session'
-import { principalOf, resolveContext, type ResolvedContext } from '@/lib/notes/resolve'
+import { principalOf, resolveContext } from '@/lib/notes/resolve'
+import { federateTree } from '@/lib/notes/federation'
+import type { Context } from '@/lib/notes/store'
+import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { visibleVault } from '@/lib/notes/contextService'
 import { listFolders } from '@/lib/notes/store'
 import { structuralFolders } from '@/lib/notes/entities'
@@ -37,9 +43,10 @@ function ensureFolderPath(root: TreeNode, folderPath: string): void {
   }
 }
 
-/** One context's own tree: its visible notes, its empty folders, its tools' folders. */
-async function treeFor(context: ResolvedContext): Promise<TreeNode> {
-  const p = await principalOf(context)
+/** One context's own tree: its visible notes, its empty folders, its tools' folders.
+ *  `gated` = the folder-visibility lens applies (a shared context that is not
+ *  a personal space). */
+async function treeFor(context: Context, p: ContextPrincipal, gated: boolean): Promise<TreeNode> {
   const [{ metas }, folders, space] = await Promise.all([
     visibleVault(p, context),
     listFolders(context),
@@ -59,7 +66,7 @@ async function treeFor(context: ResolvedContext): Promise<TreeNode> {
   for (const folder of folders) {
     // Graft only folders the caller may see: readable themselves, or holding a
     // readable grant somewhere inside (restricted subtrees stay invisible).
-    if (context.scope === 'shared' && !context.isPersonalSpace && !principalSeesFolder(p, folder)) continue
+    if (gated && !principalSeesFolder(p, folder)) continue
     ensureFolderPath(root, folder)
   }
   return root
@@ -72,7 +79,10 @@ export async function GET(req: NextRequest) {
   const context = await resolveContext(session, url.searchParams.get('spaceId'), url.searchParams.get('scope'))
   if (context instanceof Response) return context
 
-  const root = await treeFor(context)
+  const p = await principalOf(context)
+  const gated = context.scope === 'shared' && !context.isPersonalSpace
+  const root = await treeFor(context, p, gated)
+  await federateTree(p, context, root, (ctx, principal) => treeFor(ctx, principal, true))
   sortTree(root)
   return NextResponse.json({ tree: root })
 }

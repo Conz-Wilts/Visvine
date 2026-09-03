@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useSpace } from './SpaceContext';
 import { createSafeContext } from './createSafeContext';
+import { flowFor, rowForKind, type CreateKind } from '@/lib/create/rows';
+import type { SpaceFeatureConfig } from '@/lib/types';
 
 export type CreateableType =
   | 'person'
@@ -27,48 +30,33 @@ export type CreateableType =
   // A gateway to an external API or database, written as connectors/<name>.md.
   // Admin-only, and the note IS the config — see lib/connectors/config.ts.
   | 'connector'
-  // A scheduled agent, written as agents/<name>.md — any member may author one;
-  // an admin activates it (lib/agents/config.ts).
+  // A scheduled agent, written as agents/<name>/index.md — any member may
+  // author one and turn it on (lib/agents/config.ts).
   | 'agent'
   // A Tool — a folder of notes under tools/<name>/ scaffolded by
   // lib/tools/service.ts#createTool; any member may author one, an admin
-  // publishes it. Not note-first: the scaffold writes three notes and a node
-  // at once, so it stays in the docked panel.
+  // publishes it.
   | 'tool';
 
-/**
- * Types that are created on the note-first surface (/directory/new). Everything
- * is, except a Tool — its scaffold writes three notes and a node at once, so it
- * stays in the docked panel. A connector and an agent are ONLY creatable
- * here: the docked panel has no form for either.
- *
- * A channel, section and uploaded file each write a context note
- * (channels/<slug>.md, spaces/…) or land in the context tree, so the draft
- * surface takes a name and a starting body for them like the rest. The docked
- * panel is still reachable from the places that open it directly (the space
- * switcher, the channel list).
- */
-const NOTE_FIRST: Partial<Record<CreateableType, string>> = {
-  context: 'note',
-  folder: 'folder',
-  person: 'person',
-  space: 'space',
-  resource: 'resource',
-  connector: 'connector',
-  // An agent is a note like the rest: the title names it, the editor body is
-  // the brief, and the model/connectors its runner needs are the draft's
-  // inline extras.
-  agent: 'agent',
-  channel: 'channel',
-  section: 'section',
-  file: 'file',
-};
+export interface CreateOpenOptions {
+  /** A folder the caller was standing in, for the kinds that land in one. */
+  folder?: string | null;
+}
 
 interface CreateModalContextValue {
+  /** The Create panel is out beside the rail. */
   isOpen: boolean;
-  defaultType: CreateableType | null;
-  open: (type?: CreateableType) => void;
+  /** A kind to open straight onto, skipping the list. */
+  defaultType: CreateKind | null;
+  defaultFolder: string | null;
+  open: (type?: CreateKind, opts?: CreateOpenOptions) => void;
   close: () => void;
+  /** A form is being filled in. The panel opens under the pointer and shuts
+   *  when the pointer leaves the rail's card (Sidebar); while someone is
+   *  typing into a form, leaving must not throw that away, so the card holds
+   *  the panel until the form is done or Escape steps back to the list. */
+  formOpen: boolean;
+  setFormOpen: (v: boolean) => void;
 }
 
 const [CreateModalContext, useCreateModal] = createSafeContext<CreateModalContextValue>('CreateModal');
@@ -76,61 +64,63 @@ export { useCreateModal };
 
 export function CreateModalProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [defaultType, setDefaultType] = useState<CreateableType | null>(null);
+  const [defaultType, setDefaultType] = useState<CreateKind | null>(null);
+  const [defaultFolder, setDefaultFolder] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
 
-  const open = (type?: CreateableType) => {
+  const open = useCallback((type?: CreateKind, opts?: CreateOpenOptions) => {
     setDefaultType(type ?? null);
+    setDefaultFolder(opts?.folder ?? null);
     setIsOpen(true);
-  };
+  }, []);
 
-  const close = () => {
+  const close = useCallback(() => {
     setIsOpen(false);
     setDefaultType(null);
-  };
+    setDefaultFolder(null);
+    setFormOpen(false);
+  }, []);
 
   return (
-    <CreateModalContext.Provider
-      value={{
-        isOpen,
-        defaultType,
-        open,
-        close,
-      }}
-    >
+    <CreateModalContext.Provider value={{ isOpen, defaultType, defaultFolder, open, close, formOpen, setFormOpen }}>
       {children}
     </CreateModalContext.Provider>
   );
 }
 
 /**
- * The one entry point call sites should use: it knows which types open the
- * note-first surface and which open the docked panel, so a caller just says
- * what it wants to create.
- *
- * `createSurface()` with no type opens a blank draft — pressing "+" should land
- * you on an empty note, not on a menu of decisions.
+ * The one entry point call sites should use: say what you want to create and
+ * the flow table (lib/create/rows.ts) decides whether that is a form in the
+ * panel, the kind's own surface, or the context-note draft. With no type the
+ * panel opens on its list.
  */
 export function useCreateSurface() {
   const router = useRouter();
+  const pathname = usePathname();
   const { open } = useCreateModal();
+  const { currentSpace, isAdmin } = useSpace();
 
   return useCallback(
-    (type?: CreateableType, opts?: { folder?: string }) => {
-      // With no explicit type the draft opens with the Type row UNSET. The route
-      // used to imply one, which meant "Create new" from anywhere under
-      // /directory started on Person — a type nobody asked for, on a surface
-      // whose whole point is that you say what the thing is.
-      const draftType = type ? NOTE_FIRST[type] : null;
-      if (type && !draftType) {
-        open(type);
+    (type?: CreateKind, opts?: CreateOpenOptions) => {
+      if (!type) {
+        open(undefined, opts);
         return;
       }
-      const params = new URLSearchParams();
-      if (draftType) params.set('type', draftType);
-      if (opts?.folder) params.set('folder', opts.folder);
-      const query = params.toString();
-      router.push(`/directory/new${query ? `?${query}` : ''}`);
+      const row = rowForKind(type, {
+        featureConfig: (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null,
+        isAdmin,
+        spaceNodeTypes: currentSpace?.nodeTypes,
+        pathname,
+      });
+      // Not offered here (feature off, not an admin): the list says so.
+      if (!row) {
+        open(undefined, opts);
+        return;
+      }
+      const flow = flowFor(row, { pathname: pathname ?? '/', folder: opts?.folder });
+      if (flow.kind === 'inline') open(type, opts);
+      else router.push(flow.href);
     },
-    [open, router],
+    [open, router, pathname, currentSpace, isAdmin],
   );
 }

@@ -19,6 +19,7 @@ import {
   publicNameTakenMessage,
 } from '@/lib/spaces/publicName';
 import { defaultFeatureConfig } from '@/lib/featureAccess';
+import { listSubspaces } from '@/lib/spaces/subspaceAccess';
 import { updateSpaceConfig } from '@/lib/spaces/spaceConfig';
 import { mergeAliasList, mergeLinkTypeList } from '@/lib/spaces/configMerge';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
@@ -264,6 +265,17 @@ export async function DELETE(request: NextRequest) {
     await purgeSpaceObjects(id).catch((err) =>
       logger.error('api.data.spaces.delete.purge_failed', { spaceId: id, err })
     );
+
+    // A space's sub-spaces go with it — they live under it, and the console's
+    // confirmation says how many. Children first, each purged like the parent,
+    // because the parent relation is Restrict on purpose (a cascade here would
+    // be a tenant wipe nobody spelled out).
+    for (const sub of await listSubspaces(id)) {
+      await purgeSpaceObjects(sub.id).catch((err) =>
+        logger.error('api.data.spaces.delete.purge_failed', { spaceId: sub.id, err })
+      );
+      await prisma.space.delete({ where: { id: sub.id } });
+    }
 
     // Then the rows. Everything cascades from the space now — `resources` grew
     // its foreign key in 20260823120100_resources_drive, so the hand-sweep that

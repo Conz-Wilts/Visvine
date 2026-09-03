@@ -10,6 +10,7 @@ import {
   publicNameTakenMessage,
 } from '@/lib/spaces/publicName';
 import { updateSpaceConfig, UnknownSpaceError } from '@/lib/spaces/spaceConfig';
+import { findSiblingNameConflict } from '@/lib/spaces/subspaceAccess';
 import { mergeDesignConfig } from '@/lib/spaces/configMerge';
 
 /**
@@ -60,12 +61,20 @@ export async function PUT(
   if (name !== undefined || visibility !== undefined) {
     const current = await prisma.space.findUnique({
       where: { id: spaceId },
-      select: { name: true, visibility: true, personalOwnerId: true },
+      select: { name: true, visibility: true, personalOwnerId: true, parentId: true },
     });
     if (!current) {
       return NextResponse.json({ error: 'Space not found' }, { status: 404 });
     }
     const effective = effectiveNameAndVisibility({ name, visibility }, current);
+    // A sub-space's name is unique among its siblings, public or not
+    // (lib/spaces/subspaceAccess.ts) — the same key as the public-name rule.
+    if (name !== undefined && current.parentId) {
+      const sibling = await findSiblingNameConflict(current.parentId, effective.name, spaceId);
+      if (sibling) {
+        return NextResponse.json({ error: sibling.message, code: 'name_taken' }, { status: 409 });
+      }
+    }
     if (effective.isPublic && !current.personalOwnerId) {
       const clash = await findPublicNameConflict(effective.name, spaceId);
       if (clash) {

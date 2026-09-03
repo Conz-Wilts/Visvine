@@ -65,14 +65,15 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 - Tests: `node --import tsx --test tests/*.test.ts`. Prefer testing the pure
   layer (`lib/notes/shared/*`, `lib/connectors/perimeter.ts`) over routes.
 
-## A space is a tenant
+## A space is a tenant, and may hold sub-spaces
 
-Spaces do not nest — there is no parent, no inherited visibility, no federated
-tree. The parts that constrain code:
+Every space is a full `Space` row: its own context, members, aliases and tool
+rail. `visibility` is `public | private` and nothing else. Creating one always
+goes through `lib/spaces/provision.ts`. Spaces nest **one level**
+(`docs/sub-spaces.md`): a sub-space is a full row that names its parent in
+`parent_id` and is its own tenant in every other table. The parts that
+constrain code:
 
-- Every space is a full `Space` row: its own context, members, aliases and tool
-  rail. `visibility` is `public | private` and nothing else. Creating one always
-  goes through `lib/spaces/provision.ts`.
 - **A record is not a tenant.** An organisation a space tracks — a portfolio
   company, say — is a directory record whose note lives in `communities/`
   (`Company` in the Blackbird seed; `company` folds onto `space` in
@@ -86,8 +87,64 @@ tree. The parts that constrain code:
 - **A new space starts with every toggleable tool off** —
   `defaultFeatureConfig()`. Both create routes, `provisionSpace` and the seed
   write it; the people in the space opt in from the console.
-- Listings (Discover, `/communities`) and the switcher are flat lists of the
-  spaces you can see.
+- **A sub-space's visibility is its own.** A public sub-space inside a private
+  space is on Discover and joinable without joining the parent; a private one
+  inside a public space is invite-only. Membership and admin standing do not
+  cross the boundary: the creator holds the sub-space's Admin alias, and the
+  parent's admins are not admins of it. Creating one is an act of the
+  parent's admins (`POST /api/communities` with `parentId`); a sub-space
+  cannot hold sub-spaces (`lib/spaces/subspaces.ts#parentDenial`), and
+  sibling names are unique (`spaces_sibling_name_unique`).
+- **A public sub-space's context flows up.** It appears in the parent's
+  context tree as the read-only folder `spaces/<id>/`, federated at read time
+  by `lib/notes/federation.ts` — tree, note index, single-note read and search
+  each have a federated form, and the routes, the actions and an agent's
+  tools call those. The sub-space is read under its **everyone-principal**:
+  no admin standing, only its space-wide grants, capped to view
+  (`access.ts#spaceWideAccessFor`), so a restricted folder there is hidden
+  here too. A public sub-space is born with a space-wide view grant at its
+  root so it flows something. A private sub-space shows nothing at the
+  parent. `spaces/` is reserved in every space's own context
+  (`subspaceWriteDenial`, first clause of `writeDenial`).
+- Deleting a space with sub-spaces is a children-first delete in
+  `DELETE /api/data/communities` (the parent relation is Restrict); the
+  seed's wipe deletes sub-spaces before parents for the same reason.
+- Listings (Discover, `/communities`) are flat lists of the spaces you can
+  see, with "in *Parent*" beside a sub-space only when the parent is in your
+  own list; the switcher nests a sub-space under its parent
+  (`subspaces.ts#nestSpaces`).
+
+## Creating things
+
+**Create new is a panel of the rail, and one table says where every kind is
+made.** The rail's Create new slides the panel column out beside the rail (the
+way the space switcher does): a search, then a row per kind — the built-ins
+the space's tools own, a hairline, the space's own note types, and a **New
+type** row while the search names something nobody has used. Ordering, search
+and the row list are `lib/create/rows.ts#createRows` (pure, tested); the
+current page's kinds sort first (`suggestedType.ts`), and that order is the
+whole suggestion — nothing renders a reason. Picking a row does one of three
+things, and `rows.ts#flowFor` is the only place that decides:
+
+- `inline` — a short form in the panel itself (`features/create/components/forms/`):
+  Person, Space (a directory record), Resource, Folder, File, Channel, Section,
+  Tool, New type, and the Agent **starter** list. Placeholder text is the
+  label; one **Create** button; creating navigates and the panel closes on the
+  route change. Person / Space / Resource render their rows from
+  `lib/create/typeFields.ts`, so the form, the note's property rows and the
+  Directory table are one schema.
+- `route` — the kind's own surface: Event → the composer at `/events/new`,
+  Connector → the console catalogue, Model → the Models dialog.
+- `draft` — `/directory/new`, the context-note surface, for the things that
+  ARE prose: a Note, an Agent's brief (`?template=` seeds a starter), and a
+  note wearing one of the space's own types (`?type=<Name>`). The draft's own
+  Type menu offers only Note, Folder, Agent and the custom types; it never
+  commits an entity, a channel, a file or a connector.
+
+`useCreateSurface(kind, { folder })` is the one entry point for code (the
+tree's "+", the channel list): it asks `flowFor` and either opens the panel on
+that form or routes. Starting a space you run stays on the switcher
+(`NewSpaceDialog`) and is not a create kind.
 
 ## Auth and permissions
 

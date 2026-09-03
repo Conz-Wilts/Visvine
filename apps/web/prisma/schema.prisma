@@ -27,12 +27,21 @@ model Space {
   // Filtered out of Discover / other users' space lists.
   personalOwnerId String?                @map("personal_owner_id")
   // "public" = discoverable & self-joinable from Discover; "private" = hidden from
-  // Discover / non-members' lists, joinable only via invite link or admin add;
-  // "inherit" (children only) = every active member of the parent can see and
-  // read it. The rules between the three live in lib/spaces/hierarchy.ts.
+  // Discover / non-members' lists, joinable only via invite link or admin add.
+  // A sub-space's visibility is its own, independent of its parent's: a
+  // public sub-space inside a private space is listed and joinable, and its
+  // context is read into the parent's (lib/spaces/subspaces.ts).
   // Private by default: a space someone forgot to set visibility on must err
   // toward hidden, never toward discoverable (demo seeds opt into public).
   visibility      String                 @default("private")
+  // Set = this is a sub-space of that space (one level: a sub-space never
+  // holds sub-spaces, lib/spaces/subspaces.ts#parentDenial). Its own tenant
+  // in every other table — members, aliases, tools, context — with the parent
+  // named here and nowhere else. Restrict, not cascade: deleting a space with
+  // sub-spaces is a deliberate children-first delete, never a silent wipe.
+  parentId        String?                @map("parent_id")
+  parent          Space?                 @relation("SpaceChildren", fields: [parentId], references: [id], onDelete: Restrict)
+  children        Space[]                @relation("SpaceChildren")
   // Reusable, revocable invite token. Regenerating overwrites it, invalidating the
   // previously shared link. Null until first generated.
   inviteToken     String?                @unique @map("invite_token")
@@ -81,6 +90,7 @@ model Space {
   projectionJobs  NoteProjectionJob[]
 
   @@index([personalOwnerId])
+  @@index([parentId])
   @@map("spaces")
 }
 

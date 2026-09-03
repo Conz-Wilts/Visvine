@@ -4,26 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
+import { ITEM_GAP, LABEL_ML, ROW_CLASS, ROW_H, ROW_INSET, ROW_TEXT } from '@/features/shared/components/layout/railRow';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
-
-// Predictable, ranked matching for the space switcher. Name-only (like the main
-// directory search) so it stays predictable — these are spaces you already know
-// by name, and matching descriptions made every venture firm match "ven".
-// Ranking: exact > prefix > word-start > substring. Returns -Infinity for no match.
-function scoreSpace(name: string, query: string): number {
-  const lower = name.toLowerCase();
-  if (lower === query) return 100000;
-  if (lower.startsWith(query)) return 90000 - query.length;
-  // Any word in the name starts with the query, e.g. "ven" → "Blackbird Ventures".
-  if (lower.split(/[^a-z0-9]+/).some(word => word.startsWith(query))) {
-    return 80000 - lower.indexOf(query);
-  }
-  const idx = lower.indexOf(query);
-  if (idx > 0) return 70000 - idx * 10;
-  return -Infinity;
-}
+import { scoreName } from '@/lib/rankName';
+import { nestSpaces } from '@/lib/spaces/subspaces';
 
 /**
  * The space switcher — the search and the list of every space you are in — as
@@ -68,16 +53,18 @@ export default function SpaceSwitcherPanel() {
   }, [pathname, setSwitcherOpen]);
 
   // Rows in display order: every space you are in, ranked by the search when
-  // there is one, alphabetical otherwise. A flat list — a space is a tenant of
-  // its own and sits beside the rest.
+  // there is one, alphabetical otherwise — with each sub-space you are in
+  // sitting under its parent when the parent is in the list too
+  // (lib/spaces/subspaces.ts#nestSpaces). A search flattens: the match is
+  // what you are looking at.
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return [...joinedSpaces].sort((a, b) => a.name.localeCompare(b.name));
+    if (!q) return nestSpaces([...joinedSpaces].sort((a, b) => a.name.localeCompare(b.name)));
     return joinedSpaces
-      .map((space) => ({ space, score: scoreSpace(space.name, q) }))
+      .map((space) => ({ space, score: scoreName(space.name, q) }))
       .filter(({ score }) => score > -Infinity)
       .sort((a, b) => b.score - a.score)
-      .map(({ space }) => space);
+      .map(({ space }) => ({ space, nested: false }));
   }, [joinedSpaces, query]);
 
   const select = (spaceId: string) => {
@@ -101,10 +88,12 @@ export default function SpaceSwitcherPanel() {
       >
         {/* Search first, at the very top, level with the space in the rail's
             head — this is the rail continuing, so it starts where the rail
-            does. No title: the row that opened it says what it is. */}
-        <div className="flex flex-shrink-0 items-center px-3" style={{ height: SHELL_TOP_BAR_H }}>
-          <div className="flex min-h-[40px] items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 transition-colors focus-within:border-brand-green">
-            <svg className="h-3.5 w-3.5 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            does, and the search is one rail row tall so the rows below it
+            line up with the rail's. No title: the row that opened it says
+            what it is. */}
+        <div className="flex flex-shrink-0 items-center px-3" style={{ height: ROW_H }}>
+          <div className="flex h-12 w-full items-center gap-2.5 rounded-xl border border-border-default bg-surface-1 px-4 transition-colors focus-within:border-brand-green">
+            <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
             <input
@@ -114,18 +103,22 @@ export default function SpaceSwitcherPanel() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               tabIndex={isOpen ? 0 : -1}
-              className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+              className="min-w-0 flex-1 bg-transparent text-[15px] text-text-primary placeholder:text-text-muted focus:outline-none"
             />
           </div>
         </div>
 
         {/* Every space you are a member of, ranked by the search when there is
-            one. */}
-        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-1.5 pb-3">
+            one. Each is a rail row — the avatar centred in the rail's glyph
+            cell, the name beside it at the rail's size — so the list reads as
+            the rail continuing rather than a menu beside it. A sub-space
+            steps its whole row in under its parent. */}
+        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-3" style={{ paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
           {rows.length === 0 ? (
             <div className="p-4 text-center text-sm text-text-muted">No spaces found</div>
           ) : (
-            rows.map((space) => {
+            <div className="flex flex-col" style={{ gap: ITEM_GAP }}>
+            {rows.map(({ space, nested }) => {
               const current = currentSpace?.id === space.id;
               return (
                 <button
@@ -133,10 +126,13 @@ export default function SpaceSwitcherPanel() {
                   type="button"
                   onClick={() => select(space.id)}
                   tabIndex={isOpen ? 0 : -1}
-                  className={`flex w-full min-w-0 items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-2 ${current ? 'bg-surface-2' : ''}`}
+                  className={`${ROW_CLASS} min-w-0 pr-4 text-left ${current ? 'bg-surface-3 font-semibold' : 'font-normal'}`}
+                  style={{ height: ROW_H, paddingLeft: nested ? 24 : 0, color: current ? 'var(--shell-fg-strong, #111827)' : 'var(--shell-fg-muted, #111827)' }}
                 >
-                  <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="sm" />
-                  <span className={`min-w-0 flex-1 truncate text-sm text-text-primary ${current ? 'font-semibold' : ''}`}>{space.name}</span>
+                  <span className="flex shrink-0 items-center justify-center" style={{ width: ROW_H, height: ROW_H }}>
+                    <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" />
+                  </span>
+                  <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: LABEL_ML }}>{space.name}</span>
                   {current && (
                     <svg className="h-4 w-4 shrink-0 text-brand-green" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -144,7 +140,8 @@ export default function SpaceSwitcherPanel() {
                   )}
                 </button>
               );
-            })
+            })}
+            </div>
           )}
         </div>
       </aside>

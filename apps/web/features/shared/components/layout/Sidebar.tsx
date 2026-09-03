@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/CreateModalContext";
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
@@ -13,7 +13,7 @@ import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
 import UserMenu from "@/features/auth/components/UserMenu";
-import CreateModal from "@/features/create/components/CreateModal";
+import CreatePanel from "@/features/create/components/CreatePanel";
 import SpaceSelector from "@/features/spaces/components/SpaceSelector";
 import SpaceSwitcherPanel from "@/features/spaces/components/SpaceSwitcherPanel";
 import type { SpaceFeatureConfig } from "@/lib/types";
@@ -58,6 +58,10 @@ import {
  */
 
 const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
+// The width of the rail's own panels — the space list and Create new — which
+// slide out beside the open rail: wide enough for a form's rows to sit in one
+// column.
+const CREATE_PANEL_W = 360;
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full height
 // paddingBottom on the rail column. It matches SHELL_PANE_TOP, so the rail's
@@ -65,16 +69,16 @@ const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full h
 const RAIL_PAD_Y = SHELL_PANE_TOP;
 // paddingTop is its own number, because the head row is aligned to the shell's
 // top band rather than to the pane below it: the band is SHELL_TOP_BAR_H tall,
-// so the space avatar — 40px in a 48px row — starts where its centre lands on
+// so the space avatar — 40px in a ROW_H-tall row — starts where its centre lands on
 // that band's centre line.
-const RAIL_PAD_TOP = (SHELL_TOP_BAR_H - ROW_H) / 2;
+const RAIL_PAD_TOP = Math.max(0, (SHELL_TOP_BAR_H - ROW_H) / 2);
 // A band boundary: the hairline sits ITEM_GAP below the last row and ITEM_GAP
 // above the next one, so the bands are held apart by the rhythm the rows
 // already have rather than by a number of their own.
 const BAND_TOP = ITEM_GAP;
 export default function Sidebar() {
   const pathname = usePathname();
-  const { isOpen: createOpen } = useCreateModal();
+  const { isOpen: createOpen, formOpen: createFormOpen, close: closeCreate } = useCreateModal();
   const createSurface = useCreateSurface();
   const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
   const { currentSpace, isAdmin, loading: spaceLoading } = useSpace();
@@ -146,18 +150,40 @@ export default function Sidebar() {
   const docked = pathname.startsWith("/channels") && wide;
   const panelW = CHANNELS_PANEL_W;
 
-  // "Create new" takes over this same column: it replaces whatever panel is
-  // docked (so the width never changes on open), and off-dock it pushes the
-  // column open at the standard panel width — clamped so it can't outgrow a
-  // narrow viewport, where nothing is docked anyway.
-  const createW = docked ? `${panelW}px` : `min(${CHANNELS_PANEL_W}px, calc(100vw - ${COLLAPSED_W}px))`;
-  const columnW = createOpen ? createW : docked ? `${panelW}px` : "0px";
+  // The rail's own panels — Switch space and Create new — are layers against
+  // the OPEN rail's edge (below), not this column: clamped so they can't
+  // outgrow a narrow viewport.
+  const railPanelW = `min(${CREATE_PANEL_W}px, calc(100vw - ${EXPANDED_W}px))`;
+  const columnW = docked ? `${panelW}px` : "0px";
+  // The rail is held open while one of its panels shows: the panel sits
+  // against the open rail's edge, so the pointer crossing into it must not
+  // shut the rail underneath.
+  const railPanelOpen = switcherOpen || createOpen;
+  // Shutting a panel is two moves in order, not one: the panel slides back
+  // under the rail FIRST, then the rail lets go. Its box is pinned at the open
+  // rail's edge, so a rail that shrank at the same moment would pull away from
+  // under it and the two would read as collapsing towards each other.
+  const releaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelRelease = () => {
+    if (releaseTimer.current) clearTimeout(releaseTimer.current);
+    releaseTimer.current = null;
+  };
+  const shutRailPanels = () => {
+    setSwitcherOpen(false);
+    closeCreate();
+    cancelRelease();
+    releaseTimer.current = setTimeout(() => {
+      releaseTimer.current = null;
+      setHovered(false);
+    }, reduced ? 0 : DOCK_MS);
+  };
+  useEffect(() => cancelRelease, []);
 
   // Honour reduced-motion: collapse the width/margin transitions below to 0s.
-  // Closing (nothing docked, no create panel) runs faster than opening — the
-  // leaving panel should be out of the way before the destination's content
-  // (the grid's card cascade) is mid-animation beside it.
-  const dur = reduced ? "0s" : `${docked || createOpen ? DOCK_MS : DOCK_CLOSE_MS}ms`;
+  // Closing (nothing docked) runs faster than opening — the leaving panel
+  // should be out of the way before the destination's content (the grid's
+  // card cascade) is mid-animation beside it.
+  const dur = reduced ? "0s" : `${docked ? DOCK_MS : DOCK_CLOSE_MS}ms`;
 
 
   const railInner = (
@@ -177,9 +203,11 @@ export default function Sidebar() {
 
             Create acts on the current space, so with none selected there is
             nothing for it to make (creating a space itself lives on the
-            switcher above). No menu hangs off it: every type is a choice in the
-            draft surface's own Type row, so it is one click to a surface you
-            can type into rather than a list of decisions. */}
+            switcher above). Pointing at it is enough, the way Switch space
+            is: the panel slides out beside the rail — every kind you can make
+            here, searchable — and stays while the pointer is anywhere on the
+            card. The kind decides what comes next: a short form in the panel,
+            its own surface, or a draft note (lib/create/rows.ts). */}
         <div
           className="flex flex-col border-t"
           style={{
@@ -194,11 +222,21 @@ export default function Sidebar() {
           }}
         >
           {!noSpace && (
+            <div
+              onMouseEnter={() => {
+                // One panel at a time: the two share the edge of the rail.
+                setSwitcherOpen(false);
+                if (!createOpen) createSurface();
+              }}
+            >
             <Row
               expanded={expanded}
               reduced={reduced}
               label="Create new"
-              onClick={() => createSurface()}
+              active={createOpen}
+              aria-expanded={createOpen}
+              aria-haspopup="dialog"
+              onClick={() => (createOpen ? closeCreate() : createSurface())}
               icon={
                 // The one row that MAKES something, so it is the one row that
                 // is painted: a filled disc in the space's own accent rather
@@ -215,6 +253,7 @@ export default function Sidebar() {
                 </span>
               }
             />
+            </div>
           )}
 
           {GLOBAL_NAV.map(({ key, href, label, icon }) => (
@@ -336,13 +375,15 @@ export default function Sidebar() {
   return (
     <aside
       className="fixed left-0 top-0 z-40"
-      // The switcher opens under the pointer (the Switch space row), so it
-      // shuts when the pointer leaves the whole card — rail and panel both —
-      // and the rail, held open under it, lets go at the same moment.
+      // The rail's panels open under the pointer (the Switch space row, the
+      // Create new row), so they shut when the pointer leaves the whole card —
+      // rail and panel both — and the rail, held open under them, lets go at
+      // the same moment. A Create form being filled in is the exception: it
+      // holds the card open until it is done or stepped back from.
       onMouseLeave={() => {
-        if (!switcherOpen) return;
-        setSwitcherOpen(false);
-        setHovered(false);
+        if (!railPanelOpen) return;
+        if (createOpen && createFormOpen) return;
+        shutRailPanels();
       }}
     >
       {/* The card runs the viewport's full height, flush against the left and
@@ -368,10 +409,12 @@ export default function Sidebar() {
             paddingBottom: RAIL_PAD_Y,
             transition: reduced ? "none" : "width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
           }}
-          onMouseEnter={() => setHovered(true)}
-          // Crossing from the rail into the switcher beside it must not shut
-          // the rail: the panel sits against the OPEN rail's edge.
-          onMouseLeave={() => { if (!switcherOpen) setHovered(false); }}
+          // Coming back before a shutting panel has released the rail keeps it
+          // open — the release is cancelled, not raced.
+          onMouseEnter={() => { cancelRelease(); setHovered(true); }}
+          // Crossing from the rail into a panel beside it must not shut the
+          // rail: the panel sits against the OPEN rail's edge.
+          onMouseLeave={() => { if (!railPanelOpen) setHovered(false); }}
         >
           {railInner}
         </div>
@@ -379,7 +422,6 @@ export default function Sidebar() {
         {/* The side panel, hosted inside this same card. Always mounted so the portal
             host stays stable and the column can transition its width open ↔ closed;
             off the docked routes it's a clipped 0-width sliver with an empty host.
-            "Create new" opens the same column and slides in over the host below.
             marginTop: the column element starts below any bar the page pins at
             the card top (dockTopInset); the flex stretch absorbs the margin, so
             no height math is needed and the bar's band holds no aside pixels at
@@ -411,7 +453,7 @@ export default function Sidebar() {
               here. Inner width tracks the active route's panel so the content is
               revealed by the clipping column rather than reflowing as it opens.
               It also SLIDES with the column's leading edge (parked under the icon
-              rail at -100%, like the Create panel above): the width change alone
+              rail at -100%, like the rail's own panels): the width change alone
               is a wipe over motionless content, which reads as snapping open even
               at the same duration. Travelling content is what gives the
               connections rail its glide, so the panel is glued to the widening
@@ -429,43 +471,31 @@ export default function Sidebar() {
             }}
           />
 
-          {/* "Create new" — a layer over the host, clipped by this column so it
-              slides out from under the icon rail and covers whatever panel is
-              docked. The column itself already starts below any bar the page
-              pins at the card top (marginTop above), so top-0 here. */}
-          {/* pointer-events-none while parked: the box still covers the docked
-              panel (it's absolutely positioned over it) even with the panel
-              slid out of view, so leaving it hit-testable made it swallow every
-              wheel/click aimed at the docked tree — scrolling over the context
-              tree did nothing while the graph behind it took the wheel. The
-              panel re-enables events on itself once open. */}
-          <div
-            className={`absolute left-0 top-0 bottom-0 z-10 overflow-hidden ${createOpen ? '' : 'pointer-events-none'}`}
-            // Fixed at the panel's FINAL width, not the column's animating one:
-            // the slide is a translateX(-100%) of this box, so a width that grows
-            // during the transition would keep moving the parked position and the
-            // panel would trail the column's leading edge.
-            style={{ width: createW }}
-          >
-            <CreateModal />
-          </div>
 
         </div>
       </div>
 
-      {/* The space switcher — a layer against the open rail's edge running
-          the card's full height, so its search is at the very top beside the
-          space, not below the shell's band the way the page's panel column
-          is. It slides out from under the rail like Create new; parked, it is
-          clipped by this box. It hangs off the aside rather than the card's
-          overflow-hidden box above, because that box is only as wide as the
-          rail and would scroll itself sideways to show a focused search. The
-          rail is held open while it shows, so EXPANDED_W is where its edge is. */}
+      {/* The rail's own panels — the space switcher and Create new — are
+          layers against the open rail's edge running the card's full height,
+          so their search is at the very top beside the space, not below the
+          shell's band the way the page's panel column is. Each slides out
+          from under the rail; parked, it is clipped by its box. They hang off
+          the aside rather than the card's overflow-hidden box above, because
+          that box is only as wide as the rail and would scroll itself sideways
+          to show a focused search. The rail is held open while one shows, so
+          EXPANDED_W is where its edge is. One shows at a time (the rows that
+          open them close the other), so they share the edge without a stack. */}
       <div
         className={`absolute top-0 bottom-0 z-20 overflow-hidden ${switcherOpen ? '' : 'pointer-events-none'}`}
-        style={{ left: EXPANDED_W, width: createW }}
+        style={{ left: EXPANDED_W, width: railPanelW }}
       >
         <SpaceSwitcherPanel />
+      </div>
+      <div
+        className={`absolute top-0 bottom-0 z-20 overflow-hidden ${createOpen ? '' : 'pointer-events-none'}`}
+        style={{ left: EXPANDED_W, width: railPanelW }}
+      >
+        <CreatePanel />
       </div>
 
       {/* "More" popup — the same centered modal shell as the Create-new modal,

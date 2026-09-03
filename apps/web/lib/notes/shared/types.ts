@@ -51,6 +51,10 @@ export interface TreeNode {
   kind: 'folder' | 'note'
   title?: string // display title for notes
   children?: TreeNode[]
+  // Set on the folder a public sub-space is read through (`spaces/<id>`):
+  // the id of that space. Everything under it is that space's own context,
+  // rebased into this tree read-only (lib/spaces/subspaces.ts).
+  space?: string
 }
 
 // A note sitting in the trash (soft-deleted), awaiting restore or purge.

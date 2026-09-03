@@ -7,7 +7,7 @@ import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { Button, EmptyState } from '@/components/ui';
 
 export default function SpacesPage() {
-  const { joinedSpaces, currentSpace, setCurrentSpace, leaveSpace } = useSpace();
+  const { spaces, joinedSpaces, currentSpace, setCurrentSpace, leaveSpace } = useSpace();
   const [leaving, setLeaving] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState<string | null>(null);
 
@@ -46,7 +46,9 @@ export default function SpacesPage() {
           <ul className="divide-y divide-border-subtle">
             {joinedSpaces.map((space) => {
               const isActive = currentSpace?.id === space.id;
+              const parent = space.parentId ? spaces.find((s) => s.id === space.parentId) : null;
               const facts = [
+                parent ? `in ${parent.name}` : null,
                 `${space.memberCount} ${space.memberCount === 1 ? 'member' : 'members'}`,
                 space.location,
               ].filter(Boolean).join(' · ');

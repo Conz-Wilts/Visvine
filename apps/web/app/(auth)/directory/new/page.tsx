@@ -1,8 +1,8 @@
 'use client';
 
 // The note-first create surface: /directory/new renders a blank context note
-// you fill in. Picking a type commits it — a plain Note lands at /directory/note/<path>, an entity
-// lands at /directory/<id>?tab=context with a Profile tab now in the bar.
+// you fill in — a note, a folder or an agent's brief, reached from the Create
+// panel with the shape chosen (lib/create/rows.ts) or bare from the tree's "+".
 //
 // The static `new` segment wins over the sibling /directory/[nodeId] route, the
 // same rule /directory/note relies on. No collision risk: node ids are always
@@ -31,12 +31,9 @@ const DRAFT_TABS: PaneTabItem[] = [
   { id: 'raw', label: 'Raw' },
 ];
 
-// Every type the draft surface can commit — `?type=` is only a pre-pick, so an
-// unknown value just leaves the Type row unset rather than erroring.
-const DRAFT_TYPES = new Set<DraftType>([
-  'note', 'folder', 'person', 'space', 'resource', 'event',
-  'file', 'connector', 'agent', 'channel', 'section',
-]);
+// The shapes the draft surface can commit — `?type=` is only a pre-pick, so
+// an unknown value is read as one of the space's own note types instead.
+const DRAFT_TYPES = new Set<DraftType>(['note', 'folder', 'agent']);
 
 function DraftRoute() {
   const params = useSearchParams();
@@ -62,15 +59,25 @@ function DraftRoute() {
   });
 
   // `?folder=` pre-fills the destination when "+" was pressed while standing in
-  // a folder; `?type=` pre-picks from the route suggestion.
+  // a folder; `?type=` pre-picks what the Create panel chose.
   const folder = params.get('folder') ?? '';
   const typeParam = params.get('type');
   const initialType = DRAFT_TYPES.has(typeParam as DraftType) ? (typeParam as DraftType) : null;
+  // Anything else named is one of the space's own note types (the Create
+  // panel's "New type" lands here with it); the draft checks it exists.
+  const initialCustomType = typeParam && !initialType ? typeParam : null;
+  const initialAgentTemplate = initialType === 'agent' ? params.get('template') : null;
 
   return (
     <div className="w-full pb-10">
       <div className="profile-enter">
-        <DraftContextPanel mode={mode} initialFolder={folder} initialType={initialType} />
+        <DraftContextPanel
+          mode={mode}
+          initialFolder={folder}
+          initialType={initialType}
+          initialCustomType={initialCustomType}
+          initialAgentTemplate={initialAgentTemplate}
+        />
       </div>
     </div>
   );

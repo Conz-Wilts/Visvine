@@ -2,12 +2,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useSession } from '@/features/auth/lib/auth-client';
 import { ChevronsUpDownIcon, PlusIcon, SettingsIcon, UsersIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
-import { HEAD_INSET, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
+import { HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
 import NewSpaceDialog from './NewSpaceDialog';
 
 /**
@@ -33,6 +34,8 @@ import NewSpaceDialog from './NewSpaceDialog';
 export default function SpaceSelector() {
   const { currentSpace, isAdmin } = useSpace();
   const { expanded, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
+  // The switcher and Create new share the rail's edge, one at a time.
+  const { close: closeCreate } = useCreateModal();
   const { data: session } = useSession();
   const router = useRouter();
   // The console is the space's own settings, so it hangs off the space — not
@@ -69,6 +72,7 @@ export default function SpaceSelector() {
   const openSwitcher = () => {
     setPinned(false);
     setOpen(false);
+    closeCreate();
     setSwitcherOpen(true);
   };
 
@@ -79,7 +83,7 @@ export default function SpaceSelector() {
       onClick: openSwitcher,
       // Pointing at the row is enough: the list slides out beside the rail
       // and stays while the pointer is anywhere on the card (Sidebar).
-      onHover: () => setSwitcherOpen(true),
+      onHover: () => { closeCreate(); setSwitcherOpen(true); },
       icon: <ChevronsUpDownIcon />,
     },
     ...(canManage
@@ -128,20 +132,21 @@ export default function SpaceSelector() {
         setOpen(false);
       }}
     >
-      {/* The space. A rail row: a 48px avatar cell on the rail's glyph column,
+      {/* The space. A rail row: the avatar centred in the rail's glyph cell,
           then the space's name, which the collapsed rail clips away. Pointing
           at it is what opens the band below; pressing it opens the switcher. */}
-      <div style={{ paddingLeft: HEAD_INSET, paddingRight: HEAD_INSET }}>
+      <div style={{ paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
         <button
           type="button"
           onClick={() => (switcherOpen ? setSwitcherOpen(false) : openSwitcher())}
           aria-haspopup="dialog"
           aria-expanded={switcherOpen}
-          className={`relative z-10 flex h-12 w-full items-center rounded-[10px] transition-colors duration-150 hover:bg-surface-3 ${
+          className={`relative z-10 flex w-full items-center transition-colors duration-150 hover:bg-surface-3 ${
             switcherOpen ? 'bg-surface-3' : ''
           }`}
+          style={{ height: ROW_H }}
         >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center">
+          <span className="flex shrink-0 items-center justify-center" style={{ width: HEAD_CELL_W, height: ROW_H }}>
             {currentSpace ? (
               <SpaceAvatar name={currentSpace.name} imageUrl={currentSpace.imageUrl} size="md" rounded="rounded-[10px]" className="!w-10 !h-10 !text-base" />
             ) : (
@@ -152,7 +157,7 @@ export default function SpaceSelector() {
               but is transparent and untouchable while the rail is shut. */}
           <span
             aria-hidden={!expanded}
-            className="ml-2.5 flex min-w-0 flex-1 items-center"
+            className="ml-2 flex min-w-0 flex-1 items-center"
             style={{
               opacity: expanded ? 1 : 0,
               pointerEvents: expanded ? undefined : 'none',

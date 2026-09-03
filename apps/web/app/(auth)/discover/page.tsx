@@ -18,16 +18,21 @@ function formatMemberCount(count: number): string {
 
 function SpaceCard({
   space,
+  parentName,
   joined,
   onJoin,
 }: {
   space: Space;
+  /** The space this one is a sub-space of, when the viewer can see it. */
+  parentName: string | null;
   joined: boolean;
   onJoin: (c: Space) => void;
 }) {
   // The same shape as the directory's NodeCard: a bare square, then the name
   // and one line of facts underneath. Join is a word in the accent, not a bar.
-  const facts = [`${formatMemberCount(space.memberCount)} members`, space.location].filter(Boolean).join(' · ');
+  const facts = [parentName ? `in ${parentName}` : null, `${formatMemberCount(space.memberCount)} members`, space.location]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <div className="group flex w-full flex-col">
@@ -70,6 +75,9 @@ export default function DiscoverPage() {
   const [search, setSearch] = useState('');
 
   const isJoined = (id: string) => joinedSpaces.some(c => c.id === id);
+  // A public sub-space of a private space is listed on its own: the parent's
+  // name is shown only when the parent is in the viewer's own list.
+  const nameOf = (id: string | null | undefined) => (id ? (spaces.find(c => c.id === id)?.name ?? null) : null);
 
   const handleJoin = (space: Space) => {
     // Only Person-scoped aliases are selectable when joining (a user is a person),
@@ -133,6 +141,7 @@ export default function DiscoverPage() {
               <SpaceCard
                 key={space.id}
                 space={space}
+                parentName={nameOf(space.parentId)}
                 joined={isJoined(space.id)}
                 onJoin={handleJoin}
               />

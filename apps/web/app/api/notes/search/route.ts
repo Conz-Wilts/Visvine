@@ -3,12 +3,14 @@
 // Fused retrieval (query plan → frontmatter/date filter → BM25 → pgvector →
 // chunks → link context, weighted RRF) over
 // everything the caller can read in the context; the visibility lens and the
-// private-folder read audit are applied inside contextService.searchContext.
+// private-folder read audit are applied inside contextService.searchContext;
+// a public sub-space's notes rank alongside, under `spaces/<id>/`
+// (lib/notes/federation.ts).
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireContext, fail, failFromError } from '@/lib/notes/api'
 import { principalOf } from '@/lib/notes/resolve'
-import { searchContext } from '@/lib/notes/contextService'
+import { searchFederated } from '@/lib/notes/federation'
 import type { SearchFilters } from '@/lib/notes/shared/retrieval'
 
 function parseFilters(raw: unknown): SearchFilters {
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
   const p = await principalOf(context)
   try {
     const rewrite = typeof body.rewrite === 'boolean' ? body.rewrite : undefined
-    const { hits, semantic, plan } = await searchContext(p, context, query, parseFilters(body.filters), k, {
+    const { hits, semantic, plan } = await searchFederated(p, context, query, parseFilters(body.filters), k, {
       rewrite,
     })
     // `semantic` says whether the embedding stages actually ran — 'no-key' means

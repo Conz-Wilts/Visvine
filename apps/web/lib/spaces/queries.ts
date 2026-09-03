@@ -64,6 +64,7 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
       designConfig: true,
       featureConfig: true,
       visibility: true,
+      parentId: true,
       timezone: true,
       // Derived, not stored: counting active memberships here cannot drift the
       // way a maintained column would.
@@ -94,6 +95,7 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
     designConfig: (c.designConfig as unknown as Space['designConfig']) ?? undefined,
     featureConfig: (c.featureConfig as unknown as Space['featureConfig']) ?? undefined,
     visibility: (c.visibility as Space['visibility']) ?? 'public',
+    parentId: c.parentId,
     timezone: c.timezone ?? null,
     installedTools: installedTools.get(c.id) ?? [],
   }));
@@ -116,6 +118,8 @@ export interface SpaceMembership {
   /** Whether the user holds an alias of this space that manages it. */
   isAdmin: boolean;
   joinedAt: string;
+  /** The space this one is a sub-space of, if any (docs/sub-spaces.md). */
+  parentId: string | null;
 }
 
 const MEMBERSHIP_SPACE_SELECT = {
@@ -131,6 +135,7 @@ const MEMBERSHIP_SPACE_SELECT = {
   aliases: true,
   linkTypes: true,
   designConfig: true,
+  parentId: true,
   _count: { select: { members: { where: { status: 'active' as const } } } },
 } as const;
 
@@ -172,6 +177,7 @@ export async function listUserSpaces(session: SessionPayload): Promise<SpaceMemb
     designConfig: space.designConfig,
     isAdmin: adminIds.has(space.id),
     joinedAt: joinedAt.toISOString(),
+    parentId: space.parentId,
   });
 
   return memberships.map(m => toDto(m.space, m.joinedAt));

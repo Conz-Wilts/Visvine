@@ -11,7 +11,7 @@ things go unprefixed (`spaces`, `users`, `identities`, `nodes`,
 
 | Table | Controls |
 | --- | --- |
-| `spaces` | A Space — the tenant. Name, emoji, image, location, tags, public/private, invite token, and its **vocabulary**: which node types, aliases, and link types exist (stored as JSON). `personal_owner_id` set = it's a hidden one-person Space holding that user's personal notes. |
+| `spaces` | A Space — the tenant. Name, emoji, image, location, tags, public/private, invite token, and its **vocabulary**: which node types, aliases, and link types exist (stored as JSON). `personal_owner_id` set = it's a hidden one-person Space holding that user's personal notes. `parent_id` set = a sub-space of that Space (one level; docs/sub-spaces.md) — its own tenant, listed under the parent, and when public its context is read into the parent's under `spaces/<id>/`. |
 | `space_members` | Who belongs to a Space, and whether they're `active` or `pending` (asked to join via invite link). Carries **no role** — permissions come from aliases. |
 | `user_aliases` | Which aliases a member holds ("Admin", "Investor", …). This *is* the permission model: holding an alias marked `admin` = admin of that Space. Keyed by `user_id`, so it applies to a login account, not to a directory card. |
 

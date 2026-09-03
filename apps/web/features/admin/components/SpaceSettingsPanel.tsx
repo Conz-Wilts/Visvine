@@ -12,6 +12,7 @@ import Toggle from '@/components/ui/Toggle';
 import { useConsoleAction, useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { FetchJsonError, fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import SpaceImageUpload from '@/features/spaces/components/SpaceImageUpload';
+import SubspacesSection from '@/features/spaces/components/SubspacesSection';
 
 interface Props {
   space: Space;
@@ -159,7 +160,12 @@ function CountrySelector({ value, onChange }: { value: string; onChange: (code: 
 
 export default function SpaceSettingsPanel({ space, onSaved }: Props) {
   const router = useRouter();
-  const { refreshSpace } = useSpace();
+  const { refreshSpace, spaces } = useSpace();
+  // A sub-space names its parent; a top-level space lists its sub-spaces.
+  // Nesting is one level, so a space is one or the other (docs/sub-spaces.md).
+  const parent = space.parentId ? (spaces.find((s) => s.id === space.parentId) ?? null) : null;
+  const isSubspace = Boolean(space.parentId);
+  const subspaceCount = spaces.filter((s) => s.parentId === space.id).length;
 
   const [name, setName] = useState(space.name);
   const [nameError, setNameError] = useState('');
@@ -272,7 +278,11 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
                 {isPrivate ? 'Private' : 'Public'}
               </div>
               <p className="mt-0.5 text-xs text-text-muted">
-                {isPrivate ? 'Invite or admin only' : 'Anyone can find and join'}
+                {isPrivate
+                  ? 'Invite or admin only'
+                  : isSubspace
+                    ? `Anyone can find and join · context shows in ${parent?.name ?? 'the parent space'}`
+                    : 'Anyone can find and join'}
               </p>
               <Toggle
                 className="mt-3"
@@ -286,6 +296,12 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
               leaves the toggle back where it was — this says why, and the fix
               is the Name field right below. */}
           {visibilityError && <Alert variant="error">{visibilityError}</Alert>}
+          {isSubspace && (
+            <p className="text-sm text-text-muted">
+              A sub-space of <span className="font-medium text-text-secondary">{parent?.name ?? space.parentId}</span> —
+              its own members, admins and tools. {isPrivate ? 'While private, nothing of it shows there.' : 'While public, its context is read there under spaces/.'}
+            </p>
+          )}
           <div className="space-y-5">
             <Field label="Name" error={nameError}>
               <Input
@@ -336,6 +352,8 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
         </div>
       </section>
 
+      {!isSubspace && <SubspacesSection spaceId={space.id} spaceName={space.name} />}
+
       {/* The button names the action, so it stands alone — no heading, no label row. */}
       <section>
         {deleteError && <Alert variant="error" className="mb-4">{deleteError}</Alert>}
@@ -356,6 +374,9 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
           <>
             Anyone will be able to find <span className="font-semibold">{space.name}</span> in
             Discover and join it without an invite.
+            {isSubspace && (
+              <> Its context will also show in <span className="font-semibold">{parent?.name ?? 'the parent space'}</span>, read-only, to everyone there.</>
+            )}
           </>
         }
         confirmLabel="Make public"
@@ -372,7 +393,10 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
         body={
           <>
             This permanently deletes <span className="font-semibold">{space.name}</span> — every
-            record, connection, note, post and membership in it. This cannot be undone.
+            record, connection, note, post and membership in it
+            {subspaceCount > 0 && (
+              <>, and its {subspaceCount === 1 ? 'sub-space' : `${subspaceCount} sub-spaces`} with everything in {subspaceCount === 1 ? 'it' : 'them'}</>
+            )}. This cannot be undone.
           </>
         }
         confirmLabel="Delete space"

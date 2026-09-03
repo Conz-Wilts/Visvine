@@ -18,6 +18,7 @@ import {
   noteHref,
 } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
+import { isSubspacePath, subspaceWriteDenial } from '@/lib/spaces/subspaces'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { notesApi, type AccessOverviewResponse } from './notesApi'
 import { contextKeys, invalidateContextCache, swrFetch, watchContextCache } from './contextPrefetch'
@@ -51,6 +52,11 @@ export function parentFolderOf(path: string): string {
  * server's message instead of being predicted here.
  */
 export function moveDenial(from: string, kind: 'note' | 'folder', destFolder: string): string | null {
+  // spaces/ is another space's context shown here read-only
+  // (lib/spaces/subspaces.ts): nothing moves in, nothing moves out.
+  if (isSubspacePath(from)) return 'This is a sub-space’s context, shown here read-only. Move it in that space.'
+  const readOnly = destFolder ? subspaceWriteDenial(destFolder) : null
+  if (readOnly) return readOnly
   // Into an entity's OWN folder (people/<slug>) is fine — that files the note
   // under the entity (and converts its note to the folder if needed). Into the
   // namespace root, or beside it as a would-be entity, is not.
@@ -93,7 +99,7 @@ export function moveDenial(from: string, kind: 'note' | 'folder', destFolder: st
  */
 export function deleteFolderDenial(path: string): string | null {
   if (!path) return 'The context root can’t be deleted.'
-  return namespaceFolderDenial(path)
+  return subspaceWriteDenial(path) ?? namespaceFolderDenial(path)
 }
 
 /** Whether a drop on `destFolder` would do anything (legal AND a real change). */

@@ -49,7 +49,3 @@ test('tolerates a missing pathname', () => {
   assert.equal(suggestedCreateType(''), null)
 })
 
-test('carries a human reason for the suggested row', () => {
-  assert.equal(suggestedCreateType('/events')?.reason, "You're on Events")
-  assert.equal(suggestedCreateType('/directory')?.reason, "You're in the Directory")
-})

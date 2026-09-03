@@ -22,8 +22,6 @@ import {
   type ContextScope,
 } from '@/lib/actions/resolve'
 import {
-  searchContext,
-  readVisible,
   visibleVault,
   writeGated,
   appendLogGated,
@@ -31,6 +29,7 @@ import {
   listVisibleSources,
   readSourceVisible,
 } from '@/lib/notes/contextService'
+import { federatedMetas, readFederated, searchFederated } from '@/lib/notes/federation'
 import { readableRoots, LEVEL_EDIT } from '@/lib/notes/shared/authz'
 import { audienceSummary } from '@/lib/notes/shared/audience'
 import { loadSpaceAccess, grantAccess, setFolderRestricted } from '@/lib/notes/access'
@@ -463,8 +462,9 @@ export const CONTEXT_ACTIONS = [
         const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, scope)
         const limit = args.limit ?? 100
 
-        // Notes (visibility lens applied inside visibleVault).
-        const { metas } = await visibleVault(principal, context)
+        // Notes (visibility lens applied inside visibleVault; a public
+        // sub-space's index rides along under spaces/<id>/).
+        const metas = await federatedMetas(principal, context)
         let notes = [...metas].sort((a, b) => a.path.localeCompare(b.path))
         if (args.path_prefix) notes = notes.filter((m) => m.path.startsWith(args.path_prefix!))
 
@@ -633,7 +633,7 @@ export const CONTEXT_ACTIONS = [
         const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
         const k = args.k ?? 10
 
-        const { hits, semantic, plan } = await searchContext(
+        const { hits, semantic, plan } = await searchFederated(
           principal,
           context,
           args.query,
@@ -782,7 +782,7 @@ export const CONTEXT_ACTIONS = [
         if (!row) {
           const path = args.note_path ?? structuralPath
           if (!path) throw new ActionError(404, `No entity '${args.node_id}' in this space`)
-          const content = await readVisible(principal, context, path)
+          const content = await readFederated(principal, context, path)
           if (!content) throw new ActionError(404, `No accessible note or entity at '${path}'`)
           return {
             entity: null,
@@ -796,7 +796,7 @@ export const CONTEXT_ACTIONS = [
 
         const notePath = entityNotePath(nodeLike(row))
         const [note, linkRows, { metas }] = await Promise.all([
-          notePath ? readVisible(principal, context, subNotePath ?? notePath) : null,
+          notePath ? readFederated(principal, context, subNotePath ?? notePath) : null,
           prisma.link.findMany({
             where: {
               spaceId: args.space_id,

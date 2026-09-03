@@ -12,6 +12,7 @@ import { resolveRegistry } from './registry'
 import { logAudit } from './audit'
 import {
   LEVEL_EDIT,
+  LEVEL_VIEW,
   SUBJECT_TYPES,
   levelName,
   migrateLegacyRegistry,
@@ -202,6 +203,35 @@ export async function contextAccessFor(spaceId: string, userId: string): Promise
       subjectId: r.subjectId,
       resourcePath: r.resourcePath,
       level: r.level,
+    })),
+    restricted: flags.restricted,
+    locked: flags.locked,
+  }
+}
+
+/**
+ * The standing EVERYONE in the space has: its space-wide grants and folder
+ * boundaries, nobody's aliases or personal grants. This is what a sub-space
+ * shares with its parent (lib/notes/federation.ts): a parent's member reading
+ * a public sub-space through the parent sees what that sub-space shows all
+ * of its own members — and, whatever level those grants carry, only ever
+ * reads (`level` is capped to view here, so the cap cannot be forgotten
+ * downstream).
+ */
+export async function spaceWideAccessFor(spaceId: string): Promise<ContextAccess> {
+  const [rows, flags] = await Promise.all([
+    prisma.contextGrant.findMany({
+      where: { spaceId, subjectType: 'space' },
+      select: { subjectType: true, subjectId: true, resourcePath: true, level: true },
+    }),
+    loadFolderFlags(spaceId),
+  ])
+  return {
+    grants: rows.map((r) => ({
+      subjectType: r.subjectType as GrantSubjectType,
+      subjectId: r.subjectId,
+      resourcePath: r.resourcePath,
+      level: Math.min(r.level, LEVEL_VIEW),
     })),
     restricted: flags.restricted,
     locked: flags.locked,

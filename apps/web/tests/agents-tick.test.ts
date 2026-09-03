@@ -93,6 +93,11 @@ const ADMIN = `test-agents-admin-${process.pid}`
 async function setup() {
   const p = prisma!
   await teardown()
+  // reclaimStale counts EVERY stale running row in the database, not just this
+  // space's — so a fixture an interrupted earlier run left behind (a different
+  // pid, so a different SPACE, never torn down) makes the count assertions
+  // off by one, once, and then vanishes because that very run reclaimed it.
+  await teardownOrphans()
   await p.space.create({ data: { id: SPACE, name: 'agents tick test', timezone: 'UTC' } })
   for (const [id, email] of [
     [AUTHOR, `${AUTHOR}@local.test`],
@@ -102,6 +107,21 @@ async function setup() {
     await p.user.create({ data: { id, email, name: id } })
     await p.spaceMember.create({ data: { spaceId: SPACE, userId: id } })
   }
+}
+
+/** Fixtures from earlier runs of this file that never reached teardown. */
+async function teardownOrphans() {
+  const p = prisma!
+  const spaceId = { startsWith: 'test-agents-tick-' }
+  await p.agentEvent.deleteMany({ where: { spaceId } })
+  await p.agentSubscription.deleteMany({ where: { spaceId } })
+  await p.connectorSecret.deleteMany({ where: { spaceId } })
+  await p.agentRun.deleteMany({ where: { spaceId } })
+  await p.agentState.deleteMany({ where: { spaceId } })
+  await p.contextNote.deleteMany({ where: { spaceId } })
+  await p.spaceMember.deleteMany({ where: { spaceId } })
+  await p.space.deleteMany({ where: { id: spaceId } })
+  await p.user.deleteMany({ where: { id: { startsWith: 'test-agents-' }, email: { endsWith: '@local.test' } } })
 }
 
 async function teardown() {

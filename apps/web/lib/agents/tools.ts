@@ -3,7 +3,7 @@
  * in OUR tool surface rather than a vendor's proprietary model feature.
  *
  * Every tool routes through the same layers a human or an MCP client uses —
- * `readVisible`/`visibleVault`/`searchContext` for reads, `writeGated` /
+ * `readFederated`/`federatedMetas`/`searchFederated` for reads, `writeGated` /
  * `appendLogGated` (origin `agent`) for writes, `loadConnector` →
  * `executeConnectorScript` for connectors, `createEntity` / `upsertLink` for
  * the directory — under the
@@ -35,13 +35,8 @@ import { MCP_SCOPES } from '@/lib/mcp/scopes'
 import { ConnectorError } from '@/lib/connectors/config'
 import { executeConnectorScript, loadConnector, type ConnectorActionSummary } from '@/lib/connectors/service'
 import { createEntity, type CreateEntityInput, type CreateEntityResult } from '@/lib/directory/createEntity'
-import {
-  appendLogGated,
-  readVisible,
-  searchContext,
-  visibleVault,
-  writeGated,
-} from '@/lib/notes/contextService'
+import { appendLogGated, writeGated } from '@/lib/notes/contextService'
+import { federatedMetas, readFederated, searchFederated } from '@/lib/notes/federation'
 import { upsertLink } from '@/lib/notes/context/links'
 import type { ResolvedContext } from '@/lib/notes/resolve'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
@@ -194,7 +189,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       describe: (a) => str(a.folder) || '(all)',
       run: async (a) => {
         const folder = str(a.folder).replace(/^\/+|\/+$/g, '')
-        const { metas } = await visibleVault(principal, context)
+        const metas = await federatedMetas(principal, context)
         const rows = metas
           .filter((m) => !folder || m.path === `${folder}` || m.path.startsWith(`${folder}/`))
           .sort((x, y) => x.path.localeCompare(y.path))
@@ -223,7 +218,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
         const query = str(a.query).trim()
         if (!query) return 'error: query is required'
         const limit = Math.min(SEARCH_CAP, Math.max(1, Number(a.limit) || 10))
-        const result = await searchContext(principal, context, query, {}, limit)
+        const result = await searchFederated(principal, context, query, {}, limit)
         if (result.hits.length === 0) return 'no matches'
         return result.hits
           .slice(0, limit)
@@ -241,7 +236,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       run: async (a) => {
         const path = str(a.path).trim()
         if (!path) return 'error: path is required'
-        const content = await readVisible(principal, context, path)
+        const content = await readFederated(principal, context, path)
         if (content === null) return 'error: no such note (or not visible to this agent)'
         return clip(content, READ_CAP_CHARS)
       },

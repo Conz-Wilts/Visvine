@@ -39,6 +39,7 @@ import { ADMIN_ALIAS, ADMIN_ALIAS_ID, ADMIN_ALIAS_NAME } from "../lib/types/cont
 import { nameKey } from "../lib/identity/normalize";
 import { rebuildGlobalRecords } from "../lib/global/record";
 import { syncActionNotes } from "../lib/actions/sync";
+import { createNote, ensureRootIndex, SHARED_OWNER_KEY } from "../lib/notes/store";
 
 assertLocalTarget();
 
@@ -239,6 +240,9 @@ async function wipeData() {
     prisma.node.deleteMany({}),
     prisma.identity.deleteMany({}),
     prisma.user.deleteMany({}),
+    // Sub-spaces before their parents: the parent relation is Restrict, so one
+    // statement over both would refuse the parent while its child still stands.
+    prisma.space.deleteMany({ where: { parentId: { not: null } } }),
     prisma.space.deleteMany({}),
     // The marketplace registry is deliberately NOT space-foreign-keyed — a
     // published version must outlive the space that authored it, because other
@@ -400,6 +404,96 @@ async function createAnchorUsers() {
   }
 }
 
+/**
+ * Two sub-spaces of Blackbird (docs/sub-spaces.md), one of each kind, so the
+ * flow-up rule is on screen from the first seed: Founders Network is PUBLIC —
+ * its context appears in Blackbird's tree under spaces/, read-only — and
+ * Investment Committee is PRIVATE, its own tenant with nothing showing above.
+ * Dev Admin administers both (they created them); Dev Member is in the public
+ * one only, so signing in as them shows exactly what a parent's member sees.
+ */
+const SUBSPACES = [
+  {
+    id: "blackbird-founders-network",
+    name: "Founders Network",
+    description: "Blackbird's founder community: office hours, playbooks and the people running them.",
+    visibility: "public",
+    members: [ANCHORS[0], ANCHORS[1]],
+    notes: [
+      {
+        path: "playbooks/office-hours.md",
+        content:
+          "---\ntype: Note\ntitle: Office hours\ntags: [founders, playbook]\n---\n\n# Office hours\n\nEvery Thursday. Book through the [founders index](/index.md); a partner takes the first slot.\n",
+      },
+      {
+        path: "playbooks/first-hire.md",
+        content:
+          "---\ntype: Note\ntitle: The first hire\ntags: [founders, playbook, hiring]\n---\n\n# The first hire\n\nHire for the thing you are worst at. See [office hours](office-hours.md) to talk it through.\n",
+      },
+    ],
+  },
+  {
+    id: "blackbird-investment-committee",
+    name: "Investment Committee",
+    description: "Deal memos and IC decisions. Private to the committee.",
+    visibility: "private",
+    members: [ANCHORS[0]],
+    notes: [
+      {
+        path: "memos/2026-q3.md",
+        content:
+          "---\ntype: Note\ntitle: Q3 2026 memo\ntags: [ic, memo]\n---\n\n# Q3 2026 memo\n\nThree deals reviewed, one approved. Not for the wider firm.\n",
+      },
+    ],
+  },
+] as const;
+
+async function createSubspaces() {
+  console.log("Creating sub-spaces…");
+  const actor = { id: ANCHORS[0].id, name: ANCHORS[0].name, email: ANCHORS[0].email };
+  for (const sub of SUBSPACES) {
+    await prisma.space.create({
+      data: {
+        id: sub.id,
+        name: sub.name,
+        description: sub.description,
+        visibility: sub.visibility,
+        parentId: SPACE_ID,
+        // Every optional tool off, as a fresh sub-space starts (lib/featureAccess).
+        featureConfig: { enabled: { channels: false } },
+      },
+    });
+    for (const m of sub.members) {
+      await prisma.spaceMember.create({ data: { userId: m.id, spaceId: sub.id } });
+    }
+    // The creator holds the sub-space's own Admin alias — separate admins,
+    // whatever they are to Blackbird.
+    await prisma.userAlias.create({
+      data: { spaceId: sub.id, userId: ANCHORS[0].id, aliasId: ADMIN_ALIAS_ID, addedBy: ANCHORS[0].id },
+    });
+    await prisma.contextState.create({
+      data: {
+        spaceId: sub.id,
+        ownerKey: "shared",
+        name: "access-state.json",
+        content: JSON.stringify({ seededAt: Date.now(), seededFrom: "aliases" }, null, 2),
+      },
+    });
+    // What a public sub-space shows its parent is what it shows everyone in
+    // it: the root view grant provisionSpace writes for one (lib/spaces/provision.ts).
+    if (sub.visibility === "public") {
+      await prisma.contextGrant.create({
+        data: { spaceId: sub.id, subjectType: "space", subjectId: "", resourcePath: "", level: VIEW, grantedBy: ANCHORS[0].id },
+      });
+    }
+    const context = { spaceId: sub.id, ownerKey: SHARED_OWNER_KEY };
+    await ensureRootIndex(context, sub.name, actor);
+    for (const note of sub.notes) {
+      await createNote(context, note.path, note.content, actor);
+    }
+  }
+}
+
 async function main() {
   const t0 = Date.now();
   await wipeData();
@@ -407,6 +501,7 @@ async function main() {
   await createAliases();
   await createAnchorUsers();
   await markAccessSeeded();
+  await createSubspaces();
   // The Visvine space: one public record per person the seed made public.
   const global = await rebuildGlobalRecords();
   console.log(`Visvine: ${global.records} global record(s) from ${global.identities} identit(ies).`);

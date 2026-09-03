@@ -68,6 +68,9 @@ export interface Space {
   // 'public' = discoverable & self-joinable; 'private' = invite/admin-add only
   // (lib/spaces/publicName.ts#SpaceVisibility).
   visibility?: 'public' | 'private';
+  // The space this one is a sub-space of (docs/sub-spaces.md): listed under
+  // it, and — when public — read into its context. Null for a top-level space.
+  parentId?: string | null;
   timezone?: string | null; // IANA zone the space's scheduled agents run in (null = UTC)
   // The Tools this space runs, enabled ones only. Rides the space DTO because
   // the sidebar rail, the `/t/<slug>` page and the type-page dispatch all need

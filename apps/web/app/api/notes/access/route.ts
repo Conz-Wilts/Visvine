@@ -43,6 +43,8 @@ import {
   type GrantSubjectType,
 } from '@/lib/notes/shared/authz'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
+import { readerForPath } from '@/lib/notes/federation'
+import { isSubspacePath } from '@/lib/spaces/subspaces'
 
 /** Restricted folders that cover or sit inside the caller's view of a path. */
 function visibleRestricted(p: ContextPrincipal, path: string): string[] {
@@ -100,6 +102,29 @@ export async function GET(req: NextRequest) {
       locked: p.access.locked,
       readableRoots: p.spaceAdmin ? [''] : readableRoots(p.access),
       grants,
+    })
+  }
+
+  // A path under spaces/<id>/ is a sub-space's note shown here read-only
+  // (lib/notes/federation.ts): readable exactly when its reader may read it,
+  // never writable or manageable from this space, and never a gate — the
+  // editor must not offer "request access" to a space this one only reads.
+  if (isSubspacePath(path)) {
+    const hit = await readerForPath(p, context, path)
+    const canRead = !!hit && !!hit.path && principalCanRead(hit.reader.principal, hit.path)
+    return NextResponse.json({
+      path,
+      me: { userId: p.userId, spaceAdmin: p.spaceAdmin },
+      gated: false,
+      canRead,
+      canWrite: false,
+      canManage: false,
+      myLevel: canRead ? 'view' : null,
+      restricted: [],
+      locked: [],
+      entries: null,
+      subjects: null,
+      subspace: hit ? hit.reader.space : null,
     })
   }
 

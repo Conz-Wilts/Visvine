@@ -38,6 +38,8 @@ import {
   useContextTreeState,
 } from '@/features/notes/hooks/useContextTreeState'
 import { canMoveInto, deleteFolderDenial, moveDenial, parentFolderOf } from '../lib/useContextTree'
+import { isSubspacePath } from '@/lib/spaces/subspaces'
+import { BlocksIcon } from '@/features/shared/icons'
 
 // Expansion state (openPaths + reveal overlay + persistence) lives in
 // useContextTreeState, shared with the full-screen Context explorer so both
@@ -657,7 +659,10 @@ function FolderRow(props: {
   // Share affordance (keyed by the folder's full path).
   const badge = props.folderBadges?.get(props.node.path)
   const openPath = (path: string) => props.onSelect(path)
-  const showAccess = !!props.onFolderAccess
+  // A sub-space's context is read here, never shared, moved or deleted here
+  // (lib/spaces/subspaces.ts) — those rows carry no menu that would try.
+  const federated = isSubspacePath(props.node.path)
+  const showAccess = !!props.onFolderAccess && !federated
   // Folder-note behaviour: when the folder has an index.md (hidden as a child
   // row by Tree), the folder row IS that note â€” clicking the name opens it and
   // selection highlights here. The chevron keeps expand/collapse to itself.
@@ -781,10 +786,10 @@ function FolderRow(props: {
               at the glyph's centre â€” exactly where CHILD_INDENT puts the
               children's guides, so the two read as one line. */}
           {open && <TreeStem active={onSelectedPath(props.node.path, props.selectedPath)} />}
-          {/* A sub-space's record is a folder like any other — it opens, it
-              holds notes, and it sits in the same tree. Marking it with its own
-              glyph made the one folder you enter MOST look like a control. */}
-          {props.icon ?? <FolderIcon open={open} />}
+          {/* A sub-space read into this tree is another space, so its folder
+              carries a space's glyph rather than a folder's: what is under it
+              is that space's own context, read-only here. */}
+          {props.icon ?? (props.node.space ? <BlocksIcon className="h-4 w-4" /> : <FolderIcon open={open} />)}
         </button>
         )}
         <button
@@ -840,7 +845,7 @@ function FolderRow(props: {
             // built-in folder: agents/, connectors/, tools/, people/ and the
             // rest are structure the runtime resolves against, so the row
             // offers no way to remove one (deleteFolderDenial).
-            ...(props.onDeleteFolder && !deleteFolderDenial(props.node.path)
+            ...(props.onDeleteFolder && !federated && !deleteFolderDenial(props.node.path)
               ? [
                   {
                     label: 'Delete',
@@ -1076,13 +1081,13 @@ function NoteRow({
       <RowMenu
         selected={selected}
         items={[
-          ...(onShare
+          ...(onShare && !isSubspacePath(path)
             ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => onShare(path) }]
             : []),
           ...(draggable
             ? [{ label: 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
             : []),
-          ...(canEdit
+          ...(canEdit && !isSubspacePath(path)
             ? [{ label: 'Delete', icon: <TrashIcon />, danger: true, onClick: () => onDelete(path) }]
             : []),
         ]}
