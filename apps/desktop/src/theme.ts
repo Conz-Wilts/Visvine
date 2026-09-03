@@ -37,3 +37,12 @@ export const SHELL_COLORS = {
  * defaulted to the OS appearance would flash dark on a dark-mode machine.
  */
 export const WINDOW_BACKGROUND = SHELL_COLORS.surface;
+
+/**
+ * The appearance the window chrome takes — frame, title bar, native menus and
+ * dialogs. Pinned to the app's theme rather than the OS setting: the pixels
+ * Electron draws around the page must match the pixels inside it, and the app
+ * has one theme. When the web app grows a dark theme this is where the shell
+ * follows it.
+ */
+export const WINDOW_THEME: "light" | "dark" = "light";

@@ -35,3 +35,10 @@ test("no hex colour in the offline page is outside the shell palette", () => {
   const stray = [...new Set(used.map((c) => c.toLowerCase()))].filter((c) => !palette.has(c));
   assert.deepEqual(stray, [], `stray colours in offline.html: ${stray.join(", ")}`);
 });
+
+test("the window chrome is pinned to the app's theme, not the OS appearance", () => {
+  const { WINDOW_THEME } = require("../dist/theme.js");
+  assert.equal(WINDOW_THEME, "light");
+  const main = fs.readFileSync(path.join(root, "src", "main.ts"), "utf8");
+  assert.ok(/nativeTheme\.themeSource = WINDOW_THEME/.test(main), "main.ts must set nativeTheme.themeSource");
+});

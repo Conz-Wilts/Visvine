@@ -1,8 +1,8 @@
-import { app, BrowserWindow, ipcMain, Menu, net, screen, session, shell, type WebContents } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme, net, screen, session, shell, type WebContents } from "electron";
 import path from "node:path";
 import { isDevMode, readSettings, resolveAppUrl } from "./config";
 import { buildMenu } from "./menu";
-import { WINDOW_BACKGROUND } from "./theme";
+import { WINDOW_BACKGROUND, WINDOW_THEME } from "./theme";
 import {
   appPathUrl,
   deepLinkToPath,
@@ -263,6 +263,9 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(() => {
+    // The frame follows the app's theme, never the OS appearance: a dark
+    // system setting must not put a dark title bar around a light page.
+    nativeTheme.themeSource = WINDOW_THEME;
     // Only the app itself may hold a permission; auth-provider pages and the
     // offline page get nothing. Checks and requests answer from the same list.
     const permitted = (permission: string, origin: string) =>
