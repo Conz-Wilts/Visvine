@@ -229,15 +229,17 @@ html, body {
   to { opacity: 1; }
 }
 
-/* Directory grid card entrance — staggered "rise" reveal (see NodeGrid.tsx).
-   The stagger delay is set inline per card; `both` holds the start frame during
-   that delay so cards stay hidden until their turn. */
+/* A block rising into place, as a keyframe — the sign-in panel. Same distance,
+   duration and curve as the view entrance in lib/motion.ts, which is what most
+   content arrives on; keep the two in step if either moves. `both` holds the
+   start frame through any inline delay, so a staggered caller stays hidden
+   until its turn. */
 @keyframes card-rise {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .card-rise {
-  animation: card-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: card-rise 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
   will-change: opacity, transform;
 }
 
@@ -355,6 +357,7 @@ html, body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,
+  .card-rise,
   .profile-enter,
   .profile-content-fade,
   .chip-pop,

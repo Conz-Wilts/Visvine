@@ -104,7 +104,7 @@ export const notesApi = {
       contextName,
     }),
 
-  list: (c: string) => getJson<{ notes: NoteMeta[]; starred: string[] }>(`/api/notes?${qs(c)}`),
+  list: (c: string) => getJson<{ notes: NoteMeta[] }>(`/api/notes?${qs(c)}`),
   tree: (c: string) => getJson<{ tree: TreeNode }>(`/api/notes/tree?${qs(c)}`),
 
   read: (c: string, path: string) =>
@@ -177,9 +177,6 @@ export const notesApi = {
     sendJson<{ ok: true }>('/api/notes/trash/purge', 'POST', { spaceId: c, id }),
   emptyTrash: (c: string) =>
     sendJson<{ ok: true }>('/api/notes/trash/empty', 'POST', { spaceId: c }),
-
-  star: (c: string, path: string, starred: boolean) =>
-    sendJson<{ ok: true }>('/api/notes/star', 'POST', { spaceId: c, path, starred }),
 
   refactor: (mode: 'note' | 'selection', text: string, instruction?: string) =>
     sendJson<{ result: string }>('/api/notes/ai/refactor', 'POST', { mode, text, instruction }),

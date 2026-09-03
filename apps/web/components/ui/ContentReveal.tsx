@@ -1,15 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-
-/** Reveal duration. Deliberately long — this is the whole transition from the
- *  context canvas to an open note, and a shorter one finishes before the note it
- *  is introducing has loaded. */
-const REVEAL_MS = 620;
-
-/** Ease-out cubic: quick to commit, long gentle settle. No overshoot — a spring
- *  curve on a page-sized block of text reads as a wobble, not as polish. */
-const REVEAL_EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
+import { VIEW_ENTER_EASE, VIEW_ENTER_MS, VIEW_ENTER_SHIFT_PX } from '@/lib/motion';
 
 /** How long the curtain may stay down before it opens on whatever is there. */
 const STUCK_MS = 2500;
@@ -22,9 +14,10 @@ interface ContentRevealProps {
   ready: boolean;
   className?: string;
   style?: React.CSSProperties;
-  /** Passed through so this can stand in for the wrapper it replaced (the profile
-   *  pages' role="tabpanel" content div). */
+  /** Passed through so this can stand in for the wrapper it replaced (a
+   *  `role="tabpanel"` content div, and the id its tab points at). */
   role?: string;
+  id?: string;
   children: React.ReactNode;
 }
 
@@ -50,7 +43,7 @@ interface ContentRevealProps {
  * once shown, so this never lingers as a containing block for fixed-position
  * modals rendered inside.
  */
-export default function ContentReveal({ ready, className, style, role, children }: ContentRevealProps) {
+export default function ContentReveal({ ready, className, style, role, id, children }: ContentRevealProps) {
   const [shown, setShown] = useState(false);
   // will-change is dropped once the transition ends: holding a compositor layer
   // for the lifetime of a note view costs memory and buys nothing after the move.
@@ -91,7 +84,7 @@ export default function ContentReveal({ ready, className, style, role, children 
   // they set instead of replacing it — overwriting `transition` would make the
   // panel column snap the content sideways.
   const reveal = animate
-    ? `opacity ${REVEAL_MS}ms ${REVEAL_EASE}, transform ${REVEAL_MS}ms ${REVEAL_EASE}`
+    ? `opacity ${VIEW_ENTER_MS}ms ${VIEW_ENTER_EASE}, transform ${VIEW_ENTER_MS}ms ${VIEW_ENTER_EASE}`
     : '';
   const transition = [style?.transition, reveal].filter(Boolean).join(', ') || undefined;
 
@@ -99,13 +92,14 @@ export default function ContentReveal({ ready, className, style, role, children 
     <div
       className={className}
       role={role}
+      id={id}
       onTransitionEnd={(e) => {
         if (e.target === e.currentTarget) setSettled(true);
       }}
       style={{
         ...style,
         opacity: shown ? 1 : 0,
-        transform: shown ? 'none' : 'translateY(12px)',
+        transform: shown ? 'none' : `translateY(${VIEW_ENTER_SHIFT_PX}px)`,
         transition,
         willChange: animate && !settled ? 'opacity, transform' : undefined,
       }}

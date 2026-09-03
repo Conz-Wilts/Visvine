@@ -2,12 +2,21 @@
 
 import { clsx } from 'clsx';
 
-// Two sizes. `md` is the inline filter box that sits inside an already-busy
-// panel; `lg` is for a surface where search is the primary action — it is
-// taller, reads at 15px and carries a hairline so it stays legible sitting on
-// a white toolbar rather than dissolving into it.
+// Three sizes. `sm` is the box that rides a control bar as one of its
+// controls — the Table's toolbar, the context tree's column — sized to the
+// rows beside it rather than to the surface. `md` is the inline filter box
+// that sits inside an already-busy panel; `lg` is for a surface where search
+// is the primary action — it is taller, reads at 15px and carries a hairline
+// so it stays legible sitting on a white toolbar rather than dissolving into
+// it.
 
 const SIZES = {
+  sm: {
+    frame: 'gap-1.5 rounded-md px-2 py-1',
+    input: 'text-[13px]',
+    icon: 'h-3.5 w-3.5',
+    clear: 'h-3 w-3',
+  },
   md: {
     frame: 'gap-2 rounded-lg px-3.5 py-2.5',
     input: 'text-sm',

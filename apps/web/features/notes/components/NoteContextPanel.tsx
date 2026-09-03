@@ -329,16 +329,14 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
 
   if (gatedOut) {
     return (
-      <div className="flex justify-center py-10">
-        <AccessRequestCard
-          scope="context"
-          spaceName={currentSpace?.name ?? 'this space'}
-          pending={requestPending}
-          requesting={requesting}
-          error={error}
-          onRequest={requestAccess}
-        />
-      </div>
+      <AccessRequestCard
+        scope="context"
+        spaceName={currentSpace?.name ?? 'this space'}
+        pending={requestPending}
+        requesting={requesting}
+        error={error}
+        onRequest={requestAccess}
+      />
     )
   }
 
@@ -364,16 +362,14 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   // its copy commits to neither reading.
   if (shownRead.status === 'missing') {
     return (
-      <div className="flex justify-center py-10">
-        <AccessRequestCard
-          scope="path"
-          spaceName={currentSpace?.name ?? 'this space'}
-          pending={requestPending}
-          requesting={requesting}
-          error={error}
-          onRequest={requestAccess}
-        />
-      </div>
+      <AccessRequestCard
+        scope="path"
+        spaceName={currentSpace?.name ?? 'this space'}
+        pending={requestPending}
+        requesting={requesting}
+        error={error}
+        onRequest={requestAccess}
+      />
     )
   }
 

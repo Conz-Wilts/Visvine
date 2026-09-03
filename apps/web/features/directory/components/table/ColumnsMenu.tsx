@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
 import { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown';
-import { TABLE_TOOLBAR_BTN } from './TableToolbar';
+import { TABLE_TOOLBAR_BTN, TABLE_TOOLBAR_ICON } from './TableToolbar';
 import { ConfirmDialog } from '@/components/ui';
 import AddFieldForm, { type FieldOps } from './AddFieldForm';
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, XIcon } from '@/features/shared/icons';
@@ -63,7 +63,7 @@ export default function ColumnsMenu({ typeName, arranged, view, onToggle, onMove
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <ChevronDownIcon className={clsx('h-3.5 w-3.5 transition-transform duration-200', open && 'rotate-180')} />
+        <ChevronDownIcon className={clsx(TABLE_TOOLBAR_ICON, 'transition-transform duration-200', open && 'rotate-180')} />
         <span>Columns</span>
         {hiddenCount > 0 && <span className="text-text-muted">{hiddenCount} hidden</span>}
       </button>

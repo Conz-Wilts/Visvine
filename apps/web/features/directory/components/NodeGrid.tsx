@@ -88,9 +88,12 @@ function createRevealCoordinator() {
 type RevealCoordinator = ReturnType<typeof createRevealCoordinator>
 
 // Wraps a card and plays the rise-in animation the first time it appears.
-function RevealCard({ id, coordinator, children }: {
+function RevealCard({ id, coordinator, cascade, children }: {
   id: string
   coordinator: RevealCoordinator
+  /** Off when something above is already animating this grid in as one block —
+   *  see NodeGrid's `cascade` prop. */
+  cascade: boolean
   children: React.ReactNode
 }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -98,7 +101,7 @@ function RevealCard({ id, coordinator, children }: {
   useIsoLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    const order = coordinator.claim(id)
+    const order = cascade ? coordinator.claim(id) : null
     if (order === null || prefersReducedMotion()) {
       el.style.opacity = '1'
       return
@@ -110,7 +113,8 @@ function RevealCard({ id, coordinator, children }: {
     const done = () => { el.style.opacity = '1'; el.classList.remove('card-rise') }
     el.addEventListener('animationend', done, { once: true })
     return () => el.removeEventListener('animationend', done)
-    // Claim exactly once per mount — id/coordinator are stable for a mounted card.
+    // Claim exactly once per mount — id/coordinator/cascade are stable for a
+    // mounted card.
   }, [])
 
   return (
@@ -147,9 +151,17 @@ interface DirectoryGridProps {
   onCardClick?: (item: DirectoryItem) => void
   nodeTypes?: NodeTypeConfig[]
   aliases?: SpaceAlias[]
+  /**
+   * Whether cards reveal one after another. Pass false when an ancestor already
+   * animates the whole grid in — two entrances on one set of cards, on different
+   * curves, read as a stutter rather than as polish. The Directory page does
+   * exactly that: its four views share one block entrance (ContentReveal), so
+   * the cards arrive with the block rather than after it.
+   */
+  cascade?: boolean
 }
 
-export default function NodeGrid({ items, loading = false, onCardClick, nodeTypes, aliases }: DirectoryGridProps) {
+export default function NodeGrid({ items, loading = false, onCardClick, nodeTypes, aliases, cascade = true }: DirectoryGridProps) {
   // One coordinator per mounted grid, reset whenever the result set changes so a
   // filter/search re-runs the cascade (mirrors the previous id-keyed behaviour).
   const coordinatorRef = useRef<RevealCoordinator | null>(null)
@@ -220,7 +232,7 @@ export default function NodeGrid({ items, loading = false, onCardClick, nodeType
           // ahead of that are unmounted.
           increaseViewportBy={{ top: 400, bottom: 800 }}
           itemContent={(_, item) => (
-            <RevealCard id={item.id} coordinator={coordinator}>
+            <RevealCard id={item.id} coordinator={coordinator} cascade={cascade}>
               <NodeCard item={item} onClick={onCardClick} nodeTypes={nodeTypes} aliases={aliases} />
             </RevealCard>
           )}

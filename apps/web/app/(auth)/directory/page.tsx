@@ -6,6 +6,7 @@ import NodeGrid from '@/features/directory/components/NodeGrid';
 import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
 import DirectoryTableView from '@/features/directory/components/table/DirectoryTableView';
 import ResourcesBrowser from '@/features/resources/components/ResourcesBrowser';
+import ContentReveal from '@/components/ui/ContentReveal';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
@@ -159,9 +160,12 @@ function DirectoryPane() {
       // `-mb-6` eating <main>'s pb-6 so the last row sits on the bottom edge
       // rather than 24px above it.
       <div className="relative -mb-6 w-full" style={{ height: 'calc(100dvh - 88px)' }}>
-        <div id="panel-table" role="tabpanel" className="h-full">
+        {/* The reveal is the panel, not the box around it: the sizing above is
+            what the table measures its scroll box against, and a wrapper that
+            animates a transform must not be that element. */}
+        <ContentReveal ready={!loading} id="panel-table" role="tabpanel" className="h-full">
           <DirectoryTableView browse={browse} type={typeParam} onTypeChange={handleTypeChange} />
-        </div>
+        </ContentReveal>
       </div>
     );
   }
@@ -169,9 +173,7 @@ function DirectoryPane() {
   if (view === 'resources') {
     return (
       <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 112px)' }}>
-        <div id="panel-resources" role="tabpanel">
-          <ResourcesBrowser />
-        </div>
+        <ResourcesBrowser id="panel-resources" role="tabpanel" />
       </div>
     );
   }
@@ -183,7 +185,7 @@ function DirectoryPane() {
     <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 112px)' }}>
       {/* Search, filters, sort and count ride one sticky toolbar welded under
           the pane tab bar; the cards scroll beneath it. */}
-      <div id="panel-grid" role="tabpanel">
+      <ContentReveal ready={!loading} id="panel-grid" role="tabpanel">
         <DirectoryToolbar browse={browse} />
 
         {/* pt-7, not pt-4: a hovered card lifts 6px and throws a soft glow about
@@ -198,16 +200,19 @@ function DirectoryPane() {
               </div>
             )}
 
+            {/* No per-card cascade: the whole view is already rising as one
+                block, the same way the other three tabs do. */}
             <NodeGrid
               items={filteredItems}
               loading={loading}
+              cascade={false}
               onCardClick={handleItemClick}
               nodeTypes={space?.nodeTypes}
               aliases={space?.aliases as SpaceAlias[] | undefined}
             />
           </div>
         </div>
-      </div>
+      </ContentReveal>
     </div>
   );
 }

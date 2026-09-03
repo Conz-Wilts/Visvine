@@ -14,7 +14,7 @@
 // row must not flicker backwards. The overrides live as long as this view.
 
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, SearchInput } from '@/components/ui';
+import { Alert } from '@/components/ui';
 import ColumnsMenu from './ColumnsMenu';
 import TableToolbar from './TableToolbar';
 import DirectoryTable from './DirectoryTable';
@@ -162,21 +162,14 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
       <div className="shrink-0 px-6 pt-1">
-        {/* The Directory's one search box, in the one place it lives on every
-            tab: first thing under the tab bar, the same `lg` field at the same
-            width. Switching Grid → Table moves the cursor nowhere. */}
-        <div className="flex flex-wrap items-center gap-2 pb-2">
-          <SearchInput
-            value={browse.searchTerm}
-            onChange={browse.setSearchTerm}
-            placeholder={activeName ? `Search ${activeName.toLowerCase()}s…` : 'Search the directory…'}
-            size="lg"
-            className="w-full max-w-[420px] flex-1 sm:min-w-[280px]"
-          />
-        </div>
-
+        {/* Search is one of the bar's controls here, not a band of its own: the
+            Table already states what it is showing and narrows it from that
+            line, so the box belongs on it, at the height of the buttons beside
+            it. The Grid and Resources tabs keep the big field, where search IS
+            the surface. */}
         <TableToolbar
           browse={browse}
+          searchPlaceholder={activeName ? `Search ${activeName.toLowerCase()}s…` : 'Search the directory…'}
           types={types}
           typeKey={activeKey ?? ''}
           onTypeChange={onTypeChange}

@@ -547,16 +547,14 @@ export function EntityContextPanel({
 
   if (gatedOut || deniedPath) {
     return (
-      <div className="flex justify-center py-10">
-        <AccessRequestCard
-          scope={gatedOut ? 'context' : 'path'}
-          spaceName={currentSpace?.name ?? 'this space'}
-          pending={requestPending}
-          requesting={requesting}
-          error={error}
-          onRequest={requestAccess}
-        />
-      </div>
+      <AccessRequestCard
+        scope={gatedOut ? 'context' : 'path'}
+        spaceName={currentSpace?.name ?? 'this space'}
+        pending={requestPending}
+        requesting={requesting}
+        error={error}
+        onRequest={requestAccess}
+      />
     )
   }
 

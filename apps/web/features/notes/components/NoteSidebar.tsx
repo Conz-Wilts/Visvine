@@ -1,12 +1,9 @@
 ﻿'use client'
 
-// The notes sidebar: starred notes and a folder/note tree. Folders expand/collapse
+// The notes sidebar: a folder/note tree. Folders expand/collapse
 // and carry a folder icon; notes carry their frontmatter type's glyph (person,
-// group, event, resource) or a document icon when untyped. Row actions (star,
-// delete, share) live behind a single â‹¯ menu revealed on hover â€” starred state
-// shows only there and in the Starred section above the tree, never as a glyph
-// on the row. Starring is the same `starred:` frontmatter flag the editor
-// toolbar's star toggles, so both surfaces always agree. Nesting is shown
+// group, event, resource) or a document icon when untyped. Row actions (share,
+// move, delete) live behind a single menu revealed on hover. Nesting is shown
 // with tree guides: each nested row draws its own segment of the vertical line
 // plus an elbow into its icon, and the last child of a folder closes the line
 // off with a rounded corner, so depth reads at a glance. Expanding a folder puts
@@ -34,7 +31,6 @@ import {
 } from '@/components/ui/TreeChrome'
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
 import { entityKindOf, isEntityFolderIndex } from '@/lib/notes/entities'
-import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { filterTree, folderPathsIn } from '@/lib/notes/shared/context'
 import {
   TRASH_PATH,
@@ -103,11 +99,9 @@ function isMovable(path: string, kind: 'note' | 'folder'): boolean {
 interface NoteSidebarProps {
   tree: TreeNode
   notes: NoteMeta[]
-  starred: string[]
   selectedPath: string | null
   canEdit: boolean
   onSelect: (path: string) => void
-  onToggleStar: (path: string, starred: boolean) => void
   onDeleteNote: (path: string) => void
   /** Access badges keyed by FULL path â€” folders AND privately-restricted notes
    *  (shared scope only). */
@@ -154,20 +148,18 @@ interface NoteSidebarProps {
   revealPath?: string | null
   /** The Directory's search box, applied to the tree: the tree is pruned to
    *  what matches and every surviving folder is opened, so a match is never
-   *  hidden inside a collapsed ancestor. Starred and Trash step aside while
-   *  it runs — a search says "here is what matches", not "here is everything
-   *  plus what matches". */
+   *  hidden inside a collapsed ancestor. Trash steps aside while it runs -
+   *  a search says "here is what matches", not "here is everything plus
+   *  what matches". */
   query?: string
 }
 
 export function NoteSidebar({
   tree,
   notes,
-  starred,
   selectedPath,
   canEdit,
   onSelect,
-  onToggleStar,
   onDeleteNote,
   folderBadges,
   onFolderAccess,
@@ -187,12 +179,6 @@ export function NoteSidebar({
   query = '',
 }: NoteSidebarProps) {
   const searching = query.trim().length > 0
-  const starredSet = useMemo(() => new Set(starred), [starred])
-  const titleFor = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const n of notes) map.set(n.path, n.title)
-    return map
-  }, [notes])
 
   const glyphFor = useMemo(() => {
     const map = new Map<string, NodeGlyph>()
@@ -202,11 +188,6 @@ export function NoteSidebar({
     }
     return map
   }, [notes])
-
-  const starredNotes = useMemo(
-    () => starred.map((p) => ({ path: p, title: titleFor.get(p) ?? p })).filter((n) => titleFor.has(n.path)),
-    [starred, titleFor],
-  )
 
   // Moving: dragging a row onto a folder, or the same move from the row menu
   // via the "Move to..." dialog. Both go through one `move` so the rules and the
@@ -282,7 +263,15 @@ export function NoteSidebar({
       if (container && el) {
         const c = container.getBoundingClientRect()
         const r = el.getBoundingClientRect()
-        if (r.top < c.top || r.bottom > c.bottom) el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        if (r.top < c.top || r.bottom > c.bottom) {
+          // The tree's own scrollport, and nothing above it. scrollIntoView
+          // walks EVERY scrollable ancestor, so centring a row deep in a long
+          // tree also scrolled <main> — which slid the note's title up behind
+          // the floating toolbar the moment a note was opened.
+          const top =
+            container.scrollTop + (r.top - c.top) - (c.height - r.height) / 2
+          container.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+        }
       } else if (attempts++ < 5) {
         raf = requestAnimationFrame(tryScroll)
       }
@@ -316,28 +305,6 @@ export function NoteSidebar({
             bands still bleed past it; a matching pr would pull the bands'
             right edge in and break the full-width look. */}
         <div className="pl-2">
-          {starredNotes.length > 0 && !searching && (
-            <div className="mb-2">
-              <SectionLabel>Starred</SectionLabel>
-              {starredNotes.map((n) => (
-                <NoteRow
-                  key={n.path}
-                  title={n.title}
-                  path={n.path}
-                  glyph={glyphFor.get(n.path) ?? null}
-                  selected={selectedPath === n.path}
-                  starred
-                  restrictedBadge={folderBadges?.get(n.path)?.restricted ?? false}
-                  canEdit={canEdit}
-                  onSelect={onSelect}
-                  onToggleStar={onToggleStar}
-                  onDelete={onDeleteNote}
-                  onShare={onShareNote}
-                />
-              ))}
-            </div>
-          )}
-
           {root ? (
             // The context root as the tree's own top-level folder â€” same row
             // chrome as any other folder, so nesting reads uniformly from the
@@ -350,11 +317,9 @@ export function NoteSidebar({
               onToggleFolder={toggleFolder}
               onOpenFolder={openFolder}
               selectedPath={selectedPath}
-              starredSet={starredSet}
               glyphFor={glyphFor}
               canEdit={canEdit}
               onSelect={onSelect}
-              onToggleStar={onToggleStar}
               onDeleteNote={onDeleteNote}
               folderBadges={folderBadges}
               onFolderAccess={onFolderAccess}
@@ -368,11 +333,9 @@ export function NoteSidebar({
               onToggleFolder={toggleFolder}
               onOpenFolder={openFolder}
               selectedPath={selectedPath}
-              starredSet={starredSet}
               glyphFor={glyphFor}
               canEdit={canEdit}
               onSelect={onSelect}
-              onToggleStar={onToggleStar}
               onDeleteNote={onDeleteNote}
               folderBadges={folderBadges}
               onFolderAccess={onFolderAccess}
@@ -574,11 +537,9 @@ function Tree({
   onToggleFolder,
   onOpenFolder,
   selectedPath,
-  starredSet,
   glyphFor,
   canEdit,
   onSelect,
-  onToggleStar,
   onDeleteNote,
   folderBadges,
   onFolderAccess,
@@ -590,11 +551,9 @@ function Tree({
   onToggleFolder: (path: string, isOpen: boolean) => void
   onOpenFolder: (path: string) => void
   selectedPath: string | null
-  starredSet: Set<string>
   glyphFor: Map<string, NodeGlyph>
   canEdit: boolean
   onSelect: (path: string) => void
-  onToggleStar: (path: string, starred: boolean) => void
   onDeleteNote: (path: string) => void
   folderBadges?: Map<string, FolderBadge>
   onFolderAccess?: (folderId: string) => void
@@ -626,11 +585,9 @@ function Tree({
             onToggleFolder={onToggleFolder}
             onOpenFolder={onOpenFolder}
             selectedPath={selectedPath}
-            starredSet={starredSet}
             glyphFor={glyphFor}
             canEdit={canEdit}
             onSelect={onSelect}
-            onToggleStar={onToggleStar}
             onDeleteNote={onDeleteNote}
             folderBadges={folderBadges}
             onFolderAccess={onFolderAccess}
@@ -646,11 +603,9 @@ function Tree({
             guideActive={selectedPath === child.path}
             glyph={glyphFor.get(child.path) ?? null}
             selected={selectedPath === child.path}
-            starred={starredSet.has(child.path)}
             restrictedBadge={folderBadges?.get(child.path)?.restricted ?? false}
             canEdit={canEdit}
             onSelect={onSelect}
-            onToggleStar={onToggleStar}
             onDelete={onDeleteNote}
             onShare={onShareNote}
           />
@@ -673,7 +628,7 @@ function EmptyBranchRow() {
 
 function FolderRow(props: {
   node: TreeNode
-  /** Tree guide for a nested row; omitted for the tree's root folder row. */
+  /** Tree guide for a nested row. */
   guide?: Guide
   /** The open note is this folder or lives inside it â€” tints the guide. */
   guideActive?: boolean
@@ -685,11 +640,9 @@ function FolderRow(props: {
   onToggleFolder: (path: string, isOpen: boolean) => void
   onOpenFolder: (path: string) => void
   selectedPath: string | null
-  starredSet: Set<string>
   glyphFor: Map<string, NodeGlyph>
   canEdit: boolean
   onSelect: (path: string) => void
-  onToggleStar: (path: string, starred: boolean) => void
   onDeleteNote: (path: string) => void
   folderBadges?: Map<string, FolderBadge>
   onFolderAccess?: (folderId: string) => void
@@ -880,16 +833,6 @@ function FolderRow(props: {
             ...(showAccess
               ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => props.onFolderAccess!(props.node.path) }]
               : []),
-            // No Star on a plain folder: it IS its index note, and Starred is a
-            // shortcut list of notes, not folders. An entity's index is the
-            // exception — starring Connor is exactly what people mean.
-            ...(entityIndex
-              ? [{
-                  label: props.starredSet.has(indexPath) ? 'Unstar' : 'Star',
-                  icon: <StarIcon filled={props.starredSet.has(indexPath)} />,
-                  onClick: () => props.onToggleStar(indexPath, !props.starredSet.has(indexPath)),
-                }]
-              : []),
             ...(draggable
               ? [{ label: 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
               : []),
@@ -924,11 +867,9 @@ function FolderRow(props: {
               onToggleFolder={props.onToggleFolder}
               onOpenFolder={props.onOpenFolder}
               selectedPath={props.selectedPath}
-              starredSet={props.starredSet}
               glyphFor={props.glyphFor}
               canEdit={props.canEdit}
               onSelect={props.onSelect}
-              onToggleStar={props.onToggleStar}
               onDeleteNote={props.onDeleteNote}
               folderBadges={props.folderBadges}
               onFolderAccess={props.onFolderAccess}
@@ -954,7 +895,7 @@ interface RowMenuItem {
 const ROW_MENU_W = 160
 const ROW_MENU_ITEM_H = 34
 
-/** The â‹¯ button every row shows on hover, opening its actions (star, delete,
+/** The â‹¯ button every row shows on hover, opening its actions (share, move, delete,
  *  shareâ€¦) in a small popup. The popup is a fixed-position portal: the tree's
  *  scroll container clips overflow on both axes, so an absolutely positioned
  *  menu inside the row would be cut off at the panel edge. Fixed positioning
@@ -1066,27 +1007,23 @@ function NoteRow({
   guide,
   guideActive,
   selected,
-  starred,
   restrictedBadge = false,
   canEdit,
   onSelect,
-  onToggleStar,
   onDelete,
   onShare,
 }: {
   title: string
   path: string
   glyph: NodeGlyph | null
-  /** Tree guide for a nested row; omitted for the flat Starred list. */
+  /** Tree guide for a nested row. */
   guide?: Guide
   guideActive?: boolean
   selected: boolean
-  starred: boolean
   /** The note is privately restricted â€” inherited access is cut at the note. */
   restrictedBadge?: boolean
   canEdit: boolean
   onSelect: (path: string) => void
-  onToggleStar: (path: string, starred: boolean) => void
   onDelete: (path: string) => void
   onShare?: (path: string) => void
 }) {
@@ -1142,15 +1079,6 @@ function NoteRow({
           ...(onShare
             ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => onShare(path) }]
             : []),
-          // Index notes are folders, and folders aren't starrable — except an
-          // entity's own index, which is the entity (the Starred list holds it).
-          ...(isIndexPath(path) && !isEntityFolderIndex(path)
-            ? []
-            : [{
-                label: starred ? 'Unstar' : 'Star',
-                icon: <StarIcon filled={starred} />,
-                onClick: () => onToggleStar(path, !starred),
-              }]),
           ...(draggable
             ? [{ label: 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
             : []),
@@ -1265,12 +1193,6 @@ function MoveDialog({
   )
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">{children}</div>
-  )
-}
-
 // Type glyph (person/group/event/resource silhouette) sized to match FileIcon.
 function GlyphIcon({ glyph }: { glyph: NodeGlyph }) {
   return (
@@ -1285,15 +1207,6 @@ function FileIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
       <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-    </svg>
-  )
-}
-
-function StarIcon({ filled = false }: { filled?: boolean }) {
-  // Same star glyph as the editor toolbar's lucide Star; fills amber when starred.
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />
     </svg>
   )
 }

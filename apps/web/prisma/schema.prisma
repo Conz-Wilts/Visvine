@@ -97,7 +97,6 @@ model ContextNote {
   ownerKey    String                @map("owner_key") // 'shared' = space context; else a userId = personal context
   path        String // context-relative POSIX path, e.g. "portfolio/canva.md"
   content     String // full markdown incl. frontmatter (source of truth)
-  starred     Boolean               @default(false) // synced from frontmatter `starred:` on every write
   createdBy   String                @map("created_by")
   createdAt   DateTime              @default(now()) @map("created_at")
   updatedAt   DateTime              @updatedAt @map("updated_at")

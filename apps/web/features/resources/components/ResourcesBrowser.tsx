@@ -20,6 +20,7 @@ import { MoveDialog, NameDialog } from '@/features/resources/components/driveDia
 import { driveApi } from '@/features/resources/lib/driveApi';
 import { childFolders, folderTrail, subtree } from '@/features/resources/lib/tree';
 import { ConfirmDialog, EmptyState, SearchInput } from '@/components/ui';
+import ContentReveal from '@/components/ui/ContentReveal';
 import { ChevronRightIcon } from '@/features/shared/icons';
 import type { Resource, ResourceFolder } from '@/lib/types';
 
@@ -57,7 +58,13 @@ function Crumb({
   );
 }
 
-export default function ResourcesBrowser() {
+interface ResourcesBrowserProps {
+  /** The tab panel's id and role, when this is a Directory view. */
+  id?: string;
+  role?: string;
+}
+
+export default function ResourcesBrowser({ id, role }: ResourcesBrowserProps = {}) {
   const router = useRouter();
   const { currentSpace } = useSpace();
   const spaceId = currentSpace?.id ?? null;
@@ -187,12 +194,19 @@ export default function ResourcesBrowser() {
   const empty = !loading && !visibleFolders.length && !visibleFiles.length;
 
   return (
+    // The drop target is the whole box and never moves — a page you can drag a
+    // file onto must not be sliding while you aim at it. The reveal is the
+    // content inside it, gated on the Drive's own fetch so the entrance plays
+    // over files rather than over their skeletons.
     <div
       className="relative w-full"
+      id={id}
+      role={role}
       onDragOver={onPageDragOver}
       onDragLeave={e => { if (e.currentTarget === e.target) setOsDrop(false); }}
       onDrop={onPageDrop}
     >
+      <ContentReveal ready={!loading}>
       {/* ── Toolbar: search and breadcrumb ──────────────────────────────
           The Directory toolbar's chrome to the pixel — sticky flush under
           the shell band's strip, the same -ml-6 bleed, pl-12 inset and pt-1 / pb-2
@@ -387,6 +401,7 @@ export default function ResourcesBrowser() {
         }}
         onClose={() => setDialog(null)}
       />
+      </ContentReveal>
     </div>
   );
 }

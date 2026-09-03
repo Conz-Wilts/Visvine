@@ -68,12 +68,6 @@ import {
   type IndexChild,
 } from './shared/indexNote'
 
-// The `starred` column is a queryable index of the frontmatter `starred:` flag
-// (the source of truth), re-derived on every write.
-function isStarred(content: string): boolean {
-  return Boolean(parseFrontmatter(content).starred)
-}
-
 export interface Context {
   spaceId: string
   ownerKey: string // 'shared' = space context; else a userId = personal context
@@ -278,7 +272,6 @@ export async function createNote(
         ownerKey: context.ownerKey,
         path: p,
         content,
-        starred: isStarred(content),
         createdBy: actor.id,
       },
       select: { path: true, content: true, updatedAt: true },
@@ -445,7 +438,6 @@ export async function ensureAncestorIndexes(
           ownerKey: context.ownerKey,
           path: idx,
           content: buildIndexStub(folder, children),
-          starred: false,
           createdBy: actor.id,
         },
       })
@@ -535,7 +527,7 @@ export async function writeNote(
     const note = existing
       ? await tx.contextNote.update({
           where: { id: existing.id },
-          data: { content, starred: isStarred(content) },
+          data: { content },
         })
       : await tx.contextNote.create({
           data: {
@@ -543,7 +535,6 @@ export async function writeNote(
             ownerKey: context.ownerKey,
             path: p,
             content,
-            starred: isStarred(content),
             createdBy: actor.id,
           },
         })
@@ -1076,7 +1067,6 @@ export async function ensureEntityFolder(
             ownerKey: context.ownerKey,
             path: dest,
             content: seed ?? entityStub(node),
-            starred: false,
             createdBy: actor.id,
           },
         })
@@ -1528,39 +1518,3 @@ export async function applyRevision(
   await writeNote(context, row.path, rev.content, actor, 'restore')
 }
 
-// Star / unstar a note (sidebar Starred section + editor toolbar star). The
-// frontmatter `starred:` flag is the source of truth; rewrite it through
-// writeNote so the synced column, revisions and link sync all stay consistent
-// with a toggle made from the editor.
-//
-// Index notes are folders, and folders aren't starrable — the Starred section is
-// a shortcut list of notes, not a second folder tree. Rejected here so every
-// caller (API, MCP, scripts) is covered, not just the UI that hides the control.
-export async function setStarred(
-  context: Context,
-  path: string,
-  starred: boolean,
-  actor: Actor,
-): Promise<void> {
-  const clean = sanitizePath(path)
-  if (isIndexPath(clean)) throw new Error('Index notes cannot be starred')
-  const row = await findLive(context, clean)
-  if (!row) throw new Error(`Note not found: ${path}`)
-  const { frontmatter, body } = splitFrontmatter(row.content)
-  const lines = (frontmatter ?? '')
-    .split('\n')
-    .filter((l) => l.trim() && !/^starred\s*:/i.test(l.trim()))
-  if (starred) lines.push('starred: true')
-  const content = lines.length ? `---\n${lines.join('\n')}\n---\n\n${body}` : body
-  await writeNote(context, row.path, content, actor)
-}
-
-export async function listStarred(context: Context): Promise<string[]> {
-  const rows = await prisma.contextNote.findMany({
-    where: { spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: null, starred: true },
-    select: { path: true },
-  })
-  // Index notes can no longer be starred; filter any that were starred before
-  // that rule existed so they don't linger in the Starred section.
-  return rows.map((r) => r.path).filter((p) => !isIndexPath(p))
-}

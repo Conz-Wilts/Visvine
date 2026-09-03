@@ -42,8 +42,6 @@ const RAW_STORE = [
   'readNote',
   'readNoteOrNull',
   'renameNote',
-  'setStarred',
-  'listStarred',
   'listRaw',
   'listFolders',
   'createFolder',

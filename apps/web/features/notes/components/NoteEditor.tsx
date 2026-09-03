@@ -28,7 +28,6 @@ import {
   ListIcon,
   ListOrderedIcon,
   SparklesIcon,
-  StarIcon,
   TableIcon,
   TextQuoteIcon,
 } from '@/features/shared/icons';
@@ -40,7 +39,6 @@ import { NoteModeToggle, type NoteMode } from './NoteModeToggle'
 import { parseEntityHref } from '@/lib/notes/entities'
 import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
 import {
-  isIndexPath,
   parseChildrenBlock,
   reattachChildrenBlock,
   splitChildrenBlock,
@@ -189,9 +187,6 @@ export function NoteEditor({
   const [linkAnchor, setLinkAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null)
   const [refactoring, setRefactoring] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Starred flag lives in the note's frontmatter (`starred: true`), so toggling
-  // it rewrites the prefix and saves through the normal path.
-  const [starred, setStarred] = useState(false)
   // Embedded only: the tab bar's attached region is our toolbar's home, and it
   // opened when the tab did (see TabBarSlotContext).
   const { host: toolbarHost } = useTabBarSlot()
@@ -382,7 +377,6 @@ export function NoteEditor({
     setChildren(parseChildrenBlock(split.block))
     editor.commands.setContent(split.body, { emitUpdate: false })
     setRawContent(initialContent)
-    setStarred(Boolean(parseFrontmatter(initialContent).starred))
     pendingRef.current = null
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current)
@@ -409,7 +403,6 @@ export function NoteEditor({
       loadingRef.current = true
       const { frontmatter, body } = splitFrontmatter(rawContent)
       prefixRef.current = buildPrefix(frontmatter)
-      setStarred(Boolean(parseFrontmatter(rawContent).starred))
       const split = splitChildrenBlock(body)
       childrenBlockRef.current = split.block
       setChildren(parseChildrenBlock(split.block))
@@ -510,22 +503,6 @@ export function NoteEditor({
     [editor, notes],
   )
 
-  // Toggle `starred:` in the frontmatter prefix and save immediately. Only
-  // reachable from the wysiwyg toolbar, so the prefix ref is authoritative.
-  const toggleStar = useCallback(() => {
-    if (!editor || !canEdit || isIndexPath(path)) return
-    const next = !starred
-    const { frontmatter } = splitFrontmatter(prefixRef.current)
-    const lines = (frontmatter ?? '')
-      .split('\n')
-      .filter((l) => l.trim() && !/^starred\s*:/i.test(l.trim()))
-    if (next) lines.push('starred: true')
-    prefixRef.current = lines.length ? buildPrefix(lines.join('\n')) : ''
-    setStarred(next)
-    pendingRef.current = composeContent(prefixRef.current, getMarkdown(editor), childrenBlockRef.current)
-    flush()
-  }, [editor, canEdit, starred, flush, path])
-
   const onRawChange = (value: string) => {
     setRawContent(value)
     if (canEdit) queueSave(value)
@@ -604,17 +581,8 @@ export function NoteEditor({
         </ToolbarButton>
       </>
     ) : null
-  // Star sits at the far left of the toolbar; Refactor is a filled button pushed
-  // to the far right (both matching the reference layout). Same rule as
-  // formatControls: no `editor` in the presence test. toggleStar already no-ops
-  // without one.
-  // Index notes are folders, and folders aren't starrable — no star for them.
-  const starButton =
-    canEdit && trayMode === 'wysiwyg' && !isIndexPath(path) ? (
-      <ToolbarButton label={starred ? 'Unstar note' : 'Star note'} onClick={toggleStar}>
-        <StarIcon className={`h-4 w-4 ${starred ? 'fill-amber-400 text-amber-400' : ''}`} />
-      </ToolbarButton>
-    ) : null
+  // Refactor is a filled button pushed to the far right, matching the reference
+  // layout. Same rule as formatControls: no `editor` in the presence test.
   const refactorButton =
     canEdit && trayMode === 'wysiwyg' && aiConfigured ? (
       <button
@@ -631,8 +599,6 @@ export function NoteEditor({
   // embedded profile bar renders them flat, attached under the tabs.
   const formatPill = formatControls ? (
     <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-border-subtle bg-surface-1 px-1.5 py-1">
-      {starButton}
-      {starButton && <Divider />}
       {formatControls}
       {refactorButton && (
         <>
@@ -724,7 +690,7 @@ export function NoteEditor({
 
           No host means no toolbar: `embedded` is only used by EntityContextPanel
           under the profile pages, which provide one. */}
-      {embedded && toolbarHost && (starButton || formatControls || refactorButton || onModeChange || toolbarTrailSlot) && createPortal(
+      {embedded && toolbarHost && (formatControls || refactorButton || onModeChange || toolbarTrailSlot) && createPortal(
         /* One content-width card, centred by the host and floating clear of the
            nav line: a rounded rectangle on all four sides with its own border
            and shadow, separated from the tab row by the mt-4 gap the host's
@@ -733,8 +699,6 @@ export function NoteEditor({
            overflow-x-auto keep narrow panes scrolling inside the card rather
            than growing it. */
         <div className="relative mt-4 flex h-11 max-w-full items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-3 shadow-strip">
-          {starButton}
-          {starButton && formatControls && <Divider />}
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto">{formatControls}</div>
           {/* Trailing group: Refactor + the Editor/Raw toggle + Share. The
               toggle renders regardless of canEdit/mode (unlike formatControls,

@@ -168,14 +168,17 @@ export default function PaneSurfaceHost({ children }: { children?: React.ReactNo
   }, [commitSwap]);
 
   // A persistent surface must scroll back to the top explicitly where a fresh
-  // page mount used to imply it. Panel→panel only: entering from a profile tab
-  // keeps the user's scroll position.
+  // page mount used to imply it. From another panel, and from a page with no
+  // panel at all (the Directory's Grid/Table, scrolled) — a note opened there
+  // would otherwise start mid-way, with its title behind the floating toolbar.
+  // Not from 'tree': that is the lag state a profile tab registers while its
+  // node resolves, and switching tabs keeps the user's scroll position.
   const prevIdentityRef = useRef(activeIdentity);
   useEffect(() => {
     const prev = prevIdentityRef.current;
     prevIdentityRef.current = activeIdentity;
     const isNote = (id: string) => id !== 'none' && id !== 'tree';
-    if (activeIdentity !== prev && isNote(activeIdentity) && isNote(prev)) {
+    if (activeIdentity !== prev && isNote(activeIdentity) && prev !== 'tree') {
       document.querySelector('main')?.scrollTo({ top: 0 });
     }
   }, [activeIdentity]);

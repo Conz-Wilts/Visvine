@@ -14,7 +14,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
-import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext'
 import { usePaneChromeState } from '@/features/shared/contexts/PaneShellContext'
 import { TRAY_ROW_H } from '@/features/shared/components/pane/PaneTabBar'
 import { isFeatureEnabled } from '@/lib/featureAccess'
@@ -27,7 +26,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import SearchInput from '@/components/ui/SearchInput'
 import { NoteSidebar } from './NoteSidebar'
 import { SharePanel } from './SharePanel'
-import { SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext'
+import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext'
 
 /** Width of the tree column. The pane tab bars inset their toolbar tray by the
  *  same amount so the tray centres over the note, not the whole pane. */
@@ -69,7 +68,6 @@ export function ContextSidebar({
 }) {
   const router = useRouter()
   const { currentSpace } = useSpace()
-  const { dockTopInset } = useContextPanel()
   // The toolbar tray only centres over the note column, so the tree climbs
   // past it to sit flush under the tab row whenever it's open.
   const trayOpen = !!usePaneChromeState().chrome?.attachedOpen
@@ -121,35 +119,46 @@ export function ContextSidebar({
 
   if (!notesEnabled || !spaceId) return null
 
-  // Sticks under the pane's pinned tab row — dockTopInset is where that row's
-  // bottom edge is, 0 when there is no bar — and runs to just above <main>'s
-  // bottom padding, scrolling on its own
-  // while the note scrolls the page. Hidden below lg, where the column would
-  // crowd the note. No entrance animation: it re-mounts on every navigation between
-  // surfaces, and the cache repaints the tree synchronously, so it swaps in
-  // place pixel-identical.
+  // Starts at the content line — <main>'s content-box top, where the note card
+  // and the connections rail start — and runs to just above <main>'s bottom
+  // padding, scrolling on its own while the note scrolls the page.
+  //
+  // `top: 0`, not SHELL_PANE_TOP: a sticky offset is measured from the
+  // scrollport ALREADY inset by <main>'s padding, so SHELL_PANE_TOP there
+  // counts that padding twice and asks the column to sit 24px lower than it
+  // flows. On a long note the browser grants that shift; on a short one the
+  // containing block has no room and the column stays where it flowed — which
+  // is the whole bug: the tree landed 24px apart depending on how long the open
+  // note happened to be. At 0 the sticky line IS the flow position, so there is
+  // never a shift to grant or refuse.
+  //
+  // Hidden below lg, where the column would crowd the note. No entrance
+  // animation: it re-mounts on every navigation between surfaces, and the cache
+  // repaints the tree synchronously, so it swaps in place pixel-identical.
   return (
     <aside
       className="sticky hidden shrink-0 flex-col overflow-hidden lg:flex"
       style={{
         width: CONTEXT_PANEL_W,
-        top: dockTopInset,
-        height: `calc(100dvh - ${SHELL_TOP_BAR_H + dockTopInset + MAIN_PAD_B}px)`,
+        top: 0,
+        height: `calc(100dvh - ${SHELL_TOP_BAR_H + SHELL_PANE_TOP + MAIN_PAD_B}px)`,
         marginTop: trayOpen ? -TRAY_ROW_H : 0,
         transition: 'margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
       <div className="flex min-h-0 flex-1 flex-col" style={{ width: CONTEXT_PANEL_W }}>
-        {/* The Directory's one search box, in the place it sits on every other
-            tab: first thing under the tab bar, at the pane's left edge. The
-            column is narrower than the grid's 420px field, so it takes the
-            column's width — the same `lg` field either way. */}
-        <div className="shrink-0 pb-1 pr-3">
+        {/* The tree's own filter, sized to the column: the `md` field, running
+            the full width the tree rows run and starting on the same left edge
+            they do. The Grid and Resources tabs carry the big `lg` field
+            because search is the whole surface there; here it is one control
+            at the head of a list, the way the Table's is one control on its
+            bar. */}
+        <div className="shrink-0 pb-2 pl-2 pr-2 pt-0.5">
           <SearchInput
             value={query}
             onChange={setQuery}
             placeholder="Search the context…"
-            size="lg"
+            size="md"
             className="w-full"
           />
         </div>
@@ -165,11 +174,9 @@ export function ContextSidebar({
             <NoteSidebar
               tree={ctx.tree}
               notes={notes}
-              starred={ctx.starred}
               selectedPath={selectedPath}
               canEdit
               onSelect={handleSelect}
-              onToggleStar={ctx.handleToggleStar}
               onDeleteNote={ctx.handleDeleteNote}
               bare
               root={ctx.rootFolder}

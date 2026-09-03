@@ -140,7 +140,6 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
 
   const [tree, setTree] = useState<TreeNode>(EMPTY_TREE)
   const [notes, setNotes] = useState<NoteMeta[]>([])
-  const [starred, setStarred] = useState<string[]>([])
   const [trash, setTrash] = useState<TrashEntry[]>([])
   const [overview, setOverview] = useState<AccessOverviewResponse | null>(null)
   const [contextName, setContextName] = useState<string | null>(null)
@@ -176,10 +175,8 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
       swrFetch(contextKeys.tree(spaceId), () => notesApi.tree(spaceId), ({ tree }) => {
         if (!cancelled) setTree(tree ?? EMPTY_TREE)
       }),
-      swrFetch(contextKeys.list(spaceId), () => notesApi.list(spaceId), ({ notes, starred }) => {
-        if (cancelled) return
-        setNotes(notes ?? [])
-        setStarred(starred ?? [])
+      swrFetch(contextKeys.list(spaceId), () => notesApi.list(spaceId), ({ notes }) => {
+        if (!cancelled) setNotes(notes ?? [])
       }),
     ])
       .catch((e: unknown) => {
@@ -290,25 +287,6 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
   const rootFolder = useMemo(
     () => ({ label: contextDisplayName(contextName, currentSpace?.name) }),
     [contextName, currentSpace?.name],
-  )
-
-  const handleToggleStar = useCallback(
-    (path: string, next: boolean) => {
-      if (!spaceId) return
-      // Optimistic: reflect the toggle immediately, revert on failure.
-      setStarred((prev) => (next ? [...prev, path] : prev.filter((p) => p !== path)))
-      notesApi
-        .star(spaceId, path, next)
-        .then(() => {
-          // The cached list carries `starred` — drop it so the next open
-          // doesn't repaint the pre-toggle state.
-          invalidateContextCache(contextKeys.list(spaceId))
-        })
-        .catch(() => {
-          setStarred((prev) => (next ? prev.filter((p) => p !== path) : [...prev, path]))
-        })
-    },
-    [spaceId],
   )
 
   // Delete = move to the context's trash (restorable from the tree's Trash folder
@@ -516,7 +494,6 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
   return {
     tree,
     notes,
-    starred,
     trash,
     loading,
     error,
@@ -524,7 +501,6 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     rootFolder,
     shareTarget,
     setShareTarget,
-    handleToggleStar,
     handleDeleteNote,
     handleDeleteFolder,
     handleMoveNote,

@@ -243,7 +243,12 @@ function PaneTabBarInner({
     <div
       role="tablist"
       aria-label={chrome.ariaLabel ?? 'Sections'}
-      className="relative flex min-w-0 overflow-x-auto"
+      // Scrolls when the words genuinely outgrow the band, but never shows a
+      // bar for it: the underline is placed from rounded offsets and the
+      // exiting-label ghosts sit where a word USED to be, so either can poke
+      // past the edge by a subpixel or a whole tab after a set change — and a
+      // scrollbar drawn for that is a bar under the tabs that never goes away.
+      className="relative flex min-w-0 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {tabs.map((tab, idx) => (
             <button

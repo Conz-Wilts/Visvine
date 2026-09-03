@@ -5,9 +5,10 @@
 // the type menu that is the same choice folded into a button (each type row
 // opens to its aliases, so "Founders" is one pick, not two) — then active
 // filters as removable pills beside a "+ Filter" menu; sort and the
-// view's Columns menu on the right. Search is not here: every Directory tab
-// carries the same search box in the same place, the row above this one
-// (DirectoryTableView). The shape is the data-grid one (Attio,
+// view's Columns menu on the right. Search rides the same line, sized to the
+// buttons beside it — the Table names what it is showing and narrows it from
+// one bar, so a full-width search band above would be a second bar doing the
+// same job. The shape is the data-grid one (Attio,
 // Linear): every control is a small text button that only shows chrome when
 // it has something to say, so the resting bar is almost empty.
 //
@@ -22,6 +23,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
+import SearchInput from '@/components/ui/SearchInput';
 import { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown';
 import Chip from '@/components/ui/Chip';
 import {
@@ -48,9 +50,14 @@ interface TableType {
   count: number;
 }
 
-/** The bar's one button shape — borderless, hover fill, 28px tall. */
+/** The bar's one button shape: borderless, hover fill, 36px tall, so it stands
+ *  the same height as the `md` search field beside it. */
 export const TABLE_TOOLBAR_BTN =
-  'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary';
+  'inline-flex h-9 shrink-0 items-center gap-2 rounded-md px-2.5 text-[13.5px] font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary';
+
+/** Icon size on the bar's own controls. The same glyphs inside the menus those
+ *  buttons open stay small: a menu row is a list item, not a control on a bar. */
+export const TABLE_TOOLBAR_ICON = 'h-[18px] w-[18px]';
 
 interface TableToolbarProps {
   browse: ReturnType<typeof useDirectoryBrowse>;
@@ -65,11 +72,14 @@ interface TableToolbarProps {
   onSortChange: (sort: TableSort | null) => void;
   /** The view's Columns menu, at the right end. */
   trailing?: ReactNode;
+  /** Named for the type on show — "Search founders…". */
+  searchPlaceholder: string;
 }
 
-export default function TableToolbar({ browse, types, typeKey, onTypeChange, columns, sort, onSortChange, trailing }: TableToolbarProps) {
+export default function TableToolbar({ browse, types, typeKey, onTypeChange, columns, sort, onSortChange, trailing, searchPlaceholder }: TableToolbarProps) {
   const {
     nodes, space,
+    searchTerm, setSearchTerm,
     filterAliases, setFilterAliases,
     filterTags, setFilterTags,
   } = browse;
@@ -95,13 +105,24 @@ export default function TableToolbar({ browse, types, typeKey, onTypeChange, col
   const activeCount = filterAliases.size + filterTags.size;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 py-1.5">
-      {/* Which table this is, and the choice of table, are the same control:
-          the menu names the type and opens the list of them, each type opening
-          to its aliases so "Founders" is one pick. Then the three menus that
-          act on the table — Filter, Sort, Columns — as one run, because they
-          are one job; nothing is parked at the far end. The active filters
-          trail them as removable chips. */}
+    <div className="flex flex-wrap items-center gap-2 py-2">
+      {/* Search leads the bar, then the table's identity: the menu names the
+          type and opens the list of them, each type opening to its aliases so
+          "Founders" is one pick. Then the three menus that act on the table -
+          Filter, Sort, Columns - as one run, because they are one job; nothing
+          is parked at the far end. The active filters trail them as removable
+          chips. */}
+      <SearchInput
+        value={searchTerm}
+        onChange={setSearchTerm}
+        placeholder={searchPlaceholder}
+        size="md"
+        // The width the context tree's box comes out at: its 300px column less
+        // the 16px of padding either side. Same height, same width, so the two
+        // read as one control appearing in two places rather than two controls.
+        className="w-[284px] shrink-0"
+      />
+
       <TypeMenu
         types={types}
         activeKey={typeKey}
@@ -112,7 +133,7 @@ export default function TableToolbar({ browse, types, typeKey, onTypeChange, col
         onChangeAliases={setFilterAliases}
         onTypeChange={onTypeChange}
       />
-      <div className="h-4 w-px shrink-0 bg-border-subtle" />
+      <div className="h-5 w-px shrink-0 bg-border-subtle" />
 
       <FilterMenu
         tags={typeTags.map((t) => ({
@@ -175,12 +196,12 @@ function SortMenu({ columns, sort, onChange }: {
       >
         {active && sort ? (
           <>
-            {sort.dir === 'asc' ? <ArrowUpIcon className="h-3.5 w-3.5" /> : <ArrowDownIcon className="h-3.5 w-3.5" />}
+            {sort.dir === 'asc' ? <ArrowUpIcon className={TABLE_TOOLBAR_ICON} /> : <ArrowDownIcon className={TABLE_TOOLBAR_ICON} />}
             <span>Sorted by {active.label}</span>
           </>
         ) : (
           <>
-            <ChevronsUpDownIcon className="h-4 w-4" />
+            <ChevronsUpDownIcon className={TABLE_TOOLBAR_ICON} />
             <span>Sort</span>
           </>
         )}
@@ -316,13 +337,13 @@ function TypeMenu({ types, activeKey, nodes, aliases, nodeTypes, selectedAliases
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-semibold text-text-primary transition-colors hover:bg-surface-2"
+        className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md px-2.5 text-[14px] font-semibold text-text-primary transition-colors hover:bg-surface-2"
         aria-haspopup="menu"
         aria-expanded={open}
       >
         {active && <Swatch color={getTypeColor(active.name, nodeTypes)} />}
         <span>{active?.name ?? 'Types'}</span>
-        <ChevronDownIcon className={clsx('h-3.5 w-3.5 text-text-muted transition-transform duration-200', open && 'rotate-180')} />
+        <ChevronDownIcon className={clsx(TABLE_TOOLBAR_ICON, 'text-text-muted transition-transform duration-200', open && 'rotate-180')} />
       </button>
 
       {/* The menu is the space's vocabulary as a tree: a search, then every
@@ -483,7 +504,7 @@ function FilterMenu({ tags, selectedTags, onChangeTags }: {
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <PlusIcon className="h-3.5 w-3.5" />
+        <PlusIcon className={TABLE_TOOLBAR_ICON} />
         <span>Filter</span>
       </button>
 
@@ -545,5 +566,5 @@ function FilterMenu({ tags, selectedTags, onChangeTags }: {
  *  Square, not a dot: a tag and an alias are already rounded squares
  *  everywhere else in the app (Chip), and this is a list of the same idea. */
 function Swatch({ color }: { color: string }) {
-  return <span aria-hidden className="h-3 w-3 shrink-0 rounded-[4px]" style={{ background: color }} />;
+  return <span aria-hidden className="h-3.5 w-3.5 shrink-0 rounded-[4px]" style={{ background: color }} />;
 }

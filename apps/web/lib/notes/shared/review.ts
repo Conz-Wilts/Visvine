@@ -433,7 +433,7 @@ export function extractClaims(body: string): Claim[] {
 // on `title` or `timestamp` is not a contradiction, it is just two notes.
 const NON_ASSERTED_KEYS = new Set([
   'title', 'description', 'timestamp', 'author', 'tags', 'aliases', 'type',
-  'resource', 'starred', 'status', 'confidence', 'expires', 'supersedes',
+  'resource', 'status', 'confidence', 'expires', 'supersedes',
   'superseded_by', 'icon', 'image',
 ])
 
