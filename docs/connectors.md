@@ -352,7 +352,7 @@ minted the first time an admin opens the connector page's Webhook card (stored e
 working at once. Treat the URL as a credential.
 
 **What a delivery goes through**, in order: a per-hook rate bucket (60/min, 429); the note — no
-note, not a connector, a `kind: model` connector, no `webhook:` block or a wrong token are all the
+note, not a connector, no `webhook:` block or a wrong token are all the
 same 404, so the address cannot be used to enumerate a space; the size cap (413, before the body is
 read); the declared signature scheme (401 plus one audit line, `webhook rejected: signature`); then
 one `agent_events` row per listening agent, deduped on `id_header` (or a body hash) while a copy is

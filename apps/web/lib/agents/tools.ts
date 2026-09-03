@@ -116,12 +116,6 @@ export interface AgentToolContext {
   agentName: string
   brief: AgentBrief
   /**
-   * The subset of `brief.connectors` a run_connector tool is offered for —
-   * `kind: model` connectors are declared reach for the model, not runnable
-   * (see runnableConnectorNames). Defaults to every declared name.
-   */
-  runnableConnectors?: readonly string[]
-  /**
    * The named `actions:` each runnable connector declares (connectorActionsFor),
    * so the run_connector description can list them and the model can call one
    * by name with `args` instead of writing code. Optional: absent means the
@@ -312,7 +306,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
     },
   ]
 
-  const runnable = ctx.runnableConnectors ?? brief.connectors
+  const runnable = brief.connectors
   if (runnable.length > 0) {
     const allowed = new Set(runnable)
     const actionLines = runnable
@@ -344,7 +338,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
         const name = str(a.name).trim()
         const code = str(a.code)
         const action = str(a.action).trim()
-        if (!allowed.has(name)) return `error: connector "${name}" is not declared in this agent's brief (or is a model connector, which is not runnable)`
+        if (!allowed.has(name)) return `error: connector "${name}" is not declared in this agent's brief (a model is not a connector, and is never run directly)`
         if ((code.trim().length > 0) === (action.length > 0)) return 'error: pass exactly one of code or action'
         try {
           const loaded = await loadConnector(principal, context, name)

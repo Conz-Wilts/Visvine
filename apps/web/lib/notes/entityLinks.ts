@@ -191,6 +191,7 @@ async function syncNoteNode(
   if (kind === 'agent') return syncAgentNode(spaceId, path, content)
   if (isIndexPath(path)) return false
   if (kind === 'connector') return syncConnectorNode(spaceId, path, content)
+  if (kind === 'model') return syncModelNode(spaceId, path, content)
   return false
 }
 
@@ -340,6 +341,36 @@ async function syncConnectorNode(
     type: 'connector',
     name: String(fm.title ?? '').trim() || name,
     alias,
+    subtitle: description || null,
+    recordId: path,
+    slugSource: name,
+    metadata: { notePath: path },
+    parentNodeId: spaceNodeId(spaceId),
+    revalidate: false,
+  })
+  return true
+}
+
+/**
+ * The `model:` node standing for a `models/<name>.md` note — the same shape as
+ * a connector's, so the model participates in backlinks and `[[mentions]]`
+ * and has a page. Its `alias` is the provider id (`anthropic`), which is what
+ * the type chip reads wherever the node is drawn; an unparseable note leaves
+ * it null and the chip falls back to "Model".
+ */
+async function syncModelNode(spaceId: string, path: string, content: string | null): Promise<boolean> {
+  if (content === null) return removeEntityNode(spaceId, 'model', path)
+
+  const name = path.replace(/\.md$/i, '').split('/').pop() || path
+  const fm = parseFrontmatter(content)
+  const provider = typeof fm.provider === 'string' && fm.provider.trim() ? fm.provider.trim().toLowerCase() : null
+  const description = typeof fm.description === 'string' ? fm.description.trim() : ''
+
+  await syncEntityNode({
+    spaceId,
+    type: 'model',
+    name: String(fm.title ?? '').trim() || name,
+    alias: provider,
     subtitle: description || null,
     recordId: path,
     slugSource: name,

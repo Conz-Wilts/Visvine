@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Modal } from '@/components/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
+import ModelsPanel from '@/features/models/components/ModelsPanel';
 
 /**
  * Connectors, as a dialog off the account menu — the space you are in, from
@@ -17,8 +18,9 @@ import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
  * Request, which lands in the console for an admin to add.
  *
  * MODELS is the same dialog with no tab bar, opened by its own row in the
- * account band: what this space's agents run on is a decision of its own
- * rather than a service among forty.
+ * account band and holding the models panel instead: what this space's
+ * agents run on is a decision of its own rather than a service among forty,
+ * and a model is not a connector (lib/models).
  *
  * An admin sees the same three lists with the console's acts in them — it is
  * the same panel — so adding, disabling and signing in are one surface.
@@ -43,7 +45,7 @@ export function connectorsSegment(value: string | null): ConnectorsTab | null {
   return 'disconnected';
 }
 
-type PanelView = 'mine' | 'connected' | 'disconnected' | 'catalog' | 'models';
+type PanelView = 'mine' | 'connected' | 'disconnected' | 'catalog';
 
 const TABS: Array<{ id: ConnectorsTab; label: string; view: PanelView; blurb: string }> = [
   { id: 'connected', label: 'Connected', view: 'connected', blurb: 'What works for you here, now.' },
@@ -51,8 +53,6 @@ const TABS: Array<{ id: ConnectorsTab; label: string; view: PanelView; blurb: st
   { id: 'all', label: 'All connectors', view: 'catalog', blurb: 'Every service Visvine can connect. Ask for one this space does not have yet.' },
 ];
 
-/** Models is not one of the tabs — it is the dialog opened on its own row. */
-const MODELS = { view: 'models' as PanelView, blurb: '' };
 
 export default function ConnectorsDialog({
   initial = 'connected',
@@ -68,7 +68,7 @@ export default function ConnectorsDialog({
   const [pathname] = useState(() => (typeof window === 'undefined' ? '/directory' : window.location.pathname));
   const returnTo = `${pathname}?${CONNECTORS_PARAM}=${tab}`;
   const modelsOnly = initial === 'models';
-  const current = modelsOnly ? MODELS : TABS.find((t) => t.id === tab) ?? TABS[0];
+  const current = TABS.find((t) => t.id === tab) ?? TABS[0];
 
   return (
     <Modal
@@ -111,10 +111,12 @@ export default function ConnectorsDialog({
           </p>
         )}
 
-        {currentSpace ? (
-          <ConnectorsPanel space={currentSpace.id} view={current.view} returnTo={returnTo} onLeave={onClose} />
+        {!currentSpace ? (
+          <p className="py-8 text-center text-sm text-text-muted">Open a space to see its {modelsOnly ? 'models' : 'connectors'}.</p>
+        ) : modelsOnly ? (
+          <ModelsPanel space={currentSpace.id} onLeave={onClose} />
         ) : (
-          <p className="py-8 text-center text-sm text-text-muted">Open a space to see its connectors.</p>
+          <ConnectorsPanel space={currentSpace.id} view={current.view} returnTo={returnTo} onLeave={onClose} />
         )}
       </div>
     </Modal>

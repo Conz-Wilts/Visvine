@@ -11,7 +11,7 @@ import { spaceBudgetCents } from '@/lib/agents/runs'
  * (lib/agents/shared/usage.ts), plus the space-wide monthly cap. Admin-read
  * and admin-write like the budget route — members see the roster, never the
  * bill. Rendered by the Usage console section and, filtered to one provider,
- * by a model connector's Spend section.
+ * by a model's own page as its Usage section.
  *
  * PUT sets the cap (`{ budgetMonthlyCents: number | null }`), stored in the
  * space's featureConfig the way the machine quota is — no schema, no deploy.

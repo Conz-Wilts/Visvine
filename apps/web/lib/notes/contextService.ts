@@ -286,6 +286,12 @@ export function writeDenial(p: ContextPrincipal, context: Context, path: string)
   ) {
     return 'Only space admins can create or edit connectors.'
   }
+  // models/ names the provider agents run on and, for a custom endpoint, the
+  // URL the space's context is sent to (lib/models) — the same bargain as a
+  // connector's hosts, so the same gate.
+  if ((path === 'models' || path.startsWith('models/')) && !p.system && !principalIsSuperAdmin(p)) {
+    return 'Only space admins can create or edit models.'
+  }
   // settings/ IS the space's configuration (lib/spaces/configNote.ts) — the
   // feature switches, the type vocabulary, and the alias flags that decide who
   // administers the space. Editing one of those notes changes the space, so it

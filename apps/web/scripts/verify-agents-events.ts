@@ -18,7 +18,7 @@
  *                    `active: false` into the brief and the reason onto the row
  *
  * The runs themselves are expected to FAIL: the brief names `custom/probe` and
- * the space's custom model connector points at a closed local port, so the loop's
+ * the space's custom model points at a closed local port, so the loop's
  * first model call is refused — which is exactly one failed run (no key
  * rejection, no deactivation), and everything this script asserts about the
  * run row is written at CLAIM time, before the model is ever consulted. What is
@@ -53,7 +53,7 @@ import { tick } from '../lib/agents/schedule';
 import { encryptSecret } from '../lib/crypto/secrets';
 import { provisionWebhookToken } from '../lib/connectors/webhookInbound';
 import { webhookPath } from '../lib/connectors/webhook';
-import { newModelConnectorNote } from '../lib/connectors/model';
+import { newModelNote } from '../lib/models/config';
 
 // The tick dispatches inline (the dev default) — stated, so a shell that
 // exported AGENT_DISPATCH=self for something else cannot turn the claimed runs
@@ -222,13 +222,13 @@ async function main(): Promise<void> {
       if (r.status === 'denied') throw new Error(`write ${path} denied: ${r.reason}`);
     };
 
-    // The `custom/…` model resolves against the space's custom model connector.
+    // The `custom/…` model resolves against the space's custom model note.
     // A closed local port: the run's first model call is refused and the run
     // fails, which is the outcome this script wants (see the header). http and
     // a loopback host are only accepted because NODE_ENV is development.
     await write(
-      'connectors/probe-model.md',
-      newModelConnectorNote({ name: 'probe-model', provider: 'custom', baseUrl: 'http://127.0.0.1:9/v1/' }),
+      'models/probe-model.md',
+      newModelNote({ name: 'probe-model', provider: 'custom', baseUrl: 'http://127.0.0.1:9/v1/' }),
     );
 
     // ── a. on.context ────────────────────────────────────────────────────────

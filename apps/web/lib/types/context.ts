@@ -380,6 +380,8 @@ const TYPE_SYNONYMS: Record<string, string> = {
   spaces: 'space',
   tool: 'tool',
   tools: 'tool',
+  model: 'model',
+  models: 'model',
 };
 
 /**

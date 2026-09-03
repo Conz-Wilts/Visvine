@@ -642,47 +642,67 @@ note's own frontmatter — the note stays the connector.
 
 A connector's mark is one component on both surfaces
 (`ConnectorLogo` — the list row and the connector's own page header): the
-recipe's logo, resolved by `catalogEntryFor` on the note name and then the
-model provider, and the plug for a connector the space wrote itself. Nothing is
+recipe's logo, resolved by `catalogEntryFor` on the note name, and the plug
+for a connector the space wrote itself; a model's is its own catalogue's. Nothing is
 stamped into the note to make that exact — a miss is a plug, and no behaviour
 hangs off it. Logos live in `public/images/connectors/`. `tests/connector-catalog.test.ts`
 runs every recipe through the real parsers, so a new entry that would write an
 invalid note fails there.
 
-**A model is a connector, and the space's models are the only models there are.**
-`kind: model` + `provider: gemini|openai|anthropic|openrouter|custom` +
-**`model:`, the id it runs** (`lib/connectors/model.ts`) — keyed by the reserved
-`MODEL_KEY_<PROVIDER>` secret, with the base URL from `lib/agents/registry.ts`
-(never the note). Consequences, all load-bearing:
+**A model is its own kind, and the space's models are the only models there are.**
+`models/<name>.md`, `type: model` + `provider: gemini|openai|anthropic|openrouter|custom`
++ **`model:`, the id it runs** (`lib/models/config.ts`) — keyed by the reserved
+`MODEL_KEY_<PROVIDER>` secret (in `connector_secrets`, one per provider per
+space), with the base URL from `lib/agents/registry.ts` (never the note). It
+is NOT a connector: it has no perimeter, lives outside `connectors/`, and
+nothing runs it directly — `run_connector` hands caller-authored JS the
+plaintext of every secret its env binds, so a runnable model would let any
+`connectors:use` member exfiltrate or spend the key. `models/` is admin-only
+for writes like `connectors/` (`writeDenial`), sealed to Tools, and skipped by
+the memory sweep. Consequences, all load-bearing:
 
 - **A brief's `model:` is OPTIONAL and usually absent.** An agent runs on the
-  SPACE's model — the first runnable model connector in note order — because
-  which model a space runs on is one decision it makes once, beside the key that
-  pays for it. A brief pins one only when it needs a different one the space
-  also has; `parseAgentBrief` gives `modelRef: null` otherwise, and a pin that
-  is malformed is still refused at parse.
+  SPACE's model — the first runnable model in note order — because which model
+  a space runs on is one decision it makes once, beside the key that pays for
+  it. A brief pins one only when it needs a different one the space also has;
+  `parseAgentBrief` gives `modelRef: null` otherwise, and a pin that is
+  malformed is still refused at parse.
 - **There is no platform default.** `DEFAULT_AGENT_MODEL` is gone.
   `create_agent` writes no `model:` and reports `model_problem` when the space
   has none, the settings picker offers the space's models rather than the
   registry's providers, and `noModelReason` is the one sentence every surface
-  says. A space with no model connector had briefs written pointing at Gemini —
-  a provider it had never signed up for — which is what all of this is for.
+  says. A space with no model had briefs written pointing at Gemini — a
+  provider it had never signed up for — which is what all of this is for.
 - **`lib/agents/spaceModels.ts` is the one read of those notes.** The custom
-  endpoint, the declared pricing and the options surface each swept
-  `connectors/` separately before, which is how they came to disagree about
-  what "configured" meant. `spaceModels()` → `defaultModelOf` / `noModelReason`
+  endpoint, the declared pricing and the options surface each swept the
+  folder separately before, which is how they came to disagree about what
+  "configured" meant. `spaceModels()` → `defaultModelOf` / `noModelReason`
   / `customEndpointOf` / `declaredPricingFor`, all pure over the parsed rows.
+  It still reads the shape before `models/` existed — `connectors/<name>.md`
+  with `kind: model` — until `db:models:migrate` has moved it, so the order
+  of the deploy and the script never decides whether agents run; a `models/`
+  note wins its name. That legacy shape is NOT a connector anywhere else
+  (`isLegacyModelConnector`): the connectors list, `loadConnector` and the
+  brief's `connectors:` picker all skip it.
 - A run records the model it ACTUALLY used, not the brief's (absent) pin.
+- **A model has a node and a page.** `model:<name>` is synced like a
+  connector's node (alias = the provider id), and `/directory/model:<name>`
+  is the Model tab beside Context and Raw
+  (`features/profile/components/ModelPageContent.tsx`), admins only like a
+  connector's: the provider and id (editable), the key (write-only), **the
+  bill** — the last six months of `agent_model_usage` under `<provider>/`,
+  this month by model id and by agent — and **who ran on it**: the recent
+  `agent_runs` rows named (run for / started by), folded per person.
+  Spend is keyed by `<provider>/<modelId>`, and a note stands for its
+  PROVIDER (one key), so a brief pinning a sibling model on the same key
+  is on this page too. `GET/PATCH /api/communities/<id>/models/<name>` and
+  `lib/models/service.ts` are the read; `list_models` is the action.
 - **Models is its own row in the account band**, beside Connectors — the same
-  dialog pinned to `ConnectorsPanel view="models"`, with no tab bar and a `+`.
-  It is not a section of the connectors list and not a console section: what
-  agents run on is one decision a space makes once, not a row among forty
-  services.
-
-They list beside HTTP connectors and may appear in a brief's `connectors:`, but
-`loadConnector` refuses them — `run_connector` hands caller-authored JS the
-plaintext of every secret its env binds, so a runnable model connector would let
-any `connectors:use` member exfiltrate or spend the key. Keep it that way.
+  dialog holding `ModelsPanel` (`features/models/components/`) with no tab bar
+  and a `+` offering the five providers of `lib/models/catalog.ts`. Adding one
+  writes `models/<name>.md` and PUTs the key to `/secrets`. It is not a section
+  of the connectors list and not a console section: what agents run on is one
+  decision a space makes once, not a row among forty services.
 
 Runtime: one QuickJS-WASM isolate (`lib/connectors/isolate.ts`) — no filesystem,
 no process, no require/import, no timers, no real fetch. Agents run

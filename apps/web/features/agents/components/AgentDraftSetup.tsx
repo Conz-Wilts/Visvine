@@ -17,7 +17,7 @@ import { useAgentOptions } from '../lib/useAgentOptions';
  * selected until they change something.
  *
  * No model is chosen here, or written into the brief at all. A new agent runs
- * on the SPACE's model — the first `kind: model` connector it has — so the
+ * on the SPACE's model — the first note under models/ it has — so the
  * only thing worth saying at this point is when there isn't one.
  */
 export default function AgentDraftSetup({

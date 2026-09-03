@@ -19,7 +19,6 @@ import { timeAgo } from '@/lib/date';
 import type { ConnectorRequest } from '@/lib/connectors/requests';
 import {
   CONNECTOR_CATALOG,
-  allowsManyConnectors,
   catalogConnectStyle,
   catalogEntryFor,
   catalogRowLabel,
@@ -61,11 +60,11 @@ import {
  * lists and connects, it does not author prose.
  *
  * The same panel serves the account menu's dialog, where a MEMBER opens it on
- * the space they are in, pinned to one view (`view`) — the three lists, plus
- * MODELS, which the account menu's own row opens because what a space's
- * agents run on is not a service among forty. The list route
- * says whether they can manage (`canManage`), and when they cannot the panel
- * offers no Manage, no Models + and no Connect — what it offers is the asks:
+ * the space they are in, pinned to one view (`view`) — the three lists. (What
+ * a space's agents run on is not a service among forty: models have their own
+ * dialog, features/models/components/ModelsPanel.tsx.) The list route says
+ * whether they can manage (`canManage`), and when they cannot the panel
+ * offers no Manage and no Connect — what it offers is the asks:
  *
  * - CONNECTED is the rows that work for this person now: no account needed,
  *   or their own account linked and not broken.
@@ -93,10 +92,9 @@ import {
  * always addable. That split is what lets a space hold two Drives: a service is
  * not a slot that fills up, so its row never stops offering another, and the
  * second Drive is a row of its own on the other tab rather than a state the
- * Drive row is in. (A model provider is the exception — one key per space, so
- * its row offers Manage once it is connected: `allowsManyConnectors`.)
+ * Drive row is in.
  */
-type Tab = 'mine' | 'connected' | 'disconnected' | 'catalog' | 'models';
+type Tab = 'mine' | 'connected' | 'disconnected' | 'catalog';
 
 /** What the space already has, by note name — one row of GET …/connectors. */
 interface ExistingConnector {
@@ -106,9 +104,6 @@ interface ExistingConnector {
   title: string | null;
   /** Frontmatter `recipe` — which catalog service it is to, where it says. */
   recipe: string | null;
-  kind: 'http' | 'model';
-  /** Set for `kind: model` — the provider the note names and the model it runs. */
-  model: { provider: string; providerLabel: string; modelId: string | null } | null;
   alias: string | null;
   description: string | null;
   hosts: string[];
@@ -151,7 +146,7 @@ interface HiddenConnector {
  * Does this connector hold an account somebody signs in to, per its recipe?
  */
 function signsIn(connector: ExistingConnector): boolean {
-  const shape = catalogEntryFor(connector.name, connector.model?.provider, connector.recipe)?.shape;
+  const shape = catalogEntryFor(connector.name, connector.recipe)?.shape;
   return shape === 'oauth' || shape === 'mcp';
 }
 
@@ -185,7 +180,7 @@ function statusOf(connector: ExistingConnector): { label: string; tone: Tone } |
   if (connector.invalid) return { label: 'Invalid', tone: 'bad' };
   if (connector.missingSecrets.length > 0) return { label: 'Missing secrets', tone: 'warn' };
   if (connector.warnings.length > 0) return { label: 'Needs migration', tone: 'warn' };
-  if (connector.kind !== 'model' && connector.hosts.length === 0) return { label: 'No network', tone: 'warn' };
+  if (connector.hosts.length === 0) return { label: 'No network', tone: 'warn' };
   // The account is per member, and the row is about what the space has — so a
   // note with nobody signed in is what a configured connector looks like, and
   // only a linked account that has stopped working is worth a chip.
@@ -339,8 +334,6 @@ export default function ConnectorsPanel({
   // the page has to show what the space now has rather than a snapshot.
   const [manage, setManage] = useState<{ name: string; about: string | null } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ExistingConnector | null>(null);
-  /** The Models + is open: the five providers, and nothing else. */
-  const [modelPicker, setModelPicker] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // The connector whose on/off write is in flight, and what went wrong if it did.
   const [toggling, setToggling] = useState<string | null>(null);
@@ -402,14 +395,14 @@ export default function ConnectorsPanel({
   }, [spaceId, canManage, reloadKey]);
 
   /** The service a connector is to, where it came from a recipe. */
-  const serviceOf = (c: ExistingConnector) => catalogEntryFor(c.name, c.model?.provider, c.recipe);
+  const serviceOf = (c: ExistingConnector) => catalogEntryFor(c.name, c.recipe);
 
   // What the space has, per service — the count a catalog row reports, and how
   // the second Drive is known to be a Drive at all.
   const held = useMemo(() => {
     const map = new Map<string, ExistingConnector[]>();
     for (const c of existing) {
-      const service = catalogEntryFor(c.name, c.model?.provider, c.recipe);
+      const service = catalogEntryFor(c.name, c.recipe);
       if (!service) continue;
       const rows = map.get(service.id);
       if (rows) rows.push(c);
@@ -423,26 +416,13 @@ export default function ConnectorsPanel({
   const takenNames = useMemo(() => existing.map((c) => c.name), [existing]);
 
   /** The rows that work for this person now ({@link worksForCaller}). */
-  const working = useMemo(() => existing.filter((c) => c.kind !== 'model' && worksForCaller(c)), [existing]);
+  const working = useMemo(() => existing.filter(worksForCaller), [existing]);
 
-  /**
-   * The space's models, and the rest.
-   *
-   * A model connector is the same note as any other — `connectors/<name>.md`,
-   * `kind: model` — but it answers a different question. Every other connector
-   * is somewhere the space can REACH; a model is what its agents RUN ON, and
-   * an agent that names none runs on the first of these. Filed among thirty
-   * services, that decision is invisible; given its own line with a + beside
-   * it, it is one press to make.
-   *
-   */
-  const modelRows = useMemo(() => existing.filter((c) => c.kind === 'model'), [existing]);
-  const nonModelRows = useMemo(() => existing.filter((c) => c.kind !== 'model'), [existing]);
 
   // A connector matches on what a reader would type: its own name or title, or
   // the service it is to.
   const matches = (c: { name: string; title: string | null; alias?: string | null; recipe: string | null }, q: string) => {
-    const service = catalogEntryFor(c.name, null, c.recipe);
+    const service = catalogEntryFor(c.name, c.recipe);
     return (
       c.name.toLowerCase().includes(q) ||
       (c.title ?? '').toLowerCase().includes(q) ||
@@ -451,7 +431,7 @@ export default function ConnectorsPanel({
     );
   };
   const q = query.trim().toLowerCase();
-  const mine = useMemo(() => (q ? nonModelRows.filter((c) => matches(c, q)) : nonModelRows), [nonModelRows, q]);
+  const mine = useMemo(() => (q ? existing.filter((c) => matches(c, q)) : existing), [existing, q]);
   const mineHidden = useMemo(() => (q ? hidden.filter((c) => matches(c, q)) : hidden), [hidden, q]);
   const connected = useMemo(() => (q ? working.filter((c) => matches(c, q)) : working), [working, q]);
   // What the space has that does NOT work for this person yet: a connector
@@ -666,7 +646,7 @@ export default function ConnectorsPanel({
         </button>
 
         <div className="flex min-h-14 items-center gap-3">
-          <ConnectorLogo name={connected.name} provider={connected.model?.provider} recipe={connected.recipe} />
+          <ConnectorLogo name={connected.name} recipe={connected.recipe} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate text-base font-semibold text-text-primary">
@@ -703,9 +683,7 @@ export default function ConnectorsPanel({
         )}
         {toggleError && <Alert>{toggleError}</Alert>}
 
-        {connected.kind !== 'model' && spaceId && (
-          <ManageConnections spaceId={spaceId} name={connected.name} returnTo={returnTo} />
-        )}
+        {spaceId && <ManageConnections spaceId={spaceId} name={connected.name} returnTo={returnTo} />}
 
         {/* An MCP server is the one connector whose reach is a list of NAMES
             rather than a list of hosts, so it is the one with a permissions
@@ -718,11 +696,7 @@ export default function ConnectorsPanel({
         <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1 border-t border-border-subtle pt-4 text-[13px] text-text-secondary">
           <dt className="text-text-muted">Reaches</dt>
           <dd className="min-w-0 break-words">
-            {connected.kind === 'model'
-              ? 'The model provider’s own endpoint'
-              : connected.hosts.length > 0
-                ? connected.hosts.join(', ')
-                : 'Nothing — no hosts declared'}
+            {connected.hosts.length > 0 ? connected.hosts.join(', ') : 'Nothing — no hosts declared'}
           </dd>
           <dt className="text-text-muted">Secrets</dt>
           <dd className="min-w-0 break-words">
@@ -743,16 +717,6 @@ export default function ConnectorsPanel({
           <dt className="text-text-muted">Note</dt>
           <dd className="min-w-0 break-words font-mono text-xs">{connected.path}</dd>
         </dl>
-
-        {/* Two model connectors to one provider would name the same key and the
-            same endpoint, so the page says where the key really lives rather
-            than leaving an admin to discover it by adding a second. */}
-        {connected.kind === 'model' && (
-          <p className="text-[13px] text-text-secondary">
-            The key is the space’s, one per provider — every {service?.name ?? 'provider'} agent
-            uses it. Replace it on this connector’s page.
-          </p>
-        )}
 
         <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-4">
           <Button
@@ -795,93 +759,8 @@ export default function ConnectorsPanel({
     );
   }
 
-  // The catalogue's model recipes — what + offers.
-  const modelServices = CONNECTOR_CATALOG.filter((e) => e.shape === 'model');
-
   return (
     <div className="flex flex-col gap-4">
-      {/* Models are their own view, opened from the account band: what this
-          space's agents run on is a decision of its own, not a row buried
-          among the services the space reaches. */}
-      {tab === 'models' && (
-        <section className="flex flex-col">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs text-text-muted">
-                {modelRows.length === 0
-                  ? 'What this space’s agents run on. Add one and they can run.'
-                  : `Agents run on the first of these unless their brief names another.`}
-              </p>
-            </div>
-            {!readOnly && (
-              <Button
-                variant={modelRows.length === 0 ? 'brand' : 'neutral'}
-                size="sm"
-                className={ACTION_SLOT}
-                onClick={() => { setQuery(''); setModelPicker(true); }}
-              >
-                {modelRows.length === 0 ? 'Add model' : '+ Add'}
-              </Button>
-            )}
-          </div>
-
-          {modelRows.length > 0 && (
-            <ul className="mt-2 divide-y divide-border-subtle border-t border-border-subtle">
-              {modelRows.map((c) => {
-                const status = statusOf(c);
-                return (
-                  <li key={c.path} className="py-1">
-                    <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
-                      <button
-                        onClick={() => (readOnly ? openConnector(c.name) : openManage(c))}
-                        className="flex min-w-0 flex-1 items-center gap-4 text-left"
-                      >
-                        <ConnectorLogo name={c.name} provider={c.model?.provider} recipe={c.recipe} />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-text-primary">
-                            {c.model?.modelId ?? c.title ?? c.name}
-                          </p>
-                          <p className="truncate text-xs text-text-muted">
-                            {c.model?.providerLabel ?? 'Model'} · {c.name}
-                          </p>
-                        </div>
-                      </button>
-                      {status && <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>{status.label}</span>}
-                      {!readOnly && (
-                        <Button variant="neutral" size="sm" className={ACTION_SLOT} onClick={() => openManage(c)}>
-                          Manage
-                        </Button>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          {/* The + opens the providers, and nothing else: choosing a model is
-              choosing among five, not searching a catalogue of forty. */}
-          {modelPicker && (
-            <ul className="mt-2 divide-y divide-border-subtle border-t border-border-subtle">
-              {modelServices.map((e) => (
-                <li key={e.id} className="py-1">
-                  <button
-                    onClick={() => { setModelPicker(false); setEntry(e); }}
-                    className="-mx-3 flex min-h-14 w-[calc(100%+1.5rem)] items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
-                  >
-                    <ConnectorLogo entry={e} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-text-primary">{e.name}</p>
-                      <p className="truncate text-xs text-text-muted">{e.description}</p>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
       {/* What members asked the space to connect. Add is the recipe's own
           path — one press or the form — and the note it writes closes the
           request; Dismiss closes it with nothing written. */}
@@ -925,13 +804,11 @@ export default function ConnectorsPanel({
         </section>
       )}
 
-      {tab !== 'models' && (
-        <SearchInput
-          value={query}
-          onChange={setQuery}
-          placeholder={tab === 'catalog' ? 'Search services…' : 'Search this space’s connectors…'}
-        />
-      )}
+      <SearchInput
+        value={query}
+        onChange={setQuery}
+        placeholder={tab === 'catalog' ? 'Search services…' : 'Search this space’s connectors…'}
+      />
 
       {!readOnly && view === undefined && <div className="flex gap-1">
         {TABS.map((t) => (
@@ -945,8 +822,8 @@ export default function ConnectorsPanel({
             }`}
           >
             {t.label}
-            {t.id === 'mine' && nonModelRows.length > 0 && (
-              <span className="ml-1.5 text-xs text-text-muted">{nonModelRows.length}</span>
+            {t.id === 'mine' && existing.length > 0 && (
+              <span className="ml-1.5 text-xs text-text-muted">{existing.length}</span>
             )}
           </button>
         ))}
@@ -966,7 +843,7 @@ export default function ConnectorsPanel({
         <div className="flex flex-col gap-2">
           {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
         </div>
-      ) : tab === 'models' ? null : tab !== 'catalog' ? (
+      ) : tab !== 'catalog' ? (
         <div className="border-t border-border-subtle pt-2">
           {(tab === 'connected' ? connected : tab === 'disconnected' ? notConnected : mine).length === 0 && (tab === 'connected' || mineHidden.length === 0) && (
             <p className="py-8 text-center text-sm text-text-muted">
@@ -995,7 +872,7 @@ export default function ConnectorsPanel({
                       onClick={() => openConnector(c.name)}
                       className="flex min-w-0 flex-1 items-center gap-4 text-left"
                     >
-                      <ConnectorLogo name={c.name} provider={c.model?.provider} recipe={c.recipe} />
+                      <ConnectorLogo name={c.name} recipe={c.recipe} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-text-primary">
                           {c.title ?? c.name}
@@ -1042,7 +919,7 @@ export default function ConnectorsPanel({
                 so they can ask, and nothing else — the row does not go
                 anywhere, because there is nowhere it may go yet. */}
             {(tab === 'mine' || tab === 'disconnected') && mineHidden.map((h) => {
-              const service = catalogEntryFor(h.name, null, h.recipe);
+              const service = catalogEntryFor(h.name, h.recipe);
               return (
                 <li key={h.path} className="py-1">
                   <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5">
@@ -1091,14 +968,10 @@ export default function ConnectorsPanel({
           {/* One row per SERVICE. In a space's console it never fills up: a
               service the space already reaches still offers another, because a
               second connector is a second set of credentials (the team's Drive
-              beside yours), not a duplicate. Two rows do fill up — a model
-              provider, whose key is the space's one key, and every row in your
-              own settings, where a connector is your account at a service and
-              you have one of those. Those hand over to the one they have. */}
+              beside yours), not a duplicate. */}
           <ul className="divide-y divide-border-subtle">
             {services.map((e) => {
               const rows = held.get(e.id) ?? [];
-              const many = allowsManyConnectors(e);
               // Nothing to ask for: Connect is the whole interaction, and the
               // form stays reachable through the row for the space that wants
               // its own OAuth app or extra scopes.
@@ -1149,11 +1022,7 @@ export default function ConnectorsPanel({
                       // the connector's own page once it exists.
                       disabled={busy}
                       onClick={() =>
-                        rows.length > 0 && !many
-                          ? openManage(rows[0], e.description)
-                          : oneClick
-                            ? void connectInOneClick(e)
-                            : setEntry(e)
+                        oneClick ? void connectInOneClick(e) : setEntry(e)
                       }
                       className="flex min-w-0 flex-1 items-center gap-4 text-left"
                     >
@@ -1183,7 +1052,7 @@ export default function ConnectorsPanel({
                       >
                         {busy ? 'Connecting…' : 'Connect'}
                       </Button>
-                    ) : many ? (
+                    ) : (
                       <Button
                         variant="neutral"
                         size="sm"
@@ -1192,15 +1061,6 @@ export default function ConnectorsPanel({
                         onClick={() => (oneClick ? void connectInOneClick(e) : setEntry(e))}
                       >
                         {busy ? 'Connecting…' : 'Add another'}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="neutral"
-                        size="sm"
-                        className={ACTION_SLOT}
-                        onClick={() => openManage(rows[0], e.description)}
-                      >
-                        Manage
                       </Button>
                     )}
                   </div>
@@ -1268,8 +1128,7 @@ function EntryForm({
 }) {
   const suggestion = useMemo(() => suggestConnector(entry, taken), [entry, taken]);
   const [title, setTitle] = useState(suggestion.title);
-  // A field with choices starts on its first one: a model recipe should not
-  // make somebody pick the obvious model before it will let them paste a key.
+  // A field with choices starts on its first one.
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       entry.fields.flatMap((f) => (f.choices && f.choices.length > 0 ? [[f.key, f.choices[0].value]] : [])),
@@ -1333,9 +1192,7 @@ function EntryForm({
       }
       hint={f.hint}
     >
-      {/* A field with choices offers them and still takes anything: a model
-          recipe lists the ids the registry ships, and a provider releases new
-          ones faster than that list is edited. */}
+      {/* A field with choices offers them and still takes anything. */}
       {f.choices && f.choices.length > 0 ? (
         <>
           <Select

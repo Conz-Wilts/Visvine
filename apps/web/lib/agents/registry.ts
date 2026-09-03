@@ -8,7 +8,7 @@
  * are — because the brief is member-writable and an open URL there would let
  * any member POST the Space's whole context to a host of their choosing.
  * `custom/<modelId>` is the one escape hatch: its base URL is the `base_url:`
- * of the Space's `provider: custom` model connector — a note in `connectors/`,
+ * of the Space's `provider: custom` model — a note in `models/`,
  * which is admin-only for writes (lib/connectors/model.ts).
  *
  * The key is the Space's own, stored in ConnectorSecret under a reserved name
@@ -47,7 +47,7 @@ interface RegistryModel {
 export interface ProviderEntry {
   id: string
   label: string
-  /** Pinned literally. `null` for `custom`, whose URL is its model connector's `base_url:`. */
+  /** Pinned literally. `null` for `custom`, whose URL is its model note's `base_url:`. */
   baseURL: string | null
   /** The ConnectorSecret name holding this provider's key. */
   keySecret: string

@@ -195,7 +195,7 @@ export default function UsagePanel({ spaceId }: { spaceId: string }) {
           {current.unpricedRuns > 0 && (
             <p className="text-xs text-text-muted">
               {current.unpricedRuns} run{current.unpricedRuns === 1 ? '' : 's'} on unpriced models — not in the dollar
-              total. An admin can declare prices in the model connector&apos;s <code className="font-mono">pricing:</code>.
+              total. An admin can declare prices in the model note&apos;s <code className="font-mono">pricing:</code>.
             </p>
           )}
           <LinesTable title="By model" lines={current.byModel} />

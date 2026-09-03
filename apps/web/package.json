@@ -45,6 +45,7 @@
     "db:agents:folders": "tsx scripts/migrate-agent-folders.ts",
     "db:agents:activation": "tsx scripts/fold-agent-activation.ts",
     "db:agents:stamp": "tsx scripts/stamp-agent-briefs.ts",
+    "db:models:migrate": "tsx scripts/migrate-model-notes.ts",
     "db:actions:sync": "tsx scripts/sync-action-notes.ts",
     "db:prices": "tsx scripts/sync-model-prices.ts",
     "db:usage:backfill": "tsx scripts/backfill-model-usage.ts",

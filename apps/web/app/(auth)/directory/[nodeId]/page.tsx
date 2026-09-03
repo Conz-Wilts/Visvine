@@ -37,6 +37,7 @@ import SpacePageContent from '@/features/profile/components/SpacePageContent';
 import ResourcePreviewContent from '@/features/profile/components/ResourcePreviewContent';
 import ConnectorPageContent from '@/features/profile/components/ConnectorPageContent';
 import AgentPageContent from '@/features/profile/components/AgentPageContent';
+import ModelPageContent from '@/features/profile/components/ModelPageContent';
 import ToolPageContent from '@/features/profile/components/ToolPageContent';
 
 /** URL-level tab ids. Kept as a type for the ?tab= plumbing — the bar itself
@@ -811,6 +812,30 @@ function ConnectorRoute({ nodeId }: { nodeId: string }) {
   );
 }
 
+// ── Model nodes → Model + Context/Raw ─────────────────────────────────────────
+
+// The note IS the model (Context/Raw): which provider, which model id. What it
+// cannot say — whether the key is stored, what running on it cost, who ran on
+// it — is the first tab, and it is the space's bill, so like a connector's tab
+// it exists for admins and a member gets the note alone.
+const MODEL_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Model' };
+
+function ModelRoute({ nodeId }: { nodeId: string }) {
+  const { isAdmin, loading } = useSpace();
+  if (loading) return <ProfileSkeletonLoader mode="fullpage" />;
+  return isAdmin ? (
+    <NodePage
+      nodeId={nodeId}
+      firstTab={MODEL_FIRST_TAB}
+      ariaLabel="Model sections"
+      notFoundTitle="Model not found"
+      renderBody={(id) => <ModelPageContent nodeId={id} />}
+    />
+  ) : (
+    <ContextOnlyPage nodeId={nodeId} ariaLabel="Model sections" notFoundTitle="Model not found" />
+  );
+}
+
 // ── Agent nodes → Agent + Context/Raw ─────────────────────────────────────────
 
 // The note IS the brief (Context/Raw), but whether the agent is on, when it
@@ -988,6 +1013,9 @@ function NodeRoute() {
   }
   if (nodeId.startsWith('connector:')) {
     return <ConnectorRoute nodeId={nodeId} />;
+  }
+  if (nodeId.startsWith('model:')) {
+    return <ModelRoute nodeId={nodeId} />;
   }
   if (nodeId.startsWith('agent:')) {
     return <AgentRoute nodeId={nodeId} />;

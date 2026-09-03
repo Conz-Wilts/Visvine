@@ -147,7 +147,7 @@ export interface AgentBrief {
   /**
    * The raw `model:` value, e.g. `anthropic/claude-sonnet-5` — or null, which
    * is the ordinary case: an agent runs on the SPACE's model (the first
-   * runnable `kind: model` connector, lib/agents/spaceModels.ts) unless it
+   * runnable note under models/, lib/agents/spaceModels.ts) unless it
    * pins one of its own. Which model a space runs on is a decision it makes
    * once, beside the key that pays for it.
    */

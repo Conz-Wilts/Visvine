@@ -4,14 +4,14 @@
  *
  * The pure registry lives in ./registry.ts so parsers and tests stay
  * prisma-free, and which models a space HAS lives in ./spaceModels.ts — one
- * read of the `connectors/` folder that every caller shares. This file is what
+ * read of the `models/` folder that every caller shares. This file is what
  * joins them to a key.
  */
 import prisma from '@/lib/prisma'
 import { decryptSecret } from '@/lib/crypto/secrets'
 import { assertPubliclyRoutable } from '@/lib/net/ssrf'
 import { classifyModelStatus, type ChatConfig } from '@/lib/notes/ai'
-import { parseModelBaseUrl } from '@/lib/connectors/model'
+import { parseModelBaseUrl } from '@/lib/models/config'
 import { parseModelRef, type ModelPricing, type ModelRef, type ProviderEntry } from './registry'
 import { customEndpointOf, declaredPricingFor, defaultModelOf, noModelReason, spaceModels, type SpaceModel } from './spaceModels'
 import { fetchedPricing } from './prices'
@@ -35,7 +35,7 @@ export async function validateCustomEndpoint(raw: string): Promise<string> {
  * The price a run of `ref` meters at, for a space. The chain, strongest claim
  * first — declared → shipped → discovered:
  *
- *   1. the connector note's `pricing:` (the admin said so);
+ *   1. the model note's `pricing:` (the admin said so);
  *   2. the registry's pinned price (the release said so);
  *   3. `agent_model_prices`, refreshed nightly from public catalogues
  *      (lib/agents/prices.ts — how an arbitrary model id still gets a price);
@@ -47,19 +47,19 @@ async function resolveModelPricing(models: readonly SpaceModel[], ref: ModelRef)
 }
 
 export type ResolveModelResult =
-  | { ok: true; config: ChatConfig; ref: ModelRef; /** The connector it came from, when the brief named no model. */ connector: string | null }
+  | { ok: true; config: ChatConfig; ref: ModelRef; /** The note it came from (its path), when the brief named no model. */ modelNote: string | null }
   | { ok: false; reason: 'no_model' | 'no_key' | 'no_endpoint' | 'bad_key' | 'invalid_model'; message: string }
 
 /**
  * Resolve the ChatConfig an agent run uses.
  *
  * `modelRaw` is the brief's `model:`, and it is OPTIONAL. Absent, the run uses
- * the SPACE's model — the first runnable `kind: model` connector — because
+ * the SPACE's model — the first runnable note under `models/` — because
  * which model a space runs on is a decision it makes once, beside the key that
  * pays for it, not one every brief repeats. A brief that names one pins it,
  * which is what a space running two models is for.
  *
- * With no model connector at all the answer is `no_model`, and it says to go
+ * With no model at all the answer is `no_model`, and it says to go
  * and add one. It deliberately does NOT name a provider: there is no platform
  * default, and inventing one is how an agent came to be built pointing at
  * Gemini in a space that had never heard of it.
@@ -72,7 +72,7 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
   const named = typeof modelRaw === 'string' && modelRaw.trim().length > 0
 
   let ref: ModelRef
-  let connector: string | null = null
+  let modelNote: string | null = null
   if (named) {
     const parsed = parseModelRef(modelRaw)
     if (!parsed.ok) return { ok: false, reason: 'invalid_model', message: parsed.error }
@@ -85,7 +85,7 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
     const parsed = parseModelRef(fallback.ref)
     if (!parsed.ok) return { ok: false, reason: 'invalid_model', message: parsed.error }
     ref = parsed.ref
-    connector = fallback.connector
+    modelNote = fallback.path
   }
 
   let baseURL = ref.provider.baseURL
@@ -102,7 +102,7 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
       return {
         ok: false,
         reason: 'no_endpoint',
-        message: `The custom model endpoint on ${endpoint.connector} is not reachable from here: ${e instanceof Error ? e.message : String(e)}`,
+        message: `The custom model endpoint on ${endpoint.name} is not reachable from here: ${e instanceof Error ? e.message : String(e)}`,
       }
     }
   }
@@ -119,7 +119,7 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
     return {
       ok: false,
       reason: 'no_key',
-      message: `No key stored for ${ref.provider.label} — add ${ref.provider.keySecret} on its connector's page under Connectors → Models.`,
+      message: `No key stored for ${ref.provider.label} — add ${ref.provider.keySecret} on its page under Models.`,
     }
   }
   let apiKey: string
@@ -128,7 +128,7 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
   } catch {
     return { ok: false, reason: 'bad_key', message: 'The stored model key could not be decrypted (SECRETS_KEY).' }
   }
-  return { ok: true, ref: { ...ref, pricing }, connector, config: { apiKey, baseURL, model: ref.modelId } }
+  return { ok: true, ref: { ...ref, pricing }, modelNote, config: { apiKey, baseURL, model: ref.modelId } }
 }
 
 export type KeyProbeResult = { ok: true } | { ok: false; kind: 'auth' | 'upstream'; message: string }

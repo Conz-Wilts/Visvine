@@ -89,7 +89,7 @@ export function statusLine(a: AgentSummary, now = Date.now()): StatusLine {
     case 'off':
       return { tone: 'muted', text: scheduleText(a) ?? 'Off', problem: false };
     case 'needs_key':
-      return { tone: 'warn', text: `No ${a.model?.split('/')[0] ?? 'model'} key — add it on the model connector`, problem: true };
+      return { tone: 'warn', text: `No ${a.model?.split('/')[0] ?? 'model'} key — add it on the model's page`, problem: true };
     case 'budget':
       return { tone: 'warn', text: 'Paused — monthly budget reached', problem: true };
     case 'due':
@@ -166,7 +166,7 @@ export function setupBlocker(a: AgentSummary, isAdmin: boolean): { text: string;
 /**
  * The same problem, for someone who cannot fix it: they need to know they are
  * waiting on an admin, not what to type. The server's sentence ends in an
- * instruction ("Add one under Connectors → Models"), which is the half that
+ * instruction ("Add one under Models"), which is the half that
  * does not apply.
  */
 function shortenForMember(problem: string): string {

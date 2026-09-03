@@ -20,7 +20,7 @@
  */
 import prisma from '@/lib/prisma'
 import { ModelError, type ChatUsage } from '@/lib/notes/ai'
-import { connectorActionsFor, runnableConnectorNames } from '@/lib/connectors/service'
+import { connectorActionsFor } from '@/lib/connectors/service'
 import { readVisible } from '@/lib/notes/contextService'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
@@ -222,8 +222,8 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     // money, and a run priced at run time keeps its dollars when the space's
     // model changes later.
     const modelUsed = `${ref.provider.id}/${ref.modelId}`
-    if (resolved.connector) {
-      events.push({ at: Date.now(), type: 'system', text: `Running on the space's model: ${modelUsed} (connectors/${resolved.connector}.md).` })
+    if (resolved.modelNote) {
+      events.push({ at: Date.now(), type: 'system', text: `Running on the space's model: ${modelUsed} (${resolved.modelNote}).` })
     }
     await flushRunEvents(runId, events, { model: modelUsed })
 
@@ -293,10 +293,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       }
     }
     const signal = AbortSignal.timeout(opts.maxRunMs ?? MAX_RUN_MS)
-    // Model connectors may be declared (they name the provider) but are never
-    // offered as run_connector targets.
-    const runnableConnectors = await runnableConnectorNames(principal, context, brief.connectors)
-    const connectorActions = await connectorActionsFor(principal, context, runnableConnectors)
+    const connectorActions = await connectorActionsFor(principal, context, brief.connectors)
     // The action catalogue for run_action's description. Imported here rather
     // than in lib/agents/tools.ts because an action definition imports the
     // agent service, which reaches that module — a cycle at eval time.
@@ -319,7 +316,6 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
         spaceId,
         agentName: name,
         brief,
-        runnableConnectors,
         connectorActions,
         runId,
         chainDepth,

@@ -278,9 +278,7 @@ export async function spaceFacts(p: ContextPrincipal, context: Context): Promise
 
   return {
     available: {
-      // Model connectors name an LLM provider and are never runnable, so a Tool
-      // declaring one has nothing it could call (lib/connectors/service.ts).
-      connectors: connectors.filter((c) => c.kind !== 'model').map((c) => c.name),
+      connectors: connectors.map((c) => c.name),
       types: [...types],
       agents: agents.agents.map((a) => a.name),
     },

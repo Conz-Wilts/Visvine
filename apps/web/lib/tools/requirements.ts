@@ -43,7 +43,7 @@ export interface ToolRequirements {
 
 /** What the space actually has, in the three dimensions a Tool can miss. */
 export interface SpaceAvailability {
-  /** Connector note names (model connectors excluded — they are never runnable). */
+  /** Connector note names. */
   connectors: string[]
   /** Node type names, lower-cased so they line up with a declared `types:` list. */
   types: string[]

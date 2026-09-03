@@ -6,7 +6,6 @@ import assert from 'node:assert/strict'
 import {
   CATALOG_CATEGORIES,
   CONNECTOR_CATALOG,
-  allowsManyConnectors,
   catalogConnectStyle,
   catalogEntryFor,
   catalogRowLabel,
@@ -18,7 +17,6 @@ import {
 } from '@/lib/connectors/catalog'
 import { appOrigin, connectorConnectPath, connectorConnectUrl, safeReturnTo } from '@/lib/connectors/connectUrl'
 import { parseConnectorPerimeter, perimeterSecretRefs } from '@/lib/connectors/config'
-import { connectorKind, parseModelConnector } from '@/lib/connectors/model'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -57,7 +55,8 @@ test('search matches by name and description, category otherwise', () => {
   assert.deepEqual(searchCatalog('granola').map((e) => e.id), ['granola'])
   assert.ok(searchCatalog('meeting').length >= 2)
   assert.equal(searchCatalog('').length, CONNECTOR_CATALOG.length)
-  assert.ok(searchCatalog('LLM keys').every((e) => e.category === 'llm'))
+  const data = searchCatalog('Data').map((e) => e.id)
+  assert.ok(CONNECTOR_CATALOG.filter((e) => e.category === 'data').every((e) => data.includes(e.id)))
 })
 
 for (const entry of CONNECTOR_CATALOG) {
@@ -76,13 +75,6 @@ for (const entry of CONNECTOR_CATALOG) {
     for (const f of entry.fields.filter((x) => x.secret)) {
       assert.ok(!content.includes(values[f.key]), `${f.key} leaked into ${entry.id}`)
       assert.ok(secrets.some((s) => s.name === f.key && s.value === values[f.key]), `${f.key} stored`)
-    }
-
-    if (entry.shape === 'model') {
-      assert.equal(connectorKind(fm), 'model')
-      const parsed = parseModelConnector(fm)
-      assert.ok(parsed.ok, `${entry.id}: ${parsed.ok ? '' : parsed.error}`)
-      return
     }
 
     const parsed = parseConnectorPerimeter(fm)
@@ -126,21 +118,14 @@ test('a vetted MCP server is one URL: discovered, self-registering, and the whol
   }
 })
 
-test('catalogEntryFor finds a note\'s logo by name, then by model provider', () => {
+test('catalogEntryFor finds a note\'s logo by name', () => {
   const first = CONNECTOR_CATALOG[0]
   assert.equal(catalogEntryFor(first.id)?.id, first.id)
   // The name is a slug, so casing and stray space must not lose the mark.
   assert.equal(catalogEntryFor(` ${first.id.toUpperCase()} `)?.id, first.id)
 
-  // A model connector renamed at connect time still keeps its provider's mark.
-  const model = CONNECTOR_CATALOG.find((e) => e.shape === 'model' && e.provider)
-  if (model) {
-    assert.equal(catalogEntryFor('our-house-model', model.provider)?.id, model.id)
-  }
-
   // A connector the space wrote itself matches nothing — the caller draws a plug.
   assert.equal(catalogEntryFor('appdb'), null)
-  assert.equal(catalogEntryFor('appdb', null), null)
 })
 
 test('a second connector to one service keeps the service, under its own name', () => {
@@ -165,7 +150,7 @@ test('a second connector to one service keeps the service, under its own name', 
   })
   const fm = parseFrontmatter(content)
   assert.equal(fm.recipe, 'google-drive')
-  assert.equal(catalogEntryFor('google-drive-2', null, 'google-drive')?.id, 'google-drive')
+  assert.equal(catalogEntryFor('google-drive-2', 'google-drive')?.id, 'google-drive')
   // …and a note that never carried `recipe:` still resolves by name.
   assert.equal(catalogEntryFor('google-drive')?.id, 'google-drive')
 })
@@ -200,31 +185,6 @@ test('a second connector gets its own secrets and its own linked accounts', () =
   assert.ok(driveOne.ok && driveTwo.ok)
   assert.equal(driveOne.perimeter.auth?.provider, 'google-drive')
   assert.equal(driveTwo.perimeter.auth?.provider, 'google-drive-2')
-})
-
-test('a model provider is one connector per space; everything else is many', () => {
-  for (const entry of CONNECTOR_CATALOG) {
-    assert.equal(allowsManyConnectors(entry), entry.shape !== 'model', entry.id)
-  }
-  // The reason, asserted where it lives: every model recipe names the one
-  // reserved key its provider reads (lib/agents/registry.ts).
-  for (const entry of CONNECTOR_CATALOG.filter((e) => e.shape === 'model')) {
-    assert.ok(entry.fields.some((f) => f.secret && f.key.startsWith('MODEL_KEY_')), entry.id)
-  }
-})
-
-test('a model recipe stamps its service too', () => {
-  const openrouter = CONNECTOR_CATALOG.find((e) => e.id === 'openrouter')
-  assert.ok(openrouter)
-  const { content } = connectorFromCatalog(openrouter, {
-    name: 'openrouter',
-    title: 'OpenRouter',
-    description: '',
-    values: sampleValues(openrouter),
-  })
-  const fm = parseFrontmatter(content)
-  assert.equal(fm.recipe, 'openrouter')
-  assert.ok(parseModelConnector(fm).ok)
 })
 
 test('google recipes: blank credential fields fall back to the platform client', () => {
@@ -376,7 +336,7 @@ test('the link a browser is sent to is relative, and carries the same query', ()
 })
 
 test('the catalogue is one list, and every shape of service is on it', () => {
-  for (const id of ['slack', 'gmail', 'google-drive', 'microsoft', 'postgres', 'openai', 'mcp', 'notion-mcp']) {
+  for (const id of ['slack', 'gmail', 'google-drive', 'microsoft', 'postgres', 'mcp', 'notion-mcp']) {
     assert.ok(CONNECTOR_CATALOG.some((e) => e.id === id), `${id} is a space connector`)
   }
   // A vetted MCP server and a Google recipe are one press for the space too.
@@ -385,10 +345,6 @@ test('the catalogue is one list, and every shape of service is on it', () => {
     assert.ok(entry)
     assert.ok(connectsInOneClick(entry, ['google']), id)
   }
-  // A service is not a slot: a space may hold two of anything but a model key.
-  const notion = CONNECTOR_CATALOG.find((e) => e.id === 'notion-mcp')
-  assert.ok(notion)
-  assert.equal(allowsManyConnectors(notion), true)
 })
 
 test('a service you paste a credential into is named for what it is', () => {
@@ -405,12 +361,9 @@ test('a service you paste a credential into is named for what it is', () => {
   assert.equal(label('slack'), 'Slack API')
   assert.equal(label('granola'), 'Granola API')
   // …except where the suffix would read as a lie: a database is not an API,
-  // and a model provider and the catch-alls already say what they are.
+  // and the catch-alls already say what they are.
   assert.equal(label('postgres'), CONNECTOR_CATALOG.find((e) => e.id === 'postgres')!.name)
   assert.equal(label('mcp'), CONNECTOR_CATALOG.find((e) => e.id === 'mcp')!.name)
-  for (const e of CONNECTOR_CATALOG.filter((x) => x.shape === 'model')) {
-    assert.equal(catalogRowLabel(e), e.name)
-  }
 })
 
 test('how a service connects is one of three answers', () => {

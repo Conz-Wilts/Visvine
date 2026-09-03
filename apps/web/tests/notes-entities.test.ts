@@ -71,6 +71,16 @@ test('container kinds get their own note namespaces (dirs kept their old names)'
   assert.equal(parseEntityHref('/spaces/index.md'), null); // folder index, not an entity
 });
 
+test('models are an entity namespace like connectors: flat, admin-written, not creatable', () => {
+  assert.equal(entityKindOf('model'), 'model');
+  assert.equal(entityKindOf('Models'), 'model');
+  assert.equal(entityNotePath({ id: 'model:anthropic', type: 'model' }), 'models/anthropic.md');
+  assert.equal(entityKindOfPath('models/anthropic.md'), 'model');
+  assert.equal(parseEntityHref('/models/anthropic.md'), 'models/anthropic.md');
+  assert.equal(parseEntityHref('models/index.md'), null);
+  assert.equal(isCreatableType('model'), false);
+});
+
 test('connectors are an entity namespace, but not a creatable one', () => {
   assert.equal(entityKindOf('connector'), 'connector');
   assert.equal(entityKindOf('Connectors'), 'connector');
@@ -495,9 +505,9 @@ test('namespaceFolderDenial pins the built-in folders, not what is inside them',
   assert.equal(namespaceFolderDenial(''), null);
 });
 
-test('structuralFolders: the three built-in folders are always there', () => {
-  // Nothing configured: all three are there.
-  assert.deepEqual(structuralFolders(null).sort(), ['agents', 'connectors', 'tools']);
+test('structuralFolders: the four built-in folders are always there', () => {
+  // Nothing configured: all four are there.
+  assert.deepEqual(structuralFolders(null).sort(), ['agents', 'connectors', 'models', 'tools']);
 
   // Each folder is keyed to a core feature — agents/ to `notes`, since an agent
   // is a brief in the Context — so they survive even an explicit false, and a
@@ -505,6 +515,6 @@ test('structuralFolders: the three built-in folders are always there', () => {
   // nothing: "they are always there" needs no special case.
   assert.deepEqual(
     structuralFolders({ enabled: { agents: false, notes: false, connectors: false, tools: false } }).sort(),
-    ['agents', 'connectors', 'tools'],
+    ['agents', 'connectors', 'models', 'tools'],
   );
 });

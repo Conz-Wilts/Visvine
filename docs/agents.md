@@ -38,7 +38,7 @@ title: Weekly digest
 description: Summarises the week into reports/weekly.md
 # model:                           # OPTIONAL — omit to run on the space's model.
                                    # Pin `<provider>/<model-id>` only for a different one
-                                   # the space also has (Connectors → Models).
+                                   # the space also has (Models, in the account menu).
 connectors: [hubspot]              # declared reach
 tools: [web, actions]              # optional: web, sandbox, messages, directory, actions
 agents: [crm-sync]                 # optional: the agents this one has in mind for run_agent
@@ -65,19 +65,19 @@ Read this week's notes under updates/ and write a digest to reports/weekly.md �
   `author_gone`, deactivated.
 - **Model keys are the Space's** — `MODEL_KEY_GEMINI` / `MODEL_KEY_OPENAI` / `MODEL_KEY_ANTHROPIC` /
   `MODEL_KEY_CUSTOM` in `ConnectorSecret` (encrypted, admin-only, write-only), managed from the
-  model connector's page under `/connectors`. Providers and their base URLs are pinned in
+  model's page (`/directory/model:<name>`). Providers and their base URLs are pinned in
   `lib/agents/registry.ts`; `custom/<id>` uses the `base_url:` of the Space's `provider: custom`
-  model connector (`lib/agents/providers.ts#findCustomModelEndpoint` — one per Space, SSRF-checked
-  on save and on every resolve).
-- **Model connectors** — a model IS a connector: `connectors/<name>.md` with `type: connector`,
-  `kind: model`, `provider: gemini|openai|anthropic|openrouter|custom`, plus `base_url:` for `custom` (Create
-  panel → Connector → *Model provider*). It sits in the Connectors list beside HTTP connectors, its
-  page shows the provider, base URL (editable for custom), known model ids and the
-  `MODEL_KEY_<PROVIDER>` key editor,
-  and a brief may name it in `connectors:`. It has no perimeter and is **never runnable** —
-  `loadConnector` refuses `kind: model`, so MCP/agent `run_connector` and the console can't hand
-  caller-authored JS the key. Base URL always comes from the registry, never the note
-  (`lib/connectors/model.ts`).
+  model (`lib/agents/spaceModels.ts#customEndpointOf` — one per Space, SSRF-checked on save and
+  on every resolve).
+- **Models** — a model is its own kind: `models/<name>.md` with `type: model`,
+  `provider: gemini|openai|anthropic|openrouter|custom`, `model: <id>`, plus `base_url:` for
+  `custom` (added from Models in the account menu, `lib/models/catalog.ts`). Its page is the Model
+  tab beside Context and Raw: the provider and id (editable), the `MODEL_KEY_<PROVIDER>` key
+  editor, the bill under `<provider>/` for the last six months, and who ran on it. It is not a
+  connector — no perimeter, not in `connectors/`, never named in a brief's `connectors:`, and
+  nothing runs it directly. Base URL always comes from the registry, never the note
+  (`lib/models/config.ts`). The shape before `models/` — `connectors/<name>.md` with `kind: model` —
+  is still read by `spaceModels` until `pnpm db:models:migrate` moves it.
 - **Run now** shares the scheduler's compare-and-swap claim, requires the agent to be **active**,
   does not advance the schedule, takes any waiting events with it, and is open to anyone who can
   edit the brief.
@@ -197,7 +197,7 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   monthly cap + a 2M-token per-run backstop). Not resumable: a dead run is failed and the agent waits for its
   next occurrence; partial note writes are revisions with origin `agent`, model `agent:<name>`.
 - What a token costs comes from a chain, strongest claim first — declared → shipped → discovered
-  (`lib/agents/providers.ts#resolveModelPricing`): the model connector note's `pricing:` (any
+  (`lib/agents/providers.ts#resolveModelPricing`): the model note's `pricing:` (any
   provider, not just `custom`), then the registry's pinned prices, then `agent_model_prices` —
   refreshed nightly from OpenRouter's models API and LiteLLM's community price map
   (`lib/agents/prices.ts`, by hand `pnpm db:prices`), which is how an arbitrary model id still
@@ -211,7 +211,7 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   it spends the space's key like a run does. The Space Console's **Usage** section
   (`/admin?section=usage`, admin-only like the budget route) renders it per month, by model and
   by agent, via `GET /api/communities/<id>/usage` and the pure shaper `lib/agents/shared/usage.ts`;
-  a model connector's page shows its provider's slice as a Spend section.
+  a model's page shows its provider's slice as its Usage section.
 - **The space-wide monthly cap** is `agentBudgetMonthlyCents` in the space's featureConfig
   (set inline in the Usage section, `PUT …/usage` — no schema, no deploy, like `vmMonthlyHours`),
   compared against the whole ledger, so every agent and every teaching counts toward it. Checked
@@ -354,7 +354,7 @@ Migration `20260817120000_agents` adds `spaces.timezone`, `agent_state`,
 `agent_runs`, `agent_heartbeat`; `20260820120000_agent_events` adds `agent_events`,
 `agent_state.triggers_json` / `debounce_ms` and `agent_runs.event_count` / `input`;
 `20260826120000_model_connector_base_url` drops `spaces.agent_config` (the custom endpoint is now the
-model connector's `base_url:`) — all applied by
+model note's `base_url:`) — all applied by
 `prisma migrate deploy` in the deploy workflow. The Scheduler job's cadence is the one thing not in
 a migration: existing deployments should be updated to `--schedule="* * * * *"`
 (`gcloud scheduler jobs update http visvine-agent-tick --schedule="* * * * *" …`).

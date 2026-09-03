@@ -15,7 +15,7 @@ import {
   preRunStop,
   type BudgetState,
 } from '@/lib/agents/budget'
-import { parseModelPricing } from '@/lib/connectors/model'
+import { parseModelPricing } from '@/lib/models/config'
 import { capEvents, RUN_EVENTS_BYTES_CAP, type AgentRunEvent } from '@/lib/agents/runs'
 
 const pricing = { inputPerM: 3, outputPerM: 15 } // Sonnet-ish

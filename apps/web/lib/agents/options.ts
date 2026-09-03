@@ -4,7 +4,7 @@
  * may chain into. Read by the create surface and the agent page's settings
  * form.
  *
- * The models are the space's model CONNECTORS, not the provider registry. That
+ * The models are the space's own model NOTES, not the provider registry. That
  * is the difference between "which models could exist" and "which models we
  * have", and offering the first is what produced briefs pointing at a provider
  * nobody had signed up for. A space with none offers none, and the surface
@@ -16,7 +16,7 @@
 import prisma from '@/lib/prisma'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { isConnectorEnabled } from '@/lib/connectors/config'
-import { connectorKind } from '@/lib/connectors/model'
+import { isLegacyModelConnector } from '@/lib/models/config'
 import { isAgentBriefPath, agentNameOfPath } from '@/lib/notes/entities'
 import { AGENT_TOOL_OPTIONS } from './config'
 import { defaultModelOf, noModelReason, spaceModels } from './spaceModels'
@@ -26,17 +26,17 @@ const SHARED_OWNER_KEY = 'shared'
 
 export interface AgentOptions {
   /**
-   * The models this space actually has — one per `kind: model` connector, in
+   * The models this space actually has — one per note under `models/`, in
    * note order. The broken ones are here too, carrying why: a picker that
-   * hides them leaves an admin wondering where the connector went.
+   * hides them leaves an admin wondering where the model went.
    */
   models: Array<{
     /** `<provider>/<id>` — what a brief's `model:` would say. Null when it names none. */
     ref: string | null
     label: string
     providerLabel: string
-    /** The note it comes from: `connectors/<connector>.md`. */
-    connector: string
+    /** The note it comes from: `models/<name>.md`. */
+    name: string
     /** Why it cannot run, or null. */
     problem: string | null
     pricing: ModelPricing | null
@@ -45,10 +45,10 @@ export interface AgentOptions {
    * The one a brief that names no model runs on — the first that works. Null
    * when the space has none, and then `noModels` says what to do about it.
    */
-  spaceModel: { ref: string; label: string; connector: string } | null
+  spaceModel: { ref: string; label: string; name: string } | null
   /** Why there is nothing to run on, or null. Already phrased for the reader. */
   noModels: string | null
-  connectors: Array<{ name: string; kind: 'http' | 'model'; enabled: boolean }>
+  connectors: Array<{ name: string; enabled: boolean }>
   agents: string[]
   tools: typeof AGENT_TOOL_OPTIONS
 }
@@ -73,10 +73,10 @@ export async function agentOptions(spaceId: string): Promise<AgentOptions> {
   for (const row of notes) {
     if (row.path.startsWith('connectors/')) {
       const fm = parseFrontmatter(row.content)
-      if (fm.type !== 'connector') continue
+      // The pre-models/ shape of a model is a model, not a connector.
+      if (fm.type !== 'connector' || isLegacyModelConnector(fm)) continue
       connectors.push({
         name: row.path.slice('connectors/'.length, -'.md'.length),
-        kind: connectorKind(fm),
         enabled: isConnectorEnabled(fm),
       })
     } else if (isAgentBriefPath(row.path)) {
@@ -91,13 +91,13 @@ export async function agentOptions(spaceId: string): Promise<AgentOptions> {
       ref: m.ref,
       label: m.modelId ?? 'no model named',
       providerLabel: m.provider.label,
-      connector: m.connector,
+      name: m.name,
       problem: m.problem,
       pricing: (m.modelId ? m.pricing[m.modelId] : null) ?? null,
     })),
     spaceModel:
       fallback && fallback.ref
-        ? { ref: fallback.ref, label: fallback.modelId ?? fallback.ref, connector: fallback.connector }
+        ? { ref: fallback.ref, label: fallback.modelId ?? fallback.ref, name: fallback.name }
         : null,
     noModels: noModelReason(models),
     connectors,

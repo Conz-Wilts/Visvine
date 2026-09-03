@@ -87,8 +87,8 @@ test('agentOptions: the models a space has, its default, connectors and agents',
 
     await note('connectors/hubspot.md', '---\ntype: connector\nhosts: [api.hubapi.com]\n---\nCRM.\n')
     await note('connectors/old.md', '---\ntype: connector\nenabled: false\nhosts: [example.com]\n---\nOff.\n')
-    // A model connector with no key yet: listed, with why it cannot run.
-    await note('connectors/anthropic.md', '---\ntype: connector\nkind: model\nprovider: anthropic\nmodel: claude-sonnet-5\n---\n')
+    // A model with no key yet: listed, with why it cannot run.
+    await note('models/anthropic.md', '---\ntype: model\nprovider: anthropic\nmodel: claude-sonnet-5\n---\n')
     await note('connectors/readme.md', 'Not a connector.\n')
     await note('agents/digest/index.md', '---\ntype: agent\n---\nBrief.\n')
     await note('agents/sync/index.md', '---\ntype: agent\n---\nBrief.\n')
@@ -96,10 +96,10 @@ test('agentOptions: the models a space has, its default, connectors and agents',
 
     const keyless = await agentOptions(SPACE)
     assert.deepEqual(
-      keyless.models.map((m) => ({ ref: m.ref, connector: m.connector, ok: m.problem === null })),
-      [{ ref: 'anthropic/claude-sonnet-5', connector: 'anthropic', ok: false }],
+      keyless.models.map((m) => ({ ref: m.ref, name: m.name, ok: m.problem === null })),
+      [{ ref: 'anthropic/claude-sonnet-5', name: 'anthropic', ok: false }],
     )
-    // A connector without its key is not a model the space can run on.
+    // A model without its key is not one the space can run on.
     assert.equal(keyless.spaceModel, null)
     assert.match(keyless.noModels ?? '', /no model that can run/i)
 
@@ -109,33 +109,36 @@ test('agentOptions: the models a space has, its default, connectors and agents',
     assert.deepEqual(o.spaceModel, {
       ref: 'anthropic/claude-sonnet-5',
       label: 'claude-sonnet-5',
-      connector: 'anthropic',
+      name: 'anthropic',
     })
-    // Every connector is listed for the brief's `connectors:`, model ones too —
-    // the form is what filters them out of the runnable set.
+    // Every connector is listed for the brief's `connectors:`; a model is not
+    // a connector, so it is not among them.
     assert.deepEqual(
       o.connectors,
       [
-        { name: 'anthropic', kind: 'model', enabled: true },
-        { name: 'hubspot', kind: 'http', enabled: true },
-        { name: 'old', kind: 'http', enabled: false },
+        { name: 'hubspot', enabled: true },
+        { name: 'old', enabled: false },
       ],
     )
     assert.deepEqual(o.agents, ['digest', 'sync'])
 
-    // Note order decides, so "the first one under Connectors" is a sentence an
+    // Note order decides, so "the first one under Models" is a sentence an
     // admin can act on. `anthropic` sorts before `openai`.
     await prisma!.connectorSecret.create({ data: { spaceId: SPACE, name: 'MODEL_KEY_OPENAI', ciphertext: 'x' } })
-    await note('connectors/openai.md', '---\ntype: connector\nkind: model\nprovider: openai\nmodel: gpt-4.1\n---\n')
+    await note('models/openai.md', '---\ntype: model\nprovider: openai\nmodel: gpt-4.1\n---\n')
     const two = await agentOptions(SPACE)
     assert.equal(two.models.length, 2)
-    assert.equal(two.spaceModel?.connector, 'anthropic')
+    assert.equal(two.spaceModel?.name, 'anthropic')
 
-    // A model connector that names nothing falls back to the provider's first
-    // model, so a note written before `model:` existed still runs.
+    // A model that names nothing falls back to the provider's first model, so
+    // a note written before `model:` existed still runs — and the shape before
+    // models/ existed (a `kind: model` connector) is still read until
+    // db:models:migrate moves it.
     await note('connectors/gemini.md', '---\ntype: connector\nkind: model\nprovider: gemini\n---\n')
     const legacy = await agentOptions(SPACE)
-    assert.equal(legacy.models.find((m) => m.connector === 'gemini')?.ref, 'gemini/gemma-4-31b-it')
+    assert.equal(legacy.models.find((m) => m.name === 'gemini')?.ref, 'gemini/gemma-4-31b-it')
+    // …but it is not a connector the brief may declare.
+    assert.ok(!legacy.connectors.some((c) => c.name === 'gemini'))
   } finally {
     await teardown()
   }

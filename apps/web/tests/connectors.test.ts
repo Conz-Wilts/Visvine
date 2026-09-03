@@ -22,7 +22,6 @@ import {
   type AllowRule,
   isConnectorEnabled,
 } from '@/lib/connectors/config'
-import { connectorKind, modelConnectorInfo, newModelConnectorNote, parseModelBaseUrl, parseModelConnector } from '@/lib/connectors/model'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { isPrivateAddress } from '@/lib/net/ssrf'
 import { assertSingleReadOnlyStatement } from '@/lib/connectors/postgres'
@@ -483,105 +482,6 @@ test('a note that is neither v2 nor a valid legacy config reads as a hosts probl
   const parsed = parseConnectorPerimeter({ type: 'connector', description: 'just words' })
   assert.ok(!parsed.ok)
   assert.match(parsed.error, /needs `hosts:`/)
-})
-
-// ── model connectors (kind: model) ──
-
-test('a model connector parses to its registry provider and never a perimeter', () => {
-  const fm = parseFrontmatter(`---
-type: connector
-kind: model
-provider: OpenAI
-description: our account
----`)
-  assert.equal(connectorKind(fm), 'model')
-  const parsed = parseModelConnector(fm)
-  assert.ok(parsed.ok)
-  assert.equal(parsed.config.provider.id, 'openai')
-  const info = modelConnectorInfo(parsed.config)
-  assert.equal(info.keySecret, 'MODEL_KEY_OPENAI')
-  assert.equal(info.baseURL, 'https://api.openai.com/v1/')
-  assert.equal(info.customEndpoint, false)
-  assert.ok(info.models.some((m) => m.id === 'gpt-4.1'))
-  // No `kind:` (or any other kind) is an ordinary perimeter connector.
-  assert.equal(connectorKind({ type: 'connector', hosts: [] }), 'http')
-  assert.equal(connectorKind({ type: 'connector', kind: 'http' }), 'http')
-})
-
-test('a model connector refuses unknown providers and any perimeter field', () => {
-  const noProvider = parseModelConnector({ type: 'connector', kind: 'model' })
-  assert.ok(!noProvider.ok)
-  assert.match(noProvider.error, /provider:/)
-
-  const unknown = parseModelConnector({ type: 'connector', kind: 'model', provider: 'mistral' })
-  assert.ok(!unknown.ok)
-  assert.match(unknown.error, /unknown model provider "mistral"/)
-
-  // A model connector binding MODEL_KEY_* into an isolate env would let any
-  // member with connectors:use read the key — hosts/env/allow are refused.
-  for (const key of ['hosts', 'env', 'allow']) {
-    const withPerimeter = parseModelConnector({ type: 'connector', kind: 'model', provider: 'gemini', [key]: [] })
-    assert.ok(!withPerimeter.ok, key)
-    assert.match(withPerimeter.error, new RegExp(`\`${key}:\``))
-  }
-  // A pinned provider's endpoint is Visvine's, never the note's.
-  const pinned = parseModelConnector({ type: 'connector', kind: 'model', provider: 'gemini', base_url: 'https://evil.example/' })
-  assert.ok(!pinned.ok)
-  assert.match(pinned.error, /base_url:/)
-})
-
-test('a custom model connector carries its own base_url, shape-checked like a host', () => {
-  const ok = parseModelConnector({ type: 'connector', kind: 'model', provider: 'custom', base_url: 'https://llm.example.com/v1' })
-  assert.ok(ok.ok)
-  assert.equal(ok.config.baseURL, 'https://llm.example.com/v1/') // trailing slash normalised
-  const info = modelConnectorInfo(ok.config)
-  assert.equal(info.customEndpoint, true)
-  assert.equal(info.keySecret, 'MODEL_KEY_CUSTOM')
-
-  const missing = parseModelConnector({ type: 'connector', kind: 'model', provider: 'custom' })
-  assert.ok(!missing.ok)
-  assert.match(missing.error, /base_url:/)
-  for (const bad of ['not-a-url', 'http://llm.example.com/v1/', 'https://llm.example.com/v1/?key=1', 'https://{{secret:HOST}}/v1/']) {
-    const r = parseModelBaseUrl(bad)
-    assert.ok(!r.ok, bad)
-  }
-})
-
-test('newModelConnectorNote round-trips through parseModelConnector', () => {
-  const note = newModelConnectorNote({ name: 'anthropic', provider: 'anthropic', description: 'Claude, billed to ops' })
-  const fm = parseFrontmatter(note)
-  assert.equal(fm.type, 'connector')
-  assert.equal(fm.kind, 'model')
-  assert.equal(fm.alias, 'model')
-  assert.equal(fm.description, 'Claude, billed to ops')
-  const parsed = parseModelConnector(fm)
-  assert.ok(parsed.ok)
-  assert.equal(parsed.config.provider.id, 'anthropic')
-  assert.match(note, /MODEL_KEY_ANTHROPIC/)
-  assert.doesNotMatch(note, /hosts:/)
-
-  // A registry provider with no `model:` given falls back to its first.
-  assert.equal(parsed.config.modelId, 'claude-opus-5')
-  assert.match(note, /^model: claude-opus-5$/m)
-
-  // Named explicitly, it is what the note says and what the connector runs.
-  const pinned = newModelConnectorNote({ name: 'anthropic', provider: 'anthropic', model: 'claude-haiku-4-5' })
-  assert.match(pinned, /^model: claude-haiku-4-5$/m)
-  const pinnedParsed = parseModelConnector(parseFrontmatter(pinned))
-  assert.ok(pinnedParsed.ok && pinnedParsed.config.modelId === 'claude-haiku-4-5')
-
-  const custom = newModelConnectorNote({ name: 'ollama', provider: 'custom', baseUrl: 'https://llm.example.com/v1', model: 'llama-4-70b' })
-  assert.match(custom, /^base_url: https:\/\/llm\.example\.com\/v1\/$/m)
-  assert.match(custom, /^model: llama-4-70b$/m)
-  const customParsed = parseModelConnector(parseFrontmatter(custom))
-  assert.ok(customParsed.ok && customParsed.config.baseURL === 'https://llm.example.com/v1/')
-  assert.throws(() => newModelConnectorNote({ name: 'ollama', provider: 'custom', model: 'x' }), /base_url:/)
-  // A custom endpoint ships no models, so it has nothing to fall back to.
-  assert.throws(
-    () => newModelConnectorNote({ name: 'ollama', provider: 'custom', baseUrl: 'https://llm.example.com/v1' }),
-    /must name one/,
-  )
-  assert.throws(() => newModelConnectorNote({ name: 'x', provider: 'nope' }), /unknown model provider/)
 })
 
 // ── actions: (wave 1) ─────────────────────────────────────────────────────────

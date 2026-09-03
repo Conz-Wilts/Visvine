@@ -1531,8 +1531,8 @@ export const CONTEXT_ACTIONS = [
         'Each entry carries its docs (what the system is and how to call it), the hosts it may reach, ' +
         'and the env var names its code can read. `actions` lists named entry points (name, description, params) ' +
         'you can run with run_connector by name instead of writing code. Run one with run_connector; a connector with no hosts is ' +
-        "documentation-only. Entries with kind 'model' are LLM providers the space's agents run on (their key " +
-        "is the space's) — they are listed for context but never runnable. Entries marked `personal: true` are the " +
+        "documentation-only. The models the space's agents run on are not connectors: they are notes under models/ " +
+        "(list_models). Entries marked `personal: true` are the " +
         'CALLER\'s own connectors, connected in their settings and usable in every space they are in; the space does not ' +
         "share them. Executing needs the 'connectors:use' scope. " +
         'TO CREATE ONE: a connector is a NOTE at connectors/<name>.md, written with edit_context ' +
@@ -1546,6 +1546,40 @@ export const CONTEXT_ACTIONS = [
         // `personal: true` — the caller's own connectors resolve here too, so
         // the catalogue has to name them or they cannot be asked for.
         return { connectors: await listConnectors(principal, context, { personal: true }) }
+      },
+    }),
+    defineAction({
+      name: 'list_models',
+      scope: 'context:read',
+      summary: "The models a space's agents run on, which one is the space's, and why any cannot run.",
+      description:
+        "List the space's models — notes under models/ naming a provider, the model id they run, and whether the " +
+        "provider's key is stored. `space_model` is the one an agent that names no `model:` runs on (the first that " +
+        'works, in note order); `problem` on a row says why it cannot run yet. Never a key. A model is not a connector ' +
+        'and nothing runs it directly: an agent uses it by running. TO ADD ONE: a model is a NOTE at models/<name>.md ' +
+        "(`type: model`, `provider:`, `model:`), written with edit_context by a space admin, plus the MODEL_KEY_<PROVIDER> " +
+        'secret set with set_connector_secret. Adding one from the Models dialog in the app does both.',
+      input: { space_id: z.string() },
+      annotations: { readOnlyHint: true },
+      run: async (ctx, args) => {
+        const { context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const models = await spaceModels(context.spaceId)
+        const fallback = defaultModelOf(models)
+        return {
+          models: models.map((m) => ({
+            name: m.name,
+            path: m.path,
+            page: `/directory/${encodeURIComponent(`model:${m.name}`)}`,
+            provider: m.provider.id,
+            provider_label: m.provider.label,
+            model: m.ref,
+            enabled: m.enabled,
+            key_stored: m.keyStored,
+            problem: m.problem,
+          })),
+          space_model: fallback?.ref ?? null,
+          ...(fallback ? {} : { model_problem: noModelReason(models) }),
+        }
       },
     }),
     defineAction({
@@ -1971,10 +2005,10 @@ export const CONTEXT_ACTIONS = [
           .string()
           .optional()
           .describe(
-            'USUALLY OMIT THIS. An agent runs on the space\'s model — the first `kind: model` connector it has — ' +
+            'USUALLY OMIT THIS. An agent runs on the space\'s model — the first note under models/ it has — ' +
               'so the model is a decision the space already made. Pass `<provider>/<model-id>` only when this ' +
               'particular agent must run on a different one the space also has. NEVER invent a provider: a space ' +
-              'with no model connector has no model, and the agent should be created without one',
+              'with no model has no model, and the agent should be created without one',
           ),
         connectors: z
           .array(z.string())
@@ -2012,7 +2046,7 @@ export const CONTEXT_ACTIONS = [
           path: r.path,
           title: r.brief.title,
           model: r.brief.model ?? fallback?.ref ?? null,
-          model_source: r.brief.model ? 'pinned in the brief' : fallback ? `the space's model (connectors/${fallback.connector}.md)` : 'none',
+          model_source: r.brief.model ? 'pinned in the brief' : fallback ? `the space's model (${fallback.path})` : 'none',
           ...(problem ? { model_problem: problem } : {}),
           connectors: r.brief.connectors,
           tools: r.brief.tools,
@@ -2056,7 +2090,7 @@ export const CONTEXT_ACTIONS = [
           name: agent.name,
           title: agent.title,
           modelEffective: agent.modelEffective,
-          modelConnector: agent.modelConnector,
+          modelNote: agent.modelNote,
           modelProblem: agent.modelProblem,
           // Judged for the CALLER, because the caller is who stands in: a
           // connector only the author has signed in to is out of reach here.
@@ -2070,7 +2104,7 @@ export const CONTEXT_ACTIONS = [
           page: agentPageHref(agent.name),
           active: agent.activation.active,
           runs_on: agent.modelEffective,
-          model_source: agent.model ? 'pinned in the brief' : agent.modelConnector ? `the space's model (connectors/${agent.modelConnector}.md)` : 'none',
+          model_source: agent.model ? 'pinned in the brief' : agent.modelNote ? `the space's model (${agent.modelNote})` : 'none',
           ready_for_a_real_run: plan.ready,
           blocking: plan.blocking,
           out_of_reach: plan.out_of_reach,

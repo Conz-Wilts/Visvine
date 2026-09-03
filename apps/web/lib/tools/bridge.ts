@@ -224,7 +224,7 @@ function normalizeNotePath(raw: string): string | null {
  * It is benign — the index is a generated children listing, and it can only ever
  * name briefs this Tool was already permitted to create.
  */
-const SEALED_WRITE_DIRS = ['tools', 'agents', 'connectors'] as const
+const SEALED_WRITE_DIRS = ['tools', 'agents', 'connectors', 'models'] as const
 
 function sealedNamespace(path: string): string | null {
   const top = path.split('/')[0]

@@ -41,7 +41,7 @@ export default function AgentSettingsFields({
   const toggleConnector = (name: string, on: boolean) =>
     onChange({ ...value, connectors: on ? [...new Set([...value.connectors, name])] : value.connectors.filter((c) => c !== name) });
 
-  const usableConnectors = (options?.connectors ?? []).filter((c) => c.kind !== 'model');
+  const usableConnectors = options?.connectors ?? [];
 
   // The models this space HAS, and the one an agent that picks none runs on.
   // There is no provider picker any more: a provider is a place to send a
@@ -60,7 +60,7 @@ export default function AgentSettingsFields({
         label="Model"
         hint={
           options?.spaceModel
-            ? `The space's model is ${options.spaceModel.label}, from connectors/${options.spaceModel.connector}.md. Pick another only if this agent needs one.`
+            ? `The space's model is ${options.spaceModel.label}, from models/${options.spaceModel.name}.md. Pick another only if this agent needs one.`
             : undefined
         }
       >
@@ -86,7 +86,7 @@ export default function AgentSettingsFields({
               {options?.spaceModel ? `The space's model — ${options.spaceModel.label}` : 'The space\u2019s model'}
             </option>
             {models.map((m) => (
-              <option key={m.connector} value={m.ref ?? ''} disabled={!m.ref || m.problem !== null}>
+              <option key={m.name} value={m.ref ?? ''} disabled={!m.ref || m.problem !== null}>
                 {m.providerLabel} · {m.label}
                 {m.pricing ? ` · $${m.pricing.inputPerM}/$${m.pricing.outputPerM} per M` : ''}
                 {m.problem ? ` — ${m.problem}` : ''}

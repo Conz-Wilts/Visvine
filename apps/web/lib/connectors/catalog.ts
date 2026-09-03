@@ -9,14 +9,12 @@
  * permission model is untouched: the note is admin-written, secrets live in
  * the secret store, and `connectors:use` is what lets an agent run it.
  *
- * Four shapes:
+ * Three shapes:
  *   - `key`: a static credential (API key, bot token, DSN) stored as a secret
  *     and bound into `env:` — the common case.
  *   - `oauth`: the note carries an `auth:` block; the secret stored here is the
  *     OAuth client, and the account itself is connected afterwards from the
  *     connector's page (lib/connectors/auth.ts).
- *   - `model`: an LLM provider the space's agents run on — never runnable
- *     (lib/connectors/model.ts).
  *   - `mcp`: a vetted remote MCP server, by URL. Nothing to fill in: Visvine
  *     discovers the server's OAuth endpoints, registers itself as a client and
  *     signs the person in ({@link mcpServer}). Every server on the list has
@@ -31,14 +29,13 @@
  * A recipe is not a slot. A space may connect one service several times — the
  * team's Drive beside your own, two Slack workspaces — so a connector's NAME
  * (`google-drive`, then `google-drive-2`) no longer says which service it is
- * to. The note's `recipe:` does ({@link catalogEntryFor}). The exception is a
- * model provider, which is one per space by construction
- * ({@link allowsManyConnectors}).
+ * to. The note's `recipe:` does ({@link catalogEntryFor}).
+ *
+ * The models a space's agents run on are not here: a model is not a connector,
+ * and its own catalogue is lib/models/catalog.ts.
  */
 
 import { SANDBOX_LIMITS } from './config'
-import { PROVIDERS } from '@/lib/agents/registry'
-import { newModelConnectorNote } from './model'
 import { platformClientRef } from './platformClients'
 
 export type CatalogCategory =
@@ -47,7 +44,6 @@ export type CatalogCategory =
   | 'messengers'
   | 'productivity'
   | 'development'
-  | 'llm'
   | 'data'
   | 'other'
 
@@ -57,7 +53,6 @@ export const CATALOG_CATEGORIES: ReadonlyArray<{ id: CatalogCategory; label: str
   { id: 'messengers', label: 'Messengers', description: 'Chat platforms agents can read from and post to.' },
   { id: 'productivity', label: 'Productivity', description: 'Docs, tasks, CRM and the tools work lives in.' },
   { id: 'development', label: 'Development tools', description: 'Code hosting and issue trackers.' },
-  { id: 'llm', label: 'LLM keys', description: 'The model provider this space’s agents run on.' },
   { id: 'data', label: 'Data', description: 'Databases and payment data, read directly.' },
   { id: 'other', label: 'Other', description: 'Anything with an HTTP API, an MCP server, or a service not listed.' },
 ]
@@ -76,9 +71,7 @@ interface CatalogField {
   multiline?: boolean
   /**
    * A fixed set of values, rendered as a picker. The list is a suggestion, not
-   * a gate — a model recipe offers the ids the registry ships and still lets
-   * a newer one be typed, because a provider releases models faster than this
-   * file is edited.
+   * a gate — the form still lets another value be typed.
    */
   choices?: readonly { value: string; label: string }[]
   /**
@@ -97,12 +90,10 @@ export interface CatalogEntry {
   category: CatalogCategory
   /** Path under /images/connectors. */
   logo: string
-  shape: 'key' | 'oauth' | 'model' | 'mcp'
+  shape: 'key' | 'oauth' | 'mcp'
   /** `host` or `host:port` entries the isolate may reach. */
   hosts: readonly string[]
   fields: readonly CatalogField[]
-  /** `model` entries: the registry provider id. */
-  provider?: string
   /** `mcp` entries: the server's streamable-HTTP endpoint — also its `auth.discover`. */
   mcp?: { url: string }
   /** `oauth` entries: the `auth:` block minus the client credentials. */
@@ -123,12 +114,6 @@ export interface CatalogEntry {
   }
   /** Markdown body: how an agent calls the service, with working example code. */
   body: string
-}
-
-/** The model ids a registry provider ships, as picker choices. */
-function modelChoices(providerId: string): { value: string; label: string }[] {
-  const provider = PROVIDERS.find((p) => p.id === providerId)
-  return (provider?.models ?? []).map((m) => ({ value: m.id, label: m.label }))
 }
 
 const apiKey = (hint: string, placeholder = 'paste the key'): CatalogField => ({
@@ -838,90 +823,6 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     ].join('\n'),
   },
 
-  // ── LLM keys ───────────────────────────────────────────────────────────────
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    description: 'Run this space’s agents on OpenAI models',
-    category: 'llm',
-    logo: 'openai.svg',
-    shape: 'model',
-    provider: 'openai',
-    hosts: [],
-    fields: [
-      { key: 'MODEL_KEY_OPENAI', label: 'API key', placeholder: 'sk-…', secret: true, required: true, hint: 'platform.openai.com → API keys.' },
-      { key: 'model', label: 'Model', required: true, hint: 'Which model this connector runs. Agents use it unless they pin another.',
-        choices: modelChoices('openai'), placeholder: 'model id' },
-    ],
-    body: '',
-  },
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    description: 'Run this space’s agents on Claude',
-    category: 'llm',
-    logo: 'anthropic.svg',
-    shape: 'model',
-    provider: 'anthropic',
-    hosts: [],
-    fields: [
-      { key: 'MODEL_KEY_ANTHROPIC', label: 'API key', placeholder: 'sk-ant-…', secret: true, required: true, hint: 'console.anthropic.com → API keys.' },
-      { key: 'model', label: 'Model', required: true, hint: 'Which model this connector runs. Agents use it unless they pin another.',
-        choices: modelChoices('anthropic'), placeholder: 'model id' },
-    ],
-    body: '',
-  },
-  {
-    id: 'gemini',
-    name: 'Google Gemini',
-    description: 'Run this space’s agents on Gemini',
-    category: 'llm',
-    logo: 'googlegemini.svg',
-    shape: 'model',
-    provider: 'gemini',
-    hosts: [],
-    fields: [
-      { key: 'MODEL_KEY_GEMINI', label: 'API key', placeholder: 'AIza…', secret: true, required: true, hint: 'aistudio.google.com → Get API key.' },
-      { key: 'model', label: 'Model', required: true, hint: 'Which model this connector runs. Agents use it unless they pin another.',
-        choices: modelChoices('gemini'), placeholder: 'model id' },
-    ],
-    body: '',
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    description: 'One key, hundreds of models from every vendor',
-    category: 'llm',
-    logo: 'openrouter.svg',
-    shape: 'model',
-    provider: 'openrouter',
-    hosts: [],
-    fields: [
-      { key: 'MODEL_KEY_OPENROUTER', label: 'API key', placeholder: 'sk-or-v1-…', secret: true, required: true, hint: 'openrouter.ai/keys → Create key.' },
-      { key: 'model', label: 'Model', required: true, hint: 'Which model this connector runs. Agents use it unless they pin another.',
-        choices: modelChoices('openrouter'), placeholder: 'model id' },
-    ],
-    body: '',
-  },
-  {
-    id: 'custom-model',
-    name: 'OpenAI-compatible endpoint',
-    description: 'Any provider speaking the OpenAI chat API',
-    category: 'llm',
-    logo: 'modelcontextprotocol.svg',
-    shape: 'model',
-    provider: 'custom',
-    hosts: [],
-    fields: [
-      { key: 'base_url', label: 'Base URL', placeholder: 'https://llm.example.com/v1/', required: true, hint: 'An https endpoint; no query or fragment.' },
-      { key: 'MODEL_KEY_CUSTOM', label: 'API key', secret: true, required: true },
-      // No choices: nobody but the admin knows what their gateway serves.
-      { key: 'model', label: 'Model', required: true, placeholder: 'model id at your endpoint',
-        hint: 'Which model this connector runs. Agents use it unless they pin another.' },
-    ],
-    body: '',
-  },
-
   // ── Data ───────────────────────────────────────────────────────────────────
   {
     id: 'stripe',
@@ -1152,42 +1053,22 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
  * A space may hold SEVERAL connections to one service — two Drives, two Slack
  * workspaces — so the note name cannot be the answer: only the first of them is
  * called `google-drive`. The note carries `recipe:` in its frontmatter, written
- * by {@link connectorFromCatalog}, and that is consulted first. The name, and
- * then the model provider, remain the fallbacks, so a connection written before
- * `recipe:` existed — or by hand — still finds its mark.
+ * by {@link connectorFromCatalog}, and that is consulted first. The name
+ * remains the fallback, so a connection written before `recipe:` existed — or
+ * by hand — still finds its mark.
  *
  * It stays display-only. A wrong or missing answer costs a plug icon and a row
  * listed on its own; no perimeter, key or permission is read from it.
  */
-export function catalogEntryFor(name: string, provider?: string | null, recipe?: string | null): CatalogEntry | null {
+export function catalogEntryFor(name: string, recipe?: string | null): CatalogEntry | null {
   if (recipe) {
     const byRecipe = CONNECTOR_CATALOG.find((e) => e.id === recipe.trim().toLowerCase())
     if (byRecipe) return byRecipe
   }
   const slug = name.trim().toLowerCase()
-  const byId = CONNECTOR_CATALOG.find((e) => e.id === slug)
-  if (byId) return byId
-  if (!provider) return null
-  const key = provider.trim().toLowerCase()
-  return CONNECTOR_CATALOG.find((e) => e.shape === 'model' && e.provider === key) ?? null
+  return CONNECTOR_CATALOG.find((e) => e.id === slug) ?? null
 }
 
-/**
- * May a space add ANOTHER connection to this service?
- *
- * For an HTTP or OAuth service, always: a connection is one set of
- * credentials, and two Drives (the team's and yours) or two Slack workspaces
- * are ordinary. For a model provider, no — and not as a policy. Its key is
- * `MODEL_KEY_<PROVIDER>`, one row per space by construction, and a registry
- * provider's endpoint is pinned in code, so a second note would name the same
- * key and the same URL and differ only in its title. `custom` is the same story
- * from the other end: agents resolve ONE custom endpoint per space
- * (lib/agents/providers.ts#findCustomModelEndpoint), so a second URL is a
- * configuration error rather than a second choice.
- */
-export function allowsManyConnectors(entry: CatalogEntry): boolean {
-  return entry.shape !== 'model'
-}
 
 /**
  * What the picker calls a service.
@@ -1199,15 +1080,15 @@ export function allowsManyConnectors(entry: CatalogEntry): boolean {
  * actually is — "Slack API" — and the plain name is left to the ones you just
  * press Connect on.
  *
- * The suffix is only added where it READS as true: a database, a model
- * provider, an MCP server and the catch-all "other" rows are named for what
+ * The suffix is only added where it READS as true: a database, an MCP server
+ * and the catch-all "other" rows are named for what
  * they are already, and "Postgres API" would be worse than Postgres. The note
  * a recipe writes is titled with the plain name either way — this is how the
  * catalogue reads, not what the connector is called.
  */
 export function catalogRowLabel(entry: CatalogEntry): string {
   if (entry.shape !== 'key') return entry.name
-  if (entry.category === 'data' || entry.category === 'llm' || entry.category === 'other') return entry.name
+  if (entry.category === 'data' || entry.category === 'other') return entry.name
   return `${entry.name} API`
 }
 
@@ -1302,23 +1183,6 @@ export function connectorFromCatalog(
 ): { content: string; secrets: Array<{ name: string; value: string }> } {
   const v = (key: string) => (input.values[key] ?? '').trim()
   const description = input.description.trim() || entry.description
-
-  if (entry.shape === 'model') {
-    // A model provider's key is reserved and shared by design — one
-    // MODEL_KEY_<PROVIDER> per space — which is the same fact that makes it a
-    // one-connector service (allowsManyConnectors).
-    return {
-      content: newModelConnectorNote({
-        name: input.name,
-        provider: entry.provider ?? 'custom',
-        baseUrl: v('base_url'),
-        model: v('model'),
-        description,
-        recipe: entry.id,
-      }),
-      secrets: entry.fields.filter((f) => f.secret && v(f.key)).map((f) => ({ name: f.key, value: v(f.key) })),
-    }
-  }
 
   // A second connector to a service gets its OWN secrets. The names are the
   // space's namespace, not the note's, so two Slack workspaces both writing

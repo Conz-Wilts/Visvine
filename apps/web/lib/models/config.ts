@@ -1,33 +1,37 @@
 /**
- * Model connectors — the `kind: model` connector variant.
+ * Models — the pure half of lib/models.
  *
- * A model connector is a note at `connectors/<name>.md` that stands for an LLM
- * provider the Space's agents run on (Gemini, OpenAI, Anthropic, OpenRouter, or
- * a custom OpenAI-compatible endpoint). It sits beside HTTP connectors in the
- * connectors list and its key lives in the same encrypted secrets table, so "everything
- * this Space reaches out to, and the keys it uses" has one home — the
- * connectors folder — and nothing model-related lives anywhere else. Two things
- * deliberately make it NOT an ordinary connector:
+ * A model is a note at `models/<name>.md` that stands for an LLM provider the
+ * Space's agents run on (Gemini, OpenAI, Anthropic, OpenRouter, or a custom
+ * OpenAI-compatible endpoint) and the model id they run there. It is its own
+ * kind, with its own folder and its own node page, because it answers a
+ * different question from a connector: every connector is somewhere the space
+ * can REACH; a model is what its agents RUN ON, and its page is where the bill
+ * is read — what it cost, and who ran on it.
  *
- *   • It is never runnable. `run_connector` (MCP, agent tool, console) hands
- *     caller-authored JS the plaintext of every secret its perimeter binds, so
- *     an ordinary connector holding a model key would let any member with
- *     `connectors:use` exfiltrate it or spend it. A model connector has no
- *     perimeter; {@link loadConnector} refuses it before anything can run.
+ * Its key lives in the same encrypted secrets table as a connector's, under the
+ * reserved name `MODEL_KEY_<PROVIDER>` — one per provider per space. Two things
+ * keep the key out of reach:
+ *
+ *   • A model is never runnable. `run_connector` hands caller-authored JS the
+ *     plaintext of every secret its perimeter binds; a model has no perimeter
+ *     and lives outside `connectors/`, so no run can bind its key.
  *   • Its base URL is admin-controlled. Registry providers pin it in code
  *     ({@link PROVIDERS}); `custom` reads it from the note's `base_url:` — and
- *     that is safe for the same reason an HTTP connector's `hosts:` is: the
- *     `connectors/` folder is admin-only for writes regardless of grants, so a
- *     member-writable brief can never point the Space's context at a host of
- *     its choosing. The URL is shape-checked here (pure) and SSRF-checked at
- *     save and at resolve time, before any request leaves.
+ *     that is safe for the same reason a connector's `hosts:` is: `models/` is
+ *     admin-only for writes regardless of grants (contextService.writeDenial),
+ *     so a member-writable brief can never point the Space's context at a host
+ *     of its choosing. The URL is shape-checked here (pure) and SSRF-checked
+ *     at save and at resolve time, before any request leaves.
  *
  * Frontmatter:
- *   type: connector
- *   kind: model
+ *   type: model
  *   provider: gemini | openai | anthropic | openrouter | custom
- *   model: claude-sonnet-5   (the model this connector runs; see below)
+ *   model: claude-sonnet-5   (the model this note runs; see below)
  *   base_url: https://…      (custom only, required; refused on the others)
+ *   pricing: { <id>: { input_per_m, output_per_m } }   (optional)
+ *   enabled: false           (optional — held in reserve)
+ *   recipe: anthropic        (the catalogue row it came from; display only)
  *   description: …           (optional)
  *
  * `model:` is the point of the note: a provider is a place to send a request,
@@ -42,27 +46,54 @@
  * rather than failing to parse — a note written before `model:` existed must
  * still load.
  *
- * The key is `MODEL_KEY_<PROVIDER>` — fixed by the provider, one per Space —
- * so two model connectors for the same provider share a key. That is on
- * purpose: the key is the Space's, the note is how it appears in the console.
+ * A note at `connectors/<name>.md` carrying `kind: model` is the shape this
+ * replaced; `db:models:migrate` moves it here, and until it has run
+ * spaceModels still reads it ({@link isLegacyModelConnector}).
+ *
  * Pure module: no prisma, no fetch.
  */
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { PROVIDERS, type ModelPricing, type ProviderEntry } from '@/lib/agents/registry'
 
-export type ConnectorKind = 'http' | 'model'
+export const MODELS_DIR = 'models/'
 
-/** The `kind:` a connector note declares; anything but `model` is an HTTP (perimeter) connector. */
-export function connectorKind(fm: NoteFrontmatter): ConnectorKind {
-  return typeof fm.kind === 'string' && fm.kind.trim().toLowerCase() === 'model' ? 'model' : 'http'
+/** A model's name: the note's basename, which is also what a node id and a secret suffix are cut from. */
+export const MODEL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/
+
+/** `models/<name>.md` */
+export function modelPath(name: string): string {
+  return `${MODELS_DIR}${name}.md`
 }
 
-export interface ModelConnectorConfig {
+/** `models/<name>.md` → `<name>`, or null for any other path. */
+export function modelNameOfPath(path: string): string | null {
+  const m = /^models\/([^/]+)\.md$/.exec(path)
+  return m && m[1] !== 'index' ? m[1] : null
+}
+
+/** Does this frontmatter declare a model note (`type: model`)? */
+export function isModelNote(fm: NoteFrontmatter): boolean {
+  return typeof fm.type === 'string' && fm.type.trim().toLowerCase() === 'model'
+}
+
+/**
+ * The shape before models had a folder: `connectors/<name>.md` with
+ * `type: connector` and `kind: model`. Read until `db:models:migrate` has
+ * moved it, refused everywhere a connector is loaded.
+ */
+export function isLegacyModelConnector(fm: NoteFrontmatter): boolean {
+  return (
+    typeof fm.type === 'string' && fm.type.trim().toLowerCase() === 'connector' &&
+    typeof fm.kind === 'string' && fm.kind.trim().toLowerCase() === 'model'
+  )
+}
+
+export interface ModelConfig {
   provider: ProviderEntry
   /** Where requests go: the registry's pinned URL, or the note's `base_url:` for `custom`. */
   baseURL: string
   /**
-   * The model id this connector runs — the note's `model:`, else the first the
+   * The model id this note runs — the note's `model:`, else the first the
    * registry ships for the provider. Null only for a custom endpoint that
    * names none, which nothing can guess.
    */
@@ -80,8 +111,8 @@ export interface ModelConnectorConfig {
   pricing: Readonly<Record<string, ModelPricing>>
 }
 
-export type ParseModelConnectorResult =
-  | { ok: true; config: ModelConnectorConfig }
+export type ParseModelResult =
+  | { ok: true; config: ModelConfig }
   | { ok: false; error: string }
 
 /**
@@ -91,7 +122,7 @@ export type ParseModelConnectorResult =
  * a DNS question and lives in lib/agents/providers.ts.
  */
 export function parseModelBaseUrl(raw: unknown): { ok: true; url: string } | { ok: false; error: string } {
-  if (typeof raw !== 'string' || !raw.trim()) return { ok: false, error: 'A custom model connector needs `base_url:` — an OpenAI-compatible https URL' }
+  if (typeof raw !== 'string' || !raw.trim()) return { ok: false, error: 'A custom model needs `base_url:` — an OpenAI-compatible https URL' }
   const value = raw.trim()
   if (value.includes('{{')) return { ok: false, error: '`base_url:` must be literal — it cannot reference a secret' }
   let url: URL
@@ -126,13 +157,13 @@ function parseModelId(raw: unknown): { ok: true; id: string | null } | { ok: fal
   return { ok: true, id }
 }
 
-/** Frontmatter → model connector config. Never throws; errors are admin-readable. */
-export function parseModelConnector(fm: NoteFrontmatter): ParseModelConnectorResult {
+/** Frontmatter → model config. Never throws; errors are admin-readable. */
+export function parseModel(fm: NoteFrontmatter): ParseModelResult {
   const raw = typeof fm.provider === 'string' ? fm.provider.trim().toLowerCase() : ''
   if (!raw) {
     return {
       ok: false,
-      error: `A model connector needs \`provider:\` — one of ${PROVIDERS.map((p) => p.id).join(', ')}`,
+      error: `A model needs \`provider:\` — one of ${PROVIDERS.map((p) => p.id).join(', ')}`,
     }
   }
   const provider = PROVIDERS.find((p) => p.id === raw)
@@ -143,7 +174,7 @@ export function parseModelConnector(fm: NoteFrontmatter): ParseModelConnectorRes
     if (fm[key] !== undefined) {
       return {
         ok: false,
-        error: `A model connector must not declare \`${key}:\` — it has no perimeter; its key is the ${provider.keySecret} secret`,
+        error: `A model must not declare \`${key}:\` — it has no perimeter; its key is the ${provider.keySecret} secret`,
       }
     }
   }
@@ -160,7 +191,7 @@ export function parseModelConnector(fm: NoteFrontmatter): ParseModelConnectorRes
     if (fm.base_url !== undefined) {
       return {
         ok: false,
-        error: `A ${provider.label} connector must not declare \`base_url:\` — its endpoint is pinned by Visvine. Use \`provider: custom\` for your own endpoint`,
+        error: `A ${provider.label} model must not declare \`base_url:\` — its endpoint is pinned by Visvine. Use \`provider: custom\` for your own endpoint`,
       }
     }
     return { ok: true, config: { provider, baseURL: provider.baseURL, modelId, pricing: pricing.pricing } }
@@ -211,22 +242,22 @@ function isPrice(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
 }
 
-/** What a model connector exposes to the list/detail surfaces — never the key. */
-export interface ModelConnectorInfo {
+/** What a model exposes to the list/detail surfaces — never the key. */
+export interface ModelInfo {
   provider: string
   providerLabel: string
   baseURL: string
   /** True when `base_url:` is the note's own (custom) rather than pinned by the registry. */
   customEndpoint: boolean
   keySecret: string
-  /** The model this connector runs, as `<provider>/<id>` — null when it names none. */
+  /** The model this note runs, as `<provider>/<id>` — null when it names none. */
   modelRef: string | null
   /** The model id alone, for a surface that already says the provider. */
   modelId: string | null
   models: { id: string; label: string }[]
 }
 
-export function modelConnectorInfo(config: ModelConnectorConfig): ModelConnectorInfo {
+export function modelInfo(config: ModelConfig): ModelInfo {
   const p = config.provider
   return {
     provider: p.id,
@@ -241,17 +272,17 @@ export function modelConnectorInfo(config: ModelConnectorConfig): ModelConnector
 }
 
 /**
- * The starting note for a model connector created from the Create panel.
- * Round-trips through {@link parseModelConnector}.
+ * The starting note for a model added from the Models dialog or the catalogue.
+ * Round-trips through {@link parseModel}.
  */
-export function newModelConnectorNote(input: {
+export function newModelNote(input: {
   name: string
   provider: string
   baseUrl?: string
-  /** The model this connector runs. Blank falls back to the provider's first. */
+  /** The model this note runs. Blank falls back to the provider's first. */
   model?: string
   description?: string
-  /** The catalog recipe this came from — display only (lib/connectors/catalog.ts). */
+  /** The catalogue row this came from — display only (lib/models/catalog.ts). */
   recipe?: string
 }): string {
   const provider = PROVIDERS.find((p) => p.id === input.provider.trim().toLowerCase())
@@ -265,13 +296,11 @@ export function newModelConnectorNote(input: {
   const model = parseModelId(input.model?.trim() || undefined)
   if (!model.ok) throw new Error(model.error)
   const modelId = model.id ?? provider.models[0]?.id ?? null
-  if (!modelId) throw new Error('This provider ships no models, so the connector must name one — set `model:`')
+  if (!modelId) throw new Error('This provider ships no models, so the note must name one — set `model:`')
   const description = (input.description ?? '').trim()
   const front = [
-    `type: connector`,
-    `kind: model`,
+    `type: model`,
     `title: ${JSON.stringify(input.name)}`,
-    `alias: model`,
     `provider: ${provider.id}`,
     `model: ${modelId}`,
   ]
@@ -284,15 +313,29 @@ export function newModelConnectorNote(input: {
     provider.baseURL
       ? `Requests go to ${provider.baseURL} (pinned by Visvine, not by this note).`
       : `Requests go to ${baseURL} — the \`base_url:\` above, which only an admin can change.`,
-    `The key is the ${provider.keySecret} secret, set on this connector's page and`,
+    `The key is the ${provider.keySecret} secret, set on this model's page and`,
     `never written into a note.`,
     ``,
-    `This connector runs \`${modelId}\`. An agent that names no \`model:\` of its own`,
+    `This note runs \`${modelId}\`. An agent that names no \`model:\` of its own`,
     `runs on the space's model, which is this one unless the space has another;`,
     `an agent that needs a different one pins \`model: ${provider.id}/<model-id>\`.`,
     ``,
-    `This connector is not runnable — \`run_connector\` refuses it, so no note`,
-    `or agent can read or spend the key directly.`,
+    `A model is not a connector — \`run_connector\` cannot reach it, so no note`,
+    `or agent can read or spend the key directly. Its page is where the bill is`,
+    `read: what it cost this month, and which runs, for whom, spent it.`,
   ]
   return `---\n${front.join('\n')}\n---\n\n${body.join('\n')}\n`
+}
+
+/**
+ * Turn a legacy `connectors/<name>.md` (`kind: model`) note into the note
+ * `models/<name>.md` holds: `type: model`, the `kind:` and display `alias:`
+ * dropped, everything else — provider, model, base_url, pricing, enabled,
+ * recipe, description, the body — kept as written.
+ */
+export function legacyModelNoteToModel(fm: NoteFrontmatter, body: string): { fm: NoteFrontmatter; body: string } {
+  const next: NoteFrontmatter = { ...fm, type: 'model' }
+  delete next.kind
+  delete next.alias
+  return { fm: next, body }
 }

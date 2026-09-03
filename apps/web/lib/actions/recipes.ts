@@ -178,10 +178,10 @@ an H1, a "What changed" section grouped by theme, and a "People" list linking
 every person involved to their note.
 
 Note what is NOT there: \`model:\`. An agent runs on the SPACE's model — the
-first \`kind: model\` connector it has — because which model a space runs on is
+first note under \`models/\` it has — because which model a space runs on is
 one decision it makes once, beside the key that pays for it. Omit \`model:\`
 unless this particular agent must run on a different one the space ALSO has,
-and never invent a provider: a space with no model connector has no model, and
+and never invent a provider: a space with no model has no model, and
 the right answer is to say so and create the agent anyway. It will run as soon
 as somebody adds one, with no edit to the brief.
 
@@ -313,7 +313,7 @@ const RECIPES: Recipe[] = [
     mustKnow: () => [
       '`fetch` returns `body` as a STRING — call JSON.parse yourself; there is no .json().',
       'Use secrets by name (`env.API_KEY`), never ask the user for a credential value. Values are redacted from everything that returns.',
-      "A connector with no `hosts` is documentation-only. One with `kind: model` is the space's LLM provider — listed for context, never runnable.",
+      "A connector with no `hosts` is documentation-only. The space's models are not connectors — list_models shows them, and nothing runs them directly.",
       'Output is capped at 256KB and each space has a per-minute run budget (429 when exceeded).',
     ],
     blockers: (ctx) => [
@@ -352,7 +352,7 @@ const RECIPES: Recipe[] = [
       {
         n: 2,
         tool: 'list_connectors',
-        why: "The brief's `connectors` list is the agent's entire external reach, and every name must be a connector that exists. It also shows the space's `kind: model` connectors — but leave `model` out of the brief: the agent runs on the space's model. If there are none, say so and create it anyway.",
+        why: "The brief's `connectors` list is the agent's entire external reach, and every name must be a connector that exists. Leave `model` out of the brief: the agent runs on the space's model (list_models). If there are none, say so and create it anyway.",
         args: { space_id: spaceId(ctx) },
       },
       {
@@ -390,7 +390,7 @@ const RECIPES: Recipe[] = [
       'A clock schedule needs a timezone. Ask which one rather than assuming; "daily at 07:00" is meaningless without it.',
       'OFFER THE REHEARSAL. A brief nobody has seen run is a guess, and the first real run happens unattended. rehearse_agent hands you the round to do yourself — on your model, on your access, writing nothing — so the person reads the output and fixes the brief before it is ever switched on. It also surfaces a missing model or an unconnected connector now rather than in a failed 3am run.',
       'A rehearsal is NOT a run: say so plainly. Nothing was recorded on the agent, nothing was billed to the space, and the notes it would have written do not exist until it runs for real.',
-      "NEVER put a model in the brief unless the person asked for a specific one. If the space has no `kind: model` connector, create_agent says so in `model_problem` — repeat that to them (\"there is no model in this space yet, so I have left it unset; add one under Connectors and this will run\") rather than naming a provider they never signed up for.",
+      "NEVER put a model in the brief unless the person asked for a specific one. If the space has no model, create_agent says so in `model_problem` — repeat that to them (\"there is no model in this space yet, so I have left it unset; add one under Models and this will run\") rather than naming a provider they never signed up for.",
       'Once it is active, run_agent triggers it now without waiting for the schedule.',
       // agents/ refuses generic AI writes (contextService.lockedDenial), and
       // create_agent is the ONE way past it — it writes at a human origin.

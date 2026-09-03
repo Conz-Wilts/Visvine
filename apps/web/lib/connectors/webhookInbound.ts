@@ -8,7 +8,7 @@
  *
  *   1. shape        bad connector name / token shape → 404
  *   2. rate         per-(space, connector) bucket, 60/min → 429
- *   3. note         no note / not a connector / `kind: model` / no `webhook:`
+ *   3. note         no note / not a connector / no `webhook:`
  *                   block / URL token mismatch → 404, all indistinguishable, so
  *                   the URL cannot be used to enumerate a space's connectors
  *   4. size         body over `max_bytes` → 413 (checked before it is read)
@@ -33,7 +33,6 @@ import { decryptSecret, encryptSecret } from '@/lib/crypto/secrets'
 import { enqueueAgentEvent, webhookRecipients } from '@/lib/agents/events'
 import { parseConnectorPerimeter } from './config'
 import { appOrigin } from './connectUrl'
-import { connectorKind } from './model'
 import {
   extractEventField,
   pickWebhookHeaders,
@@ -92,7 +91,6 @@ async function loadWebhookConnector(spaceId: string, connector: string): Promise
   if (!row) return null
   const fm = parseFrontmatter(row.content)
   if (typeof fm.type !== 'string' || fm.type.trim().toLowerCase() !== 'connector') return null
-  if (connectorKind(fm) === 'model') return null
   const parsed = parseConnectorPerimeter(fm)
   if (!parsed.ok || !parsed.perimeter.webhook) return null
   return { path, webhook: parsed.perimeter.webhook }

@@ -43,7 +43,7 @@ import { runInIsolate, type IsolateRunResult } from './isolate'
 import { mcpAllTools, type McpToolInfo } from './hostMcp'
 import { MAX_DENIALS } from './perimeter'
 import { toolGroup, toolPermission, type ToolGroup, type ToolPermission } from './toolPolicy'
-import { connectorKind, modelConnectorInfo, parseModelConnector, type ConnectorKind, type ModelConnectorInfo } from './model'
+import { isLegacyModelConnector } from '@/lib/models/config'
 import { catalogEntryFor } from './catalog'
 
 const CONNECTORS_DIR = 'connectors/'
@@ -145,10 +145,6 @@ async function readConnectorNote(
 export interface ConnectorSummary {
   name: string
   path: string
-  /** `http` = a perimeter connector agents can run; `model` = an LLM provider (never runnable). */
-  kind: ConnectorKind
-  /** Set for `kind: model` — provider, pinned base URL, key secret NAME, known models. */
-  model: ModelConnectorInfo | null
   /** Raw frontmatter `alias` — display metadata only (chip colour), any string. */
   alias: string | null
   /**
@@ -210,8 +206,14 @@ function connectorName(path: string): string {
  * other entity namespace writes its `type:` capitalised (`Person`, `Space`), so
  * a note authored by hand as `type: Connector` must count.
  */
+/**
+ * A connector note declares `type: connector`. The pre-`models/` shape of a
+ * model — `type: connector` with `kind: model` — is NOT one: it is a model
+ * (lib/agents/spaceModels.ts reads it until `db:models:migrate` moves it),
+ * so nothing here lists, loads or runs it.
+ */
 function isConnectorNote(fm: NoteFrontmatter): boolean {
-  return typeof fm.type === 'string' && fm.type.trim().toLowerCase() === 'connector'
+  return typeof fm.type === 'string' && fm.type.trim().toLowerCase() === 'connector' && !isLegacyModelConnector(fm)
 }
 
 /** Human-readable form of an allow rule — the shape admins wrote in the note. */
@@ -234,7 +236,7 @@ function formatAllowRule(rule: { method: string; path: string; prefix: boolean }
  */
 function mcpEndpoint(name: string, recipe: string | null, declared: { url: string } | null): { url: string } | null {
   if (declared) return declared
-  const entry = catalogEntryFor(name, null, recipe)
+  const entry = catalogEntryFor(name, recipe)
   return entry?.mcp ? { url: entry.mcp.url } : null
 }
 
@@ -254,30 +256,9 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
     enabled: isConnectorEnabled(fm),
     docs,
   }
-  if (connectorKind(fm) === 'model') {
-    // No perimeter: the endpoint is the provider's, the key is the provider's
-    // reserved secret. `secrets` names it so the console's missing-secret
-    // check works unchanged.
-    const parsed = parseModelConnector(fm)
-    const info = parsed.ok ? modelConnectorInfo(parsed.config) : null
-    return {
-      ...base,
-      kind: 'model',
-      model: info,
-      hosts: [],
-      allow: [],
-      invalid: parsed.ok ? null : parsed.error,
-      warnings: [],
-      secrets: info ? [info.keySecret] : [],
-      actions: [],
-      mcp: null,
-    }
-  }
   const parsed = parseConnectorPerimeter(fm)
   return {
     ...base,
-    kind: 'http',
-    model: null,
     hosts: parsed.ok ? [...parsed.perimeter.hosts] : [],
     allow: parsed.ok ? parsed.perimeter.allow.map(formatAllowRule) : [],
     invalid: parsed.ok ? null : parsed.error,
@@ -325,7 +306,7 @@ export async function listHiddenConnectors(p: ContextPrincipal, context: Context
     if (!raw.path.startsWith(CONNECTORS_DIR) || !raw.path.endsWith('.md')) continue
     if (canReadPath(p, context, raw.path)) continue
     const summary = summariseNote(raw.path, raw.content)
-    if (!summary || summary.kind === 'model') continue
+    if (!summary) continue
     hidden.push({ name: summary.name, path: summary.path, title: summary.title, recipe: summary.recipe })
   }
   return hidden.sort((a, b) => a.name.localeCompare(b.name))
@@ -382,7 +363,6 @@ export async function describeConnector(
   if (content === null) return null
   const summary = summariseNote(path, content)
   if (!summary) return null
-  if (summary.kind === 'model') return { ...summary, perimeter: null }
   const parsed = parseConnectorPerimeter(parseFrontmatter(content))
   return { ...summary, perimeter: parsed.ok ? parsed.perimeter : null }
 }
@@ -449,8 +429,8 @@ export interface LoadedConnector {
  * Load one connector through the visibility lens. Null when the note is absent
  * OR not visible (indistinguishable, matching readVisible semantics); throws
  * ConnectorError('config') when the note exists but isn't a valid connector —
- * including every `kind: model` connector, which is deliberately not runnable
- * (see lib/connectors/model.ts). Every executor (MCP run_connector, the agent
+ * and a model, which lives under models/ and is deliberately not a connector
+ * (lib/models/config.ts). Every executor (MCP run_connector, the agent
  * tool, the console terminal) loads through here, so that refusal is one line.
  */
 export async function loadConnector(
@@ -465,12 +445,6 @@ export async function loadConnector(
   const fm = parseFrontmatter(content)
   if (!isConnectorNote(fm)) {
     throw new ConnectorError('config', `The note at ${path} is not a connector (missing \`type: connector\`)`)
-  }
-  if (connectorKind(fm) === 'model') {
-    throw new ConnectorError(
-      'config',
-      `${name} is a model connector — it names the provider agents run on and is not runnable. Set an agent's \`model:\` to use it.`,
-    )
   }
   // Off is a refusal, not a not-found: the note is there and the caller named
   // it correctly, so say so rather than letting them hunt for a typo.
@@ -535,9 +509,6 @@ export async function connectorReadiness(
       const { content, spaceId: ownerSpaceId, personal } = source
       const fm = parseFrontmatter(content)
       if (!isConnectorNote(fm)) return { connector: name, status: 'invalid', ...none, detail: 'the note is not a connector' }
-      // A model connector names the provider the agent runs on; the model-key
-      // check (keyStored) owns that half, so it never blocks here.
-      if (connectorKind(fm) === 'model') return { connector: name, status: 'ok', ...none, personal }
       if (!isConnectorEnabled(fm)) return { connector: name, status: 'disabled', ...none, personal }
       const parsed = parseConnectorPerimeter(fm)
       if (!parsed.ok) return { connector: name, status: 'invalid', ...none, personal, detail: parsed.error }
@@ -562,27 +533,6 @@ export async function connectorReadiness(
   )
 }
 
-/**
- * Which of these declared connector names an agent may actually be offered a
- * `run_connector` tool for: everything except `kind: model` notes. Absent or
- * invisible names stay in the list — the tool then reports not-found at call
- * time, which is the honest answer; only model connectors are silently
- * unofferable, because offering them would advertise something that always
- * refuses.
- */
-export async function runnableConnectorNames(
-  p: ContextPrincipal,
-  context: Context,
-  names: readonly string[],
-): Promise<string[]> {
-  const kept = await Promise.all(
-    names.map(async (name) => {
-      const source = await readConnectorNote(p, context, name)
-      return source === null || connectorKind(parseFrontmatter(source.content)) !== 'model'
-    }),
-  )
-  return names.filter((_, i) => kept[i])
-}
 
 /**
  * The actions each of these runnable connectors declares — for a tool

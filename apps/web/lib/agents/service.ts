@@ -99,7 +99,8 @@ export interface AgentSummary {
    */
   modelEffective: string | null
   /** The connector supplying it, when the model is the space's rather than pinned. */
-  modelConnector: string | null
+  /** The path of the model note a brief that names none runs on; null when it pins one or there is none. */
+  modelNote: string | null
   /**
    * Why it cannot run at all — no model in the space, no key, a connector
    * switched off — or null when it can. One sentence, already phrased for
@@ -169,24 +170,24 @@ function rowStateOf(
 function modelStateOf(
   brief: AgentBrief | null,
   models: readonly SpaceModel[],
-): Pick<AgentSummary, 'modelEffective' | 'modelConnector' | 'modelProblem'> {
-  if (!brief) return { modelEffective: null, modelConnector: null, modelProblem: null }
+): Pick<AgentSummary, 'modelEffective' | 'modelNote' | 'modelProblem'> {
+  if (!brief) return { modelEffective: null, modelNote: null, modelProblem: null }
   if (brief.modelRef) {
     const ref = `${brief.modelRef.provider.id}/${brief.modelRef.modelId}`
-    // A pinned model is served by whichever connector names that provider; the
+    // A pinned model is served by whichever model note names that provider; the
     // key is per provider, so any of them proves it is payable.
     const behind = models.find((m) => m.provider.id === brief.modelRef!.provider.id && m.problem === null)
     return {
       modelEffective: ref,
-      modelConnector: null,
+      modelNote: null,
       modelProblem: behind
         ? null
-        : `This brief pins ${ref}, and this space has no working ${brief.modelRef.provider.label} connector. Add one under Connectors → Models, or clear \`model:\` to use the space's.`,
+        : `This brief pins ${ref}, and this space has no working ${brief.modelRef.provider.label} model. Add one under Models, or clear \`model:\` to use the space's.`,
     }
   }
   const fallback = defaultModelOf(models)
-  if (!fallback) return { modelEffective: null, modelConnector: null, modelProblem: noModelReason(models) }
-  return { modelEffective: fallback.ref, modelConnector: fallback.connector, modelProblem: null }
+  if (!fallback) return { modelEffective: null, modelNote: null, modelProblem: noModelReason(models) }
+  return { modelEffective: fallback.ref, modelNote: fallback.path, modelProblem: null }
 }
 
 async function summarise(

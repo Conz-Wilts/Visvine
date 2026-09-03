@@ -12,7 +12,7 @@ const base = {
   name: 'weekly-digest',
   title: 'Weekly digest',
   modelEffective: 'anthropic/claude-sonnet-5',
-  modelConnector: 'anthropic',
+  modelNote: 'models/anthropic.md',
   modelProblem: null as string | null,
   connectors: [] as RehearsalConnector[],
   tools: [] as string[],
@@ -24,7 +24,7 @@ test('an agent that could run for real is ready, with nothing blocking', () => {
   assert.deepEqual(plan.blocking, [])
   assert.deepEqual(plan.out_of_reach, [])
   assert.match(plan.instruction, /Weekly digest/)
-  assert.match(plan.instruction, /A real run would use anthropic\/claude-sonnet-5 \(the space's model, connectors\/anthropic\.md\)\./)
+  assert.match(plan.instruction, /A real run would use anthropic\/claude-sonnet-5 \(the space's model, models\/anthropic\.md\)\./)
   assert.match(plan.instruction, /Its reach: the gmail connector, the web tool, and every run reads and writes notes\./)
 })
 
@@ -32,7 +32,7 @@ test('no model in the space blocks the real run but not the rehearsal', () => {
   const plan = rehearsalPlan({
     ...base,
     modelEffective: null,
-    modelConnector: null,
+    modelNote: null,
     modelProblem: 'This space has no model connector yet.',
   })
   assert.equal(plan.ready, false)

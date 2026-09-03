@@ -34,7 +34,7 @@ export interface RehearsalInput {
   /** What it would run on, `<provider>/<id>`, or null when the space has no model. */
   modelEffective: string | null
   /** The connector supplying that model, when it is the space's rather than a pin. */
-  modelConnector: string | null
+  modelNote: string | null
   /** Why a real run cannot happen at all, already phrased for a person. */
   modelProblem: string | null
   connectors: readonly RehearsalConnector[]
@@ -78,7 +78,7 @@ export function rehearsalPlan(input: RehearsalInput): RehearsalPlan {
   const blocking = [...(input.modelProblem ? [input.modelProblem] : []), ...broken.map(connectorLine)]
 
   const runsOn = input.modelEffective
-    ? `A real run would use ${input.modelEffective}${input.modelConnector ? ` (the space's model, connectors/${input.modelConnector}.md)` : ' (pinned in the brief)'}.`
+    ? `A real run would use ${input.modelEffective}${input.modelNote ? ` (the space's model, ${input.modelNote})` : ' (pinned in the brief)'}.`
     : 'A real run could not happen yet — this space has no model for an agent to run on.'
 
   const rules = [

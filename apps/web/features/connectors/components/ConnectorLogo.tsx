@@ -1,7 +1,7 @@
 'use client';
 
 import { PlugIcon } from '@/features/shared/icons';
-import { catalogEntryFor, type CatalogEntry } from '@/lib/connectors/catalog';
+import { catalogEntryFor } from '@/lib/connectors/catalog';
 
 /**
  * A connector's mark: the service's logo where the note came from a catalog
@@ -9,11 +9,12 @@ import { catalogEntryFor, type CatalogEntry } from '@/lib/connectors/catalog';
  * logo to show, and a square that says "connector" beats an empty box.
  *
  * The same component on both surfaces (the console's Connectors list and the
- * connector's own page) so a row and the page it opens carry one mark. Pass
- * `entry` where the catalog row is already in hand; pass `name` (plus the note's
- * `recipe`, and `provider` for a model connector) where all there is is a note.
- * `recipe` is what keeps the mark right on a second connection to one service,
- * whose name is `google-drive-2` rather than `google-drive`.
+ * connector's own page) so a row and the page it opens carry one mark — and
+ * on a model's row and page too, handed the model catalogue's entry. Pass
+ * `entry` where the catalogue row is already in hand; pass `name` (plus the
+ * note's `recipe`) where all there is is a connector note. `recipe` is what
+ * keeps the mark right on a second connection to one service, whose name is
+ * `google-drive-2` rather than `google-drive`.
  */
 
 const SIZES = {
@@ -25,18 +26,17 @@ const SIZES = {
 export default function ConnectorLogo({
   entry,
   name,
-  provider,
   recipe,
   size = 'md',
 }: {
-  entry?: CatalogEntry | null;
+  /** Any catalogue row with a logo — a connector's or a model's. */
+  entry?: { logo: string } | null;
   name?: string;
-  provider?: string | null;
   /** The note's `recipe:` — the service, where the name no longer says it. */
   recipe?: string | null;
   size?: keyof typeof SIZES;
 }) {
-  const resolved = entry ?? (name ? catalogEntryFor(name, provider, recipe) : null);
+  const resolved = entry ?? (name ? catalogEntryFor(name, recipe) : null);
   const { box, glyph } = SIZES[size];
   return (
     <div className={`${box} flex shrink-0 items-center justify-center bg-surface-2`}>

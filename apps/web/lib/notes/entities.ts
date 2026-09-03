@@ -19,6 +19,7 @@ export type EntityKind =
   | 'connector'
   | 'agent'
   | 'tool'
+  | 'model'
 
 // `space` is the org kind (a group, organisation or community recorded in the
 // directory); there is no separate `company`
@@ -44,6 +45,13 @@ export type EntityKind =
 // is still read (never written); it is a sub-note like any other (it opens on
 // the agent's Context tab) but never an entity note, so it syncs no node and
 // resolves no [[mention]].
+//
+// model is the fourth config kind, and the flattest: models/<name>.md names
+// the provider a space's agents run on and the model id they run (lib/models).
+// It is read by sweeping the folder (lib/agents/spaceModels.ts), never written
+// under, so it keeps the lazy one-note shape a connector has. It gets the
+// entity treatment for one reason a connector does not need: its node page is
+// where the bill is read — what the model cost, and who ran on it.
 //
 // tool is note-first too, and folder-only in the strictest sense: a Tool is
 // several notes by construction — tools/<name>/index.md (frontmatter = config,
@@ -72,6 +80,7 @@ const CHANNELS_DIR = 'channels'
 const CONNECTORS_DIR = 'connectors'
 const AGENTS_DIR = 'agents'
 const TOOLS_DIR = 'tools'
+const MODELS_DIR = 'models'
 
 // The dirs kept their pre-rename names on purpose: a note path is storage AND
 // link identity (every inbound [[mention]] resolves against it), so renaming
@@ -88,6 +97,7 @@ const ENTITY_DIRS: Record<EntityKind, string> = {
   connector: CONNECTORS_DIR,
   agent: AGENTS_DIR,
   tool: TOOLS_DIR,
+  model: MODELS_DIR,
 }
 
 /**
@@ -158,6 +168,7 @@ export function entityKindOf(type: string | null | undefined): EntityKind | null
   if (t === 'connector' || t === 'connectors') return 'connector'
   if (t === 'agent' || t === 'agents') return 'agent'
   if (t === 'tool' || t === 'tools') return 'tool'
+  if (t === 'model' || t === 'models') return 'model'
   if (t === 'resource' || t === 'resources') return 'resource'
   if (t === 'event' || t === 'events') return 'event'
   return null
@@ -270,7 +281,7 @@ export function canonicalEntityPath(path: string): string {
 // Namespaces where EITHER form names the entity — '<ns>/<slug>/index.md', the
 // folder, or '<ns>/<slug>.md': the flat alias of a folder-only kind, or a lazy
 // kind's note before it converts (see FOLDER_ONLY_ENTITY_KINDS).
-const FLAT_ENTITY_NS_RE = 'people|resources|events|communities|spaces|channels|connectors|agents'
+const FLAT_ENTITY_NS_RE = 'people|resources|events|communities|spaces|channels|connectors|agents|models'
 // Namespaces where only '<ns>/<slug>/index.md' names the entity: a tool's flat
 // path is an ordinary note.
 const FOLDER_ENTITY_NS_RE = 'tools'
@@ -377,6 +388,7 @@ export function entityKindOfDir(path: string): EntityKind | null {
   if (path.startsWith(`${CONNECTORS_DIR}/`)) return 'connector'
   if (path.startsWith(`${AGENTS_DIR}/`)) return 'agent'
   if (path.startsWith(`${TOOLS_DIR}/`)) return 'tool'
+  if (path.startsWith(`${MODELS_DIR}/`)) return 'model'
   return null
 }
 
@@ -497,10 +509,13 @@ export function namespaceFolderDenial(path: string): string | null {
  *
  * The entity namespaces (`people/`, `events/`, …) are deliberately NOT here:
  * they're derived from the directory rather than switched on, so an empty one
- * is noise. This is about the three folders a person goes LOOKING for.
+ * is noise. This is about the four folders a person goes LOOKING for —
+ * `models/` beside `agents/` for the same reason: what the agents run on is
+ * one decision a space makes, and the folder is where it is written.
  */
 const STRUCTURAL_FOLDER_FEATURES: Record<string, string> = {
   agents: 'notes',
+  models: 'notes',
   connectors: 'connectors',
   tools: 'tools',
 }
@@ -577,6 +592,8 @@ const ENTITY_TYPE_LABEL: Record<EntityKind, string> = {
   agent: 'agent',
   // Same reason again: `type: tool` is what lib/tools matches on.
   tool: 'tool',
+  // And `type: model` is what lib/models matches on.
+  model: 'model',
 }
 /** The frontmatter `type:` an entity note of this node type carries, or null
  *  for a non-entity type. */
@@ -622,6 +639,7 @@ const ENTITY_TAG: Record<EntityKind, string> = {
   connector: 'connector',
   agent: 'agent',
   tool: 'tool',
+  model: 'model',
 }
 
 // Default markdown for an auto-created entity context note. Carries the directory
