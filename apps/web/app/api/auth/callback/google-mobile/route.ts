@@ -185,8 +185,6 @@ export async function GET(req: NextRequest) {
           name: googleName,
           image: googlePicture,
           googleId,
-          oauthProvider: "google",
-          emailVerified: true,
           isActive: true,
         },
       });
@@ -222,7 +220,6 @@ export async function GET(req: NextRequest) {
       where: { id: userByEmail.id },
       data: {
         googleId,
-        oauthProvider: "google",
         name: googleName,
         image: googlePicture || userByEmail.image,
       },

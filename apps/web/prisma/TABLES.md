@@ -26,7 +26,7 @@ in the shared context of a personal Space, so any other value is legacy.)
 | `context_notes` | The notes themselves. Full markdown (frontmatter + body) is the source of truth. Soft-delete (`deleted_at`) = trash. |
 | `context_note_revisions` | Version history. One full snapshot per save, plus who saved it and why (`edit`, `agent`, `ai-enrich`, `restore`, …). |
 | `context_folders` | Folders that exist even when empty, plus the two folder flags: `restricted` (cuts permission inheritance at that boundary) and `locked` (frozen for AI). |
-| `context_state` | Control-plane sidecar files — folder registry, read-audit log, join requests, enrichment ledger. JSON/JSONL blobs, one row per named file. |
+| `context_state` | Control-plane sidecar files — the folder registry, the access-seeding marker and the context settings. JSON blobs, one row per named file. |
 | `context_note_embeddings` | Cached vector for each whole note, for semantic search. Re-computed when the note changes. |
 | `context_memories` | One-sentence claims extracted from each note by the nightly sweep, with a vector each. Search ranks over them and folds each hit onto its note, so a result can carry the sentence that answered. Rows from an older save of the note are never served. |
 | `context_publications` | A live publish link: a note in one Space is mirrored into another Space's context and rewritten on every save. Turning it off leaves the copy behind as a plain note. |
@@ -37,7 +37,7 @@ in the shared context of a personal Space, so any other value is legacy.)
 
 | Table | Controls |
 | --- | --- |
-| `context_grants` | One rule: *subject* (whole Space / an alias / a single user) gets *level* (view 10, comment 20, edit 30, full 40) on *path* (root, a folder, or one note). Access flows down the tree; your effective level is the highest grant that reaches the note. Grants only ever add. |
+| `context_grants` | One rule: *subject* (whole Space / an alias / a single user) gets *level* (view 10, edit 30) on *path* (root, a folder, or one note). Access flows down the tree; your effective level is the highest grant that reaches the note. Grants only ever add. |
 | `context_access_requests` | "Please give me access to X" — the request, its status, and what an admin eventually granted. Kept afterwards as the audit trail. |
 
 ## Connectors

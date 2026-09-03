@@ -36,14 +36,13 @@ export async function GET(
   const canManage = await isAdmin(session.userId, resource.spaceId, session.email);
 
   // A download URL is signed per read and never stored — see the note on
-  // Resource.gcsPath. `fileUrl` survives only to serve pre-migration rows that
-  // hold a real static link rather than one of our expired signatures.
-  let fileUrl = resource.fileUrl;
+  // Resource.gcsPath. A row with no object (a seeded demo file) has no URL.
+  let fileUrl: string | null = null;
   if (resource.gcsPath && process.env.GCS_RESOURCES_BUCKET) {
     try {
       fileUrl = await getSignedUrl(RESOURCES_BUCKET(), resource.gcsPath);
     } catch {
-      // fall back to the stored value rather than failing the page
+      // The page still renders; it just has no download link.
     }
   }
 

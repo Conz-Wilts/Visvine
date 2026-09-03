@@ -56,13 +56,6 @@ export async function createAuthCode(input: {
   redirectUri: string
   scope: string
   codeChallenge: string
-  /**
-   * The MCP resource the resulting tokens are for (RFC 8707). There is one, so
-   * this is constant today; the column and its CHECK constraint stay because a
-   * code issued before the surfaces were one is still in flight for its
-   * five-minute life.
-   */
-  resource: string
 }): Promise<string> {
   const code = randomToken(32)
   await prisma.oAuthAuthCode.create({
@@ -72,7 +65,6 @@ export async function createAuthCode(input: {
       userId: input.userId,
       redirectUri: input.redirectUri,
       scope: input.scope,
-      resource: input.resource,
       codeChallenge: input.codeChallenge,
       codeChallengeMethod: 'S256',
       expiresAt: new Date(Date.now() + AUTH_CODE_TTL_MS),

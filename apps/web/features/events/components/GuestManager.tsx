@@ -28,7 +28,7 @@ interface GuestManagerProps {
 }
 
 // Client-safe status helpers (kept local to avoid importing node `crypto` via eventUtils).
-const norm = (s: string): RSVPStatus => (!s || s === 'registered' ? 'going' : (s as RSVPStatus));
+const norm = (s: string): RSVPStatus => (s ? (s as RSVPStatus) : 'going');
 const spots = (a: AttendeeRow) =>
   a.response === 'maybe' ? 0 : (['going', 'checked_in'].includes(norm(a.status)) ? 1 + (a.plusOnes ?? 0) : 0);
 

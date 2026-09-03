@@ -24,12 +24,8 @@
  * (lib/notes/shared/permissions.ts: principalCanManage). That is the whole
  * model: view/edit are note-by-note, administration is a space role.
  *
- * The numbers are spaced, not sequential, and the retired levels' values are
- * deliberately skipped: rows written when 'comment' (20) and 'full' (40)
- * existed are still in the DB, and the max-wins ladder reads them correctly
- * without a data migration — 20 lands at view (it never granted more than
- * view), 40 lands at edit (its extra powers are now admin-only). Never reuse
- * 20 or 40 for a new level.
+ * The numbers are spaced so a level can be added between them; a CHECK on the
+ * table holds the list to exactly these two.
  */
 export const LEVEL_VIEW = 10
 export const LEVEL_EDIT = 30

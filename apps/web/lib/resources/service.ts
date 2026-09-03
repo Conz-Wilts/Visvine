@@ -326,9 +326,8 @@ export async function deleteResource(resourceId: string): Promise<boolean> {
   await prisma.resource.delete({ where: { id: resource.id } })
 
   // Last, and best-effort: an orphaned object costs storage, an orphaned record
-  // costs a broken page. Legacy rows may hold a URL rather than an object path —
-  // only delete what we can prove is one of ours.
-  if (resource.gcsPath && !resource.gcsPath.startsWith('http') && !resource.gcsPath.startsWith('/uploads')) {
+  // costs a broken page.
+  if (resource.gcsPath) {
     await deleteResourceFile(resource.gcsPath).catch((err) =>
       logger.error('resources.deleteObject.failed', { resourceId, err }),
     )
@@ -341,7 +340,6 @@ type ResourceRow = {
   spaceId: string
   name: string
   fileType: string
-  fileUrl: string | null
   fileSize: number | null
   uploadedBy: string
   sourcePath: string | null
@@ -358,7 +356,7 @@ function toDriveFile(row: ResourceRow, chunkCount: number, fileUrl?: string | nu
     spaceId: row.spaceId,
     name: row.name,
     fileType: row.fileType,
-    fileUrl: fileUrl ?? row.fileUrl,
+    fileUrl: fileUrl ?? null,
     fileSize: row.fileSize,
     uploadedBy: row.uploadedBy,
     sourcePath: row.sourcePath,
@@ -393,12 +391,12 @@ export async function listResources(spaceId: string): Promise<DriveFile[]> {
 
   return Promise.all(
     rows.map(async (row) => {
-      let url = row.fileUrl
+      let url: string | null = null
       if (row.gcsPath && process.env.GCS_RESOURCES_BUCKET) {
         try {
           url = await getSignedUrl(RESOURCES_BUCKET(), row.gcsPath)
         } catch {
-          // Keep whatever the row holds rather than failing the whole listing.
+          // A file whose URL cannot be signed still lists; it just has no link.
         }
       }
       return toDriveFile(row, row.sourcePath ? (chunksByPath.get(row.sourcePath) ?? 0) : 0, url)

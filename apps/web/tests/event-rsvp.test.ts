@@ -21,8 +21,7 @@ function attendee(partial: Partial<NBAttendee>): NBAttendee {
   };
 }
 
-test("normalizeStatus maps legacy 'registered' to 'going'", () => {
-  assert.equal(normalizeStatus("registered"), "going");
+test("normalizeStatus reads a blank status as the column default, going", () => {
   assert.equal(normalizeStatus(undefined), "going");
   assert.equal(normalizeStatus(""), "going");
   assert.equal(normalizeStatus("waitlisted"), "waitlisted");
@@ -32,7 +31,6 @@ test("normalizeStatus maps legacy 'registered' to 'going'", () => {
 test("spotsTaken counts a confirmed guest plus their +guests", () => {
   assert.equal(spotsTaken(attendee({ status: "going", plusOnes: 2 })), 3);
   assert.equal(spotsTaken(attendee({ status: "checked_in", plusOnes: 0 })), 1);
-  assert.equal(spotsTaken(attendee({ status: "registered" })), 1); // legacy
 });
 
 test("spotsTaken reserves nothing for maybe / waitlist / pending / cancelled", () => {

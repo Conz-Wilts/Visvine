@@ -340,9 +340,9 @@ try {
     const path = join(uploadDir, r.file);
     writeFileSync(path, r.body, 'utf8');
     const row = await client.query(
-      `INSERT INTO resources (space_id, name, file_type, file_url, file_size, uploaded_by, metadata, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, '{"seeded": "true"}'::jsonb, $7) RETURNING id`,
-      [COMM, r.name, r.fileType, `/uploads/seed/${r.file}`, Buffer.byteLength(r.body), r.uploadedBy, daysAgo(r.daysAgo)],
+      `INSERT INTO resources (space_id, name, file_type, file_size, uploaded_by, metadata, created_at)
+       VALUES ($1, $2, $3, $4, $5, '{"seeded": "true"}'::jsonb, $6) RETURNING id`,
+      [COMM, r.name, r.fileType, Buffer.byteLength(r.body), r.uploadedBy, daysAgo(r.daysAgo)],
     );
     resourceIdByFile.set(r.file, row.rows[0].id);
   }

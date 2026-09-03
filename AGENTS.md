@@ -410,10 +410,7 @@ standing behind it.
 
 `/api/mcp/creator` 308s to `/api/mcp`, and `legacyResourceUrl()` keeps the
 tokens and `resource` parameters of connections made before the merge
-verifying. Both are deletable once nothing is configured that way. The
-`oauth_auth_codes.resource` column is now constant (`'context'`) rather than
-migrated away: codes live five minutes, so one issued before the merge is still
-in flight, and re-splitting later would want the binding back.
+verifying. Both are deletable once nothing is configured that way.
 
 The identity clients render — name, title, website, logo — is
 `lib/mcp/config.ts#mcpServerInfo`. The logo is the favicon PNG, but served from

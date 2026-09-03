@@ -208,15 +208,15 @@ model ContextFolder {
   space      Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
   @@unique([spaceId, ownerKey, path], name: "folder_identity")
-  @@index([spaceId, ownerKey])
   @@map("context_folders")
 }
 
 /// Control-plane sidecar for a context. One row per named file per context: the
-/// folder registry ("folders.json"), read-audit log ("audit.jsonl"), join
-/// requests ("join-requests.jsonl"), enrichment ledger ("enrichment-state.json").
-/// Content is text (JSON or JSONL); the domain layer (lib/notes/sidecar.ts)
-/// owns parsing. Keyed like notes so personal contexts can also carry state.
+/// folder registry ("folders.json"), the access-seeding marker
+/// ("access-state.json") and the context settings ("settings.json"). Content is
+/// JSON text; the domain layer (lib/notes/sidecar.ts) owns parsing. Keyed like
+/// notes so personal contexts can also carry state. The audit log, join
+/// requests and move proposals each have a table of their own.
 model ContextState {
   id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId   String   @map("space_id")
@@ -351,10 +351,9 @@ model ConnectorState {
   @@map("connector_state")
 }
 
-/// The scheduler's index of one Space agent (lib/agents). The NOTES stay
-/// authoritative — `agents/<name>.md` is the brief, `agents/live/<name>.md`
-/// holds `active` and the schedule — and this row is derived from them on
-/// every write (`scheduleHash` lets a tick notice a note that changed under
+/// The scheduler's index of one Space agent (lib/agents). The NOTE stays
+/// authoritative — `agents/<name>/index.md` is the brief, its schedule and
+/// its `active` flag — and this row is derived from it on every write (`scheduleHash` lets a tick notice a note that changed under
 /// it and re-derive). It exists so "who is due" is one indexed query instead
 /// of parsing every live agent note every five minutes, and so overlap
 /// suppression is an atomic compare-and-swap on `status` that survives ten
@@ -363,7 +362,7 @@ model ConnectorState {
 model AgentState {
   id                  String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId             String    @map("space_id")
-  name                String // agent name = basename of agents/<name>.md
+  name                String // agent name = the folder under agents/
   runAsUserId         String?   @map("run_as_user_id") // the brief's author; the principal a run acts as
   briefNoteId         String?   @map("brief_note_id") // the context_notes row this state was derived from; a different id at the same name is a NEW agent, and the old one's runs go with it
   active              Boolean   @default(false)
@@ -492,7 +491,6 @@ model AgentVm {
   substrate     String    @default("cloudflare")
   substrateName String    @map("substrate_name")
   instanceType  String    @default("standard-3") @map("instance_type")
-  imageDigest   String?   @map("image_digest")
   /// provisioning | running | asleep | reaping | unavailable | dead
   state         String    @default("provisioning")
   policyHash    String?   @map("policy_hash")
@@ -837,18 +835,15 @@ model ContextGrant {
   // alias's stable id, never its name — see the note on UserAlias.
   subjectId    String   @default("") @map("subject_id")
   resourcePath String   @default("") @map("resource_path") // '' = context root
-  // 10 view · 30 edit. These are the only two grantable levels: permissions
+  // 10 view · 30 edit — the only two levels, enforced by a CHECK. Permissions
   // ABOUT a resource (sharing, restricting, deleting a folder) are a space-admin
-  // power, not a level. 20 ('comment') and 40 ('full') are RETIRED — rows may
-  // still hold them and the max-wins ladder reads them as view and edit
-  // respectively, so never reuse those values. See lib/notes/shared/authz.ts.
+  // power, not a level. See lib/notes/shared/authz.ts.
   level        Int
   grantedBy    String   @map("granted_by")
   createdAt    DateTime @default(now()) @map("created_at")
   space        Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
   @@unique([spaceId, subjectType, subjectId, resourcePath], name: "grant_identity")
-  @@index([spaceId, subjectType, subjectId])
   @@map("context_grants")
 }
 
@@ -904,10 +899,6 @@ model ContextPublication {
   @@map("context_publications")
 }
 
-/// Cached whole-note embedding for the retrieval vector stage (pgvector).
-/// Keyed by the note's context + path; `mtime` is the note's updatedAt epoch-ms at
-/// embed time, so a stale row (mtime mismatch) is lazily re-embedded on the next
-/// search. `embedding` is written/read via raw SQL (Prisma can't type vector).
 /// A queued publish/promotion proposal: someone wants a note of theirs to live
 /// in a shared folder they cannot write to, and a folder admin approves or
 /// denies it (lib/notes/promote.ts). Same shape and same reason as
@@ -1107,7 +1098,6 @@ model Node {
   linksAsTarget  Link[]          @relation("TargetNode")
   space          Space?          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  @@index([spaceId])
   @@index([type])
   @@index([spaceId, type])
   @@index([identityId])
@@ -1139,7 +1129,6 @@ model Link {
   @@unique([spaceId, pairKey, relationship], name: "link_identity") // dedup; origin deliberately NOT in the key
   @@index([sourceId])
   @@index([targetId])
-  @@index([spaceId])
   @@index([pairKey])
   @@map("links")
 }
@@ -1154,8 +1143,8 @@ model EventAttendee {
   companyName  String?   @map("company_name")
   roleTitle    String?   @map("role_title")
   answers      Json      @default("{}")
-  // Operational lifecycle: going | waitlisted | pending | checked_in | no_show | cancelled | invited.
-  // Legacy rows may still hold 'registered' (normalized to 'going' on read — see eventUtils.normalizeStatus).
+  // Operational lifecycle: going | waitlisted | pending | checked_in | no_show | cancelled | invited
+  // (a CHECK constraint holds the list).
   status       String    @default("going")
   // Guest's intent, separate from the operational status: going | maybe | declined.
   response     String?
@@ -1169,7 +1158,6 @@ model EventAttendee {
   person       Node?     @relation("PersonNode", fields: [personId], references: [id])
 
   @@unique([eventId, email]) // dedupe RSVPs by email (NULL emails remain distinct in Postgres)
-  @@index([eventId])
   @@index([eventId, status])
   @@index([personId])
   @@index([email])
@@ -1203,14 +1191,12 @@ model User {
   id            String        @id @default(dbgenerated("(gen_random_uuid())::text"))
   name          String
   email         String        @unique
-  emailVerified Boolean       @default(false) @map("email_verified")
   image         String?
   createdAt     DateTime      @default(now()) @map("created_at")
   updatedAt     DateTime      @updatedAt @map("updated_at")
   claimNonce    String?       @unique @map("claim_nonce")
   googleId      String?       @unique @map("google_id")
   isActive      Boolean       @default(true) @map("is_active")
-  oauthProvider String?       @map("oauth_provider")
   publicMeta    Json          @default("{}") @map("public_meta")
   person        Person?
   membersAdded  SpaceMember[] @relation("AddedByRelation")
@@ -1257,7 +1243,6 @@ model SpaceMember {
   user        User     @relation("MemberOf", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, spaceId])
-  @@index([userId])
   @@index([spaceId])
   @@map("space_members")
 }
@@ -1291,9 +1276,8 @@ model Person {
 /// photo, strong identifiers). Resolution (lib/identity/resolve.ts) decides whether
 /// a new node attaches to an existing identity or mints a new one. `userId` links the
 /// identity to a registered User when claimed/verified (email/linkedin become
-/// authoritative); kept as a plain unique scalar to avoid a relation on the large
-/// User model. Strong identifiers are stored normalized and treated as effectively
-/// unique per kind by the resolver/backfill (no DB partial-unique with db push).
+/// authoritative). Strong identifiers are stored normalized and treated as
+/// effectively unique per kind by the resolver/backfill.
 model Identity {
   kind           String // 'person' | 'organization'
   canonicalName  String   @map("canonical_name")
@@ -1357,14 +1341,8 @@ model Resource {
   /// The object in GCS_RESOURCES_BUCKET. SERVER-MINTED, never accepted from a
   /// client: this is the string the API signs a download URL for, so a
   /// client-supplied one would sign any object in the bucket — including another
-  /// space's. It used to live in the `metadata` blob and be posted by the
-  /// browser, which is exactly that hole. Null only for legacy/link-only rows.
+  /// space's. Null for a row whose bytes were never stored (a seeded demo file).
   gcsPath    String?           @map("gcs_path")
-  /// Legacy column. It stored a 15-MINUTE SIGNED URL, which is expired for every
-  /// row older than a quarter hour — a URL is not an identifier and this is why.
-  /// Nothing writes it any more; `gcsPath` is signed fresh on each read. Kept
-  /// nullable so pre-migration rows that hold a real static link still render.
-  fileUrl    String?           @map("file_url")
   fileSize   Int?              @map("file_size")
   uploadedBy String            @map("uploaded_by")
   /// The ContextSource path holding this file's extracted chunks, or null when
@@ -1420,7 +1398,6 @@ model ResourceComment {
   createdAt  DateTime @default(now()) @map("created_at")
   resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 
-  @@index([resourceId])
   @@index([resourceId, cellRef])
   @@map("resource_comments")
 }
@@ -1439,7 +1416,6 @@ model ResourceChange {
   createdAt     DateTime  @default(now()) @map("created_at")
   resource      Resource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 
-  @@index([resourceId])
   @@index([resourceId, status])
   @@map("resource_changes")
 }
@@ -1468,8 +1444,6 @@ model OAuthAuthCode {
   userId              String    @map("user_id")
   redirectUri         String    @map("redirect_uri")
   scope               String
-  /// Which MCP server the token is for (RFC 8707): "context" | "creator".
-  resource            String    @default("context")
   codeChallenge       String    @map("code_challenge")
   codeChallengeMethod String    @default("S256") @map("code_challenge_method")
   expiresAt           DateTime  @map("expires_at")
@@ -1496,9 +1470,6 @@ model Conversation {
   icon        String?
   /// How a CHANNEL renders: classic chat thread or social-feed post cards.
   viewMode    ChannelViewMode      @default(CHAT) @map("view_mode")
-  /// Sorted "userA:userB" pair for a DM, so the same two people can only ever
-  /// have one. Written by the seed; no runtime path creates a DM yet.
-  dmKey       String?              @unique @map("dm_key")
   /// Set for CHANNEL conversations — channels are space-scoped and discoverable by space members.
   spaceId     String?              @map("space_id")
   /// Optional grouping of CHANNEL conversations into a named section.
@@ -1545,13 +1516,11 @@ model ConversationMember {
   role           ConversationMemberRole @default(MEMBER)
   joinedAt       DateTime               @default(now()) @map("joined_at")
   lastReadAt     DateTime?              @map("last_read_at")
-  mutedUntil     DateTime?              @map("muted_until")
   conversation   Conversation           @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
   @@index([userId])
-  @@index([conversationId])
   @@index([conversationId, lastReadAt])
   @@map("conversation_members")
 }

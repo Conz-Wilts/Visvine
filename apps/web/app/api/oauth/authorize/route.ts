@@ -230,11 +230,6 @@ export async function POST(req: NextRequest) {
     redirectUri,
     scope: serializeScopes(scopes),
     codeChallenge,
-    // One resource, so this is constant. The column and its CHECK constraint
-    // stay (migration 20260818150000) rather than being migrated away: codes
-    // live five minutes, so one issued before the surfaces were one is still in
-    // flight, and re-splitting later would want the binding back.
-    resource: 'context',
   })
 
   const url = new URL(redirectUri)

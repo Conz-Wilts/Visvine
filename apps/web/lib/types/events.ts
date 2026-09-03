@@ -2,8 +2,8 @@
 
 // Event types
 export type EventVisibility = 'public' | 'space' | 'private';
-// Operational lifecycle. 'registered' is legacy (read as 'going' via normalizeStatus).
-export type RSVPStatus = 'invited' | 'pending' | 'going' | 'registered' | 'waitlisted' | 'cancelled' | 'checked_in' | 'no_show';
+// Operational lifecycle; the list is held by a CHECK on event_attendees.status.
+export type RSVPStatus = 'invited' | 'pending' | 'going' | 'waitlisted' | 'cancelled' | 'checked_in' | 'no_show';
 // The guest's intent, independent of the operational status above.
 export type RSVPResponse = 'going' | 'maybe' | 'declined';
 type FormFieldType = 'text' | 'textarea' | 'email' | 'select' | 'checkbox' | 'url' | 'linkedin' | 'company';

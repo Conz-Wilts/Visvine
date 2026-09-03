@@ -286,13 +286,9 @@ export function getEventStatus(startAt: string, endAt?: string): 'upcoming' | 'l
 
 // ─── RSVP status helpers ───────────────────────────────────────────────────────
 
-/**
- * Normalize an attendee status to the current vocabulary.
- * Legacy rows used 'registered' for what we now call 'going'.
- */
+/** An attendee's status, with the column's default standing in for a blank. */
 export function normalizeStatus(status: string | null | undefined): RSVPStatus {
-  if (!status || status === 'registered') return 'going';
-  return status as RSVPStatus;
+  return status ? (status as RSVPStatus) : 'going';
 }
 
 /** Statuses that hold a confirmed seat at the event. */

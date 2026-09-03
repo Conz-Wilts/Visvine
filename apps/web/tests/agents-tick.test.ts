@@ -405,7 +405,7 @@ test('an event that arrives while the agent is running does not pull next_run_at
     // The brief was inserted behind the store's back, and the space was rebuilt under a process that already
     // memoised its access seeding: drop the cached vault and grant the author root access by hand.
     ;(await import('@/lib/notes/vaultCache')).invalidateVault({ spaceId: SPACE, ownerKey: 'shared' })
-    await prisma!.contextGrant.create({ data: { spaceId: SPACE, subjectType: 'user', subjectId: AUTHOR, resourcePath: '', level: 40, grantedBy: 'system' } })
+    await prisma!.contextGrant.create({ data: { spaceId: SPACE, subjectType: 'user', subjectId: AUTHOR, resourcePath: '', level: 30, grantedBy: 'system' } })
     const running2 = await makeRun(st2.id, 'busy2', new Date())
     await prisma!.agentState.update({ where: { id: st2.id }, data: { currentRunId: running2.id } })
     await enqueueAgentEvent({ spaceId: SPACE, agentName: 'busy2', kind: 'webhook', source: 'hubspot', summary: 'contact.created' })
@@ -481,7 +481,7 @@ test('claimManualRun resets next_run_at once it takes the mail; a trigger-only a
     // The inline run must fail WITHOUT deactivating (as in the mid-run test): an undecryptable key + root access for the author.
     await prisma!.connectorSecret.create({ data: { spaceId: SPACE, name: 'MODEL_KEY_OPENAI', ciphertext: 'garbage' } })
     ;(await import('@/lib/notes/vaultCache')).invalidateVault({ spaceId: SPACE, ownerKey: 'shared' })
-    await prisma!.contextGrant.create({ data: { spaceId: SPACE, subjectType: 'user', subjectId: AUTHOR, resourcePath: '', level: 40, grantedBy: 'system' } })
+    await prisma!.contextGrant.create({ data: { spaceId: SPACE, subjectType: 'user', subjectId: AUTHOR, resourcePath: '', level: 30, grantedBy: 'system' } })
     const st = await prisma!.agentState.create({
       data: { spaceId: SPACE, name: 'only', runAsUserId: AUTHOR, active: true, triggersJson: { context: ['people/**'], webhook: null }, debounceMs: 5_000, scheduleHash: scheduleHash(parsed.activation, 'UTC') },
     })
@@ -619,7 +619,7 @@ test('a fire fans out: one run per subscriber, each acting as that person', asyn
     // fails `author_gone` — which deactivates the row and takes the fan-out
     // with it. Drop the cached vault and grant the author root by hand.
     ;(await import('@/lib/notes/vaultCache')).invalidateVault({ spaceId: SPACE, ownerKey: 'shared' })
-    await prisma!.contextGrant.create({ data: { spaceId: SPACE, subjectType: 'user', subjectId: AUTHOR, resourcePath: '', level: 40, grantedBy: 'system' } })
+    await prisma!.contextGrant.create({ data: { spaceId: SPACE, subjectType: 'user', subjectId: AUTHOR, resourcePath: '', level: 30, grantedBy: 'system' } })
 
     await enqueueAgentEvent({ spaceId: SPACE, agentName: 'fan', kind: 'note_written', source: 'people/p.md', summary: 'saved', payload: {} })
     const armed = await state(st.id)

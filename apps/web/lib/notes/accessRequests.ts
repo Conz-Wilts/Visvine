@@ -1,6 +1,5 @@
 // Access requests for the context gate, restricted folders, and individual notes
-// (table `context_access_requests`, successor of the "join-requests.jsonl"
-// sidecar). A member asks for a resource path ('' = the context root, i.e. context
+// (table `context_access_requests`). A member asks for a resource path ('' = the context root, i.e. context
 // access); whoever MANAGES that path — full-level grant holders and space
 // admins — approves, which writes a grant at EXACTLY that path, or denies.
 // Resolved rows are kept as the audit trail behind the console queue.
@@ -9,27 +8,11 @@
 // shared/accessRequests.ts so the UI and the API agree.
 
 import prisma from '@/lib/prisma'
-import { SHARED_OWNER_KEY, type Context } from './store'
-import { readJsonl, writeJsonl } from './sidecar'
 import { grantAccess, normalizeResourcePath } from './access'
 import { logAudit } from './audit'
 import type { AccessRequest, ContextPrincipal } from './shared/contextTypes'
 import { canRequest, canResolveRequest, requestVisibleTo, sortRequests } from './shared/accessRequests'
 import { LEVEL_VIEW, levelDisplayLabel, levelName } from './shared/authz'
-
-/** The pre-table store — imported once per space, then deleted. */
-const LEGACY_FILE = 'join-requests.jsonl'
-
-interface LegacyJoinRequest {
-  id?: string
-  folderId?: string
-  userId?: string
-  message?: string
-  requestedAt?: number
-  status?: string
-  resolvedBy?: string
-  resolvedAt?: number
-}
 
 type RequestRow = {
   id: string
@@ -42,10 +25,6 @@ type RequestRow = {
   resolvedBy: string | null
   resolvedAt: Date | null
   grantedLevel: number | null
-}
-
-function sharedContext(spaceId: string): Context {
-  return { spaceId, ownerKey: SHARED_OWNER_KEY }
 }
 
 function toRequest(row: RequestRow): AccessRequest {
@@ -61,39 +40,6 @@ function toRequest(row: RequestRow): AccessRequest {
     resolvedAt: row.resolvedAt?.getTime(),
     grantedLevel: row.grantedLevel ?? undefined,
   }
-}
-
-// Runs at most once per space per process; deleting the sidecar row makes it
-// at most once ever (a racing instance just re-imports the same records).
-const imported = new Set<string>()
-
-/**
- * Carry any requests filed against the old JSONL sidecar into the table, then
- * drop the sidecar. Same lazy shape as access.ensureAccessSeeded — nothing has
- * to be backfilled ahead of a deploy.
- */
-async function ensureRequestsImported(spaceId: string): Promise<void> {
-  if (imported.has(spaceId)) return
-  imported.add(spaceId)
-  const legacy = await readJsonl<LegacyJoinRequest>(sharedContext(spaceId), LEGACY_FILE)
-  if (!legacy.length) return
-  await prisma.contextAccessRequest.createMany({
-    data: legacy
-      .filter((r): r is LegacyJoinRequest & { userId: string } => typeof r.userId === 'string')
-      .map((r) => ({
-        spaceId,
-        userId: r.userId,
-        resourcePath: typeof r.folderId === 'string' ? r.folderId : '',
-        level: LEVEL_VIEW,
-        message: r.message ?? null,
-        status: r.status === 'approved' || r.status === 'denied' ? r.status : 'pending',
-        createdAt: new Date(r.requestedAt ?? Date.now()),
-        resolvedBy: r.resolvedBy ?? null,
-        resolvedAt: r.resolvedAt ? new Date(r.resolvedAt) : null,
-      })),
-  })
-  // Empty the sidecar so a second process can't import the same records again.
-  await writeJsonl(sharedContext(spaceId), LEGACY_FILE, [])
 }
 
 /** Attach requester/resolver display snapshots for the review queue. */
@@ -128,7 +74,6 @@ export async function createAccessRequest(
 ): Promise<AccessRequest> {
   const path = normalizeResourcePath(resourcePath)
   if (!canRequest(p, path)) throw new Error('You already have access here')
-  await ensureRequestsImported(p.spaceId)
   const open = await prisma.contextAccessRequest.findFirst({
     where: { spaceId: p.spaceId, userId: p.userId, resourcePath: path, status: 'pending' },
   })
@@ -151,7 +96,6 @@ export async function createAccessRequest(
  * requested shows "pending" instead of offering the button again.
  */
 export async function pendingRequestPaths(p: ContextPrincipal): Promise<Set<string>> {
-  await ensureRequestsImported(p.spaceId)
   const rows = await prisma.contextAccessRequest.findMany({
     where: { spaceId: p.spaceId, userId: p.userId, status: 'pending' },
     select: { resourcePath: true },
@@ -165,7 +109,6 @@ export async function pendingRequestPaths(p: ContextPrincipal): Promise<Set<stri
  * admin's SharePanel; each filters what it shows.
  */
 export async function listVisibleAccessRequests(p: ContextPrincipal): Promise<AccessRequest[]> {
-  await ensureRequestsImported(p.spaceId)
   const rows = await prisma.contextAccessRequest.findMany({
     where: { spaceId: p.spaceId },
     orderBy: { createdAt: 'desc' },

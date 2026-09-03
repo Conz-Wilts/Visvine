@@ -1,6 +1,7 @@
 // The context's control-plane sidecar. One ContextState row per named file per
-// context: "folders.json" (registry) and "enrichment-state.json". Content is
-// text; JSON parsing lives here, domain meaning in the callers.
+// context: "folders.json" (the registry), "access-state.json" and
+// "settings.json". Content is text; JSON parsing lives here, domain meaning in
+// the callers.
 //
 // This is for SMALL, WHOLE-DOCUMENT state that is rewritten as a unit. It is
 // deliberately not capable of appending any more: everything that grew one
@@ -46,27 +47,4 @@ export async function readJson<T>(context: Context, name: string, fallback: T): 
 
 export async function writeJson(context: Context, name: string, value: unknown): Promise<void> {
   await writeText(context, name, JSON.stringify(value, null, 2))
-}
-
-/** Parse a JSONL file into records (malformed lines skipped). */
-export async function readJsonl<T>(context: Context, name: string): Promise<T[]> {
-  const raw = await readText(context, name)
-  if (!raw) return []
-  const out: T[] = []
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    try {
-      out.push(JSON.parse(trimmed) as T)
-    } catch {
-      /* skip malformed line */
-    }
-  }
-  return out
-}
-
-/** Rewrite a whole JSONL file — used only to clear a legacy blob after its
- *  contents have been migrated into a real table. */
-export async function writeJsonl(context: Context, name: string, records: unknown[]): Promise<void> {
-  await writeText(context, name, records.map((r) => JSON.stringify(r)).join('\n') + (records.length ? '\n' : ''))
 }

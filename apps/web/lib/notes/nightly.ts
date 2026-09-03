@@ -146,6 +146,18 @@ export async function runNightlyMaintenance(): Promise<{ ran: boolean; ms: numbe
     })
     if (prunedBuckets) logger.info('notes.nightly.rate_limits', { pruned: prunedBuckets })
 
+    // An authorization code lives five minutes and is single-use; a row past
+    // that is a record of nothing. Swept an hour late so a code still being
+    // exchanged at the boundary is never pulled from under the exchange.
+    const prunedCodes = await prisma.oAuthAuthCode
+      .deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 60 * 60 * 1000) } } })
+      .then((r) => r.count)
+      .catch((err) => {
+        logger.error('notes.nightly.auth_code_prune_failed', { err })
+        return 0
+      })
+    if (prunedCodes) logger.info('notes.nightly.auth_codes', { pruned: prunedCodes })
+
     if (aiConfigured()) {
       const spaces = await prisma.space.findMany({ select: { id: true } })
       let updated = 0

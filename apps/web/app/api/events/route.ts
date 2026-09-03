@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
       : [];
     const hostNameById = new Map(hostNodes.map((n) => [n.id, n.name]));
 
-    // Add summary stats to each event ('registered' is legacy for 'going')
+    // Add summary stats to each event
     const eventsWithStats = visibleEvents.map((event) => {
       const attendees = eventsData.attendees.filter((a) => a.eventId === event.id);
       const goingCount = attendees.filter((a) => normalizeStatus(a.status) === 'going').length;

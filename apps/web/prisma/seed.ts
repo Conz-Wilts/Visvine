@@ -339,7 +339,6 @@ async function createAnchorUsers() {
         id: a.id,
         email: a.email,
         name: a.name,
-        emailVerified: true,
         isActive: true,
       },
     });

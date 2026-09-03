@@ -157,10 +157,8 @@ export async function consumeClaimToken(
     where: { id: user.id },
     data: {
       googleId: payload.google_id,
-      oauthProvider: "google",
       isActive: true,
       claimNonce: null,
-      emailVerified: true,
       name: (mergedMeta.name as string) || user.name,
       image: (mergedMeta.avatar_url as string) || user.image,
       publicMeta: mergedMeta,

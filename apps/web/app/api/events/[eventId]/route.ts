@@ -49,7 +49,7 @@ export async function GET(
 
     const attendees = await getAttendees(spaceId, eventId);
 
-    // Calculate stats ('registered' is legacy for 'going')
+    // Calculate stats
     const norm = (a: (typeof attendees)[number]) => normalizeStatus(a.status);
     const goingCount = attendees.filter((a) => norm(a) === 'going').length;
     const stats = {

@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readFile } from 'fs/promises';
-import { join, sep } from 'path';
 import prisma from '@/lib/prisma';
 import { requireApiSession, forbiddenResponse, handleApiError } from '@/lib/api/route';
+import { downloadResourceFile } from '@/lib/gcs';
 
 // Mammoth emits well-formed HTML derived from docx. The primary XSS control is
 // the sandboxed (no-scripts) iframe the client renders this in; this scrub is
-// belt-and-braces and now also catches unquoted event handlers and whitespace-
-// obfuscated `javascript:` that the old quoted-only pattern let through.
+// belt-and-braces and also catches unquoted event handlers and whitespace-
+// obfuscated `javascript:`.
 function stripExecutable(html: string): string {
   return html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
@@ -36,24 +35,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ res
     return NextResponse.json({ error: 'Not a docx' }, { status: 400 });
   }
 
-  // This preview only ever served the LEGACY local-uploads layout, where
-  // `fileUrl` was a path under public/. Files stored in GCS (everything uploaded
-  // since) are previewed client-side from their signed URL instead, so a row
-  // without a local path simply has no local preview to render.
-  if (!resource.fileUrl || resource.fileUrl.startsWith('http')) {
-    return NextResponse.json({ error: 'No local preview for this file' }, { status: 404 });
-  }
-  // `fileUrl` is a DB value that becomes a filesystem path — refuse traversal so
-  // it can never resolve outside the public assets root even if a write path
-  // ever lets a `../` into the column.
-  const publicRoot = join(process.cwd(), 'public');
-  const filePath = join(publicRoot, resource.fileUrl);
-  if (!filePath.startsWith(publicRoot + sep)) {
-    return NextResponse.json({ error: 'Invalid resource path' }, { status: 400 });
+  // The bytes live in the Drive's bucket; a row without an object has nothing
+  // to render (a seeded demo file, or an upload whose object was lost).
+  if (!resource.gcsPath || !process.env.GCS_RESOURCES_BUCKET) {
+    return NextResponse.json({ error: 'The original file is not in storage' }, { status: 404 });
   }
 
   try {
-    const buf = await readFile(filePath);
+    const buf = await downloadResourceFile(resource.gcsPath);
     const mammoth = await import('mammoth');
     const result = await mammoth.convertToHtml({ buffer: buf });
     return new NextResponse(stripExecutable(result.value), {
