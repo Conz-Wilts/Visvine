@@ -8,8 +8,8 @@ import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/Sideb
 import { ROW_H } from '@/features/shared/components/layout/railRow';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
 import { createRows, flowFor, rowForKind, rowKey, rowLabel, type CreateKind, type CreateRow } from '@/lib/create/rows';
-import type { SpaceFeatureConfig } from '@/lib/types';
-import TypeList, { Dot } from './TypeList';
+import { aliasesForType, type SpaceAlias, type SpaceFeatureConfig } from '@/lib/types';
+import TypeList, { Mark } from './TypeList';
 import type { InlineFormProps } from './forms/shared';
 import AgentStartersForm from './forms/AgentStartersForm';
 import ChannelForm from './forms/ChannelForm';
@@ -33,7 +33,7 @@ const FORMS: Partial<Record<CreateKind, ComponentType<InlineFormProps>>> = {
   folder: FolderForm,
 };
 
-type Step = { kind: 'pick' } | { kind: 'form'; row: CreateRow };
+type Step = { kind: 'pick' } | { kind: 'form'; row: CreateRow; alias?: SpaceAlias };
 
 /**
  * Create new — a panel of the rail rather than a page: a layer in the rail's
@@ -103,11 +103,21 @@ export default function CreatePanel() {
   const back = useCallback(() => setStep({ kind: 'pick' }), []);
   useEscapeKey(step.kind === 'form' ? back : close, isOpen);
 
+  // The kinds whose form takes an alias — the entity forms — and the space's
+  // aliases for each, so the list can open them as a tree.
+  const aliasesOf = useCallback(
+    (row: CreateRow): SpaceAlias[] => {
+      if (row.kind !== 'type' || !['person', 'space', 'resource'].includes(row.id)) return [];
+      return aliasesForType((currentSpace?.aliases as SpaceAlias[] | undefined) ?? [], row.label);
+    },
+    [currentSpace],
+  );
+
   const pick = useCallback(
-    (row: CreateRow) => {
+    (row: CreateRow, alias?: SpaceAlias) => {
       const flow = flowFor(row, { pathname: pathname ?? '/', folder: defaultFolder });
       if (flow.kind === 'inline') {
-        setStep({ kind: 'form', row });
+        setStep({ kind: 'form', row, alias });
         return;
       }
       close();
@@ -125,12 +135,14 @@ export default function CreatePanel() {
   const onDone = useCallback((href: string) => { close(); router.push(href); }, [close, router]);
 
   const formRow = step.kind === 'form' ? step.row : null;
+  const formAlias = step.kind === 'form' ? step.alias : undefined;
   const TypedForm = formRow?.kind === 'type' ? FORMS[formRow.id] : undefined;
   const formProps = (row: CreateRow, space: { id: string; name: string }): InlineFormProps => ({
     spaceId: space.id,
     contextName: space.name,
     folder: defaultFolder,
     accent: row.kind === 'new-type' ? 'var(--theme-accent-color, #78d870)' : row.color,
+    initialAlias: formAlias?.name ?? null,
     onDone,
   });
 
@@ -165,7 +177,7 @@ export default function CreatePanel() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <Dot row={formRow} />
+            <Mark row={formRow} />
             <span className="truncate text-sm font-semibold text-text-primary">
               {formRow.kind === 'new-type' ? formRow.name : rowLabel(formRow)}
             </span>
@@ -195,11 +207,11 @@ export default function CreatePanel() {
             {formRow.kind === 'new-type' ? (
               <NewTypeForm key={rowKey(formRow)} {...formProps(formRow, currentSpace)} name={formRow.name} />
             ) : TypedForm ? (
-              <TypedForm key={rowKey(formRow)} {...formProps(formRow, currentSpace)} />
+              <TypedForm key={`${rowKey(formRow)}:${formAlias?.name ?? ''}`} {...formProps(formRow, currentSpace)} />
             ) : null}
           </div>
         ) : (
-          <TypeList list={list} active={active} onHover={setActive} onPick={pick} />
+          <TypeList list={list} active={active} aliasesOf={aliasesOf} onHover={setActive} onPick={pick} />
         )}
       </div>
     </aside>

@@ -6,7 +6,7 @@ import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useSession } from '@/features/auth/lib/auth-client';
-import { ChevronsUpDownIcon, PlusIcon, SettingsIcon, UsersIcon } from '@/features/shared/icons';
+import { PlusIcon, SettingsIcon, UsersIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
 import NewSpaceDialog from './NewSpaceDialog';
@@ -15,16 +15,16 @@ import NewSpaceDialog from './NewSpaceDialog';
  * The space band — the rail's first rows (Sidebar). The space sits at the head
  * of the same column you sit at the foot of, and it opens the same way the
  * account band does: point at the space and the band GROWS DOWNWARD. What
- * hangs off the space — Switch space, the console and its members for admins,
- * New space — unfolds as ordinary rail rows on the rail's own glyph column,
+ * hangs off the space — the console and its members for admins, New space —
+ * unfolds as ordinary rail rows on the rail's own glyph column,
  * their names arriving on the same fade the tools' names do. Opening the space
  * is the rail widening and the band unfolding, one gesture, rather than a panel
  * appearing over whatever page you were reading.
  *
- * The space's own row is the fast path: pressing it opens the switcher — the
- * search and the list of every space you are in — beside the rail, because
- * going somewhere else is what the head of the rail is most often for. The
- * band's rows are the rest.
+ * The space's own row IS the switcher: pointing at it slides the search and
+ * the list of every space you are in out beside the rail, because going
+ * somewhere else is what the head of the rail is most often for. Pointing at
+ * any row of the band below puts the list away. The band's rows are the rest.
  *
  * Provisioning a space isn't one of the create-panel types — it's the one
  * action that takes you OUT of the space you're in, so it belongs here rather
@@ -68,36 +68,31 @@ export default function SpaceSelector() {
   }, [expanded]);
 
   // The switcher itself is the rail's panel (SpaceSwitcherPanel), slid out
-  // beside the rail by the Sidebar; this only asks for it.
+  // beside the rail by the Sidebar; this only asks for it. Create new shares
+  // the rail's edge, so it goes away first.
   const openSwitcher = () => {
-    setPinned(false);
-    setOpen(false);
     closeCreate();
     setSwitcherOpen(true);
   };
 
-  const actions: { key: string; label: string; onClick: () => void; onHover?: () => void; icon: React.ReactNode }[] = [
-    {
-      key: 'switch',
-      label: 'Switch space',
-      onClick: openSwitcher,
-      // Pointing at the row is enough: the list slides out beside the rail
-      // and stays while the pointer is anywhere on the card (Sidebar).
-      onHover: () => { closeCreate(); setSwitcherOpen(true); },
-      icon: <ChevronsUpDownIcon />,
-    },
+  // The list is open only while the pointer is on the space (or in the list
+  // itself): pointing at any row of the band puts it away.
+  const shutSwitcher = () => setSwitcherOpen(false);
+  const actions: { key: string; label: string; onClick: () => void; onHover: () => void; icon: React.ReactNode }[] = [
     ...(canManage
       ? [
           {
             key: 'console',
             label: 'Space console',
             onClick: () => router.push('/admin'),
+            onHover: shutSwitcher,
             icon: <SettingsIcon />,
           },
           {
             key: 'members',
             label: 'Members',
             onClick: () => router.push('/admin?section=members'),
+            onHover: shutSwitcher,
             icon: <UsersIcon />,
           },
         ]
@@ -106,6 +101,7 @@ export default function SpaceSelector() {
       key: 'new',
       label: 'New space',
       onClick: () => setCreating(true),
+      onHover: shutSwitcher,
       icon: <PlusIcon />,
     },
   ];
@@ -134,10 +130,12 @@ export default function SpaceSelector() {
     >
       {/* The space. A rail row: the avatar centred in the rail's glyph cell,
           then the space's name, which the collapsed rail clips away. Pointing
-          at it is what opens the band below; pressing it opens the switcher. */}
+          at it opens the band below AND slides the switcher out beside the
+          rail; pressing it toggles the switcher. */}
       <div style={{ paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
         <button
           type="button"
+          onMouseEnter={openSwitcher}
           onClick={() => (switcherOpen ? setSwitcherOpen(false) : openSwitcher())}
           aria-haspopup="dialog"
           aria-expanded={switcherOpen}
@@ -210,7 +208,6 @@ export default function SpaceSelector() {
                 reduced={reduced}
                 label={label}
                 icon={icon}
-                active={key === 'switch' && switcherOpen}
                 onClick={() => {
                   setPinned(false);
                   setOpen(false);

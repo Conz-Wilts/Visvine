@@ -16,6 +16,8 @@ export interface InlineFormProps {
   folder: string | null;
   /** The kind's colour. */
   accent: string;
+  /** An alias picked from the list's tree, already on when the form opens. */
+  initialAlias?: string | null;
   onDone: (href: string) => void;
 }
 

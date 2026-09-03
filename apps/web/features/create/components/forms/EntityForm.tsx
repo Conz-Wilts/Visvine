@@ -40,12 +40,12 @@ function createdHref(type: EntityKind, nodeId: string): string {
  * for the type. Matches from other spaces appear under the name as you type;
  * taking one fills the rows and binds the card to that identity.
  */
-function EntityForm({ type, spaceId, accent, onDone }: InlineFormProps & { type: EntityKind }) {
+function EntityForm({ type, spaceId, accent, initialAlias, onDone }: InlineFormProps & { type: EntityKind }) {
   const { currentSpace } = useSpace();
   const [name, setName] = useState('');
   const [fields, setFields] = useState<Record<string, string>>({});
   const [tags, setTags] = useState('');
-  const [alias, setAlias] = useState<string | null>(null);
+  const [alias, setAlias] = useState<string | null>(initialAlias ?? null);
   const [identityId, setIdentityId] = useState<string | null>(null);
   const [followGlobal, setFollowGlobal] = useState(false);
   const [pickedSpace, setPickedSpace] = useState<{ ref: string; name: string } | null>(null);
