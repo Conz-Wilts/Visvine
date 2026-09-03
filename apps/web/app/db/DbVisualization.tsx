@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 
 interface Column {
   table_name: string;
@@ -228,10 +229,8 @@ export default function DbVisualization() {
   const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
-    fetch('/api/db-schema')
-      .then((r) => r.json())
-      .then((data: SchemaData & { error?: string }) => {
-        if (data.error) { setError(data.error); return; }
+    fetchJson<SchemaData>('/api/db-schema')
+      .then((data) => {
         setSchema(data);
         const lays = computeLayout(data.tables, data.foreignKeys, data.columns);
         setLayouts(lays);
@@ -251,7 +250,7 @@ export default function DbVisualization() {
           redraw((n) => n + 1);
         }
       })
-      .catch(() => setError('Failed to load schema'));
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load schema'));
   }, []);
 
   const onWheel = useCallback((e: React.WheelEvent) => {

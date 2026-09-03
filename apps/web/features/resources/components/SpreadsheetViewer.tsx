@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import type { ResourceChange } from '@/lib/types';
 
 interface SpreadsheetViewerProps {
@@ -43,8 +44,7 @@ export default function SpreadsheetViewer({ resourceId, fileUrl, onCellSelect, s
   }, [fileUrl]);
 
   useEffect(() => {
-    fetch(`/api/resources/${resourceId}/changes`)
-      .then(r => r.json())
+    fetchJson<ResourceChange[]>(`/api/resources/${resourceId}/changes`)
       .then(setChanges)
       .catch(() => {});
   }, [resourceId]);

@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { fetchJsonBody } from '@/lib/fetchJson';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import type { ResourceComment } from '@/lib/types';
 
 export default function CommentsPanel({
@@ -19,7 +19,7 @@ export default function CommentsPanel({
   useEffect(() => {
     if (!resourceId) return;
     const url = `/api/resources/${resourceId}/comments${cellRef ? `?cellRef=${encodeURIComponent(cellRef)}` : ''}`;
-    fetch(url).then(r => r.json()).then(setComments).catch(() => {});
+    fetchJson<ResourceComment[]>(url).then(setComments).catch(() => {});
   }, [resourceId, cellRef]);
 
   async function addComment() {
