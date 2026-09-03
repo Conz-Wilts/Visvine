@@ -44,6 +44,18 @@ export const MAX_FANOUT_SUBSCRIBERS = 10
  * switching an agent off is a thing a person then has to notice and undo.
  */
 export const MAX_CONSECUTIVE_FAILURES = 10
+/**
+ * How long a CALLER waiting on a run it just triggered is made to wait before
+ * it is handed the run id instead of the outcome.
+ *
+ * A run may take MAX_RUN_MS, but the caller is a request — an MCP client, a
+ * browser — and a request that waits out a 25-minute run holds a connection
+ * (and, on Cloud Run, an instance) for the whole of it. Nothing is lost by
+ * giving up the wait: dispatch is its own request to the run endpoint, so the
+ * run carries on, and every answer already names the page that watches it.
+ * A minute is long enough that a short run still answers in one round trip.
+ */
+export const RUN_AWAIT_MS = 60_000
 /** How often the executor flushes the transcript to the run row. */
 export const FLUSH_EVERY_MS = 2_000
 export const FLUSH_EVERY_EVENTS = 10

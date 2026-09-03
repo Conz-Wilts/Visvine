@@ -164,9 +164,17 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     setNotice(null);
     // The run row exists before the executor starts, so the first reload puts
     // the live chain up while this request is still waiting on the outcome.
+    // A run that outlasts the request answers `running`, with no outcome yet —
+    // the standing 4 s poll above carries it from there.
     const t = setInterval(reload, 1500);
     try {
-      const res = await fetchJson<{ ok: true; runId: string; outcome: { status: string; reason: string } | null; error: string | null }>(
+      const res = await fetchJson<{
+        ok: true;
+        runId: string;
+        running: boolean;
+        outcome: { status: string; reason: string } | null;
+        error: string | null;
+      }>(
         `/api/communities/${spaceId}/agents/${encodeURIComponent(name)}/run`,
         { method: 'POST' },
       );

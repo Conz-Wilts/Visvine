@@ -761,6 +761,16 @@ backups, secret rotation. The parts that constrain how you write code:
 - **The runtime is also N processes, so no cross-request state may live in a
   Map.** Rate limits are rows (`lib/rateLimit/`); a per-process limiter on a
   service with `--max-instances=10` is ten limits, reset on every cold start.
+- **No request may run to the runtime's ceiling.** Cloud Run's `--timeout` is
+  1800s because the agent tick awaits its dispatches, and it bills instance
+  time for every second a connection is held — an SSE or chunked response has
+  no length, so the exchange lasts until the CLIENT hangs up, which is how
+  `/api/mcp` came to hold half-hour requests for answers it had already
+  delivered. Every long-lived path carries its own shorter bound:
+  `lib/mcp/deadline.ts` settles each MCP body and gives it a length,
+  `RUN_AWAIT_MS` bounds what a caller waits for a run it triggered, and
+  `/api/messages/stream` closes on its own clock (`EventSource` reconnects).
+  Anything new that streams, polls or awaits needs the same.
 - **`logger.error()` is the alerting surface.** In production every call is
   emitted as a Cloud Error Reporting event, grouped by stack signature. Use
   `error` for a genuine fault and `warn` for the app working as designed — a

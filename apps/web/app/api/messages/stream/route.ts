@@ -6,6 +6,20 @@ import type { RealtimeEvent } from '@/lib/messages/types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+/**
+ * How long one connection is held before the server closes it and lets the
+ * browser open the next one.
+ *
+ * A stream lives on an instance, and an instance the autoscaler cannot retire
+ * is one that is still billed. Left to itself this connection ends when the
+ * client hangs up — and a client that goes away without its abort reaching us
+ * (a sleeping laptop, a proxy that drops the socket quietly) leaves the stream
+ * running until the runtime's own request ceiling, half an hour later. Closing
+ * on our own clock bounds that: `EventSource` reconnects by itself, so a
+ * viewer sees nothing, and every reconnection is a chance to shed an instance.
+ */
+const MAX_STREAM_MS = 5 * 60_000;
+
 export async function GET(request: NextRequest) {
   const user = await getApiMessagingUser();
 
@@ -44,9 +58,12 @@ export async function GET(request: NextRequest) {
 
         closed = true;
         clearInterval(heartbeat);
+        clearTimeout(lifetime);
         unsubscribe();
         controller.close();
       };
+
+      const lifetime = setTimeout(cleanup, MAX_STREAM_MS);
 
       request.signal.addEventListener('abort', cleanup);
     },

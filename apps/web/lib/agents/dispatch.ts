@@ -12,7 +12,7 @@
  * `inline` (dev / tests / AGENT_DISPATCH=inline): run in the tick request.
  */
 import { mintRunToken } from './internalAuth'
-import { MAX_RUN_MS } from './limits'
+import { MAX_RUN_MS, RUN_AWAIT_MS } from './limits'
 import { executeRun, type ExecuteRunOutcome } from './runner'
 
 export type DispatchMode = 'self' | 'inline'
@@ -55,5 +55,30 @@ export async function dispatchRun(runId: string): Promise<DispatchResult> {
     return { ok: true, outcome: body?.outcome ?? null }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'dispatch failed' }
+  }
+}
+
+/**
+ * The outcome of a dispatch if it lands inside `ms`, else null — the run is
+ * left running and the caller answers with the run id.
+ *
+ * A caller waiting on a run it triggered is a REQUEST: an MCP client, a
+ * browser. Waiting out a run that may take MAX_RUN_MS holds that connection —
+ * and, on a scale-to-zero runtime, the instance behind it — for the whole run,
+ * which is a bill and a pinned instance in exchange for nothing the agent's
+ * page does not already show. Giving up the wait costs nothing: `self`
+ * dispatch is its own request to the run endpoint, so the run carries on
+ * without this promise. The abandoned promise is caught, so letting go of it
+ * is never an unhandled rejection.
+ */
+export async function dispatchWithin(work: Promise<DispatchResult>, ms: number = RUN_AWAIT_MS): Promise<DispatchResult | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const expiry = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms)
+  })
+  try {
+    return await Promise.race([work.catch((e): DispatchResult => ({ ok: false, error: e instanceof Error ? e.message : 'dispatch failed' })), expiry])
+  } finally {
+    clearTimeout(timer)
   }
 }

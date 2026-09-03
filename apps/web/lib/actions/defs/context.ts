@@ -94,6 +94,7 @@ import {
   type AgentTriggers,
 } from '@/lib/agents/config'
 import { claimManualRun } from '@/lib/agents/schedule'
+import { dispatchWithin } from '@/lib/agents/dispatch'
 import { intakeSummary } from '@/lib/actions/shared/intake'
 import { agentPreamble, AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
 import { rehearsalPlan } from '@/lib/agents/shared/rehearsal'
@@ -1906,7 +1907,8 @@ export const CONTEXT_ACTIONS = [
         "Trigger a run of an ACTIVE agent now (see list_agents). Anyone who can edit the brief may — its author, a space admin, " +
         'or a member with edit access to its folder; an inactive agent is refused. The run acts as YOU, the caller — a `mode: user` ' +
         "connector spends your own linked account, not the author's. Shares the scheduler's claim path so it cannot double-fire, and " +
-        'does not advance the schedule. Returns the run id and, when the run completes within this call, its outcome.',
+        'does not advance the schedule. Returns the run id and, when the run finishes within a minute, its outcome; a longer run ' +
+        'answers `running: true` and carries on — watch it at the `watch` href rather than calling again.',
       input: {
         space_id: spaceArg,
         agent: z.string().describe("The agent's name, e.g. 'weekly-digest' for agents/weekly-digest/"),
@@ -1918,9 +1920,13 @@ export const CONTEXT_ACTIONS = [
         }
         const claimed = await claimManualRun(args.space_id, args.agent, principal.userId)
         if (!claimed.ok) throw new ActionError(claimed.code === 'unknown' ? 404 : 409, claimed.message)
-        const result = await claimed.dispatch
+        // Waited on for RUN_AWAIT_MS, not for the run's own cap: a long run
+        // hands back its id and keeps going, rather than holding this request
+        // (and the instance serving it) for as long as it takes.
+        const result = claimed.dispatch ? await dispatchWithin(claimed.dispatch) : null
         return {
           run_id: claimed.runId,
+          running: result === null,
           outcome: result?.ok ? result.outcome : null,
           error: result && !result.ok ? result.error : null,
           // Where a person watches it — the agent's page, on the run just started:
@@ -1945,7 +1951,7 @@ export const CONTEXT_ACTIONS = [
         'CREATING IS NOT TURNING ON: a new brief is inert. Anyone who can edit it turns it on with activate_agent (or ' +
         "the Turn on button on the agent's page) — say so when you hand it over, and OFFER THE REHEARSAL FIRST: " +
         'rehearse_agent hands you its first round to carry out yourself, so the person sees the output before an ' +
-        'unattended run makes it. ' + +
+        'unattended run makes it. ' +
         'Creates only; an existing agent is a 409, and briefs are edited on the note itself.',
       input: {
         space_id: spaceArg,

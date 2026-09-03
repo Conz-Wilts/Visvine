@@ -14,6 +14,7 @@ import type { McpServer } from '@modelcontextprotocol/server'
 import { mcpBearerVerifier } from '@/lib/mcp/auth'
 import { withScopeGate, withScopeHint } from '@/lib/mcp/challenge'
 import { mcpInstructions, mcpResourceUrl, mcpServerInfo } from '@/lib/mcp/config'
+import { withRequestDeadline } from '@/lib/mcp/deadline'
 
 export function buildMcpHandler(
   register: (server: McpServer) => void,
@@ -29,10 +30,15 @@ export function buildMcpHandler(
     verboseLogs: process.env.NODE_ENV !== 'production',
   })
 
-  return withScopeHint(
-    withMcpAuth(withScopeGate(handler, resourceMetadataUrl), mcpBearerVerifier(), {
-      required: true,
-      resourceUrl,
-    }),
+  // Outermost, so a challenge settles the same way a tool result does: every
+  // response this endpoint returns is read to its end and given a length
+  // before it leaves, and none of them may outlive the deadline.
+  return withRequestDeadline(
+    withScopeHint(
+      withMcpAuth(withScopeGate(handler, resourceMetadataUrl), mcpBearerVerifier(), {
+        required: true,
+        resourceUrl,
+      }),
+    ),
   )
 }
