@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { KeyRoundIcon, PencilIcon, Trash2Icon, TriangleAlertIcon } from '@/features/shared/icons';
+import { KeyRoundIcon, PencilIcon, TriangleAlertIcon } from '@/features/shared/icons';
 import { Skeleton } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -27,50 +27,19 @@ import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 import ConnectorLogo from '@/features/connectors/components/ConnectorLogo';
 import { fmtCents } from '@/features/agents/lib/rowState';
+import { fmtTokens, LinesTable, monthLabel } from '@/features/agents/components/UsageLines';
+import { FIELD, GHOST_BUTTON, SAVE_BUTTON, Section, SecretEditor } from './pageChrome';
 import { agentPageHref } from '@/lib/agents/config';
 import { PROVIDERS } from '@/lib/agents/registry';
 import { modelCatalogEntryFor } from '@/lib/models/catalog';
 import type { ModelDetail, ModelRunRow, ModelUserLine } from '@/lib/models/service';
-import type { MonthUsage, UsageLine } from '@/lib/agents/shared/usage';
+import type { MonthUsage } from '@/lib/agents/shared/usage';
 import { timeAgo } from '@/lib/date';
-
-const FIELD =
-  'w-full min-w-0 rounded-lg border border-border-default bg-surface-1 px-3 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:border-brand-green';
-const GHOST_BUTTON =
-  'rounded-lg border border-border-default px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50';
-const SAVE_BUTTON =
-  'rounded-lg bg-brand-green px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50';
 
 interface DetailResponse {
   model: ModelDetail;
   usage: { months: MonthUsage[]; currentMonth: string };
   history: { runs: ModelRunRow[]; users: ModelUserLine[] };
-}
-
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
-  return n.toLocaleString();
-}
-
-function monthLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
-}
-
-/** Title, an optional meta, at most one action, over a rule. No box: the page is one model. */
-function Section({ title, meta, action, children }: { title: string; meta?: string; action?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section className="border-t border-border-subtle py-5">
-      <header className="flex items-center justify-between gap-3 pb-3">
-        <h2 className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-sm font-semibold text-text-primary">{title}</span>
-          {meta && <span className="shrink-0 font-mono text-[11px] text-text-muted">{meta}</span>}
-        </h2>
-        {action}
-      </header>
-      {children}
-    </section>
-  );
 }
 
 function statusOf(m: ModelDetail): { label: string; tone: 'ok' | 'warn' | 'bad' | 'muted'; hint: string } {
@@ -79,75 +48,6 @@ function statusOf(m: ModelDetail): { label: string; tone: 'ok' | 'warn' | 'bad' 
   if (!m.info.modelId) return { label: 'No model', tone: 'warn', hint: 'The note names no model id — set `model:`.' };
   if (!m.key?.set) return { label: 'No key', tone: 'warn', hint: `Agents on ${m.info.providerLabel} fail until ${m.key?.name ?? 'its key'} is stored below.` };
   return { label: 'Ready', tone: 'ok', hint: `Agents run on ${m.info.modelRef}; a brief may pin any ${m.info.provider}/… model on this key.` };
-}
-
-/** The write-only form for the key. Values are never read back, so this is always a fresh write. */
-function KeyEditor({ secret, spaceId, onChanged, onClose }: { secret: { name: string; set: boolean }; spaceId: string; onChanged: () => void; onClose: () => void }) {
-  const [value, setValue] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const call = async (method: 'PUT' | 'DELETE') => {
-    setBusy(true);
-    setError(null);
-    try {
-      await fetchJsonBody(`/api/communities/${spaceId}/secrets`, method, method === 'PUT' ? { name: secret.name, value } : { name: secret.name });
-      setValue('');
-      onChanged();
-      onClose();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="mt-3 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2.5">
-      <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (value.length > 0) void call('PUT'); }}>
-        <input type="password" autoComplete="off" autoFocus value={value} onChange={(e) => setValue(e.target.value)} placeholder={`Value for ${secret.name}`} className={`${FIELD} min-w-0 flex-1`} />
-        <button type="submit" disabled={busy || value.length === 0} className={SAVE_BUTTON}>{busy ? 'Saving…' : 'Save'}</button>
-        <button type="button" onClick={onClose} disabled={busy} className={GHOST_BUTTON}>Cancel</button>
-        {secret.set && (
-          <button type="button" onClick={() => void call('DELETE')} disabled={busy} aria-label={`Clear ${secret.name}`} title={`Clear ${secret.name}`}
-            className="rounded-lg border border-border-default p-1.5 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50">
-            <Trash2Icon className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </form>
-      <p className="mt-1.5 text-xs text-text-muted">Encrypted on save, never shown again.</p>
-      {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
-    </div>
-  );
-}
-
-function LinesTable({ title, lines, nameOf }: { title: string; lines: UsageLine[]; nameOf?: (key: string) => React.ReactNode }) {
-  if (lines.length === 0) return null;
-  return (
-    <div>
-      <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-text-muted">{title}</h3>
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr className="border-b border-border-subtle text-left text-xs text-text-muted">
-            <th className="py-1 pr-3 font-normal" />
-            <th className="py-1 pr-3 text-right font-normal">Runs</th>
-            <th className="py-1 pr-3 text-right font-normal">In</th>
-            <th className="py-1 pr-3 text-right font-normal">Out</th>
-            <th className="py-1 text-right font-normal">Cost</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((line) => (
-            <tr key={line.key} className="border-b border-border-subtle last:border-b-0">
-              <td className="py-1.5 pr-3 font-mono text-[12px] text-text-primary">{nameOf ? nameOf(line.key) : line.key}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{line.runs}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{fmtTokens(line.promptTokens)}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{fmtTokens(line.completionTokens)}</td>
-              <td className="py-1.5 text-right tabular-nums text-text-primary">{line.unpricedRuns === line.runs ? 'tokens only' : fmtCents(line.costCents)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 export default function ModelPageContent({ nodeId }: { nodeId: string }) {
@@ -370,7 +270,7 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
             {model.key.name}
             {!model.key.set && <span className="text-[10px] font-semibold uppercase">missing</span>}
           </button>
-          {keyOpen && <KeyEditor secret={model.key} spaceId={spaceId} onChanged={() => void reload()} onClose={() => setKeyOpen(false)} />}
+          {keyOpen && <SecretEditor secret={model.key} spaceId={spaceId} onChanged={() => void reload()} onClose={() => setKeyOpen(false)} />}
           <p className="mt-2 text-xs text-text-muted">
             One key per provider, shared by every agent in this space. Encrypted on save, never shown again, and never
             reachable from a run — a model is not a connector.

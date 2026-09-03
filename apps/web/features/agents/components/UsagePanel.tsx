@@ -6,7 +6,8 @@ import { Alert, Button, Input, Skeleton } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import { fmtCents } from '@/features/agents/lib/rowState';
 import { agentPageHref } from '@/lib/agents/config';
-import type { MonthUsage, UsageLine } from '@/lib/agents/shared/usage';
+import type { MonthUsage } from '@/lib/agents/shared/usage';
+import { fmtTokens, LinesTable, monthLabel } from './UsageLines';
 
 /**
  * Usage, as a console section: what the space's agents spent on models, per
@@ -17,56 +18,6 @@ import type { MonthUsage, UsageLine } from '@/lib/agents/shared/usage';
  * a run on a model nobody priced counts tokens only, and the panel says how
  * many of those there were rather than pretending the total is complete.
  */
-
-function fmtTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
-  return n.toLocaleString();
-}
-
-function monthLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
-}
-
-function LinesTable({ title, lines, nameOf }: {
-  title: string;
-  lines: UsageLine[];
-  /** Render the key cell — the agent line links to the agent's page. */
-  nameOf?: (key: string) => React.ReactNode;
-}) {
-  if (lines.length === 0) return null;
-  return (
-    <div>
-      <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-text-muted">{title}</h3>
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr className="border-b border-border-subtle text-left text-xs text-text-muted">
-            <th className="py-1 pr-3 font-normal" />
-            <th className="py-1 pr-3 text-right font-normal">Runs</th>
-            <th className="py-1 pr-3 text-right font-normal">In</th>
-            <th className="py-1 pr-3 text-right font-normal">Out</th>
-            <th className="py-1 text-right font-normal">Cost</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((line) => (
-            <tr key={line.key} className="border-b border-border-subtle last:border-b-0">
-              <td className="py-1.5 pr-3 font-mono text-[12px] text-text-primary">
-                {nameOf ? nameOf(line.key) : line.key}
-              </td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{line.runs}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{fmtTokens(line.promptTokens)}</td>
-              <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{fmtTokens(line.completionTokens)}</td>
-              <td className="py-1.5 text-right tabular-nums text-text-primary">
-                {line.unpricedRuns === line.runs ? 'tokens only' : fmtCents(line.costCents)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 /**
  * The space-wide monthly cap, inline-editable the way an agent's is on its
