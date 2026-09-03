@@ -6,7 +6,7 @@ guide: what you can connect, how a connector knows who is asking, and how agents
 
 Code lives in `apps/web/lib/connectors/`. The MCP tools that drive it are `list_connectors`,
 `run_connector` (gated on `connectors:use`) and `set_connector_secret` (gated on `secrets:write`,
-space admins only) — all in `lib/mcp/tools.ts`.
+space admins only) — all actions in `lib/actions/defs/`, reached through the one `visvine` MCP tool (`lib/mcp/gateway.ts`) and `POST /api/actions/<name>`.
 
 ## What a connector is
 

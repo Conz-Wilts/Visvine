@@ -18,7 +18,6 @@ import type { AccessRequest } from '@/lib/notes/shared/contextTypes';
 import { usePeopleSection } from './PeopleDataContext';
 import { LevelSelect } from './shared';
 
-/** "3 hours ago" without pulling in a date library. */
 function TargetChip({ path, contextName }: { path: string; contextName: string }) {
   const Icon = path === '' ? UsersIcon : path.endsWith('.md') ? FileTextIcon : FolderIcon;
   return (

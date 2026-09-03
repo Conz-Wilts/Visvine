@@ -365,7 +365,7 @@ export function lockedDenial(
   // only the AI origins are shut out.
   //
   // NOTE for the Tool authoring surface: the generic MCP context writes pass
-  // origin 'agent' (lib/mcp/tools.ts), so they land here. The dedicated Tool
+  // origin 'agent' (lib/actions/defs/context.ts), so they land here. The dedicated Tool
   // handlers must write with a human origin ('edit') — a person driving Claude
   // Code is authoring, not sweeping, the same distinction that keeps
   // 'ai-refactor' out of AI_ORIGINS.

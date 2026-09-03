@@ -11,7 +11,7 @@
 // Pure — no Prisma/Node/DOM imports. The vocabulary lives here rather than in
 // review.ts because three unrelated layers need it: the checks that maintain it
 // (shared/review.ts), the fusion that weighs it (shared/retrieval.ts) and the
-// agent-facing surfaces that display it (lib/mcp/tools.ts).
+// agent-facing surfaces that display it (lib/actions/defs/context.ts).
 
 import type { NoteFrontmatter, NoteMeta } from './types'
 
