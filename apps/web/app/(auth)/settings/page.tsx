@@ -20,7 +20,7 @@ import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPane
 // gone until there's something behind it; Account is here because deleting your
 // account is something.
 // Your own connectors are NOT a section here: they are an entry on the account
-// menu that opens a dialog (PersonalConnectorsDialog), because connecting one
+// menu that opens a dialog (ConnectorsDialog), because connecting one
 // is a minute's work over whatever page you were on, not a place to navigate
 // to. `?connectors=1` on any page opens it.
 const SECTIONS: ConsoleSection[] = [

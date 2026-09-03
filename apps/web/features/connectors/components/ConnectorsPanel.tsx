@@ -58,6 +58,13 @@ import {
  * than a logo: it is the same `connectors/<name>.md`, it just has no recipe
  * behind it. Writing one is still the draft surface's job — this section
  * lists and connects, it does not author prose.
+ *
+ * The same panel serves the account menu's dialog, where a MEMBER may open
+ * it on the space they are in. The list route says whether they can manage
+ * (`canManage`), and when they cannot the panel is the list alone: no
+ * catalog, no Manage, no Models +; a row goes to the connector's page, and
+ * the one act left is signing in to their own account behind a connector
+ * that needs one.
  */
 
 /**
@@ -252,12 +259,15 @@ export default function ConnectorsPanel({
   space,
   scope = 'space',
   returnTo = null,
+  onLeave,
 }: {
   /** The space to work in; defaults to the one the app is showing. */
   space?: string | null;
   scope?: ConnectorScope;
   /** Where the OAuth round trip lands — this surface, not the connector page. */
   returnTo?: string | null;
+  /** Called just before the panel sends the browser to another page — a dialog closes on it. */
+  onLeave?: () => void;
 } = {}) {
   const router = useRouter();
   const { currentSpace } = useSpace();
@@ -290,6 +300,13 @@ export default function ConnectorsPanel({
   // The OAuth services this deployment can complete without the space
   // registering its own app — what makes a Connect button one click.
   const [platformClients, setPlatformClients] = useState<string[]>([]);
+  // Whether the caller may change what this space has. A member sees the list
+  // — the connectors their agents can use, and which one they still have to
+  // sign in to — and none of the acts: those are an admin's, and each write
+  // behind them refuses a member anyway. Read off the response rather than
+  // the space context so the panel is right for whichever space it was given.
+  const [canManage, setCanManage] = useState(true);
+  const readOnly = !canManage;
   // The catalog row whose one-click connect is in flight, by entry id: the note
   // is written, then the browser leaves for the provider, so the button stays
   // busy until navigation rather than settling back.
@@ -316,21 +333,25 @@ export default function ConnectorsPanel({
     if (!spaceId) return;
     let cancelled = false;
     setLoading(true);
-    fetchJson<{ connectors: ExistingConnector[]; platformClients?: string[] }>(
+    fetchJson<{ connectors: ExistingConnector[]; platformClients?: string[]; canManage?: boolean }>(
       `/api/communities/${encodeURIComponent(spaceId)}/connectors`,
     )
       .then((data) => {
         if (cancelled) return;
         setExisting(data.connectors);
         setPlatformClients(data.platformClients ?? []);
+        setCanManage(data.canManage !== false);
         setError(null);
         // What the space has is the question an admin usually has, but a space
         // with nothing connected would open on an empty list — so land on the
         // catalog instead. Once per space: a later reload (a delete, a toggle)
-        // must not move the tab out from under whoever chose it.
+        // must not move the tab out from under whoever chose it. A member has
+        // no catalog to land on.
         if (landedRef.current !== spaceId) {
           landedRef.current = spaceId;
-          setTab(data.connectors.some((c) => isConnected(c, scope)) ? 'mine' : 'catalog');
+          setTab(
+            data.canManage !== false && !data.connectors.some((c) => isConnected(c, scope)) ? 'catalog' : 'mine',
+          );
         }
       })
       .catch((e: Error) => {
@@ -453,8 +474,10 @@ export default function ConnectorsPanel({
     }
   };
 
-  const openConnector = (name: string) =>
+  const openConnector = (name: string) => {
+    onLeave?.();
     router.push(`/directory/${encodeURIComponent(`connector:${name}`)}`);
+  };
 
   /** Send the browser to the provider for a connector whose note already exists. */
   const signIn = (name: string) => {
@@ -500,7 +523,7 @@ export default function ConnectorsPanel({
         taken={takenNames}
         returnTo={returnTo}
         onBack={() => setEntry(null)}
-        onCreated={(href) => router.push(href)}
+        onCreated={(href) => { onLeave?.(); router.push(href); }}
       />
     );
   }
@@ -674,7 +697,7 @@ export default function ConnectorsPanel({
     <div className="flex flex-col gap-4">
       {/* Models first, and above the search box: what this space's agents run
           on is one line, not a row buried among the services it reaches. */}
-      {!personal && (
+      {!personal && (readOnly ? modelRows.length > 0 : true) && (
         <section className="flex flex-col">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -685,14 +708,16 @@ export default function ConnectorsPanel({
                   : `Agents run on the first of these unless their brief names another.`}
               </p>
             </div>
-            <Button
-              variant={modelRows.length === 0 ? 'brand' : 'neutral'}
-              size="sm"
-              className={ACTION_SLOT}
-              onClick={() => { setQuery(''); setModelPicker(true); }}
-            >
-              {modelRows.length === 0 ? 'Add model' : '+ Add'}
-            </Button>
+            {!readOnly && (
+              <Button
+                variant={modelRows.length === 0 ? 'brand' : 'neutral'}
+                size="sm"
+                className={ACTION_SLOT}
+                onClick={() => { setQuery(''); setModelPicker(true); }}
+              >
+                {modelRows.length === 0 ? 'Add model' : '+ Add'}
+              </Button>
+            )}
           </div>
 
           {modelRows.length > 0 && (
@@ -702,7 +727,10 @@ export default function ConnectorsPanel({
                 return (
                   <li key={c.path} className="py-1">
                     <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
-                      <button onClick={() => openManage(c)} className="flex min-w-0 flex-1 items-center gap-4 text-left">
+                      <button
+                        onClick={() => (readOnly ? openConnector(c.name) : openManage(c))}
+                        className="flex min-w-0 flex-1 items-center gap-4 text-left"
+                      >
                         <ConnectorLogo name={c.name} provider={c.model?.provider} recipe={c.recipe} />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-text-primary">
@@ -714,9 +742,11 @@ export default function ConnectorsPanel({
                         </div>
                       </button>
                       {status && <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>{status.label}</span>}
-                      <Button variant="neutral" size="sm" className={ACTION_SLOT} onClick={() => openManage(c)}>
-                        Manage
-                      </Button>
+                      {!readOnly && (
+                        <Button variant="neutral" size="sm" className={ACTION_SLOT} onClick={() => openManage(c)}>
+                          Manage
+                        </Button>
+                      )}
                     </div>
                   </li>
                 );
@@ -761,7 +791,7 @@ export default function ConnectorsPanel({
         }
       />
 
-      <div className="flex gap-1">
+      {!readOnly && <div className="flex gap-1">
         {TABS[scope].map((t) => (
           <button
             key={t.id}
@@ -778,7 +808,7 @@ export default function ConnectorsPanel({
             )}
           </button>
         ))}
-      </div>
+      </div>}
 
       {outcome && (
         <p
@@ -798,7 +828,11 @@ export default function ConnectorsPanel({
         <div className="border-t border-border-subtle pt-2">
           {mine.length === 0 && (
             <p className="py-8 text-center text-sm text-text-muted">
-              {query ? `Nothing matches “${query}”.` : 'Nothing connected yet.'}
+              {query
+                ? `Nothing matches “${query}”.`
+                : readOnly
+                  ? 'This space has no connectors yet. An admin adds them in the Space Console.'
+                  : 'Nothing connected yet.'}
             </p>
           )}
 
@@ -830,28 +864,42 @@ export default function ConnectorsPanel({
                     {status && (
                       <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>{status.label}</span>
                     )}
-                    <Button
-                      variant="neutral"
-                      size="sm"
-                      className={ACTION_SLOT}
-                      onClick={() => openManage(c)}
-                    >
-                      Manage
-                    </Button>
+                    {/* A member's one act on a space's connector is signing in
+                        to their own account behind it — what a `mode: user`
+                        connector needs from each person before a run as them
+                        can spend it. The rest is the admin's. */}
+                    {readOnly ? (
+                      signsIn(c) && c.enabled && !c.invalid && (!c.connection || c.connection.broken) ? (
+                        <Button variant="brand" size="sm" className={ACTION_SLOT} onClick={() => signIn(c.name)}>
+                          {c.connection?.broken ? 'Reconnect' : 'Sign in'}
+                        </Button>
+                      ) : null
+                    ) : (
+                      <Button
+                        variant="neutral"
+                        size="sm"
+                        className={ACTION_SLOT}
+                        onClick={() => openManage(c)}
+                      >
+                        Manage
+                      </Button>
+                    )}
                   </div>
                 </li>
               );
             })}
           </ul>
 
-          <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4 mt-2">
-            <p className="text-xs text-text-muted">
-              {personal ? 'Sign in to another MCP server.' : 'Connect another service, or write one yourself.'}
-            </p>
-            <Button variant="neutral" size="sm" onClick={() => { setQuery(''); setTab('catalog'); }}>
-              {personal ? 'See servers' : 'Add a connector'}
-            </Button>
-          </div>
+          {!readOnly && (
+            <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4 mt-2">
+              <p className="text-xs text-text-muted">
+                {personal ? 'Sign in to another MCP server.' : 'Connect another service, or write one yourself.'}
+              </p>
+              <Button variant="neutral" size="sm" onClick={() => { setQuery(''); setTab('catalog'); }}>
+                {personal ? 'See servers' : 'Add a connector'}
+              </Button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="border-t border-border-subtle pt-2">

@@ -524,7 +524,7 @@ echoed through the provider.
 
 **A connector you connect for yourself works in every space you are in.** Sign
 in once from **Connectors on the account menu** — a dialog over whatever page
-you were on (`PersonalConnectorsDialog`), not a settings section, because
+you were on (`ConnectorsDialog`), not a settings section, because
 `?connectors=1` on ANY page opens it and that is what the OAuth round trip
 returns to — and the note lands in your personal
 space (`me:<userId>` — a full Space you are the only member and admin of, so

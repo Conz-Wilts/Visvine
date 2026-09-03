@@ -8,7 +8,7 @@ import Image from "next/image";
 import { useSession, signOut } from "@/features/auth/lib/auth-client";
 import { useFullProfile } from "@/features/shared/contexts/FullProfileContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
-import PersonalConnectorsDialog, { CONNECTORS_PARAM } from "@/features/settings/components/PersonalConnectorsDialog";
+import ConnectorsDialog, { CONNECTORS_PARAM, connectorsSegment } from "@/features/settings/components/ConnectorsDialog";
 
 /**
  * The account button, floated in the shell's top-right corner (AuthLayoutClient)
@@ -18,8 +18,9 @@ import PersonalConnectorsDialog, { CONNECTORS_PARAM } from "@/features/settings/
  *
  * Connectors are a menu entry rather than a settings section because they are
  * yours wherever you are: the dialog opens over the page you were on and
- * closing it leaves you there. The button sits in the shell, so `?connectors=1`
- * re-opens it on ANY page — which is what the OAuth round trip returns to.
+ * closing it leaves you there. The button sits in the shell, so `?connectors=`
+ * re-opens it on ANY page — which is what the OAuth round trip returns to —
+ * on the segment (yours, or this space's) the sign-in started from.
  */
 export default function UserMenu() {
   const { data: session, isPending } = useSession();
@@ -27,22 +28,23 @@ export default function UserMenu() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
-  const [connectorsOpen, setConnectorsOpen] = useState(false);
+  const [connectorsOpen, setConnectorsOpen] = useState<"personal" | "space" | null>(null);
   const router = useRouter();
   const { openProfile } = useFullProfile();
 
-  // `?connectors=1` opens the dialog: the sign-in round trip comes back to the
+  // `?connectors=` opens the dialog: the sign-in round trip comes back to the
   // page it started on, and this is what re-opens what the person was in.
   // Read off `location` rather than useSearchParams — the account button is
   // shell chrome on every page, and a hook that forces a Suspense boundary
   // there would be paid by all of them.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (new URLSearchParams(window.location.search).get(CONNECTORS_PARAM) === "1") setConnectorsOpen(true);
+    const segment = connectorsSegment(new URLSearchParams(window.location.search).get(CONNECTORS_PARAM));
+    if (segment) setConnectorsOpen(segment);
   }, []);
 
   const closeConnectors = () => {
-    setConnectorsOpen(false);
+    setConnectorsOpen(null);
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (!params.has(CONNECTORS_PARAM)) return;
@@ -126,7 +128,7 @@ export default function UserMenu() {
           </button>
 
           <button
-            onClick={() => { setOpen(false); setConnectorsOpen(true); }}
+            onClick={() => { setOpen(false); setConnectorsOpen("personal"); }}
             className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors flex items-center gap-2"
           >
             <PlugIcon className="w-4 h-4 text-text-muted" />
@@ -159,7 +161,7 @@ export default function UserMenu() {
         document.body
       )}
 
-      {connectorsOpen && <PersonalConnectorsDialog onClose={closeConnectors} />}
+      {connectorsOpen && <ConnectorsDialog initial={connectorsOpen} onClose={closeConnectors} />}
     </>
   );
 }

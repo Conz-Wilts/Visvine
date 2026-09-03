@@ -6,9 +6,16 @@ import { listConnectors } from '@/lib/connectors/service';
 import { availablePlatformClients } from '@/lib/connectors/platformClients';
 
 /**
- * Admin view of the space's connectors — the parsed state of every
- * connectors/*.md note (alias, allowlist, referenced secret names, parse
- * errors) for the console panel. Secrets themselves live in ../secrets.
+ * The space's connectors — the parsed state of every connectors/*.md note
+ * (alias, allowlist, referenced secret names, parse errors) for the console
+ * panel and the account menu's dialog. Secrets themselves live in ../secrets.
+ *
+ * Any member of the space may read it: the list is what the notes they can
+ * already open say about themselves (visibility is the principal's, in
+ * listConnectors), and a member needs it to see which connector they still
+ * have to sign in to. `canManage` says whether the caller is an admin — the
+ * writes behind Manage (PATCH, the note delete, the secrets) each gate
+ * themselves, so this is only what the UI shows, never what it allows.
  */
 export async function GET(
   _req: NextRequest,
@@ -20,9 +27,6 @@ export async function GET(
 
   const resolved = await resolveContext(session, spaceId);
   if (resolved instanceof Response) return resolved;
-  if (!resolved.isAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
 
   const principal = await principalOf(resolved);
   const connectors = await listConnectors(principal, resolved);
@@ -55,6 +59,7 @@ export async function GET(
   }
 
   return NextResponse.json({
+    canManage: resolved.isAdmin,
     // Which OAuth services this deployment can complete on its own — names
     // only, never credentials. It is what lets the catalog offer one-click
     // Connect for Google here and the paste-your-own-app form on a deployment
