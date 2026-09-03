@@ -13,6 +13,12 @@ interface SidebarContextValue {
   setHovered: (v: boolean) => void;
   /** Honours prefers-reduced-motion — consumers collapse transitions to 0s. */
   reduced: boolean;
+  /** The space switcher is open in the rail's panel column — the search and
+   *  the list of every space you are in, slid out beside the rail the way
+   *  Create new is (SpaceSwitcherPanel). Opened from the space at the rail's
+   *  head; the Sidebar owns the column it slides into. */
+  switcherOpen: boolean;
+  setSwitcherOpen: (v: boolean) => void;
 }
 
 /**
@@ -33,6 +39,8 @@ const SidebarContext = createContext<SidebarContextValue>({
   expanded: false,
   setHovered: () => {},
   reduced: false,
+  switcherOpen: false,
+  setSwitcherOpen: () => {},
 });
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
@@ -42,11 +50,12 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   // PAGE brought instead.
   const [hovered, setHovered] = useState(false);
   const [reduced, setReduced] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
 
   useEffect(() => setReduced(prefersReducedMotion()), []);
 
   return (
-    <SidebarContext.Provider value={{ expanded: hovered, setHovered, reduced }}>
+    <SidebarContext.Provider value={{ expanded: hovered, setHovered, reduced, switcherOpen, setSwitcherOpen }}>
       {children}
     </SidebarContext.Provider>
   );

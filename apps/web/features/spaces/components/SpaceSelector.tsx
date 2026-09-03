@@ -1,249 +1,221 @@
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import Link from 'next/link';
+import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useSession } from '@/features/auth/lib/auth-client';
+import { ChevronsUpDownIcon, PlusIcon, SettingsIcon, UsersIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
+import { HEAD_INSET, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
 import NewSpaceDialog from './NewSpaceDialog';
 
-// Predictable, ranked matching for the space switcher. Name-only (like the main
-// directory search) so it stays predictable — these are spaces you already know
-// by name, and matching descriptions made every venture firm match "ven".
-// Ranking: exact > prefix > word-start > substring. Returns -Infinity for no match.
-function scoreSpace(name: string, query: string): number {
-  const lower = name.toLowerCase();
-  if (lower === query) return 100000;
-  if (lower.startsWith(query)) return 90000 - query.length;
-  // Any word in the name starts with the query, e.g. "ven" → "Blackbird Ventures".
-  if (lower.split(/[^a-z0-9]+/).some(word => word.startsWith(query))) {
-    return 80000 - lower.indexOf(query);
-  }
-  const idx = lower.indexOf(query);
-  if (idx > 0) return 70000 - idx * 10;
-  return -Infinity;
-}
-
+/**
+ * The space band — the rail's first rows (Sidebar). The space sits at the head
+ * of the same column you sit at the foot of, and it opens the same way the
+ * account band does: point at the space and the band GROWS DOWNWARD. What
+ * hangs off the space — Switch space, the console and its members for admins,
+ * New space — unfolds as ordinary rail rows on the rail's own glyph column,
+ * their names arriving on the same fade the tools' names do. Opening the space
+ * is the rail widening and the band unfolding, one gesture, rather than a panel
+ * appearing over whatever page you were reading.
+ *
+ * The space's own row is the fast path: pressing it opens the switcher — the
+ * search and the list of every space you are in — beside the rail, because
+ * going somewhere else is what the head of the rail is most often for. The
+ * band's rows are the rest.
+ *
+ * Provisioning a space isn't one of the create-panel types — it's the one
+ * action that takes you OUT of the space you're in, so it belongs here rather
+ * than to the "+" grid. Discover is not a row of the band: it is already the
+ * top group's own row, directly below.
+ */
 export default function SpaceSelector() {
-  const { currentSpace, joinedSpaces, setCurrentSpace, isAdmin } = useSpace();
-  // The shut rail is one glyph column wide. The name and the switch marker stay
-  // mounted so they can FADE with the rail's other labels — a name revealed by
-  // the widening rail reads as sliding out from under the avatar — but they are
-  // transparent and untouchable while it is shut, so the marker never shows as
-  // a stray mark past the avatar's edge.
-  const { expanded, reduced } = useSidebar();
+  const { currentSpace, isAdmin } = useSpace();
+  const { expanded, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
   const { data: session } = useSession();
+  const router = useRouter();
   // The console is the space's own settings, so it hangs off the space — not
   // off a rail row of its own. Same gate the console page applies.
   const canManage = Boolean(currentSpace) && (isAdmin || session?.user?.isSuperAdmin === true);
-  const [isOpen, setIsOpen] = useState(false);
-  // Provisioning a space isn't one of the create-panel types — it's the one
-  // action that takes you OUT of the space you're in, so it belongs to the
-  // switcher rather than the "+" grid.
+  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  // The dropdown is portalled to <body> (so it escapes the sidebar rail's
-  // overflow-hidden clip); this anchors it to the trigger's viewport position.
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-
+  const bandRef = useRef<HTMLDivElement>(null);
+  // A pinned band closes on the next click outside it, the way the account
+  // band does. Hover-opened bands need nothing: the pointer leaving closes them.
   useEffect(() => {
-    if (!isOpen) return;
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (rect) setMenuPos({ top: rect.bottom + 8, left: rect.left });
-  }, [isOpen]);
-
-  // Close the dropdown when clicking anywhere outside it (including other top-bar items).
-  useEffect(() => {
-    if (!isOpen) return;
+    if (!pinned) return;
     const handlePointerDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (containerRef.current?.contains(target)) return;
-      if (menuRef.current?.contains(target)) return;
-      setIsOpen(false);
+      if (bandRef.current?.contains(e.target as Node)) return;
+      setPinned(false);
+      setOpen(false);
     };
     document.addEventListener('mousedown', handlePointerDown);
     return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [isOpen]);
+  }, [pinned]);
 
-  // Rows in display order: every space you are in, ranked by the search when
-  // there is one, alphabetical otherwise. A flat list — a space is a tenant of
-  // its own and sits beside the rest.
-  const rows = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return [...joinedSpaces].sort((a, b) => a.name.localeCompare(b.name));
-    return joinedSpaces
-      .map((space) => ({ space, score: scoreSpace(space.name, query) }))
-      .filter(({ score }) => score > -Infinity)
-      .sort((a, b) => b.score - a.score)
-      .map(({ space }) => space);
-  }, [joinedSpaces, searchQuery]);
+  // The rail shutting takes the band with it: a column of nameless glyphs
+  // under the avatar is not a menu anyone can read.
+  useEffect(() => {
+    if (!expanded) {
+      setOpen(false);
+      setPinned(false);
+    }
+  }, [expanded]);
 
-  const handleSelect = (spaceId: string) => {
-    setCurrentSpace(spaceId);
-    setIsOpen(false);
-    setSearchQuery('');
+  // The switcher itself is the rail's panel (SpaceSwitcherPanel), slid out
+  // beside the rail by the Sidebar; this only asks for it.
+  const openSwitcher = () => {
+    setPinned(false);
+    setOpen(false);
+    setSwitcherOpen(true);
   };
 
+  const actions: { key: string; label: string; onClick: () => void; onHover?: () => void; icon: React.ReactNode }[] = [
+    {
+      key: 'switch',
+      label: 'Switch space',
+      onClick: openSwitcher,
+      // Pointing at the row is enough: the list slides out beside the rail
+      // and stays while the pointer is anywhere on the card (Sidebar).
+      onHover: () => setSwitcherOpen(true),
+      icon: <ChevronsUpDownIcon />,
+    },
+    ...(canManage
+      ? [
+          {
+            key: 'console',
+            label: 'Space console',
+            onClick: () => router.push('/admin'),
+            icon: <SettingsIcon />,
+          },
+          {
+            key: 'members',
+            label: 'Members',
+            onClick: () => router.push('/admin?section=members'),
+            icon: <UsersIcon />,
+          },
+        ]
+      : []),
+    {
+      key: 'new',
+      label: 'New space',
+      onClick: () => setCreating(true),
+      icon: <PlusIcon />,
+    },
+  ];
+
+  // The sheet is the hairline under the space's row and everything it
+  // reveals. Shut, it is one gap tall — the rail's rhythm between the space
+  // and Create — with the hairline along its bottom edge, which is the line
+  // between the two. Open, it grows by the rows, a gap above each and one
+  // below, and that same line is what travels down over the rows it covers.
+  const shutH = ITEM_GAP;
+  const openH = shutH + actions.length * ROW_H + (actions.length + 1) * ITEM_GAP;
+  const dur = reduced ? '0s' : '260ms';
+
   return (
-    <div className="relative" ref={containerRef}>
-      {/* Trigger — a rail row: a 48px avatar cell on the rail's glyph column,
-          then the space's name, which the collapsed rail clips away. */}
-      <button
-        ref={triggerRef}
-        onClick={() => setIsOpen(!isOpen)}
-        aria-haspopup="dialog"
-        aria-expanded={isOpen}
-        className="relative z-10 flex h-12 w-full items-center rounded-[10px] transition-colors duration-150 hover:bg-surface-3"
-      >
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center">
-          {currentSpace ? (
-            <SpaceAvatar name={currentSpace.name} imageUrl={currentSpace.imageUrl} size="md" rounded="rounded-[10px]" className="!w-10 !h-10 !text-base" />
-          ) : (
-            <div className="w-10 h-10 rounded-[10px] bg-surface-3 flex-shrink-0" />
-          )}
-        </span>
-        <span
-          aria-hidden={!expanded}
-          className="ml-2.5 flex min-w-0 flex-1 items-center"
-          style={{
-            opacity: expanded ? 1 : 0,
-            pointerEvents: expanded ? undefined : 'none',
-            transition: reduced ? 'none' : `opacity 140ms ease ${expanded ? 200 : 0}ms`,
-          }}
+    <div
+      ref={bandRef}
+      className="relative flex flex-col"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => { if (!pinned) setOpen(false); }}
+      onFocus={() => setOpen(true)}
+      onBlur={(e) => {
+        if (pinned) return;
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setOpen(false);
+      }}
+    >
+      {/* The space. A rail row: a 48px avatar cell on the rail's glyph column,
+          then the space's name, which the collapsed rail clips away. Pointing
+          at it is what opens the band below; pressing it opens the switcher. */}
+      <div style={{ paddingLeft: HEAD_INSET, paddingRight: HEAD_INSET }}>
+        <button
+          type="button"
+          onClick={() => (switcherOpen ? setSwitcherOpen(false) : openSwitcher())}
+          aria-haspopup="dialog"
+          aria-expanded={switcherOpen}
+          className={`relative z-10 flex h-12 w-full items-center rounded-[10px] transition-colors duration-150 hover:bg-surface-3 ${
+            switcherOpen ? 'bg-surface-3' : ''
+          }`}
         >
-          <span className="min-w-0 flex-1 truncate text-left text-[15px] font-open-sauce font-semibold text-text-primary">
-            {currentSpace?.name || 'Select space'}
-          </span>
-          <svg className="mr-2 h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-            <path d="M8 9l4-4 4 4M8 15l4 4 4-4" />
-          </svg>
-        </span>
-      </button>
-
-      {isOpen && typeof document !== 'undefined' && createPortal(
-        <div
-          ref={menuRef}
-          className="fixed w-80 bg-surface-1 rounded-2xl shadow-float border border-border-subtle z-[60] overflow-hidden"
-          style={{ top: menuPos.top, left: menuPos.left }}
-        >
-            {/* Who you are in, and what it is — the menu opens on the space
-                itself rather than straight into a list of other ones. */}
-            {currentSpace && (
-              <div className="flex items-center gap-3 px-4 py-3.5">
-                <SpaceAvatar name={currentSpace.name} imageUrl={currentSpace.imageUrl} size="md" rounded="rounded-[10px]" className="!w-10 !h-10 !text-base" />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-text-primary">{currentSpace.name}</p>
-                  <p className="truncate text-xs text-text-muted">
-                    {currentSpace.visibility === 'private' ? 'Private' : 'Public'}
-                    {' · '}
-                    {currentSpace.memberCount} {currentSpace.memberCount === 1 ? 'member' : 'members'}
-                  </p>
-                </div>
-              </div>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center">
+            {currentSpace ? (
+              <SpaceAvatar name={currentSpace.name} imageUrl={currentSpace.imageUrl} size="md" rounded="rounded-[10px]" className="!w-10 !h-10 !text-base" />
+            ) : (
+              <div className="w-10 h-10 rounded-[10px] bg-surface-3 flex-shrink-0" />
             )}
+          </span>
+          {/* The name stays mounted so it can FADE with the rail's other labels
+              but is transparent and untouchable while the rail is shut. */}
+          <span
+            aria-hidden={!expanded}
+            className="ml-2.5 flex min-w-0 flex-1 items-center"
+            style={{
+              opacity: expanded ? 1 : 0,
+              pointerEvents: expanded ? undefined : 'none',
+              transition: reduced ? 'none' : `opacity 140ms ease ${expanded ? 200 : 0}ms`,
+            }}
+          >
+            <span className="min-w-0 flex-1 truncate text-left text-[15px] font-open-sauce font-semibold text-text-primary">
+              {currentSpace?.name || 'Select space'}
+            </span>
+          </span>
+        </button>
+      </div>
 
-            {/* Everywhere else you can go. Search first, because the list is as
-                long as your memberships. */}
-            <div className="border-t border-border-subtle p-3 pb-2">
-              <div className="flex min-h-[40px] items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 focus-within:border-brand-green transition-colors">
-                <svg className="h-3.5 w-3.5 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search spaces…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-                  autoFocus
-                />
-              </div>
+      {/* The sheet. Unlike the account band — which grows into the empty air
+          above the avatar — this one LAYS OVER the rows beneath it rather than
+          pushing them down: absolutely positioned from the foot of the space's
+          row, painted opaque, so Create and the tools hold still while it
+          unfolds across them. It starts at the row's foot rather than at the
+          line so the pointer never leaves the band on its way down to a row —
+          the gap is part of the sheet. Clipped rather than unmounted so the
+          stack is there to travel, and the labels fade on the rail's timing. */}
+      <div
+        className="absolute left-0 right-0 z-20 overflow-hidden border-b"
+        style={{
+          top: ROW_H,
+          height: open ? openH : shutH,
+          // The sheet's bottom edge is the rail's one hairline: the line under
+          // the space when shut, and the edge seen travelling down over the
+          // rows when open.
+          borderBottomColor: 'var(--shell-border, #e5e7eb)',
+          boxSizing: 'content-box',
+          // The rail paints nothing of its own (--shell-bg is transparent),
+          // so the sheet is painted in the page's backdrop, which is what the
+          // rows beneath it sit on.
+          background: 'var(--app-backdrop, #ffffff)',
+          transition: reduced ? 'none' : `height ${dur} cubic-bezier(0.25, 0.1, 0.25, 1)`,
+        }}
+        aria-hidden={!open}
+      >
+        <div
+          className="flex flex-col"
+          // Two gaps above the first row: the one the shut sheet already is,
+          // then one holding the row off the line.
+          style={{ gap: ITEM_GAP, paddingTop: ITEM_GAP * 2, paddingBottom: ITEM_GAP, paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}
+        >
+          {actions.map(({ key, label, icon, onClick, onHover }) => (
+            <div key={key} onMouseEnter={onHover}>
+              <Row
+                expanded={expanded}
+                reduced={reduced}
+                label={label}
+                icon={icon}
+                active={key === 'switch' && switcherOpen}
+                onClick={() => {
+                  setPinned(false);
+                  setOpen(false);
+                  onClick();
+                }}
+              />
             </div>
-
-            {/* Spaces List — caps at 5 rows (~48px each) before scrolling */}
-            <div className="max-h-[240px] overflow-y-auto px-1.5 pb-1.5 custom-scrollbar">
-              {rows.length === 0 ? (
-                <div className="p-4 text-sm text-text-muted text-center">No spaces found</div>
-              ) : (
-                rows.map((space) => (
-                  <button
-                    key={space.id}
-                    onClick={() => handleSelect(space.id)}
-                    className={`flex w-full min-w-0 items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-surface-2 ${
-                      currentSpace?.id === space.id ? 'bg-surface-2' : ''
-                    }`}
-                  >
-                    <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="sm" />
-                    <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{space.name}</span>
-                    {currentSpace?.id === space.id && (
-                      <svg className="w-4 h-4 shrink-0 text-brand-green" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-
-            {/* Everything that is not "switch to another space": what you can do
-                TO this one (admins only — a member sees the switcher and nothing
-                else), then the two ways out of every space you are in. */}
-            <div className="flex flex-col border-t border-border-subtle p-1.5">
-              {canManage && (
-                <>
-                  <Link
-                    href="/admin"
-                    onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
-                >
-                    <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Space management
-                  </Link>
-                  <Link
-                    href="/admin?section=members"
-                    onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
-                >
-                    <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-1a3 3 0 00-4-2.83M9 20H2v-1a5 5 0 019.5-2.2M15 7a3 3 0 11-6 0 3 3 0 016 0zm5 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    Members
-                  </Link>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={() => { setIsOpen(false); setCreating(true); }}
-                className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
-              >
-                <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 4v16m8-8H4" />
-                </svg>
-                Create space
-              </button>
-              <Link
-                href="/discover"
-                onClick={() => setIsOpen(false)}
-                className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
-              >
-                <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="9" strokeWidth={1.8} />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
-                </svg>
-                Discover spaces
-              </Link>
-            </div>
-          </div>,
-        document.body
-      )}
+          ))}
+        </div>
+      </div>
 
       {creating && <NewSpaceDialog onClose={() => setCreating(false)} />}
     </div>

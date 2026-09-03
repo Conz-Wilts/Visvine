@@ -15,11 +15,11 @@ import Modal from "@/components/ui/Modal";
 import UserMenu from "@/features/auth/components/UserMenu";
 import CreateModal from "@/features/create/components/CreateModal";
 import SpaceSelector from "@/features/spaces/components/SpaceSelector";
+import SpaceSwitcherPanel from "@/features/spaces/components/SpaceSwitcherPanel";
 import type { SpaceFeatureConfig } from "@/lib/types";
 import {
   COLLAPSED_W,
   EXPANDED_W,
-  HEAD_INSET,
   ITEM_GAP,
   ROW_H,
   ROW_INSET,
@@ -76,7 +76,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen: createOpen } = useCreateModal();
   const createSurface = useCreateSurface();
-  const { expanded, setHovered, reduced } = useSidebar();
+  const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
   const { currentSpace, isAdmin, loading: spaceLoading } = useSpace();
   const { setHost, dockTopInset } = useContextPanel();
 
@@ -162,13 +162,13 @@ export default function Sidebar() {
 
   const railInner = (
     <>
-      {/* Head — which space you are looking at. Nothing switches here: the
-          rail opens under the pointer, and the page's own side panel is
-          switched from the shell's top band (ShellTopBar). */}
+      {/* Head — which space you are looking at, and the band that unfolds
+          under it (Switch space, the console, New space — SpaceSelector). The
+          band draws its own insets: the space's row on the head inset, its
+          rows on the rail's. The page's own side panel is switched from the
+          shell's top band (ShellTopBar), not here. */}
       <div className="flex shrink-0 flex-col" style={{ gap: ITEM_GAP }}>
-        <div style={{ paddingLeft: HEAD_INSET, paddingRight: HEAD_INSET }}>
-          <SpaceSelector />
-        </div>
+        <SpaceSelector />
 
         {/* The top group — Create new, then Discover and Marketplace. It rides
             with the head rather than the nav below because it never scrolls:
@@ -180,7 +180,19 @@ export default function Sidebar() {
             switcher above). No menu hangs off it: every type is a choice in the
             draft surface's own Type row, so it is one click to a surface you
             can type into rather than a list of decisions. */}
-        <div className="flex flex-col" style={{ gap: ITEM_GAP, paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
+        <div
+          className="flex flex-col border-t"
+          style={{
+            gap: ITEM_GAP,
+            paddingTop: ITEM_GAP,
+            paddingLeft: ROW_INSET,
+            paddingRight: ROW_INSET,
+            // The line under the space is drawn by the space's own sheet
+            // (SpaceSelector) — it is that sheet's bottom edge, which travels
+            // down when it opens — so this border only holds the pixel.
+            borderTopColor: "transparent",
+          }}
+        >
           {!noSpace && (
             <Row
               expanded={expanded}
@@ -322,7 +334,17 @@ export default function Sidebar() {
   // the card gains a panel column beside the rail; the page portals its panel
   // content into the host below.
   return (
-    <aside className="fixed left-0 top-0 z-40">
+    <aside
+      className="fixed left-0 top-0 z-40"
+      // The switcher opens under the pointer (the Switch space row), so it
+      // shuts when the pointer leaves the whole card — rail and panel both —
+      // and the rail, held open under it, lets go at the same moment.
+      onMouseLeave={() => {
+        if (!switcherOpen) return;
+        setSwitcherOpen(false);
+        setHovered(false);
+      }}
+    >
       {/* The card runs the viewport's full height, flush against the left and
           bottom screen edges: those corners and borders are dropped so it reads
           as attached to the shell rather than floating.
@@ -347,7 +369,9 @@ export default function Sidebar() {
             transition: reduced ? "none" : "width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
           }}
           onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
+          // Crossing from the rail into the switcher beside it must not shut
+          // the rail: the panel sits against the OPEN rail's edge.
+          onMouseLeave={() => { if (!switcherOpen) setHovered(false); }}
         >
           {railInner}
         </div>
@@ -425,7 +449,23 @@ export default function Sidebar() {
           >
             <CreateModal />
           </div>
+
         </div>
+      </div>
+
+      {/* The space switcher — a layer against the open rail's edge running
+          the card's full height, so its search is at the very top beside the
+          space, not below the shell's band the way the page's panel column
+          is. It slides out from under the rail like Create new; parked, it is
+          clipped by this box. It hangs off the aside rather than the card's
+          overflow-hidden box above, because that box is only as wide as the
+          rail and would scroll itself sideways to show a focused search. The
+          rail is held open while it shows, so EXPANDED_W is where its edge is. */}
+      <div
+        className={`absolute top-0 bottom-0 z-20 overflow-hidden ${switcherOpen ? '' : 'pointer-events-none'}`}
+        style={{ left: EXPANDED_W, width: createW }}
+      >
+        <SpaceSwitcherPanel />
       </div>
 
       {/* "More" popup — the same centered modal shell as the Create-new modal,
