@@ -24,7 +24,6 @@ export type ConnectError = 'not_found' | 'not_person' | 'duplicate' | 'identity_
 export interface NodeConnection {
   userId: string;
   identityId: string;
-  personId: string | null;
   isActive: boolean;
   name: string;
   email: string;
@@ -192,23 +191,35 @@ export async function resolveNodeConnection(nodeId: string): Promise<NodeConnect
   const userId = node?.identity?.userId;
   if (!node?.identityId || !userId) return null;
 
-  const [user, person] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, email: true, isActive: true },
-    }),
-    prisma.person.findUnique({ where: { userId }, select: { id: true } }),
-  ]);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, isActive: true },
+  });
   if (!user) return null;
 
   return {
     userId,
     identityId: node.identityId,
-    personId: person?.id ?? null,
     isActive: user.isActive,
     name: user.name,
     email: user.email,
   };
+}
+
+/**
+ * The member a profile id names, or null. A profile id is a node id (resolved
+ * through the connection above), the member's own node id (User.nodeId, which
+ * the session carries before the personal space has placed the node), or a
+ * user id.
+ */
+export async function resolveProfileUserId(id: string): Promise<string | null> {
+  const connection = await resolveNodeConnection(id);
+  if (connection) return connection.userId;
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ id }, { nodeId: id }] },
+    select: { id: true },
+  });
+  return user?.id ?? null;
 }
 
 /** The member's connected node in a space, or null. */

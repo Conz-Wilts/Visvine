@@ -64,11 +64,11 @@ export async function provisionPersonalSpace(user: {
 }): Promise<ProvisionResult> {
   const spaceId = personalSpaceId(user.userId)
 
-  // The Person row is created at the OAuth callback and edited from the profile
-  // editor; it's the source of truth for the directory node's profile fields.
-  const person = await prisma.person.findUnique({
-    where: { userId: user.userId },
-    select: { id: true, name: true, subtitle: true, location: true, imageUrl: true, tags: true },
+  // The profile lives on the user row; `nodeId` is minted at sign-in
+  // (lib/auth/bootstrap.ts) and is the id the node below is placed under.
+  const person = await prisma.user.findUnique({
+    where: { id: user.userId },
+    select: { nodeId: true, name: true, subtitle: true, location: true, image: true, tags: true },
   })
 
   const displayName = person?.name?.trim() || user.name
@@ -100,24 +100,24 @@ export async function provisionPersonalSpace(user: {
   // 3. Put the user's person node in their own directory. Node.spaceId is a
   //    single scalar (a node lives in one space), and a person node may exist
   //    with spaceId=null — so point it at this space here.
-  if (person) {
+  if (person?.nodeId) {
     await prisma.node.upsert({
-      where: { id: person.id },
+      where: { id: person.nodeId },
       update: { spaceId },
       create: {
-        id: person.id,
+        id: person.nodeId,
         type: 'person',
-        name: person.name,
+        name: displayName,
         subtitle: person.subtitle,
         location: person.location,
-        imageUrl: person.imageUrl,
-        tags: person.tags ?? [],
+        imageUrl: person.image,
+        tags: person.tags,
         spaceId,
       },
     })
     // Connect the node to its owner through the identity bridge — the link the
     // Profile tab and userId-based ownership resolve through everywhere.
-    await connectNodeToUserSafe(person.id, user.userId, { reason: 'personal space owner' })
+    await connectNodeToUserSafe(person.nodeId, user.userId, { reason: 'personal space owner' })
   }
 
   // 4. Seed a welcome note in the personal space's context (its shared context —

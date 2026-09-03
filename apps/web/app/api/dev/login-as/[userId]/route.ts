@@ -11,10 +11,7 @@ export async function POST(
   if (!isDevAuthEnabled()) return devAuthDisabledResponse();
 
   const { userId } = await params;
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { person: true },
-  });
+  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
     return new Response(JSON.stringify({ error: "user not found" }), {
       status: 404,
@@ -27,7 +24,7 @@ export async function POST(
     name: user.name,
     email: user.email,
     image: user.image,
-    personId: user.person?.id ?? null,
+    nodeId: user.nodeId,
   });
 
   const callbackUrl = safeRelativePath(req.nextUrl.searchParams.get("callbackUrl"));

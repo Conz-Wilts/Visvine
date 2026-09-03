@@ -352,7 +352,6 @@ async function main(): Promise<void> {
     userId: owner.id,
     name: owner.name ?? '',
     email: owner.email ?? '',
-    personId: null,
   };
   const resolved = await resolveContext(session, SPACE);
   if (resolved instanceof Response) throw new Error(`resolveContext: ${resolved.status}`);
@@ -362,7 +361,6 @@ async function main(): Promise<void> {
     userId: owner.id,
     name: owner.name ?? '',
     email: owner.email ?? '',
-    personId: null,
     scopes: ['context:read', 'context:write', 'tools:author', 'tools:install'],
   };
 

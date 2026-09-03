@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eventCreateInputSchema } from '@/lib/schemas/eventSchemas';
 import { normalizeStatus } from '@/lib/eventUtils';
 import { getEventsData } from '@/lib/eventRepo';
-import { createEventRecord } from '@/lib/events/write';
+import { createEventRecord, eventAuthorFor } from '@/lib/events/write';
 import { requireSpaceMember } from '@/lib/eventAuth';
 import { handleApiError } from '@/lib/api/route';
 
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     // Building the record, its hosts and its links is lib/events/write.ts — the
     // same call the MCP create_event tool makes, so the two doors agree.
-    const event = await createEventRecord(input, { personId: auth.personId });
+    const event = await createEventRecord(input, await eventAuthorFor(input.spaceId, auth.userId));
 
     return NextResponse.json(event, { status: 201 });
   } catch (error) {

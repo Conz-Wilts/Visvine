@@ -21,7 +21,8 @@ export interface SessionPayload {
   name: string;
   email: string;
   image?: string | null;
-  personId?: string | null;
+  /** The person's own node — their profile page (User.nodeId). */
+  nodeId?: string | null;
 }
 
 /**

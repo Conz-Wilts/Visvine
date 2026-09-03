@@ -240,7 +240,6 @@ export async function captureToolPreview(req: ScreenshotRequest): Promise<Screen
         userId: req.viewer.userId,
         name: req.viewer.name,
         email: req.viewer.email,
-        personId: req.viewer.personId ?? null,
       },
       { maxAgeSeconds: PREVIEW_SESSION_TTL_S },
     )

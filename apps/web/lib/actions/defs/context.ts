@@ -78,7 +78,7 @@ import { setSpaceSecret, storedSecretNames, SECRET_MAX_CHARS } from '@/lib/conne
 import { listFolders } from '@/lib/resources/folders'
 import { getEvent, getEventsData } from '@/lib/eventRepo'
 import { buildNewEvent } from '@/lib/events/build'
-import { createEventRecord, updateEventRecord } from '@/lib/events/write'
+import { createEventRecord, eventAuthorFor, updateEventRecord } from '@/lib/events/write'
 import { coverUrlFromResource } from '@/lib/events/cover'
 import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth'
 import { eventCreateInputSchema, eventUpdateInputSchema } from '@/lib/schemas/eventSchemas'
@@ -1795,7 +1795,8 @@ export const CONTEXT_ACTIONS = [
 
         // The cover is minted against the id the record will get, so the bytes
         // and the row cannot disagree about which event they belong to.
-        const eventId = buildNewEvent(input, { personId: ctx.personId }).id
+        const author = await eventAuthorFor(input.spaceId, ctx.userId)
+        const eventId = buildNewEvent(input, author).id
         const coverImageUrl = args.cover_resource_id
           ? await coverUrlFromResource({
               spaceId: args.space_id,
@@ -1804,7 +1805,7 @@ export const CONTEXT_ACTIONS = [
             })
           : undefined
 
-        const event = await createEventRecord({ ...input, id: eventId, coverImageUrl }, { personId: ctx.personId })
+        const event = await createEventRecord({ ...input, id: eventId, coverImageUrl }, author)
         const notePath = entityNotePath({ id: event.id, type: 'event' })
         return {
           event_id: event.id,

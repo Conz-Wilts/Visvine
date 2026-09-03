@@ -13,7 +13,7 @@ export async function GET() {
         name: session.name,
         email: session.email,
         image: session.image,
-        nodeId: session.personId,
+        nodeId: session.nodeId,
         isSuperAdmin: isSuperAdmin(session.email),
       },
     },

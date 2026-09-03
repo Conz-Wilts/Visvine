@@ -1187,6 +1187,15 @@ model EventAttendee {
 ///     is not an audit log.
 ///
 /// What is left after those three is access and credentials, and those cascade.
+///
+/// The row is also the person's PROFILE — the fields from `nodeId` down are
+/// what /api/profile reads and the profile editor writes. They belong to the
+/// account, not to any space: a `Node` is one space's card for a person, and a
+/// member's node in each space is reached through their `Identity`. `nodeId`
+/// is the id of their own person node — the one in their personal space
+/// (lib/spaces/personalSpace.ts) — minted once at first sign-in
+/// (lib/auth/bootstrap.ts) and carried in the session as the profile the
+/// account menu links to.
 model User {
   id            String        @id @default(dbgenerated("(gen_random_uuid())::text"))
   name          String
@@ -1197,8 +1206,20 @@ model User {
   claimNonce    String?       @unique @map("claim_nonce")
   googleId      String?       @unique @map("google_id")
   isActive      Boolean       @default(true) @map("is_active")
+  /// Public profile metadata: what a claim import supplied (name, headline,
+  /// avatar_url) and what the profile editor keeps here (experience,
+  /// themeColor). PATCH /api/profile round-trips it whole as `metadata`.
   publicMeta    Json          @default("{}") @map("public_meta")
-  person        Person?
+  nodeId        String?       @unique @map("node_id")
+  subtitle      String?
+  bio           String?
+  location      String?
+  website       String?
+  linkedinUrl   String?       @map("linkedin_url")
+  twitterUrl    String?       @map("twitter_url")
+  phone         String?
+  pronouns      String?
+  tags          String[]      @default([])
   membersAdded  SpaceMember[] @relation("AddedByRelation")
   memberships   SpaceMember[] @relation("MemberOf")
 
@@ -1245,28 +1266,6 @@ model SpaceMember {
   @@unique([userId, spaceId])
   @@index([spaceId])
   @@map("space_members")
-}
-
-model Person {
-  id          String   @id
-  userId      String?  @unique @map("user_id")
-  name        String
-  subtitle    String?
-  bio         String?
-  location    String?
-  website     String?  @map("website")
-  linkedinUrl String?  @map("linkedin_url")
-  twitterUrl  String?  @map("twitter_url")
-  phone       String?
-  pronouns    String?
-  imageUrl    String?  @map("image_url")
-  tags        String[] @default([])
-  metadata    Json     @default("{}")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  user        User?    @relation(fields: [userId], references: [id])
-
-  @@map("people")
 }
 
 /// Canonical, cross-space identity for a real person or organization.

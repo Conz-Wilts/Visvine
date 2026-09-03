@@ -563,7 +563,7 @@ function previewRequest(
     appOrigin: deps.appOrigin(),
     spaceId: target.context.spaceId,
     name,
-    viewer: { userId: ctx.userId, name: ctx.name, email: ctx.email, personId: ctx.personId },
+    viewer: { userId: ctx.userId, name: ctx.name, email: ctx.email },
     image: opts.image,
     budgetMs: SCREENSHOT_BUDGET_MS,
   }

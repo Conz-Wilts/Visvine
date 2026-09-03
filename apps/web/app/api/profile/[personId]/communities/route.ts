@@ -16,6 +16,7 @@ import prisma from '@/lib/prisma';
 import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
 import { adminSpaceIds } from '@/lib/auth';
+import { resolveProfileUserId } from '@/lib/identity/connection';
 
 type RouteContext = { params: Promise<{ personId: string }> };
 
@@ -57,18 +58,15 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   if (session instanceof NextResponse) return session;
 
   const { personId } = await context.params;
-  const person = await prisma.person.findUnique({
-    where: { id: personId },
-    select: { userId: true },
-  });
+  const userId = await resolveProfileUserId(personId);
 
   // Context-only people (no linked user) have no memberships to show.
-  if (!person?.userId) return NextResponse.json({ spaces: [], isOwner: false });
+  if (!userId) return NextResponse.json({ spaces: [], isOwner: false });
 
-  const isOwner = person.userId === session.userId;
-  const rows = await loadRows(person.userId);
+  const isOwner = userId === session.userId;
+  const rows = await loadRows(userId);
   const adminIds = await adminSpaceIds(
-    person.userId,
+    userId,
     rows.map((r) => r.space.id),
   );
 
@@ -99,12 +97,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   if (session instanceof NextResponse) return session;
 
   const { personId } = await context.params;
-  const person = await prisma.person.findUnique({
-    where: { id: personId },
-    select: { userId: true },
-  });
-  if (!person) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (person.userId !== session.userId) {
+  const userId = await resolveProfileUserId(personId);
+  if (!userId) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (userId !== session.userId) {
     return forbiddenResponse();
   }
 
@@ -116,7 +111,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
 
   const membership = await prisma.spaceMember.findUnique({
-    where: { userId_spaceId: { userId: person.userId, spaceId } },
+    where: { userId_spaceId: { userId, spaceId } },
   });
   if (!membership || membership.status !== 'active') {
     return NextResponse.json({ error: 'Not a member of that space' }, { status: 404 });

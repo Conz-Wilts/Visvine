@@ -71,7 +71,7 @@ test('every userId-scoped model without a cascading User FK is cleared by delete
     return !lines.some((l) => /references:\s*\[id\]/.test(l) && /onDelete:\s*Cascade/.test(l) && /User/.test(l))
   })
 
-  assert.ok(orphans.length > 0, 'expected at least UserAlias / Person / Identity here')
+  assert.ok(orphans.length > 0, 'expected at least Identity / SpaceMember.addedBy here')
 
   for (const m of orphans) {
     if (REDACTED_BY_DESIGN.has(m.name)) {
@@ -115,10 +115,6 @@ test('queued move proposals are deleted with the account', () => {
 test('deleteAccount deletes the User row last', () => {
   const userDelete = service.indexOf('tx.user.delete(')
   assert.ok(userDelete > 0, 'the User row is never deleted')
-  assert.ok(
-    service.indexOf('tx.person.deleteMany(') < userDelete,
-    'Person must go before User — its FK is SET NULL, so the profile would be orphaned',
-  )
   assert.ok(
     service.indexOf('tx.identity.deleteMany(') < userDelete,
     'Identity must go before User; it is looked up by userId',

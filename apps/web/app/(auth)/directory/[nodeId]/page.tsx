@@ -265,7 +265,7 @@ function PersonRoute({ nodeId }: { nodeId: string }) {
   // than flashing not-found on the way out.
   if (resolved.nodeId) return <ProfileSkeletonLoader mode="fullpage" />;
   // Your own id with no node behind it anywhere — a member of no space yet.
-  // The Person row is still a profile, and it is the one page you must always
+  // The account is still a profile, and it is the one page you must always
   // be able to reach; ProfilePageContent renders it without node data.
   if (session?.user?.nodeId === nodeId) return <PersonProfilePage nodeId={nodeId} />;
   return <NotFoundState title="Profile not found" />;

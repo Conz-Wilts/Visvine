@@ -88,17 +88,11 @@ export async function getUserIdentity(userId: string): Promise<{
   userId: string
   name: string
   email: string
-  personId: string | null
 } | null> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, person: { select: { id: true } } },
+    select: { id: true, name: true, email: true },
   })
   if (!user) return null
-  return {
-    userId: user.id,
-    name: user.name,
-    email: user.email,
-    personId: user.person?.id ?? null,
-  }
+  return { userId: user.id, name: user.name, email: user.email }
 }

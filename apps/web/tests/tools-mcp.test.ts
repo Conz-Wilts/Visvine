@@ -32,7 +32,6 @@ const CTX: ActionCaller = {
   userId: 'user_1',
   name: 'Ada',
   email: 'ada@local.dev',
-  personId: null,
   scopes: ['tools:author', 'tools:install', 'context:read'],
 }
 
@@ -737,7 +736,7 @@ test('preview_tool renders only when asked, and passes the image and console err
       appOrigin: 'https://visvine.test',
       spaceId: SPACE,
       name: 'board',
-      viewer: { userId: 'user_1', name: 'Ada', email: 'ada@local.dev', personId: null },
+      viewer: { userId: 'user_1', name: 'Ada', email: 'ada@local.dev' },
       image: true,
       budgetMs: 10_000,
     },

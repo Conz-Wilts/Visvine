@@ -32,7 +32,6 @@ function sessionOf(ctx: ActionCaller): SessionPayload {
     userId: ctx.userId,
     name: ctx.name || ctx.email || ctx.userId,
     email: ctx.email,
-    personId: ctx.personId,
   }
 }
 

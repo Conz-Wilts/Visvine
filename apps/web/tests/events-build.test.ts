@@ -24,25 +24,25 @@ function input(overrides: Record<string, unknown> = {}) {
 }
 
 test('the id and slug derive from the title and date, and the creator is a host', () => {
-  const event = buildNewEvent(input(), { personId: 'person:ada' })
+  const event = buildNewEvent(input(), { hostNodeId: 'person:ada' })
   assert.equal(event.id, 'event:launch-night-20260914')
   assert.equal(event.slug, 'launch-night-20260914')
   assert.deepEqual(event.hosts, ['person:ada'])
 })
 
 test('a supplied id is honoured, so a draft keeps one identity across autosaves', () => {
-  const event = buildNewEvent(input({ id: 'event:draft-abc' }), { personId: 'person:ada' })
+  const event = buildNewEvent(input({ id: 'event:draft-abc' }), { hostNodeId: 'person:ada' })
   assert.equal(event.id, 'event:draft-abc')
   assert.equal(event.slug, 'draft-abc')
 })
 
 test('the creator joins the named hosts without duplicating themselves', () => {
-  const event = buildNewEvent(input({ hosts: ['person:ada', 'person:grace'] }), { personId: 'person:ada' })
+  const event = buildNewEvent(input({ hosts: ['person:ada', 'person:grace'] }), { hostNodeId: 'person:ada' })
   assert.deepEqual(event.hosts, ['person:ada', 'person:grace'])
 })
 
 test('an author with no person node leaves the host list as given', () => {
-  const event = buildNewEvent(input({ hosts: ['person:grace'] }), { personId: null })
+  const event = buildNewEvent(input({ hosts: ['person:grace'] }), { hostNodeId: null })
   assert.deepEqual(event.hosts, ['person:grace'])
 })
 

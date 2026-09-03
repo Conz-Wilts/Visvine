@@ -58,7 +58,7 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
   `lib/prisma.ts`.
 - **A table is named after the tool that owns it** — `context_*`, `connector_*`,
   `event_*`, `resource_*`, `message_*`. Only genuinely cross-tool things go
-  unprefixed (`spaces`, `users`, `people`, `identities`, `nodes`, `links`,
+  unprefixed (`spaces`, `users`, `identities`, `nodes`, `links`,
   `oauth_*`). `prisma/TABLES.md` is the plain-English map of all of them.
   The notes surface is **Context**, everywhere — in the schema, the code and the
   UI. Don't reintroduce another word for it.

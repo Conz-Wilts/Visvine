@@ -57,7 +57,7 @@ export async function GET(
           where: { spaceId },
           orderBy: { joinedAt: 'asc' },
           take: 60,
-          include: { user: { select: { id: true, name: true, image: true, person: { select: { id: true, imageUrl: true, subtitle: true } } } } },
+          include: { user: { select: { id: true, name: true, image: true, subtitle: true, nodeId: true } } },
         }),
         isMember
           ? prisma.resource.findMany({
@@ -72,9 +72,9 @@ export async function GET(
     const toMember = (m: (typeof memberships)[number]) => ({
       userId: m.userId,
       name: m.user.name,
-      image: m.user.person?.imageUrl ?? m.user.image,
-      subtitle: m.user.person?.subtitle ?? null,
-      personId: m.user.person?.id ?? null,
+      image: m.user.image,
+      subtitle: m.user.subtitle,
+      personId: m.user.nodeId,
       isAdmin: organizerIds.has(m.userId),
       joinedAt: m.joinedAt.toISOString(),
     });

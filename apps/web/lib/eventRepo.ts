@@ -135,9 +135,9 @@ async function fetchSpaceNodes(spaceId: string): Promise<NBNode[]> {
     return meta.status !== 'draft' && meta.visibility !== 'private';
   });
 
-  // Person.imageUrl is authoritative for profile photos (stays in sync with GCS uploads).
-  // Node.imageUrl can be stale if old local-path images were never migrated to GCS.
-  // Fetch person-type nodes to overlay profile data (image, bio, links).
+  // A person node connected to a member shows that member's profile (photo,
+  // bio, links) over the node's own fields: the profile is the one the person
+  // edits, and it reaches every space through the identity bridge.
   const personNodeIds = nodeRows.filter(n => n.id.startsWith('person:')).map(n => n.id);
   const personDataMap = new Map<string, {
     imageUrl: string | null;
@@ -149,17 +149,24 @@ async function fetchSpaceNodes(spaceId: string): Promise<NBNode[]> {
     pronouns: string | null;
   }>();
   if (personNodeIds.length > 0) {
-    const personRows = await prisma.person.findMany({
-      where: { id: { in: personNodeIds } },
+    const connected = await prisma.node.findMany({
+      where: { id: { in: personNodeIds }, identity: { userId: { not: null } } },
       select: {
-        id: true, imageUrl: true, bio: true, website: true,
-        linkedinUrl: true, twitterUrl: true, phone: true,
-        pronouns: true,
+        id: true,
+        identity: {
+          select: {
+            user: {
+              select: { image: true, bio: true, website: true, linkedinUrl: true, twitterUrl: true, phone: true, pronouns: true },
+            },
+          },
+        },
       },
     });
-    for (const p of personRows) {
-      personDataMap.set(p.id, {
-        imageUrl: p.imageUrl,
+    for (const n of connected) {
+      const p = n.identity?.user;
+      if (!p) continue;
+      personDataMap.set(n.id, {
+        imageUrl: p.image,
         bio: p.bio,
         website: p.website,
         linkedinUrl: p.linkedinUrl,

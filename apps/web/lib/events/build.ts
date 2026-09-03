@@ -15,7 +15,8 @@ import type { NBEvent } from '@/lib/types'
 /** Who is creating the event — the one caller-derived fact the build needs. */
 export interface EventAuthor {
   /** The author's person node, when they have one in this space. */
-  personId?: string | null
+  /** The creator's person node in the event's space, made a host. */
+  hostNodeId?: string | null
 }
 
 /**
@@ -34,7 +35,7 @@ export function buildNewEvent(
   const slug = eventId.slice('event:'.length) // unique, reversible public URL segment
 
   // The creator is always a host, so they can manage the event afterwards.
-  const hosts = Array.from(new Set([...(input.hosts || []), ...(author.personId ? [author.personId] : [])]))
+  const hosts = Array.from(new Set([...(input.hosts || []), ...(author.hostNodeId ? [author.hostNodeId] : [])]))
 
   return {
     id: eventId,

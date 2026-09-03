@@ -248,7 +248,6 @@ async function main(): Promise<void> {
     userId: owner.id,
     name: owner.name ?? '',
     email: owner.email ?? '',
-    personId: null,
   };
   const resolved = await resolveContext(session, SPACE);
   if (resolved instanceof Response) throw new Error(`resolveContext: ${resolved.status}`);
@@ -263,7 +262,6 @@ async function main(): Promise<void> {
     userId: owner.id,
     name: owner.name ?? '',
     email: owner.email ?? '',
-    personId: null,
     scopes: ['context:read', 'context:write', 'tools:author', 'tools:install'],
   };
 
@@ -370,7 +368,6 @@ async function main(): Promise<void> {
       userId: member.id,
       name: member.name ?? '',
       email: member.email ?? '',
-      personId: null,
       scopes: ['tools:author'],
     };
     const refused = await refusal(() =>

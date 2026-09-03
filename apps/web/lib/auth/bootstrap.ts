@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { Prisma, type Person } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { COOKIE_NAME, MAX_AGE } from "@/lib/session";
 
 /**
  * Shared post-authentication plumbing for every sign-in entry point (the
- * Google OAuth callback, the claim flow, dev login). Keeps Person creation and
- * the session cookie identical across all of them.
+ * Google OAuth callback, the claim flow, dev login). Keeps the home-node mint
+ * and the session cookie identical across all of them.
  */
 
 export type SessionableUser = {
@@ -17,45 +17,33 @@ export type SessionableUser = {
 };
 
 /**
- * Returns the user's Person row, creating one if it doesn't exist yet.
- * Person IDs are `person:<emailPrefix>`; on a unique collision we either
- * adopt the row a concurrent request just created for this user, or fall
- * back to a numbered suffix.
+ * The id of the user's own person node (User.nodeId), minted on first sign-in.
+ * Ids are `person:<emailPrefix>`; on a collision with another user's node we
+ * fall back to a numbered suffix. The node itself is placed in their personal
+ * space by lib/spaces/personalSpace.ts.
  */
-export async function ensurePerson(user: SessionableUser): Promise<Person> {
-  const existing = await prisma.person.findUnique({ where: { userId: user.id } });
-  if (existing) return existing;
+export async function ensureHomeNodeId(user: SessionableUser): Promise<string> {
+  const existing = await prisma.user.findUnique({ where: { id: user.id }, select: { nodeId: true } });
+  if (existing?.nodeId) return existing.nodeId;
 
   const emailPrefix = user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
   const baseId = `person:${emailPrefix || "user"}`;
-  let candidate = baseId;
-  let suffix = 0;
 
   // Bounded retry to avoid any pathological infinite loop.
-  for (let attempt = 0; attempt < 50; attempt++) {
+  for (let suffix = 0; suffix < 50; suffix++) {
+    const candidate = suffix === 0 ? baseId : `${baseId}-${suffix}`;
     try {
-      return await prisma.person.create({
-        data: {
-          id: candidate,
-          userId: user.id,
-          name: user.name,
-          imageUrl: user.image,
-        },
-      });
+      await prisma.user.update({ where: { id: user.id }, data: { nodeId: candidate } });
+      return candidate;
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        // A concurrent request may have created this user's Person (unique userId).
-        const raced = await prisma.person.findUnique({ where: { userId: user.id } });
-        if (raced) return raced;
-        // Otherwise the `id` is taken by a different user — try a new suffix.
-        suffix++;
-        candidate = `${baseId}-${suffix}`;
+        // Taken by another user — try the next suffix.
         continue;
       }
       throw e;
     }
   }
-  throw new Error("ensurePerson: exhausted unique-id attempts");
+  throw new Error("ensureHomeNodeId: exhausted unique-id attempts");
 }
 
 /** Sets the auth session cookie on a response using the shared cookie options. */

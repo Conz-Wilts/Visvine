@@ -191,7 +191,6 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
 
     if (nodeIds.length) await tx.node.deleteMany({ where: { id: { in: nodeIds } } })
     await tx.identity.deleteMany({ where: { userId } })
-    await tx.person.deleteMany({ where: { userId } })
 
     // Their personal space, in full. Its notes are `ownerKey = 'shared'` INSIDE
     // `me:<userId>`, so none of the ownerKey sweeps above touched them — the

@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         image: true,
-        person: { select: { subtitle: true, imageUrl: true } },
+        subtitle: true,
       },
       orderBy: { name: 'asc' },
       take: 10,
@@ -70,8 +70,8 @@ export async function GET(request: NextRequest) {
       results: users.map((u) => ({
         id: u.id,
         name: u.name,
-        imageUrl: u.person?.imageUrl ?? u.image,
-        subtitle: u.person?.subtitle,
+        imageUrl: u.image,
+        subtitle: u.subtitle,
         type: 'user',
       })),
     });

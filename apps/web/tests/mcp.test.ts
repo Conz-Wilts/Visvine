@@ -46,7 +46,7 @@ import { buildTypeCatalog } from '@/lib/mcp/typeCatalog'
 process.env.AUTH_SECRET ??= 'test-secret-for-mcp-tests'
 process.env.NEXT_PUBLIC_APP_URL ??= 'http://localhost:3000'
 
-const IDENTITY = { userId: 'user_1', name: 'Test User', email: 'test@local.dev', personId: null }
+const IDENTITY = { userId: 'user_1', name: 'Test User', email: 'test@local.dev' }
 
 test('the catalogue is the two context scopes plus the eight capability scopes', () => {
   assert.deepEqual(

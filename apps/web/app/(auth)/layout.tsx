@@ -35,7 +35,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
       name: session.name,
       email: session.email,
       image: session.image,
-      nodeId: session.personId,
+      nodeId: session.nodeId,
       isSuperAdmin: isSuperAdmin(session.email),
     },
   };

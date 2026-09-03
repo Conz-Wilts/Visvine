@@ -50,7 +50,7 @@ export async function GET(
     resource.uploadedBy
       ? prisma.user.findUnique({
           where: { id: resource.uploadedBy },
-          select: { id: true, name: true, image: true, person: { select: { id: true, imageUrl: true } } },
+          select: { id: true, name: true, image: true, nodeId: true },
         })
       : Promise.resolve(null),
     prisma.resourceChange.count({ where: { resourceId, status: 'pending' } }),
@@ -63,8 +63,8 @@ export async function GET(
       ? {
           id: uploader.id,
           name: uploader.name,
-          image: uploader.person?.imageUrl ?? uploader.image,
-          personId: uploader.person?.id ?? null,
+          image: uploader.image,
+          personId: uploader.nodeId,
         }
       : null,
     counts: { comments: _count.comments, changes: _count.changes, pendingChanges },

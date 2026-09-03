@@ -16,7 +16,7 @@ export interface FullProfile {
   metadata?: Record<string, unknown> | null;
   userId?: string | null;
   /** True when this profile id resolves to a registered member (see
-   *  /api/profile — connection first, legacy Person-id second). */
+   *  /api/profile — the node's connection first, then the member's own ids). */
   connected?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -24,8 +24,8 @@ export interface FullProfile {
 
 /**
  * A career/experience entry. Stored as `metadata.experience: ExperienceEntry[]`
- * on the Person row — no dedicated table, the profile PATCH already round-trips
- * metadata.
+ * on the user's profile (User.publicMeta) — no dedicated table, the profile
+ * PATCH already round-trips metadata.
  */
 export interface ExperienceEntry {
   id: string;

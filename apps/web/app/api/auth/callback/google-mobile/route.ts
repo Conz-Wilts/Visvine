@@ -3,69 +3,17 @@ import { createSession } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { logger } from "@/lib/logger";
-
-type SessionableUser = {
-  id: string;
-  name: string;
-  email: string;
-  image: string | null;
-};
+import { ensureHomeNodeId, type SessionableUser } from "@/lib/auth/bootstrap";
 
 async function buildSessionData(user: SessionableUser) {
-  let person = await prisma.person.findUnique({
-    where: { userId: user.id },
-  });
-
-  // If no Person record exists, create one automatically
-  if (!person) {
-    const emailPrefix = user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
-    const personId = `person:${emailPrefix}`;
-
-    try {
-      person = await prisma.person.create({
-        data: {
-          id: personId,
-          userId: user.id,
-          name: user.name,
-          imageUrl: user.image,
-        },
-      });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        let suffix = 1;
-        let uniqueId = `person:${emailPrefix}-${suffix}`;
-        while (true) {
-          try {
-            person = await prisma.person.create({
-              data: {
-                id: uniqueId,
-                userId: user.id,
-                name: user.name,
-                imageUrl: user.image,
-              },
-            });
-            break;
-          } catch (err) {
-            if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-              suffix++;
-              uniqueId = `person:${emailPrefix}-${suffix}`;
-            } else {
-              throw err;
-            }
-          }
-        }
-      } else {
-        throw e;
-      }
-    }
-  }
+  const nodeId = await ensureHomeNodeId(user);
 
   const token = await createSession({
     userId: user.id,
     name: user.name,
     email: user.email,
     image: user.image,
-    personId: person.id,
+    nodeId,
   });
 
   return { token };
@@ -220,8 +168,8 @@ export async function GET(req: NextRequest) {
       where: { id: userByEmail.id },
       data: {
         googleId,
-        name: googleName,
-        image: googlePicture || userByEmail.image,
+        name: userByEmail.name || googleName,
+        image: userByEmail.image || googlePicture,
       },
     });
   }

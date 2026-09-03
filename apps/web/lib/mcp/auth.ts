@@ -33,7 +33,7 @@ export function mcpBearerVerifier() {
       clientId: v.clientId,
       scopes: v.scopes,
       expiresAt: v.expiresAt,
-      extra: { userId: v.userId, name: v.name, email: v.email, personId: v.personId },
+      extra: { userId: v.userId, name: v.name, email: v.email },
     }
   }
 }
@@ -46,7 +46,6 @@ function callerFromAuthInfo(info: AuthInfo | undefined): ActionCaller | null {
     userId,
     name: typeof extra?.name === 'string' ? extra.name : '',
     email: typeof extra?.email === 'string' ? extra.email : '',
-    personId: typeof extra?.personId === 'string' ? extra.personId : null,
     scopes: info?.scopes ?? [],
   }
 }

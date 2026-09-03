@@ -80,7 +80,7 @@ async function main() {
   });
   if (!owner) throw new Error(`alias holder ${holder.userId} has no user row`);
 
-  const session = { userId: owner.id, name: owner.name ?? '', email: owner.email ?? '', personId: null };
+  const session = { userId: owner.id, name: owner.name ?? '', email: owner.email ?? '' };
   // Not used directly — every write below goes through a handler, which resolves
   // its own principal. Asked here so a space this user cannot reach fails on the
   // first line rather than three steps in.
@@ -93,7 +93,6 @@ async function main() {
     userId: owner.id,
     name: owner.name ?? '',
     email: owner.email ?? '',
-    personId: null,
     scopes: ['context:read', 'context:write', 'tools:author', 'tools:install'],
   };
 

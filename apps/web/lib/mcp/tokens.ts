@@ -38,7 +38,6 @@ export interface McpIdentity {
   userId: string
   name: string
   email: string
-  personId?: string | null
 }
 
 /** Every token gets the same 30-day life; there is no refresh grant behind it. */
@@ -51,7 +50,6 @@ export async function mintAccessToken(
   const token = await new SignJWT({
     name: identity.name,
     email: identity.email,
-    personId: identity.personId ?? null,
     scope: serializeScopes(scopes),
     client_id: clientId,
     typ: TOKEN_TYPE,
@@ -69,7 +67,6 @@ export interface VerifiedAccessToken {
   userId: string
   name: string
   email: string
-  personId: string | null
   scopes: string[]
   clientId: string
   expiresAt?: number
@@ -97,7 +94,6 @@ export async function verifyAccessToken(token: string): Promise<VerifiedAccessTo
       userId: String(payload.sub),
       name: typeof payload.name === 'string' ? payload.name : '',
       email: typeof payload.email === 'string' ? payload.email : '',
-      personId: typeof payload.personId === 'string' ? payload.personId : null,
       scopes: scope ? scope.split(/\s+/).filter(Boolean) : [],
       clientId: typeof payload.client_id === 'string' ? payload.client_id : '',
       expiresAt: typeof payload.exp === 'number' ? payload.exp : undefined,

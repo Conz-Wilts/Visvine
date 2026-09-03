@@ -42,12 +42,10 @@ async function resolveDevUser() {
   return (
     (await prisma.user.findFirst({
       where: { OR: [{ email: wanted }, { id: wanted }] },
-      include: { person: true },
     })) ??
     (await prisma.user.findFirst({
       where: { email: { endsWith: '@local.dev' } },
       orderBy: { email: 'asc' },
-      include: { person: true },
     }))
   )
 }
@@ -70,7 +68,6 @@ export async function devMcpAuthInfo(): Promise<AuthInfo | undefined> {
       userId: user.id,
       name: user.name ?? '',
       email: user.email ?? '',
-      personId: user.person?.id ?? null,
     },
   }
 }

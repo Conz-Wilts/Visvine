@@ -33,15 +33,12 @@ export async function ensureMemberNode(
   const existing = await findMemberNode(spaceId, userId)
   if (existing) return existing.id
 
-  const [person, user] = await Promise.all([
-    prisma.person.findUnique({
-      where: { userId },
-      select: { name: true, subtitle: true, location: true, imageUrl: true, tags: true },
-    }),
-    prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
-  ])
-  const name = person?.name?.trim() || user?.name?.trim()
-  if (!name) return null
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, subtitle: true, location: true, image: true, tags: true },
+  })
+  const name = user?.name?.trim()
+  if (!user || !name) return null
 
   // Node only (`skipNote`) — the Context tab stubs a missing profile note
   // locally and the first real save creates it.
@@ -50,10 +47,10 @@ export async function ensureMemberNode(
     type: 'person',
     name,
     recordId: userId,
-    subtitle: person?.subtitle ?? null,
-    location: person?.location ?? null,
-    imageUrl: person?.imageUrl ?? null,
-    tags: person?.tags ?? [],
+    subtitle: user.subtitle,
+    location: user.location,
+    imageUrl: user.image,
+    tags: user.tags,
     // undefined (not null) when no alias was asked for — syncEntityNode only
     // writes the column when the caller actually passed one.
     ...(alias ? { alias } : {}),

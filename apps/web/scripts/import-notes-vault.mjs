@@ -116,21 +116,15 @@ async function main() {
       }
     }
 
-    // Keep the starred column in sync with the file's frontmatter `starred:` flag
-    // (the app re-derives it on every write; imports must match).
-    const isStarred = (content) =>
-      content.startsWith('---\n') &&
-      /(^|\n)starred\s*:\s*true/i.test(content.split('\n---')[0] ?? '')
-
     const notes = collect(VAULT_ROOT)
     let imported = 0
     for (const note of notes) {
       await client.query(
-        `INSERT INTO context_notes (space_id, owner_key, path, content, created_by, starred, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, now())
+        `INSERT INTO context_notes (space_id, owner_key, path, content, created_by, updated_at)
+         VALUES ($1, $2, $3, $4, $5, now())
          ON CONFLICT (space_id, owner_key, path)
-         DO UPDATE SET content = EXCLUDED.content, starred = EXCLUDED.starred, updated_at = now()`,
-        [spaceId, ownerKey, note.path, note.content, createdBy, isStarred(note.content)],
+         DO UPDATE SET content = EXCLUDED.content, updated_at = now()`,
+        [spaceId, ownerKey, note.path, note.content, createdBy],
       )
       imported++
     }

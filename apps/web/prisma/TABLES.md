@@ -4,7 +4,7 @@ Plain-English map of `schema.prisma`. Postgres table name in `code`.
 
 **Naming rule:** a table is prefixed with the tool that owns it — `context_*`,
 `connector_*`, `event_*`, `resource_*`, `message_*`. Only genuinely cross-tool
-things go unprefixed (`spaces`, `users`, `people`, `identities`, `nodes`,
+things go unprefixed (`spaces`, `users`, `identities`, `nodes`,
 `links`, `oauth_*`).
 
 ## The tenant
@@ -67,8 +67,7 @@ the entity notes in Context. They're the shared graph primitives.
 
 | Table | Controls |
 | --- | --- |
-| `users` | Login accounts — email, password hash / Google id, verification, active flag. |
-| `people` | Profile detail for a person: bio, links, phone, pronouns, photo, tags. Optionally attached to a `users` row. |
+| `users` | A person's account AND their profile: email, Google id, active flag, then the profile they edit — bio, links, phone, pronouns, photo, tags — and `node_id`, their own person node. |
 | `identities` | The canonical cross-Space identity of one real person or org. Many Space-private `nodes` can point at the same identity; only identity-level facts (canonical name, photo, email, LinkedIn, domain) live here — Spaces never share their per-node data. |
 | `identity_resolutions` | Log of every "these two are/aren't the same person" decision, with confidence and reason. Also records rejections so the matcher stops re-suggesting them. |
 

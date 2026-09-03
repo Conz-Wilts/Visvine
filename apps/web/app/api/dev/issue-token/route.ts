@@ -23,10 +23,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { person: true },
-  });
+  const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
     return new Response(JSON.stringify({ error: "user not found" }), {
       status: 404,
@@ -39,7 +36,7 @@ export async function POST(req: NextRequest) {
     name: user.name,
     email: user.email,
     image: user.image,
-    personId: user.person?.id ?? null,
+    nodeId: user.nodeId,
   });
 
   return Response.json({
@@ -49,7 +46,7 @@ export async function POST(req: NextRequest) {
       name: user.name,
       email: user.email,
       image: user.image,
-      personId: user.person?.id ?? null,
+      nodeId: user.nodeId,
     },
   });
 }

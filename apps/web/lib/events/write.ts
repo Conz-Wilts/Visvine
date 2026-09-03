@@ -16,6 +16,18 @@ import { buildNewEvent, mergeEventUpdate, type EventAuthor } from '@/lib/events/
 import { upsertLink } from '@/lib/notes/context/links'
 import type { EventCreateInput, EventUpdateInput } from '@/lib/schemas/eventSchemas'
 import type { NBEvent } from '@/lib/types'
+import { findMemberNode } from '@/lib/identity/connection'
+
+/**
+ * Who a new event is by: the creator's person node in that space, so the
+ * record's hosts are node ids the space can render and link. A creator with
+ * no node there (a super-admin, say) is still recorded through the links'
+ * `createdBy`, just not as a host.
+ */
+export async function eventAuthorFor(spaceId: string, userId: string): Promise<EventAuthor> {
+  const node = await findMemberNode(spaceId, userId)
+  return { hostNodeId: node?.id ?? null }
+}
 
 /**
  * Persist a new event and connect its hosts to it.

@@ -1,27 +1,29 @@
 /**
  * Profile API — full profile data for a person node.
- * GET   /api/profile/[personId] → profile for a directory node (or legacy Person id)
- * PATCH /api/profile/[personId] → update Person fields (the connected user only)
+ * GET   /api/profile/[personId] → profile for a directory node (or a member's own id)
+ * PATCH /api/profile/[personId] → update the member's profile (the member only)
  *
  * The param is a directory node id. A node CONNECTED to a member (via
  * Node.identityId → Identity.userId, see lib/identity/connection.ts) serves that
- * member's Person row; a disconnected node serves a profile synthesized from the
- * node so old links still render. `connected` + `userId` in the response are
- * what the client gates the Profile tab and ownership on.
+ * member's profile — the fields on their `users` row; a disconnected node
+ * serves a profile synthesized from the node so old links still render.
+ * `connected` + `userId` in the response are what the client gates the Profile
+ * tab and ownership on.
  *
- * Profile edits update the Person row ONLY. Node.name (and friends) are
- * space-local display fields owned by the context surfaces — the old
- * Person→Node sync is gone on purpose: it clobbered local labels in every
- * space the member appears in.
+ * Profile edits update the user row ONLY. Node.name (and friends) are
+ * space-local display fields owned by the context surfaces — nothing is
+ * mirrored onto nodes, which would clobber local labels in every space the
+ * member appears in.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
 import { spaceMemberForbidden } from '@/lib/auth';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
-import { resolveNodeConnection } from '@/lib/identity/connection';
+import { resolveProfileUserId } from '@/lib/identity/connection';
 import { syncGlobalRecordForUser } from '@/lib/global/record';
 
 type RouteContext = { params: Promise<{ personId: string }> };
@@ -30,18 +32,37 @@ const CACHE_HEADERS = {
   'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
 };
 
-/**
- * The userId this profile id resolves to, connection first, then the legacy
- * scheme where the node id IS the Person id (pre-backfill rows).
- */
-async function resolveProfileUserId(personId: string): Promise<string | null> {
-  const connection = await resolveNodeConnection(personId);
-  if (connection) return connection.userId;
-  const person = await prisma.person.findUnique({
-    where: { id: personId },
-    select: { userId: true },
-  });
-  return person?.userId ?? null;
+/** The profile columns on the user row, as the API has always shaped them. */
+const PROFILE_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  subtitle: true,
+  bio: true,
+  location: true,
+  website: true,
+  linkedinUrl: true,
+  twitterUrl: true,
+  phone: true,
+  pronouns: true,
+  image: true,
+  tags: true,
+  publicMeta: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.UserSelect;
+
+type ProfileRow = Prisma.UserGetPayload<{ select: typeof PROFILE_SELECT }>;
+
+/** The response shape: `imageUrl` and `metadata` are the names the clients read. */
+function toProfile(row: ProfileRow) {
+  const { image, publicMeta, id, ...rest } = row;
+  return {
+    ...rest,
+    userId: id,
+    imageUrl: normalizeImageUrl(image) ?? image,
+    metadata: publicMeta,
+  };
 }
 
 /** Whether `viewerId` shares at least one real (non-personal) space with the
@@ -82,30 +103,18 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 
   const userId = await resolveProfileUserId(personId);
   if (userId) {
-    const person = await prisma.person.findUnique({ where: { userId } });
-    if (person) {
-      person.imageUrl = normalizeImageUrl(person.imageUrl) ?? person.imageUrl;
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: PROFILE_SELECT });
+    if (user) {
       const shared = await sharesSpace(session.userId, userId);
-      // `id` stays the requested node id so client-side routing keys hold.
+      // `id` stays the requested id so client-side routing keys hold.
       return NextResponse.json(
-        redactContact({ ...person, id: personId, connected: true }, shared),
+        redactContact({ ...toProfile(user), id: personId, connected: true }, shared),
         { headers: CACHE_HEADERS },
       );
     }
   }
 
-  // Direct Person-id hit without a User link (imported/legacy rows).
-  const person = await prisma.person.findUnique({ where: { id: personId } });
-  if (person) {
-    person.imageUrl = normalizeImageUrl(person.imageUrl) ?? person.imageUrl;
-    const shared = person.userId ? await sharesSpace(session.userId, person.userId) : false;
-    return NextResponse.json(
-      redactContact({ ...person, connected: !!person.userId }, shared),
-      { headers: CACHE_HEADERS },
-    );
-  }
-
-  // No Person row. Many person nodes are created context-first (seed scripts,
+  // No member. Many person nodes are created context-first (seed scripts,
   // CRM imports, bulk adds). Rather than 404, synthesize a profile from the
   // context Node so old links still render. Only person: nodes are profiles.
   if (personId.startsWith('person:')) {
@@ -156,17 +165,14 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   if (!userId) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (userId !== session.userId) return forbiddenResponse();
 
-  const person = await prisma.person.findUnique({ where: { userId }, select: { id: true } });
-  if (!person) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
   const body = await req.json();
   const {
     name, subtitle, bio, location, website, linkedinUrl, twitterUrl,
     phone, pronouns, tags, imageUrl, metadata,
   } = body;
 
-  const updated = await prisma.person.update({
-    where: { id: person.id },
+  const updated = await prisma.user.update({
+    where: { id: userId },
     data: {
       ...(name !== undefined && { name }),
       ...(subtitle !== undefined && { subtitle }),
@@ -178,9 +184,10 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
       ...(phone !== undefined && { phone }),
       ...(pronouns !== undefined && { pronouns }),
       ...(tags !== undefined && { tags }),
-      ...(imageUrl !== undefined && { imageUrl }),
-      ...(metadata !== undefined && { metadata }),
+      ...(imageUrl !== undefined && { image: imageUrl }),
+      ...(metadata !== undefined && { publicMeta: metadata }),
     },
+    select: PROFILE_SELECT,
   });
 
   // The profile is the first source of the member's global record.
@@ -188,6 +195,5 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   // Profile fields feed the profile page's own cache tag.
   revalidateTag('context-data-v2', { expire: 0 });
 
-  updated.imageUrl = normalizeImageUrl(updated.imageUrl) ?? updated.imageUrl;
-  return NextResponse.json({ ...updated, id: personId, connected: true });
+  return NextResponse.json({ ...toProfile(updated), id: personId, connected: true });
 }

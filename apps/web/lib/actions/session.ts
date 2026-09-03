@@ -17,7 +17,6 @@ export function callerFromSession(session: SessionPayload): ActionCaller {
     userId: session.userId,
     name: session.name,
     email: session.email,
-    personId: session.personId ?? null,
     scopes: [...MCP_SCOPES],
   }
 }

@@ -95,8 +95,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
 
-  // The member this node is connected to: the identity link is canonical;
-  // the Person-id lookup below covers legacy rows the backfill hasn't touched.
+  // The member this node is connected to: the identity link is canonical; a
+  // member's own node (User.nodeId) counts before the personal space has
+  // connected it.
   let connectedUserId: string | null = node.identity?.userId ?? null;
 
   // Real shared-space count: spaces where both the viewer and the
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   if (nodeId.startsWith('person:')) {
     const person = connectedUserId
       ? { userId: connectedUserId }
-      : await prisma.person.findUnique({ where: { id: nodeId }, select: { userId: true } });
+      : await prisma.user.findUnique({ where: { nodeId }, select: { id: true } }).then((u) => (u ? { userId: u.id } : null));
     if (person?.userId) {
       connectedUserId = person.userId;
       spaceCount = Math.max(1, await prisma.spaceMember.count({

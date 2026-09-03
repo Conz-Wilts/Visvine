@@ -105,9 +105,9 @@ async function loadSources(identityId: string): Promise<{ canonicalName: string;
   const sources: GlobalSource[] = []
 
   if (identity.userId) {
-    const person = await prisma.person.findUnique({
-      where: { userId: identity.userId },
-      select: { name: true, subtitle: true, bio: true, location: true, website: true, imageUrl: true, tags: true },
+    const person = await prisma.user.findUnique({
+      where: { id: identity.userId },
+      select: { name: true, subtitle: true, bio: true, location: true, website: true, image: true, tags: true },
     })
     if (person) {
       sources.push({
@@ -118,8 +118,8 @@ async function loadSources(identityId: string): Promise<{ canonicalName: string;
         subtitle: person.subtitle,
         location: person.location,
         url: person.website,
-        imageUrl: person.imageUrl,
-        tags: person.tags ?? [],
+        imageUrl: person.image,
+        tags: person.tags,
         bio: person.bio,
       })
     }

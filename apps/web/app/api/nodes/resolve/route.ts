@@ -38,10 +38,9 @@ export async function GET(request: NextRequest) {
   const asNode = await prisma.node.findUnique({ where: { id }, select: { id: true } });
   if (asNode) return NextResponse.json({ nodeId: asNode.id });
 
-  // Otherwise it has to be a Person row that belongs to an account; a Person
-  // with no user has no node anywhere by definition.
-  const person = await prisma.person.findUnique({ where: { id }, select: { userId: true } });
-  const userId = person?.userId;
+  // Otherwise it is a member's own node id (User.nodeId) or a user id.
+  const user = await prisma.user.findFirst({ where: { OR: [{ nodeId: id }, { id }] }, select: { id: true } });
+  const userId = user?.id;
   if (!userId) return NextResponse.json({ nodeId: null });
 
   if (spaceId) {

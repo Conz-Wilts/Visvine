@@ -3,7 +3,7 @@ import { createSession } from "@/lib/session";
 import { generateClaimToken } from "@/lib/crm/claimService";
 import { safeRelativePath } from "@/lib/redirects";
 import {
-  ensurePerson,
+  ensureHomeNodeId,
   setSessionCookie,
   type SessionableUser,
 } from "@/lib/auth/bootstrap";
@@ -15,14 +15,14 @@ async function buildSessionResponse(
   callbackUrl: string,
   appUrl: string
 ) {
-  const person = await ensurePerson(user);
+  const nodeId = await ensureHomeNodeId(user);
 
   const token = await createSession({
     userId: user.id,
     name: user.name,
     email: user.email,
     image: user.image,
-    personId: person.id,
+    nodeId,
   });
 
   const response = NextResponse.redirect(new URL(callbackUrl, appUrl));
@@ -93,10 +93,11 @@ export async function GET(req: NextRequest) {
 
   if (user) {
     if (user.isActive) {
-      // Returning active user — refresh name/picture and sign in
+      // Returning active user — the profile is theirs to edit, so the provider
+      // only fills what is still empty.
       user = await prisma.user.update({
         where: { id: user.id },
-        data: { name: googleName, image: googlePicture || user.image },
+        data: { name: user.name || googleName, image: user.image || googlePicture },
       });
       return await buildSessionResponse(user, callbackUrl, appUrl);
     }
@@ -160,8 +161,8 @@ export async function GET(req: NextRequest) {
       where: { id: userByEmail.id },
       data: {
         googleId,
-        name: googleName,
-        image: googlePicture || userByEmail.image,
+        name: userByEmail.name || googleName,
+        image: userByEmail.image || googlePicture,
       },
     });
   }

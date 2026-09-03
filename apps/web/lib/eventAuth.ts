@@ -10,6 +10,7 @@
  */
 
 import { getSession, isAdmin } from '@/lib/auth';
+import { findMemberNode } from '@/lib/identity/connection';
 import type { SessionPayload } from '@/lib/session';
 import prisma from '@/lib/prisma';
 import type { NBEvent } from '@/lib/types';
@@ -45,13 +46,16 @@ export async function requireSpaceMember(
  * event must not be written twice.
  */
 export async function isEventManager(
-  identity: Pick<SessionPayload, 'userId' | 'email' | 'personId'>,
+  identity: Pick<SessionPayload, 'userId' | 'email'>,
   spaceId: string,
   event: NBEvent | null,
 ): Promise<boolean> {
   if (await isAdmin(identity.userId, spaceId, identity.email)) return true;
   const hosts = event?.hosts ?? [];
-  return !!identity.personId && hosts.includes(identity.personId);
+  if (!hosts.length) return false;
+  // Hosts are node ids in the event's space; the caller's is their member node there.
+  const node = await findMemberNode(spaceId, identity.userId);
+  return !!node && hosts.includes(node.id);
 }
 
 /** The message a failed manager check gives, in both transports. */

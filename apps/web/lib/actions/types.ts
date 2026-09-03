@@ -32,7 +32,6 @@ export interface ActionCaller {
   userId: string
   name: string
   email: string
-  personId: string | null
   /** OAuth scopes on the presented token; a web session carries them all. */
   scopes: string[]
 }

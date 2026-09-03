@@ -235,7 +235,6 @@ async function wipeData() {
     prisma.resource.deleteMany({}),
     prisma.resourceFolder.deleteMany({}),
     prisma.spaceMember.deleteMany({}),
-    prisma.person.deleteMany({}),
     prisma.identityResolution.deleteMany({}),
     prisma.node.deleteMany({}),
     prisma.identity.deleteMany({}),
@@ -340,6 +339,8 @@ async function createAnchorUsers() {
         email: a.email,
         name: a.name,
         isActive: true,
+        // Their own node: the anchor card created for them in the space below.
+        nodeId: a.personNodeId,
       },
     });
     await prisma.spaceMember.create({
@@ -394,13 +395,6 @@ async function createAnchorUsers() {
         decision: "confirmed",
         confidence: 1,
         reason: "seeded anchor",
-      },
-    });
-    await prisma.person.create({
-      data: {
-        id: a.personNodeId,
-        userId: a.id,
-        name: a.name,
       },
     });
   }

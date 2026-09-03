@@ -7,6 +7,7 @@ import { eventUpdateInputSchema } from '@/lib/schemas/eventSchemas';
 import { getEvent, getAttendees, deleteEvent } from '@/lib/eventRepo';
 import { updateEventRecord } from '@/lib/events/write';
 import { requireEventManager, requireSpaceMember } from '@/lib/eventAuth';
+import { findMemberNode } from '@/lib/identity/connection';
 import { normalizeStatus, occupiedSpots } from '@/lib/eventUtils';
 import prisma from '@/lib/prisma';
 import { handleApiError } from '@/lib/api/route';
@@ -65,12 +66,13 @@ export async function GET(
       maybe: attendees.filter((a) => a.response === 'maybe').length,
     };
 
-    // The viewer's own RSVP record (matched by person node or session email) —
-    // their own data, safe for any member.
+    // The viewer's own RSVP record (matched by their node in this space or
+    // their session email) — their own data, safe for any member.
     const viewerEmail = member.email?.toLowerCase();
+    const viewerNode = await findMemberNode(spaceId, member.userId);
     const viewerAttendee = attendees.find(
       (a) =>
-        (member.personId && a.personId === member.personId) ||
+        (viewerNode && a.personId === viewerNode.id) ||
         (!!viewerEmail && a.email?.toLowerCase() === viewerEmail),
     );
 
