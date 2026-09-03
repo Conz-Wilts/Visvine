@@ -24,7 +24,7 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
   const event = await getEventBySlug(slug);
   if (!event || event.status === 'draft' || event.visibility !== 'public') notFound();
 
-  const attendees = await getAttendees(event.spaceId, event.id);
+  const attendees = await getAttendees(event.id);
   const going = occupiedSpots(attendees);
   const guestNames = event.guestListVisible
     ? attendees

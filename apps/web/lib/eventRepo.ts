@@ -397,7 +397,7 @@ async function updateEventAnalytics(spaceId: string, eventId: string, updates: P
 
 // ─── Attendees ────────────────────────────────────────────────────────────────
 
-export async function getAttendees(spaceId: string, eventId: string): Promise<NBAttendee[]> {
+export async function getAttendees(eventId: string): Promise<NBAttendee[]> {
   try {
     const rows = await prisma.eventAttendee.findMany({ where: { eventId } });
     return rows.map(attendeeRowToNBAttendee);
@@ -426,7 +426,7 @@ function attendeeToWritable(a: NBAttendee) {
   };
 }
 
-async function upsertAttendee(spaceId: string, attendee: NBAttendee): Promise<void> {
+async function upsertAttendee(attendee: NBAttendee): Promise<void> {
   const writable = attendeeToWritable(attendee);
   await prisma.eventAttendee.upsert({
     where: { id: attendee.id },
@@ -585,7 +585,7 @@ export async function setAttendeeStatus(
   attendeeId: string,
   status: RSVPStatus,
 ): Promise<NBAttendee | null> {
-  const attendees = await getAttendees(spaceId, eventId);
+  const attendees = await getAttendees(eventId);
   const attendee = attendees.find((a) => a.id === attendeeId);
   if (!attendee) return null;
 
@@ -595,7 +595,7 @@ export async function setAttendeeStatus(
     checkinAt: status === 'checked_in' ? (attendee.checkinAt ?? new Date().toISOString()) : attendee.checkinAt,
     updatedAt: new Date().toISOString(),
   };
-  await upsertAttendee(spaceId, next);
+  await upsertAttendee(next);
 
   if (status === 'checked_in') {
     const event = await getEvent(spaceId, eventId);
@@ -619,7 +619,7 @@ export async function setAttendeeStatus(
 
 /** Permanently remove an attendee (and any 'attended' context link). */
 export async function removeAttendee(spaceId: string, eventId: string, attendeeId: string): Promise<boolean> {
-  const attendees = await getAttendees(spaceId, eventId);
+  const attendees = await getAttendees(eventId);
   const attendee = attendees.find((a) => a.id === attendeeId);
   if (!attendee) return false;
   await prisma.eventAttendee.deleteMany({ where: { id: attendeeId, eventId } });

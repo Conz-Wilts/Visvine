@@ -5,7 +5,7 @@ import { getConversationMemberIds, removeMemberFromGroup } from '@/lib/messages'
 import { publishToUsers } from '@/lib/messages/realtime';
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ conversationId: string; memberId: string }> },
 ) {
   try {

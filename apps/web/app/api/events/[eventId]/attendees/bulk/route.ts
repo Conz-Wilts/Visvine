@@ -48,7 +48,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
     const { action, attendeeIds, scope } = parsed.data;
 
-    const all = await getAttendees(spaceId, eventId);
+    const all = await getAttendees(eventId);
     let targets = all;
     if (attendeeIds?.length) {
       const set = new Set(attendeeIds);

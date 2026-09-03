@@ -48,7 +48,7 @@ export async function GET(
       );
     }
 
-    const attendees = await getAttendees(spaceId, eventId);
+    const attendees = await getAttendees(eventId);
 
     // Calculate stats
     const norm = (a: (typeof attendees)[number]) => normalizeStatus(a.status);

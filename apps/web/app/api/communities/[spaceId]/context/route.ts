@@ -16,7 +16,7 @@ type RouteContext = {
 export const runtime = 'nodejs';
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   context: RouteContext
 ) {
   try {

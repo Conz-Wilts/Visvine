@@ -5,7 +5,7 @@ import { ensureConversationMember, getConversationMemberIds, leaveConversation }
 import { publishToUsers } from '@/lib/messages/realtime';
 
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ conversationId: string }> },
 ) {
   try {

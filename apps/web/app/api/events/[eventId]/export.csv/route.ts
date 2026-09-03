@@ -56,7 +56,7 @@ export async function GET(
     const auth = await requireEventManager(spaceId, event);
     if (auth instanceof Response) return auth;
 
-    const attendees = await getAttendees(spaceId, eventId);
+    const attendees = await getAttendees(eventId);
     const contextData = await getSpaceContextData(spaceId);
 
     // CSV header

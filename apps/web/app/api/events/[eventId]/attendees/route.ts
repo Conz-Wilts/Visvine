@@ -153,7 +153,7 @@ export async function GET(
     const auth = await requireEventManager(spaceId, event);
     if (auth instanceof Response) return auth;
 
-    const attendees = await getAttendees(spaceId, eventId);
+    const attendees = await getAttendees(eventId);
 
     // Get person details for each attendee (nodes only — no need to load links)
     const nodes = await getSpaceNodes(spaceId);

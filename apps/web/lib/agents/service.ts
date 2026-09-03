@@ -195,7 +195,6 @@ function modelStateOf(
 }
 
 async function summarise(
-  p: ContextPrincipal,
   context: Context,
   name: string,
   path: string,
@@ -311,7 +310,7 @@ export async function listAgents(
     briefs.push({ name, path: raw.path, content: raw.content })
   }
   const out = await Promise.all(
-    briefs.map((b) => summarise(p, context, b.name, b.path, b.content, { includeSpend: !!opts.includeSpend, now, heartbeatAt, models })),
+    briefs.map((b) => summarise(context, b.name, b.path, b.content, { includeSpend: !!opts.includeSpend, now, heartbeatAt, models })),
   )
   return {
     agents: out.sort((a, b) => a.path.localeCompare(b.path)),
@@ -359,7 +358,7 @@ export async function describeAgent(
   const content = row ? await readVisible(p, context, row.path) : null
   if (!row || content === null) return null
   const heartbeatAt = await lastHeartbeat()
-  const summary = await summarise(p, context, name, row.path, content, {
+  const summary = await summarise(context, name, row.path, content, {
     includeSpend: !!opts.includeSpend,
     now: new Date(),
     heartbeatAt,

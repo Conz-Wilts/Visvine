@@ -46,7 +46,7 @@ function cleanTags(input: unknown): string[] {
   return out;
 }
 
-export async function GET(request: NextRequest, context: RouteContext) {
+export async function GET(_request: NextRequest, context: RouteContext) {
   const session = await requireApiSession();
   if (session instanceof NextResponse) return session;
 
