@@ -613,6 +613,13 @@ test('a fire fans out: one run per subscriber, each acting as that person', asyn
     // platform fault that neither deactivates nor calls a provider — so the
     // group keeps claiming, which is the behaviour under test.
     await prisma!.connectorSecret.create({ data: { spaceId: SPACE, name: 'MODEL_KEY_OPENAI', ciphertext: 'aes256gcm$AAAA$AAAA$AAAA' } })
+    // The briefs went in behind the store's back, and SPACE is one id per
+    // process: an earlier test in this file has already memoised its access
+    // seeding, so the author cannot read `agents/fan/index.md` and the run
+    // fails `author_gone` — which deactivates the row and takes the fan-out
+    // with it. Drop the cached vault and grant the author root by hand.
+    ;(await import('@/lib/notes/vaultCache')).invalidateVault({ spaceId: SPACE, ownerKey: 'shared' })
+    await prisma!.contextGrant.create({ data: { spaceId: SPACE, subjectType: 'user', subjectId: AUTHOR, resourcePath: '', level: 40, grantedBy: 'system' } })
 
     await enqueueAgentEvent({ spaceId: SPACE, agentName: 'fan', kind: 'note_written', source: 'people/p.md', summary: 'saved', payload: {} })
     const armed = await state(st.id)

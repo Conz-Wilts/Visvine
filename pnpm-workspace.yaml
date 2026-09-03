@@ -40,6 +40,16 @@ overrides:
   '@tootallnate/once': ^2.0.1
   fast-xml-parser: ^5.7.0
   valibot: ^1.4.2
+  # Reached only as `@prisma/client > prisma > mysql2`, and this deployment is
+  # Postgres — but an override costs nothing and an ignore has to be re-read
+  # every time the advisory list changes. GHSA-3f6p-5ww8-9rcr (auth plugin
+  # downgrade to mysql_clear_password, high) and GHSA-rgwj-5xj2-c3m3 (zlib
+  # decompression bomb).
+  mysql2: ^3.23.1
+  # `apps/desktop > electron-builder > app-builder-lib > ajv > fast-uri`: four
+  # host-confusion and SSRF advisories, all patched in 3.1.6. Kept on 3.x — ajv
+  # asks for ^3, and the 4.x major is not what it was tested against.
+  fast-uri: ^3.1.6
 
 auditConfig:
   ignoreGhsas:
