@@ -8,7 +8,7 @@ import ShellTopBar from "@/features/shared/components/layout/ShellTopBar";
 import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
 import { SpaceProvider, useSpace } from "@/features/shared/contexts/SpaceContext";
 import { FEATURES, canAccessFeature, defaultLandingHref } from "@/features/shared/lib/features";
-import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/Sidebar";
+import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/railRow";
 import type { SpaceFeatureConfig } from "@/lib/types";
 import { SpaceDesignProvider } from "@/features/shared/contexts/SpaceDesignContext";
 import { ProfileProvider } from "@/features/shared/contexts/ProfileContext";
@@ -18,7 +18,6 @@ import {
 import { CreateModalProvider } from "@/features/shared/contexts/CreateModalContext";
 import { SidebarProvider, useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { ContextPanelProvider } from "@/features/shared/contexts/ContextPanelContext";
-import { FullProfileProvider } from "@/features/shared/contexts/FullProfileContext";
 import { AuthProvider } from "@/features/auth/contexts/AuthContext";
 import type { Space } from "@/lib/types";
 import type { Session } from "@/features/auth/lib/auth-client";
@@ -153,7 +152,6 @@ export default function AuthLayoutClient({
         <SpaceDesignProvider>
         <ProfileProvider>
           <HeaderProvider>
-            <FullProfileProvider>
               <SidebarProvider>
               <ContextPanelProvider>
               <CreateModalProvider>
@@ -163,7 +161,6 @@ export default function AuthLayoutClient({
                             </CreateModalProvider>
               </ContextPanelProvider>
               </SidebarProvider>
-            </FullProfileProvider>
           </HeaderProvider>
         </ProfileProvider>
         </SpaceDesignProvider>

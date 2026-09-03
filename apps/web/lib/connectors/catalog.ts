@@ -22,14 +22,11 @@
  *     signs the person in ({@link mcpServer}). Every server on the list has
  *     been checked to publish that metadata and to offer dynamic registration.
  *
- * The catalogue splits across two surfaces ({@link catalogForScope}). Your own
- * connectors — the dialog off the account menu — offer what you connect by
- * signing IN as yourself: every vetted `mcp` server, and the Google recipes
- * (Gmail, Calendar, Drive) that ride the deployment's own OAuth client — one
- * press each, your own account, carried into every space you are in. A space's
- * console offers the whole catalogue: those same recipes for the team's
- * account, beside everything that is a team's configuration — credentials,
- * OAuth apps, databases and model keys.
+ * The whole catalogue is the SPACE's to connect from — its console, and the
+ * admin's view of the account menu's dialog. A member sees the same list as
+ * All connectors and asks for what the space has not connected
+ * (lib/connectors/requests.ts); what they sign in to for themselves is their
+ * own account behind a connector the space already has.
  *
  * A recipe is not a slot. A space may connect one service several times — the
  * team's Drive beside your own, two Slack workspaces — so a connector's NAME
@@ -101,12 +98,6 @@ export interface CatalogEntry {
   /** Path under /images/connectors. */
   logo: string
   shape: 'key' | 'oauth' | 'model' | 'mcp'
-  /**
-   * Offered among your own connectors, not just in a space's console
-   * ({@link catalogForScope}). True of a service you connect by signing in as
-   * yourself — every `mcp` server, and the one-press Google recipes.
-   */
-  personal?: boolean
   /** `host` or `host:port` entries the isolate may reach. */
   hosts: readonly string[]
   fields: readonly CatalogField[]
@@ -199,7 +190,6 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     category: 'email',
     logo: 'gmail.svg',
     shape: 'oauth',
-    personal: true,
     hosts: ['gmail.googleapis.com', 'people.googleapis.com'],
     oauth: {
       provider: 'gmail',
@@ -241,7 +231,6 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     category: 'email',
     logo: 'googlecalendar.svg',
     shape: 'oauth',
-    personal: true,
     hosts: ['www.googleapis.com'],
     oauth: {
       provider: 'google-calendar',
@@ -283,7 +272,6 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
     category: 'email',
     logo: 'googledrive.svg',
     shape: 'oauth',
-    personal: true,
     hosts: ['www.googleapis.com'],
     oauth: {
       provider: 'google-drive',
@@ -1023,9 +1011,9 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
   },
 
   // ── Vetted MCP servers ─────────────────────────────────────────────────────
-  // The personal catalogue: what a person signs in to for themselves and
-  // carries into every space. Each URL was checked to publish OAuth metadata
-  // and a registration endpoint, and to speak streamable HTTP at that path.
+  // Each member signs in with their own account. Each URL was checked to
+  // publish OAuth metadata and a registration endpoint, and to speak
+  // streamable HTTP at that path.
   mcpServer({
     id: 'notion-mcp',
     name: 'Notion',
@@ -1184,13 +1172,10 @@ export function catalogEntryFor(name: string, provider?: string | null, recipe?:
   return CONNECTOR_CATALOG.find((e) => e.shape === 'model' && e.provider === key) ?? null
 }
 
-/** Whose connectors a surface is offering — a space's, or your own. */
-export type ConnectorScope = 'space' | 'personal'
-
 /**
- * May this surface add ANOTHER connection to this service?
+ * May a space add ANOTHER connection to this service?
  *
- * For an HTTP or OAuth service a SPACE may, always: a connection is one set of
+ * For an HTTP or OAuth service, always: a connection is one set of
  * credentials, and two Drives (the team's and yours) or two Slack workspaces
  * are ordinary. For a model provider, no — and not as a policy. Its key is
  * `MODEL_KEY_<PROVIDER>`, one row per space by construction, and a registry
@@ -1199,38 +1184,9 @@ export type ConnectorScope = 'space' | 'personal'
  * from the other end: agents resolve ONE custom endpoint per space
  * (lib/agents/providers.ts#findCustomModelEndpoint), so a second URL is a
  * configuration error rather than a second choice.
- *
- * Your own connectors are one per service too, for a different reason: a
- * personal connector is your ACCOUNT at a service, and you sign in to a service
- * as yourself once. Two spaces reaching two Drives is a real thing; two of your
- * own Google accounts in one settings panel is a question nobody asked, and
- * every extra row is another thing to keep working.
  */
-export function allowsManyConnectors(entry: CatalogEntry, scope: ConnectorScope = 'space'): boolean {
-  if (entry.shape === 'model') return false
-  return scope === 'space'
-}
-
-/**
- * The services a surface offers.
- *
- * Your own connectors offer what you connect by signing in AS YOURSELF: every
- * vetted MCP server, and the Google recipes that ride the deployment's own
- * client — one press, your own account, usable in every space you are in.
- *
- * A space's console offers the WHOLE catalogue. A vetted MCP server belongs
- * there beside the model providers and the API keys, because a space connects
- * one the same way it connects anything else — each member signs in with their
- * own account (`mode: 'user'`), and the note is the team's rather than yours.
- *
- * So the lists are not disjoint, and they don't need to be — the same recipe
- * connected for yourself spends your account, and connected in a space spends
- * the space's. What the personal list refuses is a credential someone has to
- * go and fetch: pasting a bot token is setup for a team, not signing in.
- */
-export function catalogForScope(scope: ConnectorScope): CatalogEntry[] {
-  if (scope === 'space') return [...CONNECTOR_CATALOG]
-  return CONNECTOR_CATALOG.filter((entry) => entry.shape === 'mcp' || entry.personal === true)
+export function allowsManyConnectors(entry: CatalogEntry): boolean {
+  return entry.shape !== 'model'
 }
 
 /**

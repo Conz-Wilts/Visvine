@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/CreateModalContext";
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
@@ -12,15 +12,25 @@ import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
+import UserMenu from "@/features/auth/components/UserMenu";
 import CreateModal from "@/features/create/components/CreateModal";
 import SpaceSelector from "@/features/spaces/components/SpaceSelector";
 import type { SpaceFeatureConfig } from "@/lib/types";
+import {
+  COLLAPSED_W,
+  EXPANDED_W,
+  HEAD_INSET,
+  ITEM_GAP,
+  ROW_H,
+  ROW_INSET,
+  Row,
+} from "@/features/shared/components/layout/railRow";
 
 /*
- * The rail is the shell's chrome — there is no bar across the top of the page,
- * only the account button the layout floats in its top-right corner. The rail
- * runs the full height of the viewport in three bands, and opens either on
- * hover or from the switch in the shell's top band (which pins it):
+ * The rail is the shell's chrome, and it carries everything that is not a
+ * page: the space at its head, you at its foot. It runs the full height of the
+ * viewport in four bands, and opens either on hover or from the switch in the
+ * shell's top band (which pins it):
  *
  *  ┌──────────────────────────────────┐
  *  │ [space]  Blackbird Ventures      │  head: the space, and the page's panel
@@ -33,6 +43,8 @@ import type { SpaceFeatureConfig } from "@/lib/types";
  *  │ ▤  Channels …                    │
  *  ├──────────────────────────────────┤
  *  │ …  More                          │  foot: the tools the space tucked away
+ *  ├──────────────────────────────────┤
+ *  │ (you)                            │  account: your avatar and its menu
  *  └──────────────────────────────────┘
  *
  *  Every row is the same shape: a 48px glyph cell on one column, then a label
@@ -45,140 +57,21 @@ import type { SpaceFeatureConfig } from "@/lib/types";
  * ContextPanelContext), so the two read as one connected container.
  */
 
-// Exported so the AuthLayout's content inset and the rail track the exact same
-// widths — change them here and the whole shell stays in sync.
-// The closed rail is a column of glyphs: wide enough to hold one at a size you
-// can read at a glance, with air either side of it.
-export const COLLAPSED_W = 88;
-export const EXPANDED_W = 272;
-const ROW_H = 48;      // row height, and the side of the square a row's glyph is centred in
-const ROW_INSET = 6;   // row ↔ rail edge
-// The glyph column is the same width open or closed, and it is the CLOSED
-// rail's full inner width — so a glyph's centre lands on COLLAPSED_W / 2 in
-// both states and nothing about it moves when the rail opens.
-const GLYPH_CELL_W = COLLAPSED_W - ROW_INSET * 2;
-const LABEL_ML = 8;    // glyph cell → label, on the open row
-// Row ↔ row. The same gap open or closed: the rail's geometry must not depend
-// on which state it is in, or opening it would slide the whole column.
-const ITEM_GAP = 20;
-// The space switcher draws its own 48px cell, so it takes its own inset to put
-// that cell — and the avatar centred in it — on the glyph column's centre line.
-const HEAD_INSET = (COLLAPSED_W - 48) / 2;
-// The nav icons ship at h-5 w-5 from the feature registry (they are also drawn
-// on the launcher cards at that size); the rail draws them at 32px unfilled, so
-// each cell scales its own svg rather than the registry carrying a second set.
-const GLYPH = "[&>svg]:h-8 [&>svg]:w-8";
-// One row shape for every entry — Create, each tool, More. At rest a row is
-// bare: no border, no fill, just the glyph (and the label once the rail is
-// open). The soft block appears under the pointer only, which is what makes the
-// rail read as a column of icons rather than a stack of buttons.
-const ROW_CLASS =
-  "relative z-10 flex w-full items-center rounded-[10px] transition-colors duration-150 hover:bg-surface-3";
-const ROW_TEXT = "text-[15px] whitespace-nowrap";
-// A name fades in once the rail is open and is gone before it shuts. The
-// rail's width takes 300ms, and a label revealed BY that width reads as sliding
-// out from under the glyph column — so it is held back until the width has
-// arrived.
-const LABEL_FADE_MS = 140;
-const LABEL_FADE_IN_DELAY_MS = 200;
-function labelFade(show: boolean, reduced: boolean) {
-  return {
-    opacity: show ? 1 : 0,
-    transition: reduced
-      ? "none"
-      : `opacity ${LABEL_FADE_MS}ms ease ${show ? LABEL_FADE_IN_DELAY_MS : 0}ms`,
-  };
-}
 const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full height
 // paddingBottom on the rail column. It matches SHELL_PANE_TOP, so the rail's
 // last row and a page's content share the surface's bottom rhythm.
 const RAIL_PAD_Y = SHELL_PANE_TOP;
-// paddingTop is its own number, because the head row is not aligned to the
-// pane below it but to the account button ACROSS from it: the shell band is
-// SHELL_TOP_BAR_H tall and centres a 40px avatar in it, so the space avatar —
-// 40px in a 48px row — has to start where its centre lands on the same line.
+// paddingTop is its own number, because the head row is aligned to the shell's
+// top band rather than to the pane below it: the band is SHELL_TOP_BAR_H tall,
+// so the space avatar — 40px in a 48px row — starts where its centre lands on
+// that band's centre line.
 const RAIL_PAD_TOP = (SHELL_TOP_BAR_H - ROW_H) / 2;
 // A band boundary: the hairline sits ITEM_GAP below the last row and ITEM_GAP
-// above the next one, so the two bands are held apart by the rhythm the rows
-// already have rather than by a number of its own.
+// above the next one, so the bands are held apart by the rhythm the rows
+// already have rather than by a number of their own.
 const BAND_TOP = ITEM_GAP;
-
-// Active is carried by weight and colour, not by a coloured pill: the current
-// surface is the dark, semibold row; everything else sits muted until hovered.
-function rowColor(active: boolean) {
-  return active ? "var(--shell-fg-strong, #111827)" : "var(--shell-fg-muted, #111827)";
-}
-
-/**
- * Every row in the rail is this shape, whichever band it sits in: a glyph on the
- * rail's one icon column, and a name beside it once the rail is open. Shut, the
- * row is the glyph alone. The glyph itself never moves — same cell, same row
- * height, same gap in both states.
- */
-function Row({
-  label,
-  icon,
-  href,
-  onClick,
-  active = false,
-  badge,
-  expanded,
-  reduced,
-  ...aria
-}: {
-  label: string;
-  icon: ReactNode;
-  href?: string;
-  onClick?: () => void;
-  active?: boolean;
-  badge?: ReactNode;
-  expanded: boolean;
-  /** prefers-reduced-motion — no fade, the name is simply there or not. */
-  reduced: boolean;
-  "aria-expanded"?: boolean;
-  "aria-haspopup"?: "dialog";
-}) {
-  const inner = (
-    <>
-      {/* Icon: the one glyph column, identical open or closed */}
-      <span
-        className={`relative flex shrink-0 items-center justify-center ${GLYPH}`}
-        style={{ width: GLYPH_CELL_W, height: ROW_H }}
-      >
-        {icon}
-        {badge}
-      </span>
-      {/* The open name. Always mounted so it can fade rather than be wiped in
-          by the widening rail; while the rail is shut it is transparent AND
-          clipped, so it is not on screen either way. */}
-      <span
-        aria-hidden
-        className={`${ROW_TEXT} ${active ? "font-semibold" : "font-normal"}`}
-        style={{ marginLeft: LABEL_ML, ...labelFade(expanded, reduced) }}
-      >
-        {label}
-      </span>
-    </>
-  );
-  const style = { height: ROW_H, color: rowColor(active), transition: "color 0.2s, background-color 0.15s" };
-
-  return (
-    <div className="relative">
-      {href ? (
-        <Link href={href} className={ROW_CLASS} style={style} aria-label={label}>
-          {inner}
-        </Link>
-      ) : (
-        <button type="button" onClick={onClick} className={ROW_CLASS} style={style} aria-label={label} {...aria}>
-          {inner}
-        </button>
-      )}
-    </div>
-  );
-}
-
 export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen: createOpen } = useCreateModal();
@@ -297,15 +190,14 @@ export default function Sidebar() {
               icon={
                 // The one row that MAKES something, so it is the one row that
                 // is painted: a filled disc in the space's own accent rather
-                // than a bare glyph. It takes EXACTLY the box a glyph takes
-                // (the rail's 32px), so the row's name sits the same distance
-                // from it as every other name — a bigger disc would close that
-                // gap on this row alone.
+                // than a bare glyph, and drawn larger than a glyph so the row
+                // you come here to press reads first. The glyph cell is a fixed
+                // width, so the disc grows inside it without moving the name.
                 <span
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-white"
+                  className="flex h-11 w-11 items-center justify-center rounded-full text-white"
                   style={{ background: "var(--theme-accent-color, #78d870)" }}
                 >
-                  <svg className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" viewBox="0 0 24 24">
+                  <svg className="h-[26px] w-[26px]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" viewBox="0 0 24 24">
                     <path d="M12 5v14M5 12h14" />
                   </svg>
                 </span>
@@ -404,6 +296,24 @@ export default function Sidebar() {
           />
         </div>
       )}
+
+      {/* Account — you, on the same glyph column as everything above. The rail
+          is the shell's only chrome, so the avatar belongs at the end of it
+          rather than floating over a page's top-right corner, and what hangs
+          off it (Profile, Connectors, Settings, Sign out) grows upward inside
+          the band as rail rows rather than in a menu over the page. */}
+      <div
+        className="flex shrink-0 flex-col border-t"
+        style={{
+          marginTop: BAND_TOP,
+          paddingTop: ITEM_GAP,
+          paddingLeft: ROW_INSET,
+          paddingRight: ROW_INSET,
+          borderTopColor: "var(--shell-border, #e5e7eb)",
+        }}
+      >
+        <UserMenu expanded={expanded} reduced={reduced} />
+      </div>
     </>
   );
 

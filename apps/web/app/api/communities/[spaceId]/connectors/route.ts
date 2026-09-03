@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
 import { resolveContext, principalOf } from '@/lib/notes/resolve';
-import { listConnectors } from '@/lib/connectors/service';
+import { listConnectors, listHiddenConnectors } from '@/lib/connectors/service';
+import { listConnectorRequests } from '@/lib/connectors/requests';
+import { pendingRequestPaths } from '@/lib/notes/accessRequests';
 import { availablePlatformClients } from '@/lib/connectors/platformClients';
 
 /**
@@ -16,6 +18,13 @@ import { availablePlatformClients } from '@/lib/connectors/platformClients';
  * have to sign in to. `canManage` says whether the caller is an admin — the
  * writes behind Manage (PATCH, the note delete, the secrets) each gate
  * themselves, so this is only what the UI shows, never what it allows.
+ *
+ * `hidden` is the rest of what the space has: connector notes no grant lets
+ * this member open, named so they can ask for access rather than discover
+ * the gap from a refused run. `accessRequested` and `requested` are what
+ * they have already asked for — note paths with an open access request, and
+ * catalog recipes with an open request to connect — so a row says "Requested"
+ * instead of offering the button again.
  */
 export async function GET(
   _req: NextRequest,
@@ -29,7 +38,12 @@ export async function GET(
   if (resolved instanceof Response) return resolved;
 
   const principal = await principalOf(resolved);
-  const connectors = await listConnectors(principal, resolved);
+  const [connectors, hidden, accessRequested, requests] = await Promise.all([
+    listConnectors(principal, resolved),
+    resolved.isPersonalSpace ? [] : listHiddenConnectors(principal, resolved),
+    resolved.isPersonalSpace ? new Set<string>() : pendingRequestPaths(principal),
+    resolved.isPersonalSpace ? [] : listConnectorRequests(principal),
+  ]);
 
   // Which referenced secrets actually exist — the list can't tell a working
   // connector from a broken one without it, and one query covers every row.
@@ -65,6 +79,8 @@ export async function GET(
     // Connect for Google here and the paste-your-own-app form on a deployment
     // that has no client of its own (lib/connectors/catalog.ts#connectsInOneClick).
     platformClients: availablePlatformClients(),
+    hidden: hidden.map((h) => ({ ...h, accessRequested: accessRequested.has(h.path) })),
+    requested: [...new Set(requests.filter((r) => r.status === 'pending' && r.userId === session.userId).map((r) => r.recipe))],
     connectors: connectors.map(({ docs: _docs, secrets, ...rest }) => ({
       ...rest,
       secrets,

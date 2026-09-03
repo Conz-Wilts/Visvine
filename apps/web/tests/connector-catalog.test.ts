@@ -9,7 +9,6 @@ import {
   allowsManyConnectors,
   catalogConnectStyle,
   catalogEntryFor,
-  catalogForScope,
   catalogRowLabel,
   connectorFromCatalog,
   connectsInOneClick,
@@ -376,40 +375,20 @@ test('the link a browser is sent to is relative, and carries the same query', ()
   assert.equal(new URL(connectorConnectPath('s1', 'g', 'https://evil.example'), 'https://x.test').searchParams.get('return'), null)
 })
 
-test('your own settings offer what you sign in to; a space offers that plus its own configuration', () => {
-  const personal = catalogForScope('personal')
-  const space = catalogForScope('space')
-  assert.ok(personal.length > 0)
-  // Everything offered to you is a service you sign in to as yourself — a
-  // vetted MCP server, or a Google recipe riding the deployment's own client.
-  for (const entry of personal) {
-    assert.ok(entry.shape === 'mcp' || entry.personal === true, entry.id)
-    assert.ok(connectsInOneClick(entry, ['google']), entry.id)
-  }
-  for (const id of ['notion-mcp', 'gmail', 'google-calendar', 'google-drive']) {
-    assert.ok(personal.some((e) => e.id === id), `${id} is offered in your own settings`)
-  }
-  const notion = personal.find((e) => e.id === 'notion-mcp')
-  assert.ok(notion)
-  // A personal connector is your account at a service: one of each.
-  assert.equal(allowsManyConnectors(notion, 'personal'), false)
-
-  // Nothing you have to go and fetch a credential for is offered here.
-  assert.ok(!personal.some((e) => e.shape === 'key' || e.shape === 'model'))
-
-  // The console holds everything: the credential-shaped world — keys, OAuth
-  // apps, models, databases and the generic MCP-by-URL row — and the vetted
-  // servers too, which a team connects the same way you do.
-  assert.equal(space.length, CONNECTOR_CATALOG.length)
-  assert.ok(personal.every((e) => space.some((s) => s.id === e.id)))
+test('the catalogue is one list, and every shape of service is on it', () => {
   for (const id of ['slack', 'gmail', 'google-drive', 'microsoft', 'postgres', 'openai', 'mcp', 'notion-mcp']) {
-    assert.ok(space.some((e) => e.id === id), `${id} is a space connector`)
+    assert.ok(CONNECTOR_CATALOG.some((e) => e.id === id), `${id} is a space connector`)
   }
-  // The personal list is a subset: every recipe you can connect for yourself,
-  // a space may also connect for the team's account.
-  const overlap = personal.filter((p) => space.some((s) => s.id === p.id))
-  assert.equal(overlap.length, personal.length)
-  assert.ok(overlap.every((e) => e.personal === true || e.shape === 'mcp'))
+  // A vetted MCP server and a Google recipe are one press for the space too.
+  for (const id of ['notion-mcp', 'gmail', 'google-calendar', 'google-drive']) {
+    const entry = CONNECTOR_CATALOG.find((e) => e.id === id)
+    assert.ok(entry)
+    assert.ok(connectsInOneClick(entry, ['google']), id)
+  }
+  // A service is not a slot: a space may hold two of anything but a model key.
+  const notion = CONNECTOR_CATALOG.find((e) => e.id === 'notion-mcp')
+  assert.ok(notion)
+  assert.equal(allowsManyConnectors(notion), true)
 })
 
 test('a service you paste a credential into is named for what it is', () => {

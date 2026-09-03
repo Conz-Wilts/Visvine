@@ -9,6 +9,7 @@ import SpaceSettingsPanel from '@/features/admin/components/SpaceSettingsPanel';
 import TypesPanel from '@/features/admin/components/TypesPanel';
 import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
 import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
+import { useConnectorRequestCount } from '@/features/connectors/hooks/useConnectorRequestCount';
 import UsagePanel from '@/features/agents/components/UsagePanel';
 import ToolReviewPanel, { useToolReviewQueue } from '@/features/admin/components/ToolReviewPanel';
 import {
@@ -57,6 +58,8 @@ function AdminConsole({ space, onSaved }: {
   // This space's own queue — the versions its members published. Counted here
   // so the tab carries the badge, and re-read when the panel acts on one.
   const approvals = useToolApprovalCount();
+  // What members asked the space to connect — the Connectors badge.
+  const connectorRequests = useConnectorRequestCount();
 
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', width: 'form' },
@@ -66,7 +69,7 @@ function AdminConsole({ space, onSaved }: {
     { id: 'types', label: 'Types', width: 'form' },
     // Connectors has no rail row of its own — it is admins-only by nature, so
     // this console IS its surface (lib/featureAccess NAV_HIDDEN_FEATURE_KEYS).
-    { id: 'connectors', label: 'Connectors', width: 'form' },
+    { id: 'connectors', label: 'Connectors', width: 'form', badge: connectorRequests.count },
     // The model bill: what agents spent, per month, by model and by agent.
     { id: 'usage', label: 'Usage', width: 'form' },
     // Both queues a person can be waiting in — to join, and for context access —
@@ -109,7 +112,7 @@ function AdminConsole({ space, onSaved }: {
                 />
               );
             case 'connectors':
-              return <ConnectorsPanel key={space.id} />;
+              return <ConnectorsPanel key={space.id} onRequestsChanged={connectorRequests.refresh} />;
             case 'usage':
               return <UsagePanel key={space.id} spaceId={space.id} />;
             case 'members':

@@ -1,22 +1,27 @@
 'use client';
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { clsx } from 'clsx';
 import SaveStatus from '@/components/ui/SaveStatus';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
 import { TAB_MOTION } from '@/components/ui/tabMotion';
 import PaneTopScrollbarMask from '@/features/shared/components/pane/PaneTopScrollbarMask';
+import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { ConsoleSaveProvider, useConsoleSave } from './ConsoleSaveContext';
 
 /**
- * Settings shell for the Space Console: a pane-top tab bar with the active
- * section's content below it. Section state lives in the URL
+ * Settings shell for the Space Console: the section tabs with the active
+ * section's content below them. Section state lives in the URL
  * (`?section=members`) so it deep-links and survives refresh.
  *
- * Sections ride the same pane-top tab bar the Directory, notes and profiles use
- * (same bleed, row height, underline and handoff key), so moving between those
- * surfaces and the console reads as one bar relabelling itself.
+ * The tabs ride the shell's top band, portalled into it the way the Directory,
+ * notes and profiles portal theirs (same host, row height, underline and
+ * handoff key), so moving between those surfaces and the console reads as one
+ * bar relabelling itself rather than a second bar appearing under the band.
+ * The autosave state goes to the band's trailing host beside the account
+ * button. Outside the shell (no host) the bar draws itself where it stands.
  *
  * Must be rendered inside a `<Suspense>` boundary (uses `useSearchParams`).
  */
@@ -55,6 +60,7 @@ export default function ConsoleShell({
   renderSection,
   ariaLabel = 'Console sections',
 }: ConsoleShellProps) {
+  const { shellTabsHost, shellTrailHost } = useContextPanel();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -117,68 +123,94 @@ export default function ConsoleShell({
     }
   }
 
+  const tablist = (
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      className={
+        shellTabsHost
+          ? // Scrolls when the section names outgrow the band, without ever
+            // drawing a bar for it (the underline sits on rounded offsets and
+            // can overhang by a subpixel).
+            'relative flex min-w-0 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+          : 'relative flex flex-1 overflow-x-auto'
+      }
+    >
+      {sections.map((s, idx) => (
+        <button
+          key={s.id}
+          ref={(el) => { tabRefs.current[idx] = el; }}
+          role="tab"
+          id={`tab-${s.id}`}
+          aria-selected={active === s.id}
+          aria-controls={`panel-${s.id}`}
+          onClick={() => select(s.id)}
+          onKeyDown={(e) => handleKeyDown(e, idx)}
+          className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
+            handoff ? 'tabbar-label-enter' : ''
+          } ${active === s.id ? 'text-brand-black' : 'text-brand-grey hover:text-brand-black'}`}
+        >
+          {tabLabel(s)}
+        </button>
+      ))}
+
+      {/* Animated green underline indicator */}
+      <div
+        className={`absolute bottom-0 ${shellTabsHost ? 'h-[3px]' : 'h-0.5'} bg-brand-green ${motion}`}
+        style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
+      />
+    </div>
+  );
+
+  // Autosave state: in the band it rides the trailing host beside the account
+  // button, so it stays visible whatever the page is scrolled to.
+  const saveStatus = (
+    <div className="shrink-0 px-4">
+      <HeaderSaveStatus />
+    </div>
+  );
+
+  const chrome = shellTabsHost ? (
+    <>
+      {createPortal(tablist, shellTabsHost)}
+      {shellTrailHost && createPortal(saveStatus, shellTrailHost)}
+      {/* All that stays in the pane is the painted clearance under the band, so
+          the content scrolls behind an opaque strip rather than through the gap
+          above it. */}
+      <div className="sticky -top-6 -mt-6 -ml-6 z-20">
+        <PaneTopScrollbarMask height={0} />
+        <div aria-hidden className="h-6 bg-glass" />
+      </div>
+    </>
+  ) : (
+    /* Standing on its own: same chrome as the pane-top bars — -ml-6 bleeds into
+       <main>'s gutter so the bottom border runs from the rail's seam, and
+       "-top-6 -mt-6" cancels <main>'s top pad in flow and in the sticky offset
+       so the box sits at the surface's top edge either way. */
+    <div className="sticky -top-6 -mt-6 -ml-6 z-20">
+      <PaneTopScrollbarMask />
+      <div aria-hidden className="h-6 bg-glass" />
+      <div className="flex w-full items-center border-b border-border-subtle bg-glass pl-8 pr-1">
+        {tablist}
+        {saveStatus}
+      </div>
+    </div>
+  );
+
   return (
     <ConsoleSaveProvider>
       <div className="w-full">
-        {/* Same chrome as the pane-top bars: -ml-6 bleeds into <main>'s gutter
-            so the bottom border runs from the rail's seam, "-top-6 -mt-6"
-            cancels <main>'s top pad in flow and in the sticky offset so the box
-            sits at the surface's top edge either way, and the clearance above
-            the row is painted inside the box — so the band above the tabs is
-            opaque rather than something the page scrolls through. */}
-        <div className="sticky -top-6 -mt-6 -ml-6 z-20">
-          {/* Keeps the page scrollbar from running up beside the pinned bar. */}
-          <PaneTopScrollbarMask />
-          <div aria-hidden className="h-6 bg-glass" />
-          <div className="flex w-full items-center border-b border-border-subtle bg-glass pl-8 pr-1">
-            <div
-              role="tablist"
-              aria-label={ariaLabel}
-              className="relative flex flex-1 overflow-x-auto"
-            >
-              {sections.map((s, idx) => (
-                <button
-                  key={s.id}
-                  ref={(el) => { tabRefs.current[idx] = el; }}
-                  role="tab"
-                  id={`tab-${s.id}`}
-                  aria-selected={active === s.id}
-                  aria-controls={`panel-${s.id}`}
-                  onClick={() => select(s.id)}
-                  onKeyDown={(e) => handleKeyDown(e, idx)}
-                  className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
-                    handoff ? 'tabbar-label-enter' : ''
-                  } ${
-                    active === s.id ? 'text-brand-black' : 'text-brand-grey hover:text-brand-black'
-                  }`}
-                >
-                  {tabLabel(s)}
-                </button>
-              ))}
+        {chrome}
 
-              {/* Animated green underline indicator */}
-              <div
-                className={`absolute bottom-0 h-0.5 bg-brand-green ${motion}`}
-                style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
-              />
-            </div>
-
-            {/* Autosave state rides the bar so it stays visible while pinned. */}
-            <div className="shrink-0 px-4">
-              <HeaderSaveStatus />
-            </div>
-          </div>
-        </div>
-
-        {/* <main> supplies no horizontal gutter (see AuthLayoutClient) — the bar
-            bleeds into the sidebar seam, the content keeps the page's own px.
-            Left-aligned, not centred: on a wide pane the content stays anchored
-            to the same left edge as the tab bar above it. */}
+        {/* <main> supplies no horizontal gutter (see AuthLayoutClient) — the
+            content keeps the page's own px. Left-aligned, not centred: on a
+            wide pane the content stays anchored to the same left edge as the
+            tabs above it. */}
         <div className="w-full max-w-[1600px] pt-10 pb-10 px-6 sm:px-8">
-          {/* No page heading — the pane-top tab bar above already names the
-              active section. The heading's absence is why the top padding is
-              larger than the bottom gutter's rhythm would suggest: content still
-              needs air under the pinned bar, just not a restated title. */}
+          {/* No page heading — the tab set above already names the active
+              section. The heading's absence is why the top padding is larger
+              than the bottom gutter's rhythm would suggest: content still needs
+              air under the band, just not a restated title. */}
           <main id={`panel-${active}`} role="tabpanel" aria-labelledby={`tab-${active}`} className="min-w-0">
             {/* 'form' sections get a comfortable single-column width like profile settings. */}
             <div className={clsx(activeSection.width === 'form' && 'max-w-4xl')}>

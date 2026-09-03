@@ -522,56 +522,55 @@ control is Connect. The round trip lands back where it started —
 by `safeReturnTo` at both ends and held in the signed pending cookie, never
 echoed through the provider.
 
-**A connector you connect for yourself works in every space you are in.** Sign
-in once from **Connectors on the account menu** — a dialog over whatever page
-you were on (`ConnectorsDialog`), not a settings section, because
-`?connectors=1` on ANY page opens it and that is what the OAuth round trip
-returns to — and the note lands in your personal
-space (`me:<userId>` — a full Space you are the only member and admin of, so
-nothing about notes, secrets or the OAuth dance is special-cased). What makes
-it travel is `readConnectorNote`: a name is looked up in the space you are in,
-and then in the CALLER's own space. Two consequences, both load-bearing:
+**The space's admins decide what is connected; a member connects themselves
+to it.** The whole catalogue is the console's to connect from. What a member
+gets is **Connectors on the account menu** — a dialog over whatever page they
+were on (`ConnectorsDialog`), not a settings section, because `?connectors=`
+on ANY page opens it and that is what the OAuth round trip returns to — with
+three lists of the space they are in, and it is the console's own panel
+pinned to a view (`ConnectorsPanel view=`), so an admin sees their acts in the
+same places a member sees asks:
 
-- **A space's own note always wins its name.** An admin who configured
-  `google-drive` decided what its agents reach and whose credentials they use;
-  a personal note fills a gap and never displaces one.
-- **The connector carries the space it belongs to.** `LoadedConnector` holds
-  `spaceId` + `principal`, and `executeConnectorScript(loaded, run)` takes
-  nothing else — so the secrets, the linked account, the run budget and the
-  audit line are all the owner's, and no call site can pair a note with the
-  wrong space. Resolution runs through the person a run acts as, so a fan-out
-  run spends the SUBSCRIBER's connectors, not the author's.
+- **Connected** — the first tab — is what works for this person now
+  (`worksForCaller`): a connector that holds no account is connected the moment
+  its note is readable; one that signs in is connected once THEIR account is
+  linked and not broken.
+- **Not connected** is the rest of what the space has, one row per connector. A
+  row a grant reaches goes to the connector's page and offers **Sign in** where
+  the connector holds an account per member (`mode: user`). A row no grant
+  reaches is still listed — the list route's `hidden`, from
+  `service.ts#listHiddenConnectors`: name, title and recipe, never hosts,
+  secrets or body — and offers **Request access**, a `ContextAccessRequest` on
+  the note answered on Members → Waiting like any other.
+- **All connectors** is the catalogue. A service the space holds says so; one
+  it does not offers **Request**, a row in `connector_requests`
+  (`lib/connectors/requests.ts`, `/api/communities/<id>/connector-requests`),
+  which the console's Connectors section shows as a **Requested** strip with a
+  badge. **Add** there is the recipe's own path — one press or the form — and
+  the note it writes closes the request with its name stamped on the row;
+  Dismiss closes it with nothing written. A request names a catalogue id,
+  never free text.
 
-The fallback is off (`{ personal: false }`) for the Tools bridge and the
-console's test run: a Tool is code a space wrote, rendering for a viewer who
-never chose to run it, and the test button is about one particular note. An
-agent run and a direct action call are acts of the person they run as, so those
-get it. `list_connectors` reports the caller's own with `personal: true`.
+The runtime still reads a note in the caller's own space (`me:<userId>`) when
+the space it is in has none of that name (`readConnectorNote`, off with
+`{ personal: false }` for the Tools bridge and the console's test run) — a
+space's own note always wins its name, and `LoadedConnector` carries the
+space it came from so secrets, account and budget are the owner's. No UI
+writes such a note any more; the lookup is what keeps a note an action wrote
+there working.
 
-**Your own connectors offer what you sign in to; a space's console offers the
-whole catalogue.** `catalogForScope('personal')` is `shape: 'mcp'` OR
-`personal: true` — the vetted MCP servers, and the Google recipes (Gmail,
-Google Calendar, Google Drive) that ride the deployment's own OAuth client, so
-they are one press for a person too. `catalogForScope('space')` is everything,
-the vetted servers included: a team connects an MCP server the same way you do,
-each member signing in with their own account, and it belongs beside the model
-providers rather than being missing from the one surface an admin configures.
-What the personal list refuses is a credential someone has to go and fetch. The
-catalogue has a fourth shape, `mcp` — a remote MCP server by URL,
-built by `mcpServer(...)` in `lib/connectors/catalog.ts`: the note's
-`auth.discover` is the URL, the host is the whole perimeter, there are no
-fields, and Visvine registers itself as the OAuth client at first connect
+**The catalogue has four shapes**, and the fourth is `mcp` — a remote MCP
+server by URL, built by `mcpServer(...)` in `lib/connectors/catalog.ts`: the
+note's `auth.discover` is the URL, the host is the whole perimeter, there are
+no fields, and Visvine registers itself as the OAuth client at first connect
 (RFC 7591), so the press is one click on every deployment with no platform
-client behind it. The same panel in `scope: 'personal'` lists the `mcp`
-entries, one connector each (`allowsManyConnectors(entry, scope)`) — because a
-personal connector is your ACCOUNT at a service, and you sign in as yourself
-once — while a space may hold several of anything. Every URL on the list was checked to publish OAuth
-metadata with a registration endpoint and to answer streamable HTTP at that
-path; adding one is adding an `mcpServer` entry after the same check. A row
-says whether an account is actually linked (`connection` on the list route,
-keyed by provider = the note's name), so a note left behind by an abandoned
-dance reads "Not signed in" and offers the sign-in, rather than claiming to
-be connected.
+client behind it. Each member signs in with their own account. Every URL on
+the list was checked to publish OAuth metadata with a registration endpoint
+and to answer streamable HTTP at that path; adding one is adding an
+`mcpServer` entry after the same check. A row says whether an account is
+actually linked (`connection` on the list route, keyed by provider = the
+note's name), so a note left behind by an abandoned dance offers the sign-in
+rather than claiming to be connected.
 
 **The link a browser is sent to is relative** (`connectorConnectPath`).
 `appOrigin()` reads `NEXT_PUBLIC_APP_URL`, which Next inlines when the image is
@@ -674,8 +673,11 @@ invalid note fails there.
   what "configured" meant. `spaceModels()` → `defaultModelOf` / `noModelReason`
   / `customEndpointOf` / `declaredPricingFor`, all pure over the parsed rows.
 - A run records the model it ACTUALLY used, not the brief's (absent) pin.
-- Adding one is **Connectors → Models**, its own section above the service list
-  with a `+`, because what agents run on is not a row among forty services.
+- **Models is its own row in the account band**, beside Connectors — the same
+  dialog pinned to `ConnectorsPanel view="models"`, with no tab bar and a `+`.
+  It is not a section of the connectors list and not a console section: what
+  agents run on is one decision a space makes once, not a row among forty
+  services.
 
 They list beside HTTP connectors and may appear in a brief's `connectors:`, but
 `loadConnector` refuses them — `run_connector` hands caller-authored JS the

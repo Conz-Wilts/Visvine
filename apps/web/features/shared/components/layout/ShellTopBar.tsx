@@ -1,6 +1,5 @@
 "use client";
 
-import UserMenu from "@/features/auth/components/UserMenu";
 import { useHeader } from "@/features/shared/contexts/HeaderContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
@@ -9,13 +8,13 @@ import { SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
  * The band across the top of the content surface — the shell's chrome AND the
  * page's, on one line:
  *
- *   Grid Context Table Resources              Raw Share  (you)
+ *   Grid Context Table Resources                    Raw Share
  *
  * The tab set and the trailing page actions are portalled in by the pane shell
  * (PaneTabBar → shellTabsHost / shellTrailHost on ContextPanelContext), so a
  * page under the pane shell puts its sections and its actions on the band
  * rather than in a second bar below it. A page with neither leaves both hosts
- * empty and the band is just you.
+ * empty and the band is bare — you are the rail's last row, not this one's.
  *
  * There is no side-panel switch: a surface that has a panel — the context tree
  * beside a note, the channel list on /channels — keeps it open. The panel is
@@ -43,10 +42,9 @@ export default function ShellTopBar() {
 
       <div className="flex shrink-0 items-center gap-3">
         {/* Trailing page actions — Raw, Connections, Share — portalled in by
-            the pane shell beside the account button. */}
+            the pane shell. */}
         <div ref={setShellTrailHost} className="flex shrink-0 items-center" />
         {headerRight}
-        <UserMenu />
       </div>
     </div>
   );

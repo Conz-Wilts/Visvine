@@ -12,7 +12,8 @@
  */
 import prisma from '@/lib/prisma'
 import { decryptSecret } from '@/lib/crypto/secrets'
-import { readVisible, visibleVault } from '@/lib/notes/contextService'
+import { canReadPath, readVisible, visibleVault } from '@/lib/notes/contextService'
+import { getVault } from '@/lib/notes/vaultCache'
 import { personalPrincipal } from '@/lib/notes/principal'
 import { personalSpaceId } from '@/lib/spaces/personalSpaceAccess'
 import { SHARED_OWNER_KEY } from '@/lib/notes/store'
@@ -297,6 +298,37 @@ async function listConnectorsIn(p: ContextPrincipal, context: Context): Promise<
     if (summary) summaries.push(summary)
   }
   return summaries
+}
+
+/** A connector the caller cannot open — enough to name it, nothing it reaches. */
+export interface HiddenConnector {
+  name: string
+  path: string
+  title: string | null
+  recipe: string | null
+}
+
+/**
+ * The space's connector notes the principal may NOT read.
+ *
+ * A member sees what the space has connected even where a grant does not
+ * reach the note, so they can ask for it (a ContextAccessRequest on its path)
+ * rather than find out from a refused run. What is said about it is the
+ * name, title and recipe — what the row shows — and never the hosts, secrets
+ * or body: those are the note's, and the note is what they have no access to.
+ * Empty for anyone who sees the vault unfiltered.
+ */
+export async function listHiddenConnectors(p: ContextPrincipal, context: Context): Promise<HiddenConnector[]> {
+  const { raws } = await getVault(context)
+  const hidden: HiddenConnector[] = []
+  for (const raw of raws) {
+    if (!raw.path.startsWith(CONNECTORS_DIR) || !raw.path.endsWith('.md')) continue
+    if (canReadPath(p, context, raw.path)) continue
+    const summary = summariseNote(raw.path, raw.content)
+    if (!summary || summary.kind === 'model') continue
+    hidden.push({ name: summary.name, path: summary.path, title: summary.title, recipe: summary.recipe })
+  }
+  return hidden.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 /**

@@ -184,10 +184,13 @@ function DirectoryPane() {
     // set rides the band and takes no flow space.
     <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 112px)' }}>
       {/* Search, filters, sort and count ride one sticky toolbar welded under
-          the pane tab bar; the cards scroll beneath it. */}
-      <ContentReveal ready={!loading} id="panel-grid" role="tabpanel">
-        <DirectoryToolbar browse={browse} />
+          the pane tab bar; the cards scroll beneath it. It sits OUTSIDE the
+          reveal: it is pane chrome, not the view. Rising it would translate the
+          sticky bar off its pinned line for the length of the entrance, and the
+          cards already scrolled under it would show through the gap it left. */}
+      <DirectoryToolbar browse={browse} />
 
+      <ContentReveal ready={!loading} id="panel-grid" role="tabpanel">
         {/* pt-7, not pt-4: a hovered card lifts 6px and throws a soft glow about
             14px past its own edge, and the toolbar it scrolls under is opaque —
             with less clearance the top row's raised shadow was sliced off by the

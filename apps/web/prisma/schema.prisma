@@ -49,6 +49,7 @@ model Space {
   secrets         ConnectorSecret[]
   oauthClients    ConnectorOAuthClient[]
   connections     ConnectorConnection[]
+  connectorRequests ConnectorRequest[]
   connectorState  ConnectorState[]
   noteEmbeddings  ContextNoteEmbedding[]
   memories        ContextMemory[]
@@ -303,6 +304,32 @@ model ConnectorConnection {
   @@unique([spaceId, provider, userId], name: "connection_identity")
   @@index([spaceId, provider])
   @@map("connector_connections")
+}
+
+/// A member's ask that the space CONNECT a service it does not have yet — filed
+/// from the account menu's All connectors list, where a recipe the space holds
+/// no connector for offers Request instead of Connect. `recipe` is the catalog
+/// entry's id (lib/connectors/catalog.ts). A SPACE ADMIN resolves it from the
+/// console's Connectors section: Add runs the recipe and stamps the note it
+/// wrote in `connectorName`; Dismiss closes it. Access to a connector the space
+/// already has is a ContextAccessRequest on its note, not one of these.
+model ConnectorRequest {
+  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId       String    @map("space_id")
+  userId        String    @map("user_id")
+  recipe        String
+  message       String?
+  status        String    @default("pending") // 'pending' | 'added' | 'dismissed'
+  createdAt     DateTime  @default(now()) @map("created_at")
+  resolvedBy    String?   @map("resolved_by")
+  resolvedAt    DateTime? @map("resolved_at")
+  connectorName String?   @map("connector_name")
+  space         Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, status])
+  @@index([userId])
+  @@map("connector_requests")
 }
 
 /// A connector's small memory between runs — `visvine.state.get/set` inside
@@ -1206,6 +1233,7 @@ model User {
   // sweep and the database agree instead of only the sweep knowing.
   aliasesHeld             UserAlias[]
   accessRequests          ContextAccessRequest[]
+  connectorRequests       ConnectorRequest[]
   identity                Identity?
   oauthAuthCodes          OAuthAuthCode[]
 

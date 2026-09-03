@@ -1,47 +1,80 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { PlugIcon } from "@/features/shared/icons";
+import { PlugIcon, SparklesIcon } from "@/features/shared/icons";
 import Image from "next/image";
 import { useSession, signOut } from "@/features/auth/lib/auth-client";
-import { useFullProfile } from "@/features/shared/contexts/FullProfileContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
-import ConnectorsDialog, { CONNECTORS_PARAM, connectorsSegment } from "@/features/settings/components/ConnectorsDialog";
+import ConnectorsDialog, { CONNECTORS_PARAM, connectorsSegment, type ConnectorsTab } from "@/features/settings/components/ConnectorsDialog";
+import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
 
 /**
- * The account button, floated in the shell's top-right corner (AuthLayoutClient)
- * — the one piece of chrome that is not the rail. Its menu hangs down and to the
- * left of the avatar, portalled to <body> so nothing a page pins at its own top
- * edge can paint over it.
+ * The account band — the rail's last rows (Sidebar). You sit at the foot of the
+ * same column the space sits at the head of.
  *
- * Connectors are a menu entry rather than a settings section because they are
- * yours wherever you are: the dialog opens over the page you were on and
- * closing it leaves you there. The button sits in the shell, so `?connectors=`
- * re-opens it on ANY page — which is what the OAuth round trip returns to —
- * on the segment (yours, or this space's) the sign-in started from.
+ * There is no dropdown. Point at the avatar and the band GROWS UPWARD: what
+ * hangs off your account — Connectors, Settings, Sign out — unfolds as ordinary
+ * rail rows, on the rail's own glyph column, with their names arriving on the
+ * same fade the tools' names do. So opening the account is the rail widening and
+ * the band rising, one gesture, rather than a panel appearing over whatever page
+ * you were reading.
+ *
+ * Your own row is not one of those actions: your name IS the link to your
+ * profile, the way a person's name is everywhere else in the app, so pressing it
+ * goes to `/directory/<node>`.
+ *
+ * The height is what animates, and it is computed rather than `auto` so it can
+ * be transitioned. Keyboard focus opens it too, so the actions are reachable
+ * without a pointer.
+ *
+ * Connectors are a row rather than a settings section because they are about
+ * the space you are in, from where you stand in it: the dialog opens over the
+ * page you were on and closing it leaves you there. The band is shell chrome
+ * on every page, so `?connectors=` re-opens it ANYWHERE — which is what the
+ * OAuth round trip returns to — on the tab (connected, disconnected, all or
+ * models) the sign-in started from.
  */
-export default function UserMenu() {
+export default function UserMenu({ expanded, reduced }: { expanded: boolean; reduced: boolean }) {
   const { data: session, isPending } = useSession();
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
-  const [connectorsOpen, setConnectorsOpen] = useState<"personal" | "space" | null>(null);
+  const [pinned, setPinned] = useState(false);
+  const [connectorsOpen, setConnectorsOpen] = useState<ConnectorsTab | null>(null);
+  const bandRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { openProfile } = useFullProfile();
 
   // `?connectors=` opens the dialog: the sign-in round trip comes back to the
   // page it started on, and this is what re-opens what the person was in.
-  // Read off `location` rather than useSearchParams — the account button is
-  // shell chrome on every page, and a hook that forces a Suspense boundary
-  // there would be paid by all of them.
+  // Read off `location` rather than useSearchParams — the account band is shell
+  // chrome on every page, and a hook that forces a Suspense boundary there
+  // would be paid by all of them.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const segment = connectorsSegment(new URLSearchParams(window.location.search).get(CONNECTORS_PARAM));
     if (segment) setConnectorsOpen(segment);
   }, []);
+
+  // A pinned band closes on the next click outside it, the way the rail's own
+  // popups do. Hover-opened bands need nothing: the pointer leaving closes them.
+  useEffect(() => {
+    if (!pinned) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (bandRef.current?.contains(e.target as Node)) return;
+      setPinned(false);
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [pinned]);
+
+  // The rail shutting takes the band with it: a column of nameless glyphs
+  // stacked above the avatar is not a menu anyone can read.
+  useEffect(() => {
+    if (!expanded) {
+      setOpen(false);
+      setPinned(false);
+    }
+  }, [expanded]);
 
   const closeConnectors = () => {
     setConnectorsOpen(null);
@@ -53,115 +86,138 @@ export default function UserMenu() {
     router.replace(q ? `${window.location.pathname}?${q}` : window.location.pathname, { scroll: false });
   };
 
-  useEffect(() => {
-    if (!open) return;
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (rect) setMenuPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handlePointerDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (triggerRef.current?.contains(target)) return;
-      if (menuRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [open]);
-
   if (isPending) {
-    return <div className="h-11 w-11 rounded-full bg-surface-3 animate-pulse" />;
+    return <div className="h-11 w-11 rounded-[10px] bg-surface-3 animate-pulse" style={{ marginLeft: (ROW_H - 44) / 2 }} />;
   }
 
   if (!session) return null;
 
   const { user } = session;
+  // Your name is the link to your own page, so there is no Profile row in the
+  // band. A session with no person node yet has nowhere to go: the row falls
+  // back to opening the band, the way it did when Profile was a row.
+  const profileHref = user.nodeId ? `/directory/${encodeURIComponent(user.nodeId)}` : null;
 
   async function handleSignOut() {
     setOpen(false);
+    setPinned(false);
     await signOut();
     router.push("/");
     router.refresh();
   }
 
+  const actions = [
+    {
+      key: "connectors",
+      label: "Connectors",
+      onClick: () => setConnectorsOpen("connected"),
+      icon: <PlugIcon />,
+    },
+    {
+      // What the space's agents run on hangs off Connectors — a model IS a
+      // connector note — but it is one decision a space makes once, so it is
+      // its own row rather than a section inside the list of services.
+      key: "models",
+      label: "Models",
+      onClick: () => setConnectorsOpen("models"),
+      icon: <SparklesIcon />,
+    },
+    {
+      key: "settings",
+      label: "Settings",
+      onClick: () => router.push("/settings"),
+      icon: (
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+    },
+    {
+      key: "signout",
+      label: "Sign out",
+      onClick: () => { void handleSignOut(); },
+      icon: (
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+      ),
+    },
+  ];
+
+  // The stack's open height: the rows, the gaps between them, and one more gap
+  // holding the last of them off the avatar. Same rhythm as every other band,
+  // so the rows land where rail rows land rather than in a menu's own spacing.
+  const stackH = actions.length * ROW_H + actions.length * ITEM_GAP;
+  const dur = reduced ? "0s" : "260ms";
+
   return (
-    <>
-      <button
-        ref={triggerRef}
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Account menu"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="h-11 w-11 overflow-hidden rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
+    <div
+      ref={bandRef}
+      className="flex flex-col"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => { if (!pinned) setOpen(false); }}
+      onFocus={() => setOpen(true)}
+      onBlur={(e) => {
+        if (pinned) return;
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setOpen(false);
+      }}
+    >
+      {/* The rows, revealed by the band's own height. Clipped rather than
+          unmounted so they are there to travel: the stack rises out from behind
+          the avatar as the height opens, and the labels fade on the rail's
+          timing. */}
+      <div
+        className="overflow-hidden"
+        style={{
+          height: open ? stackH : 0,
+          opacity: open ? 1 : 0,
+          transition: reduced ? "none" : `height ${dur} cubic-bezier(0.25, 0.1, 0.25, 1), opacity ${dur} ease`,
+        }}
+        aria-hidden={!open}
       >
-        {user.image ? (
-          <Image src={user.image} alt={user.name ?? "Profile"} width={44} height={44} className="h-full w-full object-cover" />
-        ) : (
-          <PersonSilhouette />
-        )}
-      </button>
+        <div className="flex flex-col" style={{ gap: ITEM_GAP, paddingBottom: ITEM_GAP }}>
+          {actions.map(({ key, label, icon, onClick }) => (
+            <Row
+              key={key}
+              expanded={expanded}
+              reduced={reduced}
+              label={label}
+              icon={icon}
+              onClick={() => {
+                setPinned(false);
+                setOpen(false);
+                onClick();
+              }}
+            />
+          ))}
+        </div>
+      </div>
 
-      {open && typeof document !== "undefined" && createPortal(
-        <div
-          ref={menuRef}
-          className="fixed w-56 overflow-hidden rounded-xl border border-border-subtle bg-surface-1 py-1 shadow-float z-[60]"
-          style={{ top: menuPos.top, right: menuPos.right }}
-        >
-          <div className="px-4 py-3 border-b border-border-subtle">
-            <p className="text-sm font-medium text-text-primary truncate">{user.name}</p>
-            <p className="text-xs text-text-muted truncate">{user.email}</p>
-          </div>
-
-          <button
-            onClick={() => {
-              setOpen(false);
-              if (user.nodeId) openProfile(user.nodeId);
-            }}
-            className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            Profile
-          </button>
-
-          <button
-            onClick={() => { setOpen(false); setConnectorsOpen("personal"); }}
-            className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors flex items-center gap-2"
-          >
-            <PlugIcon className="w-4 h-4 text-text-muted" />
-            Connectors
-          </button>
-
-          <button
-            onClick={() => { setOpen(false); router.push("/settings"); }}
-            className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Settings
-          </button>
-
-          <div className="border-t border-border-subtle my-1" />
-
-          <button
-            onClick={handleSignOut}
-            className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors flex items-center gap-2"
-          >
-            <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Sign out
-          </button>
-        </div>,
-        document.body
-      )}
+      {/* You. The same row shape as everything above it, with your picture where
+          a glyph goes and your name where a tool's name goes — and, like every
+          other name in the app, it is a link to the person's page. Pointing at
+          the row is what opens the band above it; nothing is drawn to say so. */}
+      <Row
+        expanded={expanded}
+        reduced={reduced}
+        label={user.name ?? "Account"}
+        active={open}
+        href={profileHref ?? undefined}
+        onClick={profileHref ? undefined : () => { setPinned((v) => !v); setOpen(true); }}
+        icon={
+          <span className="h-11 w-11 overflow-hidden rounded-[10px] border-2 border-brand-green">
+            {user.image ? (
+              <Image src={user.image} alt="" width={44} height={44} className="h-full w-full object-cover" />
+            ) : (
+              <PersonSilhouette />
+            )}
+          </span>
+        }
+      />
 
       {connectorsOpen && <ConnectorsDialog initial={connectorsOpen} onClose={closeConnectors} />}
-    </>
+    </div>
   );
 }

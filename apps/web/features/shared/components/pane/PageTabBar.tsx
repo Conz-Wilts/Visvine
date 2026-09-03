@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext';
+import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
 import { TAB_MOTION } from '@/components/ui/tabMotion';
 
@@ -61,6 +63,12 @@ export default function PageTabBar({
   handoffKey,
 }: PageTabBarProps) {
   const { setHost } = useTabBarSlot();
+  // The tab row belongs to the shell's top band, beside the account button, so
+  // a page's sections and the shell's chrome are one line rather than two
+  // stacked bars. What stays in the pane is the painted clearance and the
+  // attached toolbar tray, which belong over the content. Outside the shell
+  // (no host) the bar draws its own row where it stands.
+  const { shellTabsHost } = useContextPanel();
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
   // Transitions are ARMED only after the bar's first frame is on screen. This bar
@@ -115,6 +123,108 @@ export default function PageTabBar({
     }
   }
 
+  // The tab set itself. In the shell it is portalled into the top band, so it
+  // carries no border or background of its own — the band is the chrome.
+  const tablist = (
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      className={
+        shellTabsHost
+          ? // Scrolls when the words outgrow the band, but never shows a bar
+            // for it: the underline is placed from rounded offsets, so it can
+            // poke past the edge by a subpixel and draw a permanent scrollbar.
+            'relative flex min-w-0 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+          : // Standing on its own, the tablist keeps flex-1 so it spans the
+            // row — a shrink-to-fit box with overflow-x-auto grows a stray
+            // scrollbar.
+            'relative flex flex-1 overflow-x-auto'
+      }
+    >
+      {tabs.map((tab, idx) => (
+        <button
+          key={tab.id}
+          ref={(el) => { tabRefs.current[idx] = el; }}
+          role="tab"
+          id={`tab-${tab.id}`}
+          aria-selected={activeTab === tab.id}
+          aria-controls={`panel-${tab.id}`}
+          onClick={() => onTabChange(tab.id)}
+          onKeyDown={(e) => handleKeyDown(e, idx)}
+          className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
+            handoff ? 'tabbar-label-enter' : ''
+          } text-brand-black`}
+        >
+          {tab.label}
+        </button>
+      ))}
+
+      {/* Animated green underline indicator */}
+      <div
+        className={`absolute bottom-0 ${shellTabsHost ? 'h-[3px]' : 'h-0.5'} bg-brand-green ${motion}`}
+        style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
+      />
+    </div>
+  );
+
+  /* The attached region. Always mounted — a conditional mount would snap
+      open with no transition — and animated 0fr↔1fr on the same const as the
+      indicator, off the same tab state, so the pair moves as one gesture.
+      The host reserves its full height from the first frame, so a toolbar
+      tray that only arrives once its data lands drops in without shifting
+      the content below.
+      Transparent and centred: whatever portals in (NoteEditor's tray)
+      brings its own pill chrome and shrinks to its content, with the page
+      showing through on either side.
+      Unarmed on the first frame (see `armed`): a bar that mounts already-open
+     must START open, not unfold into place. */
+  const attached = (
+    <div
+      className={`grid ${
+        armed ? `transition-[grid-template-rows] ${TAB_MOTION}` : ''
+      } motion-reduce:transition-none ${
+        attachedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+      }`}
+    >
+      <div className="overflow-hidden">
+        {/* The host translates -100% in step with the row collapsing above it,
+            on the same duration/curve, so its bottom edge tracks the closing
+            edge exactly: the tray visibly SLIDES up behind the nav line and
+            drops back down from under it, rather than standing still while
+            the shrinking row wipes it from the bottom. Unarmed first frame:
+            no transform transition, so a bar that mounts open/closed starts
+            there without playing the slide. */}
+        <div
+          ref={setHost}
+          className={`flex items-start justify-center motion-reduce:[transition:none!important] ${
+            attachedOpen ? 'translate-y-0' : '-translate-y-full'
+          }`}
+          style={{
+            height: TAB_ROW_H,
+            // `translate`, not `transform`: Tailwind v4's translate-y-*
+            // utilities set the standalone CSS translate property.
+            transition: armed ? 'translate 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : undefined,
+          }}
+        />
+      </div>
+    </div>
+  );
+
+  // In the shell: the tabs go to the band, and all that is left here is the
+  // painted clearance (so the content doesn't scroll through the gap above the
+  // tray) and the tray itself.
+  if (shellTabsHost) {
+    return (
+      <>
+        {createPortal(tablist, shellTabsHost)}
+        <div className={`sticky ${stickyTop} ${edgeClass}`}>
+          <div aria-hidden className="h-6 bg-glass" />
+          {attached}
+        </div>
+      </>
+    );
+  }
+
   return (
     <div className={`sticky ${stickyTop} ${edgeClass}`}>
       {/* The clearance above the row, painted and part of the sticky box, so
@@ -125,89 +235,15 @@ export default function PageTabBar({
       {/* -ml-6 bleeds the bar left into <main>'s 24px gutter so its bottom
           border starts at the sidebar's right edge; pl-8 puts the first tab's
           label back on that gutter, so the words line up with the content.
-          The gutter is padding on the scrollport, not overflow, so nothing is
-          clipped.
           Border + background live on the TAB ROW alone — the attached region
           below is transparent, so the toolbar tray it hosts reads as a pill
           hanging off the nav line with the page visible beside it, not as a
           second full-width bar. */}
-      {/* Tabs pinned to the pane's far left, next to the sidebar and out of the
-          way of the centred content column below (the attached region centres
-          its toolbar tray over that column, NoteEditor). The tablist keeps
-          flex-1 so it spans the row —
-          a shrink-to-fit box with overflow-x-auto grows a stray scrollbar. */}
       <div className="flex w-full items-center border-b border-border-subtle bg-glass pl-8 pr-1">
-        <div
-          role="tablist"
-          aria-label={ariaLabel}
-          className="relative flex flex-1 overflow-x-auto"
-        >
-          {tabs.map((tab, idx) => (
-            <button
-              key={tab.id}
-              ref={(el) => { tabRefs.current[idx] = el; }}
-              role="tab"
-              id={`tab-${tab.id}`}
-              aria-selected={activeTab === tab.id}
-              aria-controls={`panel-${tab.id}`}
-              onClick={() => onTabChange(tab.id)}
-              onKeyDown={(e) => handleKeyDown(e, idx)}
-              className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
-                handoff ? 'tabbar-label-enter' : ''
-              } text-brand-black`}
-            >
-              {tab.label}
-            </button>
-          ))}
-
-          {/* Animated green underline indicator */}
-          <div
-            className={`absolute bottom-0 h-0.5 bg-brand-green ${motion}`}
-            style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
-          />
-        </div>
+        {tablist}
       </div>
 
-      {/* The attached region. Always mounted — a conditional mount would snap
-          open with no transition — and animated 0fr↔1fr on the same const as the
-          indicator, off the same tab state, so the pair moves as one gesture.
-          The host reserves its full h-12 from the first frame, so a toolbar
-          tray that only arrives once its data lands drops in without shifting
-          the content below.
-          Transparent and centred: whatever portals in (NoteEditor's tray)
-          brings its own pill chrome and shrinks to its content, with the page
-          showing through on either side.
-          Unarmed on the first frame (see `armed`): a bar that mounts already-open
-          must START open, not unfold into place. */}
-      <div
-        className={`grid ${
-          armed ? `transition-[grid-template-rows] ${TAB_MOTION}` : ''
-        } motion-reduce:transition-none ${
-          attachedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-        }`}
-      >
-        <div className="overflow-hidden">
-          {/* The host translates -100% in step with the row collapsing above it,
-              on the same duration/curve, so its bottom edge tracks the closing
-              edge exactly: the tray visibly SLIDES up behind the tab row and
-              drops back down from under it, rather than standing still while
-              the shrinking row wipes it from the bottom. Unarmed first frame:
-              no transform transition, so a bar that mounts open/closed starts
-              there without playing the slide. */}
-          <div
-            ref={setHost}
-            className={`flex items-start justify-center motion-reduce:[transition:none!important] ${
-              attachedOpen ? 'translate-y-0' : '-translate-y-full'
-            }`}
-            style={{
-              height: TAB_ROW_H,
-              // `translate`, not `transform`: Tailwind v4's translate-y-*
-              // utilities set the standalone CSS translate property.
-              transition: armed ? 'translate 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : undefined,
-            }}
-          />
-        </div>
-      </div>
+      {attached}
     </div>
   );
 }
