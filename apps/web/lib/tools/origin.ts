@@ -23,6 +23,8 @@
  * `toolsHostDecision` — the whole of the proxy's host split — is unit-testable.
  */
 
+import { logger } from '@/lib/logger'
+
 /** Every path the tools host is allowed to answer sits under this prefix. */
 export const TOOL_RUNTIME_PATH_PREFIX = '/api/tools/runtime/'
 
@@ -70,9 +72,9 @@ export function toolsOrigin(): string | null {
   if (sameCanonicalOrigin(origin, appOrigin())) {
     if (!warnedSameOriginAsApp) {
       warnedSameOriginAsApp = true
-      console.warn(
-        'TOOLS_ORIGIN is the same origin as NEXT_PUBLIC_APP_URL — falling back to the same-origin sandbox instead of splitting hosts.',
-      )
+      logger.warn('tools.origin.same_as_app', {
+        message: 'TOOLS_ORIGIN is the same origin as NEXT_PUBLIC_APP_URL — falling back to the same-origin sandbox instead of splitting hosts.',
+      })
     }
     return null
   }
