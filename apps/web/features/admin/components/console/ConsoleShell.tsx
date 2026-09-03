@@ -4,7 +4,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { clsx } from 'clsx';
-import SaveStatus from '@/components/ui/SaveStatus';
+import SaveStatus from './SaveStatus';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
 import { TAB_MOTION } from '@/components/ui/tabMotion';
 import PaneTopScrollbarMask from '@/features/shared/components/pane/PaneTopScrollbarMask';
