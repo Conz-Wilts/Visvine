@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
+import { useHoverIntent } from '@/features/shared/hooks/useHoverIntent';
 import { useSession } from '@/features/auth/lib/auth-client';
 import { PlusIcon, SettingsIcon, UsersIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
@@ -43,6 +44,10 @@ export default function SpaceSelector() {
   const canManage = Boolean(currentSpace) && (isAdmin || session?.user?.isSuperAdmin === true);
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
+  // A band row puts the switcher away only once the pointer has rested on it:
+  // the pointer heading right, out of the space's row and into the list, may
+  // cross a row of the band on its way.
+  const intent = useHoverIntent();
   const [creating, setCreating] = useState(false);
   const bandRef = useRef<HTMLDivElement>(null);
   // A pinned band closes on the next click outside it, the way the account
@@ -202,7 +207,7 @@ export default function SpaceSelector() {
           style={{ gap: ITEM_GAP, paddingTop: ITEM_GAP * 2, paddingBottom: ITEM_GAP, paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}
         >
           {actions.map(({ key, label, icon, onClick, onHover }) => (
-            <div key={key} onMouseEnter={onHover}>
+            <div key={key} {...intent(onHover)}>
               <Row
                 expanded={expanded}
                 reduced={reduced}

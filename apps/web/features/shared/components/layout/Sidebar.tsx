@@ -11,6 +11,7 @@ import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_PANE_TOP
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE, switcherCloseMs } from "@/features/shared/contexts/SidebarContext";
+import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
 import Modal from "@/components/ui/Modal";
 import UserMenu from "@/features/auth/components/UserMenu";
 import CreatePanel from "@/features/create/components/CreatePanel";
@@ -80,11 +81,14 @@ const BAND_TOP = ITEM_GAP;
 // The rail's width, opening and closing — and the motion of anything that
 // must stay glued to its edge.
 const RAIL_MOTION_MS = 300;
-// A leave reported this long after the rail finished shutting under a panel
-// is still taken to be the panel moving, not the pointer (Sidebar#leaveCard).
-const LEAVE_GRACE_MS = 400;
-// How far a pointer stranded beside the card may drift before that counts as
-// walking away from it.
+// After the rail has shut under a panel, the pointer is given this much
+// longer before where it stands is judged (Sidebar#beginSlide).
+const LEAVE_GRACE_MS = 150;
+// A pointer left standing this far off the card was not reaching for the
+// panel: the panels shut at once.
+const LEAVE_FAR_PX = 200;
+// A pointer left nearer than that may drift this much further away before
+// that counts as walking off.
 const LEAVE_SLACK_PX = 40;
 const RAIL_MOTION = `${RAIL_MOTION_MS}ms cubic-bezier(0.25, 0.1, 0.25, 1)`;
 export default function Sidebar() {
@@ -94,6 +98,10 @@ export default function Sidebar() {
   const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen, switcherParentId } = useSidebar();
   const { currentSpace, isAdmin, loading: spaceLoading } = useSpace();
   const { setHost, dockTopInset } = useContextPanel();
+  // Rows that change which panel is out act only once the pointer has rested
+  // on them: a pointer crossing the rail on its way into a panel must not
+  // swap or shut what it is heading for.
+  const intent = useHoverIntent();
 
   const ease = DOCK_EASE;
 
@@ -205,37 +213,70 @@ export default function Sidebar() {
   useEffect(() => cancelRelease, []);
 
   // The rail shutting under an open panel pulls the panel left, and a pointer
-  // that had gone deep into the panel can be left standing on the page when
-  // the panel arrives — a mouseleave the person never made (the browser
-  // reports one once the box has moved out from under a still pointer). Such
-  // a leave — during the slide or just after it, at a point the card covered
-  // before it shrank — does not shut the panels. Instead the pointer is
-  // watched: back onto the card and the card's own leave takes over again;
-  // away from it, and the panels shut as they would have.
+  // moving into the panel meets a box travelling the other way: it can end up
+  // off the card without ever having walked off it, and the browser reports a
+  // leave for that. So while the slide runs nothing is decided — leaves are
+  // ignored and the pointer is only tracked — and once it has settled the
+  // pointer's position is what counts: on the card, and the card's own leave
+  // takes over again; beside it, and the panels shut only if it then moves
+  // further away rather than back; far from it, and they shut at once.
   const asideRef = useRef<HTMLElement>(null);
-  const collapseUntil = useRef(0);
-  const unwatch = useRef<(() => void) | null>(null);
-  const stopWatching = () => { unwatch.current?.(); unwatch.current = null; };
-  useEffect(() => stopWatching, []);
-  const leaveCard = (e: React.MouseEvent) => {
+  const phase = useRef<"slide" | "watch" | null>(null);
+  const cleanup = useRef<(() => void) | null>(null);
+  const stopTracking = () => { cleanup.current?.(); cleanup.current = null; phase.current = null; };
+  useEffect(() => stopTracking, []);
+  const distanceTo = (box: DOMRect, x: number, y: number) =>
+    Math.hypot(Math.max(box.left - x, 0, x - box.right), Math.max(box.top - y, 0, y - box.bottom));
+  // The card as the pointer meets it: the rail's column and whichever panel
+  // boxes are open beside it. The panels are absolute, so the aside's own box
+  // is only the rail; a parked panel is pointer-events-none and not counted.
+  const cardBox = (): DOMRect | null => {
+    const aside = asideRef.current;
+    if (!aside) return null;
+    let box: DOMRect | null = null;
+    for (const child of Array.from(aside.children)) {
+      if (child.classList.contains("pointer-events-none")) continue;
+      const r = child.getBoundingClientRect();
+      if (r.width === 0) continue;
+      box = box
+        ? new DOMRect(Math.min(box.left, r.left), Math.min(box.top, r.top), Math.max(box.right, r.right) - Math.min(box.left, r.left), Math.max(box.bottom, r.bottom) - Math.min(box.top, r.top))
+        : r;
+    }
+    return box;
+  };
+  const beginSlide = (x: number, y: number) => {
+    stopTracking();
+    phase.current = "slide";
+    const last = { x, y };
+    const track = (m: MouseEvent) => { last.x = m.clientX; last.y = m.clientY; };
+    document.addEventListener("mousemove", track);
+    const settle = setTimeout(() => {
+      document.removeEventListener("mousemove", track);
+      cleanup.current = null;
+      const box = cardBox();
+      const d0 = box ? distanceTo(box, last.x, last.y) : Infinity;
+      if (d0 === 0) return stopTracking();
+      if (d0 > LEAVE_FAR_PX) { stopTracking(); return shutRailPanels(); }
+      phase.current = "watch";
+      const watch = (m: MouseEvent) => {
+        const now = cardBox();
+        const d = now ? distanceTo(now, m.clientX, m.clientY) : Infinity;
+        if (d === 0) return stopTracking();
+        if (d < d0 + LEAVE_SLACK_PX) return;
+        stopTracking();
+        shutRailPanels();
+      };
+      document.addEventListener("mousemove", watch);
+      cleanup.current = () => document.removeEventListener("mousemove", watch);
+    }, RAIL_MOTION_MS + LEAVE_GRACE_MS);
+    cleanup.current = () => { document.removeEventListener("mousemove", track); clearTimeout(settle); };
+  };
+  const leaveCard = () => {
     if (!railPanelOpen) return;
     if (createOpen && createFormOpen) return;
-    const sliding = Date.now() < collapseUntil.current + LEAVE_GRACE_MS;
-    const footprint = EXPANDED_W + RAIL_PANEL_W * (switcherParentId ? 2 : 1);
-    if (!sliding || e.clientX > footprint) return shutRailPanels();
-    const from = { x: e.clientX, y: e.clientY };
-    stopWatching();
-    const onMove = (m: MouseEvent) => {
-      const box = asideRef.current?.getBoundingClientRect();
-      if (box && m.clientX >= box.left && m.clientX <= box.right && m.clientY >= box.top && m.clientY <= box.bottom) {
-        return stopWatching();
-      }
-      if (Math.hypot(m.clientX - from.x, m.clientY - from.y) < LEAVE_SLACK_PX) return;
-      stopWatching();
-      shutRailPanels();
-    };
-    document.addEventListener("mousemove", onMove);
-    unwatch.current = () => document.removeEventListener("mousemove", onMove);
+    if (phase.current === "slide") return;
+    stopTracking();
+    shutRailPanels();
   };
 
   // Honour reduced-motion: collapse the width/margin transitions below to 0s.
@@ -282,11 +323,11 @@ export default function Sidebar() {
         >
           {!noSpace && (
             <div
-              onMouseEnter={() => {
+              {...intent(() => {
                 // One panel at a time: the two share the edge of the rail.
                 setSwitcherOpen(false);
                 if (!createOpen) createSurface();
-              }}
+              })}
             >
             <Row
               expanded={expanded}
@@ -316,7 +357,7 @@ export default function Sidebar() {
           )}
 
           {GLOBAL_NAV.map(({ key, href, label, icon }) => (
-            <div key={key} onMouseEnter={leaveCreate}>
+            <div key={key} {...intent(leaveCreate)}>
             <Row
               expanded={expanded}
               reduced={reduced}
@@ -334,7 +375,7 @@ export default function Sidebar() {
           more tools than the viewport is tall; the head and foot never move. */}
       <nav
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden border-t"
-        onMouseEnter={leaveCreate}
+        {...intent(leaveCreate)}
         style={{
           paddingLeft: ROW_INSET,
           paddingRight: ROW_INSET,
@@ -381,7 +422,7 @@ export default function Sidebar() {
       {moreNav.length > 0 && (
         <div
           className="flex shrink-0 flex-col border-t"
-          onMouseEnter={leaveCreate}
+          {...intent(leaveCreate)}
           style={{
             gap: ITEM_GAP,
             marginTop: BAND_TOP,
@@ -417,7 +458,7 @@ export default function Sidebar() {
           the band as rail rows rather than in a menu over the page. */}
       <div
         className="flex shrink-0 flex-col border-t"
-        onMouseEnter={leaveCreate}
+        {...intent(leaveCreate)}
         style={{
           marginTop: BAND_TOP,
           paddingTop: ITEM_GAP,
@@ -443,7 +484,7 @@ export default function Sidebar() {
       // Create new row), so they shut when the pointer leaves the whole card —
       // rail and panel both. A Create form being filled in is the exception:
       // it holds the card open until it is done or stepped back from.
-      onMouseEnter={stopWatching}
+      onMouseEnter={() => { if (phase.current === "watch") stopTracking(); }}
       onMouseLeave={leaveCard}
     >
       {/* The card runs the viewport's full height, flush against the left and
@@ -474,8 +515,8 @@ export default function Sidebar() {
           onMouseEnter={() => { cancelRelease(); setHovered(true); }}
           // Leaving the rail shuts it, even into a panel beside it: the panel
           // travels left with the rail's edge, and the card ends up narrower.
-          onMouseLeave={() => {
-            if (railPanelOpen && expanded && !reduced) collapseUntil.current = Date.now() + RAIL_MOTION_MS;
+          onMouseLeave={(e) => {
+            if (railPanelOpen && expanded && !reduced) beginSlide(e.clientX, e.clientY);
             setHovered(false);
           }}
         >
