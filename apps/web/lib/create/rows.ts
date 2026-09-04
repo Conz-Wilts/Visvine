@@ -26,7 +26,11 @@ export type CreateRow =
   | { kind: 'type'; id: CreateKind; label: string; color: string }
   /** A type the space invented for its notes (`scope: 'note'`). */
   | { kind: 'custom'; name: string; color: string }
-  /** The search names a type nobody has made yet. */
+  /**
+   * A type the space does not have. `name` is what the search named it; the
+   * standing row at the top of the unsearched list carries none, and the form
+   * asks for it.
+   */
   | { kind: 'new-type'; name: string }
 
 export type CreateFlow =
@@ -134,10 +138,13 @@ function configNameOf(row: CreateRow): string | null {
 }
 
 /**
- * The rows in display order. With no query: the current page's kinds first,
- * the rest of the built-ins in their own order, a hairline, then the space's
- * types. With a query: one flat ranked list, plus a "New type" row when the
- * query is a legal name nobody has used.
+ * The rows in display order. With no query: **New type** first — making one is
+ * a thing you do here, so it is offered rather than discovered by typing a name
+ * nothing answers to — then the current page's kinds, the rest of the built-ins
+ * in their own order, a hairline, then the space's types. With a query: one
+ * flat ranked list, and the "New type" row last, named, when the query is a
+ * legal name nobody has used — the ranked matches keep the top, so Enter still
+ * picks what was searched for.
  */
 export function createRows(input: CreateRowsInput): CreateRowList {
   const builtIns = builtInRows(input)
@@ -150,8 +157,11 @@ export function createRows(input: CreateRowsInput): CreateRowList {
       .map((id) => builtIns.find((r) => r.kind === 'type' && r.id === id))
       .filter((r): r is CreateRow => Boolean(r))
     const rest = builtIns.filter((r) => !first.includes(r))
-    const rows = [...first, ...rest, ...customs]
-    return { rows, dividerAt: customs.length ? first.length + rest.length : null }
+    const starter = canCreateType('context', { featureConfig: input.featureConfig, isAdmin: input.isAdmin })
+      ? ([{ kind: 'new-type', name: '' }] as CreateRow[])
+      : []
+    const rows = [...starter, ...first, ...rest, ...customs]
+    return { rows, dividerAt: customs.length ? rows.length - customs.length : null }
   }
 
   // A synonym resolves to the type it names, so "company" finds Space even
@@ -184,6 +194,15 @@ function newTypeRow(input: CreateRowsInput, matches: CreateRow[]): CreateRow | n
   const name = merged.type.name
   if (matches.some((r) => rowLabel(r).toLowerCase() === name.toLowerCase())) return null
   return { kind: 'new-type', name }
+}
+
+/**
+ * The row the keyboard starts on: the first real kind, never the standing
+ * "New type" row — Enter on an untouched panel must not start inventing a type.
+ */
+export function firstPickIndex(list: CreateRowList): number {
+  const i = list.rows.findIndex((row) => row.kind !== 'new-type')
+  return i === -1 ? 0 : i
 }
 
 /** The draft surface with a type preset, and a folder when one was in hand. */

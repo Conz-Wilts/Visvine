@@ -7,7 +7,7 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { ROW_H } from '@/features/shared/components/layout/railRow';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
-import { createRows, flowFor, rowForKind, rowKey, rowLabel, type CreateKind, type CreateRow } from '@/lib/create/rows';
+import { createRows, firstPickIndex, flowFor, rowForKind, rowKey, rowLabel, type CreateKind, type CreateRow } from '@/lib/create/rows';
 import { aliasesForType, type SpaceAlias, type SpaceFeatureConfig } from '@/lib/types';
 import TypeList, { Mark } from './TypeList';
 import type { InlineFormProps } from './forms/shared';
@@ -16,6 +16,7 @@ import ChannelForm from './forms/ChannelForm';
 import { PersonForm, ResourceForm, SpaceRecordForm } from './forms/EntityForm';
 import FileForm from './forms/FileForm';
 import FolderForm from './forms/FolderForm';
+import NewAliasForm from './forms/NewAliasForm';
 import NewTypeForm from './forms/NewTypeForm';
 import SectionForm from './forms/SectionForm';
 import ToolForm from './forms/ToolForm';
@@ -33,7 +34,14 @@ const FORMS: Partial<Record<CreateKind, ComponentType<InlineFormProps>>> = {
   folder: FolderForm,
 };
 
-type Step = { kind: 'pick' } | { kind: 'form'; row: CreateRow; alias?: SpaceAlias };
+type Step =
+  | { kind: 'pick' }
+  | { kind: 'form'; row: CreateRow; alias?: SpaceAlias }
+  /** Naming an alias for `row`, on the way into that kind's own form. */
+  | { kind: 'new-alias'; row: CreateRow };
+
+/** The kinds whose form takes an alias, and so whose aliases the list opens. */
+const ALIAS_KINDS: readonly CreateKind[] = ['person', 'space', 'resource'];
 
 /**
  * Create new — a panel of the rail rather than a page: a layer in the rail's
@@ -73,7 +81,7 @@ export default function CreatePanel() {
     const row = defaultType ? rowForKind(defaultType, rowsInput) : null;
     setStep(row ? { kind: 'form', row } : { kind: 'pick' });
     setQuery('');
-    setActive(0);
+    setActive(firstPickIndex(createRows({ ...rowsInput, query: '' })));
     // rowsInput is read once at open; a later config change must not reset the step.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, defaultType]);
@@ -91,26 +99,35 @@ export default function CreatePanel() {
     }
   }, [isOpen, step.kind, reduced]);
 
-  useEffect(() => { setActive(0); }, [query]);
+  useEffect(() => { setActive(firstPickIndex(list)); }, [list]);
 
   // The card holds the panel open while a form is up (Sidebar) — leaving with
   // the pointer must not throw away what was typed.
-  useEffect(() => { setFormOpen(isOpen && step.kind === 'form'); }, [isOpen, step.kind, setFormOpen]);
+  useEffect(() => { setFormOpen(isOpen && step.kind !== 'pick'); }, [isOpen, step.kind, setFormOpen]);
 
   // Navigating away puts the real sidebar panel back.
   useEffect(() => { close(); }, [pathname, close]);
 
   const back = useCallback(() => setStep({ kind: 'pick' }), []);
-  useEscapeKey(step.kind === 'form' ? back : close, isOpen);
+  useEscapeKey(step.kind === 'pick' ? close : back, isOpen);
 
   // The kinds whose form takes an alias — the entity forms — and the space's
   // aliases for each, so the list can open them as a tree.
   const aliasesOf = useCallback(
     (row: CreateRow): SpaceAlias[] => {
-      if (row.kind !== 'type' || !['person', 'space', 'resource'].includes(row.id)) return [];
+      if (row.kind !== 'type' || !ALIAS_KINDS.includes(row.id)) return [];
       return aliasesForType((currentSpace?.aliases as SpaceAlias[] | undefined) ?? [], row.label);
     },
     [currentSpace],
+  );
+
+  // Minting one is the admin's — a Person alias IS the space's permission
+  // vocabulary — so a member sees the aliases and not the row that adds one.
+  // The server is the real gate (/api/aliases); this just stops us offering a
+  // form that 403s.
+  const canAddAlias = useCallback(
+    (row: CreateRow): boolean => isAdmin && row.kind === 'type' && ALIAS_KINDS.includes(row.id),
+    [isAdmin],
   );
 
   const pick = useCallback(
@@ -134,6 +151,12 @@ export default function CreatePanel() {
 
   const onDone = useCallback((href: string) => { close(); router.push(href); }, [close, router]);
 
+  // A new alias is not a destination: it lands in its kind's form, worn.
+  const onAliasCreated = useCallback((row: CreateRow, alias: SpaceAlias) => {
+    setStep({ kind: 'form', row, alias });
+  }, []);
+
+  const aliasRow = step.kind === 'new-alias' ? step.row : null;
   const formRow = step.kind === 'form' ? step.row : null;
   const formAlias = step.kind === 'form' ? step.alias : undefined;
   const TypedForm = formRow?.kind === 'type' ? FORMS[formRow.id] : undefined;
@@ -164,7 +187,7 @@ export default function CreatePanel() {
           rail row tall and level with the rail's head, because this is the
           rail continuing — the rows below line up with the rail's. */}
       <div className="flex flex-shrink-0 items-center px-3" style={{ height: ROW_H }}>
-        {formRow ? (
+        {formRow || aliasRow ? (
           <div className="flex min-h-[40px] w-full items-center gap-2">
             <button
               type="button"
@@ -177,9 +200,13 @@ export default function CreatePanel() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <Mark row={formRow} />
+            <Mark row={(formRow ?? aliasRow)!} />
             <span className="truncate text-sm font-semibold text-text-primary">
-              {formRow.kind === 'new-type' ? formRow.name : rowLabel(formRow)}
+              {aliasRow
+                ? `New ${rowLabel(aliasRow).toLowerCase()} alias`
+                : formRow!.kind === 'new-type'
+                  ? formRow!.name || 'New type'
+                  : rowLabel(formRow!)}
             </span>
           </div>
         ) : (
@@ -202,7 +229,17 @@ export default function CreatePanel() {
       </div>
 
       <div className="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-3">
-        {formRow && currentSpace && (TypedForm || formRow.kind === 'new-type') ? (
+        {aliasRow && currentSpace ? (
+          <div className="px-3 pt-1">
+            <NewAliasForm
+              key={`alias:${rowKey(aliasRow)}`}
+              spaceId={currentSpace.id}
+              nodeType={rowLabel(aliasRow)}
+              accent={aliasRow.kind === 'new-type' ? 'var(--theme-accent-color, #78d870)' : aliasRow.color}
+              onCreated={(alias) => onAliasCreated(aliasRow, alias)}
+            />
+          </div>
+        ) : formRow && currentSpace && (TypedForm || formRow.kind === 'new-type') ? (
           <div className="px-3 pt-1">
             {formRow.kind === 'new-type' ? (
               <NewTypeForm key={rowKey(formRow)} {...formProps(formRow, currentSpace)} name={formRow.name} />
@@ -211,7 +248,15 @@ export default function CreatePanel() {
             ) : null}
           </div>
         ) : (
-          <TypeList list={list} active={active} aliasesOf={aliasesOf} onHover={setActive} onPick={pick} />
+          <TypeList
+            list={list}
+            active={active}
+            aliasesOf={aliasesOf}
+            canAddAlias={canAddAlias}
+            onHover={setActive}
+            onPick={pick}
+            onNewAlias={(row) => setStep({ kind: 'new-alias', row })}
+          />
         )}
       </div>
     </aside>

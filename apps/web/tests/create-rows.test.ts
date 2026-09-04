@@ -1,12 +1,20 @@
 // The Create panel's list and its routing table, kept honest: every kind
-// resolves to a flow, the page you are on ranks its kinds first, a search
-// finds a type by its synonym, and "New type" appears only for a name nobody
-// has used.
+// resolves to a flow, "New type" leads the unsearched list, the page you are
+// on ranks its kinds first, a search finds a type by its synonym, and a named
+// "New type" row appears only for a name nobody has used.
 // Run: pnpm --filter @visvine/web exec node --import tsx --test tests/create-rows.test.ts
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { createRows, draftHref, flowFor, rowForKind, rowLabel, type CreateRow } from '@/lib/create/rows'
+import {
+  createRows,
+  draftHref,
+  firstPickIndex,
+  flowFor,
+  rowForKind,
+  rowLabel,
+  type CreateRow,
+} from '@/lib/create/rows'
 import type { NodeTypeConfig, SpaceFeatureConfig } from '@/lib/types'
 
 const CUSTOM: NodeTypeConfig[] = [
@@ -26,9 +34,16 @@ const admin = (over: Partial<Parameters<typeof createRows>[0]> = {}) => ({
 
 const labels = (rows: CreateRow[]) => rows.map(rowLabel)
 
+test('"New type" leads the unsearched list, and the keyboard starts below it', () => {
+  const list = createRows(admin())
+  assert.deepEqual(list.rows[0], { kind: 'new-type', name: '' })
+  assert.equal(firstPickIndex(list), 1)
+  assert.equal(list.rows[1]?.kind, 'type')
+})
+
 test('the page you are on ranks its kinds first, then a hairline, then the space types', () => {
   const { rows, dividerAt } = createRows(admin({ pathname: '/events' }))
-  assert.equal(labels(rows)[0], 'Event')
+  assert.equal(labels(rows)[1], 'Event')
   assert.equal(dividerAt, rows.length - 2)
   assert.deepEqual(labels(rows).slice(dividerAt!), ['Deal', 'Playbook'])
 })
@@ -53,15 +68,18 @@ test('a search is one flat ranked list and resolves synonyms', () => {
   assert.equal(labels(createRows(admin({ query: 'pl' })).rows)[0], 'Playbook')
 })
 
-test('"New type" appears only for a legal, unused name', () => {
+test('a NAMED "New type" row appears only for a legal, unused name', () => {
   const fresh = createRows(admin({ query: 'memo' })).rows.at(-1)
   assert.deepEqual(fresh, { kind: 'new-type', name: 'Memo' })
   // An existing type, a built-in's synonym, a reserved word and an illegal
   // name each get no such row.
-  for (const q of ['playbook', 'org', 'index', 'tool', 'a/b', '  ']) {
+  for (const q of ['playbook', 'org', 'index', 'tool', 'a/b']) {
     const rows = createRows(admin({ query: q })).rows
     assert.ok(!rows.some((r) => r.kind === 'new-type'), q)
   }
+  // Whitespace is not a search: the list is the unsearched one, so the
+  // standing row leads it and carries no name.
+  assert.deepEqual(createRows(admin({ query: '  ' })).rows[0], { kind: 'new-type', name: '' })
 })
 
 test('every row resolves to a flow, and the prose kinds go to the draft', () => {

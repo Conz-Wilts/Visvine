@@ -40,11 +40,13 @@ export function useAutoFocus<T extends HTMLElement>(delayMs: number) {
 }
 
 /**
- * Runs a form's write once, holds its error, and hands the landing page to the
- * panel. A form calls `submit` from its <form onSubmit>; the footer reads the
- * rest.
+ * Runs a form's write once, holds its error, and hands what the write produced
+ * to the panel — the page to land on, for the forms that end in a navigation,
+ * and the thing that was made for the ones that stay (a new alias, which the
+ * panel carries straight into its kind's form). A form calls `submit` from its
+ * <form onSubmit>; the footer reads the rest.
  */
-export function useCreateSubmit(run: () => Promise<string>, onDone: (href: string) => void) {
+export function useCreateSubmit<T = string>(run: () => Promise<T>, onDone: (result: T) => void) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submit = useCallback(async () => {
