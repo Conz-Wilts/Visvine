@@ -6,7 +6,7 @@ import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/Sideb
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { ITEM_GAP, ROW_H, ROW_INSET } from '@/features/shared/components/layout/railRow';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
-import { SpaceListRow, SubspaceRow } from '@/features/spaces/components/SpaceListRow';
+import { LIST_AVATAR_CENTER, LIST_AVATAR_PX, SpaceListRow, SubspaceRow } from '@/features/spaces/components/SpaceListRow';
 import { TreeSpine } from '@/components/ui/TreeChrome';
 import { scoreName } from '@/lib/rankName';
 import { spaceBranches } from '@/lib/spaces/subspaces';
@@ -35,10 +35,8 @@ import { spaceBranches } from '@/lib/spaces/subspaces';
  * (docs/sub-spaces.md), so nothing under a row opens further. The branch the
  * current space is in starts open, so where you are is on screen.
  */
-// TreeSpine draws its line 14px in (the tree glyph's centre); the rail's
-// avatar is a `md` SpaceAvatar, 32px, centred in a ROW_H cell.
+// TreeSpine draws its line 14px in (the tree glyph's centre).
 const SPINE_DEFAULT_ML = 14;
-const AVATAR_MD_PX = 32;
 
 export default function SpaceSwitcherPanel() {
   const { switcherOpen: isOpen, setSwitcherOpen, reduced } = useSidebar();
@@ -162,11 +160,11 @@ export default function SpaceSwitcherPanel() {
                       onToggle={() => toggle(space.id)}
                     />
                     {open && (
-                      // The spine sits under the centre of the parent's avatar
-                      // (ROW_H / 2), not TreeSpine's default 14px, and its stem
-                      // climbs from the branch's top to the avatar's bottom edge.
-                      <div style={{ marginLeft: ROW_H / 2 - SPINE_DEFAULT_ML }}>
-                        <TreeSpine animate={!reduced} stem={ROW_H / 2 - AVATAR_MD_PX / 2}>
+                      // The spine sits under the centre of the parent's avatar,
+                      // not TreeSpine's default 14px, and its stem climbs from
+                      // the branch's top to the avatar's bottom edge.
+                      <div style={{ marginLeft: LIST_AVATAR_CENTER - SPINE_DEFAULT_ML }}>
+                        <TreeSpine animate={!reduced} stem={ROW_H / 2 - LIST_AVATAR_PX / 2}>
                           {children.map((child, i) => (
                             <SubspaceRow
                               key={child.id}

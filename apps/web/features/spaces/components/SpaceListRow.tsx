@@ -8,10 +8,20 @@ import { TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
 
 /** A sub-space row is shorter than its parent's: a line of a list under it. */
 const SUBSPACE_ROW_H = 56;
-/** The chevron's cell on a parent row: the row's left edge, in the air the
- *  glyph cell leaves beside its centred avatar, so the avatar and the name stay
- *  exactly where every other row's are. */
+/** The chevron's cell on a parent row: the row's left edge, ahead of the
+ *  avatar, so nothing else on the row moves whether or not a row has one. */
 const CHEVRON_W = 28;
+const AVATAR_PX = 40;
+const AVATAR_GAP = 8;
+/** The avatar's cell on a list row: the chevron's cell, the avatar, a gap.
+ *  Narrower than the rail's glyph cell — the rail shuts under the list, so the
+ *  avatar need not sit on the rail's column, and a tight cell keeps the name
+ *  close to its mark. */
+const LIST_CELL_W = CHEVRON_W + AVATAR_PX + AVATAR_GAP;
+/** Where the avatar's centre falls in the row — the switcher's spine hangs
+ *  from it. */
+export const LIST_AVATAR_CENTER = CHEVRON_W + AVATAR_PX / 2;
+export { AVATAR_PX as LIST_AVATAR_PX };
 
 /**
  * One space in the switcher's list. A rail row: the avatar centred in the
@@ -22,8 +32,7 @@ const CHEVRON_W = 28;
  * you are in carries a chevron at the row's far left, its own control:
  * pressing it opens the sub-spaces on a tree under the row (SubspaceRow, hung
  * on a TreeSpine by the switcher) and never picks the space, so opening a
- * branch and choosing its root are two targets rather than two gestures. It
- * sits in the glyph cell's leading air, so nothing else on the row moves.
+ * branch and choosing its root are two targets rather than two gestures.
  */
 export function SpaceListRow({
   space,
@@ -60,8 +69,10 @@ export function SpaceListRow({
           color: current ? 'var(--shell-fg-strong, #111827)' : 'var(--shell-fg-muted, #111827)',
         }}
       >
-        <span className="flex shrink-0 items-center justify-center" style={{ width: ROW_H, height: ROW_H }}>
-          <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" />
+        <span className="flex shrink-0 items-center justify-end" style={{ width: LIST_CELL_W, height: ROW_H, paddingRight: AVATAR_GAP }}>
+          {/* The same avatar the space wears at the rail's head — 40px on
+              10px corners — so the list reads as more of that row. */}
+          <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" rounded="rounded-[10px]" className="!w-10 !h-10 !text-base" />
         </span>
         <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: LABEL_ML }}>{space.name}</span>
         {current && check}
