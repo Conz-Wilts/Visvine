@@ -4,12 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { ITEM_GAP, LABEL_ML, ROW_CLASS, ROW_H, ROW_INSET, ROW_TEXT } from '@/features/shared/components/layout/railRow';
+import { ITEM_GAP, ROW_H, ROW_INSET } from '@/features/shared/components/layout/railRow';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
-import { ChevronRightIcon } from '@/features/shared/icons';
-import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
+import { SpaceListRow } from '@/features/spaces/components/SpaceListRow';
 import { scoreName } from '@/lib/rankName';
-import { nestSpaces } from '@/lib/spaces/subspaces';
+import { spaceBranches } from '@/lib/spaces/subspaces';
 
 /**
  * The space switcher — the search and the list of every space you are in — as
@@ -26,15 +25,17 @@ import { nestSpaces } from '@/lib/spaces/subspaces';
  * navigating away. No backdrop: a click-catcher portalled from here would
  * still be inside the card's React tree, and the card's mouseleave — the
  * close — would never fire over it.
+ *
+ * This column holds TOP-LEVEL spaces only. Pointing at one that has sub-spaces
+ * opens them in a column of their own beside this one (SubspacePanel) — the
+ * rail keeps widening rather than indenting, so a sub-space's row is as wide
+ * and as readable as its parent's.
  */
 export default function SpaceSwitcherPanel() {
-  const { switcherOpen: isOpen, setSwitcherOpen, reduced } = useSidebar();
+  const { switcherOpen: isOpen, setSwitcherOpen, switcherParentId, setSwitcherParentId, reduced } = useSidebar();
   const { currentSpace, joinedSpaces, setCurrentSpace } = useSpace();
   const pathname = usePathname();
   const [query, setQuery] = useState('');
-  // Parents folded shut, by id. A parent starts open: its sub-spaces are
-  // part of what you are in.
-  const [folded, setFolded] = useState<Set<string>>(() => new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   const close = () => setSwitcherOpen(false);
@@ -42,7 +43,8 @@ export default function SpaceSwitcherPanel() {
 
   // Opening focuses the search once the panel has slid out; closing clears it
   // after the slide, so the list does not visibly reset on its way behind the
-  // rail.
+  // rail. The sub-space column is already gone by then — closing the switcher
+  // sends it home first (SidebarContext), so the two never travel at once.
   useEffect(() => {
     if (isOpen) {
       const t = setTimeout(() => inputRef.current?.focus({ preventScroll: true }), reduced ? 0 : DOCK_MS);
@@ -56,34 +58,27 @@ export default function SpaceSwitcherPanel() {
     setSwitcherOpen(false);
   }, [pathname, setSwitcherOpen]);
 
-  // Rows in display order: every space you are in, ranked by the search when
-  // there is one, alphabetical otherwise — as a tree one level deep, each
-  // sub-space you are in under its parent when the parent is in the list too
-  // (lib/spaces/subspaces.ts#nestSpaces), folded away by the parent's
-  // chevron. A search flattens: the match is what you are looking at.
+  // Rows in display order: the spaces you are in, ranked by the search when
+  // there is one, alphabetical otherwise. One level — a sub-space is carried
+  // by its parent's branch (lib/spaces/subspaces.ts#spaceBranches) and drawn
+  // in the column beside this one. A search flattens the whole tree: the match
+  // is what you are looking for, wherever it sits.
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) {
-      const nested = nestSpaces([...joinedSpaces].sort((a, b) => a.name.localeCompare(b.name)));
-      const parents = new Set(nested.filter((r) => r.nested).map((r) => r.space.parentId as string));
-      return nested
-        .filter((r) => !r.nested || !folded.has(r.space.parentId as string))
-        .map((r) => ({ ...r, parent: parents.has(r.space.id) }));
+      return spaceBranches([...joinedSpaces].sort((a, b) => a.name.localeCompare(b.name)));
     }
     return joinedSpaces
       .map((space) => ({ space, score: scoreName(space.name, q) }))
       .filter(({ score }) => score > -Infinity)
       .sort((a, b) => b.score - a.score)
-      .map(({ space }) => ({ space, nested: false, parent: false }));
-  }, [joinedSpaces, query, folded]);
+      .map(({ space }) => ({ space, children: [] }));
+  }, [joinedSpaces, query]);
 
-  const toggleFold = (id: string) =>
-    setFolded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  // A search flattens, so nothing is holding a sub-space column open under it.
+  useEffect(() => {
+    if (query.trim()) setSwitcherParentId(null);
+  }, [query, setSwitcherParentId]);
 
   const select = (spaceId: string) => {
     setCurrentSpace(spaceId);
@@ -127,57 +122,26 @@ export default function SpaceSwitcherPanel() {
         </div>
 
         {/* Every space you are a member of, ranked by the search when there is
-            one. Each is a rail row — the avatar centred in the rail's glyph
-            cell, the name beside it at the rail's size — so the list reads as
-            the rail continuing rather than a menu beside it. A sub-space
-            steps its whole row in under its parent. */}
+            one. Pointing at a row with sub-spaces opens their column; pointing
+            at one without shuts whatever column was open, so the pair always
+            says which parent you are inside. */}
         <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-3" style={{ paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
           {rows.length === 0 ? (
             <div className="p-4 text-center text-sm text-text-muted">No spaces found</div>
           ) : (
             <div className="flex flex-col" style={{ gap: ITEM_GAP }}>
-            {rows.map(({ space, nested, parent }) => {
-              const current = currentSpace?.id === space.id;
-              const expanded = parent && !folded.has(space.id);
-              return (
-                <div key={space.id} className="relative">
-                <button
-                  type="button"
-                  onClick={() => select(space.id)}
-                  tabIndex={isOpen ? 0 : -1}
-                  className={`${ROW_CLASS} min-w-0 text-left ${current ? 'bg-surface-3 font-semibold' : 'font-normal'}`}
-                  style={{ height: ROW_H, paddingLeft: nested ? 24 : 0, paddingRight: parent ? ROW_H : 16, color: current ? 'var(--shell-fg-strong, #111827)' : 'var(--shell-fg-muted, #111827)' }}
-                >
-                  <span className="flex shrink-0 items-center justify-center" style={{ width: ROW_H, height: ROW_H }}>
-                    <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" />
-                  </span>
-                  <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: LABEL_ML }}>{space.name}</span>
-                  {current && (
-                    <svg className="h-4 w-4 shrink-0 text-brand-green" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </button>
-                {/* The chevron is its own control on the row's trailing cell,
-                    so folding the sub-spaces never switches space. */}
-                {parent && (
-                  <button
-                    type="button"
-                    aria-label={expanded ? `Hide ${space.name} sub-spaces` : `Show ${space.name} sub-spaces`}
-                    aria-expanded={expanded}
-                    tabIndex={isOpen ? 0 : -1}
-                    onClick={(e) => { e.stopPropagation(); toggleFold(space.id); }}
-                    className="absolute right-0 top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-5 [&>svg]:w-5"
-                    style={{ width: ROW_H, height: ROW_H }}
-                  >
-                    <span className="transition-transform duration-150" style={{ transform: expanded ? 'rotate(90deg)' : 'none' }}>
-                      <ChevronRightIcon />
-                    </span>
-                  </button>
-                )}
-                </div>
-              );
-            })}
+              {rows.map(({ space, children }) => (
+                <SpaceListRow
+                  key={space.id}
+                  space={space}
+                  current={currentSpace?.id === space.id}
+                  hasChildren={children.length > 0}
+                  open={switcherParentId === space.id}
+                  tabbable={isOpen}
+                  onSelect={() => select(space.id)}
+                  onOpen={() => setSwitcherParentId(children.length > 0 ? space.id : null)}
+                />
+              ))}
             </div>
           )}
         </div>

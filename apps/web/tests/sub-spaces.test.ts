@@ -7,7 +7,7 @@ import {
   flowsUp,
   graftSubspace,
   isSubspacePath,
-  nestSpaces,
+  spaceBranches,
   parentDenial,
   parseSubspacePath,
   rebaseMeta,
@@ -157,7 +157,7 @@ describe('rebaseNoteLinks', () => {
   })
 })
 
-describe('nestSpaces / spaceTrail — the switcher’s order', () => {
+describe('spaceBranches / spaceTrail — the switcher’s columns', () => {
   const spaces = [
     { id: 'alpha', parentId: null },
     { id: 'blackbird', parentId: null },
@@ -165,10 +165,14 @@ describe('nestSpaces / spaceTrail — the switcher’s order', () => {
     { id: 'ic', parentId: 'blackbird' },
     { id: 'orphan', parentId: 'elsewhere' },
   ]
-  it('puts each sub-space under its parent and an unlisted parent’s child on its own', () => {
+  it('carries each sub-space on its parent’s branch, and an unlisted parent’s child on its own', () => {
     assert.deepEqual(
-      nestSpaces(spaces).map((r) => `${r.nested ? '  ' : ''}${r.space.id}`),
-      ['alpha', 'blackbird', '  founders', '  ic', 'orphan'],
+      spaceBranches(spaces).map((b) => [b.space.id, b.children.map((c) => c.id)]),
+      [
+        ['alpha', []],
+        ['blackbird', ['founders', 'ic']],
+        ['orphan', []],
+      ],
     )
   })
   it('the trail is parent then child, or the space alone', () => {

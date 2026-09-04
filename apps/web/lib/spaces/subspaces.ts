@@ -173,12 +173,19 @@ export function spaceTrail<T extends { id: string; parentId?: string | null }>(s
 }
 
 /**
- * Order spaces for a list that nests sub-spaces under their parent: every
- * top-level space in the given order, each followed by its sub-spaces in the
- * same order. A sub-space whose parent is not in the list stands on its own,
- * where it would have been.
+ * Group spaces into the branches the switcher draws: every top-level space in
+ * the given order, each carrying the sub-spaces of it that are in the list. A
+ * sub-space whose parent is not in the list stands on its own as a branch with
+ * no children, where it would have been — the parent it names is not something
+ * the viewer can see.
+ *
+ * The switcher shows one level at a time: the branches in its column, and a
+ * branch's children in a column that opens beside it, so the list keeps
+ * widening rather than indenting.
  */
-export function nestSpaces<T extends { id: string; parentId?: string | null }>(spaces: T[]): Array<{ space: T; nested: boolean }> {
+export function spaceBranches<T extends { id: string; parentId?: string | null }>(
+  spaces: T[],
+): Array<{ space: T; children: T[] }> {
   const ids = new Set(spaces.map((s) => s.id))
   const childrenOf = new Map<string, T[]>()
   const roots: T[] = []
@@ -189,10 +196,5 @@ export function nestSpaces<T extends { id: string; parentId?: string | null }>(s
       roots.push(s)
     }
   }
-  const out: Array<{ space: T; nested: boolean }> = []
-  for (const r of roots) {
-    out.push({ space: r, nested: false })
-    for (const c of childrenOf.get(r.id) ?? []) out.push({ space: c, nested: true })
-  }
-  return out
+  return roots.map((space) => ({ space, children: childrenOf.get(space.id) ?? [] }))
 }
