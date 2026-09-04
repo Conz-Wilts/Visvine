@@ -35,6 +35,7 @@ import {
 } from '@/lib/eventUtils';
 import { RegistrationField } from '@/features/events/components/RegistrationField';
 import type { SpaceFeatureConfig, NBEvent, RSVPResponse } from '@/lib/types';
+import { useMapLink } from '../hooks/useMapLink';
 import { CalendarPlusIcon, CheckIcon, ClipboardListIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, Trash2Icon, UsersIcon, VideoIcon } from '@/features/shared/icons';
 import Select from '@/components/ui/Select';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
@@ -124,6 +125,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   }, [currentSpace, eventId]);
 
   useEffect(() => { loadEvent(); }, [loadEvent]);
+  const mapLink = useMapLink(event?.location);
 
   // Follow the viewer's theme colour from Settings → Appearance (not a
   // per-event color) so event pages match the rest of the app.
@@ -379,7 +381,14 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                         </>
                       ) : (
                         <>
-                          <div className="text-sm font-bold text-text-primary">{event.location?.label || 'Location TBA'}</div>
+                          {mapLink ? (
+                            <a href={mapLink} target="_blank" rel="noopener noreferrer"
+                               className="text-sm font-bold text-text-primary hover:underline">
+                              {event.location?.label}
+                            </a>
+                          ) : (
+                            <div className="text-sm font-bold text-text-primary">{event.location?.label || 'Location TBA'}</div>
+                          )}
                           {event.location?.address && <div className="text-xs text-text-muted mt-0.5">{event.location.address}</div>}
                           {isHybrid && (
                             <span className="inline-flex items-center gap-1 mt-1 text-xs text-text-muted">
@@ -389,8 +398,8 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                         </>
                       )}
                     </div>
-                    {!isVirtual && event.location?.label && (
-                      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location.address || event.location.label)}`}
+                    {!isVirtual && mapLink && (
+                      <a href={mapLink}
                          target="_blank" rel="noopener noreferrer"
                          className="flex-none inline-flex items-center gap-1.5 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
                         <EarthIcon className="w-4 h-4" /> <span className="hidden sm:inline">Open map</span>

@@ -2,6 +2,7 @@
  * Event-related utility functions
  */
 
+import { mapLinksFor } from '@/lib/events/mapLink';
 import type { NBEvent, NBAttendee, RSVPStatus, RSVPResponse } from './types';
 import { createHash } from 'crypto';
 
@@ -136,7 +137,8 @@ export function makeICS(event: NBEvent): string {
   const endDate = event.endAt ? new Date(event.endAt) : new Date(startDate.getTime() + 3600000);
   const dtEnd = endDate.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
 
-  const location = event.location?.label || '';
+  const location = [event.location?.label, event.location?.address].filter(Boolean).join(', ');
+  const mapLink = mapLinksFor(event.location)?.google;
   const description = event.description || '';
   const title = event.title;
 
@@ -157,7 +159,8 @@ DTSTART:${dtStart}
 DTEND:${dtEnd}
 SUMMARY:${escape(title)}
 DESCRIPTION:${escape(description)}
-LOCATION:${escape(location)}
+LOCATION:${escape(location)}${mapLink ? `
+URL:${mapLink}` : ''}
 STATUS:CONFIRMED
 SEQUENCE:0
 END:VEVENT

@@ -15,6 +15,7 @@ import { useCopied } from '@/features/shared/hooks/useCopied';
 import { useRouter } from 'next/navigation';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
 import type { NBEvent, EventVisibility, FormField } from '@/lib/types';
+import { VenueAutocomplete } from './VenueAutocomplete';
 import { CustomDateTimePicker } from './CustomDateTimePicker';
 import { DriveCoverPicker } from './DriveCoverPicker';
 import Select from '@/components/ui/Select';
@@ -441,20 +442,14 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
           ))}
         </div>
         {(eventType === 'in-person' || eventType === 'hybrid') && (
-          <input
-            type="text"
-            value={location.label || ''}
-            onChange={(e) => setLocation({ label: e.target.value })}
-            placeholder="Venue or address…"
-            className={inputClass()}
-          />
+          <VenueAutocomplete value={location} onChange={setLocation} className={inputClass()} />
         )}
         {(eventType === 'virtual' || eventType === 'hybrid') && (
           <input
             type="url"
             value={virtualLink}
             onChange={(e) => setVirtualLink(e.target.value)}
-            placeholder="https://zoom.us/j/…  (meeting link)"
+            placeholder="Virtual meeting link"
             className={`${inputClass()} ${eventType === 'hybrid' ? 'mt-3' : ''}`}
           />
         )}

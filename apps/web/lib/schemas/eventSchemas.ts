@@ -58,6 +58,7 @@ export const eventCreateInputSchema = z.object({
     address: z.string().optional(),
     lat: z.number().optional(),
     lon: z.number().optional(),
+    placeId: z.string().optional(),
   }).optional(),
   hosts: z.array(z.string()).default([]),
   organizerEmail: z.union([z.string().email(), z.literal('')]).optional().transform(val => val === '' ? undefined : val),

@@ -5,7 +5,9 @@
  * unlisted (private), and draft events 404 (they live behind the app's auth).
  */
 
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
+import { mapLinksFor, preferredMapLink } from '@/lib/events/mapLink';
 import { getEventBySlug, getAttendees } from '@/lib/eventRepo';
 import { formatEventDateRange, normalizeStatus, occupiedSpots } from '@/lib/eventUtils';
 import { PublicRsvpForm } from '@/features/events/components/PublicRsvpForm';
@@ -35,6 +37,8 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
 
   const when = event.startAt ? formatEventDateRange(event.startAt, event.endAt, event.timezone) : '';
   const isVirtual = (event.metadata?.eventType as string) === 'virtual';
+  const mapLinks = mapLinksFor(event.location);
+  const userAgent = (await headers()).get('user-agent') ?? undefined;
   // Always the brand green — per-event theme colors made event pages clash
   // with the rest of the app (matches EventDetailClient).
   const themeColor = '#78d870';
@@ -66,7 +70,13 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
           {(event.location?.label || isVirtual) && (
             <div className="flex items-start gap-3">
               {isVirtual ? <VideoIcon className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" /> : <MapPinIcon className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" />}
-              <span>{event.location?.label || 'Online event'}</span>
+              {!isVirtual && mapLinks ? (
+                <a href={preferredMapLink(mapLinks, userAgent)} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                  {event.location?.label}
+                </a>
+              ) : (
+                <span>{event.location?.label || 'Online event'}</span>
+              )}
             </div>
           )}
           <div className="flex items-start gap-3">

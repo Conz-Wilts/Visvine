@@ -30,6 +30,8 @@ export interface NBEvent {
     address?: string;
     lat?: number;
     lon?: number;
+    /** The venue's id in the map service it was picked from, so a map link opens its listing. */
+    placeId?: string;
   };
   hosts: string[];
   organizerEmail?: string;
