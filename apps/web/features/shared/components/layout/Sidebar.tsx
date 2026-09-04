@@ -79,7 +79,14 @@ const RAIL_PAD_TOP = Math.max(0, (SHELL_TOP_BAR_H - ROW_H) / 2);
 const BAND_TOP = ITEM_GAP;
 // The rail's width, opening and closing — and the motion of anything that
 // must stay glued to its edge.
-const RAIL_MOTION = "0.3s cubic-bezier(0.25, 0.1, 0.25, 1)";
+const RAIL_MOTION_MS = 300;
+// A leave reported this long after the rail finished shutting under a panel
+// is still taken to be the panel moving, not the pointer (Sidebar#leaveCard).
+const LEAVE_GRACE_MS = 400;
+// How far a pointer stranded beside the card may drift before that counts as
+// walking away from it.
+const LEAVE_SLACK_PX = 40;
+const RAIL_MOTION = `${RAIL_MOTION_MS}ms cubic-bezier(0.25, 0.1, 0.25, 1)`;
 export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen: createOpen, formOpen: createFormOpen, close: closeCreate } = useCreateModal();
@@ -155,16 +162,18 @@ export default function Sidebar() {
   const panelW = CHANNELS_PANEL_W;
 
   // The rail's own panels — the space switcher and Create new — are layers against
-  // the OPEN rail's edge (below), not this column: clamped so they can't
-  // outgrow a narrow viewport.
+  // the rail's edge (below), not this column: clamped so they can't outgrow a
+  // narrow viewport even beside the open rail.
   const railPanelW = `min(${RAIL_PANEL_W}px, calc(100vw - ${EXPANDED_W}px))`;
   // The sub-space column sits beyond the switcher's, on the same width, and
   // gives up whatever the viewport cannot hold rather than running off it.
   const railSubPanelW = `min(${RAIL_PANEL_W}px, calc(100vw - ${EXPANDED_W}px - ${railPanelW}))`;
   const columnW = docked ? `${panelW}px` : "0px";
-  // The rail is held open while one of its panels shows: the panel sits
-  // against the open rail's edge, so the pointer crossing into it must not
-  // shut the rail underneath.
+  // One of the rail's panels is out beside it. The rail is NOT held open under
+  // a panel: the pointer crossing into the panel lets the rail shut to its
+  // glyph column, and the panel — pinned to the rail's edge on the rail's own
+  // motion — glides left with it, so the pair settles at a column of glyphs
+  // and one list rather than two full columns side by side.
   const railPanelOpen = switcherOpen || createOpen;
   const railW = expanded ? EXPANDED_W : COLLAPSED_W;
   // Create new is open only while the pointer is on its row or in the panel:
@@ -194,6 +203,40 @@ export default function Sidebar() {
     }, panelsGone);
   };
   useEffect(() => cancelRelease, []);
+
+  // The rail shutting under an open panel pulls the panel left, and a pointer
+  // that had gone deep into the panel can be left standing on the page when
+  // the panel arrives — a mouseleave the person never made (the browser
+  // reports one once the box has moved out from under a still pointer). Such
+  // a leave — during the slide or just after it, at a point the card covered
+  // before it shrank — does not shut the panels. Instead the pointer is
+  // watched: back onto the card and the card's own leave takes over again;
+  // away from it, and the panels shut as they would have.
+  const asideRef = useRef<HTMLElement>(null);
+  const collapseUntil = useRef(0);
+  const unwatch = useRef<(() => void) | null>(null);
+  const stopWatching = () => { unwatch.current?.(); unwatch.current = null; };
+  useEffect(() => stopWatching, []);
+  const leaveCard = (e: React.MouseEvent) => {
+    if (!railPanelOpen) return;
+    if (createOpen && createFormOpen) return;
+    const sliding = Date.now() < collapseUntil.current + LEAVE_GRACE_MS;
+    const footprint = EXPANDED_W + RAIL_PANEL_W * (switcherParentId ? 2 : 1);
+    if (!sliding || e.clientX > footprint) return shutRailPanels();
+    const from = { x: e.clientX, y: e.clientY };
+    stopWatching();
+    const onMove = (m: MouseEvent) => {
+      const box = asideRef.current?.getBoundingClientRect();
+      if (box && m.clientX >= box.left && m.clientX <= box.right && m.clientY >= box.top && m.clientY <= box.bottom) {
+        return stopWatching();
+      }
+      if (Math.hypot(m.clientX - from.x, m.clientY - from.y) < LEAVE_SLACK_PX) return;
+      stopWatching();
+      shutRailPanels();
+    };
+    document.addEventListener("mousemove", onMove);
+    unwatch.current = () => document.removeEventListener("mousemove", onMove);
+  };
 
   // Honour reduced-motion: collapse the width/margin transitions below to 0s.
   // Closing (nothing docked) runs faster than opening — the leaving panel
@@ -394,17 +437,14 @@ export default function Sidebar() {
   // content into the host below.
   return (
     <aside
+      ref={asideRef}
       className="fixed left-0 top-0 z-40"
       // The rail's panels open under the pointer (the space row, the
       // Create new row), so they shut when the pointer leaves the whole card —
-      // rail and panel both — and the rail, held open under them, lets go at
-      // the same moment. A Create form being filled in is the exception: it
-      // holds the card open until it is done or stepped back from.
-      onMouseLeave={() => {
-        if (!railPanelOpen) return;
-        if (createOpen && createFormOpen) return;
-        shutRailPanels();
-      }}
+      // rail and panel both. A Create form being filled in is the exception:
+      // it holds the card open until it is done or stepped back from.
+      onMouseEnter={stopWatching}
+      onMouseLeave={leaveCard}
     >
       {/* The card runs the viewport's full height, flush against the left and
           bottom screen edges: those corners and borders are dropped so it reads
@@ -432,9 +472,12 @@ export default function Sidebar() {
           // Coming back before a shutting panel has released the rail keeps it
           // open — the release is cancelled, not raced.
           onMouseEnter={() => { cancelRelease(); setHovered(true); }}
-          // Crossing from the rail into a panel beside it must not shut the
-          // rail: the panel sits against the OPEN rail's edge.
-          onMouseLeave={() => { if (!railPanelOpen) setHovered(false); }}
+          // Leaving the rail shuts it, even into a panel beside it: the panel
+          // travels left with the rail's edge, and the card ends up narrower.
+          onMouseLeave={() => {
+            if (railPanelOpen && expanded && !reduced) collapseUntil.current = Date.now() + RAIL_MOTION_MS;
+            setHovered(false);
+          }}
         >
           {railInner}
         </div>
@@ -496,7 +539,7 @@ export default function Sidebar() {
       </div>
 
       {/* The rail's own panels — the space switcher and Create new — are
-          layers against the open rail's edge running the card's full height,
+          layers against the rail's edge running the card's full height,
           so their search is at the very top beside the space, not below the
           shell's band the way the page's panel column is. Each slides out
           from under the rail; parked, it is clipped by its box. They hang off
@@ -506,7 +549,8 @@ export default function Sidebar() {
           on the rail's own motion: a panel opened while the rail is still
           widening, or shut before it has finished, travels with that edge
           rather than sliding towards a place the rail has not reached yet —
-          which read as the two collapsing into each other. One shows at a
+          and when the pointer crosses into a panel and the rail shuts under
+          it, the panel glides left to the glyph column's edge. One shows at a
           time (the rows that open them close the other), so they share the
           edge without a stack. */}
       <div

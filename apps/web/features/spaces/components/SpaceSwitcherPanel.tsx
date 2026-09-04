@@ -19,7 +19,8 @@ import { spaceBranches } from '@/lib/spaces/subspaces';
  * context; always mounted so the column can slide it, parked off to the left
  * while shut.
  *
- * It opens under the pointer, from the space at the rail's head, and shuts when the
+ * It opens under the pointer, from the space at the rail's head; the rail shuts to its
+ * glyph column once the pointer is in it, and the list slides left with it. It shuts when the
  * pointer leaves the card (Sidebar). Search first, because the list is as
  * long as your memberships. Choosing a space closes it; so do Escape and
  * navigating away. No backdrop: a click-catcher portalled from here would
