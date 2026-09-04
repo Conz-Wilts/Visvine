@@ -10,14 +10,13 @@ import { useSpace } from "@/features/shared/contexts/SpaceContext";
 import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_PANE_TOP, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
-import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE, switcherCloseMs } from "@/features/shared/contexts/SidebarContext";
+import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
 import Modal from "@/components/ui/Modal";
 import UserMenu from "@/features/auth/components/UserMenu";
 import CreatePanel from "@/features/create/components/CreatePanel";
 import SpaceSelector from "@/features/spaces/components/SpaceSelector";
 import SpaceSwitcherPanel from "@/features/spaces/components/SpaceSwitcherPanel";
-import SubspacePanel from "@/features/spaces/components/SubspacePanel";
 import type { SpaceFeatureConfig } from "@/lib/types";
 import {
   COLLAPSED_W,
@@ -95,7 +94,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen: createOpen, formOpen: createFormOpen, close: closeCreate } = useCreateModal();
   const createSurface = useCreateSurface();
-  const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen, switcherParentId } = useSidebar();
+  const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
   const { currentSpace, isAdmin, loading: spaceLoading } = useSpace();
   const { setHost, dockTopInset } = useContextPanel();
   // Rows that change which panel is out act only once the pointer has rested
@@ -173,9 +172,6 @@ export default function Sidebar() {
   // the rail's edge (below), not this column: clamped so they can't outgrow a
   // narrow viewport even beside the open rail.
   const railPanelW = `min(${RAIL_PANEL_W}px, calc(100vw - ${EXPANDED_W}px))`;
-  // The sub-space column sits beyond the switcher's, on the same width, and
-  // gives up whatever the viewport cannot hold rather than running off it.
-  const railSubPanelW = `min(${RAIL_PANEL_W}px, calc(100vw - ${EXPANDED_W}px - ${railPanelW}))`;
   const columnW = docked ? `${panelW}px` : "0px";
   // One of the rail's panels is out beside it. The rail is NOT held open under
   // a panel: the pointer crossing into the panel lets the rail shut to its
@@ -198,10 +194,7 @@ export default function Sidebar() {
     releaseTimer.current = null;
   };
   const shutRailPanels = () => {
-    // The switcher shuts as one motion across its columns (SidebarContext), so
-    // the rail is held for however long that takes — with the sub-space column
-    // out, that is two slides, not one.
-    const panelsGone = switcherOpen ? switcherCloseMs(switcherParentId !== null, reduced) : reduced ? 0 : DOCK_MS;
+    const panelsGone = reduced ? 0 : DOCK_MS;
     setSwitcherOpen(false);
     closeCreate();
     cancelRelease();
@@ -599,22 +592,6 @@ export default function Sidebar() {
         style={{ left: railW, width: railPanelW, transition: reduced ? "none" : `left ${RAIL_MOTION}` }}
       >
         <SpaceSwitcherPanel />
-      </div>
-      {/* One more column, out beyond the switcher: the sub-spaces of the space
-          its pointer is on. Same geometry, one panel further along, so each
-          level of the tree is a column rather than an indent — and it is a box
-          of the aside for the same reason the switcher is, since the switcher's
-          own box clips at its edge. Spaces nest one level, so this is the last
-          column there can be. */}
-      <div
-        className={`absolute top-0 bottom-0 z-20 overflow-hidden ${switcherOpen && switcherParentId ? '' : 'pointer-events-none'}`}
-        style={{
-          left: `calc(${railW}px + ${railPanelW})`,
-          width: `max(0px, ${railSubPanelW})`,
-          transition: reduced ? "none" : `left ${RAIL_MOTION}`,
-        }}
-      >
-        <SubspacePanel />
       </div>
       <div
         className={`absolute top-0 bottom-0 z-20 overflow-hidden ${createOpen ? '' : 'pointer-events-none'}`}

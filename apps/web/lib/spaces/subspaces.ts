@@ -179,9 +179,8 @@ export function spaceTrail<T extends { id: string; parentId?: string | null }>(s
  * no children, where it would have been — the parent it names is not something
  * the viewer can see.
  *
- * The switcher shows one level at a time: the branches in its column, and a
- * branch's children in a column that opens beside it, so the list keeps
- * widening rather than indenting.
+ * The switcher draws each branch as a row, and its children under it on the
+ * tree spine when the branch is opened.
  */
 export function spaceBranches<T extends { id: string; parentId?: string | null }>(
   spaces: T[],

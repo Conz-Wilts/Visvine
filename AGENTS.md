@@ -111,9 +111,9 @@ constrain code:
   seed's wipe deletes sub-spaces before parents for the same reason.
 - Listings (Discover, `/communities`) are flat lists of the spaces you can
   see, with "in *Parent*" beside a sub-space only when the parent is in your
-  own list; the switcher shows top-level spaces in its column and opens a
-  parent's sub-spaces in a column beside it on hover
-  (`subspaces.ts#spaceBranches`, `SubspacePanel`).
+  own list; the switcher lists top-level spaces and opens a parent's
+  sub-spaces under its row on a click of its chevron, hung on the tree spine
+  (`subspaces.ts#spaceBranches`, `SpaceListRow#SubspaceRow`, `TreeSpine`).
 
 ## Creating things
 

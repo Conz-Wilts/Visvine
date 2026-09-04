@@ -6,7 +6,8 @@ import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/Sideb
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { ITEM_GAP, ROW_H, ROW_INSET } from '@/features/shared/components/layout/railRow';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
-import { SpaceListRow } from '@/features/spaces/components/SpaceListRow';
+import { SpaceListRow, SubspaceRow } from '@/features/spaces/components/SpaceListRow';
+import { TreeSpine } from '@/components/ui/TreeChrome';
 import { scoreName } from '@/lib/rankName';
 import { spaceBranches } from '@/lib/spaces/subspaces';
 
@@ -27,13 +28,20 @@ import { spaceBranches } from '@/lib/spaces/subspaces';
  * still be inside the card's React tree, and the card's mouseleave — the
  * close — would never fire over it.
  *
- * This column holds TOP-LEVEL spaces only. Pointing at one that has sub-spaces
- * opens them in a column of their own beside this one (SubspacePanel) — the
- * rail keeps widening rather than indenting, so a sub-space's row is as wide
- * and as readable as its parent's.
+ * The list is a tree one level deep: top-level spaces as rail rows, and a
+ * space with sub-spaces you are in opens on its chevron to a row per
+ * sub-space hung under it on the tree's spine (TreeSpine) — the same drawing
+ * the Context tree and the console's alias lists use. Spaces nest one level
+ * (docs/sub-spaces.md), so nothing under a row opens further. The branch the
+ * current space is in starts open, so where you are is on screen.
  */
+// TreeSpine draws its line 14px in (the tree glyph's centre); the rail's
+// avatar is a `md` SpaceAvatar, 32px, centred in a ROW_H cell.
+const SPINE_DEFAULT_ML = 14;
+const AVATAR_MD_PX = 32;
+
 export default function SpaceSwitcherPanel() {
-  const { switcherOpen: isOpen, setSwitcherOpen, switcherParentId, setSwitcherParentId, reduced } = useSidebar();
+  const { switcherOpen: isOpen, setSwitcherOpen, reduced } = useSidebar();
   const { currentSpace, joinedSpaces, setCurrentSpace } = useSpace();
   const pathname = usePathname();
   const [query, setQuery] = useState('');
@@ -42,17 +50,30 @@ export default function SpaceSwitcherPanel() {
   const close = () => setSwitcherOpen(false);
   useEscapeKey(close, isOpen);
 
-  // Opening focuses the search once the panel has slid out; closing clears it
-  // after the slide, so the list does not visibly reset on its way behind the
-  // rail. The sub-space column is already gone by then — closing the switcher
-  // sends it home first (SidebarContext), so the two never travel at once.
+  // Which branches are open. The current space's own branch starts open each
+  // time the list is shown; a press on a chevron opens or shuts any other.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // Opening focuses the search once the panel has slid out and opens the
+  // branch you are in; closing clears both after the slide, so the list does
+  // not visibly reset on its way behind the rail.
   useEffect(() => {
     if (isOpen) {
+      setExpanded(new Set(currentSpace?.parentId ? [currentSpace.parentId] : []));
       const t = setTimeout(() => inputRef.current?.focus({ preventScroll: true }), reduced ? 0 : DOCK_MS);
       return () => clearTimeout(t);
     }
-    const t = setTimeout(() => setQuery(''), reduced ? 0 : DOCK_MS);
+    const t = setTimeout(() => { setQuery(''); setExpanded(new Set()); }, reduced ? 0 : DOCK_MS);
     return () => clearTimeout(t);
+    // The branch is read once at open; switching space closes the panel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, reduced]);
 
   useEffect(() => {
@@ -62,8 +83,8 @@ export default function SpaceSwitcherPanel() {
   // Rows in display order: the spaces you are in, ranked by the search when
   // there is one, alphabetical otherwise. One level — a sub-space is carried
   // by its parent's branch (lib/spaces/subspaces.ts#spaceBranches) and drawn
-  // in the column beside this one. A search flattens the whole tree: the match
-  // is what you are looking for, wherever it sits.
+  // under it. A search flattens the whole tree: the match is what you are
+  // looking for, wherever it sits.
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) {
@@ -75,11 +96,6 @@ export default function SpaceSwitcherPanel() {
       .sort((a, b) => b.score - a.score)
       .map(({ space }) => ({ space, children: [] }));
   }, [joinedSpaces, query]);
-
-  // A search flattens, so nothing is holding a sub-space column open under it.
-  useEffect(() => {
-    if (query.trim()) setSwitcherParentId(null);
-  }, [query, setSwitcherParentId]);
 
   const select = (spaceId: string) => {
     setCurrentSpace(spaceId);
@@ -123,26 +139,50 @@ export default function SpaceSwitcherPanel() {
         </div>
 
         {/* Every space you are a member of, ranked by the search when there is
-            one. Pointing at a row with sub-spaces opens their column; pointing
-            at one without shuts whatever column was open, so the pair always
-            says which parent you are inside. */}
+            one. A row with sub-spaces opens them under itself on its chevron:
+            the spine drops out of the parent's avatar and ticks into each
+            sub-space, ending at the last, so the branch reads as one drawing
+            rather than an indent. */}
         <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-3" style={{ paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
           {rows.length === 0 ? (
             <div className="p-4 text-center text-sm text-text-muted">No spaces found</div>
           ) : (
             <div className="flex flex-col" style={{ gap: ITEM_GAP }}>
-              {rows.map(({ space, children }) => (
-                <SpaceListRow
-                  key={space.id}
-                  space={space}
-                  current={currentSpace?.id === space.id}
-                  hasChildren={children.length > 0}
-                  open={switcherParentId === space.id}
-                  tabbable={isOpen}
-                  onSelect={() => select(space.id)}
-                  onOpen={() => setSwitcherParentId(children.length > 0 ? space.id : null)}
-                />
-              ))}
+              {rows.map(({ space, children }) => {
+                const open = children.length > 0 && expanded.has(space.id);
+                return (
+                  <div key={space.id}>
+                    <SpaceListRow
+                      space={space}
+                      current={currentSpace?.id === space.id}
+                      hasChildren={children.length > 0}
+                      open={open}
+                      tabbable={isOpen}
+                      onSelect={() => select(space.id)}
+                      onToggle={() => toggle(space.id)}
+                    />
+                    {open && (
+                      // The spine sits under the centre of the parent's avatar
+                      // (ROW_H / 2), not TreeSpine's default 14px, and its stem
+                      // climbs from the branch's top to the avatar's bottom edge.
+                      <div style={{ marginLeft: ROW_H / 2 - SPINE_DEFAULT_ML }}>
+                        <TreeSpine animate={!reduced} stem={ROW_H / 2 - AVATAR_MD_PX / 2}>
+                          {children.map((child, i) => (
+                            <SubspaceRow
+                              key={child.id}
+                              space={child}
+                              current={currentSpace?.id === child.id}
+                              nested={i === children.length - 1 ? 'last' : 'mid'}
+                              tabbable={isOpen}
+                              onSelect={() => select(child.id)}
+                            />
+                          ))}
+                        </TreeSpine>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

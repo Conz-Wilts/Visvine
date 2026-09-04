@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 /** How long the pointer rests on a row before pointing at it counts. */
-export const HOVER_INTENT_MS = 120;
+const HOVER_INTENT_MS = 120;
 
 /**
  * Pointing at a row that changes what is open — a rail row that swaps one
