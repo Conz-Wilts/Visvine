@@ -32,8 +32,8 @@ import { spaceBranches } from '@/lib/spaces/subspaces';
  * space with sub-spaces you are in opens on its chevron to a row per
  * sub-space hung under it on the tree's spine (TreeSpine) — the same drawing
  * the Context tree and the console's alias lists use. Spaces nest one level
- * (docs/sub-spaces.md), so nothing under a row opens further. The branch the
- * current space is in starts open, so where you are is on screen.
+ * (docs/sub-spaces.md), so nothing under a row opens further. Every branch
+ * starts shut: the list opens as the flat set of spaces you are in.
  */
 // TreeSpine draws its line 14px in (the tree glyph's centre).
 const SPINE_DEFAULT_ML = 14;
@@ -48,8 +48,9 @@ export default function SpaceSwitcherPanel() {
   const close = () => setSwitcherOpen(false);
   useEscapeKey(close, isOpen);
 
-  // Which branches are open. The current space's own branch starts open each
-  // time the list is shown; a press on a chevron opens or shuts any other.
+  // Which branches are open. Every one starts shut each time the list is
+  // shown — the list is the spaces you are in, and a branch opens only when
+  // its chevron is pressed.
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -59,19 +60,17 @@ export default function SpaceSwitcherPanel() {
       return next;
     });
 
-  // Opening focuses the search once the panel has slid out and opens the
-  // branch you are in; closing clears both after the slide, so the list does
-  // not visibly reset on its way behind the rail.
+  // Opening focuses the search once the panel has slid out; closing clears the
+  // search and every open branch after the slide, so the list does not visibly
+  // reset on its way behind the rail.
   useEffect(() => {
     if (isOpen) {
-      setExpanded(new Set(currentSpace?.parentId ? [currentSpace.parentId] : []));
+      setExpanded(new Set());
       const t = setTimeout(() => inputRef.current?.focus({ preventScroll: true }), reduced ? 0 : DOCK_MS);
       return () => clearTimeout(t);
     }
     const t = setTimeout(() => { setQuery(''); setExpanded(new Set()); }, reduced ? 0 : DOCK_MS);
     return () => clearTimeout(t);
-    // The branch is read once at open; switching space closes the panel.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, reduced]);
 
   useEffect(() => {

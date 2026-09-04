@@ -181,10 +181,14 @@ export default function Sidebar() {
   // and one list rather than two full columns side by side.
   const railPanelOpen = switcherOpen || createOpen;
   const railW = expanded ? EXPANDED_W : COLLAPSED_W;
-  // Create new is open only while the pointer is on its row or in the panel:
-  // pointing at any other row of the rail puts it away — unless a form is
-  // being filled in, which holds it the way leaving the card does.
-  const leaveCreate = () => { if (createOpen && !createFormOpen) closeCreate(); };
+  // A rail panel is open only while the pointer is on the row that opened it
+  // or in the panel itself: pointing at any other row of the rail puts both
+  // away — unless a Create form is being filled in, which holds that one the
+  // way leaving the card does.
+  const leaveRailPanels = () => {
+    if (createOpen && !createFormOpen) closeCreate();
+    if (switcherOpen) setSwitcherOpen(false);
+  };
   // Shutting a panel is two moves in order, not one: the panel slides back
   // under the rail FIRST, then the rail lets go. Its box is pinned at the open
   // rail's edge, so a rail that shrank at the same moment would pull away from
@@ -351,7 +355,7 @@ export default function Sidebar() {
           )}
 
           {GLOBAL_NAV.map(({ key, href, label, icon }) => (
-            <div key={key} {...intent(leaveCreate)}>
+            <div key={key} {...intent(leaveRailPanels)}>
             <Row
               expanded={expanded}
               reduced={reduced}
@@ -369,7 +373,7 @@ export default function Sidebar() {
           more tools than the viewport is tall; the head and foot never move. */}
       <nav
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden border-t"
-        {...intent(leaveCreate)}
+        {...intent(leaveRailPanels)}
         style={{
           paddingLeft: ROW_INSET,
           paddingRight: ROW_INSET,
@@ -416,7 +420,7 @@ export default function Sidebar() {
       {moreNav.length > 0 && (
         <div
           className="flex shrink-0 flex-col border-t"
-          {...intent(leaveCreate)}
+          {...intent(leaveRailPanels)}
           style={{
             gap: ITEM_GAP,
             marginTop: BAND_TOP,
@@ -452,7 +456,7 @@ export default function Sidebar() {
           the band as rail rows rather than in a menu over the page. */}
       <div
         className="flex shrink-0 flex-col border-t"
-        {...intent(leaveCreate)}
+        {...intent(leaveRailPanels)}
         style={{
           marginTop: BAND_TOP,
           paddingTop: ITEM_GAP,
