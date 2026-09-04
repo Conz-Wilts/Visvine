@@ -54,6 +54,14 @@ export interface FusedResult {
    */
   claim?: string
   /**
+   * The section of the note that matched — the best-scoring chunk
+   * (lib/notes/shared/noteChunks.ts), present when the chunk stage found one.
+   * Where `claim` is what the note asserts, `passage` is where it says it: a
+   * caller that needs the surrounding prose, not just the sentence, reads
+   * this instead of the whole note.
+   */
+  passage?: { heading: string; text: string }
+  /**
    * The note's memory lifecycle state, present only when it is NOT `active` —
    * so a caller (and an agent) is told when a hit is superseded, expired or
    * stale, and never has to assume a result is current. Sources have none.
@@ -105,6 +113,26 @@ export interface MemoryStage {
   keyword?(query: string): Promise<MemoryStageHit[]>
 }
 
+/** One ranked note chunk: the passage, and the note it came from. */
+export interface ChunkStageHit {
+  path: string
+  seq: number
+  heading: string
+  text: string
+  score: number
+}
+
+/**
+ * The note-chunk stage: ranks the section-sized chunks of notes
+ * (lib/notes/chunkStage.ts on the server). Like memories, every hit is keyed
+ * to its NOTE in the fusion — a chunk is a place in a note, not a result of
+ * its own — and the best-scoring chunk per note becomes the result's
+ * `passage`. Semantic only: BM25 already covers the note's words.
+ */
+export interface ChunkStage {
+  rank(query: string): Promise<ChunkStageHit[]>
+}
+
 /**
  * The embeddings stage: ranks docs by semantic similarity to the query. `mtime`
  * lets the stage key its cache; a stage returning [] contributes nothing to the
@@ -136,6 +164,8 @@ export interface FuseOptions {
   sources?: SourceStage
   /** Rank derived memories, folded onto their notes. */
   memories?: MemoryStage
+  /** Rank note chunks, folded onto their notes. */
+  chunks?: ChunkStage
   /** Expand the top BM25 hits with their link neighborhood (default true). */
   contextExpand?: boolean
   /**
@@ -178,6 +208,9 @@ export const STAGE_WEIGHTS = {
   // matchers rather than behind them.
   memoryVector: 1,
   memoryKeyword: 0.9,
+  // A chunk is one section of the note matched on its own — the whole-note
+  // vector's precise sibling, so it stands with the direct matchers too.
+  chunkVector: 1,
   sourceKeyword: 0.9,
   sourceVector: 0.8,
   context: 0.4,
@@ -340,6 +373,30 @@ export async function fusedSearch(
     }
   }
 
+  // Note chunks fold onto their note the same way: several matching sections
+  // collapse to the note's best rank, and the best-scoring section per note is
+  // kept as the result's `passage`.
+  const passageByPath = new Map<string, { heading: string; text: string; score: number }>()
+  if (opts.chunks && !plan.temporalOnly) {
+    for (const [i, q] of phrasings.entries()) {
+      const w = i === 0 ? 1 : ALTERNATE_WEIGHT
+      const weight = STAGE_WEIGHTS.chunkVector * w
+      const perNote = new Map<string, ChunkStageHit>()
+      for (const h of await opts.chunks.rank(q)) {
+        if (!byPath.has(h.path)) continue // a stale or invisible chunk never ranks
+        const best = perNote.get(h.path)
+        if (!best || h.score > best.score) perNote.set(h.path, h)
+        const passage = passageByPath.get(h.path)
+        if (!passage || h.score * weight > passage.score) {
+          passageByPath.set(h.path, { heading: h.heading, text: h.text, score: h.score * weight })
+        }
+      }
+      if (!perNote.size) continue
+      const ranked = [...perNote.values()].sort((a, b) => b.score - a.score)
+      stages.push(stageOf(weight, ranked.map((h) => ({ key: h.path, score: h.score }))))
+    }
+  }
+
   if (opts.contextExpand !== false) {
     const seed = bm25ByPhrasing[0].slice(0, GRAPH_SEED).map((r) => r.path)
     const seen = new Set(seed)
@@ -410,16 +467,19 @@ export async function fusedSearch(
     const note = byPath.get(key)!
     const status = statusOf(note.meta.frontmatter)
     const claim = claimByPath.get(key)
+    const passage = passageByPath.get(key)
     return {
       path: key,
       title: note.meta.title,
       score,
       ...(status === 'active' ? {} : { status }),
       // A note surfaced only by the vector or link-context stage never passed
-      // through BM25, so it has no snippet of its own — build one rather than
-      // returning a result the caller can't preview.
-      snippet: snippetByPath.get(key) ?? snippetFor(note.body, plan.topic || query),
+      // through BM25, so it has no snippet of its own — the matching passage
+      // is the best preview, else build one rather than returning a result
+      // the caller can't preview.
+      snippet: snippetByPath.get(key) ?? (passage ? passage.text.slice(0, 240) : snippetFor(note.body, plan.topic || query)),
       ...(claim ? { claim: claim.text } : {}),
+      ...(passage ? { passage: { heading: passage.heading, text: passage.text } } : {}),
       kind: 'note',
     }
   }

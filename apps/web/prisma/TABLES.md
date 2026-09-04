@@ -28,10 +28,14 @@ in the shared context of a personal Space, so any other value is legacy.)
 | `context_folders` | Folders that exist even when empty, plus the two folder flags: `restricted` (cuts permission inheritance at that boundary) and `locked` (frozen for AI). |
 | `context_state` | Control-plane sidecar files — the folder registry, the access-seeding marker and the context settings. JSON blobs, one row per named file. |
 | `context_note_embeddings` | Cached vector for each whole note, for semantic search. Re-computed when the note changes. |
+| `context_note_chunks` | Each note split at its headings into section-sized chunks, each with a vector, so one paragraph of a long note is findable on its own. Search folds every chunk hit onto its note and carries the passage that matched. Rows from an older save are never served. Written by the embed sweep, never at query time. |
 | `context_memories` | One-sentence claims extracted from each note by the nightly sweep, with a vector each. Search ranks over them and folds each hit onto its note, so a result can carry the sentence that answered. Rows from an older save of the note are never served. |
 | `context_publications` | A live publish link: a note in one Space is mirrored into another Space's context and rewritten on every save. Turning it off leaves the copy behind as a plain note. |
 | `context_sources` | A non-note file attached to the context (CSV, markdown, text). Original lives in GCS; this row is the metadata + extraction status. Never appears as a Node or in the Directory. |
 | `context_source_chunks` | The extracted text, split into chunks, each with a vector. This is what source-level search actually reads. |
+
+| `context_clean_schedules` | One row per space: whether the nightly clean runs and when, which mechanical fixes it may apply, whether the space's notes are embedded at all (`embed_enabled`) and whether a pass re-embeds afterwards. `run_as_user_id` is the admin whose reach it borrows. |
+| `context_clean_runs` | One row per clean pass, scheduled or pressed: what it could see, what was in scope, what it wrote by kind, what a gate refused, the worklist it left for a person, and what the post-clean embed did. |
 
 ### Context permissions
 

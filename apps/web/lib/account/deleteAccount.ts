@@ -137,6 +137,7 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     await tx.contextState.deleteMany({ where: { ownerKey: userId } })
     await tx.contextNoteEmbedding.deleteMany({ where: { ownerKey: userId } })
     await tx.contextMemory.deleteMany({ where: { ownerKey: userId } })
+    await tx.contextNoteChunk.deleteMany({ where: { ownerKey: userId } })
     await tx.contextSourceChunk.deleteMany({ where: { ownerKey: userId } })
     await tx.contextSource.deleteMany({ where: { ownerKey: userId } })
     // Outbox rows for the personal context above. Deleted rather than redacted:
@@ -188,6 +189,12 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     // Agent subscriptions — runs the agents fan out FOR this person. Without
     // this the tick would keep minting runs for a user who no longer exists.
     await tx.agentSubscription.deleteMany({ where: { userId } })
+
+    // A nightly clean that ran AS this person stops. The pass acts for a
+    // named admin or not at all, so it would only ever record a skipped run
+    // each night from here; the row stays so the space's settings and history
+    // survive, and the next admin to switch it on takes it over.
+    await tx.contextCleanSchedule.updateMany({ where: { runAsUserId: userId }, data: { enabled: false } })
 
     if (nodeIds.length) await tx.node.deleteMany({ where: { id: { in: nodeIds } } })
     await tx.identity.deleteMany({ where: { userId } })

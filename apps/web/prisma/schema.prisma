@@ -88,6 +88,9 @@ model Space {
   resources       Resource[]
   resourceFolders ResourceFolder[]
   projectionJobs  NoteProjectionJob[]
+  cleanSchedule   ContextCleanSchedule?
+  cleanRuns       ContextCleanRun[]
+  noteChunks      ContextNoteChunk[]
 
   @@index([personalOwnerId])
   @@index([parentId])
@@ -990,6 +993,34 @@ model ContextNoteEmbedding {
   @@map("context_note_embeddings")
 }
 
+/// One embedded chunk of a context note — the retrieval unit that keeps a
+/// paragraph of a long note findable (lib/notes/shared/noteChunks.ts splits,
+/// lib/notes/embedSweep.ts embeds, lib/notes/chunkStage.ts ranks). Every hit
+/// folds onto its note in the fusion, so a result is still a note and carries
+/// the matching passage. Keyed like `context_note_embeddings` — no foreign key,
+/// dropped with the note on delete/rename (projections.ts#dropEmbedding),
+/// reconciled by the sweep — and `mtime` is the note's when it was chunked: the
+/// stage matches (path, mtime) against the live notes, so chunks of an older
+/// save are never served. `heading` is the section path the chunk sits under.
+model ContextNoteChunk {
+  id        String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String                      @map("space_id")
+  ownerKey  String                      @map("owner_key")
+  path      String
+  seq       Int // 0-based order within the note
+  heading   String                      @default("")
+  text      String
+  mtime     BigInt // note updatedAt (epoch ms) when chunked
+  model     String? // embedding model; null = stored without a vector
+  embedding Unsupported("vector(768)")?
+  updatedAt DateTime                    @updatedAt @map("updated_at")
+  space     Space                       @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, ownerKey, path, seq], name: "note_chunk_identity")
+  @@index([spaceId, ownerKey, model])
+  @@map("context_note_chunks")
+}
+
 /// One derived memory: a single self-contained claim extracted from a context
 /// note by the memory sweep (lib/notes/memorySweep.ts). Search ranks over these
 /// as a stage of its own (lib/notes/memoryStage.ts) and folds each hit onto its
@@ -1679,4 +1710,86 @@ model RateLimitBucket {
 
   @@index([updatedAt])
   @@map("rate_limit_buckets")
+}
+
+/// The space's nightly clean (lib/notes/cleanSchedule.ts): one row per space,
+/// written from the Space Console's Clean section, read every minute by the
+/// agent tick. It carries no authority of its own — `runAsUserId` is the admin
+/// who turned it on, and the pass runs under THEIR principal, so it sees what
+/// they see (the visibility lens), writes only where they may write, and skips
+/// folders frozen for AI. A sub-space never holds one: its context is a
+/// parent's read-only federated folder, and cleaning happens in the space that
+/// owns the notes (lib/notes/shared/cleanSchedule.ts#cleanScheduleDenial).
+model ContextCleanSchedule {
+  spaceId     String    @id @map("space_id")
+  enabled     Boolean   @default(false)
+  /// Wall-clock hour in the space's timezone (Space.timezone, UTC when unset).
+  hour        Int       @default(3)
+  minute      Int       @default(30)
+  mode        String    @default("light") // light | full
+  /// Narrow the pass to one folder; null = everything the runner can reach.
+  targetPath  String?   @map("target_path")
+  /// False = analyse and report only; nothing is written.
+  applyFixes  Boolean   @default(true) @map("apply_fixes")
+  /// The AutoFix kinds this schedule may apply. Empty = every safe kind.
+  fixKinds    String[]  @default([]) @map("fix_kinds")
+  runAsUserId String    @map("run_as_user_id")
+  /// Whether this space's notes are embedded at all — the nightly sweep, the
+  /// query-time catch-up and the post-clean pass all read it. No row = on.
+  embedEnabled    Boolean @default(true) @map("embed_enabled")
+  /// Re-embed what the clean just changed, in the same pass, so the night's
+  /// edits are searchable by morning rather than after the next sweep.
+  embedAfterClean Boolean @default(true) @map("embed_after_clean")
+  updatedBy   String?   @map("updated_by")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  /// The next instant the tick may claim this row. Advanced by the claim
+  /// itself, so N instances racing produce one run.
+  nextRunAt   DateTime? @map("next_run_at")
+  lastRunAt   DateTime? @map("last_run_at")
+  space       Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([enabled, nextRunAt])
+  @@map("context_clean_schedules")
+}
+
+/// One clean pass, scheduled or pressed. The dashboard's history: what the
+/// runner could see, what was in its scope, what it wrote, and what it left
+/// for a person — `worklist` is the judgment work, never applied.
+model ContextCleanRun {
+  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId       String    @map("space_id")
+  trigger       String // scheduled | manual
+  status        String    @default("running") // running | succeeded | failed | skipped
+  startedAt     DateTime  @default(now()) @map("started_at")
+  endedAt       DateTime? @map("ended_at")
+  /// userId who pressed Run now; null for a scheduled fire.
+  startedBy     String?   @map("started_by")
+  /// Whose principal the pass acted as.
+  runAsUserId   String    @map("run_as_user_id")
+  mode          String    @default("light")
+  targetPath    String?   @map("target_path")
+  /// Notes the runner could READ (the visibility lens), and of those the ones
+  /// inside its scope (owned + targeted + writable).
+  analyzedNotes Int       @default(0) @map("analyzed_notes")
+  inScopeNotes  Int       @default(0) @map("in_scope_notes")
+  safeFixes     Int       @default(0) @map("safe_fixes")
+  applied       Int       @default(0)
+  appliedByKind Json      @default("{}") @map("applied_by_kind")
+  /// Fixes a gate refused at write time: [{ path, reason }].
+  skipped       Json      @default("[]")
+  /// The judgment work left over: [{ kind, count, items: [{ path, detail }] }].
+  worklist      Json      @default("[]")
+  /// Full mode analysed only the first FULL_MODE_NOTE_CAP notes.
+  truncated     Boolean   @default(false)
+  /// What the post-clean embed did: off | no-key | skipped | succeeded | failed.
+  embedStatus     String  @default("skipped") @map("embed_status")
+  embeddedNotes   Int     @default(0) @map("embedded_notes")
+  embeddedChunks  Int     @default(0) @map("embedded_chunks")
+  embeddedSources Int     @default(0) @map("embedded_sources")
+  embedMessage    String? @map("embed_message")
+  errorMessage  String?   @map("error_message")
+  space         Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, startedAt(sort: Desc)])
+  @@map("context_clean_runs")
 }

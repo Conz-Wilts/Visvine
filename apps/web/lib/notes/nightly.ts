@@ -81,12 +81,15 @@ export async function runNightlyMaintenance(): Promise<{ ran: boolean; ms: numbe
     // never had a key, or had one removed, still deletes and renames notes, and
     // its stranded vectors would otherwise have nothing that ever collects them.
     const embedded = await embedSweep()
-    if (embedded.notes || embedded.chunks || embedded.pruned) {
+    if (embedded.notes || embedded.noteChunks || embedded.chunks || embedded.pruned || embedded.skippedSpaces) {
       logger.info('notes.nightly.embeddings', {
         configured: embedded.configured,
         notes: embedded.notes,
+        chunkedNotes: embedded.chunkedNotes,
+        noteChunks: embedded.noteChunks,
         chunks: embedded.chunks,
         pruned: embedded.pruned,
+        skippedSpaces: embedded.skippedSpaces,
       })
     }
     // The derived memories, after the note vectors: bounded to 50 extractions

@@ -16,6 +16,8 @@ import { readSpaceConfig } from '@/lib/spaces/spaceConfig'
 import { createVectorStage, type SemanticReport } from './vectorStage'
 import { createSourceStage } from './sourceStage'
 import { createMemoryStage } from './memoryStage'
+import { createChunkStage } from './chunkStage'
+import { embeddingEnabledFor } from './embedSweep'
 import { embedTexts, semanticConfigured, type SemanticStatus } from './embeddings'
 import { getVault, vaultFor } from './vaultCache'
 import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
@@ -177,7 +179,8 @@ export async function resolveReferenceToken(
 export interface BrainSearchResult {
   hits: FusedResult[]
   /**
-   * What the semantic half did: 'on', 'no-key' (OPENAI_API_KEY unset — results
+   * What the semantic half did: 'on', 'off' (the space switched embedding
+   * off), 'no-key' (OPENAI_API_KEY unset — results
    * are keyword + link context only), or 'error'. Reported rather than hidden,
    * because a degraded search is indistinguishable from a thorough one that
    * found nothing.
@@ -229,8 +232,13 @@ export async function searchContext(
   // One batched embed of every phrasing, shared by both vector stages. The
   // text stages rank on the topic (time words stripped), so that is what is
   // embedded for the original — the alternates are embedded as written.
+  // A space that switched embedding off (the Console's Clean section) gets
+  // no semantic half at all — not the query embed, not the lazy catch-up —
+  // and says so the way a missing key does.
   const report: SemanticReport = {}
-  const configured = semanticConfigured()
+  const keyed = semanticConfigured()
+  const enabled = keyed && (await embeddingEnabledFor(context.spaceId))
+  const configured = keyed && enabled
   const queryVectors = new Map<string, number[]>()
   const phrasings = [plan.topic || query, ...plan.queries.slice(1)]
   if (configured && !plan.temporalOnly) {
@@ -251,6 +259,7 @@ export async function searchContext(
     sources: createSourceStage(context, sourcePaths, queryVectors, report),
     // Claims rank only for the visible notes at their CURRENT mtime.
     memories: createMemoryStage(context, new Map(metas.map((m) => [m.path, m.mtime])), queryVectors, report),
+    chunks: createChunkStage(context, new Map(metas.map((m) => [m.path, m.mtime])), queryVectors, report),
     rerank: createReranker(),
   })
   for (const h of hits) {
@@ -258,7 +267,7 @@ export async function searchContext(
       void logAudit(p.spaceId, { userId: p.userId, name: p.name, action: 'read', path: h.path })
     }
   }
-  const semantic: SemanticStatus = !configured ? 'no-key' : report.error ? 'error' : 'on'
+  const semantic: SemanticStatus = !keyed ? 'no-key' : !enabled ? 'off' : report.error ? 'error' : 'on'
   return { hits, semantic, plan: { ...plan, rewrite } }
 }
 

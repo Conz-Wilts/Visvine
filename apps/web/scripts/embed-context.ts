@@ -26,9 +26,14 @@ async function main() {
   const only = process.argv[2];
   console.log(`Embedding with ${config.model}${only ? ` for ${only}` : ' (all spaces)'}…`);
   const result = await embedSweep(only);
+  if (result.disabled) {
+    console.log('That space has embedding switched off (Console → Clean). Nothing embedded; orphans pruned.');
+    return;
+  }
   console.log(
-    `Done: ${result.notes} notes, ${result.chunks} source chunks, ` +
-      `${result.pruned} orphaned vector(s) pruned.`
+    `Done: ${result.notes} notes, ${result.noteChunks} note chunks across ${result.chunkedNotes} notes, ` +
+      `${result.chunks} source chunks, ${result.pruned} orphaned vector(s) pruned` +
+      (result.skippedSpaces ? `, ${result.skippedSpaces} space(s) skipped (embedding off).` : '.')
   );
 }
 

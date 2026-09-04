@@ -157,6 +157,8 @@ export async function runClean(
 
 export interface ApplyResult {
   applied: number
+  /** How many of each AutoFix kind were written — what the clean dashboard reports. */
+  applied_by_kind: Record<string, number>
   skipped: Array<{ path: string; reason: string }>
   remaining_issue_counts: Record<string, number>
 }
@@ -171,10 +173,42 @@ export async function applyCleanFixes(
   context: Context,
   opts: CleanOptions,
 ): Promise<ApplyResult> {
-  const { analysis, fixes, contentByPath } = await analyze(p, context, opts)
+  return applyAnalyzedFixes(p, context, await analyze(p, context, opts), null)
+}
+
+/**
+ * Analyse once and, optionally, apply in the same pass — what the scheduled
+ * clean runs (lib/notes/cleanSchedule.ts). `allowKinds` narrows the mechanical
+ * allow-list to what the schedule opted into; null means every safe kind, and
+ * an empty set means analyse only. Separate from applyCleanFixes because a
+ * nightly pass over a large space should read the vault once, not twice.
+ */
+export async function cleanPass(
+  p: ContextPrincipal,
+  context: Context,
+  opts: CleanOptions,
+  allowKinds: ReadonlySet<AutoFix['kind']> | null,
+): Promise<{ analysis: CleanAnalysis; applied: ApplyResult | null }> {
+  const internals = await analyze(p, context, opts)
+  const applied =
+    allowKinds && allowKinds.size === 0
+      ? null
+      : await applyAnalyzedFixes(p, context, internals, allowKinds)
+  return { analysis: internals.analysis, applied }
+}
+
+async function applyAnalyzedFixes(
+  p: ContextPrincipal,
+  context: Context,
+  internals: AnalysisInternals,
+  allowKinds: ReadonlySet<AutoFix['kind']> | null,
+): Promise<ApplyResult> {
+  const { analysis, fixes, contentByPath } = internals
   let applied = 0
+  const appliedByKind: Record<string, number> = {}
   const skipped: Array<{ path: string; reason: string }> = []
   for (const fix of fixes) {
+    if (allowKinds && !allowKinds.has(fix.kind)) continue
     const current = contentByPath.get(fix.path)
     if (current === undefined) continue
     // Belt and braces: the frozen callback scoped the fixes already, but the
@@ -205,10 +239,11 @@ export async function applyCleanFixes(
       })
     }
     applied++
+    appliedByKind[fix.kind] = (appliedByKind[fix.kind] ?? 0) + 1
   }
   const counts: Record<string, number> = {}
   for (const group of analysis.worklist) counts[group.kind] = group.count
-  return { applied, skipped, remaining_issue_counts: counts }
+  return { applied, applied_by_kind: appliedByKind, skipped, remaining_issue_counts: counts }
 }
 
 export interface TrashResult {

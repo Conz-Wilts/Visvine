@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyTickCaller } from '@/lib/agents/internalAuth'
 import { tick } from '@/lib/agents/schedule'
 import { drainProjections } from '@/lib/notes/projections'
+import { runDueCleans } from '@/lib/notes/cleanSchedule'
 import { reapExpiredLeases } from '@/lib/vm/lease'
 import { meterAwakeMachines, stopOverspendingSpaces } from '@/lib/vm/quota'
 import { pruneEgressLog, sweepEgress } from '@/lib/vm/anomaly'
@@ -34,6 +35,16 @@ export async function POST(req: NextRequest) {
     logger.error('agents.tick.projection_drain_failed', { err })
     return null
   })
+  // The spaces' nightly cleans ride this tick for the same reason: a schedule
+  // is a wall-clock time in the space's own zone, so it needs a minute
+  // heartbeat rather than the 03:10 nightly sweep. Best-effort — a space whose
+  // clean throws must not stop agent runs (each pass records its own failure
+  // row, lib/notes/cleanSchedule.ts).
+  const cleans = await runDueCleans(new Date()).catch((err) => {
+    logger.error('notes.clean.tick_failed', { err })
+    return null
+  })
+
   // VM leases ride this tick for the same reason the projection drain does: it
   // is the heartbeat the deployment already has, and a lease nobody has touched
   // in a fortnight is not urgent enough to justify a second scheduler job. Never
@@ -56,6 +67,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     projections,
+    cleans,
     vmLeasesReaped: vmLeases,
     machines,
     reclaimed: report.reclaimed,

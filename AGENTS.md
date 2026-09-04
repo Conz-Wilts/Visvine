@@ -307,14 +307,92 @@ columns are.
   optimistically over the fetched rows because the directory response is
   cached for 30 seconds.
 
+## The nightly clean
+
+**A space cleans itself on a clock, as a person.** The Space Console's **Clean**
+section (`/admin?section=clean`) turns it on, sets the hour, and shows every
+pass. It is the existing role-aware clean (`lib/notes/clean.ts`, the same code
+`clean_context` runs) put behind a schedule row — it holds no authority of its
+own:
+
+- **It runs as the admin who turned it on** (`run_as_user_id`), under their
+  ordinary principal. Their visibility lens decides what is analysed, their
+  write gate what is written, origin `maintenance`, audited like any edit. A
+  manual **Run now** acts as whoever pressed it. If the person it names stops
+  being an admin the run is recorded `skipped` — an unattended pass acts for a
+  named person or it does not act.
+- **Only the mechanical allow-list is applied**, narrowed further by what the
+  schedule opted into (`shared/cleanSchedule.ts#CLEAN_FIX_KINDS` is the
+  ceiling; a hand-edited row cannot widen it). Duplicates, contradictions and
+  orphans are never applied — they come back as the worklist the panel shows.
+  Folders frozen for AI are reported and never written, as always.
+- **Cleaning happens in the space that OWNS the notes, at the top level.** A
+  sub-space holds no schedule and a parent never cleans one: its context is the
+  parent's read-only `spaces/<id>/` folder, so `buildCleanScope` puts every
+  `spaces/` path out of scope and `normalizeCleanTarget` refuses one as a
+  target. A personal space is cleaned by its owner, not on a clock
+  (`cleanScheduleDenial`).
+- **The tick fires it, not the nightly sweep.** A schedule is a wall-clock hour
+  in the space's own zone, so the minute tick claims due rows with a conditional
+  UPDATE that advances `next_run_at` itself — N instances racing at 3:30am
+  produce one run, and a night the deployment was down is skipped, never
+  replayed.
+
+- **What it applies is narrow, and that is the design.** The allow-list is
+  frontmatter fill, one-match link repair, unambiguous mention linking, stale,
+  expiry and supersession. It never changes a type, an alias or a folder: a
+  restructure is judgment, and judgment comes back as the worklist (with the
+  first `WORKLIST_ITEMS_KEPT` paths per kind on the run row) for a person or
+  an agent to do through the ordinary gated writes.
+- **The same row owns embedding.** `embed_enabled` is the space's one switch
+  for the semantic half — off stops the nightly sweep, the query-time
+  catch-up and search's vector stages alike (`searchContext` reports
+  `semantic: 'off'`, distinct from the deployment's `no-key`), and a space
+  with no row is on. `embed_after_clean` makes a pass re-embed what it changed
+  in the same run, capped at `POST_CLEAN_EMBED_NOTES` with the rest left to
+  the nightly; the outcome is its own column (`embed_status`), so an embedding
+  failure never fails a clean that already wrote. `embedSweep(spaceId)` is the
+  one implementation behind all three callers.
+- **One tick runs at most `MAX_CLEANS_PER_TICK`**, oldest due first. The claim
+  advances `next_run_at` before the pass, so a deferred row is still due next
+  minute — the cap bounds one request, never the night's work.
+
+Every pass writes a `context_clean_runs` row: what it could see, what was in
+scope, what it wrote by kind, what a gate refused, what it left for a person,
+whether full mode hit its note cap, and what the embed did. That history is
+the dashboard, and it is how a schedule that quietly reaches nothing becomes
+visible. `saveCleanSchedule` merges a patch over the stored row, so the
+console can save one field at a time. Deleting the admin it runs as switches
+it off (`deleteAccount`) rather than leaving a nightly skipped row.
+
 ## Search
 
-`contextService.searchContext` → `lib/notes/shared/retrieval.ts#fusedSearch`. Five
+`contextService.searchContext` → `lib/notes/shared/retrieval.ts#fusedSearch`. Six
 stages fused by weighted RRF: frontmatter filter, BM25 over note text (title ×3,
-tags ×2), pgvector cosine over note embeddings, source-chunk cosine + Postgres
+tags ×2), pgvector cosine over whole-note embeddings, cosine over **note
+chunks** (folded onto their note, below), source-chunk cosine + Postgres
 full-text, and link-context neighbours of the top BM25 hits (recall net, weight
 0.4). Cosine hits must clear both a relative floor (85% of top) and 0.55
 absolute.
+
+**A note is embedded twice: whole, and by section.** `lib/notes/shared/noteChunks.ts`
+(pure, tested) splits a note at its headings — fenced code never opens one, an
+index note's machine child list is dropped — then packs paragraphs to
+`NOTE_CHUNK_CHARS` with a short overlap inside a section, cutting a giant
+paragraph at sentence ends and never past `NOTE_CHUNK_MAX_CHARS`. What is
+embedded is the breadcrumb plus the prose (`Portfolio > Halter > Q3 targets`
+then the section), so a section's vector knows what it is about; what is
+stored as `text` is the prose alone, for snippets. Chunks live in
+`context_note_chunks`, keyed and pruned like note vectors and dropped with
+the note in `projections.ts#dropEmbedding`; `lib/notes/chunkStage.ts` ranks
+them against the visible notes' `(path, mtime)` so a chunk of an older save
+is never served, and `fusedSearch` folds every hit onto its note at weight 1
+— several matching sections collapse to the note's best rank — keeping the
+best as the hit's `passage: { heading, text }`. Where `claim` is what the
+note asserts, `passage` is where it says it. Chunks are written only by
+`embedSweep` (nightly, post-clean, `pnpm db:embed`), never at query time: the
+whole-note vector's lazy catch-up stays, chunks cost several vectors a note
+and are done in bulk, one embeddings call per batch of notes.
 
 **A query is planned before any stage runs** (`lib/notes/shared/queryPlan.ts`,
 pure and deterministic): time words ("last week", "in June 2024", "since March",

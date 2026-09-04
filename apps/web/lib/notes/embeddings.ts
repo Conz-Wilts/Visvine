@@ -37,8 +37,12 @@ export function semanticConfigured(): boolean {
   return embeddingsConfig() !== null
 }
 
-/** What the semantic half of a search actually did. */
-export type SemanticStatus = 'on' | 'no-key' | 'error'
+/**
+ * What the semantic half of a search actually did. `off` is the space's own
+ * choice (embedding switched off in its Clean section), as opposed to
+ * `no-key`, which is the deployment's.
+ */
+export type SemanticStatus = 'on' | 'no-key' | 'off' | 'error'
 
 /** Embed texts (order-preserving), batched to keep request sizes bounded. */
 export async function embedTexts(texts: string[]): Promise<number[][]> {

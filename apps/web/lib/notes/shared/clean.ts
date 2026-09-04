@@ -6,6 +6,7 @@
 // module scopes their output and turns issues into an agent-executable
 // worklist. Pure — no Prisma/Node/DOM imports.
 import { containsPath } from './authz'
+import { isSubspacePath } from '@/lib/spaces/subspaces'
 import { isIndexPath } from './indexNote'
 import { entityKindOfPath } from '../entities'
 import type { AutoFix, Issue } from './review'
@@ -42,7 +43,12 @@ export function buildCleanScope(opts: {
     owns,
     inTarget,
     writable,
-    inScope: (path: string) => owns(path) && inTarget(path) && writable(path),
+    // `spaces/` is this space's read of its public sub-spaces' context
+    // (lib/notes/federation.ts) — another tenant's notes, read-only here. No
+    // clean, scheduled or pressed, is ever in scope there: cleaning happens in
+    // the space that owns the notes. `writable` already refuses it; saying it
+    // here too is what keeps the ANALYSIS from listing another space's work.
+    inScope: (path: string) => !isSubspacePath(path) && owns(path) && inTarget(path) && writable(path),
   }
 }
 

@@ -7,6 +7,7 @@ import PeopleDataProvider from '@/features/admin/components/people/PeopleDataCon
 import MembersPanel from '@/features/admin/components/people/MembersPanel';
 import SpaceSettingsPanel from '@/features/admin/components/SpaceSettingsPanel';
 import TypesPanel from '@/features/admin/components/TypesPanel';
+import CleanPanel from '@/features/admin/components/CleanPanel';
 import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
 import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
 import { useConnectorRequestCount } from '@/features/connectors/hooks/useConnectorRequestCount';
@@ -70,6 +71,9 @@ function AdminConsole({ space, onSaved }: {
     // Connectors has no rail row of its own — it is admins-only by nature, so
     // this console IS its surface (lib/featureAccess NAV_HIDDEN_FEATURE_KEYS).
     { id: 'connectors', label: 'Connectors', width: 'form', badge: connectorRequests.count },
+    // The nightly clean: whether the space's context tidies itself, when, as
+    // whom, and what every pass did. A sub-space's panel says why it holds none.
+    { id: 'clean', label: 'Clean', width: 'form' },
     // The model bill: what agents spent, per month, by model and by agent.
     { id: 'usage', label: 'Usage', width: 'form' },
     // Both queues a person can be waiting in — to join, and for context access —
@@ -113,6 +117,8 @@ function AdminConsole({ space, onSaved }: {
               );
             case 'connectors':
               return <ConnectorsPanel key={space.id} onRequestsChanged={connectorRequests.refresh} />;
+            case 'clean':
+              return <CleanPanel key={space.id} spaceId={space.id} />;
             case 'usage':
               return <UsagePanel key={space.id} spaceId={space.id} />;
             case 'members':
