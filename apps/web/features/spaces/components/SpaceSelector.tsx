@@ -9,6 +9,7 @@ import { useHoverIntent } from '@/features/shared/hooks/useHoverIntent';
 import { useSession } from '@/features/auth/lib/auth-client';
 import { PlusIcon, SettingsIcon, UsersIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
+import { spaceMark } from '@/lib/spaces/subspaces';
 import { HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
 import NewSpaceDialog from './NewSpaceDialog';
 
@@ -33,7 +34,7 @@ import NewSpaceDialog from './NewSpaceDialog';
  * top group's own row, directly below.
  */
 export default function SpaceSelector() {
-  const { currentSpace, isAdmin } = useSpace();
+  const { currentSpace, spaces, isAdmin } = useSpace();
   const { expanded, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
   // The switcher and Create new share the rail's edge, one at a time.
   const { close: closeCreate } = useCreateModal();
@@ -111,6 +112,14 @@ export default function SpaceSelector() {
     },
   ];
 
+  // A sub-space wears its parent's mark (spaceMark), so the head row says
+  // which space you are in with the picture and WHERE by the parent's name
+  // under it — the sub-space's own name is the only thing that differs.
+  const mark = currentSpace ? spaceMark(currentSpace, spaces) : null;
+  const parentName = currentSpace?.parentId
+    ? (spaces.find((s) => s.id === currentSpace.parentId)?.name ?? null)
+    : null;
+
   // The sheet is the hairline under the space's row and everything it
   // reveals. Shut, it is one gap tall — the rail's rhythm between the space
   // and Create — with the hairline along its bottom edge, which is the line
@@ -150,8 +159,8 @@ export default function SpaceSelector() {
           style={{ height: ROW_H }}
         >
           <span className="flex shrink-0 items-center justify-center" style={{ width: HEAD_CELL_W, height: ROW_H }}>
-            {currentSpace ? (
-              <SpaceAvatar name={currentSpace.name} imageUrl={currentSpace.imageUrl} size="md" rounded="rounded-[10px]" className="!w-10 !h-10 !text-base" />
+            {currentSpace && mark ? (
+              <SpaceAvatar name={mark.name} imageUrl={mark.imageUrl} size="md" rounded="rounded-[10px]" className="!w-10 !h-10 !text-base" />
             ) : (
               <div className="w-10 h-10 rounded-[10px] bg-surface-3 flex-shrink-0" />
             )}
@@ -167,8 +176,13 @@ export default function SpaceSelector() {
               transition: reduced ? 'none' : `opacity 140ms ease ${expanded ? 200 : 0}ms`,
             }}
           >
-            <span className="min-w-0 flex-1 truncate text-left text-[15px] font-open-sauce font-semibold text-text-primary">
-              {currentSpace?.name || 'Select space'}
+            <span className="flex min-w-0 flex-1 flex-col text-left">
+              <span className="min-w-0 truncate text-[15px] font-open-sauce font-semibold text-text-primary">
+                {currentSpace?.name || 'Select space'}
+              </span>
+              {parentName && (
+                <span className="min-w-0 truncate text-[13px] font-open-sauce text-text-muted">{parentName}</span>
+              )}
             </span>
           </span>
         </button>

@@ -197,3 +197,19 @@ export function spaceBranches<T extends { id: string; parentId?: string | null }
   }
   return roots.map((space) => ({ space, children: childrenOf.get(space.id) ?? [] }))
 }
+
+/**
+ * The mark a space wears. A sub-space wears its PARENT's — one house, one
+ * picture: a sub-space is a room of the space it names, and its own name is
+ * what tells the two apart. It falls back to its own only when the parent is
+ * not in the list the viewer can see, so a lone sub-space still shows
+ * something rather than nothing.
+ */
+export function spaceMark<T extends { id: string; name: string; imageUrl?: string; parentId?: string | null }>(
+  space: T,
+  spaces: readonly T[],
+): { name: string; imageUrl?: string } {
+  const parent = space.parentId ? spaces.find((s) => s.id === space.parentId) : undefined
+  const wearer = parent ?? space
+  return { name: wearer.name, imageUrl: wearer.imageUrl }
+}

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
+import { spaceMark } from '@/lib/spaces/subspaces';
 import { Button, EmptyState } from '@/components/ui';
 
 export default function SpacesPage() {
@@ -56,7 +57,8 @@ export default function SpacesPage() {
               return (
                 <li key={space.id} className="flex items-center gap-4 py-4">
                   <Link href={`/communities/${encodeURIComponent(space.id)}`} className="h-14 w-14 shrink-0 overflow-hidden rounded-lg">
-                    <SpaceAvatar name={space.name} imageUrl={space.imageUrl} className="h-full w-full" />
+                    {/* A sub-space wears its parent's mark; its name is what tells them apart. */}
+                    <SpaceAvatar {...spaceMark(space, spaces)} className="h-full w-full" />
                   </Link>
 
                   <div className="min-w-0 flex-1">

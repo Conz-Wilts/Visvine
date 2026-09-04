@@ -12,6 +12,7 @@ import Toggle from '@/components/ui/Toggle';
 import { useConsoleAction, useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { FetchJsonError, fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import SpaceImageUpload from '@/features/spaces/components/SpaceImageUpload';
+import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import SubspacesSection from '@/features/spaces/components/SubspacesSection';
 
 interface Props {
@@ -262,14 +263,30 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
       <section>
         <div className="space-y-6">
           <div className="flex items-start justify-between gap-4">
-            <SpaceImageUpload
-              space={{ ...space, imageUrl }}
-              onUploadComplete={url => {
-                setImageUrl(url);
-                onSaved({ imageUrl: url });
-              }}
-              size="xl"
-            />
+            {/* A sub-space wears its parent's mark (spaceMark), so there is
+                nothing here to upload: one house, one picture, and the name
+                below is what tells the rooms apart. */}
+            {isSubspace ? (
+              <div className="flex items-center gap-3">
+                <SpaceAvatar
+                  name={parent?.name ?? space.name}
+                  imageUrl={parent?.imageUrl}
+                  size="xl"
+                />
+                <p className="text-xs text-text-muted">
+                  Wears {parent ? <span className="font-medium text-text-secondary">{parent.name}</span> : 'its parent'}&apos;s picture
+                </p>
+              </div>
+            ) : (
+              <SpaceImageUpload
+                space={{ ...space, imageUrl }}
+                onUploadComplete={url => {
+                  setImageUrl(url);
+                  onSaved({ imageUrl: url });
+                }}
+                size="xl"
+              />
+            )}
             <div className="flex flex-col items-end text-right">
               <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
                 <span className={isPrivate ? 'text-brand-dark-green' : 'text-text-muted'}>

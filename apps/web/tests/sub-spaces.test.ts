@@ -8,6 +8,7 @@ import {
   graftSubspace,
   isSubspacePath,
   spaceBranches,
+  spaceMark,
   parentDenial,
   parseSubspacePath,
   rebaseMeta,
@@ -179,5 +180,22 @@ describe('spaceBranches / spaceTrail — the switcher’s columns', () => {
     const byId = new Map(spaces.map((s) => [s.id, s]))
     assert.deepEqual(spaceTrail(byId.get('founders')!, byId).map((s) => s.id), ['blackbird', 'founders'])
     assert.deepEqual(spaceTrail(byId.get('orphan')!, byId).map((s) => s.id), ['orphan'])
+  })
+})
+
+describe('spaceMark — a sub-space wears its parent’s picture', () => {
+  const spaces = [
+    { id: 'blackbird', name: 'Blackbird', imageUrl: 'bb.png', parentId: null },
+    { id: 'ic', name: 'Investment Committee', imageUrl: 'ic.png', parentId: 'blackbird' },
+    { id: 'orphan', name: 'Orphan', imageUrl: 'o.png', parentId: 'elsewhere' },
+  ]
+  it('a top-level space wears its own', () => {
+    assert.deepEqual(spaceMark(spaces[0], spaces), { name: 'Blackbird', imageUrl: 'bb.png' })
+  })
+  it('a sub-space wears the parent’s, whatever it holds itself', () => {
+    assert.deepEqual(spaceMark(spaces[1], spaces), { name: 'Blackbird', imageUrl: 'bb.png' })
+  })
+  it('falls back to its own when the parent is not in the list', () => {
+    assert.deepEqual(spaceMark(spaces[2], spaces), { name: 'Orphan', imageUrl: 'o.png' })
   })
 })

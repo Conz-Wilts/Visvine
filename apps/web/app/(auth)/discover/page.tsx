@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { Space, selfJoinAliases } from '@/lib/types';
+import { spaceMark } from '@/lib/spaces/subspaces';
 import { Button, EmptyState, Modal, SearchInput } from '@/components/ui';
 
 function formatMemberCount(count: number): string {
@@ -18,11 +19,14 @@ function formatMemberCount(count: number): string {
 
 function SpaceCard({
   space,
+  mark,
   parentName,
   joined,
   onJoin,
 }: {
   space: Space;
+  /** The mark it wears — a sub-space wears its parent's (spaceMark). */
+  mark: { name: string; imageUrl?: string };
   /** The space this one is a sub-space of, when the viewer can see it. */
   parentName: string | null;
   joined: boolean;
@@ -38,8 +42,8 @@ function SpaceCard({
     <div className="group flex w-full flex-col">
       <div className="aspect-square w-full overflow-hidden rounded-lg">
         <SpaceAvatar
-          name={space.name}
-          imageUrl={space.imageUrl}
+          name={mark.name}
+          imageUrl={mark.imageUrl}
           className="h-full w-full !rounded-none transition-transform duration-300 group-hover:scale-[1.03]"
         />
       </div>
@@ -141,6 +145,7 @@ export default function DiscoverPage() {
               <SpaceCard
                 key={space.id}
                 space={space}
+                mark={spaceMark(space, spaces)}
                 parentName={nameOf(space.parentId)}
                 joined={isJoined(space.id)}
                 onJoin={handleJoin}
