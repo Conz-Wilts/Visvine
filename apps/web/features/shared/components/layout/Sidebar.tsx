@@ -7,7 +7,7 @@ import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/Cre
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { useSpace } from "@/features/shared/contexts/SpaceContext";
-import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_PANE_TOP, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
+import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
@@ -66,9 +66,10 @@ const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync wit
 const RAIL_PANEL_W = 320;
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full height
-// paddingBottom on the rail column. It matches SHELL_PANE_TOP, so the rail's
-// last row and a page's content share the surface's bottom rhythm.
-const RAIL_PAD_Y = SHELL_PANE_TOP;
+// paddingBottom on the rail column: none. The account row runs edge to edge
+// like every other row, so it sits in the screen's bottom-left corner rather
+// than floating a band's height above it.
+const RAIL_PAD_Y = 0;
 // paddingTop is its own number, because the head row is aligned to the shell's
 // top band rather than to the pane below it: the band is SHELL_TOP_BAR_H tall,
 // so the space avatar — 40px in a ROW_H-tall row — starts where its centre lands on
