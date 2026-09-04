@@ -100,10 +100,12 @@ export function TreeSpine({ children, animate = false, stem: stemPx = 18 }: {
       />
       {rows.length > 0 && (
         <div className="relative">
+          {/* Above the rows, so a row whose band bleeds out to the panel's
+              edge (TREE_ROW_BLEED) is painted under the line rather than over it. */}
           <span
             aria-hidden
             style={run}
-            className="tree-line pointer-events-none absolute inset-y-0 left-0 w-px bg-border-default/70"
+            className="tree-line pointer-events-none absolute inset-y-0 left-0 z-[1] w-px bg-border-default/70"
           />
           {rows.map((child, i) => (
             <div key={keyOf(child, i)} className="tree-spine-row" style={row(i)}>

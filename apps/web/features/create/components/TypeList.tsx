@@ -5,7 +5,7 @@ import { rowKey, rowLabel, type CreateRow, type CreateRowList } from '@/lib/crea
 import type { SpaceAlias } from '@/lib/types';
 import { ITEM_GAP, LABEL_ML, ROW_CLASS, ROW_H, ROW_INSET, ROW_TEXT } from '@/features/shared/components/layout/railRow';
 import { ChevronRightIcon } from '@/features/shared/icons';
-import { TreeSpine, TreeSpineJoin } from '@/components/ui/TreeChrome';
+import { TREE_ROW_BLEED, TreeSpine, TreeSpineJoin } from '@/components/ui/TreeChrome';
 import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 
 // The row's leading cell, drawn the way the space switcher's is: the chevron's
@@ -137,7 +137,9 @@ export default function TypeList({
                       key={alias.id ?? alias.name}
                       type="button"
                       onClick={() => onPick(row, alias)}
-                      className={`${ROW_CLASS} min-w-0 gap-3 pr-4 text-left`}
+                      // The band runs the panel's full width (TREE_ROW_BLEED);
+                      // z-0 keeps it under the spine's line.
+                      className={`${ROW_CLASS} !z-0 !w-[calc(100%+999px)] ${TREE_ROW_BLEED} min-w-0 gap-3 pr-4 text-left`}
                       style={{ height: ALIAS_ROW_H, color: 'var(--shell-fg-muted, #111827)' }}
                     >
                       <TreeSpineJoin kind={j === aliases.length - 1 ? 'last' : 'mid'} />

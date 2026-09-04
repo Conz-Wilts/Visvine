@@ -201,7 +201,7 @@ export default function CreatePanel() {
         )}
       </div>
 
-      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-3">
+      <div className="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-3">
         {formRow && currentSpace && (TypedForm || formRow.kind === 'new-type') ? (
           <div className="px-3 pt-1">
             {formRow.kind === 'new-type' ? (

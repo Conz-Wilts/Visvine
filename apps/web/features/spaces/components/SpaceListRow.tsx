@@ -4,7 +4,7 @@ import type { Space } from '@/lib/types';
 import { LABEL_ML, ROW_CLASS, ROW_H, ROW_TEXT } from '@/features/shared/components/layout/railRow';
 import { ChevronRightIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
-import { TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
+import { TREE_ROW_BLEED, TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
 
 /** A sub-space row is shorter than its parent's: a line of a list under it. */
 const SUBSPACE_ROW_H = 56;
@@ -123,7 +123,9 @@ export function SubspaceRow({
       type="button"
       onClick={onSelect}
       tabIndex={tabbable ? 0 : -1}
-      className={`${ROW_CLASS} min-w-0 gap-3 pr-4 text-left ${current ? 'bg-surface-3 font-semibold' : 'font-normal'}`}
+      // The band runs the panel's full width, from under the spine's indent
+      // out to the edge (TREE_ROW_BLEED); z-0 keeps it under the spine's line.
+      className={`${ROW_CLASS} !z-0 !w-[calc(100%+999px)] ${TREE_ROW_BLEED} min-w-0 gap-3 pr-4 text-left ${current ? 'bg-surface-3 font-semibold' : 'font-normal'}`}
       style={{
         height: SUBSPACE_ROW_H,
         color: current ? 'var(--shell-fg-strong, #111827)' : 'var(--shell-fg-muted, #111827)',

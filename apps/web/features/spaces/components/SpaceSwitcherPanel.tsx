@@ -141,7 +141,7 @@ export default function SpaceSwitcherPanel() {
             the spine drops out of the parent's avatar and ticks into each
             sub-space, ending at the last, so the branch reads as one drawing
             rather than an indent. */}
-        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-3" style={{ paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
+        <div className="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-3" style={{ paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
           {rows.length === 0 ? (
             <div className="p-4 text-center text-sm text-text-muted">No spaces found</div>
           ) : (
