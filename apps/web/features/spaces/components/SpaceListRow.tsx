@@ -9,8 +9,10 @@ import { TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
 /** A sub-space row is shorter than its parent's: a line of a list under it. */
 const SUBSPACE_ROW_H = 56;
 /** The chevron's cell on a parent row: the row's left edge, ahead of the
- *  avatar, so nothing else on the row moves whether or not a row has one. */
-const CHEVRON_W = 28;
+ *  avatar, so nothing else on the row moves whether or not a row has one.
+ *  Wide enough that the glyph, centred in it, stands as far off the avatar as
+ *  the name does on the other side. */
+const CHEVRON_W = 44;
 const AVATAR_PX = 40;
 const AVATAR_GAP = 8;
 /** The avatar's cell on a list row: the chevron's cell, the avatar, a gap.
