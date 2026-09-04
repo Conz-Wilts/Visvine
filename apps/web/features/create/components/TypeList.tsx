@@ -5,6 +5,22 @@ import { rowKey, rowLabel, type CreateRow, type CreateRowList } from '@/lib/crea
 import type { SpaceAlias } from '@/lib/types';
 import { ITEM_GAP, LABEL_ML, ROW_CLASS, ROW_H, ROW_INSET, ROW_TEXT } from '@/features/shared/components/layout/railRow';
 import { ChevronRightIcon } from '@/features/shared/icons';
+import { TreeSpine, TreeSpineJoin } from '@/components/ui/TreeChrome';
+import { useSidebar } from '@/features/shared/contexts/SidebarContext';
+
+// The row's leading cell, drawn the way the space switcher's is: the chevron's
+// cell at the far left (empty on a kind with no aliases, so every mark lines
+// up), then the mark, then one gap before the name. The chevron stands as far
+// off the mark as the name does on the other side.
+const CHEVRON_W = 44;
+const MARK_PX = 14;
+const MARK_GAP = 8;
+const CELL_W = CHEVRON_W + MARK_PX + MARK_GAP;
+const MARK_CENTER = CHEVRON_W + MARK_PX / 2;
+// TreeSpine draws its line 14px in (the tree glyph's centre).
+const SPINE_DEFAULT_ML = 14;
+/** An alias row is shorter than its kind's: a line of a list under it. */
+const ALIAS_ROW_H = 56;
 
 /**
  * The Create panel's list: a mark and a name per kind, a hairline before the
@@ -13,10 +29,12 @@ import { ChevronRightIcon } from '@/features/shared/icons';
  * the rail's size — so the list reads as the rail continuing.
  *
  * It is a tree one level deep: a kind the space holds aliases for (a Person
- * with Founder and Investor, say) opens on its chevron to a row per alias,
- * stepped in under it, and picking one starts the form with that alias
- * already on. Arrow keys move over the kinds, Enter picks — the search box
- * above owns the keyboard, so this takes the active index from it.
+ * with Founder and Investor, say) carries a chevron at the row's far left, and
+ * pressing it hangs a row per alias under the kind on the tree spine
+ * (TreeSpine, the drawing the space switcher and the Context tree use);
+ * picking one starts the form with that alias already on. Arrow keys move
+ * over the kinds, Enter picks — the search box above owns the keyboard, so
+ * this takes the active index from it.
  */
 export default function TypeList({
   list,
@@ -35,6 +53,7 @@ export default function TypeList({
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const [open, setOpen] = useState<Set<string>>(() => new Set());
+  const { reduced } = useSidebar();
   // Keep the highlighted row in view while arrowing through a long list.
   const [lastActive, setLastActive] = useState(active);
   useEffect(() => {
@@ -74,10 +93,10 @@ export default function TypeList({
                 onMouseMove={() => onHover(i)}
                 onClick={() => onPick(row)}
                 className={`${ROW_CLASS} text-left ${i === active ? 'bg-surface-3' : ''}`}
-                style={{ height: ROW_H, paddingRight: aliases.length > 0 ? ROW_H : 16, color: 'var(--shell-fg-muted, #111827)' }}
+                style={{ height: ROW_H, paddingRight: 16, color: 'var(--shell-fg-muted, #111827)' }}
               >
-                <span className="flex shrink-0 items-center justify-center" style={{ width: ROW_H, height: ROW_H }}>
-                  <Mark row={row} size={14} />
+                <span className="flex shrink-0 items-center justify-end" style={{ width: CELL_W, height: ROW_H, paddingRight: MARK_GAP }}>
+                  <Mark row={row} size={MARK_PX} />
                 </span>
                 <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: LABEL_ML }}>
                   {row.kind === 'new-type' ? (
@@ -89,38 +108,46 @@ export default function TypeList({
                   )}
                 </span>
               </button>
-              {/* The chevron is its own control on the row's trailing cell, so
-                  opening the aliases never picks the kind. */}
+              {/* The chevron is its own control at the row's far left, laid
+                  over the leading cell, so opening the aliases never picks the
+                  kind. */}
               {aliases.length > 0 && (
                 <button
                   type="button"
                   aria-label={expanded ? `Hide ${rowLabel(row)} aliases` : `Show ${rowLabel(row)} aliases`}
                   aria-expanded={expanded}
                   onClick={(e) => { e.stopPropagation(); toggle(key); }}
-                  className="absolute right-0 top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-5 [&>svg]:w-5"
-                  style={{ width: ROW_H, height: ROW_H }}
+                  className="absolute left-0 top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-5 [&>svg]:w-5"
+                  style={{ width: CHEVRON_W, height: ROW_H }}
                 >
-                  <span className="transition-transform duration-150" style={{ transform: expanded ? 'rotate(90deg)' : 'none' }}>
+                  <span className="flex transition-transform duration-150" style={{ transform: expanded ? 'rotate(90deg)' : 'none' }}>
                     <ChevronRightIcon />
                   </span>
                 </button>
               )}
             </div>
-            {expanded &&
-              aliases.map((alias) => (
-                <button
-                  key={alias.id ?? alias.name}
-                  type="button"
-                  onClick={() => onPick(row, alias)}
-                  className={`${ROW_CLASS} pr-4 text-left`}
-                  style={{ height: ROW_H, paddingLeft: 24, color: 'var(--shell-fg-muted, #111827)' }}
-                >
-                  <span className="flex shrink-0 items-center justify-center" style={{ width: ROW_H, height: ROW_H }}>
-                    <span aria-hidden className="shrink-0 rounded-[3px]" style={{ width: 12, height: 12, background: alias.color }} />
-                  </span>
-                  <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: LABEL_ML }}>{alias.name}</span>
-                </button>
-              ))}
+            {expanded && (
+              // The spine sits under the centre of the kind's mark, not
+              // TreeSpine's default 14px, and its stem climbs from the branch's
+              // top to the mark's bottom edge.
+              <div style={{ marginLeft: MARK_CENTER - SPINE_DEFAULT_ML }}>
+                <TreeSpine animate={!reduced} stem={ROW_H / 2 - MARK_PX / 2}>
+                  {aliases.map((alias, j) => (
+                    <button
+                      key={alias.id ?? alias.name}
+                      type="button"
+                      onClick={() => onPick(row, alias)}
+                      className={`${ROW_CLASS} min-w-0 gap-3 pr-4 text-left`}
+                      style={{ height: ALIAS_ROW_H, color: 'var(--shell-fg-muted, #111827)' }}
+                    >
+                      <TreeSpineJoin kind={j === aliases.length - 1 ? 'last' : 'mid'} />
+                      <span aria-hidden className="shrink-0 rounded-[3px]" style={{ width: 12, height: 12, background: alias.color }} />
+                      <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`}>{alias.name}</span>
+                    </button>
+                  ))}
+                </TreeSpine>
+              </div>
+            )}
           </div>
         );
       })}
