@@ -1,32 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { PlugIcon, SparklesIcon } from "@/features/shared/icons";
+import { usePathname, useRouter } from "next/navigation";
+import { LogOutIcon, PlugIcon, SettingsIcon, SparklesIcon, UserIcon } from "@/features/shared/icons";
 import Image from "next/image";
 import { useSession, signOut } from "@/features/auth/lib/auth-client";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
+import Popover, { PopoverDivider, PopoverItem } from "@/components/ui/Popover";
 import ConnectorsDialog, { CONNECTORS_PARAM, connectorsSegment, type ConnectorsTab } from "@/features/settings/components/ConnectorsDialog";
-import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
+import { useSidebar } from "@/features/shared/contexts/SidebarContext";
+import { ROW_H, Row } from "@/features/shared/components/layout/railRow";
 
 /**
- * The account band — the rail's last rows (Sidebar). You sit at the foot of the
- * same column the space sits at the head of.
- *
- * There is no dropdown. Point at the avatar and the band GROWS UPWARD: what
- * hangs off your account — Connectors, Settings, Sign out — unfolds as ordinary
- * rail rows, on the rail's own glyph column, with their names arriving on the
- * same fade the tools' names do. So opening the account is the rail widening and
- * the band rising, one gesture, rather than a panel appearing over whatever page
- * you were reading.
- *
- * Your own row is not one of those actions: your name IS the link to your
- * profile, the way a person's name is everywhere else in the app, so pressing it
- * goes to `/directory/<node>`.
- *
- * The height is what animates, and it is computed rather than `auto` so it can
- * be transitioned. Keyboard focus opens it too, so the actions are reachable
- * without a pointer.
+ * You, at the foot of the rail — the same column the space sits at the head
+ * of — and the menu that hangs off you. The row is your picture and your name
+ * in the rail's own row shape; PRESSING it opens one menu beside the rail, the
+ * way the space's row does at the head: who is signed in, then Profile,
+ * Connectors, Models, Settings, and Sign out. Pressing again, Escape, or a
+ * press anywhere else closes it. Nothing opens on hover.
  *
  * Connectors are a row rather than a settings section because they are about
  * the space you are in, from where you stand in it: the dialog opens over the
@@ -37,11 +28,13 @@ import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRo
  */
 export default function UserMenu({ expanded, reduced }: { expanded: boolean; reduced: boolean }) {
   const { data: session, isPending } = useSession();
-  const [open, setOpen] = useState(false);
-  const [pinned, setPinned] = useState(false);
+  const { setMenuOpen } = useSidebar();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [connectorsOpen, setConnectorsOpen] = useState<ConnectorsTab | null>(null);
-  const bandRef = useRef<HTMLDivElement>(null);
+  const rowRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const pathname = usePathname();
+  const open = anchor !== null;
 
   // `?connectors=` opens the dialog: the sign-in round trip comes back to the
   // page it started on, and this is what re-opens what the person was in.
@@ -54,27 +47,17 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
     if (segment) setConnectorsOpen(segment);
   }, []);
 
-  // A pinned band closes on the next click outside it, the way the rail's own
-  // popups do. Hover-opened bands need nothing: the pointer leaving closes them.
+  // The rail is held open under the menu (SidebarContext) and let go with it.
   useEffect(() => {
-    if (!pinned) return;
-    const handlePointerDown = (e: MouseEvent) => {
-      if (bandRef.current?.contains(e.target as Node)) return;
-      setPinned(false);
-      setOpen(false);
-    };
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [pinned]);
+    setMenuOpen(open);
+    return () => setMenuOpen(false);
+  }, [open, setMenuOpen]);
 
-  // The rail shutting takes the band with it: a column of nameless glyphs
-  // stacked above the avatar is not a menu anyone can read.
-  useEffect(() => {
-    if (!expanded) {
-      setOpen(false);
-      setPinned(false);
-    }
-  }, [expanded]);
+  // Going somewhere closes the menu.
+  useEffect(() => setAnchor(null), [pathname]);
+
+  const close = () => setAnchor(null);
+  const toggle = () => setAnchor((a) => (a ? null : rowRef.current));
 
   const closeConnectors = () => {
     setConnectorsOpen(null);
@@ -93,129 +76,63 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   if (!session) return null;
 
   const { user } = session;
-  // Your name is the link to your own page, so there is no Profile row in the
-  // band. A session with no person node yet has nowhere to go: the row falls
-  // back to opening the band, the way it did when Profile was a row.
+  // A session with no person node yet has no page of its own, so Profile is
+  // simply not a row.
   const profileHref = user.nodeId ? `/directory/${encodeURIComponent(user.nodeId)}` : null;
 
   async function handleSignOut() {
-    setOpen(false);
-    setPinned(false);
+    close();
     await signOut();
     router.push("/");
     router.refresh();
   }
 
-  const actions = [
-    {
-      key: "connectors",
-      label: "Connectors",
-      onClick: () => setConnectorsOpen("connected"),
-      icon: <PlugIcon />,
-    },
-    {
-      // What the space's agents run on hangs off Connectors — a model IS a
-      // connector note — but it is one decision a space makes once, so it is
-      // its own row rather than a section inside the list of services.
-      key: "models",
-      label: "Models",
-      onClick: () => setConnectorsOpen("models"),
-      icon: <SparklesIcon />,
-    },
-    {
-      key: "settings",
-      label: "Settings",
-      onClick: () => router.push("/settings"),
-      icon: (
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      ),
-    },
-    {
-      key: "signout",
-      label: "Sign out",
-      onClick: () => { void handleSignOut(); },
-      icon: (
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-        </svg>
-      ),
-    },
-  ];
-
-  // The stack's open height: the rows, the gaps between them, and one more gap
-  // holding the last of them off the avatar. Same rhythm as every other band,
-  // so the rows land where rail rows land rather than in a menu's own spacing.
-  const stackH = actions.length * ROW_H + actions.length * ITEM_GAP;
-  const dur = reduced ? "0s" : "260ms";
+  const picture = (cls: string) => (
+    <span className={`overflow-hidden rounded-[10px] ${cls}`}>
+      {user.image ? (
+        <Image src={user.image} alt="" width={44} height={44} className="h-full w-full object-cover" />
+      ) : (
+        <PersonSilhouette />
+      )}
+    </span>
+  );
 
   return (
-    <div
-      ref={bandRef}
-      className="flex flex-col"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => { if (!pinned) setOpen(false); }}
-      onFocus={() => setOpen(true)}
-      onBlur={(e) => {
-        if (pinned) return;
-        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-        setOpen(false);
-      }}
-    >
-      {/* The rows, revealed by the band's own height. Clipped rather than
-          unmounted so they are there to travel: the stack rises out from behind
-          the avatar as the height opens, and the labels fade on the rail's
-          timing. */}
-      <div
-        className="overflow-hidden"
-        style={{
-          height: open ? stackH : 0,
-          opacity: open ? 1 : 0,
-          transition: reduced ? "none" : `height ${dur} cubic-bezier(0.25, 0.1, 0.25, 1), opacity ${dur} ease`,
-        }}
-        aria-hidden={!open}
-      >
-        <div className="flex flex-col" style={{ gap: ITEM_GAP, paddingBottom: ITEM_GAP }}>
-          {actions.map(({ key, label, icon, onClick }) => (
-            <Row
-              key={key}
-              expanded={expanded}
-              reduced={reduced}
-              label={label}
-              icon={icon}
-              onClick={() => {
-                setPinned(false);
-                setOpen(false);
-                onClick();
-              }}
-            />
-          ))}
-        </div>
+    <div className="flex flex-col">
+      {/* You. The same row shape as everything above it, with your picture where
+          a glyph goes and your name where a tool's name goes. Pressing it opens
+          the menu beside the rail. */}
+      <div ref={rowRef}>
+        <Row
+          expanded={expanded}
+          reduced={reduced}
+          label={user.name ?? "Account"}
+          active={open}
+          onClick={toggle}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          icon={picture("h-11 w-11 border-2 border-brand-green")}
+        />
       </div>
 
-      {/* You. The same row shape as everything above it, with your picture where
-          a glyph goes and your name where a tool's name goes — and, like every
-          other name in the app, it is a link to the person's page. Pointing at
-          the row is what opens the band above it; nothing is drawn to say so. */}
-      <Row
-        expanded={expanded}
-        reduced={reduced}
-        label={user.name ?? "Account"}
-        active={open}
-        href={profileHref ?? undefined}
-        onClick={profileHref ? undefined : () => { setPinned((v) => !v); setOpen(true); }}
-        icon={
-          <span className="h-11 w-11 overflow-hidden rounded-[10px] border-2 border-brand-green">
-            {user.image ? (
-              <Image src={user.image} alt="" width={44} height={44} className="h-full w-full object-cover" />
-            ) : (
-              <PersonSilhouette />
-            )}
-          </span>
-        }
-      />
+      <Popover anchor={anchor} onClose={close} placement="right-end" width={264} ariaLabel="Account menu" className="p-1.5">
+        <div className="flex items-center gap-3 px-2.5 pb-2 pt-2">
+          {picture("h-10 w-10 shrink-0")}
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-semibold text-text-primary">{user.name ?? "Account"}</div>
+            <div className="truncate text-[12px] text-text-muted">{user.email}</div>
+          </div>
+        </div>
+        {profileHref && <PopoverItem label="Profile" icon={<UserIcon />} href={profileHref} onClick={close} />}
+        <PopoverItem label="Connectors" icon={<PlugIcon />} onClick={() => { close(); setConnectorsOpen("connected"); }} />
+        {/* What the space's agents run on hangs off Connectors — a model IS a
+            connector note — but it is one decision a space makes once, so it is
+            its own row rather than a section inside the list of services. */}
+        <PopoverItem label="Models" icon={<SparklesIcon />} onClick={() => { close(); setConnectorsOpen("models"); }} />
+        <PopoverItem label="Settings" icon={<SettingsIcon />} onClick={() => { close(); router.push("/settings"); }} />
+        <PopoverDivider />
+        <PopoverItem label="Sign out" icon={<LogOutIcon />} onClick={() => { void handleSignOut(); }} />
+      </Popover>
 
       {connectorsOpen && <ConnectorsDialog initial={connectorsOpen} onClose={closeConnectors} />}
     </div>
