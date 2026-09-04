@@ -96,10 +96,10 @@ anything under it, and the editor shows a banner naming the sub-space.
   `parentId`, refused otherwise); the creator becomes the sub-space's admin.
   A sub-space's own Settings names its parent and says what its visibility
   means there.
-- **Space menu**: pressing the space at the rail's head opens a popover
-  (`SpaceSelector`) whose Switch space list holds top-level spaces
-  (`subspaces.ts#spaceBranches`) with each one's sub-spaces indented one step
-  beneath it. A search flattens.
+- **Switcher**: the panel lists top-level spaces
+  (`subspaces.ts#spaceBranches`); pointing at one that has sub-spaces you are
+  in opens them in a column beside it (`SubspacePanel`), so each level is a
+  column rather than an indent. A search flattens.
 - **Discover / `/communities`**: "in *Parent*" when the parent is visible.
 - **`GET /api/communities/<id>/subspaces`**: every sub-space for an admin;
   the public ones and the ones they are in for a member.

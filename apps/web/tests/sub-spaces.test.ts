@@ -157,7 +157,7 @@ describe('rebaseNoteLinks', () => {
   })
 })
 
-describe('spaceBranches / spaceTrail — the space menu’s list', () => {
+describe('spaceBranches / spaceTrail — the switcher’s columns', () => {
   const spaces = [
     { id: 'alpha', parentId: null },
     { id: 'blackbird', parentId: null },

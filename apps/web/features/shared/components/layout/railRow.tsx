@@ -30,7 +30,7 @@ export const LABEL_ML = 8;    // glyph cell → label, on the open row
 // line sits directly against the tile on either side of it. The same open or
 // closed — the rail's geometry must not depend on which state it is in.
 export const ITEM_GAP = 0;
-// The space's head row is drawn by SpaceSelector rather than by Row,
+// The space switcher's head row is drawn by SpaceSelector rather than by Row,
 // so it takes ROW_INSET and this cell — the avatar is centred in the one glyph
 // column and its hover block is the same square as every row below it.
 export const HEAD_CELL_W = GLYPH_CELL_W;

@@ -10,11 +10,13 @@ import { useSpace } from "@/features/shared/contexts/SpaceContext";
 import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_PANE_TOP, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
-import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
+import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE, switcherCloseMs } from "@/features/shared/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
 import UserMenu from "@/features/auth/components/UserMenu";
 import CreatePanel from "@/features/create/components/CreatePanel";
 import SpaceSelector from "@/features/spaces/components/SpaceSelector";
+import SpaceSwitcherPanel from "@/features/spaces/components/SpaceSwitcherPanel";
+import SubspacePanel from "@/features/spaces/components/SubspacePanel";
 import type { SpaceFeatureConfig } from "@/lib/types";
 import {
   COLLAPSED_W,
@@ -32,7 +34,7 @@ import {
  * shell's top band (which pins it):
  *
  *  ┌──────────────────────────────────┐
- *  │ [space]  Blackbird Ventures   ⇅  │  head: the space; pressing it opens its menu
+ *  │ [space]  Blackbird Ventures      │  head: the space, and the page's panel
  *  ├──────────────────────────────────┤
  *  │ +  Create new                    │  top: the one thing you DO, and the two
  *  │ ◎  Discover                      │  ways out of this space — held apart
@@ -43,13 +45,8 @@ import {
  *  ├──────────────────────────────────┤
  *  │ …  More                          │  foot: the tools the space tucked away
  *  ├──────────────────────────────────┤
- *  │ (you)                            │  account: you; pressing it opens your menu
+ *  │ (you)                            │  account: your avatar and its menu
  *  └──────────────────────────────────┘
- *
- *  The head and the foot open MENUS — anchored popovers beside the rail
- *  (components/ui/Popover), opened by a press and closed by a press, Escape
- *  or leaving for a page — never by hover. The rail is held open under an
- *  open menu (SidebarContext#menuOpen). Create new is the one hover panel.
  *
  *  Every row is the same shape: a 48px glyph cell on one column, then a label
  *  the collapsed rail clips away with overflow-hidden. Shut, the rail is a
@@ -62,9 +59,9 @@ import {
  */
 
 const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
-// The rail's own panel — Create new — slides out beside the open rail at the
-// rail's own width, so the pair reads as two equal columns rather than a rail
-// and a wider drawer.
+// The rail's own panels — the space list and Create new — slide out beside
+// the open rail at the rail's own width, so the pair reads as two equal
+// columns rather than a rail and a wider drawer.
 const RAIL_PANEL_W = EXPANDED_W;
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full height
@@ -87,7 +84,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen: createOpen, formOpen: createFormOpen, close: closeCreate } = useCreateModal();
   const createSurface = useCreateSurface();
-  const { expanded, setHovered, reduced } = useSidebar();
+  const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen, switcherParentId } = useSidebar();
   const { currentSpace, isAdmin, loading: spaceLoading } = useSpace();
   const { setHost, dockTopInset } = useContextPanel();
 
@@ -157,14 +154,18 @@ export default function Sidebar() {
   const docked = pathname.startsWith("/channels") && wide;
   const panelW = CHANNELS_PANEL_W;
 
-  // The Create panel is a layer against the OPEN rail's edge (below), not this
-  // column: clamped so it can't outgrow a narrow viewport.
+  // The rail's own panels — the space switcher and Create new — are layers against
+  // the OPEN rail's edge (below), not this column: clamped so they can't
+  // outgrow a narrow viewport.
   const railPanelW = `min(${RAIL_PANEL_W}px, calc(100vw - ${EXPANDED_W}px))`;
+  // The sub-space column sits beyond the switcher's, on the same width, and
+  // gives up whatever the viewport cannot hold rather than running off it.
+  const railSubPanelW = `min(${RAIL_PANEL_W}px, calc(100vw - ${EXPANDED_W}px - ${railPanelW}))`;
   const columnW = docked ? `${panelW}px` : "0px";
-  // The rail is held open while the Create panel shows: it sits against the
-  // open rail's edge, so the pointer crossing into it must not shut the rail
-  // underneath. (The head and foot menus hold it through SidebarContext.)
-  const railPanelOpen = createOpen;
+  // The rail is held open while one of its panels shows: the panel sits
+  // against the open rail's edge, so the pointer crossing into it must not
+  // shut the rail underneath.
+  const railPanelOpen = switcherOpen || createOpen;
   const railW = expanded ? EXPANDED_W : COLLAPSED_W;
   // Create new is open only while the pointer is on its row or in the panel:
   // pointing at any other row of the rail puts it away — unless a form is
@@ -180,7 +181,11 @@ export default function Sidebar() {
     releaseTimer.current = null;
   };
   const shutRailPanels = () => {
-    const panelsGone = reduced ? 0 : DOCK_MS;
+    // The switcher shuts as one motion across its columns (SidebarContext), so
+    // the rail is held for however long that takes — with the sub-space column
+    // out, that is two slides, not one.
+    const panelsGone = switcherOpen ? switcherCloseMs(switcherParentId !== null, reduced) : reduced ? 0 : DOCK_MS;
+    setSwitcherOpen(false);
     closeCreate();
     cancelRelease();
     releaseTimer.current = setTimeout(() => {
@@ -199,9 +204,10 @@ export default function Sidebar() {
 
   const railInner = (
     <>
-      {/* Head — which space you are looking at, and the menu that opens off
-          it (SpaceSelector): the console and members for admins, New space,
-          and Switch space. The page's own side panel is switched from the
+      {/* Head — which space you are looking at, and the band that unfolds
+          under it (the console, New space — SpaceSelector). The
+          band draws its own insets: the space's row on the head inset, its
+          rows on the rail's. The page's own side panel is switched from the
           shell's top band (ShellTopBar), not here. */}
       <div className="flex shrink-0 flex-col" style={{ gap: ITEM_GAP }}>
         <SpaceSelector />
@@ -213,9 +219,10 @@ export default function Sidebar() {
 
             Create acts on the current space, so with none selected there is
             nothing for it to make (creating a space itself lives on the
-            space menu above). Pointing at it is enough: the panel slides out
-            beside the rail — every kind you can make here, searchable — and
-            stays while the pointer is anywhere on the card. The kind decides what comes next: a short form in the panel,
+            switcher above). Pointing at it is enough, the way the space
+            is: the panel slides out beside the rail — every kind you can make
+            here, searchable — and stays while the pointer is anywhere on the
+            card. The kind decides what comes next: a short form in the panel,
             its own surface, or a draft note (lib/create/rows.ts). */}
         <div
           className="flex flex-col border-t"
@@ -224,13 +231,19 @@ export default function Sidebar() {
             paddingTop: ITEM_GAP,
             paddingLeft: ROW_INSET,
             paddingRight: ROW_INSET,
-            // The one hairline between the space and the top group.
-            borderTopColor: "var(--shell-border, #e5e7eb)",
+            // The line under the space is drawn by the space's own sheet
+            // (SpaceSelector) — it is that sheet's bottom edge, which travels
+            // down when it opens — so this border only holds the pixel.
+            borderTopColor: "transparent",
           }}
         >
           {!noSpace && (
             <div
-              onMouseEnter={() => { if (!createOpen) createSurface(); }}
+              onMouseEnter={() => {
+                // One panel at a time: the two share the edge of the rail.
+                setSwitcherOpen(false);
+                if (!createOpen) createSurface();
+              }}
             >
             <Row
               expanded={expanded}
@@ -320,8 +333,8 @@ export default function Sidebar() {
       </nav>
 
       {/* Foot — the tools the space tucked out of the rail (featureConfig.more).
-          The space's own settings are not here: they hang off the space's menu
-          at the head, the way the account's do off the avatar. */}
+          The space's own settings are not here: they hang off the space in the
+          switcher at the head, the way the account's do off the avatar. */}
       {moreNav.length > 0 && (
         <div
           className="flex shrink-0 flex-col border-t"
@@ -356,9 +369,9 @@ export default function Sidebar() {
 
       {/* Account — you, on the same glyph column as everything above. The rail
           is the shell's only chrome, so the avatar belongs at the end of it
-          rather than floating over a page's top-right corner; what hangs off
-          it (Profile, Connectors, Models, Settings, Sign out) is the menu that
-          opens beside the rail when the row is pressed (UserMenu). */}
+          rather than floating over a page's top-right corner, and what hangs
+          off it (Profile, Connectors, Settings, Sign out) grows upward inside
+          the band as rail rows rather than in a menu over the page. */}
       <div
         className="flex shrink-0 flex-col border-t"
         onMouseEnter={leaveCreate}
@@ -382,11 +395,11 @@ export default function Sidebar() {
   return (
     <aside
       className="fixed left-0 top-0 z-40"
-      // The Create panel opens under the pointer, so it shuts when the pointer
-      // leaves the whole card — rail and panel both — and the rail, held open
-      // under it, lets go at the same moment. A Create form being filled in is
-      // the exception: it holds the card open until it is done or stepped
-      // back from.
+      // The rail's panels open under the pointer (the space row, the
+      // Create new row), so they shut when the pointer leaves the whole card —
+      // rail and panel both — and the rail, held open under them, lets go at
+      // the same moment. A Create form being filled in is the exception: it
+      // holds the card open until it is done or stepped back from.
       onMouseLeave={() => {
         if (!railPanelOpen) return;
         if (createOpen && createFormOpen) return;
@@ -482,17 +495,42 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* The Create panel is a layer against the open rail's edge running the
-          card's full height, so its search is at the very top beside the
-          space, not below the shell's band the way the page's panel column
-          is. It slides out from under the rail; parked, it is clipped by its
-          box. It hangs off the aside rather than the card's overflow-hidden
-          box above, because that box is only as wide as the rail and would
-          scroll itself sideways to show a focused search. The box's left edge
-          IS the rail's edge, on the rail's own motion: a panel opened while
-          the rail is still widening, or shut before it has finished, travels
-          with that edge rather than sliding towards a place the rail has not
-          reached yet. */}
+      {/* The rail's own panels — the space switcher and Create new — are
+          layers against the open rail's edge running the card's full height,
+          so their search is at the very top beside the space, not below the
+          shell's band the way the page's panel column is. Each slides out
+          from under the rail; parked, it is clipped by its box. They hang off
+          the aside rather than the card's overflow-hidden box above, because
+          that box is only as wide as the rail and would scroll itself sideways
+          to show a focused search. Each box's left edge IS the rail's edge,
+          on the rail's own motion: a panel opened while the rail is still
+          widening, or shut before it has finished, travels with that edge
+          rather than sliding towards a place the rail has not reached yet —
+          which read as the two collapsing into each other. One shows at a
+          time (the rows that open them close the other), so they share the
+          edge without a stack. */}
+      <div
+        className={`absolute top-0 bottom-0 z-20 overflow-hidden ${switcherOpen ? '' : 'pointer-events-none'}`}
+        style={{ left: railW, width: railPanelW, transition: reduced ? "none" : `left ${RAIL_MOTION}` }}
+      >
+        <SpaceSwitcherPanel />
+      </div>
+      {/* One more column, out beyond the switcher: the sub-spaces of the space
+          its pointer is on. Same geometry, one panel further along, so each
+          level of the tree is a column rather than an indent — and it is a box
+          of the aside for the same reason the switcher is, since the switcher's
+          own box clips at its edge. Spaces nest one level, so this is the last
+          column there can be. */}
+      <div
+        className={`absolute top-0 bottom-0 z-20 overflow-hidden ${switcherOpen && switcherParentId ? '' : 'pointer-events-none'}`}
+        style={{
+          left: `calc(${railW}px + ${railPanelW})`,
+          width: `max(0px, ${railSubPanelW})`,
+          transition: reduced ? "none" : `left ${RAIL_MOTION}`,
+        }}
+      >
+        <SubspacePanel />
+      </div>
       <div
         className={`absolute top-0 bottom-0 z-20 overflow-hidden ${createOpen ? '' : 'pointer-events-none'}`}
         style={{ left: railW, width: railPanelW, transition: reduced ? "none" : `left ${RAIL_MOTION}` }}

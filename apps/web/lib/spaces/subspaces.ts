@@ -173,12 +173,15 @@ export function spaceTrail<T extends { id: string; parentId?: string | null }>(s
 }
 
 /**
- * Group spaces into the branches the space menu draws: every top-level space
- * in the given order, each carrying the sub-spaces of it that are in the list.
- * A sub-space whose parent is not in the list stands on its own as a branch
- * with no children, where it would have been — the parent it names is not
- * something the viewer can see. The menu lists each branch's children
- * indented one step under their parent.
+ * Group spaces into the branches the switcher draws: every top-level space in
+ * the given order, each carrying the sub-spaces of it that are in the list. A
+ * sub-space whose parent is not in the list stands on its own as a branch with
+ * no children, where it would have been — the parent it names is not something
+ * the viewer can see.
+ *
+ * The switcher shows one level at a time: the branches in its column, and a
+ * branch's children in a column that opens beside it, so the list keeps
+ * widening rather than indenting.
  */
 export function spaceBranches<T extends { id: string; parentId?: string | null }>(
   spaces: T[],

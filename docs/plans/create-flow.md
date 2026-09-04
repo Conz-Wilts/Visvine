@@ -16,8 +16,8 @@ living description is the "Creating things" section of `AGENTS.md`.
 ## The shape
 
 Press **Create new** → the panel column beside the rail slides out, exactly as
-a docked panel does (layer against the rail's edge, card-height, `translateX`
-over `DOCK_MS`; the space switcher has since become a click-to-open popover). The rail already owns that column
+the space switcher does (`SpaceSwitcherPanel`: layer against the rail's edge,
+card-height, `translateX` over `DOCK_MS`). The rail already owns that column
 and already mounts `CreateModal` in it (`Sidebar.tsx` "Create new — a layer
 over the host"); the rail button just stops routing and starts opening it.
 

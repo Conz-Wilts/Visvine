@@ -10,7 +10,7 @@
 // The table is its own scroll box (the view sizes it to the pane): the head
 // sticks to its top and the name column to its left, so a wide table keeps
 // the entry's name in view while its fields scroll. The header menus portal
-// out of the scroll box (components/ui/Popover) for the same reason.
+// out of the scroll box (HeaderPopover) for the same reason.
 //
 // Rows are windowed (TableVirtuoso): only the rows in or near the viewport
 // are mounted, and a row scrolled away is unmounted. A space of a few
@@ -28,7 +28,7 @@ import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon } from '@/features/sha
 import { getTypeColor } from '@/features/directory/components/typeStyles';
 import AddColumnMenu from './AddColumnMenu';
 import ColumnHeaderMenu from './ColumnHeaderMenu';
-import Popover from '@/components/ui/Popover';
+import HeaderPopover from './HeaderPopover';
 import TableCell from './TableCell';
 import { ColumnKindIcon } from './columnKindIcon';
 import { type FieldOps } from './AddFieldForm';
@@ -392,7 +392,7 @@ export default function DirectoryTable({
         }}
       />
 
-      <Popover anchor={menu?.anchor ?? null} onClose={closeMenus} className="py-1.5">
+      <HeaderPopover anchor={menu?.anchor ?? null} onClose={closeMenus}>
         {menuColumn && (
           <ColumnHeaderMenu
             column={menuColumn}
@@ -413,9 +413,9 @@ export default function DirectoryTable({
             onClose={closeMenus}
           />
         )}
-      </Popover>
+      </HeaderPopover>
 
-      <Popover anchor={addAnchor} onClose={closeMenus} className="py-1.5">
+      <HeaderPopover anchor={addAnchor} onClose={closeMenus}>
         <AddColumnMenu
           typeName={typeName}
           hiddenColumns={hiddenColumns}
@@ -423,7 +423,7 @@ export default function DirectoryTable({
           onShow={onShowColumn}
           onClose={closeMenus}
         />
-      </Popover>
+      </HeaderPopover>
 
       <ConfirmDialog
         open={removing !== null}

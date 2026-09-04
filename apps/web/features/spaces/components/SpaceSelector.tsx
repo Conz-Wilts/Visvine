@@ -1,86 +1,146 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import React, { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useSession } from '@/features/auth/lib/auth-client';
-import { CheckIcon, ChevronsUpDownIcon, PlusIcon, SearchIcon, SettingsIcon, UsersIcon } from '@/features/shared/icons';
+import { PlusIcon, SettingsIcon, UsersIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
-import { HEAD_CELL_W, ROW_H, ROW_INSET } from '@/features/shared/components/layout/railRow';
-import Popover, { PopoverDivider, PopoverHeading, PopoverItem } from '@/components/ui/Popover';
-import { scoreName } from '@/lib/rankName';
-import { spaceBranches } from '@/lib/spaces/subspaces';
-import type { Space } from '@/lib/types';
+import { HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
 import NewSpaceDialog from './NewSpaceDialog';
 
 /**
- * The space at the rail's head, and the menu that hangs off it. The row is the
- * space's avatar and name on the rail's own glyph column; PRESSING it opens
- * one menu beside the rail — the shape every workspace app settles on for its
- * top-left corner — and pressing it again, Escape, or a press anywhere else
- * closes it. Nothing here opens on hover: a hover menu needs a steady hand,
- * does nothing on a touch screen, and stands in the way of a pointer crossing
- * the rail on its way to a tool.
+ * The space band — the rail's first rows (Sidebar). The space sits at the head
+ * of the same column you sit at the foot of, and it opens the same way the
+ * account band does: point at the space and the band GROWS DOWNWARD. What
+ * hangs off the space — the console and its members for admins, New space —
+ * unfolds as ordinary rail rows on the rail's own glyph column,
+ * their names arriving on the same fade the tools' names do. Opening the space
+ * is the rail widening and the band unfolding, one gesture, rather than a panel
+ * appearing over whatever page you were reading.
  *
- * The menu is the space's whole account of itself: the space you are in at the
- * top, what you can do to it (the console and its members, for admins), New
- * space, then Switch space — a search when the list is long, and every space
- * you are in with its sub-spaces one step in beneath it. A sub-space is its
- * own tenant, so choosing one IS switching space.
+ * The space's own row IS the switcher: pointing at it slides the search and
+ * the list of every space you are in out beside the rail, because going
+ * somewhere else is what the head of the rail is most often for. Pointing at
+ * any row of the band below puts the list away. The band's rows are the rest.
  *
  * Provisioning a space isn't one of the create-panel types — it's the one
  * action that takes you OUT of the space you're in, so it belongs here rather
- * than to the "+" grid. Discover is not a row of the menu: it is already the
+ * than to the "+" grid. Discover is not a row of the band: it is already the
  * top group's own row, directly below.
  */
 export default function SpaceSelector() {
-  const { currentSpace, isAdmin, joinedSpaces, setCurrentSpace } = useSpace();
-  const { expanded, reduced, setMenuOpen } = useSidebar();
+  const { currentSpace, isAdmin } = useSpace();
+  const { expanded, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
+  // The switcher and Create new share the rail's edge, one at a time.
+  const { close: closeCreate } = useCreateModal();
   const { data: session } = useSession();
   const router = useRouter();
-  const pathname = usePathname();
   // The console is the space's own settings, so it hangs off the space — not
   // off a rail row of its own. Same gate the console page applies.
   const canManage = Boolean(currentSpace) && (isAdmin || session?.user?.isSuperAdmin === true);
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const [creating, setCreating] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const open = anchor !== null;
-
-  // The rail is held open under the menu (SidebarContext), and let go when the
-  // menu is — whichever way it went.
+  const bandRef = useRef<HTMLDivElement>(null);
+  // A pinned band closes on the next click outside it, the way the account
+  // band does. Hover-opened bands need nothing: the pointer leaving closes them.
   useEffect(() => {
-    setMenuOpen(open);
-    return () => setMenuOpen(false);
-  }, [open, setMenuOpen]);
+    if (!pinned) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (bandRef.current?.contains(e.target as Node)) return;
+      setPinned(false);
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [pinned]);
 
-  // Going somewhere closes the menu, whichever row got you there.
-  useEffect(() => setAnchor(null), [pathname]);
+  // The rail shutting takes the band with it: a column of nameless glyphs
+  // under the avatar is not a menu anyone can read.
+  useEffect(() => {
+    if (!expanded) {
+      setOpen(false);
+      setPinned(false);
+    }
+  }, [expanded]);
 
-  const close = () => setAnchor(null);
-  const toggle = () => setAnchor((a) => (a ? null : triggerRef.current));
-
-  const byId = useMemo(() => new Map(joinedSpaces.map((s) => [s.id, s])), [joinedSpaces]);
-  const parent = currentSpace?.parentId ? byId.get(currentSpace.parentId) : undefined;
-
-  const select = (spaceId: string) => {
-    close();
-    setCurrentSpace(spaceId);
+  // The switcher itself is the rail's panel (SpaceSwitcherPanel), slid out
+  // beside the rail by the Sidebar; this only asks for it. Create new shares
+  // the rail's edge, so it goes away first.
+  const openSwitcher = () => {
+    closeCreate();
+    setSwitcherOpen(true);
   };
 
+  // The list is open only while the pointer is on the space (or in the list
+  // itself): pointing at any row of the band puts it away.
+  const shutSwitcher = () => setSwitcherOpen(false);
+  const actions: { key: string; label: string; onClick: () => void; onHover: () => void; icon: React.ReactNode }[] = [
+    ...(canManage
+      ? [
+          {
+            key: 'console',
+            label: 'Space console',
+            onClick: () => router.push('/admin'),
+            onHover: shutSwitcher,
+            icon: <SettingsIcon />,
+          },
+          {
+            key: 'members',
+            label: 'Members',
+            onClick: () => router.push('/admin?section=members'),
+            onHover: shutSwitcher,
+            icon: <UsersIcon />,
+          },
+        ]
+      : []),
+    {
+      key: 'new',
+      label: 'New space',
+      onClick: () => setCreating(true),
+      onHover: shutSwitcher,
+      icon: <PlusIcon />,
+    },
+  ];
+
+  // The sheet is the hairline under the space's row and everything it
+  // reveals. Shut, it is one gap tall — the rail's rhythm between the space
+  // and Create — with the hairline along its bottom edge, which is the line
+  // between the two. Open, it grows by the rows, a gap above each and one
+  // below, and that same line is what travels down over the rows it covers.
+  const shutH = ITEM_GAP;
+  const openH = shutH + actions.length * ROW_H + (actions.length + 1) * ITEM_GAP;
+  const dur = reduced ? '0s' : '260ms';
+
   return (
-    <div className="relative flex flex-col">
+    <div
+      ref={bandRef}
+      className="relative flex flex-col"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => { if (!pinned) setOpen(false); }}
+      onFocus={() => setOpen(true)}
+      onBlur={(e) => {
+        if (pinned) return;
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setOpen(false);
+      }}
+    >
+      {/* The space. A rail row: the avatar centred in the rail's glyph cell,
+          then the space's name, which the collapsed rail clips away. Pointing
+          at it opens the band below AND slides the switcher out beside the
+          rail; pressing it toggles the switcher. */}
       <div style={{ paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
         <button
-          ref={triggerRef}
           type="button"
-          onClick={toggle}
+          onMouseEnter={openSwitcher}
+          onClick={() => (switcherOpen ? setSwitcherOpen(false) : openSwitcher())}
           aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-label={currentSpace ? `${currentSpace.name} — space menu` : 'Space menu'}
-          className={`relative z-10 flex w-full items-center transition-colors duration-150 hover:bg-surface-3 focus:outline-none focus-visible:bg-surface-3 ${
-            open ? 'bg-surface-3' : ''
+          aria-expanded={switcherOpen}
+          className={`relative z-10 flex w-full items-center transition-colors duration-150 hover:bg-surface-3 ${
+            switcherOpen ? 'bg-surface-3' : ''
           }`}
           style={{ height: ROW_H }}
         >
@@ -92,12 +152,10 @@ export default function SpaceSelector() {
             )}
           </span>
           {/* The name stays mounted so it can FADE with the rail's other labels
-              but is transparent and untouchable while the rail is shut. The
-              chevrons say the row opens: the one affordance the rail draws,
-              because this row is the one that does not go anywhere. */}
+              but is transparent and untouchable while the rail is shut. */}
           <span
             aria-hidden={!expanded}
-            className="ml-2 flex min-w-0 flex-1 items-center gap-2 pr-4"
+            className="ml-2 flex min-w-0 flex-1 items-center"
             style={{
               opacity: expanded ? 1 : 0,
               pointerEvents: expanded ? undefined : 'none',
@@ -107,122 +165,61 @@ export default function SpaceSelector() {
             <span className="min-w-0 flex-1 truncate text-left text-[15px] font-open-sauce font-semibold text-text-primary">
               {currentSpace?.name || 'Select space'}
             </span>
-            <span className="flex shrink-0 items-center text-text-muted [&>svg]:h-4 [&>svg]:w-4">
-              <ChevronsUpDownIcon />
-            </span>
           </span>
         </button>
       </div>
 
-      <Popover anchor={anchor} onClose={close} placement="right-start" width={296} role="dialog" ariaLabel="Space menu" className="p-1.5">
-        {currentSpace && (
-          <div className="flex items-center gap-3 px-2.5 pb-2 pt-2">
-            <SpaceAvatar name={currentSpace.name} imageUrl={currentSpace.imageUrl} size="lg" rounded="rounded-xl" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[15px] font-semibold text-text-primary">{currentSpace.name}</div>
-              <div className="truncate text-[12px] text-text-muted">
-                {parent ? `Sub-space of ${parent.name}` : `${currentSpace.memberCount} ${currentSpace.memberCount === 1 ? 'member' : 'members'}`}
-              </div>
+      {/* The sheet. Unlike the account band — which grows into the empty air
+          above the avatar — this one LAYS OVER the rows beneath it rather than
+          pushing them down: absolutely positioned from the foot of the space's
+          row, painted opaque, so Create and the tools hold still while it
+          unfolds across them. It starts at the row's foot rather than at the
+          line so the pointer never leaves the band on its way down to a row —
+          the gap is part of the sheet. Clipped rather than unmounted so the
+          stack is there to travel, and the labels fade on the rail's timing. */}
+      <div
+        className="absolute left-0 right-0 z-20 overflow-hidden border-b"
+        style={{
+          top: ROW_H,
+          height: open ? openH : shutH,
+          // The sheet's bottom edge is the rail's one hairline: the line under
+          // the space when shut, and the edge seen travelling down over the
+          // rows when open.
+          borderBottomColor: 'var(--shell-border, #e5e7eb)',
+          boxSizing: 'content-box',
+          // The rail paints nothing of its own (--shell-bg is transparent),
+          // so the sheet is painted in the page's backdrop, which is what the
+          // rows beneath it sit on.
+          background: 'var(--app-backdrop, #ffffff)',
+          transition: reduced ? 'none' : `height ${dur} cubic-bezier(0.25, 0.1, 0.25, 1)`,
+        }}
+        aria-hidden={!open}
+      >
+        <div
+          className="flex flex-col"
+          // Two gaps above the first row: the one the shut sheet already is,
+          // then one holding the row off the line.
+          style={{ gap: ITEM_GAP, paddingTop: ITEM_GAP * 2, paddingBottom: ITEM_GAP, paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}
+        >
+          {actions.map(({ key, label, icon, onClick, onHover }) => (
+            <div key={key} onMouseEnter={onHover}>
+              <Row
+                expanded={expanded}
+                reduced={reduced}
+                label={label}
+                icon={icon}
+                onClick={() => {
+                  setPinned(false);
+                  setOpen(false);
+                  onClick();
+                }}
+              />
             </div>
-          </div>
-        )}
-
-        {canManage && (
-          <>
-            <PopoverItem label="Space console" icon={<SettingsIcon />} onClick={() => { close(); router.push('/admin'); }} />
-            <PopoverItem label="Members" icon={<UsersIcon />} onClick={() => { close(); router.push('/admin?section=members'); }} />
-          </>
-        )}
-        <PopoverItem label="New space" icon={<PlusIcon />} onClick={() => { close(); setCreating(true); }} />
-
-        <PopoverDivider />
-        <PopoverHeading>Switch space</PopoverHeading>
-        <SpaceList spaces={joinedSpaces} currentId={currentSpace?.id ?? null} onSelect={select} />
-      </Popover>
+          ))}
+        </div>
+      </div>
 
       {creating && <NewSpaceDialog onClose={() => setCreating(false)} />}
     </div>
-  );
-}
-
-/** Searching is worth a field once the list is longer than a glance. */
-const SEARCH_FROM = 6;
-
-/**
- * Every space you are in: the top-level ones in name order, each followed by
- * its sub-spaces one step in (lib/spaces/subspaces.ts#spaceBranches). A search
- * flattens the tree and ranks — the match is what you are looking for,
- * wherever it sits.
- */
-function SpaceList({
-  spaces,
-  currentId,
-  onSelect,
-}: {
-  spaces: Space[];
-  currentId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  const [query, setQuery] = useState('');
-  const q = query.trim().toLowerCase();
-  const sorted = useMemo(() => [...spaces].sort((a, b) => a.name.localeCompare(b.name)), [spaces]);
-
-  const rows: Array<{ space: Space; indent: boolean }> = useMemo(() => {
-    if (!q) {
-      return spaceBranches(sorted).flatMap(({ space, children }) => [
-        { space, indent: false },
-        ...children.map((child) => ({ space: child, indent: true })),
-      ]);
-    }
-    return sorted
-      .map((space) => ({ space, score: scoreName(space.name, q) }))
-      .filter(({ score }) => score > -Infinity)
-      .sort((a, b) => b.score - a.score)
-      .map(({ space }) => ({ space, indent: false }));
-  }, [sorted, q]);
-
-  const check = (
-    <span className="flex shrink-0 items-center text-brand-green [&>svg]:h-4 [&>svg]:w-4">
-      <CheckIcon />
-    </span>
-  );
-
-  return (
-    <>
-      {spaces.length >= SEARCH_FROM && (
-        <div className="px-1.5 pb-1.5">
-          <div className="flex h-9 items-center gap-2 rounded-lg border border-border-default bg-surface-1 px-2.5 transition-colors focus-within:border-brand-green">
-            <span className="flex shrink-0 items-center text-text-muted [&>svg]:h-4 [&>svg]:w-4">
-              <SearchIcon />
-            </span>
-            <input
-              autoFocus
-              type="text"
-              placeholder="Search spaces…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="min-w-0 flex-1 bg-transparent text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none"
-            />
-          </div>
-        </div>
-      )}
-      <div className="custom-scrollbar max-h-[min(44vh,420px)] overflow-y-auto">
-        {rows.length === 0 ? (
-          <div className="px-2.5 py-3 text-center text-[13px] text-text-muted">No spaces found</div>
-        ) : (
-          rows.map(({ space, indent }) => (
-            <PopoverItem
-              key={space.id}
-              label={space.name}
-              indent={indent}
-              icon={indent ? undefined : <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="sm" rounded="rounded-md" />}
-              current={space.id === currentId}
-              trailing={space.id === currentId ? check : undefined}
-              onClick={() => onSelect(space.id)}
-            />
-          ))
-        )}
-      </div>
-    </>
   );
 }
