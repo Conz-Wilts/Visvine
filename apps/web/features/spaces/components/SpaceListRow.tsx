@@ -8,9 +8,9 @@ import { TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
 
 /** A sub-space row is shorter than its parent's: a line of a list under it. */
 const SUBSPACE_ROW_H = 56;
-/** The chevron's cell on a parent row — narrower than the glyph cell, so the
- *  name keeps its width. */
-const CHEVRON_W = 48;
+/** The chevron's cell on a parent row: between the avatar and the name, so
+ *  the name runs the rest of the row. */
+const CHEVRON_W = 28;
 
 /**
  * One space in the switcher's list. A rail row: the avatar centred in the
@@ -18,10 +18,12 @@ const CHEVRON_W = 48;
  * as the rail continuing rather than as a menu.
  *
  * The row is the one control that CHOOSES the space. A space with sub-spaces
- * you are in carries a chevron on its trailing cell, its own control: pressing
- * it opens the sub-spaces on a tree under the row (SubspaceRow, hung on a
- * TreeSpine by the switcher) and never picks the space, so opening a branch and
- * choosing its root are two targets rather than two gestures.
+ * you are in carries a chevron between its avatar and its name, its own
+ * control: pressing it opens the sub-spaces on a tree under the row
+ * (SubspaceRow, hung on a TreeSpine by the switcher) and never picks the
+ * space, so opening a branch and choosing its root are two targets rather than
+ * two gestures. It sits ahead of the name, where a tree's disclosure goes, and
+ * the name keeps the rest of the row.
  */
 export function SpaceListRow({
   space,
@@ -54,14 +56,17 @@ export function SpaceListRow({
         className={`${ROW_CLASS} min-w-0 text-left ${current ? 'bg-surface-3 font-semibold' : 'font-normal'}`}
         style={{
           height: ROW_H,
-          paddingRight: hasChildren ? CHEVRON_W : 16,
+          paddingRight: 16,
           color: current ? 'var(--shell-fg-strong, #111827)' : 'var(--shell-fg-muted, #111827)',
         }}
       >
         <span className="flex shrink-0 items-center justify-center" style={{ width: ROW_H, height: ROW_H }}>
           <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" />
         </span>
-        <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: LABEL_ML }}>{space.name}</span>
+        {/* The chevron's cell is held in the row so the name starts past it;
+            the control itself is laid over the cell below. */}
+        {hasChildren && <span className="shrink-0" style={{ width: CHEVRON_W }} />}
+        <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: hasChildren ? 0 : LABEL_ML }}>{space.name}</span>
         {current && check}
       </button>
       {hasChildren && (
@@ -71,8 +76,8 @@ export function SpaceListRow({
           aria-expanded={open}
           tabIndex={tabbable ? 0 : -1}
           onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
-          className="absolute right-0 top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-5 [&>svg]:w-5"
-          style={{ width: CHEVRON_W, height: ROW_H }}
+          className="absolute top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-5 [&>svg]:w-5"
+          style={{ left: ROW_H, width: CHEVRON_W, height: ROW_H }}
         >
           <span className="flex transition-transform duration-150" style={{ transform: open ? 'rotate(90deg)' : 'none' }}>
             <ChevronRightIcon />
@@ -85,8 +90,10 @@ export function SpaceListRow({
 
 /**
  * A sub-space under its parent's row, a line of the tree: the join off the
- * spine, a small mark, the name. A sub-space is its own tenant, so pressing it
- * IS switching space — the parent's row stays what it was.
+ * spine, then the name — no mark, because the spine already says whose it is
+ * and a space without a picture would only show its initials. A sub-space is
+ * its own tenant, so pressing it IS switching space — the parent's row stays
+ * what it was.
  */
 export function SubspaceRow({
   space,
@@ -113,7 +120,6 @@ export function SubspaceRow({
       }}
     >
       <TreeSpineJoin kind={nested} />
-      <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="sm" rounded="rounded-md" />
       <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`}>{space.name}</span>
       {current && (
         <svg className="h-4 w-4 shrink-0 text-brand-green" fill="currentColor" viewBox="0 0 20 20">
