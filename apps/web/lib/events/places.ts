@@ -78,19 +78,23 @@ export async function suggestPlaces(input: string, sessionToken?: string): Promi
 
 interface PlaceDetailsResponse {
   id: string;
-  displayName?: { text?: string };
   formattedAddress?: string;
   location?: { latitude?: number; longitude?: number };
 }
 
-/** The picked suggestion as the location an event stores. */
-export async function placeLocation(placeId: string, sessionToken?: string): Promise<EventLocation> {
+/**
+ * The picked suggestion as the location an event stores. The label is the
+ * suggestion's own name, which the autocomplete already returned: asking
+ * Place Details for `displayName` would move the call from the Essentials
+ * SKU to the Pro one at three times the price, for a string we hold.
+ */
+export async function placeLocation(placeId: string, label: string, sessionToken?: string): Promise<EventLocation> {
   const qs = sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : '';
   const data = await placesRequest<PlaceDetailsResponse>(`/places/${encodeURIComponent(placeId)}${qs}`, {
     method: 'GET',
-    fieldMask: 'id,displayName,formattedAddress,location',
+    fieldMask: 'id,formattedAddress,location',
   });
-  const name = data.displayName?.text?.trim();
+  const name = label.trim();
   const address = data.formattedAddress?.trim();
   return {
     label: name || address || '',

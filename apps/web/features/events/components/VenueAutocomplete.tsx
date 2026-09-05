@@ -66,7 +66,7 @@ export function VenueAutocomplete({
     const token = sessionToken.current;
     sessionToken.current = newToken();
     try {
-      const res = await fetchJson<{ location: EventLocation }>(`/api/places/${encodeURIComponent(s.placeId)}?session=${token}`);
+      const res = await fetchJson<{ location: EventLocation }>(`/api/places/${encodeURIComponent(s.placeId)}?label=${encodeURIComponent(s.name)}&session=${token}`);
       if (res.location.label) onChange(res.location);
     } catch {
       // The suggestion's own text is already stored; the map link falls back to a search by name.
