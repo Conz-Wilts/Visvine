@@ -6,7 +6,8 @@ import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/Sideb
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { ITEM_GAP, ROW_H, ROW_INSET } from '@/features/shared/components/layout/railRow';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
-import { LIST_AVATAR_CENTER, LIST_AVATAR_PX, SpaceListRow, SubspaceRow } from '@/features/spaces/components/SpaceListRow';
+import { LIST_AVATAR_CENTER, LIST_AVATAR_PX, NewSpaceRow, NewSubspaceRow, SpaceListRow, SubspaceRow } from '@/features/spaces/components/SpaceListRow';
+import NewSpaceDialog from '@/features/spaces/components/NewSpaceDialog';
 import { TreeSpine } from '@/components/ui/TreeChrome';
 import { scoreName } from '@/lib/rankName';
 import { spaceBranches } from '@/lib/spaces/subspaces';
@@ -40,9 +41,13 @@ const SPINE_DEFAULT_ML = 14;
 
 export default function SpaceSwitcherPanel() {
   const { switcherOpen: isOpen, setSwitcherOpen, reduced } = useSidebar();
-  const { currentSpace, joinedSpaces, setCurrentSpace } = useSpace();
+  const { currentSpace, joinedSpaces, setCurrentSpace, manages } = useSpace();
   const pathname = usePathname();
   const [query, setQuery] = useState('');
+  // What is being made: a top-level space, or a sub-space of the row whose
+  // branch offered it. One dialog either way (NewSpaceDialog).
+  const [creating, setCreating] = useState<null | { id: string; name: string }>(null);
+  const [makingSpace, setMakingSpace] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const close = () => setSwitcherOpen(false);
@@ -135,24 +140,35 @@ export default function SpaceSwitcherPanel() {
           </div>
         </div>
 
-        {/* Every space you are a member of, ranked by the search when there is
+        {/* Starting a space leads the list — the row you are looking for when
+            none of the ones below is the one you want — then every space you
+            are a member of, ranked by the search when there is
             one. A row with sub-spaces opens them under itself on its chevron:
             the spine drops out of the parent's avatar and ticks into each
             sub-space, ending at the last, so the branch reads as one drawing
             rather than an indent. */}
         <div className="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-3" style={{ paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}>
+          <div style={{ marginBottom: ITEM_GAP }}>
+            <NewSpaceRow tabbable={isOpen} onClick={() => setMakingSpace(true)} />
+          </div>
           {rows.length === 0 ? (
             <div className="p-4 text-center text-sm text-text-muted">No spaces found</div>
           ) : (
             <div className="flex flex-col" style={{ gap: ITEM_GAP }}>
               {rows.map(({ space, children }) => {
-                const open = children.length > 0 && expanded.has(space.id);
+                // An admin's own space opens whether or not it has sub-spaces
+                // yet: the branch is where they are read, so it is where the
+                // first one is made. Spaces nest one level, so a sub-space
+                // never offers it.
+                const canAddSub = !space.parentId && manages(space.id);
+                const branches = children.length + (canAddSub ? 1 : 0);
+                const open = branches > 0 && expanded.has(space.id);
                 return (
                   <div key={space.id}>
                     <SpaceListRow
                       space={space}
                       current={currentSpace?.id === space.id}
-                      hasChildren={children.length > 0}
+                      hasChildren={branches > 0}
                       open={open}
                       tabbable={isOpen}
                       onSelect={() => select(space.id)}
@@ -164,6 +180,14 @@ export default function SpaceSwitcherPanel() {
                       // the branch's top to the avatar's bottom edge.
                       <div style={{ marginLeft: LIST_AVATAR_CENTER - SPINE_DEFAULT_ML }}>
                         <TreeSpine animate={!reduced} stem={ROW_H / 2 - LIST_AVATAR_PX / 2}>
+                          {canAddSub && (
+                            <NewSubspaceRow
+                              parentName={space.name}
+                              nested={children.length === 0 ? 'last' : 'mid'}
+                              tabbable={isOpen}
+                              onClick={() => setCreating({ id: space.id, name: space.name })}
+                            />
+                          )}
                           {children.map((child, i) => (
                             <SubspaceRow
                               key={child.id}
@@ -183,6 +207,12 @@ export default function SpaceSwitcherPanel() {
             </div>
           )}
         </div>
+        {(makingSpace || creating) && (
+          <NewSpaceDialog
+            parent={creating}
+            onClose={() => { setCreating(null); setMakingSpace(false); }}
+          />
+        )}
       </aside>
   );
 }

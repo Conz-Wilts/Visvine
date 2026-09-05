@@ -36,9 +36,8 @@ import {
  *  ┌──────────────────────────────────┐
  *  │ [space]  Blackbird Ventures      │  head: the space, and the page's panel
  *  ├──────────────────────────────────┤
- *  │ +  Create new                    │  top: the one thing you DO, and the two
- *  │ ◎  Discover                      │  ways out of this space — held apart
- *  │ ⬚  Marketplace                   │  from the tools by one hairline
+ *  │ +  Create new                    │  top: the one thing you DO — held apart
+ *  │                                  │  from the tools by one hairline
  *  ├──────────────────────────────────┤
  *  │ ▣  Directory                     │  nav: what this space can do
  *  │ ▤  Channels …                    │
@@ -288,17 +287,18 @@ export default function Sidebar() {
   const railInner = (
     <>
       {/* Head — which space you are looking at, and the band that unfolds
-          under it (the console, New space — SpaceSelector). The
+          under it (Discover, the console, New space — SpaceSelector). The
           band draws its own insets: the space's row on the head inset, its
           rows on the rail's. The page's own side panel is switched from the
           shell's top band (ShellTopBar), not here. */}
       <div className="flex shrink-0 flex-col" style={{ gap: ITEM_GAP }}>
         <SpaceSelector />
 
-        {/* The top group — Create new, then Discover and Marketplace. It rides
-            with the head rather than the nav below because it never scrolls:
-            the one thing you come here to DO and the two ways out of this
-            space stay put however many tools it has switched on.
+        {/* The top group — Create new. It rides with the head rather than the
+            nav below because it never scrolls: the one thing you come here to
+            DO stays put however many tools the space has switched on. The ways
+            OUT of the space (Discover, New space) hang off the space itself,
+            in the band above.
 
             Create acts on the current space, so with none selected there is
             nothing for it to make (creating a space itself lives on the
@@ -354,19 +354,6 @@ export default function Sidebar() {
             />
             </div>
           )}
-
-          {GLOBAL_NAV.map(({ key, href, label, icon }) => (
-            <div key={key} {...intent(leaveRailPanels)}>
-            <Row
-              expanded={expanded}
-              reduced={reduced}
-              href={href}
-              label={label}
-              icon={icon}
-              active={href === activeHref}
-            />
-            </div>
-          ))}
         </div>
       </div>
 

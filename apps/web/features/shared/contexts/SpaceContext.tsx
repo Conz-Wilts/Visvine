@@ -16,6 +16,9 @@ interface SpaceContextValue {
   loading: boolean;
   error: string | null;
   isAdmin: boolean;
+  /** Whether the user manages a given space — the standing behind every
+   *  admin-only offer made about a space other than the current one. */
+  manages: (spaceId: string) => boolean;
 }
 
 const [SpaceContext, useSpace] = createSafeContext<SpaceContextValue>('Space');
@@ -163,6 +166,7 @@ export function SpaceProvider({ children, initialSpaces, initialMemberships }: S
   // means holding one of its aliases marked `admin` — resolved server-side, so
   // super-admins are already folded in here.
   const isAdmin = currentSpace ? memberships.get(currentSpace.id) === true : false;
+  const manages = useCallback((spaceId: string) => memberships.get(spaceId) === true, [memberships]);
 
   const value = useMemo<SpaceContextValue>(
     () => ({
@@ -176,6 +180,7 @@ export function SpaceProvider({ children, initialSpaces, initialMemberships }: S
       loading,
       error,
       isAdmin,
+      manages,
     }),
     [
       spaces,
@@ -188,6 +193,7 @@ export function SpaceProvider({ children, initialSpaces, initialMemberships }: S
       loading,
       error,
       isAdmin,
+      manages,
     ]
   );
 

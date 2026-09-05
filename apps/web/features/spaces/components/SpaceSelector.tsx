@@ -7,17 +7,16 @@ import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useHoverIntent } from '@/features/shared/hooks/useHoverIntent';
 import { useSession } from '@/features/auth/lib/auth-client';
-import { PlusIcon, SettingsIcon, UsersIcon } from '@/features/shared/icons';
+import { CompassIcon, SettingsIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { spaceMark } from '@/lib/spaces/subspaces';
 import { HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
-import NewSpaceDialog from './NewSpaceDialog';
 
 /**
  * The space band — the rail's first rows (Sidebar). The space sits at the head
  * of the same column you sit at the foot of, and it opens the same way the
  * account band does: point at the space and the band GROWS DOWNWARD. What
- * hangs off the space — the console and its members for admins, New space —
+ * hangs off the space — Discover, and the console for admins —
  * unfolds as ordinary rail rows on the rail's own glyph column,
  * their names arriving on the same fade the tools' names do. Opening the space
  * is the rail widening and the band unfolding, one gesture, rather than a panel
@@ -28,10 +27,9 @@ import NewSpaceDialog from './NewSpaceDialog';
  * somewhere else is what the head of the rail is most often for. Pointing at
  * any row of the band below puts the list away. The band's rows are the rest.
  *
- * Provisioning a space isn't one of the create-panel types — it's the one
- * action that takes you OUT of the space you're in, so it belongs here rather
- * than to the "+" grid. Discover is not a row of the band: it is already the
- * top group's own row, directly below.
+ * Discover leads the band: it is a way OUT of this space, not one of the
+ * create-panel's kinds. Starting a space is the switcher's own last row —
+ * it belongs beside the spaces you are already in.
  */
 export default function SpaceSelector() {
   const { currentSpace, spaces, isAdmin } = useSpace();
@@ -49,7 +47,6 @@ export default function SpaceSelector() {
   // the pointer heading right, out of the space's row and into the list, may
   // cross a row of the band on its way.
   const intent = useHoverIntent();
-  const [creating, setCreating] = useState(false);
   const bandRef = useRef<HTMLDivElement>(null);
   // A pinned band closes on the next click outside it, the way the account
   // band does. Hover-opened bands need nothing: the pointer leaving closes them.
@@ -85,6 +82,16 @@ export default function SpaceSelector() {
   // itself): pointing at any row of the band puts it away.
   const shutSwitcher = () => setSwitcherOpen(false);
   const actions: { key: string; label: string; onClick: () => void; onHover: () => void; icon: React.ReactNode }[] = [
+    // Discover leads the band: leaving this space for another is the same
+    // question the switcher under the pointer is asking, so it belongs beside
+    // the spaces you are already in rather than among the tools below.
+    {
+      key: 'discover',
+      label: 'Discover',
+      onClick: () => router.push('/discover'),
+      onHover: shutSwitcher,
+      icon: <CompassIcon />,
+    },
     ...(canManage
       ? [
           {
@@ -94,22 +101,8 @@ export default function SpaceSelector() {
             onHover: shutSwitcher,
             icon: <SettingsIcon />,
           },
-          {
-            key: 'members',
-            label: 'Members',
-            onClick: () => router.push('/admin?section=members'),
-            onHover: shutSwitcher,
-            icon: <UsersIcon />,
-          },
         ]
       : []),
-    {
-      key: 'new',
-      label: 'New space',
-      onClick: () => setCreating(true),
-      onHover: shutSwitcher,
-      icon: <PlusIcon />,
-    },
   ];
 
   // A sub-space wears its parent's mark (spaceMark), so the head row says
@@ -237,8 +230,6 @@ export default function SpaceSelector() {
           ))}
         </div>
       </div>
-
-      {creating && <NewSpaceDialog onClose={() => setCreating(false)} />}
     </div>
   );
 }

@@ -26,7 +26,13 @@ interface CreateResponse {
   space: { id: string; name: string };
 }
 
-export default function NewSpaceDialog({ onClose }: { onClose: () => void }) {
+export default function NewSpaceDialog({ parent, onClose }: {
+  /** The space this one goes inside, when the switcher's branch offered it.
+   *  A sub-space is a full space in every other way — same field, same
+   *  provisioning, same landing — so it is the same dialog with a parent. */
+  parent?: { id: string; name: string } | null;
+  onClose: () => void;
+}) {
   const router = useRouter();
   const { refreshSpace, setCurrentSpace } = useSpace();
   const [name, setName] = useState('');
@@ -47,6 +53,7 @@ export default function NewSpaceDialog({ onClose }: { onClose: () => void }) {
       // null, visibility to private and the tools to Directory only.
       const { space } = await fetchJsonBody<CreateResponse>('/api/communities', 'POST', {
         name: name.trim(),
+        ...(parent ? { parentId: parent.id } : {}),
       });
       // The switcher has to see it before we switch into it.
       await refreshSpace();
@@ -62,7 +69,7 @@ export default function NewSpaceDialog({ onClose }: { onClose: () => void }) {
       onClose();
       router.push('/directory');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create space');
+      setError(err instanceof Error ? err.message : `Failed to create ${parent ? 'sub-space' : 'space'}`);
       setSaving(false);
     }
   };
@@ -70,7 +77,7 @@ export default function NewSpaceDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal
       onClose={onClose}
-      title="New space"
+      title={parent ? `New sub-space of ${parent.name}` : 'New space'}
       size="sm"
       footer={
         <div className="flex justify-end gap-2 border-t border-border-subtle px-6 py-4">
@@ -93,8 +100,8 @@ export default function NewSpaceDialog({ onClose }: { onClose: () => void }) {
         {/* The placeholder is the label — one field needs no heading above it. */}
         <Input
           autoFocus
-          aria-label="Space name"
-          placeholder="Space name"
+          aria-label={parent ? 'Sub-space name' : 'Space name'}
+          placeholder={parent ? 'Sub-space name' : 'Space name'}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}

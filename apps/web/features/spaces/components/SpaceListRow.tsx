@@ -2,7 +2,7 @@
 
 import type { Space } from '@/lib/types';
 import { LABEL_ML, ROW_CLASS, ROW_H, ROW_TEXT } from '@/features/shared/components/layout/railRow';
-import { ChevronRightIcon } from '@/features/shared/icons';
+import { ChevronRightIcon, PlusIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { TREE_ROW_BLEED, TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
 
@@ -138,6 +138,66 @@ export function SubspaceRow({
           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
         </svg>
       )}
+    </button>
+  );
+}
+
+/**
+ * The list's first row: starting a space of your own. It belongs to the list
+ * rather than to the band above it, because a space you are about to make is
+ * one more of the spaces the list is already offering — and it LEADS the list
+ * for the reason "New type" leads the Create panel: it is the row you are
+ * looking for when none of the ones below is the one you want. Drawn as a
+ * list row with a plus on the avatar's square instead of a mark.
+ */
+export function NewSpaceRow({ tabbable, onClick }: { tabbable: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      tabIndex={tabbable ? 0 : -1}
+      className={`${ROW_CLASS} min-w-0 text-left font-normal`}
+      style={{ height: ROW_H, paddingRight: 16, color: 'var(--shell-fg-muted, #111827)' }}
+    >
+      <span className="flex shrink-0 items-center justify-end" style={{ width: LIST_CELL_W, height: ROW_H, paddingRight: AVATAR_GAP }}>
+        <span
+          className="flex items-center justify-center rounded-[10px] border border-dashed border-border-default text-text-muted [&>svg]:h-5 [&>svg]:w-5"
+          style={{ width: AVATAR_PX, height: AVATAR_PX }}
+        >
+          <PlusIcon />
+        </span>
+      </span>
+      <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: LABEL_ML }}>New space</span>
+    </button>
+  );
+}
+
+/**
+ * The row that makes a sub-space, first on a space's own branch — the shape
+ * "New alias" has at the head of a kind's aliases in the Create panel: making
+ * one is offered exactly where they are read, so a space with no sub-spaces
+ * still opens for the admin who may add the first.
+ */
+export function NewSubspaceRow({ parentName, nested, tabbable, onClick }: {
+  parentName: string;
+  nested: TreeGuideKind;
+  tabbable: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      tabIndex={tabbable ? 0 : -1}
+      aria-label={`New sub-space of ${parentName}`}
+      className={`${ROW_CLASS} !z-0 !w-[calc(100%+999px)] ${TREE_ROW_BLEED} min-w-0 gap-3 pr-4 text-left font-normal`}
+      style={{ height: SUBSPACE_ROW_H, color: 'var(--shell-fg-muted, #111827)' }}
+    >
+      <TreeSpineJoin kind={nested} />
+      <span aria-hidden className="flex shrink-0 items-center justify-center rounded-[5px] border border-dashed border-text-muted text-text-muted [&>svg]:h-3.5 [&>svg]:w-3.5" style={{ width: 22, height: 22 }}>
+        <PlusIcon />
+      </span>
+      <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`}>New sub-space</span>
     </button>
   );
 }
