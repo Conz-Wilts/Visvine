@@ -56,10 +56,17 @@ jobs:
         run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
       # A short, stable id for the revision and the image tag, so a revision in
-      # the console can be traced back to a commit without a lookup table.
+      # the console can be traced back to a commit without a lookup table. A
+      # manual re-run of the same commit — the way an env or secret change
+      # reaches production — needs a new revision name, since Cloud Run refuses
+      # a second revision with the same name and a different configuration; the
+      # run number keeps it unique while the commit stays readable.
       - name: Compute release id
         id: rel
-        run: echo "sha8=$(echo ${{ github.sha }} | cut -c1-8)" >> "$GITHUB_OUTPUT"
+        run: |
+          sha8=$(echo ${{ github.sha }} | cut -c1-8)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then sha8="$sha8-r${{ github.run_number }}"; fi
+          echo "sha8=$sha8" >> "$GITHUB_OUTPUT"
 
       # Record what is serving RIGHT NOW, before anything changes. This is the
       # rollback target, and it has to be captured before the deploy because
