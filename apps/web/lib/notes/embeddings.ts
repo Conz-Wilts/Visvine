@@ -1,19 +1,22 @@
-// Embeddings access for the retrieval layer. OpenAI's /embeddings endpoint, configured
-// independently of the chat client (./ai.ts, still Gemini); resolved per call so
-// a changed key takes effect immediately. Unconfigured → null and the vector
-// stage silently drops out of the fused search.
+// Embeddings access for the retrieval layer. OpenRouter's /embeddings endpoint
+// — the same key and account as the chat client (./ai.ts), so the deployment's
+// AI is one bill and one rotation — resolved per call so a changed key takes
+// effect immediately. Unconfigured → null and the vector stage silently drops
+// out of the fused search.
 //
-// text-embedding-3-small is natively 1536-dim but Matryoshka-trained, so the
-// `dimensions` param truncates to 768 with minimal quality loss — which keeps
-// the vector(768) columns and their HNSW indexes as-is. Rows embedded by an
-// earlier model are ignored automatically: both vector stages filter on
+// openai/text-embedding-3-small is natively 1536-dim but Matryoshka-trained, so
+// the `dimensions` param truncates to 768 with minimal quality loss — which
+// keeps the vector(768) columns and their HNSW indexes as-is. Rows embedded by
+// an earlier model are ignored automatically: both vector stages filter on
 // `model = config.model`, so a switch re-embeds lazily rather than mixing
-// incomparable vector spaces.
+// incomparable vector spaces. The model id is the OpenRouter slug, which is why
+// vectors written before OpenRouter (bare `text-embedding-3-small`) are stale
+// and `pnpm db:embed` is the backfill.
 
-const EMBED_MODEL = 'text-embedding-3-small'
+const EMBED_MODEL = 'openai/text-embedding-3-small'
 const EMBED_DIMENSIONS = 768
 const BATCH_SIZE = 64
-const OPENAI_BASE_URL = 'https://api.openai.com/v1/'
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/'
 
 export interface EmbeddingsConfig {
   apiKey: string
@@ -23,9 +26,9 @@ export interface EmbeddingsConfig {
 
 /** The resolved embeddings backend, or null when unconfigured. */
 export function embeddingsConfig(): EmbeddingsConfig | null {
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) return null
-  return { apiKey, baseURL: OPENAI_BASE_URL, model: process.env.EMBED_MODEL ?? EMBED_MODEL }
+  return { apiKey, baseURL: OPENROUTER_BASE_URL, model: process.env.EMBED_MODEL ?? EMBED_MODEL }
 }
 
 /**
@@ -48,7 +51,7 @@ export type SemanticStatus = 'on' | 'no-key' | 'off' | 'error'
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   const config = embeddingsConfig()
   if (!config) {
-    throw new Error('Embeddings are not configured: set OPENAI_API_KEY.')
+    throw new Error('Embeddings are not configured: set OPENROUTER_API_KEY.')
   }
   const base = config.baseURL.endsWith('/') ? config.baseURL.slice(0, -1) : config.baseURL
   const out: number[][] = []

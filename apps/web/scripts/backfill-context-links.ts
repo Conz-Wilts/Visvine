@@ -11,7 +11,7 @@
  * Usage:
  *   pnpm --filter @visvine/web exec tsx scripts/backfill-context-links.ts                 # all spaces
  *   pnpm --filter @visvine/web exec tsx scripts/backfill-context-links.ts <spaceId>   # one space
- *   … --reasons   also generate AI reason phrases for the links (needs GEMINI_API_KEY)
+ *   … --reasons   also generate AI reason phrases for the links (needs OPENROUTER_API_KEY)
  */
 
 import '../../../scripts/guard-local-db.mjs';
@@ -25,7 +25,7 @@ async function main() {
   const args = process.argv.slice(2);
   const reasons = args.includes('--reasons');
   const only = args.find((a) => !a.startsWith('--'));
-  if (reasons && !aiConfigured()) throw new Error('--reasons needs GEMINI_API_KEY set.');
+  if (reasons && !aiConfigured()) throw new Error('--reasons needs OPENROUTER_API_KEY set.');
   const spaces = only
     ? await prisma.space.findMany({ where: { id: only }, select: { id: true, name: true } })
     : await prisma.space.findMany({ select: { id: true, name: true } });

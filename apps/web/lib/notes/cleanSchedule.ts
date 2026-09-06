@@ -69,7 +69,7 @@ export interface CleanScheduleRecord extends CleanScheduleSettings {
   nextRunAt: string | null
   lastRunAt: string | null
   timezone: string | null
-  /** Whether the deployment can embed at all (OPENAI_API_KEY) — the toggles are moot without it. */
+  /** Whether the deployment can embed at all (OPENROUTER_API_KEY) — the toggles are moot without it. */
   embedKeyed: boolean
   /** Non-null when this space may not hold a schedule at all (a sub-space, a personal space). */
   denial: string | null

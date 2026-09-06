@@ -434,7 +434,7 @@ yesterday") is *temporal-only* and is answered by recency inside the range with
 no text stage at all; a history phrasing ("why did we stop…", "used to") turns
 the lifecycle down-ranking off, because the retired note IS the answer. The
 server widens the plan with one structured LLM call (`lib/notes/queryRewrite.ts`,
-GEMINI_API_KEY, skipped for ≤3-word queries and temporal-only asks): up to three
+OPENROUTER_API_KEY, skipped for ≤3-word queries and temporal-only asks): up to three
 alternate phrasings, each run through BM25 and the vector stages as its own
 stage at weight 0.7, and a date range used only when the parser found none. The
 rewrite is untrusted output (`coerceQueryRewrite`) and can only add phrasings
@@ -460,10 +460,18 @@ behind the injected `Reranker`; `lib/notes/rerank.ts` is a listwise LLM judge,
 on only with `CONTEXT_RERANK=llm`, and its scores are lifecycle-weighted like
 fused ones. `pnpm eval:retrieval` is the regression gate for all of it.
 
-Vector stages need `OPENAI_API_KEY` (`text-embedding-3-small`, 768 dims). Without
-it the response reports `semantic: "no-key"` rather than silently degrading.
-After setting the key run `pnpm db:embed` once to backfill. Directory search
-itself is fuzzy/keyword only — the old semantic directory search was removed.
+**The deployment's own AI is ONE key: `OPENROUTER_API_KEY`.** Both halves go
+through OpenRouter — chat (`lib/notes/ai.ts`, default
+`deepseek/deepseek-v4-flash-0731`, overridable with `OPENROUTER_MODEL`) and
+embeddings (`lib/notes/embeddings.ts`, `openai/text-embedding-3-small` at 768
+dims, `EMBED_MODEL`) — so there is one account to bill and one key to rotate,
+and adding a model is picking a slug rather than plumbing a provider. Without
+it the response reports `semantic: "no-key"` rather than silently degrading;
+after setting the key run `pnpm db:embed` once to backfill. This key is the
+*platform's* — a space's AGENTS never touch it: they run on the space's own
+`models/` notes and `MODEL_KEY_<PROVIDER>` secrets, and Gemini is still one of
+the providers they may choose. Directory search itself is fuzzy/keyword only —
+the old semantic directory search was removed.
 
 ## Actions, and the one MCP tool
 

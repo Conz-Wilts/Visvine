@@ -36,7 +36,7 @@ const EMBED_CHARS = 6000
 const BATCH = 32
 
 export interface EmbedSweepResult {
-  /** False when OPENAI_API_KEY is unset — nothing was embedded. */
+  /** False when OPENROUTER_API_KEY is unset — nothing was embedded. */
   configured: boolean
   /** True when the one space asked for has embedding switched off. */
   disabled: boolean
@@ -89,7 +89,7 @@ export async function embeddingEnabledFor(spaceId: string): Promise<boolean> {
  */
 export async function embedSweep(spaceId?: string, opts: EmbedSweepOptions = {}): Promise<EmbedSweepResult> {
   // Pruning is not an embedding operation and must not be gated on a key or a
-  // toggle: a space whose OPENAI_API_KEY was removed, or that switched
+  // toggle: a space whose OPENROUTER_API_KEY was removed, or that switched
   // embedding off, still deletes notes, and its orphaned vectors would
   // otherwise be unreachable by any repair. Runs first so the staleness
   // comparison below never considers a row it is about to delete.

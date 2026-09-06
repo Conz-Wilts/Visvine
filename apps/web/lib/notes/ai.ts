@@ -2,9 +2,11 @@
 // reorganization. Plain `fetch` against an OpenAI-compatible chat endpoint —
 // no SDK dependency.
 //
-// Configure with GEMINI_API_KEY (Gemini's OpenAI-compatible endpoint); the
-// model can be overridden with GEMINI_MODEL. When the key is unset,
-// aiConfigured() is false and the UI hides the refactor/reorganize affordances.
+// Configure with OPENROUTER_API_KEY; the model can be overridden with
+// OPENROUTER_MODEL. One key covers both halves of the deployment's AI —
+// chat here and embeddings in ./embeddings.ts — so there is a single account
+// to bill and a single key to rotate. When it is unset, aiConfigured() is
+// false and the UI hides the refactor/reorganize affordances.
 
 import { buildNoteIndex } from './shared/context'
 import { splitFrontmatter } from './shared/markdown'
@@ -29,8 +31,11 @@ export interface ChatConfig {
   model: string
 }
 
-const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/'
-const DEFAULT_GEMINI_MODEL = 'gemma-4-31b-it'
+const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/'
+// DeepSeek V4 Flash: $0.045/$0.09 per M, tool calling, a 1.3M context. The
+// deployment's passes are bulk and unattended (the nightly claim extraction,
+// query rewrite, rerank, link reasons), so price per token is what picks this.
+const DEFAULT_CHAT_MODEL = 'deepseek/deepseek-v4-flash-0731'
 
 /**
  * Token usage as the endpoint reports it (`usage` on the completion).
@@ -67,8 +72,9 @@ export class ModelError extends Error {
 
 /**
  * Which kind of failure a provider status is. Exported for the key probe so
- * activation and runs agree. Gemini answers a bad key with 400 "Please pass a
- * valid API key" (INVALID_ARGUMENT) rather than 401, hence the body sniff.
+ * activation and runs agree. It is asked of every provider in the Space model
+ * registry too, and Gemini answers a bad key with 400 "Please pass a valid API
+ * key" (INVALID_ARGUMENT) rather than 401 — hence the body sniff.
  */
 export function classifyModelStatus(status: number, body = ''): ModelErrorKind {
   if (status === 401 || status === 403) return 'auth'
@@ -83,23 +89,23 @@ function scrub(text: string, apiKey: string): string {
 }
 
 function resolveConfig(): ChatConfig | null {
-  const apiKey = process.env.GEMINI_API_KEY
+  const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) return null
   return {
     apiKey,
-    baseURL: GEMINI_BASE_URL,
-    model: process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
+    baseURL: OPENROUTER_BASE_URL,
+    model: process.env.OPENROUTER_MODEL ?? DEFAULT_CHAT_MODEL,
   }
 }
 
-/** Whether the LLM backend is configured (GEMINI_API_KEY set). */
+/** Whether the LLM backend is configured (OPENROUTER_API_KEY set). */
 export function aiConfigured(): boolean {
   return resolveConfig() !== null
 }
 
 /** The chat model in use — recorded on AI-refactor revisions for attribution. */
 export function aiModelName(): string {
-  return resolveConfig()?.model ?? DEFAULT_GEMINI_MODEL
+  return resolveConfig()?.model ?? DEFAULT_CHAT_MODEL
 }
 
 // One chat completion over the OpenAI-compatible REST API. Throws if unconfigured.
@@ -107,7 +113,7 @@ export function aiModelName(): string {
 export async function chat(messages: ChatMessage[]): Promise<string> {
   const config = resolveConfig()
   if (!config) {
-    throw new Error('AI is not configured: set GEMINI_API_KEY.')
+    throw new Error('AI is not configured: set OPENROUTER_API_KEY.')
   }
   const base = config.baseURL.endsWith('/') ? config.baseURL : `${config.baseURL}/`
   const res = await fetch(`${base}chat/completions`, {
@@ -177,7 +183,7 @@ export async function chatWithTools(
 ): Promise<ChatWithToolsResult> {
   const config = opts.config ?? resolveConfig()
   if (!config) {
-    throw new ModelError('config', 'AI is not configured: set GEMINI_API_KEY.')
+    throw new ModelError('config', 'AI is not configured: set OPENROUTER_API_KEY.')
   }
   const base = config.baseURL.endsWith('/') ? config.baseURL : `${config.baseURL}/`
   let res: Response
@@ -246,12 +252,20 @@ export async function chatWithTools(
   return { content, toolCalls, usage }
 }
 
-// Gemma instruction-tuned models prepend a <thought>…</thought> reasoning trace.
-// Strip it so only the model's real output reaches callers.
+// Reasoning models inline their trace in the content — <think> for the
+// DeepSeek family, <thought> for instruction-tuned Gemma. Strip either so only
+// the model's real output reaches callers. An unclosed tag means the trace ran
+// to the end of the reply, so everything up to the last close is dropped.
+const REASONING_TAGS = ['think', 'thought'] as const
+
 function stripReasoning(text: string): string {
-  const stripped = text.replace(/<thought>[\s\S]*?<\/thought>/gi, '')
-  const lastClose = stripped.lastIndexOf('</thought>')
-  return (lastClose === -1 ? stripped : stripped.slice(lastClose + '</thought>'.length)).trim()
+  let out = text
+  for (const tag of REASONING_TAGS) {
+    out = out.replace(new RegExp(`<${tag}>[\\s\\S]*?</${tag}>`, 'gi'), '')
+    const lastClose = out.lastIndexOf(`</${tag}>`)
+    if (lastClose !== -1) out = out.slice(lastClose + tag.length + 3)
+  }
+  return out.trim()
 }
 
 // Extract and parse the first JSON object from model output (tolerates fences/prose).
@@ -355,7 +369,7 @@ const SYNTH_SYSTEM =
 /** Analyse a context's notes and propose a folder reorganization (never applied here). */
 export async function reorganizeNotes(context: Context): Promise<ReorganizePlan> {
   if (!aiConfigured()) {
-    throw new Error('Reorganize needs an LLM: set GEMINI_API_KEY.')
+    throw new Error('Reorganize needs an LLM: set OPENROUTER_API_KEY.')
   }
   const raw = await listRaw(context)
   const index = new Map(buildNoteIndex(raw).map((m) => [m.path, m]))

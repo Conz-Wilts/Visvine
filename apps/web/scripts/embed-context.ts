@@ -3,7 +3,7 @@
  * that was stored without one. Thin wrapper over lib/notes/embedSweep.ts —
  * the nightly maintenance run (lib/notes/nightly.ts) uses the same sweep.
  *
- * Run this once after turning OPENAI_API_KEY on (or rotating EMBED_MODEL):
+ * Run this once after turning OPENROUTER_API_KEY on (or rotating EMBED_MODEL):
  * it makes the first real searches fast and makes old uploads findable.
  * Idempotent — see embedSweep.
  *
@@ -20,7 +20,7 @@ import { embedSweep } from '../lib/notes/embedSweep';
 async function main() {
   const config = embeddingsConfig();
   if (!config) {
-    console.error('OPENAI_API_KEY is not set — nothing to embed. Set it and re-run.');
+    console.error('OPENROUTER_API_KEY is not set — nothing to embed. Set it and re-run.');
     process.exit(1);
   }
   const only = process.argv[2];

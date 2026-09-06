@@ -17,12 +17,12 @@
  *
  * Every provider speaks the OpenAI-compatible chat/completions wire format,
  * which is what lib/notes/ai.ts already talks — the model is a per-agent
- * choice, not a platform dependency.
+ * choice, not a platform dependency. The deployment's OWN passes are separate
+ * again: they run on OPENROUTER_API_KEY (lib/notes/ai.ts) and never touch a
+ * Space's key.
  */
 
-// Pure module: no prisma, no fetch — parsers and tests import it. These two
-// literals mirror lib/notes/ai.ts (which can't be imported here without
-// dragging the note store in).
+// Pure module: no prisma, no fetch — parsers and tests import it.
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 const DEFAULT_GEMINI_MODEL = 'gemma-4-31b-it'
 

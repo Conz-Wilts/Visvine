@@ -10,7 +10,7 @@
 // with an empty marker row so it is not re-read every night, and orphans (a
 // deleted or renamed note's rows the write path failed to drop) are pruned
 // first. Embedding is separate from extraction and separately keyed: claims
-// stored without a vector (no OPENAI_API_KEY at the time) still rank by full
+// stored without a vector (no OPENROUTER_API_KEY at the time) still rank by full
 // text, and a later run with a key embeds them without re-extracting.
 
 import prisma from '@/lib/prisma'
@@ -39,7 +39,7 @@ const SYSTEM =
   '4. Keep dates, numbers and names exactly as written. Under 30 words each.'
 
 export interface MemorySweepResult {
-  /** False when GEMINI_API_KEY is unset — nothing was extracted (pruning still ran). */
+  /** False when OPENROUTER_API_KEY is unset — nothing was extracted (pruning still ran). */
   configured: boolean
   /** Notes read by the model this run. */
   notes: number

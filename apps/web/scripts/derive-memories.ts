@@ -17,7 +17,7 @@ import { memorySweep } from '../lib/notes/memorySweep';
 
 async function main() {
   if (!aiConfigured()) {
-    console.error('GEMINI_API_KEY is not set — nothing to extract. Set it and re-run.');
+    console.error('OPENROUTER_API_KEY is not set — nothing to extract. Set it and re-run.');
     process.exit(1);
   }
   const only = process.argv[2];

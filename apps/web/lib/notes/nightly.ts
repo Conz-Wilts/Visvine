@@ -32,7 +32,7 @@ let sweeping = false
 /**
  * One full maintenance pass over every space: embeddings first (search
  * freshness benefits everyone), then link reasons. Each stage keys off its own
- * env (OPENAI_API_KEY / GEMINI_API_KEY) and skips silently when unkeyed, so
+ * env (OPENROUTER_API_KEY) and skips silently when unkeyed, so
  * partial configuration runs whatever it can.
  */
 export async function runNightlyMaintenance(): Promise<{ ran: boolean; ms: number }> {

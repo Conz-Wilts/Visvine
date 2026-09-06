@@ -180,7 +180,7 @@ export interface BrainSearchResult {
   hits: FusedResult[]
   /**
    * What the semantic half did: 'on', 'off' (the space switched embedding
-   * off), 'no-key' (OPENAI_API_KEY unset — results
+   * off), 'no-key' (OPENROUTER_API_KEY unset — results
    * are keyword + link context only), or 'error'. Reported rather than hidden,
    * because a degraded search is indistinguishable from a thorough one that
    * found nothing.

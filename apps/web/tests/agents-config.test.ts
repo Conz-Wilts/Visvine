@@ -62,19 +62,14 @@ test('a gateway model id keeps its own namespace', () => {
   }
 })
 
-test('the mirrored Gemini literals in registry.ts and ai.ts stay identical', () => {
-  // lib/agents/registry.ts hand-copies these from lib/notes/ai.ts because it
-  // must stay pure; nothing else ties them together, so this does.
-  const literal = (source: string, name: string): string => {
-    const match = source.match(new RegExp(`const ${name} = '([^']+)'`))
-    assert.ok(match, `${name} not found`)
-    return match![1]
-  }
-  const ai = readFileSync(new URL('../lib/notes/ai.ts', import.meta.url), 'utf8')
+test('the deployment key never leaks into the Space model registry', () => {
+  // A Space agent runs on the Space's own MODEL_KEY_<PROVIDER> secret; the
+  // deployment's passes (lib/notes/ai.ts) run on OPENROUTER_API_KEY. Reading
+  // either key from the other side would bill the wrong account.
   const registry = readFileSync(new URL('../lib/agents/registry.ts', import.meta.url), 'utf8')
-  for (const name of ['GEMINI_BASE_URL', 'DEFAULT_GEMINI_MODEL']) {
-    assert.equal(literal(registry, name), literal(ai, name), name)
-  }
+  assert.equal(/process\.env/.test(registry), false)
+  const ai = readFileSync(new URL('../lib/notes/ai.ts', import.meta.url), 'utf8')
+  assert.equal(/MODEL_KEY_/.test(ai), false)
 })
 
 // ── brief ──

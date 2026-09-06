@@ -14,7 +14,7 @@
  *
  * TWO HONEST CAVEATS about what this data is NOT:
  *
- *  1. **The vectors are not embeddings.** Real ones need an OPENAI_API_KEY, so
+ *  1. **The vectors are not embeddings.** Real ones need an OPENROUTER_API_KEY, so
  *     the 768-float rows here are deterministic hash noise. They are written
  *     under the model name PLACEHOLDER_EMBED_MODEL, which is deliberately NOT
  *     the configured model — both vector stages filter on `model = config.model`
@@ -1216,7 +1216,7 @@ async function main() {
   console.log(
     `\nnote: the ${EMBED_DIMENSIONS}-dim vectors are deterministic placeholders written under` +
       `\n      model "${PLACEHOLDER_EMBED_MODEL}", which retrieval filters OUT. Run` +
-      `\n      \`pnpm db:embed\` with an OPENAI_API_KEY for real ones.`,
+      `\n      \`pnpm db:embed\` with an OPENROUTER_API_KEY for real ones.`,
   );
 }
 

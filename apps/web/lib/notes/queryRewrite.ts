@@ -2,7 +2,7 @@
 // (shared/queryPlan.ts) widened by one structured LLM call that proposes
 // alternate phrasings and a date range the parser may have missed.
 //
-// The call is optional in every sense. Unconfigured (no GEMINI_API_KEY) or
+// The call is optional in every sense. Unconfigured (no OPENROUTER_API_KEY) or
 // switched off by the caller, the plan is the parser's alone; a failure is
 // logged and reported, never surfaced as a failed search. It is also skipped
 // where it cannot help — a bare keyword or a name has no useful paraphrase, and
