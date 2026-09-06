@@ -52,6 +52,15 @@ export interface ExecRequest {
   runId?: string
   /** Seconds. A run that outlives this is killed rather than left holding the machine. */
   timeoutSeconds?: number
+  /**
+   * Values for THIS command's environment only — how a credential reaches one
+   * process on the machine without riding the command line (which the
+   * timeline records) or the disk (which is archived). The control plane's
+   * sign-in is the caller. The values are scrubbed out of everything the
+   * command prints before it is recorded or returned, and never appear in the
+   * `exec` event.
+   */
+  env?: Record<string, string>
 }
 
 export interface ExecResult {
@@ -175,7 +184,14 @@ export class AgentMachine extends DurableObject<Env> {
     await this.ctx.storage.put('spec', spec)
     const container = this.ctx.container
     if (!container) throw new Error('this Durable Object has no container binding')
-    if (container.running) return { running: true, booted: false }
+    if (container.running) {
+      // Every lease carries the policy the space permits NOW, and HTTPS is
+      // routed per host: a host allowed since this machine booted has no
+      // route until the intercepts are registered again. The handler would
+      // already say yes — the network has to agree.
+      await this.intercept(container, spec)
+      return { running: true, booted: false }
+    }
     await this.boot(spec, container)
     return { running: true, booted: true }
   }
@@ -333,9 +349,16 @@ export class AgentMachine extends DurableObject<Env> {
     // prompt-injected agent.
     this.stream.emit('exec', { cmd: request.cmd, runId: request.runId ?? null })
     const spec = await this.spec()
+    // A secret handed to this one command is scrubbed from what it prints —
+    // prefixes included, the way a takeover's typing is — so a site that
+    // echoes a password back, or a script that logs its environment, records
+    // nothing.
+    const held = Object.values(request.env ?? {}).filter((v) => typeof v === 'string' && v.length >= MIN_REDACTED_CHARS)
+    const clean = (text: string) => (held.length ? scrub(text, held) : text)
     const process = await container.exec(asAgent(request.cmd), {
       cwd: WORKSPACE,
-      ...(spec ? { env: machineEnv(spec) } : {}),
+      // The machine's own variables win: a caller's env adds, never redirects.
+      env: { ...(request.env ?? {}), ...(spec ? machineEnv(spec) : {}) },
     })
     const timeout = (request.timeoutSeconds ?? DEFAULT_EXEC_TIMEOUT_SECONDS) * 1000
     const timedOut = await Promise.race([
@@ -352,8 +375,8 @@ export class AgentMachine extends DurableObject<Env> {
       return { exitCode: -1, stdout: '', stderr: `killed after ${timeout / 1000}s`, timedOut: true }
     }
     const output = await process.output()
-    const stdout = decode(output.stdout)
-    const stderr = decode(output.stderr)
+    const stdout = clean(decode(output.stdout))
+    const stderr = clean(decode(output.stderr))
     const exitCode = await process.exitCode
     // The transcript carries what the command said and the machine keeps the
     // rest: a watcher sees this the moment it lands, and so does the record.
@@ -516,7 +539,20 @@ export class AgentMachine extends DurableObject<Env> {
     const env = machineEnv(spec)
     const running = await container.exec(asAgent(['xdotool', 'search', '--class', 'chromium']), { env })
     if ((await running.exitCode) === 0) {
-      this.stream.emit('exec', { cmd: ['browse', url], note: 'browser already running' })
+      // Steer the open browser rather than starting a second: attach over CDP
+      // and send its first page to the URL. The tool description promises
+      // exactly this ("calling this again steers the same one").
+      const steer = await container.exec(
+        asAgent([
+          'node',
+          '--input-type=module',
+          '-e',
+          `import { chromium } from '/usr/local/lib/node_modules/playwright/index.mjs'; const b = await chromium.connectOverCDP('http://127.0.0.1:' + (process.env.CDP_PORT ?? 9222)); const c = b.contexts()[0] ?? (await b.newContext()); const p = c.pages()[0] ?? (await c.newPage()); await p.bringToFront().catch(() => {}); await p.goto(${JSON.stringify(url)}, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch((e) => console.error('could not open: ' + e.message)); console.log(JSON.stringify({ opened: p.url() })); await b.close().catch(() => {}); process.exit(0)`,
+        ]),
+        { cwd: WORKSPACE, env },
+      )
+      const steered = (await steer.exitCode) === 0
+      this.stream.emit('exec', { cmd: ['browse', url], note: steered ? 'steered the open browser' : 'browser already running; could not steer it' })
       this.stream.flush()
       return { started: false, alreadyRunning: true }
     }

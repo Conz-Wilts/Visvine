@@ -1,0 +1,54 @@
+# Deploys the agent edge — the Cloudflare Worker that owns each agent's machine
+# and the container image those machines boot from (apps/agent-edge,
+# docs/machines.md). Runs whenever the edge's source or the policy package it
+# bundles changes on main, and on demand.
+#
+# The web app deploys itself to Cloud Run (deploy.yml); this is the other
+# deployment, on the other provider. `wrangler deploy` uploads the Worker, then
+# builds the image with Docker (which the runner has) and pushes it to
+# Cloudflare's registry — the same thing `pnpm edge:deploy` does from a laptop,
+# minus the laptop. EDGE_SERVICE_TOKEN is a Worker secret set once with
+# `wrangler secret put`; a deploy does not touch it.
+#
+# A machine already awake keeps the old image until it sleeps or is stopped, so
+# a deploy takes effect on each machine's next boot.
+name: Deploy agent edge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/agent-edge/**'
+      - 'packages/vm-policy/**'
+      - '.github/workflows/edge.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: edge-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@10.30.2 --activate
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm edge:typecheck
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm edge:deploy
