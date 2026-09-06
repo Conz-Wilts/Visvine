@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui';
 import type { AgentReadiness, AgentSubscriber, AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ConnectorReadinessNotices from './ConnectorReadinessNotices';
+import { hrefForNotePath } from '@/lib/notes/entities';
+import { memoryPath, memorySummary } from '@/lib/agents/shared/memory';
 import StatusDot from './StatusDot';
 import { fmtAgo, fmtCents, fmtDuration, fmtUntil, terminalLabel } from '../lib/rowState';
 
@@ -39,7 +41,7 @@ function LinkButton({ onClick, children }: { onClick: () => void; children: Reac
 }
 
 export interface AgentSidebarProps {
-  agent: AgentSummary & { subscribers: AgentSubscriber[]; viewerSubscribed: boolean; readiness: AgentReadiness };
+  agent: AgentSummary & { memory: string | null; subscribers: AgentSubscriber[]; viewerSubscribed: boolean; readiness: AgentReadiness };
   runs: SerializedRun[];
   shownRunId: string | null;
   isAdmin: boolean;
@@ -53,7 +55,6 @@ export interface AgentSidebarProps {
   onSubscribe: (subscribed: boolean, userId?: string) => void;
   onOpen: (panel: 'settings' | 'skills' | 'machine') => void;
   onEditBrief: () => void;
-  children?: React.ReactNode;
 }
 
 export default function AgentSidebar({
@@ -69,8 +70,8 @@ export default function AgentSidebar({
   onSubscribe,
   onOpen,
   onEditBrief,
-  children,
 }: AgentSidebarProps) {
+  const memory = memorySummary(agent.memory);
   const others = agent.subscribers.filter((s) => s.userId !== agent.readiness.runAsUserId);
   // The identity every fire already runs as is on the list without a
   // subscription, so the viewer who IS it has nothing to add or remove.
@@ -160,7 +161,39 @@ export default function AgentSidebar({
         <ConnectorReadinessNotices items={agent.readiness.viewer} mine who={null} isAdmin={isAdmin} />
       </Section>
 
-      {children && <Section title="Say something">{children}</Section>}
+      {/* What it carries between runs — the memory note, as a glance: the
+          open threads (what it means to come back to) and how much it holds.
+          The note itself is where a person corrects it. */}
+      <Section
+        title="Memory"
+        action={
+          <Link href={hrefForNotePath(memoryPath(agent.name), null)} className="shrink-0 text-[12px] font-semibold text-brand-dark-green hover:underline">
+            Open
+          </Link>
+        }
+      >
+        {memory.total === 0 ? (
+          <p className="text-text-muted">Nothing yet. It adds to this as it runs.</p>
+        ) : (
+          <>
+            <p className="text-text-muted">
+              {memory.counts
+                .filter((c) => c.count > 0)
+                .map((c) => `${c.count} ${c.section.toLowerCase()}`)
+                .join(' · ')}
+            </p>
+            {memory.open.length > 0 && (
+              <ul className="flex flex-col gap-0.5 text-text-secondary">
+                {memory.open.map((line) => (
+                  <li key={line} className="truncate" title={line}>
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+      </Section>
 
       {runs.length > 0 && (
         <Section title="History">

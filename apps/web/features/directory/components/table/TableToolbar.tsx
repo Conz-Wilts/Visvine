@@ -72,11 +72,13 @@ interface TableToolbarProps {
   onSortChange: (sort: TableSort | null) => void;
   /** The view's Columns menu, at the right end. */
   trailing?: ReactNode;
+  /** The tag filter's options, when the table's rows are not directory nodes (Agents). */
+  tagOptions?: string[];
   /** Named for the type on show — "Search founders…". */
   searchPlaceholder: string;
 }
 
-export default function TableToolbar({ browse, types, typeKey, onTypeChange, columns, sort, onSortChange, trailing, searchPlaceholder }: TableToolbarProps) {
+export default function TableToolbar({ browse, types, typeKey, onTypeChange, columns, sort, onSortChange, trailing, tagOptions, searchPlaceholder }: TableToolbarProps) {
   const {
     nodes, space,
     searchTerm, setSearchTerm,
@@ -91,7 +93,7 @@ export default function TableToolbar({ browse, types, typeKey, onTypeChange, col
   // would only ever filter the People table to nothing.
   const typeNodes = nodes.filter((n) => n.type.toLowerCase() === typeKey);
   const typeAliases = aliases.filter((a) => a.nodeType.toLowerCase() === typeKey);
-  const typeTags = [...new Set(typeNodes.flatMap((n) => n.tags ?? []))].sort();
+  const typeTags = tagOptions ?? [...new Set(typeNodes.flatMap((n) => n.tags ?? []))].sort();
 
   const aliasColor = (name: string) => typeAliases.find((a) => a.name === name)?.color ?? 'var(--color-brand-green)';
   const tagColor = (tag: string) => tagPalette(tag, tagColors).base;

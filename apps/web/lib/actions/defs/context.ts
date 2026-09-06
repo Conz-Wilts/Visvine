@@ -93,7 +93,8 @@ import {
   type AgentTriggers,
 } from '@/lib/agents/config'
 import { claimManualRun } from '@/lib/agents/schedule'
-import { dispatchWithin } from '@/lib/agents/dispatch'
+import { dispatchWithin, type DispatchResult } from '@/lib/agents/dispatch'
+import { summonAgent } from '@/lib/agents/summon'
 import { intakeSummary } from '@/lib/actions/shared/intake'
 import { agentPreamble, AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
 import { rehearsalPlan } from '@/lib/agents/shared/rehearsal'
@@ -1943,30 +1944,48 @@ export const CONTEXT_ACTIONS = [
         'or a member with edit access to its folder; an inactive agent is refused. The run acts as YOU, the caller — a `mode: user` ' +
         "connector spends your own linked account, not the author's. Shares the scheduler's claim path so it cannot double-fire, and " +
         'does not advance the schedule. Returns the run id and, when the run finishes within a minute, its outcome; a longer run ' +
-        'answers `running: true` and carries on — watch it at the `watch` href rather than calling again.',
+        'answers `running: true` and carries on — watch it at the `watch` href rather than calling again. ' +
+        'Pass `message` to tell it what this run is for: the words reach the run as what triggered it, beside its brief.',
       input: {
         space_id: spaceArg,
         agent: z.string().describe("The agent's name, e.g. 'weekly-digest' for agents/weekly-digest/"),
+        message: z
+          .string()
+          .max(20_000)
+          .optional()
+          .describe('Something to say to it for this run — a question, an instruction, a thing to look at. Optional.'),
       },
       run: async (ctx, args) => {
         const { principal } = await resolveTarget(ctx, args.space_id, 'shared')
         if (!(await canTriggerRun(principal, args.space_id, args.agent))) {
           throw new ActionError(403, 'Only someone who can edit this agent can run it')
         }
-        const claimed = await claimManualRun(args.space_id, args.agent, principal.userId)
-        if (!claimed.ok) throw new ActionError(claimed.code === 'unknown' ? 404 : 409, claimed.message)
+        let runId: string
+        let dispatch: Promise<DispatchResult> | null
+        if (args.message?.trim()) {
+          const summoned = await summonAgent({ spaceId: args.space_id, name: args.agent, principal, text: args.message })
+          if (!summoned.ok) throw new ActionError(summoned.status, summoned.message)
+          if (!summoned.runId) throw new ActionError(409, 'The agent is already running; the message waits for its next run.')
+          runId = summoned.runId
+          dispatch = summoned.dispatch
+        } else {
+          const claimed = await claimManualRun(args.space_id, args.agent, principal.userId)
+          if (!claimed.ok) throw new ActionError(claimed.code === 'unknown' ? 404 : 409, claimed.message)
+          runId = claimed.runId
+          dispatch = claimed.dispatch ?? null
+        }
         // Waited on for RUN_AWAIT_MS, not for the run's own cap: a long run
         // hands back its id and keeps going, rather than holding this request
         // (and the instance serving it) for as long as it takes.
-        const result = claimed.dispatch ? await dispatchWithin(claimed.dispatch) : null
+        const result = dispatch ? await dispatchWithin(dispatch) : null
         return {
-          run_id: claimed.runId,
+          run_id: runId,
           running: result === null,
           outcome: result?.ok ? result.outcome : null,
           error: result && !result.ok ? result.error : null,
           // Where a person watches it — the agent's page, on the run just started:
           // the steps as they happen, the machine beside them.
-          watch: agentPageHref(args.agent, claimed.runId),
+          watch: agentPageHref(args.agent, runId),
         }
       },
     }),

@@ -33,6 +33,7 @@ export default function RunPane({
   maxTurns,
   isAdmin,
   onFinished,
+  onEditBrief,
 }: {
   spaceId: string;
   agentName: string;
@@ -40,6 +41,8 @@ export default function RunPane({
   maxTurns: number | null;
   isAdmin: boolean;
   onFinished?: (run: RunDetail) => void;
+  /** Offered after a run, for anyone who may: the run is where you learn what the brief should have said. */
+  onEditBrief?: () => void;
 }) {
   const { run, error } = useRun(spaceId, agentName, runId, onFinished);
   const [now, setNow] = useState(() => Date.now());
@@ -70,9 +73,14 @@ export default function RunPane({
   const trigger: TriggerNode | null = run
     ? {
         kind: run.trigger,
-        label: triggerEvents?.length
-          ? `Woken by ${triggerEvents.length} event${triggerEvents.length === 1 ? '' : 's'}${run.eventCount > triggerEvents.length ? ` · ${run.eventCount} consumed` : ''}`
-          : ({ scheduled: 'On schedule', interval: 'On its interval', manual: 'Run by hand', webhook: 'Woken by a webhook' } as Record<string, string>)[run.trigger] ?? run.trigger,
+        label:
+          // A run someone started by saying something reads as the ask, not
+          // as mail it happened to find.
+          run.trigger === 'manual' && triggerEvents?.length && triggerEvents.every((e) => e.kind === 'reply')
+            ? 'Asked'
+            : triggerEvents?.length
+              ? `Woken by ${triggerEvents.length} event${triggerEvents.length === 1 ? '' : 's'}${run.eventCount > triggerEvents.length ? ` · ${run.eventCount} consumed` : ''}`
+              : ({ scheduled: 'On schedule', interval: 'On its interval', manual: 'Run by hand', webhook: 'Woken by a webhook' } as Record<string, string>)[run.trigger] ?? run.trigger,
         events: triggerEvents,
       }
     : null;
@@ -179,6 +187,15 @@ export default function RunPane({
           <Caption>Summary</Caption>
           <p className="mt-1 whitespace-pre-wrap text-[13px]">{run.summary}</p>
         </div>
+      )}
+
+      {run && !running && onEditBrief && (
+        <p className="text-[12px] text-text-muted">
+          Not what you wanted?{' '}
+          <button type="button" className="font-semibold text-brand-dark-green hover:underline" onClick={onEditBrief}>
+            Adjust the brief
+          </button>
+        </p>
       )}
     </div>
   );

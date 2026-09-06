@@ -15,7 +15,7 @@ inside Visvine and never leave it — not to the model, not to a sandbox, not to
 | Path | Who writes | Holds |
 |---|---|---|
 | `agents/<name>/index.md` | any member (normal grants) | the **whole agent**: `type: agent`, `title`, `description`, `model`, `connectors`, `tools`, `max_turns` — AND the **activation**: `active`, `schedule` (`hourly\|daily\|weekly`) *or* `every` (`15m`, `2h`, cron), `at`, `on` (a weekday, or the **triggers map** `{ context, webhook }`), `debounce`, `timezone`, `runs_as`. The body is the system-prompt brief |
-| `agents/<name>/…` | the agent's own runs | whatever it writes — its output, and `memory.md`, what it carries between runs |
+| `agents/<name>/…` | the agent's own runs | whatever it writes — its output, and `memory.md`, what it carries between runs: four sections (What I know · Decisions · Open threads · Last run), handed to every run, added to with `remember`, `Last run` written by the runner (`lib/agents/shared/memory.ts`) |
 | `agent_state` row | derived, never authoritative | `nextRunAt`, `status`, `runningSince`, `scheduleHash`, `runAsUserId`, `triggersJson`, `debounceMs`, `budgetMonthlyCents`, failure bookkeeping |
 | `agent_events` rows | the payload **mailbox** | one row per note save / webhook / reply that woke an agent; claimed by the run that consumes them (`consumedBy`), pruned after 7 days |
 
@@ -372,22 +372,37 @@ deadline, UTC) was already correct and was left untouched.
 - **An agent is watched on its own node page** — `/directory/agent:<name>`, the **Agent** tab
   beside Context and Raw (`features/profile/components/AgentPageContent.tsx`). It shows up on an
   `agent:` node and nowhere else, the way Profile shows up on a person: an agent is a note under
-  `agents/` in the Context, so there is no agents tool — no rail row, no feature key, no roster
-  page, nothing to switch on or off. The tab carries the status line with Run and the switch, when
-  it runs (and what stands in the way while it is off), the brief's settings folded, spend
-  (admins), then the run: the one in flight — or the one the URL names, `?run=<id>` — as steps with
-  the machine's record nested under each `run_command` / `open_page` (`RunPane` + `RunSteps` over
-  the pure fold `lib/agents/shared/trace.ts#attachMachine`), and for an admin the machine itself
-  beside it (`MachinePane`: the screen, the terminal, Watch live — opened automatically while a run
-  is on — and Take control); then what it has been taught (`SkillsPanel`), a box to say something
-  to it, and the history, each row selecting a run in place. `run_agent`, `vm_browse` and
-  `create_agent` return a `watch` / `page` href into it
-  (`lib/agents/config.ts#agentPageHref(name, runId?)`). Polling throughout, never a stream: quick
-  while anything runs, a slow walk otherwise.
-- **Where they live** — an agent is still a note under `agents/` in the space's Context, so the
-  roster IS that folder in the context tree too: folders of agents are ordinary folders with an
-  `index.md`, and a brief opens as the agent's page. Nothing about agents is switchable per space —
-  the `agent` type belongs to Context, which is always on.
+  `agents/` in the Context, so there is no agents tool — no rail row, no feature key, nothing to
+  switch on or off. The tab carries the status line with Run and the switch, when it runs (and
+  what stands in the way while it is off), then **the line**: the run in flight — or the one the
+  URL names, `?run=<id>` — as steps with the machine's record nested under each `run_command` /
+  `open_page` (`RunPane` + `RunSteps` over the pure fold `lib/agents/shared/trace.ts#attachMachine`),
+  and for an admin the machine itself beside it (`MachinePane`: the screen, the terminal, Watch
+  live — opened automatically while a run is on — and Take control). **Under the line, the box**
+  (`MessageAgent`): say something and a run starts now, as you, and the line follows it —
+  `lib/agents/summon.ts` is the same delivery every channel uses (`deliverMessage`) followed by
+  the same manual claim (`claimManualRun`), so nothing about the run is special; when the agent is
+  already running the words wait in its mailbox. Its answer is the run's summary, and "Adjust the
+  brief" sits under a finished run. The sidebar is when it runs, who it runs for, memory at a
+  glance (the open threads, and a link to the note), the history — each row selecting a run in
+  place — and setup (settings, skills, machine). `run_agent`, `vm_browse` and `create_agent` return
+  a `watch` / `page` href into it (`lib/agents/config.ts#agentPageHref(name, runId?)`). Polling
+  throughout, never a stream: quick while anything runs, a slow walk otherwise.
+- **The roster is the Directory's Agents table** — `/directory?view=table&type=agent`. The
+  Table view renders `features/agents/components/AgentsRoster.tsx` for that type instead of the
+  cell grid, because every column of an agent is live state rather than a record. Over the list
+  sits **the clock**: the next 24 hours across every agent, what is running first with its
+  current step (`runs.ts#currentStepOf`, the last tool event of the run in flight), the nightly
+  clean among them; under it every agent filed under its **group** — the brief's first tag —
+  one row each: dot, name, what it is doing or when it fires, who it runs for, last run, spend
+  (admins). The bar's search and tag filter apply; the click goes to the agent's page. Pure
+  shapes in `lib/agents/shared/roster.ts`. The `agents/` folder in the context tree is the same
+  roster as files. Nothing about agents is switchable per space — the `agent` type belongs to
+  Context, which is always on.
+- **Groups are tags.** `tags: [Investments]` in the brief files the agent under Investments on
+  the roster and lands on its `agent:` node, so the Directory's tag filter reaches it. The
+  settings dialog's Group field writes the same key. There is no folder move and no second
+  vocabulary.
 - **Creating one** — "Create → Agent" (offered first while browsing `agents/`) opens the note-first draft (`/directory/new?type=agent`)
   with the agent half filled in (`features/agents/components/AgentDraftSetup.tsx`): a row of starter
   briefs (`lib/agents/templates.ts` — each fills the title, body, tools and roster line, and must
@@ -412,9 +427,12 @@ deadline, UTC) was already correct and was left untouched.
   the brief (required to turn a scheduled agent on), models and keys are connectors, and
   activation was always per agent, on the agent's page.
 - API: `GET/PATCH /api/communities/[spaceId]/agents/[name]`, `POST …/[name]/run`,
-  `GET …/[name]/runs/[runId]`, `GET/PUT …/[name]/budget`.
+  `POST …/[name]/message` (`{ text, run? }` — a run starts now unless `run: false`),
+  `GET …/[name]/runs/[runId]`, `GET/PUT …/[name]/budget`; `GET …/agents` is the roster (plus the
+  clean schedule for the clock).
 - MCP: `list_agents` (`context:read`; includes `schedule`, `every` and `triggers` so a trigger-only
-  agent does not read "No schedule"), `run_agent` (`agents:run`). Authoring is not an MCP tool.
+  agent does not read "No schedule"), `run_agent` (`agents:run`; optional `message`). Authoring is
+  not an MCP tool.
 
 ## Code map
 

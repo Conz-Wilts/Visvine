@@ -36,6 +36,7 @@ import { LOCAL_RUNTIMES, localRuntimeOf } from '@/lib/agents/local';
  */
 type AgentDetail = AgentSummary & {
   brief: string;
+  memory: string | null;
   heartbeatAt: string | null;
   subscribers: AgentSubscriber[];
   viewerSubscribed: boolean;
@@ -291,18 +292,35 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
               maxTurns={maxTurns ? Number(maxTurns) : null}
               isAdmin={isAdmin}
               onFinished={() => void reload()}
+              onEditBrief={canManage ? editBrief : undefined}
             />
           ) : (
             <p className="text-[13px] text-text-muted">
               No runs yet.{' '}
               {runnable
-                ? 'Press Run to watch its first one here.'
+                ? 'Press Run, or ask it something below.'
                 : localRuntime
                   ? 'Its runs appear here.'
                   : agent.activation.active
                   ? 'The first one appears here when it fires.'
                   : 'Turn it on and its runs appear here.'}
             </p>
+          )}
+
+          {/* The inline door. Under the line, because what you say starts a
+              run that appears right above it — and its answer is the run's
+              summary. Not for a brief on a member's own plan: that runs
+              from the desktop app. */}
+          {spaceId && !localRuntime && canManage && (
+            <div className="mt-6">
+              <MessageAgent
+                spaceId={spaceId}
+                agentName={name}
+                disabled={!agent.activation.active || !!agent.invalid}
+                onStarted={selectRun}
+                onSettled={() => void reload()}
+              />
+            </div>
           )}
         </main>
 
@@ -319,9 +337,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
           onSubscribe={subscribe}
           onOpen={setPanel}
           onEditBrief={editBrief}
-        >
-          {spaceId && agent.activation.active && !localRuntime ? <MessageAgent spaceId={spaceId} agentName={name} /> : null}
-        </AgentSidebar>
+        />
       </div>
 
       {panel === 'settings' && spaceId && canManage && (

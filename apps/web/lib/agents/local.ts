@@ -115,7 +115,7 @@ export function localAgentPreamble(name: string, opts: { hasVisvineTool: boolean
     '',
     'Rules:',
     opts.hasVisvineTool
-      ? `- The space's notes are reachable through the visvine tool: call it with no action and your request to get the plan and the catalogue, then run actions by name. ${home}memory.md is your own memory — read it first if it exists, and append what the next run should know.`
+      ? `- The space's notes are reachable through the visvine tool: call it with no action and your request to get the plan and the catalogue, then run actions by name. ${home}memory.md is your own memory (handed to you below when it exists): four sections — What I know, Decisions, Open threads, Last run. Add a line under one of the first three, through the visvine tool, for anything the next run could not infer again; never rewrite the file.`
       : `- The space's notes are not reachable from this run; work from the brief and the web, and put anything the space should keep in your final answer.`,
     '- Do not edit files on this machine. Read, fetch and reason; write only through the visvine tool, and only under your own folder unless the brief says otherwise.',
     '- If something the brief asks for is out of reach, say so in the summary rather than guessing.',

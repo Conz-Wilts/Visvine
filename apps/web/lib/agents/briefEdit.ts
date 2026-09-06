@@ -21,6 +21,8 @@ export interface BriefSettings {
   tools: AgentToolExtra[]
   dryRun: boolean
   maxTurns: number | null
+  /** The brief's `tags:` — the roster's groups. */
+  tags: string[]
 }
 
 export type BriefSettingsPatch = Partial<BriefSettings>
@@ -45,6 +47,7 @@ export function readBriefSettings(content: string): BriefSettings {
     tools: [...new Set(tools)],
     dryRun: fm.dry_run === true || (typeof fm.dry_run === 'string' && fm.dry_run.trim().toLowerCase() === 'true'),
     maxTurns: Number.isInteger(maxTurns) && maxTurns > 0 ? maxTurns : null,
+    tags: [...new Set(list(fm.tags))],
   }
 }
 
@@ -70,6 +73,11 @@ export function updateBriefSettings(content: string, patch: BriefSettingsPatch):
   if (patch.maxTurns !== undefined) {
     if (patch.maxTurns === null) delete fm.max_turns
     else fm.max_turns = patch.maxTurns
+  }
+  if (patch.tags !== undefined) {
+    const tags = [...new Set(patch.tags.map((t) => t.trim()).filter(Boolean))]
+    if (tags.length) fm.tags = tags
+    else delete fm.tags
   }
   return joinFrontmatter(fm, body)
 }

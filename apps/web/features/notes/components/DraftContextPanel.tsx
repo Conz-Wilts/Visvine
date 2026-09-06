@@ -137,7 +137,7 @@ interface Extras {
 
 const EMPTY_EXTRAS: Extras = {
   // No model: a new agent runs on the space's (lib/agents/spaceModels.ts).
-  agent: { model: '', description: '', connectors: [], tools: [], dryRun: false, maxTurns: null },
+  agent: { model: '', description: '', connectors: [], tools: [], dryRun: false, maxTurns: null, tags: [] },
   agentTemplate: null,
 }
 

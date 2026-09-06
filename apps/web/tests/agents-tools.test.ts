@@ -22,6 +22,7 @@ function brief(over: Partial<AgentBrief> = {}): AgentBrief {
   return {
     title: 'Weekly digest',
     description: null,
+    tags: [],
     model: 'gemini/x',
     modelRef: (() => {
       const r = parseModelRef('gemini/x')
@@ -47,6 +48,7 @@ interface Fakes {
   links: { from: string; to: string; relationship: string }[]
   commands: { cmd: string[]; runId: string | null }[]
   pages: string[]
+  signIns: string[]
 }
 
 function fakes(): Fakes {
@@ -58,6 +60,7 @@ function fakes(): Fakes {
     links: [],
     commands: [],
     pages: [],
+    signIns: [],
     deps: {
       writeGated: (async (_p, _c, path: string, content: string) => {
         f.writes.push({ path, content })
@@ -88,6 +91,12 @@ function fakes(): Fakes {
         f.pages.push(url)
         return { started: true, alreadyRunning: false, vmId: 'vm-1' }
       }) as AgentToolDeps['browseOnMachine'],
+      signInOnMachine: (async (input: { connectorName: string }) => {
+        f.signIns.push(input.connectorName)
+        return input.connectorName === 'crm-login'
+          ? { ok: true, url: 'https://crm.example.com/home', title: 'Home', user: 'ops@acme.com' }
+          : { ok: false, reason: 'no_login', message: `${input.connectorName} holds no website login` }
+      }) as AgentToolDeps['signInOnMachine'],
     },
   }
   return f
@@ -124,6 +133,7 @@ test('the surface: always-on tools, and extras only when the brief asks', () => 
     'read_context',
     'write_context',
     'append_context',
+    'remember',
     'run_command',
     'open_page',
     'run_agent',
@@ -131,8 +141,20 @@ test('the surface: always-on tools, and extras only when the brief asks', () => 
   const full = names(
     agentTools(ctx(f, { brief: brief({ tools: ['web', 'directory', 'actions'], agents: ['other'], connectors: ['hubspot'] }) })),
   )
-  for (const n of ['run_connector', 'fetch_url', 'run_action', 'create_node', 'link_nodes']) assert.ok(full.includes(n), n)
+  for (const n of ['run_connector', 'sign_in', 'fetch_url', 'run_action', 'create_node', 'link_nodes']) assert.ok(full.includes(n), n)
   assert.ok(!base.includes('create_node') && !base.includes('run_action') && !base.includes('fetch_url'), 'no directory / actions / web without opt-in')
+  assert.ok(!base.includes('sign_in'), 'no sign_in without a declared connector')
+})
+
+test('sign_in: only a declared connector, and the answer never carries a password', async () => {
+  const f = fakes()
+  const t = tool(agentTools(ctx(f, { brief: brief({ connectors: ['crm-login', 'hubspot'] }) })), 'sign_in')
+  assert.match(await t.run({ connector: 'other' }), /not one of this agent's connectors/)
+  assert.equal(await t.run({ connector: 'crm-login' }), 'signed in as ops@acme.com — now on https://crm.example.com/home (Home)')
+  assert.match(await t.run({ connector: 'hubspot' }), /^not signed in: hubspot holds no website login/)
+  assert.deepEqual(f.signIns, ['crm-login', 'hubspot'])
+  const dry = tool(agentTools(ctx(f, { brief: brief({ connectors: ['crm-login'], dryRun: true }) })), 'sign_in')
+  assert.equal(await dry.run({ connector: 'crm-login' }), 'DRY RUN — would sign in with crm-login')
 })
 
 test('run_agent: any agent of the space, never itself, and refused past the depth limit', async () => {

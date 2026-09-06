@@ -42,7 +42,8 @@ import { deactivateAgent, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
 import { localRuntimeOf, localRuntimeRefusal } from './local'
-import { latestRun, spendForMonth, type RunListItem } from './runs'
+import { currentStepOf, latestRun, spendForMonth, type RunListItem } from './runs'
+import { memoryPath } from './shared/memory'
 import { lastHeartbeat } from './schedule'
 
 export type AgentRowState =
@@ -93,6 +94,15 @@ export interface AgentSummary {
     consecutiveFailures: number
   }
   lastRun: SerializedRun | null
+  /** The brief's `tags:` — the roster's groups (the first is the group). */
+  tags: string[]
+  /**
+   * Who a fire runs for: the identity every run acts as, then the subscribers.
+   * `names` is at most three; `count` is everyone.
+   */
+  runsFor: { names: string[]; count: number }
+  /** What a running run is doing right now, one line; null when idle. */
+  currentStep: string | null
   /**
    * What this agent would actually run on now, `<provider>/<id>` — the brief's
    * pin, or the space's model when it carries none. Null when the space has no
@@ -210,14 +220,24 @@ async function summarise(
   const parsedLive = hasActivationFrontmatter(fm) ? parseAgentActivation(fm) : (await findAgentActivation(spaceId, name)).parsed
   const activation: AgentActivation | null = parsedLive?.ok ? parsedLive.activation : null
 
-  const [state, last, briefRow] = await Promise.all([
+  const [state, last, briefRow, subs] = await Promise.all([
     prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } } }),
     latestRun(spaceId, name),
     prisma.contextNote.findFirst({
       where: { spaceId, ownerKey: 'shared', path, deletedAt: null },
       select: { createdBy: true },
     }),
+    prisma.agentSubscription.findMany({ where: { spaceId, name }, orderBy: { createdAt: 'asc' }, select: { userId: true } }),
   ])
+  const runAsUserId = activation?.runsAs ?? state?.runAsUserId ?? briefRow?.createdBy ?? null
+  const others = subs.filter((s) => s.userId !== runAsUserId)
+  const forIds = [runAsUserId, ...others.map((s) => s.userId)].filter((id): id is string => !!id)
+  const people = forIds.length
+    ? await prisma.user.findMany({ where: { id: { in: forIds.slice(0, 3) } }, select: { id: true, name: true } })
+    : []
+  const nameOfId = new Map(people.map((u) => [u.id, u.name]))
+  const forNames = forIds.slice(0, 3).map((id) => nameOfId.get(id) ?? null).filter((n): n is string => !!n)
+  const currentStep = state?.status === 'running' && state.currentRunId ? await currentStepOf(state.currentRunId) : null
 
   const tz = activation?.timezone ?? null
   const summary: AgentSummary = {
@@ -230,7 +250,7 @@ async function summarise(
     tools: brief?.tools ?? [],
     invalid: parsedBrief.ok ? null : parsedBrief.error,
     authorUserId: briefRow?.createdBy ?? null,
-    runAsUserId: activation?.runsAs ?? state?.runAsUserId ?? briefRow?.createdBy ?? null,
+    runAsUserId,
     activation: {
       active: !!activation?.active,
       schedule: activation?.schedule ?? null,
@@ -252,6 +272,9 @@ async function summarise(
       consecutiveFailures: state?.consecutiveFailures ?? 0,
     },
     lastRun: last ? serializeRun(last) : null,
+    tags: brief?.tags ?? [],
+    runsFor: { names: forNames, count: forIds.length },
+    currentStep,
     ...modelStateOf(brief, opts.models),
     rowState: 'off',
     spend: null,
@@ -346,6 +369,8 @@ export async function describeAgent(
 ): Promise<
   | (AgentSummary & {
       brief: string
+      /** `agents/<name>/memory.md` as the viewer may read it, or null. */
+      memory: string | null
       heartbeatAt: string | null
       subscribers: AgentSubscriber[]
       viewerSubscribed: boolean
@@ -381,9 +406,12 @@ export async function describeAgent(
   const runAs =
     runAsUserId && runAsUserId !== p.userId ? await connectorReadiness(p, context, summary.connectors, runAsUserId) : null
 
+  const memory = await readVisible(p, context, memoryPath(name))
+
   return {
     ...summary,
     brief: content,
+    memory,
     heartbeatAt: heartbeatAt?.toISOString() ?? null,
     subscribers: subRows.map((s) => ({ userId: s.userId, name: nameOf.get(s.userId) ?? null })),
     viewerSubscribed: subRows.some((s) => s.userId === p.userId),

@@ -298,6 +298,9 @@ async function syncAgentNode(spaceId: string, path: string, content: string | nu
   const name = agentNameOfPath(path) ?? path.replace(/\.md$/i, '').split('/').pop() ?? path
   const fm = parseFrontmatter(content)
   const description = typeof fm.description === 'string' ? fm.description.trim() : ''
+  // The brief's tags are the node's: that is how the roster groups agents and
+  // how the Directory's tag filter reaches them.
+  const tags = (fm.tags ?? []).map((t) => String(t).trim()).filter(Boolean)
 
   await syncEntityNode({
     spaceId,
@@ -307,6 +310,7 @@ async function syncAgentNode(spaceId: string, path: string, content: string | nu
     subtitle: description || null,
     recordId: path,
     slugSource: name,
+    tags: [...new Set(tags)],
     metadata: { notePath: path },
     parentNodeId: spaceNodeId(spaceId),
     revalidate: false,

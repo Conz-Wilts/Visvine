@@ -43,8 +43,10 @@ import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ToolHandler } from '@/lib/notes/toolLoop'
 import { agentFolderPath, type AgentBrief } from './config'
+import { memoryPath, memorySectionOf, REMEMBER_SECTIONS, rememberInto } from './shared/memory'
 import { edgeConfigured, EdgeUnavailableError } from '@/lib/vm/edge'
 import { browseOnMachine, QuotaExceededError, runOnMachine } from '@/lib/vm/lease'
+import { signInOnMachine } from '@/lib/vm/signin'
 import type { RunNowResult } from './schedule'
 import { sandboxProvider } from './sandbox'
 
@@ -73,6 +75,8 @@ export interface AgentToolDeps {
   /** One command on the agent's own machine, stamped with the run so its timeline joins the trace. */
   runOnMachine: typeof runOnMachine
   browseOnMachine: typeof browseOnMachine
+  /** Sign the machine's browser into a site a Website login connector holds (lib/vm/signin.ts). */
+  signInOnMachine: typeof signInOnMachine
 }
 
 function defaultDeps(): AgentToolDeps {
@@ -85,6 +89,7 @@ function defaultDeps(): AgentToolDeps {
     machineAvailable: edgeConfigured,
     runOnMachine,
     browseOnMachine,
+    signInOnMachine,
     linkNodes: async ({ spaceId, from, to, relationship, note, createdBy }) => {
       const rows = await prisma.node.findMany({ where: { id: { in: [from, to] }, spaceId }, select: { id: true } })
       const found = new Set(rows.map((r) => r.id))
@@ -245,7 +250,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       spec: {
         name: 'write_context',
         description:
-          `Create or overwrite a note at a path with full markdown: frontmatter (\`title:\` at least), then headings, lists, tables and root-relative links to the notes and people it concerns. Your home folder ${home} is the default place — a dated note (${home}<YYYY-MM-DD>.md) for periodic output, one fixed note for something kept current, ${home}state.md for what you carry between runs — and the only place under agents/ you may write (never ${home}index.md or ${home}activation.md). Elsewhere, the same permission gate as a human edit applies; some folders refuse.` +
+          `Create or overwrite a note at a path with full markdown: frontmatter (\`title:\` at least), then headings, lists, tables and root-relative links to the notes and people it concerns. Your home folder ${home} is the default place — a dated note (${home}<YYYY-MM-DD>.md) for periodic output, one fixed note for something kept current — and the only place under agents/ you may write (never ${home}index.md or ${home}activation.md). What you want to carry to your next run goes through remember, not here. Elsewhere, the same permission gate as a human edit applies; some folders refuse.` +
           (dry ? ' THIS IS A DRY RUN: the write is recorded, not applied.' : ''),
         parameters: {
           type: 'object',
@@ -300,6 +305,39 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       },
     },
   ]
+
+  tools.push({
+    spec: {
+      name: 'remember',
+      description:
+        `Keep one thing for your next run — a line under one section of ${memoryPath(ctx.agentName)}, which every run is handed at the start. Sections: ${REMEMBER_SECTIONS.map((s) => `"${s}"`).join(', ')}. Record what you could NOT have inferred from the notes or your brief: a fact you found, a decision you made and why, a thread left open. Not what you did (the run keeps that itself), not what a note already says. One sentence, subject named.` +
+        (dry ? ' THIS IS A DRY RUN: the line is recorded, not applied.' : ''),
+      parameters: {
+        type: 'object',
+        properties: {
+          section: { type: 'string', description: REMEMBER_SECTIONS.join(' | ') },
+          text: { type: 'string', description: 'One self-contained sentence' },
+        },
+        required: ['section', 'text'],
+      },
+    },
+    describe: (a) => `${str(a.section)}: ${str(a.text).slice(0, 80)}`,
+    run: async (a) => {
+      const section = memorySectionOf(str(a.section))
+      const text = str(a.text).trim()
+      if (!section || section === 'Last run') return `error: section must be one of ${REMEMBER_SECTIONS.join(', ')}`
+      if (!text) return 'error: text is required'
+      const path = memoryPath(ctx.agentName)
+      if (dry) return `DRY RUN — would remember under ${section}: ${text}`
+      const current = await readFederated(principal, context, path)
+      const next = rememberInto(current, ctx.agentName, section, text, new Date().toISOString().slice(0, 10))
+      if (!next.changed) return 'already remembered'
+      const result = await deps.writeGated(principal, context, path, next.content, 'agent', stamp)
+      if (result.status !== 'applied') return `error: could not remember — ${result.reason}`
+      noteWritten(path)
+      return `remembered under ${section}`
+    },
+  })
 
   const runnable = brief.connectors
   if (runnable.length > 0) {
@@ -444,10 +482,11 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
           "Open an https page in your machine's own browser (a real Chromium with a profile that remembers logins) and " +
           'leave it open — a person can watch and take over. The page loads only if the space allows its host. One ' +
           'browser per machine: calling this again steers the same one. To READ what you opened, run a script with ' +
-          "run_command that attaches to it: node, `const b = await require('playwright').chromium." +
-          "connectOverCDP('http://127.0.0.1:9222'); const p = b.contexts()[0].pages()[0]; console.log(await p." +
-          "innerText('body'))` — that is the same browser, so it sees the rendered page and any session a person " +
-          'logged in during a takeover. Launching your own browser instead gets a different one that knows nobody.',
+          "run_command that attaches to it — `node --input-type=module -e \"import { chromium } from " +
+          "'/usr/local/lib/node_modules/playwright/index.mjs'; const b = await chromium.connectOverCDP('http://127.0.0.1:9222'); " +
+          "const p = b.contexts()[0].pages()[0]; console.log(await p.innerText('body')); process.exit(0)\"` — that is the same " +
+          'browser, so it sees the rendered page and any session it is signed into (sign_in, or a person during a takeover). ' +
+          'Launching your own browser instead gets a different one that knows nobody.',
         parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'] },
       },
       describe: (a) => str(a.url),
@@ -460,6 +499,40 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
           return `${r.started ? 'opened' : r.alreadyRunning ? 'steered the open browser to' : 'opened'} ${url}`
         } catch (err) {
           const known = machineError(err)
+          if (known) return known
+          throw err
+        }
+      },
+    })
+  }
+
+  // The vault's door. Offered when the machine is, for the login connectors
+  // the brief declares — declared reach, like run_connector — and the
+  // password goes to the machine's browser, never through here.
+  if (deps.machineAvailable() && runnable.length > 0) {
+    tools.push({
+      spec: {
+        name: 'sign_in',
+        description:
+          `Sign your machine's browser into a website using a login this space holds — one of your declared connectors (${runnable.join(', ')}) that is a Website login. Opens the sign-in page, fills the account and submits; after it, open_page and CDP scripts on that site are signed in, and the session survives a sleep. You never see the password. Says whether it worked, and why not when it did not (no form on the page, still asked for a password, a second factor).`,
+        parameters: {
+          type: 'object',
+          properties: { connector: { type: 'string', description: 'The Website login connector, by name' } },
+          required: ['connector'],
+        },
+      },
+      describe: (a) => str(a.connector),
+      run: async (a) => {
+        const name = str(a.connector).trim()
+        if (!name) return 'error: connector is required'
+        if (!runnable.includes(name)) return `error: ${name} is not one of this agent's connectors`
+        if (dry) return `DRY RUN — would sign in with ${name}`
+        try {
+          const r = await deps.signInOnMachine({ principal, context, spaceId, agentName: ctx.agentName, connectorName: name, runId: ctx.runId })
+          if (r.ok) return `signed in as ${r.user} — now on ${r.url}${r.title ? ` (${r.title})` : ''}`
+          return `not signed in: ${r.message}`
+        } catch (err) {
+          const known = (err instanceof QuotaExceededError && `error: the space's machine-hours are used up — ${err.message}`) || (err instanceof EdgeUnavailableError && `error: the machine is unavailable right now — ${err.message}`) || null
           if (known) return known
           throw err
         }

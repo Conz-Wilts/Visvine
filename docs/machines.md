@@ -53,8 +53,18 @@ or a grant.
 
 With any of the Cloud Run pair unset there are no machines: `edgeConfigured()`
 is false, `vm_exec` answers 503, and nothing else on the platform degrades,
-because nothing else depends on a machine. Ship the edge with
-`pnpm edge:deploy`; `pnpm edge:tail` follows its logs.
+because nothing else depends on a machine.
+
+**The edge ships from GitHub Actions** (`.github/workflows/edge.yml`): a push
+to `main` touching `apps/agent-edge/**` or `packages/vm-policy/**` runs
+`wrangler deploy` — Worker upload, container image build on the runner, push
+to Cloudflare's registry — under `CLOUDFLARE_API_TOKEN` (a repository secret;
+an "Edit Cloudflare Workers" token with Containers and Workers Scripts edit)
+and `CLOUDFLARE_ACCOUNT_ID` (a repository variable). `pnpm edge:deploy` is the
+same command from a laptop logged in with `wrangler login`, for a hotfix;
+`pnpm edge:tail` follows the Worker's logs. A machine already awake keeps the
+old image until it sleeps or is stopped, so a deploy lands on each machine's
+next boot.
 
 ### Identity
 
@@ -232,13 +242,29 @@ Plaintext never enters the machine.
   promised binding the edge does not hold is a 503 refusal, never an
   unauthenticated request an agent reads as "the service is down". Rotating it
   in the binding takes effect on the next request.
-- A website the agent must be *logged into* is logged into by a human during a
-  takeover; the session lives in the browser profile under
-  `/workspace/.browser`, archived with everything else.
+- A website the agent must be *logged into* is signed into one of two ways,
+  and the session lives in the browser profile under `/workspace/.browser`
+  either way, archived with everything else: by a human during a takeover, or
+  by **the vault** — a `website-login` connector (`lib/connectors/catalog.ts`)
+  whose note names the sign-in page (`login.url`, on one of its `hosts:`, so
+  the site is on the machine's policy by the same rule as every other
+  connector host) and holds the account in its env, the password a
+  `{{secret:…}}` like any other. `sign_in` (`lib/vm/signin.ts`, offered to an
+  agent whose brief declares the connector, on a space that has a machine)
+  decrypts it on the control plane and hands it to ONE command as that
+  command's environment (`ExecRequest.env`): a Playwright script attached to
+  the machine's own browser over CDP fills the form and submits. The value is
+  never on the command line (the timeline records that), never on disk (the
+  workspace is archived), never in the model's context, the trace or a note;
+  the edge scrubs it out of whatever the command prints, prefixes included,
+  the way a takeover's typing is scrubbed from titles. It is in one process's
+  environment for the seconds the form takes, and an agent's tool calls are
+  sequential, so nothing of the agent's runs beside it.
 
 A secret is a property of the policy, never of the machine: a machine that is
 archived, woken or rebuilt carries no plaintext because there was never any in
-it.
+it — the sign-in's credential included, which is gone with the process that
+typed it.
 
 ## The window
 
@@ -264,11 +290,18 @@ survives a late batch; output is clipped to 4,000 characters per event and the
 stream capped at 2,000 events per boot, after which the timeline records that
 it stopped recording.
 
-**The agent reads the browser through CDP.** `browse.mjs` starts Chromium with
-DevTools on `127.0.0.1:9222`, so a `run_command` script attaches to the SAME
-browser (`chromium.connectOverCDP`) rather than launching a second one — the
+**The agent reads the browser through CDP.** `browse.mjs` starts Chromium
+itself — the binary, not Playwright's launcher, which talks over a pipe and
+drops the port flag — with DevTools on `127.0.0.1:9222`, waits for the port to
+answer, and only then navigates over CDP; so a `run_command` script attaches
+to the SAME browser (`chromium.connectOverCDP`, importing Playwright by its
+global path, `/usr/local/lib/node_modules/playwright/index.mjs`, since
+`/workspace` resolves no packages) rather than launching a second one — the
 profile is locked by the running process, and a fresh browser would carry none
-of the sessions that make the first one useful. The port is loopback and never
+of the sessions that make the first one useful. A second `open_page` steers
+that browser the same way. A lease on a machine that is already running
+re-registers its HTTPS routes, because they are per host and a host allowed
+since boot would otherwise have no route at all. The port is loopback and never
 routed: `PLATFORM_DENY` refuses `localhost` before any allow rule, so the
 egress boundary is untouched by it, and nothing outside the container can reach
 it. `open_page`'s tool description carries the three-line script.

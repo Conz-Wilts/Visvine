@@ -112,6 +112,12 @@ export interface CatalogEntry {
      */
     clientId?: string
   }
+  /**
+   * A website login: the note gets a `login:` block naming the sign-in page,
+   * and the account rides `env` (LOGIN_USER, LOGIN_PASSWORD). Used by an
+   * agent's machine through `sign_in`, never by the isolate.
+   */
+  login?: true
   /** Markdown body: how an agent calls the service, with working example code. */
   body: string
 }
@@ -888,6 +894,33 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
 
   // ── Other ──────────────────────────────────────────────────────────────────
   {
+    // The vault. A site an agent's machine has to be signed into — no API, no
+    // OAuth, a username and a password. The password is a secret like any
+    // other; the site's host joins the machine's egress policy like any other
+    // connector host; `sign_in` types it on the machine so the model never
+    // holds it (lib/vm/signin.ts).
+    id: 'website-login',
+    name: 'Website login',
+    description: 'A site an agent signs in to on its machine, with a username and password',
+    category: 'other',
+    logo: 'website-login.svg',
+    shape: 'key',
+    hosts: [],
+    login: true,
+    fields: [
+      { key: 'url', label: 'Sign-in page', placeholder: 'https://app.example.com/login', required: true,
+        hint: 'The page with the form. Its host becomes one the machine may reach.' },
+      { key: 'LOGIN_USER', label: 'Username or email', placeholder: 'ops@company.com', required: true },
+      { key: 'LOGIN_PASSWORD', label: 'Password', placeholder: '••••••••', secret: true, required: true,
+        hint: 'Stored encrypted. Typed on the machine by sign_in; never shown to an agent.' },
+    ],
+    body: [
+      'A login the agent’s machine can use. In a run with a machine, `sign_in("<this connector’s name>")` opens the page in the machine’s browser, fills the account and submits; the session then lives in that browser, so `open_page` and CDP scripts after it are signed in. The password is never in the transcript, the model’s context or a note.',
+      '',
+      'This connector has no API to call from `run_connector`.',
+    ].join('\n'),
+  },
+  {
     id: 'mcp',
     name: 'MCP server',
     description: 'Any remote MCP server, by URL',
@@ -1096,8 +1129,9 @@ export function catalogRowLabel(entry: CatalogEntry): string {
 export function catalogConnectStyle(
   entry: CatalogEntry,
   platformClients: readonly string[],
-): 'one-click' | 'sign-in' | 'key' {
+): 'one-click' | 'sign-in' | 'key' | 'password' {
   if (connectsInOneClick(entry, platformClients)) return 'one-click'
+  if (entry.login) return 'password'
   return entry.shape === 'oauth' || entry.shape === 'mcp' ? 'sign-in' : 'key'
 }
 
@@ -1227,6 +1261,7 @@ export function connectorFromCatalog(
   // ("which tools does this have, and which may it use") rather than a URL the
   // reader has to infer from a host or from `auth.discover`.
   if (entry.mcp) front.push(`mcp:\n  url: ${entry.mcp.url}`)
+  if (entry.login && v('url')) front.push(`login:\n  url: ${yamlStr(v('url'))}`)
   if (envLines.length > 0) front.push(`env:\n${envLines.join('\n')}`)
   front.push(`timeout_ms: ${SANDBOX_LIMITS.timeoutMs.default}`)
 

@@ -100,13 +100,19 @@ export function exec(
   timeoutSeconds?: number,
   /** The run asking, so the machine's timeline can be read back per run. Data, never a key. */
   runId?: string | null,
+  /**
+   * Values for this one command's environment — the sign-in's credential.
+   * The edge scrubs them from the command's output and never records them
+   * (apps/agent-edge/src/machine.ts#ExecRequest.env).
+   */
+  env?: Record<string, string>,
 ): Promise<ExecResult> {
   // The HTTP timeout sits above the machine's own, so a command that is killed
   // in the container still answers here rather than aborting the request.
   const seconds = timeoutSeconds ?? 120
   return call(
     '/exec',
-    { environment, spaceId, agentName, cmd, timeoutSeconds: seconds, runId: runId ?? undefined },
+    { environment, spaceId, agentName, cmd, timeoutSeconds: seconds, runId: runId ?? undefined, ...(env ? { env } : {}) },
     (seconds + 15) * 1000,
   )
 }

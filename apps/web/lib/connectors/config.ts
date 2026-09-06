@@ -602,6 +602,15 @@ export interface ConnectorPerimeter {
    */
   mcp: { url: string } | null
   /**
+   * A website this connector holds a login for (`login:` in the frontmatter).
+   * The page is `url`; the account is `env.LOGIN_USER` and
+   * `env.LOGIN_PASSWORD` (a `{{secret:…}}` ref). Nothing here runs in the
+   * isolate: an agent's machine signs in with it through `sign_in`
+   * (lib/vm/signin.ts), and the password reaches one process on that machine
+   * for the seconds it takes to type — never the model, the trace or a note.
+   */
+  login: { url: string } | null
+  /**
    * Which of that server's tools may be called, and when
    * (lib/connectors/toolPolicy.ts). Everything allowed when the note says
    * nothing, so a connection made before the block existed keeps working.
@@ -780,12 +789,12 @@ export function perimeterFromLegacy(config: ConnectorConfig): {
       // paths, so a base_url with a path prefix must be folded into each rule.
       const prefix = new URL(config.baseUrl).pathname.replace(/\/$/, '')
       const allow = config.allow.map((rule) => ({ ...rule, path: prefix + rule.path }))
-      return { perimeter: { hosts, allow, env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, tools: OPEN_TOOL_POLICY }, warnings: [] }
+      return { perimeter: { hosts, allow, env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, login: null, tools: OPEN_TOOL_POLICY }, warnings: [] }
     }
     case 'postgres':
     case 'mysql':
       return {
-        perimeter: { hosts: [], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, tools: OPEN_TOOL_POLICY },
+        perimeter: { hosts: [], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, login: null, tools: OPEN_TOOL_POLICY },
         warnings: [
           `This legacy ${config.alias} note keeps its database host inside the DSN secret, so the ` +
             'perimeter cannot allow it — add `hosts:` (e.g. "db.example.com:5432") or run the v2 migration',
@@ -798,7 +807,7 @@ export function perimeterFromLegacy(config: ConnectorConfig): {
               'Legacy per-tool allow rules cannot be tunnel-enforced under v2 — they become guidance in the note body after migration',
             ]
           : []
-      return { perimeter: { hosts: [hostOf(config.url)], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, tools: OPEN_TOOL_POLICY }, warnings }
+      return { perimeter: { hosts: [hostOf(config.url)], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, login: null, tools: OPEN_TOOL_POLICY }, warnings }
     }
   }
 }
@@ -826,6 +835,34 @@ function parseConnectorMcp(raw: unknown): { ok: true; mcp: { url: string } | nul
     return { ok: false, error: '`mcp.url` must be an http(s) URL' }
   }
   return { ok: true, mcp: { url: parsed.toString() } }
+}
+
+/**
+ * `login:` → the website this connector can sign in to.
+ *
+ * The page's host must be one of `hosts:` — the perimeter is still the only
+ * list of what a run may reach, and a login for a site the connector may not
+ * talk to would be a credential with nowhere to go. The account itself rides
+ * `env` like any other value, so the same secret store, the same redaction
+ * and the same audit cover it.
+ */
+function parseConnectorLogin(raw: unknown, hosts: readonly string[]): { ok: true; login: { url: string } | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, login: null }
+  if (typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, error: '`login:` must be a block with a `url:`' }
+  const url = (raw as { url?: unknown }).url
+  if (typeof url !== 'string' || url.trim().length === 0) return { ok: false, error: '`login.url` must be the sign-in page' }
+  let parsed: URL
+  try {
+    parsed = new URL(url.trim())
+  } catch {
+    return { ok: false, error: `\`login.url\` is not a URL: ${url}` }
+  }
+  if (parsed.protocol !== 'https:') return { ok: false, error: '`login.url` must be an https URL' }
+  const host = parsed.host.toLowerCase()
+  if (!hosts.some((h) => h.toLowerCase() === host || h.toLowerCase() === parsed.hostname.toLowerCase())) {
+    return { ok: false, error: `\`login.url\` is on ${host}, which \`hosts:\` does not name` }
+  }
+  return { ok: true, login: { url: parsed.toString() } }
 }
 
 /**
@@ -883,6 +920,12 @@ export function parseConnectorPerimeter(fm: NoteFrontmatter): ParsePerimeterResu
   const tools = parseToolPolicy((fm as Record<string, unknown>).tools)
   if (!tools.ok) return { ok: false, error: tools.error }
 
+  const login = parseConnectorLogin((fm as Record<string, unknown>).login, hosts.hosts)
+  if (!login.ok) return { ok: false, error: login.error }
+  if (login.login && (!env.env.LOGIN_USER || !env.env.LOGIN_PASSWORD)) {
+    return { ok: false, error: '`login:` needs `env.LOGIN_USER` and `env.LOGIN_PASSWORD` (a {{secret:…}} ref)' }
+  }
+
   const { min, max, default: dflt } = SANDBOX_LIMITS.timeoutMs
   return {
     ok: true,
@@ -896,6 +939,7 @@ export function parseConnectorPerimeter(fm: NoteFrontmatter): ParsePerimeterResu
       actions: actions.actions,
       webhook: webhook.webhook,
       mcp: mcp.mcp,
+      login: login.login,
       tools: tools.policy,
     },
     legacy: null,

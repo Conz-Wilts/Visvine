@@ -282,6 +282,22 @@ export async function latestRun(spaceId: string, name: string): Promise<RunListI
   return (row as RunListItem | null) ?? null
 }
 
+/**
+ * What a running run is doing RIGHT NOW, as one line — the last tool it called
+ * and what about — for the roster's row and the status line. Null when the
+ * run has not called a tool yet or is not running.
+ */
+export async function currentStepOf(runId: string): Promise<string | null> {
+  const row = await prisma.agentRun.findUnique({ where: { id: runId }, select: { status: true, events: true } })
+  if (!row || row.status !== 'running') return null
+  const events = (row.events as AgentRunEvent[] | null) ?? []
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]
+    if (e.type === 'tool') return e.detail ? `${e.tool} · ${e.detail.replace(/\s+/g, ' ').slice(0, 80)}` : e.tool
+  }
+  return null
+}
+
 export async function getRun(spaceId: string, name: string, runId: string) {
   const row = await prisma.agentRun.findFirst({ where: { id: runId, spaceId, name } })
   if (!row) return null

@@ -53,7 +53,7 @@ Append a "## Background" section to their note with what you found. Never rewrit
     description: 'Pulls new records from a connector into the directory',
     tools: ['directory'],
     trigger: 'Every hour',
-    body: `Each run, call the connector named in this brief's connectors list to list records created or updated since the previous run — the previous run's high-water mark is kept in state.md in your own folder, which you read at the start and rewrite at the end.
+    body: `Each run, call the connector named in this brief's connectors list to list records created or updated since the previous run — the previous run's high-water mark is in your memory under "What I know"; remember the new one before you finish.
 
 For every new record, create a matching person or organisation in the directory if none exists, and write what the connector knows to its note. For every updated record, append the change to the existing note; never overwrite what a person wrote.
 

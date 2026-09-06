@@ -161,6 +161,12 @@ export interface AgentBrief {
   /** `dry_run: true` — writes are recorded in the transcript instead of applied. */
   dryRun: boolean
   maxTurns: number
+  /**
+   * The brief's `tags:` — how a space groups its agents (Investments,
+   * Operations…). The roster reads the first one as the group; the agent's
+   * node carries them all, so the Directory's tag filters reach agents too.
+   */
+  tags: string[]
   /** The system-prompt body (markdown after the frontmatter), trimmed. */
   body: string
 }
@@ -216,6 +222,9 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
     if (!AGENT_NAME_RE.test(a)) return { ok: false, error: `agent name "${a}" in \`agents\` is not valid` }
   }
 
+  const tags = stringList(fm.tags, 'tags')
+  if (!tags.ok) return tags
+
   let dryRun = false
   if (fm.dry_run !== undefined && fm.dry_run !== null && fm.dry_run !== '') {
     const raw = typeof fm.dry_run === 'string' ? fm.dry_run.trim().toLowerCase() : fm.dry_run
@@ -247,6 +256,7 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
       agents: agents.list,
       dryRun,
       maxTurns,
+      tags: [...new Set(tags.list.map((t) => t.trim()).filter(Boolean))],
       body: trimmedBody,
     },
   }

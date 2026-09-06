@@ -1,55 +1,47 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { getSession } from '@/lib/session';
-import { resolveContext } from '@/lib/notes/resolve';
-import { deliverMessage } from '@/lib/agents/channels';
-import { clean, MAX_BODY, MAX_SUBJECT } from '@/lib/agents/shared/channels';
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { bad, requireAgentsAccess } from '@/lib/agents/route'
+import { summonAgent } from '@/lib/agents/summon'
+import { MAX_BODY } from '@/lib/agents/shared/channels'
+import { dispatchWithin } from '@/lib/agents/dispatch'
+
+// In `inline` dispatch (dev) the run happens inside this request.
+// Segment config must be a literal Next can read statically: MAX_RUN_MS (25 min) + 60s.
+export const maxDuration = 1560
 
 const bodySchema = z.object({
   text: z.string().min(1).max(MAX_BODY),
-  subject: z.string().max(MAX_SUBJECT).optional(),
-});
+  /** Start a run now when the agent is idle and the sender may run it. Default true. */
+  run: z.boolean().optional(),
+})
 
 /**
- * Say something to an agent, from inside the app.
- *
- * The in-app channel, and the simplest of the three: the session already says
- * who this is, so there is no address to parse and no sender to match. It still
- * goes through the same delivery path as an email or a Slack mention — the
- * message lands in the agent's mailbox and the ordinary tick runs it — because
- * one loop behind every channel is the property worth keeping.
- *
- * The reply arrives the way an agent's work always does: on its timeline and
- * in the notes it writes.
+ * Say something to an agent, from inside the app — and, by default, have it
+ * act on it now (lib/agents/summon.ts). The message lands in the mailbox
+ * either way; the run, when one starts, is watched on the page that sent it.
+ * The request holds for RUN_AWAIT_MS like "Run now" does, so a short run
+ * answers with its outcome and a long one answers `running: true`.
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ spaceId: string; name: string }> }
-) {
-  const { spaceId, name } = await params;
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const resolved = await resolveContext(session, spaceId);
-  if (resolved instanceof Response) return resolved;
+export async function POST(req: NextRequest, { params }: { params: Promise<{ spaceId: string; name: string }> }) {
+  const { spaceId, name: raw } = await params
+  const name = decodeURIComponent(raw)
+  const ctx = await requireAgentsAccess(spaceId)
+  if (ctx instanceof Response) return ctx
 
-  const parsed = bodySchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'text is required' }, { status: 400 });
+  const parsed = bodySchema.safeParse(await req.json().catch(() => null))
+  if (!parsed.success) return bad('text is required')
 
-  const result = await deliverMessage({
-    channel: 'in_app',
-    spaceId,
-    agentName: name,
-    from: { email: session.email, display: session.name },
-    subject: clean(parsed.data.subject ?? parsed.data.text, MAX_SUBJECT),
-    body: clean(parsed.data.text, MAX_BODY),
-    // The session's own message id: one send is one message, and a double-click
-    // is deduped by the mailbox rather than by us guessing.
-    externalId: `${session.userId}:${Date.now()}`,
-  });
+  const result = await summonAgent({ spaceId, name, principal: ctx.principal, text: parsed.data.text, run: parsed.data.run })
+  if (!result.ok) return bad(result.message, result.status)
 
-  if (!result.ok) {
-    const status = result.reason === 'not_a_member' ? 403 : result.reason === 'dropped' ? 409 : 404;
-    return NextResponse.json({ error: result.message }, { status });
-  }
-  return NextResponse.json({ ok: true, agent: result.agentName, eventId: result.eventId });
+  const outcome = result.dispatch ? await dispatchWithin(result.dispatch) : null
+  return NextResponse.json({
+    ok: true,
+    eventId: result.eventId,
+    runId: result.runId,
+    waiting: result.waiting,
+    running: result.runId !== null && outcome === null,
+    outcome: outcome?.ok ? outcome.outcome : null,
+    error: outcome && !outcome.ok ? outcome.error : null,
+  })
 }

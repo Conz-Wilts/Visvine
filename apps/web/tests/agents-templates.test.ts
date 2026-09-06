@@ -62,7 +62,7 @@ test('updateBriefSettings rewrites settings and keeps the prose and hand-written
   ].join('\n')
 
   const before = readBriefSettings(original)
-  assert.deepEqual(before, { model: 'gemini/gemma-4-31b-it', description: '', connectors: ['hubspot'], tools: [], dryRun: false, maxTurns: 16 })
+  assert.deepEqual(before, { model: 'gemini/gemma-4-31b-it', description: '', connectors: ['hubspot'], tools: [], dryRun: false, maxTurns: 16, tags: [] })
 
   const next = updateBriefSettings(original, {
     model: 'openai/gpt-4.1-mini',
@@ -71,6 +71,7 @@ test('updateBriefSettings rewrites settings and keeps the prose and hand-written
     tools: ['web', 'messages'],
     dryRun: true,
     maxTurns: 8,
+    tags: ['Investments', 'weekly'],
   })
   const parsed = parse(next)
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error)
@@ -82,6 +83,7 @@ test('updateBriefSettings rewrites settings and keeps the prose and hand-written
     assert.equal(parsed.brief.dryRun, true)
     assert.equal(parsed.brief.maxTurns, 8)
     assert.deepEqual(parsed.brief.agents, ['crm-sync'])
+    assert.deepEqual(parsed.brief.tags, ['Investments', 'weekly'])
     assert.equal(parsed.brief.title, 'Weekly digest')
     assert.equal(parsed.brief.body, 'Read the week. Write the digest.\n\n## Notes\n- keep it short')
   }

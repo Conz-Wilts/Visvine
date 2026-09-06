@@ -177,6 +177,8 @@ export interface ConnectorSummary {
    * from a recipe id — which is display metadata and may be wrong or absent.
    */
   mcp: { url: string } | null
+  /** The site this connector signs a machine into, when it is a Website login. */
+  login: { url: string } | null
   docs: string
   /**
    * The caller's own connector, brought from their Settings rather than
@@ -266,6 +268,7 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
     secrets: parsed.ok ? perimeterSecretRefs(parsed.perimeter) : [],
     actions: parsed.ok ? summariseActions(parsed.perimeter.actions) : [],
     mcp: parsed.ok ? mcpEndpoint(base.name, base.recipe, parsed.perimeter.mcp) : null,
+    login: parsed.ok ? parsed.perimeter.login : null,
   }
 }
 
@@ -593,6 +596,33 @@ async function resolveSecretValues(
   return values
 }
 
+/** The perimeter's `env` with every `{{secret:…}}` filled in. */
+function envFromSecrets(perimeter: ConnectorPerimeter, secrets: Map<string, string>): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const [key, template] of Object.entries(perimeter.env)) {
+    const resolved = interpolateSecrets(template, secrets)
+    if (!resolved.ok) {
+      throw new ConnectorError('missing_secret', `Secret ${resolved.missing.join(', ')} not set`)
+    }
+    env[key] = resolved.value
+  }
+  return env
+}
+
+/**
+ * A website login's account, in plaintext, for the machine's sign-in and
+ * nothing else (lib/vm/signin.ts). The one read of a connector's secrets that
+ * does not end in the isolate; it exists so the sign-in never has to hold a
+ * decryption path of its own.
+ */
+export async function loginCredentialsOf(loaded: LoadedConnector): Promise<{ url: string; user: string; password: string } | null> {
+  const login = loaded.perimeter.login
+  if (!login) return null
+  const secrets = await resolveSecretValues(loaded.spaceId, perimeterSecretRefs(loaded.perimeter))
+  const env = envFromSecrets(loaded.perimeter, secrets)
+  return { url: login.url, user: env.LOGIN_USER ?? '', password: env.LOGIN_PASSWORD ?? '' }
+}
+
 const CODE_MAX_CHARS = 32_768
 const AUDIT_CODE_CHARS = 200
 /** Largest `args` payload an action call accepts, serialised. */
@@ -680,6 +710,12 @@ export async function executeConnectorScript(
   // space whose secrets it opens are one fact, and pairing them at the call
   // site is how a personal connector would end up reading a space's keys.
   const { spaceId, principal: p } = loaded
+  // A website login is not a service to call: its env is a password, and
+  // caller-written code in the isolate reads env. The one path that password
+  // takes is sign_in on the agent's machine (lib/vm/signin.ts).
+  if (loaded.perimeter.login) {
+    throw new ConnectorError('config', 'This connector is a website login — it is used by sign_in on an agent\'s machine and has nothing to run.')
+  }
   const { code, globals, summary } = resolveRun(loaded, run)
 
   // Quota BEFORE any secret leaves the store, and per space rather than per
@@ -702,14 +738,7 @@ export async function executeConnectorScript(
 
   try {
     const secrets = await resolveSecretValues(spaceId, perimeterSecretRefs(loaded.perimeter))
-    const env: Record<string, string> = {}
-    for (const [key, template] of Object.entries(loaded.perimeter.env)) {
-      const resolved = interpolateSecrets(template, secrets)
-      if (!resolved.ok) {
-        throw new ConnectorError('missing_secret', `Secret ${resolved.missing.join(', ')} not set`)
-      }
-      env[key] = resolved.value
-    }
+    const env = envFromSecrets(loaded.perimeter, secrets)
 
     // Identity is assembled OUTSIDE `env` on purpose. Isolate code reads `env`;
     // if the signing key were in there, connector code could mint an assertion

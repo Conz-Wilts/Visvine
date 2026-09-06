@@ -378,3 +378,29 @@ test('how a service connects is one of three answers', () => {
   assert.equal(style('microsoft'), 'sign-in')
   assert.equal(style('slack'), 'key')
 })
+
+test('a website login is a note with a login block, the site in hosts, and the password only in the store', () => {
+  const entry = CONNECTOR_CATALOG.find((e) => e.id === 'website-login')!
+  const { content, secrets } = connectorFromCatalog(entry, {
+    name: 'crm-login',
+    title: 'CRM',
+    description: '',
+    values: { url: 'https://app.example.com/login', LOGIN_USER: 'ops@acme.com', LOGIN_PASSWORD: 'hunter2' },
+  })
+  assert.ok(!content.includes('hunter2'))
+  assert.deepEqual(secrets, [{ name: 'LOGIN_PASSWORD__CRM_LOGIN', value: 'hunter2' }])
+  const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error)
+  if (!parsed.ok) return
+  assert.deepEqual(parsed.perimeter.login, { url: 'https://app.example.com/login' })
+  assert.deepEqual(parsed.perimeter.hosts, ['app.example.com'])
+  assert.equal(parsed.perimeter.env.LOGIN_USER, 'ops@acme.com')
+  assert.equal(parsed.perimeter.env.LOGIN_PASSWORD, '{{secret:LOGIN_PASSWORD__CRM_LOGIN}}')
+})
+
+test('a login block is refused for a site the hosts do not name, or without the account', () => {
+  const off = parseConnectorPerimeter(parseFrontmatter('---\ntype: connector\nhosts: [a.com]\nlogin:\n  url: https://b.com/login\nenv:\n  LOGIN_USER: x\n  LOGIN_PASSWORD: "{{secret:P}}"\n---\n'))
+  assert.ok(!off.ok && /hosts/.test(off.error))
+  const bare = parseConnectorPerimeter(parseFrontmatter('---\ntype: connector\nhosts: [a.com]\nlogin:\n  url: https://a.com/login\n---\n'))
+  assert.ok(!bare.ok && /LOGIN_USER/.test(bare.error))
+})

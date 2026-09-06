@@ -121,6 +121,8 @@ interface ExistingConnector {
    * that may be absent on a note written by hand.
    */
   mcp: { url: string } | null;
+  /** The site this connector signs an agent's machine into — a Website login. */
+  login: { url: string } | null;
   /**
    * The linked account behind an OAuth connector, when there is one — null both
    * for a connector that uses no OAuth and for one whose sign-in was never
@@ -694,6 +696,15 @@ export default function ConnectorsPanel({
         )}
 
         <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1 border-t border-border-subtle pt-4 text-[13px] text-text-secondary">
+          {connected.login && (
+            <>
+              <dt className="text-text-muted">Signs in at</dt>
+              <dd className="min-w-0 break-words">
+                {connected.login.url}
+                <span className="block text-xs text-text-muted">An agent with this connector calls sign_in on its machine; the password is typed there and never shown to it.</span>
+              </dd>
+            </>
+          )}
           <dt className="text-text-muted">Reaches</dt>
           <dd className="min-w-0 break-words">
             {connected.hosts.length > 0 ? connected.hosts.join(', ') : 'Nothing — no hosts declared'}
@@ -1034,8 +1045,8 @@ export default function ConnectorsPanel({
                     </button>
                     {/* How you connect it, before you press anything: one press,
                         a sign-in, or a credential you have to go and fetch. */}
-                    <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[style === 'key' ? 'muted' : 'ok']}`}>
-                      {style === 'one-click' ? 'One click' : style === 'sign-in' ? 'Sign in' : 'API key'}
+                    <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[style === 'key' || style === 'password' ? 'muted' : 'ok']}`}>
+                      {style === 'one-click' ? 'One click' : style === 'sign-in' ? 'Sign in' : style === 'password' ? 'Password' : 'API key'}
                     </span>
                     {rows.length > 0 && (
                       <span className="shrink-0 text-xs text-text-muted">

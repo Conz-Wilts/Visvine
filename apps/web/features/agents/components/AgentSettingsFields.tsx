@@ -36,6 +36,9 @@ export default function AgentSettingsFields({
   // Unfolded only when something non-default is set: every scaffolded brief
   // carries `max_turns: 16`, which is the default and not worth a fold.
   const [advanced, setAdvanced] = useState(value.dryRun || (value.maxTurns !== null && value.maxTurns !== 16));
+  // The comma-separated text as typed: parsing on every keystroke would eat
+  // the comma the person just pressed.
+  const [tagsText, setTagsText] = useState(value.tags.join(', '));
 
   const toggleTool = (id: AgentToolExtra, on: boolean) =>
     onChange({ ...value, tools: on ? [...new Set([...value.tools, id])] : value.tools.filter((t) => t !== id) });
@@ -157,6 +160,21 @@ export default function AgentSettingsFields({
           value={value.description}
           onChange={(e) => onChange({ ...value, description: e.target.value })}
           placeholder="What it does, in a sentence"
+          className="text-sm"
+        />
+      </Field>
+
+      {/* The brief's `tags:`. The first is the group the roster files it
+          under — Investments, Operations — and every one reaches the
+          Directory's tag filter through the agent's node. */}
+      <Field label="Group" hint="Investments, Operations… the roster files it under the first.">
+        <Input
+          value={tagsText}
+          onChange={(e) => {
+            setTagsText(e.target.value);
+            onChange({ ...value, tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) });
+          }}
+          placeholder="Investments"
           className="text-sm"
         />
       </Field>

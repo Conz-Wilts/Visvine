@@ -14,10 +14,13 @@
 // row must not flicker backwards. The overrides live as long as this view.
 
 import { useCallback, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui';
 import ColumnsMenu from './ColumnsMenu';
 import TableToolbar from './TableToolbar';
 import DirectoryTable from './DirectoryTable';
+import AgentsRoster from '@/features/agents/components/AgentsRoster';
+import { useAgentsRoster } from '@/features/agents/lib/useAgentsRoster';
 import { useTableView } from '@/features/directory/hooks/useTableView';
 import { useTrackedFields } from '@/features/directory/hooks/useTrackedFields';
 import type { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
@@ -43,6 +46,7 @@ interface DirectoryTableViewProps {
 
 export default function DirectoryTableView({ browse, type, onTypeChange }: DirectoryTableViewProps) {
   const { space, loading, error, filteredItems, presentTypes, handleItemClick, handleDataChanged, nodes } = browse;
+  const router = useRouter();
 
   // The type menu's entries: every type with rows, built-ins first in their
   // canonical order, then the space's own — so Person is always the first
@@ -50,12 +54,17 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   // entry is keyed by the type's own name, not its canonical base: Company
   // folds onto Space for the entity machinery, but a space that records both
   // wants two tables.
+  // Agents are not in the directory feed (their nodes are structural, like a
+  // connector's), so the menu's Agents entry — and the roster under it — come
+  // from the agents route. Followed live only while it is the table shown.
+  const isAgents = type?.toLowerCase() === 'agent';
+  const roster = useAgentsRoster(space?.id ?? null, isAgents);
   const types = useMemo(() => {
     const rank = (name: string) => {
       const i = DEFAULT_NODE_TYPES.findIndex((t) => t.name.toLowerCase() === name.toLowerCase());
       return i === -1 ? DEFAULT_NODE_TYPES.length : i;
     };
-    return [...presentTypes]
+    const fromNodes = [...presentTypes]
       .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
       .map((name) => {
         const id = name.toLowerCase();
@@ -63,7 +72,9 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
         return { id, name, count };
       })
       .filter((t) => t.count > 0);
-  }, [presentTypes, nodes]);
+    const agentCount = roster.data?.agents.length ?? 0;
+    return agentCount > 0 ? [...fromNodes, { id: 'agent', name: 'Agent', count: agentCount }] : fromNodes;
+  }, [presentTypes, nodes, roster.data]);
 
   // The `?type=` is usually a type's own name, but crossing from a context note
   // it is the namespace's entity KIND (`communities/` → space), and a space may
@@ -173,11 +184,12 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
           types={types}
           typeKey={activeKey ?? ''}
           onTypeChange={onTypeChange}
-          columns={table.visible}
+          columns={isAgents ? [] : table.visible}
+          tagOptions={isAgents ? [...new Set((roster.data?.agents ?? []).flatMap((a) => a.tags))].sort() : undefined}
           sort={table.view.sort}
           onSortChange={table.setSort}
           trailing={
-            activeKey ? (
+            activeKey && !isAgents ? (
               <ColumnsMenu
                 typeName={activeName}
                 arranged={table.arranged}
@@ -204,6 +216,13 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
           bottom padding is cancelled by the page's `-mb-6` — and only the left
           margin holds, keeping the name column on the toolbar's line. */}
       <div className="min-h-0 flex-1 pl-6">
+        {/* Agents are not rows of a record: every column is live state — what
+            it is doing, when it fires next, who for — so the type gets the
+            roster with the clock over it rather than the cell grid. Same bar,
+            same search and tag filter, same click-through. */}
+        {isAgents && spaceId ? (
+          <AgentsRoster data={roster.data} error={roster.error} now={roster.now} search={browse.searchTerm} tags={browse.filterTags} onNavigate={(href) => router.push(href)} />
+        ) : (
         <DirectoryTable
           items={items}
           columns={table.visible}
@@ -224,6 +243,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
           onOpen={handleItemClick}
           onSaveCell={spaceId ? saveCell : undefined}
         />
+        )}
       </div>
     </div>
   );

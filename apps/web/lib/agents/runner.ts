@@ -21,7 +21,7 @@
 import prisma from '@/lib/prisma'
 import { ModelError, type ChatUsage } from '@/lib/notes/ai'
 import { connectorActionsFor } from '@/lib/connectors/service'
-import { readVisible } from '@/lib/notes/contextService'
+import { readVisible, writeGated } from '@/lib/notes/contextService'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import { runToolLoop, type ChatFn } from '@/lib/notes/toolLoop'
@@ -34,6 +34,7 @@ import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_M
 import { principalForUser } from './principal'
 import { resolveAgentChatConfig } from './providers'
 import { clipEventText, finishRun, flushRunEvents, ledgerSpendForMonth, recordRunInput, spaceBudgetCents, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
+import { memoryForPrompt, memoryPath, setLastRun } from './shared/memory'
 import { agentPreamble } from './shared/prompt'
 import { skillsForRun, skillsMessage } from './skills'
 import { agentTools } from './tools'
@@ -255,8 +256,16 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     const tz = await effectiveTimezone(spaceId, null)
     const system = `${agentPreamble(name)}\n\n---\n\n${brief.body}`
     const user =
-      `It is ${nowIso(now, tz)}. This is a ${run.trigger} run of the agent "${brief.title || name}". Carry out your brief now, then finish with a short summary.` +
+      `It is ${nowIso(now, tz)}. This is a ${run.trigger} run of the agent "${brief.title || name}".` +
+      (run.trigger === 'manual'
+        ? ' A person started it and is watching. If they said something (below), that is what this run is for: do it within your brief and answer them in your summary. Otherwise carry out your brief now.'
+        : ' Carry out your brief now, then finish with a short summary.') +
       (dryRun ? ' This is a DRY RUN: writes are recorded in the transcript instead of applied — act exactly as you normally would.' : '')
+    // What it carried from its last run — handed over rather than spending a
+    // turn on read_context, and `remember` (lib/agents/tools.ts) is how it adds.
+    const memoryNote = await readVisible(principal, context, memoryPath(name)).catch(() => null)
+    const memoryText = memoryForPrompt(memoryNote)
+    const memoryMessage = memoryText ? `Your memory (${memoryPath(name)}):\n\n${memoryText}` : null
     if (dryRun) events.push({ at: Date.now(), type: 'system', text: 'Dry run: writes are captured, not applied.' })
     if (chainDepth > 0) events.push({ at: Date.now(), type: 'system', text: `Started by run_agent from run ${runInput?.chain?.parent ?? '?'} (chain depth ${chainDepth}).` })
     // The mail this run was claimed with (schedule.ts stamped consumed_by).
@@ -306,6 +315,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     const result = await runToolLoop({
       messages: [
         { role: 'system', content: system },
+        ...(memoryMessage ? [{ role: 'system' as const, content: memoryMessage }] : []),
         { role: 'user', content: user },
         ...(skillsPrompt ? [{ role: 'system' as const, content: skillsPrompt }] : []),
         ...(triggerMessage ? [{ role: 'user' as const, content: triggerMessage }] : []),
@@ -361,6 +371,16 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
           model: modelUsed,
         })
         await recordRunInput(runId, { writes, dryRun }).catch(() => {})
+        // The runner's own line in the memory: what this run did, so the next
+        // one starts knowing. Mechanical, never the model's to forget; a dry
+        // run leaves the note alone.
+        if (!dryRun) {
+          const forName = run.runAsUserId && run.runAsUserId !== state.runAsUserId ? principal.name : null
+          // Read again: `remember` may have added lines since the run began.
+          const current = await readVisible(principal, context, memoryPath(name)).catch(() => null)
+          const next = setLastRun(current, name, { date: now.toISOString().slice(0, 10), trigger: run.trigger, summary: result.finalText, forName })
+          await writeGated(principal, context, memoryPath(name), next, 'agent', `agent:${name}`).catch(() => undefined)
+        }
         const deactivated = await release(state.id, runId, spaceId, name, { failed: false, countsAsFailure: false, deactivate: null })
         return { status: 'succeeded', reason: result.reason, deactivated }
       }

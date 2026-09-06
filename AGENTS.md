@@ -189,15 +189,34 @@ that form or routes. Starting a space you run stays on the switcher
   budget stays admin-only, on the row. Editing a brief does NOT switch the agent
   off. Everything else in the folder is the agent's own — the ONE place under
   `agents/` a run stamped `agent:<name>` may write
-  (`contextService.lockedDenial`), never its brief or another agent's folder —
-  and `agents/<name>/memory.md` is what it carries between runs. The run prompt
-  (`lib/agents/shared/prompt.ts`) names that folder as the default output
-  location and teaches the markdown/link contract; `create_agent` and its recipe
-  quote the same text so an authoring model knows what a brief can ask for.
+  (`contextService.lockedDenial`), never its brief or another agent's folder.
+  The run prompt (`lib/agents/shared/prompt.ts`) names that folder as the
+  default output location and teaches the markdown/link contract;
+  `create_agent` and its recipe quote the same text so an authoring model
+  knows what a brief can ask for.
   Nothing under `agents/` ever fires a trigger. `db:agents:folders` moves the two
   earlier shapes into the folder; `db:agents:activation` folds a pre-merge
   `agents/<name>/activation.md` into the brief (it is still READ until then, so
   an older agent keeps running).
+- **Memory is a note with a shape; a run's trace is a row.** What an agent
+  CONCLUDED lives in `agents/<name>/memory.md` — four sections, `What I know`,
+  `Decisions`, `Open threads`, `Last run` (`lib/agents/shared/memory.ts`, pure)
+  — because the next run and the person checking what it believes both read
+  it, and a note gets revisions with the agent as author, the clean pass and
+  grants for free. What it DID is `agent_runs.events`, never a note: a
+  transcript in the context would flood search and accumulate the way every
+  naive agent memory does. The runner hands the note to every run as a system
+  message, so no turn is spent reading it; the agent adds with `remember`
+  (one line under one of the first three sections, deduped, capped per
+  section) and never rewrites the file; the runner replaces `Last run` itself
+  when a run succeeds. A cursor or high-water mark is a line under
+  `What I know`. Structured values an agent tracks are tracked fields on
+  nodes, through the ordinary write, like everything else structured.
+- **Agents are grouped by the brief's `tags:`.** The first tag is the group
+  the roster files it under (Investments, Operations); every tag lands on the
+  `agent:<name>` node (`entityLinks.ts#syncAgentNode`), so the Directory's tag
+  filter reaches agents like anything else. The settings dialog's Group field
+  writes the same key (`briefEdit.ts`). No second vocabulary, no folder move.
 - **A name is not an identity.** `agent_state` is keyed by `(space, name)` and
   outlives the note, so the row carries `brief_note_id` — the `context_notes`
   row it was derived from. A DIFFERENT note at the same name is a new agent, and
@@ -231,17 +250,30 @@ that form or routes. Starting a space you run stays on the switcher
 - **An agent is watched on its own node page** — `/directory/agent:<name>`, the
   Agent tab beside Context and Raw (`features/profile/components/AgentPageContent.tsx`),
   the way Profile is a tab of a person node. There is no agents tool: no rail
-  row, no feature key, no roster page, and no console section. The roster is the
-  `agents/` folder in the context tree. The tab is the status line and
-  its switch, when it runs, the brief's settings, spend (admins), then THE RUN —
-  the one in flight, else the one `?run=<id>` names, else the latest — as steps
-  with the machine's record nested under each `run_command` / `open_page`
-  (`tools: [machine]` gives a run its own machine; the run id rides every command
-  so `agent_vm_events` joins the trace through the pure
-  `lib/agents/shared/trace.ts#attachMachine`), and for admins the live screen and
-  terminal beside them; then skills, a box to say something to it, and the
-  history. Actions return `watch` hrefs into it
-  (`lib/agents/config.ts#agentPageHref(name, runId?)`). Polling, never a stream.
+  row, no feature key, and no console section. **The roster is the Directory's
+  Agents table** — `/directory?view=table&type=agent` renders
+  `features/agents/components/AgentsRoster.tsx` in place of the cell grid,
+  because every column of an agent is live state, not a record — with **the
+  clock** over it: the next 24 hours across every agent and the nightly clean,
+  what is running first with its current step (`lib/agents/shared/roster.ts`,
+  pure; `agent_runs`' last tool event via `runs.ts#currentStepOf`), then the
+  agents filed under their groups. The `agents/` folder in the tree is the
+  same roster as files. The tab is the status line and its switch, when it
+  runs, then THE RUN — the one in flight, else the one `?run=<id>` names, else
+  the latest — as ONE LINE of steps with the machine's record nested under
+  each `run_command` / `open_page` (`tools: [machine]` gives a run its own
+  machine; the run id rides every command so `agent_vm_events` joins the trace
+  through the pure `lib/agents/shared/trace.ts#attachMachine`), and for admins
+  the live screen and terminal beside them; **under the line, the box** — say
+  something and a run starts now, as you, and the line follows it
+  (`lib/agents/summon.ts`: the same delivery every channel uses, then the
+  same manual claim; when it is already running the words wait in the
+  mailbox). Its answer is the run's summary, and "Adjust the brief" sits
+  under it, because the run is where you learn what the brief should have
+  said. `run_agent` takes the same `message`. The sidebar is when it runs,
+  who for, memory at a glance, history and setup. Actions return `watch`
+  hrefs into it (`lib/agents/config.ts#agentPageHref(name, runId?)`).
+  Polling, never a stream.
 - **Links are derived, not authored.** A markdown link to an entity's note,
   inside another shared-context note, is what creates a `mentioned` edge. There is
   no create-link operation anywhere in the system.
@@ -691,6 +723,19 @@ space's own note always wins its name, and `LoadedConnector` carries the
 space it came from so secrets, account and budget are the owner's. No UI
 writes such a note any more; the lookup is what keeps a note an action wrote
 there working.
+
+**A website login is a connector, and that is the vault.** The `website-login`
+recipe writes a note with a `login:` block (the sign-in page, whose host must
+be one of its `hosts:` — `config.ts#parseConnectorLogin`) and the account in
+its env (`LOGIN_USER`, `LOGIN_PASSWORD` as a `{{secret:…}}`), so the same
+store, redaction, audit and machine policy cover it as any other connector.
+Nothing runs it in the isolate. An agent whose brief declares it, on a space
+with a machine, gets `sign_in`: `lib/vm/signin.ts` decrypts the password on
+the control plane and hands it to one command on the machine as that
+command's environment, never on the command line, the disk, the trace or the
+model's context (`docs/machines.md` § Secrets has the exact window). The
+session then lives in the machine's browser profile like one a person made
+during a takeover.
 
 **The catalogue has four shapes**, and the fourth is `mcp` — a remote MCP
 server by URL, built by `mcpServer(...)` in `lib/connectors/catalog.ts`: the

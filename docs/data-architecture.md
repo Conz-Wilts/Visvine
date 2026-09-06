@@ -168,26 +168,31 @@ what an agent should have *concluded* from a run and want on its next one.
 So the shape is a third artifact, distinct from both:
 
 ```
-agents/<name>.md          brief        tier 1, human-written, AI-frozen
-agents/live/<name>.md     activation   tier 1, admin-written, AI-frozen
-agent_runs                exhaust      tier 2 ledger, machine-written
-memory/agents/<name>/     memory       tier 1, AGENT-written  ← the missing piece
+agents/<name>/index.md    brief        tier 1, PERSON-written
+agent_runs                run          tier 2, RUNNER-written
+agents/<name>/memory.md   memory       tier 1, AGENT-written
 ```
 
-Agent memory must live **outside `agents/`**, because that subtree is
-structurally frozen for AI writes and must stay that way. `memory/agents/<name>/`
-is an ordinary context folder: it gets grants, visibility, search ranking, a
-revision history that shows the agent as author, and the clean pass. It is
-readable by people, correctable by people, and shareable with other agents by
-granting access to the folder — which is what "shared memory" actually means
-here, and it costs no new machinery.
+Memory lives in the agent's own folder, which is the one place under
+`agents/` a run stamped `agent:<name>` may write (`lockedDenial` in
+`lib/notes/contextService.ts` reads the stamp; the rest of `agents/` stays
+frozen for AI origins, so a sweep can still never switch an agent off). It is
+an ordinary context note: grants, visibility, search ranking, a revision
+history that shows the agent as author, and the clean pass. It is readable by
+people, correctable by people, and shareable with other agents by granting
+access to the folder — which is what "shared memory" actually means here,
+and it costs no new machinery.
+
+What keeps it from turning into a second transcript is a fixed shape and a
+gated write (`lib/agents/shared/memory.ts`): four sections — What I know,
+Decisions, Open threads, Last run — and a `remember` tool that appends one
+line under one of the first three, deduped and capped per section, with the
+instruction "record what you could not have inferred". The runner hands the
+note to every run as a system message and writes `Last run` itself when a run
+succeeds. Nothing rewrites the file.
 
 The loop then reads: **brief (intent) → run (exhaust) → memory note
-(knowledge) → retrieved into the next run's context.**
-
-This is the one piece of the design that is not built yet. What exists today is
-the mailbox (`AgentEvent`) that tells an agent *why it woke up*; what does not
-exist is anything that tells it *what it learned last time*.
+(knowledge) → handed to the next run.**
 
 ### A caution, from someone else's data
 
