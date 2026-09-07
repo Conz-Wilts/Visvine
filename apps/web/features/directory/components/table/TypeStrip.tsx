@@ -1,0 +1,58 @@
+'use client';
+
+// Which table you are in, as one row of tabs above it: All, then every type
+// with rows, each under its colour square with its count beside it. The
+// current one sits on a pill; the rest are plain text that fills on hover.
+// It replaces a menu because the list is short — a space records a handful
+// of kinds, not forty — and a row you can see beats a row you have to open.
+
+import { clsx } from 'clsx';
+import { getTypeColor } from '@/features/directory/components/typeStyles';
+import type { NodeTypeConfig } from '@/lib/types';
+
+export interface StripType {
+  /** Lowercased id, the `?type=` value; `all` for every row at once. */
+  id: string;
+  name: string;
+  count: number;
+}
+
+export default function TypeStrip({ types, activeKey, nodeTypes, onChange }: {
+  types: StripType[];
+  activeKey: string;
+  nodeTypes?: NodeTypeConfig[];
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div role="tablist" aria-label="Tables" className="flex flex-wrap items-center gap-1">
+      {types.map((type) => {
+        const active = type.id === activeKey;
+        const all = type.id === 'all';
+        return (
+          <button
+            key={type.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(type.id)}
+            className={clsx(
+              'inline-flex h-8 items-center gap-2 rounded-full px-3 text-[13px] font-medium transition-colors',
+              active ? 'bg-surface-2 text-text-primary ring-1 ring-border-subtle' : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
+            )}
+          >
+            {!all && <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: getTypeColor(type.name, nodeTypes) }} />}
+            <span>{type.name}</span>
+            <span
+              className={clsx(
+                'shrink-0 tabular-nums',
+                active ? 'rounded-full bg-surface-1 px-1.5 py-px text-[11px] text-text-secondary ring-1 ring-border-subtle' : 'text-[11px] text-text-muted',
+              )}
+            >
+              {type.count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}

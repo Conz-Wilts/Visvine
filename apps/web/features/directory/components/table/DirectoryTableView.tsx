@@ -1,12 +1,12 @@
 'use client';
 
-// The Directory's Table view: the Directory's search box, a slim control bar
-// (TableToolbar) and one type's table. A table is per type because the columns are — a Person has
-// a role and a company, an Event has a date and a capacity — so the type
-// filter of the grid becomes the bar's type menu here, and the bar's
-// remaining filters (search, alias, tag) narrow within it. The menu is the
-// whole navigation: it names the table you are in and opens the list of the
-// others, each type opening to its own aliases.
+// The Directory's Table view: a slim control bar (TableToolbar), the strip
+// of tables (TypeStrip) and one of them. A table is per type because the
+// columns are — a Person has a role and a company, an Event has a date and a
+// capacity — so the grid's type filter becomes the strip here, and the bar's
+// filters (search, alias, tag) narrow within the table picked. `All` is the
+// one table across types: the core every entity has — name, type, tags —
+// and nothing a single type owns.
 //
 // Edits go straight to the record (`PATCH /api/nodes/<id>`) and are held
 // optimistically over the fetched rows: the directory response is cached for
@@ -18,6 +18,7 @@ import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui';
 import ColumnsMenu from './ColumnsMenu';
 import TableToolbar from './TableToolbar';
+import TypeStrip from './TypeStrip';
 import DirectoryTable from './DirectoryTable';
 import AgentsRoster from '@/features/agents/components/AgentsRoster';
 import { useAgentsRoster } from '@/features/agents/lib/useAgentsRoster';
@@ -73,7 +74,9 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
       })
       .filter((t) => t.count > 0);
     const agentCount = roster.data?.agents.length ?? 0;
-    return agentCount > 0 ? [...fromNodes, { id: 'agent', name: 'Agent', count: agentCount }] : fromNodes;
+    const withAgents = agentCount > 0 ? [...fromNodes, { id: 'agent', name: 'Agent', count: agentCount }] : fromNodes;
+    // All leads when there is more than one table to be all of.
+    return withAgents.length > 1 ? [{ id: 'all', name: 'All', count: nodes.length }, ...withAgents] : withAgents;
   }, [presentTypes, nodes, roster.data]);
 
   // The `?type=` is usually a type's own name, but crossing from a context note
@@ -89,13 +92,16 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
       const sameKind = kind ? types.find((t) => entityKindOf(t.name) === kind) : undefined;
       if (sameKind) return sameKind.id;
     }
-    return types[0]?.id ?? null;
+    // No type named: the first REAL table, so a fresh visit lands on People
+    // rather than on the cross-type view.
+    return types.find((t) => t.id !== 'all')?.id ?? types[0]?.id ?? null;
   }, [type, types]);
+  const isAll = activeKey === 'all';
   const activeName = types.find((t) => t.id === activeKey)?.name ?? activeKey ?? '';
 
   const typeConfig = useMemo(
-    () => (activeName ? findNodeTypeConfig(activeName, space?.nodeTypes) : null),
-    [activeName, space?.nodeTypes],
+    () => (activeName && !isAll ? findNodeTypeConfig(activeName, space?.nodeTypes) : null),
+    [activeName, isAll, space?.nodeTypes],
   );
   const columns = useMemo(
     () => (activeKey ? columnsForType(activeKey, typeConfig) : []),
@@ -107,7 +113,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   // The menus edit the current type's fields; the type is bound here.
   const fields = useMemo(
     () =>
-      tracked.canEdit && activeName
+      tracked.canEdit && activeName && !isAll
         ? {
             saving: tracked.saving,
             error: tracked.error,
@@ -117,7 +123,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
             remove: (key: string) => tracked.remove(activeName, key),
           }
         : undefined,
-    [tracked, activeName],
+    [tracked, activeName, isAll],
   );
 
   // The "+" menu's stock: what the type has that this view isn't showing.
@@ -134,10 +140,10 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   const items = useMemo(() => {
     if (!activeKey) return [];
     const rows = filteredItems
-      .filter((i) => i.type.toLowerCase() === activeKey)
+      .filter((i) => isAll || i.type.toLowerCase() === activeKey)
       .map((i) => (overrides.get(i.id) ?? []).reduce(applyCellPatch, i));
     return sortItems(withKnownAliases(rows, aliasNames), columns, table.view.sort);
-  }, [filteredItems, activeKey, aliasNames, overrides, columns, table.view.sort]);
+  }, [filteredItems, activeKey, isAll, aliasNames, overrides, columns, table.view.sort]);
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const spaceId = space?.id ?? null;
@@ -180,10 +186,8 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
             the surface. */}
         <TableToolbar
           browse={browse}
-          searchPlaceholder={activeName ? `Search ${activeName.toLowerCase()}s…` : 'Search the directory…'}
-          types={types}
+          searchPlaceholder={activeName && !isAll ? `Search ${activeName.toLowerCase()}s…` : 'Search the directory…'}
           typeKey={activeKey ?? ''}
-          onTypeChange={onTypeChange}
           columns={isAgents ? [] : table.visible}
           tagOptions={isAgents ? [...new Set((roster.data?.agents ?? []).flatMap((a) => a.tags))].sort() : undefined}
           sort={table.view.sort}
@@ -203,6 +207,10 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
           }
         />
 
+        <div className="pb-3 pt-1">
+          <TypeStrip types={types} activeKey={activeKey ?? ''} nodeTypes={space?.nodeTypes} onChange={onTypeChange} />
+        </div>
+
         {(error || saveError) && (
           <div className="py-2">
             <Alert variant="error" onDismiss={saveError ? () => setSaveError(null) : undefined}>
@@ -212,10 +220,10 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
         )}
       </div>
 
-      {/* The table bleeds to the pane's right and bottom edges — <main>'s own
-          bottom padding is cancelled by the page's `-mb-6` — and only the left
-          margin holds, keeping the name column on the toolbar's line. */}
-      <div className="min-h-0 flex-1 pl-6">
+      {/* The table is a framed box on the pane, on the toolbar's line at the
+          left and held off the pane's other edges by the same margin, so its
+          corners and hairline read as one object rather than a bleed. */}
+      <div className="min-h-0 flex-1 px-6 pb-6">
         {/* Agents are not rows of a record: every column is live state — what
             it is doing, when it fires next, who for — so the type gets the
             roster with the clock over it rather than the cell grid. Same bar,

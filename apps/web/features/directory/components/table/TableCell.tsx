@@ -166,19 +166,19 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
     // a row wearing none, what its type is called. The column is Type either
     // way, so it is never blank.
     const label = text || typeLabel;
-    body = label ? <Chip color={aliasColor ?? undefined} size="xs">{label}</Chip> : null;
+    body = label ? <Chip color={aliasColor ?? undefined} tone="tint" size="sm">{label}</Chip> : null;
   } else if (column.kind === 'tags' && Array.isArray(value) && value.length > 0) {
     body = (
-      <span className="flex min-w-0 items-center gap-1 overflow-hidden">
+      <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
         {value.map((t) => (
-          <Chip key={String(t)} color={tagPalette(String(t), tagColors ?? null).base} size="xs">{String(t)}</Chip>
+          <Chip key={String(t)} color={tagPalette(String(t), tagColors ?? null).base} tone="tint" size="sm">{String(t)}</Chip>
         ))}
       </span>
     );
   } else if (column.kind === 'select' && text) {
     // A select option wears a steady colour the way a tag does — hashed from
     // its own text, so every row's "Won" is the same pill.
-    body = <Chip color={tagPalette(text, null).base} size="xs">{text}</Chip>;
+    body = <Chip color={tagPalette(text, null).base} tone="tint" size="sm">{text}</Chip>;
   } else if (href) {
     // A mail or web cell wears a standing underline, the way an address in a
     // CRM row does: it is the one kind of cell that leaves the app, and a
@@ -209,7 +209,7 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
       onKeyDown={editable ? (e) => { if (e.key === 'Enter') begin(); } : undefined}
       title={error ?? (editable ? undefined : text || undefined)}
       className={clsx(
-        'flex h-full min-w-0 items-center px-3.5 text-sm text-text-primary',
+        'flex h-full min-w-0 items-center px-3 text-sm text-text-primary',
         column.kind === 'number' && 'justify-end',
         editable && 'cursor-text rounded-md outline-none focus-visible:ring-1 focus-visible:ring-border-default',
         saving && 'opacity-60',

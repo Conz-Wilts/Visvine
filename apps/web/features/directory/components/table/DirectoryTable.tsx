@@ -1,11 +1,14 @@
 'use client';
 
 // The Directory as rows: one type at a time, one row per entry, one column
-// per thing the type tracks. The shape is the data-grid one (Attio): each
-// header wears its kind's glyph and opens a menu of what can be done to the
-// column — sort, step, hide, and an admin's edit — a drag reorders it, its
-// right edge resizes it, and the "+" past the last column shows a hidden
-// column or mints a new field without leaving the table.
+// per thing the type tracks. The shape is the spreadsheet one: a framed grid
+// with a numbered name column, each header wearing its kind's glyph and
+// opening a menu of what can be done to the column — sort, step, hide, and
+// an admin's edit — with the column it opened for lit under it; a drag
+// reorders a column, its right edge resizes it, and the "+" past the last
+// one shows a hidden column or mints a new field without leaving the table.
+// A footer row under the grid counts what is there: how many entries, and
+// per column how many carry a value.
 //
 // The table is its own scroll box (the view sizes it to the pane): the head
 // sticks to its top and the name column to its left, so a wide table keeps
@@ -122,11 +125,19 @@ const TableRow = ({ item: _item, style, ...props }: React.ComponentPropsWithoutR
   <tr
     {...props}
     style={style}
-    className="group h-12 border-b border-border-subtle transition-colors hover:bg-surface-2"
+    className="group h-11 border-b border-border-subtle transition-colors hover:bg-surface-2"
   />
 );
 
-const tableComponents = { Scroller, Table, TableHead, TableRow } as unknown as TableComponents<DirectoryItem, TableContext>;
+// Sticky at the foot the way the head is at the top, and above the name
+// column for the same reason.
+const TableFoot = React.forwardRef<HTMLTableSectionElement, React.ComponentPropsWithoutRef<'tfoot'>>(
+  function TableFoot({ style, ...props }, ref) {
+    return <tfoot ref={ref} {...props} style={{ ...style, zIndex: 20 }} className="bg-surface-1" />;
+  },
+);
+
+const tableComponents = { Scroller, Table, TableHead, TableRow, TableFoot } as unknown as TableComponents<DirectoryItem, TableContext>;
 
 export default function DirectoryTable({
   items, columns, hiddenColumns, typeName, sort, widths, loading = false,
@@ -184,6 +195,25 @@ export default function DirectoryTable({
   );
   const menuColumn = menu ? columns.find((c) => c.key === menu.key) ?? null : null;
   const menuIndex = menuColumn ? columns.indexOf(menuColumn) : -1;
+  // The column the open menu is for: lit down its whole length, so what the
+  // menu acts on is never in doubt.
+  const litKey = menu?.key ?? null;
+
+  // The footer's figures: how many rows carry a value in each column.
+  const filled = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const column of columns) {
+      if (column.source === 'name') continue;
+      let n = 0;
+      for (const item of items) {
+        const v = cellValue(item, column);
+        if (v === null || v === undefined || v === '' || v === false || (Array.isArray(v) && v.length === 0)) continue;
+        n += 1;
+      }
+      counts.set(column.key, n);
+    }
+    return counts;
+  }, [items, columns]);
 
   if (loading) {
     return (
@@ -205,7 +235,7 @@ export default function DirectoryTable({
   }
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full overflow-hidden rounded-xl border border-border-subtle bg-surface-1">
       <TableVirtuoso<DirectoryItem, TableContext>
         data={items}
         context={tableContext}
@@ -217,6 +247,7 @@ export default function DirectoryTable({
             {columns.map((column) => {
               const active = sort?.key === column.key;
               const isName = column.source === 'name';
+              const lit = litKey === column.key;
               return (
                 <th
                   key={column.key}
@@ -242,7 +273,8 @@ export default function DirectoryTable({
                   }}
                   onDragEnd={() => { setDragKey(null); setDropKey(null); }}
                   className={clsx(
-                    'group/th relative border-r border-border-subtle bg-surface-1 px-0 text-left align-middle text-xs font-medium text-text-muted select-none',
+                    'group/th relative border-r border-border-subtle px-0 text-left align-middle text-[13px] font-medium text-text-secondary select-none',
+                    lit ? 'bg-surface-2' : 'bg-surface-1',
                     isName && 'sticky left-0 z-10',
                     dragKey === column.key && 'opacity-40',
                     dropKey === column.key && 'shadow-[inset_2px_0_0_var(--color-brand-green)]',
@@ -257,18 +289,19 @@ export default function DirectoryTable({
                     aria-haspopup="menu"
                     aria-expanded={menu?.key === column.key}
                     className={clsx(
-                      'flex h-10 w-full min-w-0 items-center gap-1.5 px-3.5 transition-colors hover:text-text-primary',
+                      'flex h-10 w-full min-w-0 items-center gap-2 px-3 transition-colors hover:text-text-primary',
                       column.kind === 'number' && 'justify-end',
-                      (active || menu?.key === column.key) && 'text-text-primary',
+                      (active || lit) && 'text-text-primary',
                     )}
                     title={`${column.label} column`}
                   >
-                    <ColumnKindIcon column={column} className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                    {isName && <span aria-hidden className="w-6 shrink-0" />}
+                    <ColumnKindIcon column={column} className="h-4 w-4 shrink-0 text-text-muted" />
                     <span className="truncate">{column.label}</span>
                     {active && (
                       sort!.dir === 'asc'
-                        ? <ArrowUpIcon className="h-3 w-3 shrink-0" />
-                        : <ArrowDownIcon className="h-3 w-3 shrink-0" />
+                        ? <ArrowUpIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-text-muted" />
+                        : <ArrowDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-text-muted" />
                     )}
                   </button>
                   {/* The resize grip: the last 6px of every header. */}
@@ -329,7 +362,35 @@ export default function DirectoryTable({
             <th aria-hidden className="bg-surface-1 p-0" />
           </tr>
         )}
-        itemContent={(_, item) => {
+        fixedFooterContent={() => (
+          <tr className="h-10 border-t border-border-default text-[12.5px]">
+            {columns.map((column) => {
+              const isName = column.source === 'name';
+              const lit = litKey === column.key;
+              return (
+                <td
+                  key={column.key}
+                  className={clsx(
+                    'border-r border-border-subtle px-3 align-middle',
+                    lit ? 'bg-surface-2' : 'bg-surface-1',
+                    isName && 'sticky left-0 z-10',
+                    column.kind === 'number' && 'text-right',
+                  )}
+                >
+                  {isName ? (
+                    <span className="text-text-secondary">
+                      <span className="font-semibold tabular-nums text-text-primary">{items.length}</span> count
+                    </span>
+                  ) : (
+                    <span className="tabular-nums text-text-muted">{filled.get(column.key) ?? 0} filled</span>
+                  )}
+                </td>
+              );
+            })}
+            <td aria-hidden colSpan={2} className="bg-surface-1 p-0" />
+          </tr>
+        )}
+        itemContent={(index, item) => {
             const typeColor = getTypeColor(item.type, nodeTypes);
             // What the row is, in the space's own words — the Type cell's
             // reading for a row wearing no alias.
@@ -343,9 +404,13 @@ export default function DirectoryTable({
                     return (
                       <td
                         key={column.key}
-                        className="sticky left-0 z-10 border-r border-border-subtle bg-surface-1 p-0 align-middle transition-colors group-hover:bg-surface-2"
+                        className={clsx(
+                          'sticky left-0 z-10 border-r border-border-subtle p-0 align-middle transition-colors group-hover:bg-surface-2',
+                          litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
+                        )}
                       >
-                        <div className="flex h-12 min-w-0 items-center gap-2.5 pl-3.5 pr-1">
+                        <div className="flex h-11 min-w-0 items-center gap-2.5 pl-3 pr-1">
+                          <span className="w-6 shrink-0 text-right text-[12px] tabular-nums text-text-muted">{index + 1}</span>
                           <button
                             type="button"
                             onClick={() => onOpen(item)}
@@ -374,7 +439,7 @@ export default function DirectoryTable({
                     );
                   }
                   return (
-                    <td key={column.key} className="h-12 border-r border-border-subtle p-0 align-middle">
+                    <td key={column.key} className={clsx('h-11 border-r border-border-subtle p-0 align-middle', litKey === column.key && 'bg-surface-2')}>
                       <TableCell
                         column={column}
                         value={value}

@@ -1,24 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { Button } from '@/components/ui';
 import type { AgentReadiness, AgentSubscriber, AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ConnectorReadinessNotices from './ConnectorReadinessNotices';
 import AgentNeeds from './AgentNeeds';
-import { hrefForNotePath } from '@/lib/notes/entities';
-import { memoryPath, memorySummary } from '@/lib/agents/shared/memory';
 import StatusDot from './StatusDot';
-import { fmtAgo, fmtCents, fmtDuration, fmtUntil, terminalLabel } from '../lib/rowState';
+import { fmtAgo, fmtDuration, fmtUntil, terminalLabel } from '../lib/rowState';
 
 /**
  * The agent's control column, beside its run.
  *
- * Everything here answers a question about the agent as a THING — when it
- * fires, who it fires for, what it has cost, what to say to it, what it did
- * before. The run itself is the page's subject and lives in the wide column;
- * anything you configure rather than watch is either one line here or behind
- * one of the three buttons at the foot, because a page you read every day
- * should not carry a form you touch twice a year.
+ * Three questions about the agent as a THING — when it fires, who it fires
+ * for, what it did before — and nothing else. The run itself is the page's
+ * subject and lives in the wide column; what it runs on is the bar in the
+ * header; anything you configure or look into rather than watch is behind the
+ * header's gear, because a page you read every day should not carry a form
+ * you touch twice a year.
  */
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
@@ -42,7 +39,7 @@ function LinkButton({ onClick, children }: { onClick: () => void; children: Reac
 }
 
 export interface AgentSidebarProps {
-  agent: AgentSummary & { memory: string | null; subscribers: AgentSubscriber[]; viewerSubscribed: boolean; readiness: AgentReadiness };
+  agent: AgentSummary & { subscribers: AgentSubscriber[]; viewerSubscribed: boolean; readiness: AgentReadiness };
   runs: SerializedRun[];
   shownRunId: string | null;
   isAdmin: boolean;
@@ -54,7 +51,8 @@ export interface AgentSidebarProps {
   onSchedule: () => void;
   /** Add or remove someone from the fan-out list; no id means the viewer. */
   onSubscribe: (subscribed: boolean, userId?: string) => void;
-  onOpen: (panel: 'settings' | 'skills' | 'machine') => void;
+  /** Open the gear on its Settings tab — where a need's fix is made. */
+  onOpenSettings: () => void;
   onEditBrief: () => void;
 }
 
@@ -69,10 +67,9 @@ export default function AgentSidebar({
   onSelectRun,
   onSchedule,
   onSubscribe,
-  onOpen,
+  onOpenSettings,
   onEditBrief,
 }: AgentSidebarProps) {
-  const memory = memorySummary(agent.memory);
   const others = agent.subscribers.filter((s) => s.userId !== agent.readiness.runAsUserId);
   // The identity every fire already runs as is on the list without a
   // subscription, so the viewer who IS it has nothing to add or remove.
@@ -80,7 +77,6 @@ export default function AgentSidebar({
     agent.readiness.viewerIsRunAs ? 'you' : (agent.readiness.runAsName ?? 'its author'),
     ...others.map((s) => s.name ?? 'a member'),
   ];
-  const setup = [agent.model, ...agent.connectors, ...agent.tools].filter(Boolean);
   // Who a run acted as, for the history rows — a fan-out group is one row per
   // person, and the name is what tells them apart.
   const personOf = new Map<string, string | null>(agent.subscribers.map((s) => [s.userId, s.name]));
@@ -127,7 +123,7 @@ export default function AgentSidebar({
             connector the space lacks, one they have not signed in to, a service
             the instructions name that the brief never declared — each with the
             way to fix it. The model is a need too, said by the blocker line above. */}
-        <AgentNeeds needs={{ ...agent.readiness.needs, needs: agent.readiness.needs.needs.filter((n) => n.status !== 'no_model') }} isAdmin={isAdmin} onEditSettings={() => onOpen('settings')} />
+        <AgentNeeds needs={{ ...agent.readiness.needs, needs: agent.readiness.needs.needs.filter((n) => n.status !== 'no_model') }} isAdmin={isAdmin} onEditSettings={onOpenSettings} />
         {/* The identity SCHEDULED runs act as: what THEY still have to connect,
             said before a 3am run discovers it instead. */}
         {agent.readiness.runAs && (
@@ -166,40 +162,6 @@ export default function AgentSidebar({
         )}
       </Section>
 
-      {/* What it carries between runs — the memory note, as a glance: the
-          open threads (what it means to come back to) and how much it holds.
-          The note itself is where a person corrects it. */}
-      <Section
-        title="Memory"
-        action={
-          <Link href={hrefForNotePath(memoryPath(agent.name), null)} className="shrink-0 text-[12px] font-semibold text-brand-dark-green hover:underline">
-            Open
-          </Link>
-        }
-      >
-        {memory.total === 0 ? (
-          <p className="text-text-muted">Nothing yet. It adds to this as it runs.</p>
-        ) : (
-          <>
-            <p className="text-text-muted">
-              {memory.counts
-                .filter((c) => c.count > 0)
-                .map((c) => `${c.count} ${c.section.toLowerCase()}`)
-                .join(' · ')}
-            </p>
-            {memory.open.length > 0 && (
-              <ul className="flex flex-col gap-0.5 text-text-secondary">
-                {memory.open.map((line) => (
-                  <li key={line} className="truncate" title={line}>
-                    {line}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-      </Section>
-
       {runs.length > 0 && (
         <Section title="History">
           <ul className="flex flex-col">
@@ -234,30 +196,6 @@ export default function AgentSidebar({
         </Section>
       )}
 
-      <Section title="Setup">
-        <p className="font-mono text-[11px] leading-5 text-text-muted">{setup.join(' · ')}</p>
-        {isAdmin && (
-          <p className="text-text-muted">
-            <span className="tabular-nums text-text-secondary">{fmtCents(agent.spend?.monthCents)}</span> this month
-            {agent.spend?.budgetMonthlyCents != null ? ` · cap ${fmtCents(agent.spend.budgetMonthlyCents)}` : ''}
-          </p>
-        )}
-        <div className="mt-1 flex flex-wrap gap-1.5">
-          {canManage && (
-            <Button variant="ghost" size="sm" onClick={() => onOpen('settings')}>
-              Settings
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => onOpen('skills')}>
-            Skills
-          </Button>
-          {isAdmin && (
-            <Button variant="ghost" size="sm" onClick={() => onOpen('machine')}>
-              Machine
-            </Button>
-          )}
-        </div>
-      </Section>
     </aside>
   );
 }

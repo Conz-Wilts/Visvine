@@ -270,9 +270,14 @@ that form or routes. Starting a space you run stays on the switcher
   same manual claim; when it is already running the words wait in the
   mailbox). Its answer is the run's summary, and "Adjust the brief" sits
   under it, because the run is where you learn what the brief should have
-  said. `run_agent` takes the same `message`. The sidebar is when it runs,
-  who for, memory at a glance, history and setup. Actions return `watch`
-  hrefs into it (`lib/agents/config.ts#agentPageHref(name, runId?)`).
+  said. `run_agent` takes the same `message`. The header is the agent at a
+  glance — name, purpose, the model chip and the bar of connector logos and
+  tool icons it reaches (`AgentSetupBar`), the status line with its switch
+  and Run — and a gear opening one dialog with tabs: Settings · Memory ·
+  Skills · Machine (`AgentSettingsDialog`). The sidebar is when it runs, who
+  for, and history. The run reads as capsule rows (`RunSteps`), one per step
+  with a badge for how it went, joined by short hairlines. Actions return
+  `watch` hrefs into it (`lib/agents/config.ts#agentPageHref(name, runId?)`).
   Polling, never a stream.
 - **Links are derived, not authored.** A markdown link to an entity's note,
   inside another shared-context note, is what creates a `mentioned` edge. There is
@@ -306,7 +311,11 @@ that form or routes. Starting a space you run stays on the switcher
 and the view rides the URL (`?view=table&type=person`). Grid and Table share
 `useDirectoryBrowse` (search, alias and tag filters, the nodes-only
 `/api/communities/<id>/directory` feed); Table is per TYPE, because the
-columns are.
+columns are, picked from the strip of tabs under the toolbar
+(`table/TypeStrip.tsx`, a colour square and a count per type). `?type=all` is
+the one cross-type table: the core columns only. The toolbar's Filter menu
+holds the type's aliases and its tags; the grid's cells wear the `tint`
+chip tone (`components/ui/Chip.tsx`), the only surface that does.
 
 - **A type's columns come from three places, in order**
   (`lib/directory/table.ts#columnsForType`, pure and tested): the core every

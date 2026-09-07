@@ -2,19 +2,18 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { PlayIcon } from '@/features/shared/icons';
-import { Alert, Modal, Skeleton } from '@/components/ui';
+import { PlayIcon, SettingsIcon } from '@/features/shared/icons';
+import { Alert, Skeleton } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson } from '@/lib/fetchJson';
 import type { AgentReadiness, AgentSubscriber, AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ActivateAgentDialog from '@/features/agents/components/ActivateAgentDialog';
-import AgentSettingsDialog from '@/features/agents/components/AgentSettingsDialog';
+import AgentSettingsDialog, { type SettingsTab } from '@/features/agents/components/AgentSettingsDialog';
+import AgentSetupBar from '@/features/agents/components/AgentSetupBar';
 import AgentSidebar from '@/features/agents/components/AgentSidebar';
-import MachinePane from '@/features/agents/components/MachinePane';
 import MessageAgent from '@/features/agents/components/MessageAgent';
 import RunPane from '@/features/agents/components/RunPane';
-import SkillsPanel from '@/features/agents/components/SkillsPanel';
 import StatusDot from '@/features/agents/components/StatusDot';
 import LocalRunPane from '@/features/agents/components/LocalRunPane';
 import { setupBlocker, statusLine, terminalLabel } from '@/features/agents/lib/rowState';
@@ -24,13 +23,15 @@ import { LOCAL_RUNTIMES, localRuntimeOf } from '@/lib/agents/local';
 /**
  * The first tab of an agent's node page: what the note alone can't say.
  *
- * Two columns and one subject. The wide one is THE RUN — the chain of nodes
- * the agent walked, live or read back — because that is what a person opens
- * this page to see. The narrow one is the agent as a thing: when it fires, who
- * it fires for, what to say to it, what it did before. Everything you
- * configure rather than watch — model, tools, connectors, the monthly cap, the
- * skills it has been taught, the machine's own screen — is behind a button on
- * that column, so the page stays the run.
+ * A header and two columns, one subject. The header is the agent in a
+ * glance: its name and what it does on the left, what it runs on and reaches
+ * on the right as marks, and under them one line for how it is with the
+ * switch and Run beside it. The wide column is THE RUN — the steps the agent
+ * walked, live or read back — because that is what a person opens this page
+ * to see. The narrow one is when it fires, who it fires for, and what it did
+ * before. Everything you configure or look into rather than watch — model,
+ * tools, connectors, the cap, memory, skills, the machine's own screen — is
+ * behind the gear in the header, so the page stays the run.
  *
  * The brief itself is the note, on the Context and Raw tabs beside this one.
  */
@@ -50,8 +51,6 @@ interface DetailResponse {
   canManage: boolean;
 }
 
-type Panel = 'settings' | 'skills' | 'machine';
-
 export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const name = nodeId.startsWith('agent:') ? nodeId.slice('agent:'.length) : nodeId;
   const router = useRouter();
@@ -65,7 +64,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState(false);
-  const [panel, setPanel] = useState<Panel | null>(null);
+  const [panel, setPanel] = useState<SettingsTab | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   // A run on the member's own plan, in flight on this machine — keyed by the
@@ -213,20 +212,45 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 pb-16">
-      {/* One line for the whole agent: how it is, and the two controls that
-          change that. Everything else is a column below. */}
-      <header className="flex flex-col gap-2">
+      {/* The agent in a glance: name and purpose on the left, what it runs on
+          and reaches on the right, then one line for how it is with the two
+          controls that change that. */}
+      <header className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[20px] font-semibold leading-tight text-text-primary">{agent.title || agent.name}</h1>
+            {agent.description && <p className="mt-1 text-[13px] text-text-muted">{agent.description}</p>}
+          </div>
+          <div className="flex items-center gap-2">
+            <AgentSetupBar agent={agent} />
+            <button
+              type="button"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border-subtle bg-surface-1 text-text-muted hover:bg-surface-2 hover:text-text-primary"
+              aria-label="Settings"
+              title="Settings"
+              onClick={() => setPanel(canManage ? 'settings' : 'memory')}
+            >
+              <SettingsIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           <StatusDot tone={line.tone} />
           <p
-            className={`min-w-0 flex-1 truncate text-sm ${line.problem ? (line.tone === 'bad' ? 'text-red-600' : 'text-amber-700') : 'text-text-primary'}`}
+            className={`min-w-0 flex-1 truncate text-[13px] ${line.problem ? (line.tone === 'bad' ? 'text-red-600' : 'text-amber-700') : 'text-text-secondary'}`}
           >
             {line.text}
           </p>
+          {!localRuntime && <Toggle
+            checked={agent.activation.active}
+            disabled={!canManage || busy || !!agent.invalid}
+            aria-label={canManage ? (agent.activation.active ? 'Turn off' : 'Turn on') : 'Someone who can edit the brief turns it on'}
+            onChange={(next) => (next ? setActivating(true) : patchActive(false))}
+          />}
           {canManage && (
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] font-semibold text-text-secondary hover:bg-surface-3 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border-subtle px-2.5 py-1 text-[12px] font-semibold text-text-secondary hover:bg-surface-2 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
               disabled={!runnable || busy}
               onClick={runNow}
               title={localRuntime ? (desktop ? 'Run on your plan, from this machine' : 'Runs from the desktop app') : agent.activation.active ? 'Run now' : 'Turn it on first'}
@@ -234,12 +258,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
               <PlayIcon className="h-3 w-3" /> Run
             </button>
           )}
-          {!localRuntime && <Toggle
-            checked={agent.activation.active}
-            disabled={!canManage || busy || !!agent.invalid}
-            aria-label={canManage ? (agent.activation.active ? 'Turn off' : 'Turn on') : 'Someone who can edit the brief turns it on'}
-            onChange={(next) => (next ? setActivating(true) : patchActive(false))}
-          />}
         </div>
         {localRuntime && (
           <p className="pl-5 text-[13px] text-text-muted">
@@ -247,7 +265,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
             {!desktop && ' Open Visvine in the desktop app to run it.'}
           </p>
         )}
-        {agent.description && <p className="pl-5 text-[13px] text-text-muted">{agent.description}</p>}
         {notice && (
           <Alert inline variant="warning" className="ml-5">
             {notice}
@@ -335,16 +352,19 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
           onSelectRun={(id) => selectRun(id === liveRun?.id ? null : id)}
           onSchedule={() => setActivating(true)}
           onSubscribe={subscribe}
-          onOpen={setPanel}
+          onOpenSettings={() => setPanel('settings')}
           onEditBrief={editBrief}
         />
       </div>
 
-      {panel === 'settings' && spaceId && canManage && (
+      {panel && spaceId && (
         <AgentSettingsDialog
           spaceId={spaceId}
           agent={agent}
           isAdmin={isAdmin}
+          canManage={canManage}
+          liveRun={!!liveRun}
+          initialTab={panel}
           onClose={() => setPanel(null)}
           onSaved={() => void reload()}
           onEditBrief={() => {
@@ -352,22 +372,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
             editBrief();
           }}
         />
-      )}
-
-      {panel === 'skills' && spaceId && (
-        <Modal onClose={() => setPanel(null)} title="Skills" size="md">
-          <SkillsPanel spaceId={spaceId} agentName={name} isAdmin={isAdmin} />
-        </Modal>
-      )}
-
-      {/* The machine's live screen and terminal. Admins only — a terminal is
-          not a member's surface — and a dialog rather than a third column,
-          because the stored record of what it did is already nested under the
-          run's own steps. */}
-      {panel === 'machine' && spaceId && isAdmin && (
-        <Modal onClose={() => setPanel(null)} title="Machine" size="lg">
-          <MachinePane spaceId={spaceId} agentName={name} autoWatch={!!liveRun} />
-        </Modal>
       )}
 
       {activating && spaceId && (
