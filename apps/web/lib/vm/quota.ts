@@ -19,6 +19,18 @@ import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { checkQuota, DEFAULT_MONTHLY_HOURS, hoursOf, overSpendAlert, usdFor, type QuotaVerdict } from '@/lib/vm/shared/limits'
 
+/**
+ * The row for a machine that is no longer awake.
+ *
+ * One place writes it, because the meter reads it and two writers would
+ * eventually disagree about what `running` means: the tick's reconciliation,
+ * the release at the end of a run, and the stop of a space past its cap all
+ * mean the same thing by it.
+ */
+export async function markAsleep(vmIds: readonly string[]): Promise<void> {
+  await prisma.agentVm.updateMany({ where: { id: { in: [...vmIds] } }, data: { state: 'asleep' } })
+}
+
 /** The UTC month an instant falls in. Usage is keyed on this. */
 export function monthOf(at: Date): Date {
   return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1))
@@ -144,7 +156,7 @@ export async function stopOverspendingSpaces(
       // move: a lease we cannot stop is one we should stop trying to lease.
       logger.warn('vm.quota.stop_failed', { vmId: vm.id, err })
     }
-    await prisma.agentVm.update({ where: { id: vm.id }, data: { state: 'asleep' } })
+    await markAsleep([vm.id])
     stopped += 1
   }
   return stopped

@@ -16,7 +16,7 @@ import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { machineName, workspacePrefix } from '@visvine/vm-policy'
 import { compileForSpace } from '@/lib/vm/policy'
-import { allowedToRun, recordExec } from '@/lib/vm/quota'
+import { allowedToRun, markAsleep, recordExec } from '@/lib/vm/quota'
 import * as edge from '@/lib/vm/edge'
 import type { InstanceType } from '@/lib/vm/edge'
 
@@ -187,6 +187,7 @@ export async function reapExpiredLeases(now = new Date()): Promise<number> {
 /** Rows reconciled against the edge in one tick. Bounded so a minute stays a minute. */
 const RECONCILE_PER_TICK = 25
 
+
 /**
  * Put the rows back in step with the machines.
  *
@@ -226,12 +227,7 @@ export async function reconcileSleptMachines(
   )
 
   const slept = verdicts.filter((v) => !v.awake)
-  if (slept.length > 0) {
-    await prisma.agentVm.updateMany({
-      where: { id: { in: slept.map((v) => v.vm.id) } },
-      data: { state: 'asleep' },
-    })
-  }
+  if (slept.length > 0) await markAsleep(slept.map((v) => v.vm.id))
   return slept.length
 }
 
@@ -273,12 +269,12 @@ export async function releaseMachineAfterRun(
   try {
     const state = await askStatus(spaceId, agentName)
     if (!state.running) {
-      await prisma.agentVm.update({ where: { id: vm.id }, data: { state: 'asleep' } })
+      await markAsleep([vm.id])
       return false
     }
     if (state.watching > 0 || state.takeover) return false
     await askStop(spaceId, agentName)
-    await prisma.agentVm.update({ where: { id: vm.id }, data: { state: 'asleep' } })
+    await markAsleep([vm.id])
     return true
   } catch (err) {
     logger.warn('vm.release.failed', { spaceId, agent: agentName, err })
