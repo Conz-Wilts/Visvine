@@ -61,24 +61,17 @@ export default function AgentSettingsFields({
 
   return (
     <div className="flex flex-col gap-5">
-      <Field
-        label="Model"
-        hint={
-          options?.spaceModel
-            ? `The space's model is ${options.spaceModel.label}, from models/${options.spaceModel.name}.md. Pick another only if this agent needs one.`
-            : undefined
-        }
-      >
+      <Field label="Model">
         {options && models.length === 0 && (
           // Nothing of the space's to choose. Saying so beats a picker offering
           // providers the space has never signed up for — which is what put
           // "gemini" in briefs written in spaces that had no Gemini key. A
           // member's own plan is still offered below: it needs nothing here.
           <p className="mb-2 text-[13px] text-text-secondary">
-            {options.noModels}{' '}
+            No model in this space yet.{' '}
             {isAdmin && (
               <a href="/admin?section=connectors" className="font-medium text-text-primary underline underline-offset-2">
-                Add a model
+                Add one
               </a>
             )}
           </p>
@@ -115,7 +108,7 @@ export default function AgentSettingsFields({
         )}
       </Field>
 
-      <Field label="Tools" hint="Reading and writing notes is always on. These add reach.">
+      <Field label="Tools">
         <div className="flex flex-wrap gap-1.5">
           {(options?.tools ?? []).map((t) => {
             const on = value.tools.includes(t.id);
@@ -129,7 +122,7 @@ export default function AgentSettingsFields({
       </Field>
 
       {usableConnectors.length > 0 && (
-        <Field label="Connectors" hint="The services this agent may call. Its runs reach nothing else.">
+        <Field label="Connectors">
           <div className="flex flex-wrap gap-1.5">
             {usableConnectors.map((c) => {
               const on = value.connectors.includes(c.name);
@@ -167,7 +160,7 @@ export default function AgentSettingsFields({
       {/* The brief's `tags:`. The first is the group the roster files it
           under — Investments, Operations — and every one reaches the
           Directory's tag filter through the agent's node. */}
-      <Field label="Group" hint="Investments, Operations… the roster files it under the first.">
+      <Field label="Group">
         <Input
           value={tagsText}
           onChange={(e) => {
@@ -184,9 +177,9 @@ export default function AgentSettingsFields({
           <Toggle
             checked={value.dryRun}
             onChange={(on) => onChange({ ...value, dryRun: on })}
-            label="Rehearse only — writes are recorded in the transcript, not applied"
+            label="Rehearse only — nothing is written"
           />
-          <Field label="Turn cap" hint="Tool calls a run may make before it stops. 1–40, default 16.">
+          <Field label="Turn cap">
             <Input
               className="w-28 text-sm"
               inputMode="numeric"

@@ -81,7 +81,7 @@ export default function AgentSettingsDialog({
 
   return (
     <Modal onClose={onClose} title={agent.title || agent.name} size={tab === 'machine' ? 'lg' : 'md'}>
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-5 px-6 py-5">
         <div role="tablist" className="flex gap-1 border-b border-border-subtle">
           {tabs.map((t) => (
             <button
@@ -104,35 +104,29 @@ export default function AgentSettingsDialog({
             <AgentSettingsPanel spaceId={spaceId} agent={agent} isAdmin={isAdmin} onSaved={onSaved} />
 
             {isAdmin && (
-              <section className="flex flex-col gap-2 border-t border-border-subtle pt-4">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Monthly cap</h3>
-                <div className="flex items-center gap-2">
-                  <Input
-                    className="w-32"
-                    inputMode="decimal"
-                    placeholder="no cap"
-                    value={budgetInput}
-                    onChange={(e) => setBudgetInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') void saveBudget();
-                    }}
-                  />
-                  <Button variant="ghost" size="sm" onClick={saveBudget} disabled={busy}>
-                    Save cap
-                  </Button>
-                  <p className="text-[12px] text-text-muted">{fmtCents(agent.spend?.monthCents)} spent this month</p>
-                </div>
-                {error && <p className="text-[12px] text-red-600">{error}</p>}
-              </section>
+              <div className="flex items-center gap-2 border-t border-border-subtle pt-4">
+                <span className="text-[13px] font-medium text-text-primary">Monthly cap</span>
+                <Input
+                  className="w-28"
+                  inputMode="decimal"
+                  placeholder="none"
+                  value={budgetInput}
+                  onChange={(e) => setBudgetInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void saveBudget();
+                  }}
+                />
+                <Button variant="ghost" size="sm" onClick={saveBudget} disabled={busy}>
+                  Save
+                </Button>
+                <span className="text-[12px] text-text-muted">{fmtCents(agent.spend?.monthCents)} this month</span>
+                {error && <span className="text-[12px] text-red-600">{error}</span>}
+              </div>
             )}
 
-            <p className="border-t border-border-subtle pt-4 text-[13px] text-text-muted">
-              What it reads, produces and writes is the brief itself —{' '}
-              <button type="button" className="font-semibold text-brand-dark-green hover:underline" onClick={onEditBrief}>
-                edit the note
-              </button>
-              .
-            </p>
+            <button type="button" className="self-start text-[13px] font-semibold text-brand-dark-green hover:underline" onClick={onEditBrief}>
+              Edit the brief
+            </button>
           </div>
         )}
 

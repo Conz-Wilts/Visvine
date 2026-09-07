@@ -346,6 +346,7 @@ export async function listAgents(
 export interface AgentSubscriber {
   userId: string
   name: string | null
+  image: string | null
 }
 
 /**
@@ -359,6 +360,7 @@ export interface AgentReadiness {
   runAs: ConnectorReadiness[] | null
   runAsUserId: string | null
   runAsName: string | null
+  runAsImage: string | null
   /** The viewer IS that identity, so every fire already runs for them. */
   viewerIsRunAs: boolean
   /**
@@ -406,9 +408,10 @@ export async function describeAgent(
   const runAsUserId = summary.runAsUserId
   const userIds = [...new Set([...subRows.map((s) => s.userId), ...(runAsUserId ? [runAsUserId] : [])])]
   const users = userIds.length
-    ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+    ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true, image: true } })
     : []
   const nameOf = new Map(users.map((u) => [u.id, u.name]))
+  const imageOf = new Map(users.map((u) => [u.id, u.image]))
 
   const viewer = await connectorReadiness(p, context, summary.connectors, p.userId)
   const runAs =
@@ -429,13 +432,14 @@ export async function describeAgent(
     brief: content,
     memory,
     heartbeatAt: heartbeatAt?.toISOString() ?? null,
-    subscribers: subRows.map((s) => ({ userId: s.userId, name: nameOf.get(s.userId) ?? null })),
+    subscribers: subRows.map((s) => ({ userId: s.userId, name: nameOf.get(s.userId) ?? null, image: imageOf.get(s.userId) ?? null })),
     viewerSubscribed: subRows.some((s) => s.userId === p.userId),
     readiness: {
       viewer,
       runAs,
       runAsUserId,
       runAsName: runAsUserId ? (nameOf.get(runAsUserId) ?? null) : null,
+      runAsImage: runAsUserId ? (imageOf.get(runAsUserId) ?? null) : null,
       viewerIsRunAs: runAsUserId === p.userId,
       needs,
     },

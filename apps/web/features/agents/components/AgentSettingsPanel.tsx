@@ -64,7 +64,7 @@ export default function AgentSettingsPanel({
       <AgentSettingsFields value={value} onChange={setValue} options={options} isAdmin={isAdmin} />
       {error && <Alert inline>{error}</Alert>}
       <div className="flex items-center gap-2">
-        <Button variant="brand" size="sm" onClick={save} disabled={!dirty || busy || !value.model.trim()} loading={busy} loadingText="Saving…">
+        <Button variant="brand" size="sm" onClick={save} disabled={!dirty || busy} loading={busy} loadingText="Saving…">
           Save settings
         </Button>
         {dirty && (

@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
+import { Avatar } from '@/components/ui';
 import type { AgentReadiness, AgentSubscriber, AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ConnectorReadinessNotices from './ConnectorReadinessNotices';
 import AgentNeeds from './AgentNeeds';
@@ -17,6 +19,8 @@ import { fmtAgo, fmtDuration, fmtUntil, terminalLabel } from '../lib/rowState';
  * header's gear, because a page you read every day should not carry a form
  * you touch twice a year.
  */
+
+const SHOWN_PEOPLE = 3;
 
 function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -71,12 +75,25 @@ export default function AgentSidebar({
   onEditBrief,
 }: AgentSidebarProps) {
   const others = agent.subscribers.filter((s) => s.userId !== agent.readiness.runAsUserId);
-  // The identity every fire already runs as is on the list without a
-  // subscription, so the viewer who IS it has nothing to add or remove.
-  const names = [
-    agent.readiness.viewerIsRunAs ? 'you' : (agent.readiness.runAsName ?? 'its author'),
-    ...others.map((s) => s.name ?? 'a member'),
+  // Everyone a fire runs for: the identity every run acts as first — the
+  // creator, unless `runs_as` names someone else — then each subscriber. Three
+  // show; the rest wait behind a count.
+  const people: { userId: string; name: string; image: string | null; tag: string | null }[] = [
+    ...(agent.readiness.runAsUserId
+      ? [
+          {
+            userId: agent.readiness.runAsUserId,
+            name: agent.readiness.viewerIsRunAs ? 'You' : (agent.readiness.runAsName ?? 'Its author'),
+            image: agent.readiness.runAsImage,
+            tag: agent.readiness.runAsUserId === agent.authorUserId ? 'creator' : 'runs as',
+          },
+        ]
+      : []),
+    ...others.map((s) => ({ userId: s.userId, name: s.name ?? 'A member', image: s.image, tag: null })),
   ];
+  const [allPeople, setAllPeople] = useState(false);
+  const shownPeople = allPeople ? people : people.slice(0, SHOWN_PEOPLE);
+  const hiddenPeople = people.length - shownPeople.length;
   // Who a run acted as, for the history rows — a fan-out group is one row per
   // person, and the name is what tells them apart.
   const personOf = new Map<string, string | null>(agent.subscribers.map((s) => [s.userId, s.name]));
@@ -141,24 +158,29 @@ export default function AgentSidebar({
           )
         }
       >
-        <p className="text-text-primary">{names.join(', ')}</p>
-        {isAdmin && others.length > 0 && (
-          <p className="text-text-muted">
-            {others.map((s, i) => (
-              <span key={s.userId}>
-                {i > 0 && ' · '}
-                {s.name ?? 'a member'}{' '}
+        <ul className="flex flex-col gap-1">
+          {shownPeople.map((person) => (
+            <li key={person.userId} className="flex items-center gap-2">
+              <Avatar name={person.name} imageUrl={person.image} size="xs" />
+              <span className="min-w-0 flex-1 truncate text-text-primary">{person.name}</span>
+              {person.tag && <span className="shrink-0 text-[11px] text-text-muted">{person.tag}</span>}
+              {isAdmin && !person.tag && (
                 <button
                   type="button"
-                  className="text-text-muted hover:text-red-600 hover:underline"
+                  className="shrink-0 text-[11px] text-text-muted hover:text-red-600 hover:underline"
                   disabled={busy}
-                  onClick={() => onSubscribe(false, s.userId)}
+                  onClick={() => onSubscribe(false, person.userId)}
                 >
                   remove
                 </button>
-              </span>
-            ))}
-          </p>
+              )}
+            </li>
+          ))}
+        </ul>
+        {(hiddenPeople > 0 || allPeople) && (
+          <button type="button" className="self-start text-[12px] text-text-muted hover:text-text-primary hover:underline" onClick={() => setAllPeople((v) => !v)}>
+            {allPeople ? 'Show fewer' : `+${hiddenPeople} more`}
+          </button>
         )}
       </Section>
 

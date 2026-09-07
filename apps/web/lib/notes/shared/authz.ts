@@ -73,7 +73,7 @@ export interface AccessGrant {
   subjectType: GrantSubjectType
   /** '' for space-wide grants, else an aliasId / userId. */
   subjectId: string
-  /** '' = context root, a folder path ('teams/engineering'), or a note path. */
+  /** '' = context root, a folder path ('portfolio/halter'), or a note path. */
   resourcePath: string
   level: number
 }

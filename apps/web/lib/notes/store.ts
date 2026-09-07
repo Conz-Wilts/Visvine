@@ -1337,7 +1337,7 @@ export async function renameFolder(
       await toolNoteRenamed(context, note.path, to)
     }
   })
-  // Grants ride the rename too — a moved team subtree keeps its access rows.
+  // Grants ride the rename too — a moved subtree keeps its access rows.
   if (context.ownerKey === SHARED_OWNER_KEY) {
     await prisma.contextGrant.updateMany({
       where: { spaceId: context.spaceId, resourcePath: f },
