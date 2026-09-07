@@ -130,3 +130,19 @@ export function browse(
 export function stop(environment: string, spaceId: string, agentName: string): Promise<{ ok: true }> {
   return call('/stop', { environment, spaceId, agentName })
 }
+
+/**
+ * What the edge says the machine is doing right now.
+ *
+ * The platform's idle timer stops a container without telling anyone, so this
+ * is the only honest answer to "is it awake" — and the meter is not allowed to
+ * bill for a machine on any other authority. Reads the Durable Object, never
+ * the container: asking does not wake anything.
+ */
+export function status(
+  environment: string,
+  spaceId: string,
+  agentName: string,
+): Promise<{ leased: boolean; running: boolean; watching: number; takeover: boolean }> {
+  return call('/status', { environment, spaceId, agentName }, 15_000)
+}

@@ -183,3 +183,54 @@ export async function reapExpiredLeases(now = new Date()): Promise<number> {
   }
   return reaped
 }
+
+/** Rows reconciled against the edge in one tick. Bounded so a minute stays a minute. */
+const RECONCILE_PER_TICK = 25
+
+/**
+ * Put the rows back in step with the machines.
+ *
+ * Nothing tells us when the platform's idle timer stops a container — that is
+ * the whole point of letting the platform own the timer — so a row left saying
+ * `running` says it forever, and the meter bills a sleeping machine every
+ * minute until the space is stopped for a bill it never ran up. This is the one
+ * place that asks and writes down the answer.
+ *
+ * Asking is a read of the Durable Object, not of the container, so reconciling
+ * never wakes anything. A machine the edge cannot answer for is left alone: an
+ * edge outage must not silently zero a space's usage.
+ */
+export async function reconcileSleptMachines(
+  /** Injected the way `stopOverspendingSpaces` injects its stop, so a test can answer for the edge. */
+  ask: (spaceId: string, agentName: string) => Promise<{ running: boolean }> = (spaceId, agentName) =>
+    edge.status(environment(), spaceId, agentName),
+): Promise<number> {
+  if (!edge.edgeConfigured()) return 0
+  const running = await prisma.agentVm.findMany({
+    where: { state: 'running' },
+    select: { id: true, spaceId: true, agentName: true },
+    take: RECONCILE_PER_TICK,
+  })
+  if (running.length === 0) return 0
+
+  const verdicts = await Promise.all(
+    running.map(async (vm) => {
+      try {
+        const state = await ask(vm.spaceId, vm.agentName)
+        return { vm, awake: state.running }
+      } catch (err) {
+        logger.warn('vm.reconcile.unreachable', { vmId: vm.id, err })
+        return { vm, awake: true }
+      }
+    }),
+  )
+
+  const slept = verdicts.filter((v) => !v.awake)
+  if (slept.length > 0) {
+    await prisma.agentVm.updateMany({
+      where: { id: { in: slept.map((v) => v.vm.id) } },
+      data: { state: 'asleep' },
+    })
+  }
+  return slept.length
+}

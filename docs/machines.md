@@ -402,6 +402,16 @@ lean, and send frames only while watched.
 The model is not on this bill — a space brings its own key
 (`MODEL_KEY_<PROVIDER>`), and Visvine never bills for tokens.
 
+**The meter counts what the edge says is awake.** The platform's timer stops a
+container and tells nobody, so a row left saying `running` says it forever —
+which would bill a space a minute a minute for a machine doing nothing, and stop
+it for a cap it never reached. Every tick reconciles first
+(`lease.ts#reconcileSleptMachines`): it asks the edge's `/status` for each row in
+`running` and writes `asleep` where the container is down. The ask reads the
+Durable Object, not the container, so reconciling never wakes anything, and an
+edge that cannot answer leaves the row alone — an outage must not zero a space's
+usage.
+
 **Quota.** A space gets **120 machine-hours a month** (`DEFAULT_MONTHLY_HOURS`
 in `lib/vm/shared/limits.ts`), overridable as `vmMonthlyHours` in its feature
 config; `null` is uncapped and an admin has to write it, because the absence of

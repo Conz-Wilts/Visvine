@@ -1,0 +1,12 @@
+[
+  {
+    "name": "keep-recent-releases",
+    "action": { "type": "Keep" },
+    "mostRecentVersions": { "keepCount": 15 }
+  },
+  {
+    "name": "delete-aged-out",
+    "action": { "type": "Delete" },
+    "condition": { "tagState": "ANY", "olderThan": "30d" }
+  }
+]

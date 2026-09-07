@@ -3,7 +3,7 @@ import { verifyTickCaller } from '@/lib/agents/internalAuth'
 import { tick } from '@/lib/agents/schedule'
 import { drainProjections } from '@/lib/notes/projections'
 import { runDueCleans } from '@/lib/notes/cleanSchedule'
-import { reapExpiredLeases } from '@/lib/vm/lease'
+import { reapExpiredLeases, reconcileSleptMachines } from '@/lib/vm/lease'
 import { meterAwakeMachines, stopOverspendingSpaces } from '@/lib/vm/quota'
 import { pruneEgressLog, sweepEgress } from '@/lib/vm/anomaly'
 import { stop as stopMachine, edgeConfigured } from '@/lib/vm/edge'
@@ -85,7 +85,8 @@ export async function POST(req: NextRequest) {
 
 /**
  * Everything the machines need doing once a minute: count the awake ones
- * against their spaces' caps, stop any space that has gone past, look at the
+ * against their spaces' caps after putting the rows back in step with what the
+ * edge says is actually awake, stop any space that has gone past, look at the
  * egress log for a pattern worth a human's attention, and prune what has aged
  * out of being evidence.
  *
@@ -93,13 +94,17 @@ export async function POST(req: NextRequest) {
  * timer is what bills, and it is what counts.
  */
 async function vmHousekeeping() {
+  // Before the meter, never after: a machine the platform put to sleep must
+  // stop being billed on the same tick it is found asleep, or the row goes on
+  // charging a space for a machine that is doing nothing.
+  const slept = await reconcileSleptMachines()
   const metered = await meterAwakeMachines(TICK_SECONDS)
   const stopped = await stopOverspendingSpaces((spaceId, agentName) => stopMachine(environment(), spaceId, agentName))
   const anomalies = await sweepEgress()
   // Pruning is cheap and idempotent; doing it on the tick avoids a second job
   // for a table that only ever grows in one direction.
   const pruned = await pruneEgressLog()
-  return { metered, stopped, anomalies: anomalies.length, egressPruned: pruned }
+  return { slept, metered, stopped, anomalies: anomalies.length, egressPruned: pruned }
 }
 
 /** The scheduler's interval, and therefore the meter's unit. */

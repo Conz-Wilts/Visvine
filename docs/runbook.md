@@ -181,6 +181,49 @@ gcloud scheduler jobs run visvine-nightly-maintenance \
 
 ---
 
+## Spend
+
+Two bills, and they fail in different ways.
+
+**Cloudflare — the machines.** A machine costs about $0.10 an awake hour and
+nothing asleep, so the sleep policy is nearly the whole bill (docs/machines.md
+§ Cost and quota). The platform's `sleepAfter` timer is what stops a container
+and it announces nothing, so the tick asks the edge which machines are actually
+up and writes the answer back (`reconcileSleptMachines`, run BEFORE the meter on
+every tick). Without that reconciliation an `agent_vms` row says `running`
+forever: the meter charges the space a minute a minute, and a space that ran one
+machine once is stopped for its cap a few days later having spent nothing. The
+symptom is `agent_vm_usage.seconds` climbing for a space with no runs; the check
+is `wrangler containers instances <id>` against the rows in `running`.
+
+Idle instance count and image storage are worth a look now and then:
+
+```bash
+cd apps/agent-edge
+npx wrangler containers instances <app-id>   # anything not `inactive` is billing
+npx wrangler containers images list          # 50 GB across the account
+```
+
+**Google Cloud — the control plane.** Cloud Run is `--min-instances=0` and CPU
+is throttled between requests, so the per-minute tick costs instance-seconds
+rather than an instance: `run.googleapis.com/container/billable_instance_time`
+is the number to check, and it should be well under 3600 an hour. Cloud SQL is
+the standing cost, and it is a decision rather than a leak.
+
+Artifact Registry grows one image a deploy and nothing removes them. The policy
+in `scripts/gcp/artifact-cleanup-policy.json` keeps the 15 most recent versions
+and deletes anything older than 30 days — a window that outlives any revision a
+rollback would reach for, since a rollback shifts traffic to a revision whose
+image must still exist. Apply it after checking what it would remove:
+
+```bash
+gcloud artifacts repositories set-cleanup-policies visvine \
+  --project=visvine-platform --location=australia-southeast1 \
+  --policy=scripts/gcp/artifact-cleanup-policy.json --dry-run   # then --no-dry-run
+```
+
+---
+
 ## Backups and recovery
 
 Configuration lives in `scripts/backup-config.mjs` and is asserted, not assumed:
