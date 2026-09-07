@@ -65,7 +65,7 @@ const AGENT_QUESTIONS: readonly IntakeQuestion[] = [
   {
     ask: 'What may it read and use — which folders, and which of the space\'s connectors?',
     decides: 'The brief\'s `connectors:` (its entire external reach) and `tools:`, and what the instructions tell it to read first.',
-    skipWhen: 'The space has no connectors, or the job is plainly context-only — then say what you assumed instead of asking.',
+    skipWhen: 'The space has no connectors, or the job is plainly context-only — then say what you assumed instead of asking. Declare a connector the job needs even when the space lacks it: create_agent reports it in `needs` with how to add it, which is better than a brief that quietly cannot do the job.',
   },
   {
     ask: 'Should the first runs be a rehearsal rather than the real thing?',

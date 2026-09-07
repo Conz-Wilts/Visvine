@@ -358,7 +358,7 @@ const RECIPES: Recipe[] = [
       {
         n: 3,
         tool: 'create_agent',
-        why: "Writes the brief. `instructions` IS the agent's system prompt, so write a standing instruction — what to read, what to produce and its shape (headings, a table, links to the people involved), where to write it (its own folder agents/<name>/ by default) — not a description of the agent.",
+        why: "Writes the brief. `instructions` IS the agent's system prompt, so write a standing instruction — what to read, what to produce and its shape (headings, a table, links to the people involved), where to write it (its own folder agents/<name>/ by default) — not a description of the agent. The answer's `needs` and `plan` say what still stands between the brief and a working run: read them back as the next steps.",
         args: {
           space_id: spaceId(ctx),
           name: '<slug>',
@@ -390,6 +390,7 @@ const RECIPES: Recipe[] = [
       'A clock schedule needs a timezone. Ask which one rather than assuming; "daily at 07:00" is meaningless without it.',
       'OFFER THE REHEARSAL. A brief nobody has seen run is a guess, and the first real run happens unattended. rehearse_agent hands you the round to do yourself — on your model, on your access, writing nothing — so the person reads the output and fixes the brief before it is ever switched on. It also surfaces a missing model or an unconnected connector now rather than in a failed 3am run.',
       'A rehearsal is NOT a run: say so plainly. Nothing was recorded on the agent, nothing was billed to the space, and the notes it would have written do not exist until it runs for real.',
+      "SAY WHAT IT NEEDS. create_agent and rehearse_agent return `needs` — no model in the space, a declared connector that is missing, off or not signed in to, a service the instructions name (Slack, Gmail…) that the brief never declared — each with why, the fix and who can do it, and `plan` with the fixes in order. When `ready` is false, hand the person that plan as the next steps and do not call the agent ready. A connector the space lacks is added by an admin from the Space Console's catalogue; one nobody signed in to is fixed at its `href`; a service the brief forgot is added to its `connectors:` on the agent's page.",
       "NEVER put a model in the brief unless the person asked for a specific one. If the space has no model, create_agent says so in `model_problem` — repeat that to them (\"there is no model in this space yet, so I have left it unset; add one under Models and this will run\") rather than naming a provider they never signed up for.",
       'Once it is active, run_agent triggers it now without waiting for the schedule.',
       // agents/ refuses generic AI writes (contextService.lockedDenial), and

@@ -98,6 +98,7 @@ import { summonAgent } from '@/lib/agents/summon'
 import { intakeSummary } from '@/lib/actions/shared/intake'
 import { agentPreamble, AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
 import { rehearsalPlan } from '@/lib/agents/shared/rehearsal'
+import { agentNeedsFor } from '@/lib/agents/needs'
 import { featureAccessForbidden } from '@/lib/auth'
 import { readNoteOrNull, type Context } from '@/lib/notes/store'
 import { runClean, applyCleanFixes, trashNotes } from '@/lib/notes/clean'
@@ -1125,13 +1126,13 @@ export const CONTEXT_ACTIONS = [
         `To connect it to others, write mentions: ${MENTION_RULE}`,
       input: {
         space_id: spaceArg,
-        type: z.enum(CREATABLE_TYPES),
+        type: z.enum(CREATABLE_TYPES).describe("What it is: 'person', 'space' (an organisation) or 'resource'. Decides the fields and where the note lives"),
         name: z.string().describe('Display name — also the basis of the id and note path'),
         fields: z
           .record(z.string(), z.union([z.string(), z.number()]))
           .optional()
           .describe('Type-specific fields, using exactly the keys listed above'),
-        tags: z.array(z.string()).optional(),
+        tags: z.array(z.string()).optional().describe('Free-form tags for the note, e.g. ["founder", "fintech"]'),
         body: z
           .string()
           .optional()
@@ -1201,7 +1202,7 @@ export const CONTEXT_ACTIONS = [
       name: 'edit_context',
       scope: 'context:write',
       summary:
-        'Write a note at a path, replacing its whole content. This is how connectors are authored.',
+        'Create or overwrite one note at a path, whole content. Read it first when editing.',
       description:
         'Create or overwrite one context note (full-content write; the previous version is kept in history). ' +
         // This write lands at origin 'agent', which lockedDenial refuses under
@@ -1437,7 +1438,9 @@ export const CONTEXT_ACTIONS = [
         'administering it is refused.',
       input: {
         space_id: spaceArg,
-        action: z.enum(['list', 'create', 'update', 'delete', 'assign', 'clear']),
+        action: z
+          .enum(['list', 'create', 'update', 'delete', 'assign', 'clear'])
+          .describe("'list' the type's aliases; 'create'/'update'/'delete' edit the vocabulary (admins); 'assign'/'clear' put a chip on one entity or take it off"),
         node_type: z
           .string()
           .optional()
@@ -1536,11 +1539,11 @@ export const CONTEXT_ACTIONS = [
         "(list_models). Entries marked `personal: true` are the " +
         'CALLER\'s own connectors, connected in their settings and usable in every space they are in; the space does not ' +
         "share them. Executing needs the 'connectors:use' scope. " +
-        'TO CREATE ONE: a connector is a NOTE at connectors/<name>.md, written with edit_context ' +
-        "(scope:'shared', visibility:'inherit'), space admins only — there is no create_connector tool because " +
-        'there is nothing to create but the note. Ask the visvine tool with no action for the frontmatter contract and the ' +
-        'ordered steps before you write it.',
-      input: { space_id: z.string() },
+        'TO ADD ONE: most services are in the catalogue — a space admin adds them from the Space Console ' +
+        '(Connectors → Add a connector) with one press, a sign-in or a pasted key. For a service that is not, a ' +
+        'connector is a NOTE at connectors/<name>.md an admin writes with edit_context; the create_connector recipe ' +
+        '(the visvine router with `request`) has the frontmatter contract and the steps.',
+      input: { space_id: spaceArg },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
@@ -1560,7 +1563,7 @@ export const CONTEXT_ACTIONS = [
         'and nothing runs it directly: an agent uses it by running. TO ADD ONE: a model is a NOTE at models/<name>.md ' +
         "(`type: model`, `provider:`, `model:`), written with edit_context by a space admin, plus the MODEL_KEY_<PROVIDER> " +
         'secret set with set_connector_secret. Adding one from the Models dialog in the app does both.',
-      input: { space_id: z.string() },
+      input: { space_id: spaceArg },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
         const { context } = await resolveTarget(ctx, args.space_id, 'shared')
@@ -1751,7 +1754,7 @@ export const CONTEXT_ACTIONS = [
         'deliberately. You become a host, so you can edit it afterwards with update_event.',
       input: {
         space_id: spaceArg,
-        title: z.string(),
+        title: z.string().describe("The event's name, as it appears on the card and page"),
         start_at: z.string().describe('ISO 8601 instant, e.g. 2026-09-14T18:00:00.000Z'),
         end_at: z.string().optional().describe('ISO 8601 instant'),
         timezone: z.string().optional().describe("IANA zone the event is read in, e.g. 'Pacific/Auckland'"),
@@ -1838,15 +1841,18 @@ export const CONTEXT_ACTIONS = [
       input: {
         space_id: spaceArg,
         event_id: z.string().describe("The event's id, e.g. 'event:launch-night-20260914'"),
-        title: z.string().optional(),
+        title: z.string().optional().describe('A new name'),
         start_at: z.string().optional().describe('ISO 8601 instant'),
         end_at: z.string().optional().describe('ISO 8601 instant'),
-        timezone: z.string().optional(),
-        description: z.string().optional(),
-        location: z.object({ label: z.string(), address: z.string().optional() }).optional(),
-        capacity: z.number().int().positive().optional(),
-        visibility: z.enum(['public', 'space', 'private']).optional(),
-        status: z.enum(['draft', 'published']).optional(),
+        timezone: z.string().optional().describe("IANA zone the event is read in, e.g. 'Pacific/Auckland'"),
+        description: z.string().optional().describe('The summary shown on the event card and page'),
+        location: z
+          .object({ label: z.string(), address: z.string().optional() })
+          .optional()
+          .describe('Where it happens — label is what people read'),
+        capacity: z.number().int().positive().optional().describe('Adds a waitlist once it is full'),
+        visibility: z.enum(['public', 'space', 'private']).optional().describe('Who can see it once published'),
+        status: z.enum(['draft', 'published']).optional().describe("'published' makes it visible — this is how a draft goes live"),
         cover_resource_id: z.string().optional().describe('A Drive image to use as the poster (list_drive)'),
         hosts: z.array(z.string()).optional().describe('Replaces the host list — include the existing hosts to keep them'),
       },
@@ -1905,7 +1911,7 @@ export const CONTEXT_ACTIONS = [
         'activation, and creating one does NOT start it. Briefs are EDITED on the note itself, not ' +
         'through edit_context: agents/ is frozen against generic AI writes so that a sweep cannot silently ' +
         'switch off every agent in the space.',
-      input: { space_id: z.string() },
+      input: { space_id: spaceArg },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
@@ -1938,7 +1944,7 @@ export const CONTEXT_ACTIONS = [
       name: 'run_agent',
       scope: 'agents:run',
       summary:
-        'Trigger an agent run now.',
+        'Run an active agent now, as you — optionally with a message saying what this run is for.',
       description:
         "Trigger a run of an ACTIVE agent now (see list_agents). Anyone who can edit the brief may — its author, a space admin, " +
         'or a member with edit access to its folder; an inactive agent is refused. The run acts as YOU, the caller — a `mode: user` ' +
@@ -1999,8 +2005,13 @@ export const CONTEXT_ACTIONS = [
         'it runs on, the connectors it may call and which tool extras it gets; BODY the instructions it follows ' +
         'on every run. Write the body as a standing instruction, not a one-off request: what to read from the ' +
         "context, what to produce, and where to write it. Read list_connectors first — every name in " +
-        '`connectors` must be a connector the space already has, and `model` must name one of its model ' +
-        'connectors (omit it for the space default). ' +
+        '`connectors` must be a connector the space already has; omit `model` unless this agent must run on a ' +
+        "different one of the space's models. " +
+        'THE ANSWER SAYS WHAT IT STILL NEEDS: `needs` lists every gap between the brief and a working run — no ' +
+        'model in the space, a declared connector that is missing, off or not signed in to, and any service the ' +
+        'instructions name (Slack, Gmail…) that the brief never declared — each with why, the fix and who can do it, ' +
+        'and `plan` is those fixes in order. Read it back to the person as the next steps; never say the agent ' +
+        'is ready when `ready` is false. ' +
         `WHAT THE AGENT CAN DO, so the brief can ask for it: ${AGENT_RUN_CAPABILITIES} ` +
         'CREATING IS NOT TURNING ON: a new brief is inert. Anyone who can edit it turns it on with activate_agent (or ' +
         "the Turn on button on the agent's page) — say so when you hand it over, and OFFER THE REHEARSAL FIRST: " +
@@ -2038,8 +2049,10 @@ export const CONTEXT_ACTIONS = [
           .array(z.enum(AGENT_TOOL_EXTRAS))
           .optional()
           .describe(
-            "Extra capabilities: 'web' (fetch a public page), 'sandbox' (run code on a disposable computer), " +
-              "'messages' (post to a channel), 'directory' (create nodes and links). Omit for none",
+            "Extra capabilities: 'web' (fetch any public page, including a search engine's results), 'actions' (run any " +
+              "platform action — events, the Drive, connectors, Tools), 'sandbox' (run code on a disposable computer), " +
+              "'messages' (post to a channel), 'directory' (create nodes and links), 'machine' (its own computer with a " +
+              "browser an admin can watch). Omit for none",
           ),
       },
       run: async (ctx, args) => {
@@ -2061,6 +2074,15 @@ export const CONTEXT_ACTIONS = [
         const models = await spaceModels(context.spaceId)
         const fallback = defaultModelOf(models)
         const problem = r.brief.model ? null : noModelReason(models)
+        // What stands between this brief and a working run, judged for the
+        // caller: a declared connector that is not there, a service the
+        // instructions name that nothing reaches, no model at all — each with
+        // its fix, so the person hears it now rather than from a failed run.
+        const needs = await agentNeedsFor(principal, context, {
+          connectors: r.brief.connectors,
+          instructions: args.instructions,
+          modelProblem: problem,
+        })
         return {
           name: r.name,
           path: r.path,
@@ -2071,14 +2093,17 @@ export const CONTEXT_ACTIONS = [
           connectors: r.brief.connectors,
           tools: r.brief.tools,
           active: false,
+          ready: needs.ready,
+          needs: needs.needs,
+          plan: needs.plan,
           page: agentPageHref(r.name),
           // A brief nobody has seen run is a guess. Offer the rehearsal before
           // the switch: it costs the space nothing and it is the only look at
           // the output anyone gets before an unattended run produces it.
           try_it: 'Offer to try it now: rehearse_agent hands you its first round to carry out yourself, on your model — nothing runs, nothing is written and nothing is billed. Do it before turning it on.',
-          next: problem
-            ? `${problem} The brief is written and will run once there is one — rehearse_agent still shows what it would do; turn it on with activate_agent once the space has a model.`
-            : 'Turn it on before it runs — activate_agent, or the Turn on button on its page.',
+          next: needs.ready
+            ? 'Turn it on before it runs — activate_agent, or the Turn on button on its page.'
+            : `The brief is written but ${needs.needs.length === 1 ? 'one thing stands' : `${needs.needs.length} things stand`} between it and a working run — follow \`plan\`. rehearse_agent still shows what it would do; turn it on with activate_agent once \`needs\` is empty.`,
         }
       },
     }),
@@ -2093,7 +2118,8 @@ export const CONTEXT_ACTIONS = [
         'reachable for you — and YOU do that first round yourself, on your own model and with your own access. ' +
         'Use it straight after create_agent, and any time somebody asks what an agent would do. It is how an author ' +
         'sees the output before a 3am run produces it, and how a missing model or a connector nobody signed in to is ' +
-        'found now rather than in a failed run at the weekend. Follow the `rules` exactly — the important ones are ' +
+        'found now rather than in a failed run at the weekend. `needs` is every gap with its fix — including a service ' +
+        'the instructions name that the brief never declared — and `plan` is the fixes in order. Follow the `rules` exactly — the important ones are ' +
         'that you write no notes (put what the agent would have written in your reply instead) and use only what the ' +
         'brief declares. Turning it on afterwards is activate_agent; the brief itself is edited on its own page.',
       input: {
@@ -2117,6 +2143,11 @@ export const CONTEXT_ACTIONS = [
           connectors: agent.readiness.viewer,
           tools: agent.tools,
         })
+        const needs = await agentNeedsFor(principal, context, {
+          connectors: agent.connectors,
+          instructions: splitFrontmatter(agent.brief).body,
+          modelProblem: agent.modelProblem,
+        })
         return {
           agent: agent.name,
           title: agent.title,
@@ -2128,6 +2159,8 @@ export const CONTEXT_ACTIONS = [
           ready_for_a_real_run: plan.ready,
           blocking: plan.blocking,
           out_of_reach: plan.out_of_reach,
+          needs: needs.needs,
+          plan: needs.plan,
           rehearsal: {
             instruction: plan.instruction,
             rules: plan.rules,

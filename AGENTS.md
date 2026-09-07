@@ -551,6 +551,18 @@ an unattended run makes it, and it is where a missing model or an unconnected
 account surfaces instead of in a 3am failure. `create_agent` offers it in
 `try_it`, and it is step 4 of the recipe, before `activate_agent`.
 
+**A brief says what it still needs.** `create_agent` and `rehearse_agent`
+answer with `needs` and `plan` (`lib/agents/shared/needs.ts`, pure;
+`lib/agents/needs.ts` gathers the inputs): no model in the space, a declared
+connector that is missing, off, invalid, not signed in to or broken, and any
+catalogue service the instructions NAME that the brief never declared — held
+by the space under some name (add it to `connectors:`) or not held at all (an
+admin adds it from the console's catalogue, said with how it connects). Each
+need carries why, the fix, who can do it and where; the plan is the fixes in
+order, then rehearse, then activate. `create_agent` still writes a brief that
+declares a connector the space lacks — a brief that names what it needs and
+reports it beats one that quietly cannot do the job.
+
 **A recipe that BUILDS something asks first.** `create_agent` and
 `create_connector` carry an `intake` (`lib/actions/shared/intake.ts`, pure and
 rendered into the note above the steps): at most four questions, in one message,
