@@ -19,8 +19,8 @@ import prisma from '../lib/prisma'
 import { syncActionNotes } from '../lib/actions/sync'
 
 async function main() {
-  const { actions, recipes } = await syncActionNotes()
-  console.log(`Visvine Context: ${actions} action note(s), ${recipes} recipe note(s).`)
+  const { actions, recipes, guides } = await syncActionNotes()
+  console.log(`Visvine Context: ${actions} action note(s), ${recipes} recipe note(s), ${guides} new guide(s).`)
 }
 
 main()

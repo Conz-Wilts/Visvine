@@ -67,6 +67,11 @@ export interface ActionDef<Shape extends z.ZodRawShape = z.ZodRawShape> {
   input: Shape
   /** MCP tool-annotation hints, carried into the action's rendered contract. */
   annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean }
+  /**
+   * Guides (lib/actions/shared/guides.ts) appended to this action's manual —
+   * the contract it shares with other actions, written once and read with it.
+   */
+  guides?: readonly string[]
   run: (caller: ActionCaller, args: z.infer<z.ZodObject<Shape>>) => Promise<unknown>
 }
 

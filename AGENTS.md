@@ -529,6 +529,16 @@ the same content in code, so the order of two deploy steps can never decide whet
 the surface routes at all. Syncing is what makes the content editable in the
 app, by the admin of the Visvine space (`connor@visvine.com` in production).
 
+**What several actions share is a guide, written once.** Folders and their
+index, mentions and the lifecycle frontmatter are the `writing_notes` guide
+(`lib/actions/shared/guides.ts`); `add_context`, `edit_context`,
+`append_context` and `clean_context` name it in `guides:` and keep only the
+leading-slash line inline. `buildActionDoc` appends every named guide to the
+action's manual, `visvine({ action: 'writing_notes' })` reads one on its own,
+the catalogue lists them, and `db:actions:sync` writes `guides/<id>.md` once
+and never overwrites it — a guide is prose only, so the whole note is the
+maintainer's. A guide id is never an action: it cannot be run.
+
 **A note can describe an action; it can never invent one.** `runAction` resolves
 names against the registry, the required scope is read from the definition, and
 the `params:` an action's note advertises are regenerated from its Zod schema
@@ -561,7 +571,12 @@ admin adds it from the console's catalogue, said with how it connects). Each
 need carries why, the fix, who can do it and where; the plan is the fixes in
 order, then rehearse, then activate. `create_agent` still writes a brief that
 declares a connector the space lacks — a brief that names what it needs and
-reports it beats one that quietly cannot do the job.
+reports it beats one that quietly cannot do the job — but `activate_agent`
+refuses on a **hard** need (`hardNeeds`: a declared connector missing, off or
+invalid, which fails every run whoever it acts as) and warns on a sign-in the
+runner still owes. The agent page's sidebar shows the same needs for the
+viewer (`AgentNeeds.tsx`, from `describeAgent`'s `readiness.needs`), each with
+its fix, so the page and the tool never disagree about what is missing.
 
 **A recipe that BUILDS something asks first.** `create_agent` and
 `create_connector` carry an `intake` (`lib/actions/shared/intake.ts`, pure and

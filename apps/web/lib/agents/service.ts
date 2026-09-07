@@ -5,7 +5,9 @@
  */
 import prisma from '@/lib/prisma'
 import { defaultModelOf, noModelReason, spaceModels, type SpaceModel } from './spaceModels'
-import { connectorReadiness, type ConnectorReadiness } from '@/lib/connectors/service'
+import { connectorReadiness, listConnectors, type ConnectorReadiness } from '@/lib/connectors/service'
+import { agentNeeds, hardNeeds, type AgentNeeds } from './shared/needs'
+import { needsCatalog } from './needs'
 import { logAudit } from '@/lib/notes/audit'
 import { readVisible, visibleVault, writeDenial, writeDenialFull, writeGated } from '@/lib/notes/contextService'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
@@ -359,6 +361,12 @@ export interface AgentReadiness {
   runAsName: string | null
   /** The viewer IS that identity, so every fire already runs for them. */
   viewerIsRunAs: boolean
+  /**
+   * Everything between the brief and a working run for the viewer — the
+   * model, the declared connectors, and any service the instructions name
+   * that the brief never declared — each with its fix (shared/needs.ts).
+   */
+  needs: AgentNeeds
 }
 
 export async function describeAgent(
@@ -407,6 +415,14 @@ export async function describeAgent(
     runAsUserId && runAsUserId !== p.userId ? await connectorReadiness(p, context, summary.connectors, runAsUserId) : null
 
   const memory = await readVisible(p, context, memoryPath(name))
+  const held = await listConnectors(p, context)
+  const needs = agentNeeds({
+    declared: viewer,
+    instructions: splitFrontmatter(content).body,
+    modelProblem: summary.modelProblem,
+    catalog: needsCatalog(),
+    spaceConnectors: held.map((c) => ({ name: c.name, recipe: c.recipe })),
+  })
 
   return {
     ...summary,
@@ -421,6 +437,7 @@ export async function describeAgent(
       runAsUserId,
       runAsName: runAsUserId ? (nameOf.get(runAsUserId) ?? null) : null,
       viewerIsRunAs: runAsUserId === p.userId,
+      needs,
     },
   }
 }
@@ -517,11 +534,40 @@ export async function activateAgent(
   // the desktop app; switching it on would promise a schedule nothing can keep.
   const localRuntime = localRuntimeOf(parsed.brief.model)
   if (localRuntime) return { ok: false, status: 400, error: localRuntimeRefusal(localRuntime) }
+
+  // A declared connector that is not there, is off or does not parse fails
+  // every run whoever it acts as — so it is refused here, with the fix, rather
+  // than found by the first fire. A sign-in is the runner's to do and is a
+  // warning; a service the prose names is a reading of the prose, and the
+  // page already says it.
+  const existing = parseAgentActivation(parseFrontmatter(content))
+  const runAsUserId = (existing.ok ? existing.activation.runsAs : null) ?? p.userId
+  const [declared, held] = await Promise.all([
+    connectorReadiness(p, context, parsed.brief.connectors, runAsUserId),
+    listConnectors(p, context),
+  ])
+  const needs = agentNeeds({
+    declared,
+    instructions: splitFrontmatter(content).body,
+    modelProblem: null,
+    catalog: needsCatalog(),
+    spaceConnectors: held.map((c) => ({ name: c.name, recipe: c.recipe })),
+  })
+  const hard = hardNeeds(needs)
+  if (hard.length > 0) {
+    return {
+      ok: false,
+      status: 409,
+      error: `Not turned on: ${hard.map((n) => `${n.why} ${n.fix}`).join(' ')}`,
+    }
+  }
+  const unsigned = needs.needs.filter((n) => n.status === 'needs_connection' || n.status === 'broken')
+
   const resolved = await resolveAgentChatConfig(context.spaceId, parsed.brief.model)
   if (!resolved.ok) return { ok: false, status: 400, error: resolved.message }
   const probe = await probeModelKey(resolved.config, resolved.ref.provider)
   if (!probe.ok && probe.kind === 'auth') return { ok: false, status: 400, error: probe.message }
-  const warning = probe.ok ? null : probe.message
+  const warning = [probe.ok ? null : probe.message, ...unsigned.map((n) => `${n.why} ${n.fix}`)].filter(Boolean).join(' ') || null
 
   // The activation is written INTO the brief — one note, one edit, the same
   // people. Round-trip it so a bad glob or interval is refused here, not

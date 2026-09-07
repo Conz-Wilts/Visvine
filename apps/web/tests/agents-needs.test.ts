@@ -2,7 +2,7 @@
 // create_agent's and rehearse_agent's `needs` and `plan`.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { agentNeeds, type NeedsCatalogEntry } from '@/lib/agents/shared/needs'
+import { agentNeeds, hardNeeds, type NeedsCatalogEntry } from '@/lib/agents/shared/needs'
 import { needsCatalog } from '@/lib/agents/needs'
 
 const catalog: NeedsCatalogEntry[] = [
@@ -157,4 +157,27 @@ test('the real catalogue narrows to what the wording needs', () => {
   assert.equal(gmail.connects, 'sign-in')
   assert.equal(gmail.perMember, true)
   assert.equal(needsCatalog(['google']).find((r) => r.id === 'gmail')!.connects, 'one-click')
+})
+
+test('only a need no runner can get past is hard — the switch refuses those and warns about the rest', () => {
+  const r = agentNeeds({
+    declared: [
+      { connector: 'slack', status: 'missing' },
+      { connector: 'hubspot', status: 'disabled' },
+      { connector: 'gmail', status: 'needs_connection', connectUrl: 'https://x' },
+    ],
+    instructions: 'Read Notion, post to Slack.',
+    modelProblem: null,
+    catalog,
+    spaceConnectors: [{ name: 'hubspot', recipe: 'hubspot' }, { name: 'gmail', recipe: 'gmail' }],
+  })
+  assert.deepEqual(
+    hardNeeds(r).map((n) => n.need),
+    ['slack', 'hubspot'],
+  )
+  // A sign-in is the runner's to do; a service read out of the prose is a reading.
+  assert.deepEqual(
+    r.needs.filter((n) => !hardNeeds(r).includes(n)).map((n) => n.status),
+    ['needs_connection', 'not_in_space'],
+  )
 })

@@ -26,7 +26,8 @@ import { readNoteOrNull, writeNote, type Actor, type Context } from '@/lib/notes
 import { joinFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { allActions } from '@/lib/actions/registry'
 import { allRecipes, orientRecipe, renderRecipeBody } from '@/lib/actions/recipes'
-import { ACTIONS_FOLDER, RECIPES_FOLDER, actionNotePath, recipeNotePath } from '@/lib/actions/notes'
+import { ACTIONS_FOLDER, GUIDES_FOLDER, RECIPES_FOLDER, actionNotePath, guideNotePath, recipeNotePath } from '@/lib/actions/notes'
+import { GUIDES } from '@/lib/actions/shared/guides'
 import {
   applyContract,
   paramsOf,
@@ -42,6 +43,7 @@ const CONTEXT: Context = { spaceId: GLOBAL_SPACE_ID, ownerKey: 'shared' }
 export interface SyncReport {
   actions: number
   recipes: number
+  guides: number
 }
 
 export async function syncActionNotes(): Promise<SyncReport> {
@@ -101,8 +103,24 @@ export async function syncActionNotes(): Promise<SyncReport> {
     recipes += 1
   }
 
-  logger.info('actions.notes.synced', { actions, recipes })
-  return { actions, recipes }
+  // A guide is prose and nothing else, so the whole note is the maintainer's:
+  // written once, then left exactly as found.
+  let guides = 0
+  for (const guide of GUIDES) {
+    const path = guideNotePath(guide.id)
+    if (await readNoteOrNull(CONTEXT, path)) continue
+    await writeNote(
+      CONTEXT,
+      path,
+      joinFrontmatter({ title: guide.title, description: guide.summary, guide: guide.id }, guide.body),
+      ACTOR,
+      'baseline',
+    )
+    guides += 1
+  }
+
+  logger.info('actions.notes.synced', { actions, recipes, guides })
+  return { actions, recipes, guides }
 }
 
 const ACTIONS_INDEX = `Every action Visvine can be asked to perform, one note each.
@@ -125,11 +143,24 @@ recipe is writing a note here, and needs no deploy.
 A recipe is advice, never authorization. Every step it names still runs through the same permission
 gates, so a wrong recipe costs a refusal and nothing more.`
 
+const GUIDES_INDEX = `The contracts several actions share, written once and read with each of them.
+
+A guide is appended to the manual of every action that names it, and can be read on its own by
+asking the visvine router for it by id. It is prose only — nothing here can change what an action
+does — so the whole note is the maintainer's, and a sync never overwrites one that exists.`
+
 async function writeIndexes(): Promise<void> {
   await writeNote(
     CONTEXT,
     `${ACTIONS_FOLDER}/index.md`,
     joinFrontmatter({ title: 'Actions', description: 'What Visvine can be asked to do.' }, ACTIONS_INDEX),
+    ACTOR,
+    'baseline',
+  )
+  await writeNote(
+    CONTEXT,
+    `${GUIDES_FOLDER}/index.md`,
+    joinFrontmatter({ title: 'Guides', description: 'What several actions have in common.' }, GUIDES_INDEX),
     ACTOR,
     'baseline',
   )

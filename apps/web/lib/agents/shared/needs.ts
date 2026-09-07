@@ -56,7 +56,7 @@ type NeedStatus =
   | 'undeclared'
   | 'not_in_space'
 
-interface AgentNeed {
+export interface AgentNeed {
   /** What is needed: `model`, or a connector name, or a catalogue id. */
   need: string
   status: NeedStatus
@@ -233,4 +233,14 @@ export function agentNeeds(input: NeedsInput): AgentNeeds {
     `${needs.length + 2}. Turn it on — activate_agent — with a schedule and a timezone.`,
   )
   return { ready: needs.length === 0, needs, plan }
+}
+
+/**
+ * The needs no run can get past, whoever it runs as: a declared connector that
+ * is not there, is off, or does not parse. A sign-in is a person's to do and
+ * a service the prose names is a reading of the prose — both are reported,
+ * never a refusal.
+ */
+export function hardNeeds(needs: AgentNeeds): AgentNeed[] {
+  return needs.needs.filter((n) => n.status === 'missing' || n.status === 'disabled' || n.status === 'invalid')
 }

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui';
 import type { AgentReadiness, AgentSubscriber, AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ConnectorReadinessNotices from './ConnectorReadinessNotices';
+import AgentNeeds from './AgentNeeds';
 import { hrefForNotePath } from '@/lib/notes/entities';
 import { memoryPath, memorySummary } from '@/lib/agents/shared/memory';
 import StatusDot from './StatusDot';
@@ -122,6 +123,11 @@ export default function AgentSidebar({
         {agent.state.nextRunAt && agent.activation.active && (
           <p className="text-text-muted">Next run {fmtUntil(agent.state.nextRunAt)}</p>
         )}
+        {/* Everything between the brief and a working run for the viewer — a
+            connector the space lacks, one they have not signed in to, a service
+            the instructions name that the brief never declared — each with the
+            way to fix it. The model is a need too, said by the blocker line above. */}
+        <AgentNeeds needs={{ ...agent.readiness.needs, needs: agent.readiness.needs.needs.filter((n) => n.status !== 'no_model') }} isAdmin={isAdmin} onEditSettings={() => onOpen('settings')} />
         {/* The identity SCHEDULED runs act as: what THEY still have to connect,
             said before a 3am run discovers it instead. */}
         {agent.readiness.runAs && (
@@ -158,7 +164,6 @@ export default function AgentSidebar({
             ))}
           </p>
         )}
-        <ConnectorReadinessNotices items={agent.readiness.viewer} mine who={null} isAdmin={isAdmin} />
       </Section>
 
       {/* What it carries between runs — the memory note, as a glance: the

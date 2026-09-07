@@ -18,7 +18,8 @@
  * never advertise a call that does not exist, however stale the notes get.
  */
 import { allActions, actionByName } from '@/lib/actions/registry'
-import { readActionNotes, readRecipeNotes, readActionNote } from '@/lib/actions/notes'
+import { readActionNotes, readRecipeNotes, readActionNote, readGuideNote } from '@/lib/actions/notes'
+import { GUIDES, guideById } from '@/lib/actions/shared/guides'
 import { scoreCandidates, confidenceOf } from '@/lib/actions/shared/match'
 import { paramsOf, renderContract, proseOutsideContract } from '@/lib/actions/shared/contract'
 import { spaceFactsFor } from '@/lib/actions/spaceFacts'
@@ -66,6 +67,8 @@ async function catalogue(caller: ActionCaller): Promise<string> {
     const summary = notes.get(def.name)?.summary || def.summary
     lines.push(`- \`${def.name}\` — ${summary}${scopeNote(def, caller)}`)
   }
+  lines.push('', '## Guides', '', 'Read one like an action: `visvine({ action: "<id>" })`.', '')
+  for (const guide of GUIDES) lines.push(`- \`${guide.id}\` — ${guide.summary}`)
   return lines.join('\n')
 }
 
@@ -180,9 +183,17 @@ export async function buildGuide(req: PlanRequest): Promise<string> {
  * rendered here rather than trusted from the note so that documentation is
  * correct even against notes that were never synced, or synced long ago.
  */
+/** A guide as a document of its own — the note's wording when there is one. */
+async function guideDoc(id: string): Promise<string | null> {
+  const guide = guideById(id)
+  if (!guide) return null
+  const body = (await readGuideNote(id)) ?? guide.body
+  return [`# ${guide.title}`, '', guide.summary, '', body].join('\n')
+}
+
 export async function buildActionDoc(name: string): Promise<string | null> {
   const def = actionByName(name)
-  if (!def) return null
+  if (!def) return guideDoc(name)
   const note = await readActionNote(name)
 
   const contract = renderContract({
@@ -197,6 +208,16 @@ export async function buildActionDoc(name: string): Promise<string | null> {
   // generated from the live schema, and two copies of it would be one too many.
   const prose = note ? proseOutsideContract(note.body) : ''
 
+  // The contracts this action shares with others, appended so one read of
+  // the manual is the whole of what it takes to call it well.
+  const guides = await Promise.all(
+    (def.guides ?? []).map(async (id) => {
+      const guide = guideById(id)
+      if (!guide) return ''
+      return ['', `## Guide: ${guide.title}`, '', (await readGuideNote(id)) ?? guide.body].join('\n')
+    }),
+  )
+
   return [
     `# ${def.name}`,
     '',
@@ -205,5 +226,6 @@ export async function buildActionDoc(name: string): Promise<string | null> {
     contract,
     '',
     prose.length > 0 ? prose : def.description,
+    ...guides,
   ].join('\n')
 }

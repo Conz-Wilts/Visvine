@@ -25,6 +25,7 @@ import { actionByName, allActions, scopeForAction, schemaOf } from '@/lib/action
 import { registerTools } from '@/lib/mcp/register'
 import { TOOL_NAME, actionAnnotations, actionFromToolName, actionToolName } from '@/lib/mcp/gateway'
 import { mcpServerInfo } from '@/lib/mcp/config'
+import { GUIDES, guideById } from '@/lib/actions/shared/guides'
 
 /** A server that records what was registered on it and runs nothing. */
 type Registered = {
@@ -256,4 +257,33 @@ test('every catalogue scope has consent copy', () => {
   for (const scope of MCP_SCOPES) {
     assert.ok(SCOPE_DESCRIPTIONS[scope]?.length > 20, `${scope} has no readable consent description`)
   }
+})
+
+test('the writing contract is one guide, and the write actions point at it', () => {
+  // Folders, mentions and lifecycle were pasted into four descriptions; now
+  // they are one guide each of those actions names, so a change is one edit.
+  const guide = guideById('writing_notes')!
+  assert.ok(guide, 'the writing_notes guide exists')
+  assert.match(guide.body, /## Folders/)
+  assert.match(guide.body, /## Mentions/)
+  assert.match(guide.body, /## Lifecycle/)
+  assert.match(guide.body, /leading slash/i)
+  assert.match(guide.body, /index:children/)
+  assert.match(guide.body, /supersedes:/)
+
+  for (const name of ['add_context', 'edit_context', 'append_context', 'clean_context']) {
+    const def = actionByName(name)!
+    assert.deepEqual(def.guides, ['writing_notes'], `${name} must name the guide`)
+    // The description keeps the one line that matters most and points at the rest.
+    assert.match(def.description, /ROOT-RELATIVE|leading slash/i, `${name} must still say the slash`)
+    assert.match(def.description, /writing_notes/, `${name} must point at the guide`)
+    assert.ok(!def.description.includes('index:children'), `${name} must not inline the folder contract`)
+    assert.ok(def.description.length < 2_600, `${name}'s description is ${def.description.length} chars`)
+  }
+  // A guide id is never an action: it cannot be run, only read.
+  assert.equal(actionByName('writing_notes'), null)
+  assert.equal(scopeForAction('writing_notes'), null)
+  // Every guide an action names exists.
+  for (const def of allActions()) for (const id of def.guides ?? []) assert.ok(guideById(id), `${def.name} names guide ${id}`)
+  assert.ok(GUIDES.every((g) => /^[a-z_]+$/.test(g.id)))
 })

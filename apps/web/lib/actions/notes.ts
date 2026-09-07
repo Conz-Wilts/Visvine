@@ -30,10 +30,16 @@ import { GLOBAL_SPACE_ID } from '@/lib/spaces/globalSpace'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { KeywordRule } from '@/lib/actions/shared/match'
 import { actionByName } from '@/lib/actions/registry'
+import { guideById } from '@/lib/actions/shared/guides'
 import { allRecipes, orientRecipe, renderRecipeBody } from '@/lib/actions/recipes'
 
 export const ACTIONS_FOLDER = 'actions'
 export const RECIPES_FOLDER = 'recipes'
+export const GUIDES_FOLDER = 'guides'
+
+export function guideNotePath(id: string): string {
+  return `${GUIDES_FOLDER}/${id}.md`
+}
 
 export function actionNotePath(name: string): string {
   return `${ACTIONS_FOLDER}/${name}.md`
@@ -205,4 +211,25 @@ export async function readActionNote(name: string): Promise<ActionNote | null> {
     summary: typeof fm.description === 'string' ? fm.description : '',
     body: splitFrontmatter(row.content).body.trim(),
   }
+}
+
+/**
+ * A guide's body as the note holds it, or null to fall back to the shipped
+ * text — the same relationship an action note has with its definition.
+ */
+export async function readGuideNote(id: string): Promise<string | null> {
+  if (!guideById(id)) return null
+  let row: { content: string } | null
+  try {
+    row = await prisma.contextNote.findFirst({
+      where: { spaceId: GLOBAL_SPACE_ID, ownerKey: 'shared', deletedAt: null, path: guideNotePath(id) },
+      select: { content: true },
+    })
+  } catch (err) {
+    logger.warn('actions.notes.unreadable', { err })
+    return null
+  }
+  if (!row) return null
+  const body = splitFrontmatter(row.content).body.trim()
+  return body.length > 0 ? body : null
 }
