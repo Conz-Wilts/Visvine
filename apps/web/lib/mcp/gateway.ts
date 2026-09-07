@@ -1,13 +1,23 @@
 /**
- * The one MCP tool.
+ * The MCP tools: one router, and one tool per action.
  *
- * Both servers register exactly this and nothing else. The surface behind it is
- * a catalogue in the Visvine space's Context, which a client fetches when it has a reason
- * to (lib/actions/guide.ts), and a registry of endpoints it dispatches through
- * (lib/actions/run.ts) — so connecting costs one tool schema, whatever the
- * catalogue grows to.
+ * `visvine` is the router. The surface behind it is a catalogue in the Visvine
+ * space's Context, which a client fetches when it has a reason to
+ * (lib/actions/guide.ts), and a registry of endpoints it dispatches through
+ * (lib/actions/run.ts). It is the door a client with no idea what exists walks
+ * through: the plan for an ask, the manual for an action, and a way to run any
+ * of them from a single schema.
  *
- * THE THREE MODES, and why they are shaped this way:
+ * `visvine_<action>` is every action as its own tool, generated from the same
+ * registry (`registerActionTools`). Same `runAction`, same scope, same Zod —
+ * the two doors cannot drift. What a named tool adds is what a single schema
+ * cannot carry: a client can allow or deny each one by name, its log says
+ * which action ran, the arguments arrive typed rather than as a bag the model
+ * recalled from a manual, and the MCP annotations say whether it reads or
+ * writes. The scope challenge (lib/mcp/challenge.ts) reads the action out of
+ * the tool name for these, out of the arguments for the router.
+ *
+ * THE ROUTER'S THREE MODES, and why they are shaped this way:
  *
  *   no `action`            the plan. Free, read-only, and the thing to call first.
  *   `action`, no `input`   that action's manual.
@@ -27,10 +37,46 @@ import { z } from 'zod'
 import { withCaller, type ToolExtra } from '@/lib/mcp/auth'
 import { buildGuide, buildActionDoc } from '@/lib/actions/guide'
 import { runAction } from '@/lib/actions/run'
-import { allActions } from '@/lib/actions/registry'
-import { ActionError } from '@/lib/actions/types'
+import { allActions, schemaOf } from '@/lib/actions/registry'
+import { ActionError, type ActionDef } from '@/lib/actions/types'
 
 export const TOOL_NAME = 'visvine'
+
+/** The prefix every per-action tool carries, so a client's log reads `visvine_search_context`. */
+const ACTION_TOOL_PREFIX = `${TOOL_NAME}_`
+
+export function actionToolName(action: string): string {
+  return `${ACTION_TOOL_PREFIX}${action}`
+}
+
+/** The action a per-action tool name stands for, or null for any other tool. */
+export function actionFromToolName(toolName: string): string | null {
+  if (!toolName.startsWith(ACTION_TOOL_PREFIX)) return null
+  const action = toolName.slice(ACTION_TOOL_PREFIX.length)
+  return action.length > 0 ? action : null
+}
+
+/**
+ * What the hints say about an action. A read scope is read-only unless the
+ * definition says otherwise; everything else may write, and is marked
+ * destructive unless the definition says it is not, because a client that
+ * gates on the hint must be told about `edit_context` overwriting a note.
+ * Connectors and machines reach outside the platform, which is `openWorldHint`.
+ */
+export function actionAnnotations(def: ActionDef): {
+  title: string
+  readOnlyHint: boolean
+  destructiveHint: boolean
+  openWorldHint: boolean
+} {
+  const readOnly = def.annotations?.readOnlyHint ?? def.scope === 'context:read'
+  return {
+    title: def.name,
+    readOnlyHint: readOnly,
+    destructiveHint: readOnly ? false : (def.annotations?.destructiveHint ?? true),
+    openWorldHint: def.scope === 'connectors:use' || def.scope === 'vm:run',
+  }
+}
 
 /**
  * The tool's description. The only text about this surface a client reads
@@ -41,9 +87,11 @@ export const TOOL_NAME = 'visvine'
 function describeTool(): string {
   const count = allActions().length
   return (
-    'The single door to Visvine — a relationship-context platform where context notes are how you direct ' +
+    'The router into Visvine — a relationship-context platform where context notes are how you direct ' +
     `agents. ${count} actions sit behind it, covering context, files, events, connectors, agents and ` +
-    'building Tools, and this tool is how you find them, read them and run them.\n\n' +
+    'building Tools, and this tool is how you find them, read them and run them. Each action is also ' +
+    'its own tool, `visvine_<action>`, with the same arguments — prefer that once you know which one ' +
+    'you need, so the call is typed and named.\n\n' +
     "CALL IT FIRST, with no `action` and `request` set to the user's message VERBATIM. You get back the plan " +
     'for that ask, the space you are working in, and the full list of actions — read from Visvine itself, so ' +
     'it is current. Then call again with `action` to read one, and again with `action` + `input` to run it.\n\n' +
@@ -119,4 +167,30 @@ export function registerGateway(server: McpServer): void {
         return result
       }),
   )
+}
+
+/**
+ * One tool per action, from the registry. The description is the catalogue
+ * line plus where the manual is; the schema is the action's own Zod shape, so
+ * the client sees every argument and its description without a round trip.
+ */
+export function registerActionTools(server: McpServer): void {
+  for (const def of allActions()) {
+    server.registerTool(
+      actionToolName(def.name),
+      {
+        description:
+          `${def.summary}\n\nRequires the \`${def.scope}\` scope. ` +
+          `For the full manual — refusals to expect, worked examples — call \`${TOOL_NAME}\` with ` +
+          `\`action: "${def.name}"\` and no \`input\`.`,
+        inputSchema: schemaOf(def),
+        annotations: actionAnnotations(def),
+      },
+      (args: unknown, extra: ToolExtra) =>
+        withCaller(extra, async (caller) => {
+          const { result } = await runAction(caller, def.name, args ?? {})
+          return result
+        }),
+    )
+  }
 }

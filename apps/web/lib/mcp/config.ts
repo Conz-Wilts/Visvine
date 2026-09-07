@@ -65,8 +65,9 @@ export function mcpServerInfo(): Implementation {
  * The `instructions` a client receives at initialize — the one piece of text
  * every model reads before it has called anything.
  *
- * It says as little as possible on purpose. This surface has exactly one tool
- * and the tool's own description teaches how to use it; everything else a
+ * It says as little as possible on purpose. This surface is one router and a
+ * named tool per action, and each tool's own description teaches how to use
+ * it; everything else a
  * client needs — the catalogue, the recipes, the contracts — is fetched from
  * the action notes on the first call, where it can change without a deploy.
  * This string is cached by clients for the life of a connection, so anything
@@ -74,10 +75,12 @@ export function mcpServerInfo(): Implementation {
  */
 export function mcpInstructions(): string {
   return (
-    'This server exposes ONE tool, `visvine`. Call it first with no `action` and `request` set to the ' +
-    "user's message verbatim: it returns the plan for that ask plus the catalogue of every action that " +
-    'exists — reading and writing context, calling connectors, running agents, and building Tools. Then ' +
-    'call it again with `action` to read one, and again with `action` + `input` to run it.\n\n' +
+    'This server exposes the `visvine` router and one tool per action, `visvine_<action>`. Call the ' +
+    "router first with no `action` and `request` set to the user's message verbatim: it returns the plan " +
+    'for that ask plus the catalogue of every action that exists — reading and writing context, calling ' +
+    'connectors, running agents, and building Tools. Then call the named tool for the action you need ' +
+    '(its schema carries every argument), or the router with `action` to read the manual and with ' +
+    '`action` + `input` to run it.\n\n' +
     'Visvine is note-first — most things here are markdown notes at deterministic paths, not records ' +
     'behind a create_* API — so the absence of an action named for something is not evidence it cannot be ' +
     'done. The plan will tell you how it is actually done. Never report something as impossible without ' +

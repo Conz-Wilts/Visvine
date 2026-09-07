@@ -1,10 +1,10 @@
 /**
  * The gate the MCP transport runs behind: bearer verification for the
  * connection, and `withCaller` — identity resolution plus uniform error
- * mapping — for the one tool's body.
+ * mapping — for every tool's body.
  *
- * There is no scope check here: a scope belongs to the ACTION, not to the one
- * tool that reaches all of them, and `runAction` (lib/actions/run.ts) enforces
+ * There is no scope check here: a scope belongs to the ACTION, whichever tool
+ * reached it, and `runAction` (lib/actions/run.ts) enforces
  * it for both doors. The transport challenges before dispatch as well
  * (lib/mcp/challenge.ts) so a client gets an RFC 6750 `insufficient_scope` it
  * can step up from; both read the same `scopeForAction`.

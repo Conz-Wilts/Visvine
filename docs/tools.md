@@ -170,8 +170,8 @@ the folder, the build, and this space's own install
 deletion was already held to `canRemove`). A Tool never lingers in the console
 after its config note is gone.
 
-Visvine runs ONE MCP server at `/api/mcp`, exposing one tool, `visvine`. The
-authoring loop is a set of actions behind it like any other — there is no
+Visvine runs ONE MCP server at `/api/mcp`, exposing the `visvine` router and a
+named tool per action. The authoring loop is a set of actions like any other — there is no
 separate creator endpoint (`/api/mcp/creator` 308s to the one server, and the
 tokens it minted still verify). The address is shown in Settings → MCP
 (`/api/mcp/connect-info`).

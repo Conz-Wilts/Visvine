@@ -20,7 +20,7 @@
 import type { AuthInfo } from '@modelcontextprotocol/server'
 import { MCP_SCOPES, serializeScopes } from '@/lib/mcp/scopes'
 import { scopeForAction } from '@/lib/actions/registry'
-import { TOOL_NAME } from '@/lib/mcp/gateway'
+import { TOOL_NAME, actionFromToolName } from '@/lib/mcp/gateway'
 
 type Handler = (req: Request) => Response | Promise<Response>
 
@@ -38,13 +38,14 @@ function challengeHeader(params: Record<string, string>): string {
  * and challenged together — the spec is explicit that trickling out one missing
  * scope at a time forces needless round-trips.
  *
- * There is one tool now, so the scope being challenged is the ACTION's, read
- * out of `params.arguments.action`. A call that names no action is the plan or
- * the catalogue — free, read-only, and never challenged; a call that names one
- * but supplies no `input` is asking for its manual, which is equally free. Only
- * a call that would actually RUN something is gated here, which keeps discovery
- * open to a token that cannot yet do the work and lets the client step up once,
- * knowing exactly what to ask for.
+ * The scope being challenged is the ACTION's. A per-action tool carries it in
+ * its name (`visvine_edit_context`); the router carries it in
+ * `params.arguments.action`. A router call that names no action is the plan or
+ * the catalogue — free, read-only, and never challenged; one that names an
+ * action but supplies no `input` is asking for its manual, which is equally
+ * free. Only a call that would actually RUN something is gated here, which
+ * keeps discovery open to a token that cannot yet do the work and lets the
+ * client step up once, knowing exactly what to ask for.
  */
 export function missingScopesForBody(rawBody: string, granted: readonly string[]): string[] {
   let parsed: unknown
@@ -60,18 +61,27 @@ export function missingScopesForBody(rawBody: string, granted: readonly string[]
     const m = message as { method?: unknown; params?: unknown }
     if (m.method !== 'tools/call') continue
     const params = m.params as { name?: unknown; arguments?: unknown } | undefined
-    if (params?.name !== TOOL_NAME) continue
-    const args = params.arguments
-    if (typeof args !== 'object' || args === null) continue
-    const { action, input, explain } = args as Record<string, unknown>
-    if (typeof action !== 'string') continue
-    // No `input` (or `explain`) means "tell me about it", not "do it".
-    if (input === undefined || input === null || explain === true) continue
+    if (typeof params?.name !== 'string') continue
+    const action = actionToRun(params.name, params.arguments)
+    if (!action) continue
     const required = scopeForAction(action)
     // An unknown action name is the handler's error to report, not ours.
     if (required && !granted.includes(required)) missing.add(required)
   }
   return [...missing]
+}
+
+/** The action a `tools/call` would RUN, or null when it runs nothing. */
+function actionToRun(toolName: string, args: unknown): string | null {
+  const named = actionFromToolName(toolName)
+  if (named) return named
+  if (toolName !== TOOL_NAME) return null
+  if (typeof args !== 'object' || args === null) return null
+  const { action, input, explain } = args as Record<string, unknown>
+  if (typeof action !== 'string') return null
+  // No `input` (or `explain`) means "tell me about it", not "do it".
+  if (input === undefined || input === null || explain === true) return null
+  return action
 }
 
 /**

@@ -61,8 +61,8 @@ chosen dev user with every scope.
 "visvine": { "type": "http", "url": "http://localhost:3000/api/mcp" }
 ```
 
-One server, one tool — `visvine` — and every action behind it. Call it with no
-`action` to get the plan and the catalogue.
+One server, the `visvine` router and a `visvine_<action>` tool per action. Call
+the router with no `action` to get the plan and the catalogue.
 
 Picking the user is the only local decision. `--user` takes a bare name, an
 email or a user id; `DEV_MCP_USER` in `apps/web/.env` does the same thing

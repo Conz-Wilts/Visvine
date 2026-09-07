@@ -4,17 +4,17 @@
  * One definition, two doors:
  *
  *   HTTP   POST /api/actions/<name>      — a session-authenticated endpoint
- *   MCP    the single `visvine` tool     — lib/mcp/gateway.ts
+ *   MCP    the `visvine` router, or `visvine_<name>`   — lib/mcp/gateway.ts
  *
  * Both go through `runAction` (lib/actions/run.ts), so neither can drift and
  * neither re-implements authorization: an action body resolves the caller's
  * context through the same `resolveContext` / `principalOf` the web routes use.
  *
- * WHY THIS SHAPE. A protocol that carries one tool costs a client nothing on
- * connect, however large the surface behind it grows. The guidance that would
- * otherwise be thirty-odd tool schemas in every context window lives where
- * guidance belongs in this app — in context notes, in the Visvine space's shared Context,
- * fetched when there is a reason to (lib/actions/notes.ts).
+ * WHY THIS SHAPE. The definition is the one source: the router's catalogue,
+ * the per-action tool's schema and the HTTP endpoint are all rendered from it.
+ * The guidance — when to use an action, its refusals, worked examples — lives
+ * where guidance belongs in this app: in context notes, in the Visvine space's
+ * shared Context, fetched when there is a reason to (lib/actions/notes.ts).
  *
  * The perimeter is STRUCTURAL, not declared. A note can describe an action; it
  * can never invent one. `runAction` resolves a name against this registry or

@@ -1,5 +1,5 @@
 /**
- * The guide: what the one tool answers with when it is not running anything.
+ * The guide: what the router tool answers with when it is not running anything.
  *
  * Two modes, and the split is the whole point of this surface.
  *
@@ -27,11 +27,12 @@ import { recipeById, type PlanSpaceFacts } from '@/lib/actions/recipes'
 
 /** The two-paragraph preamble every plan carries. It is the protocol. */
 const HOW_IT_WORKS = [
-  'Visvine has ONE tool and a catalogue of actions behind it.',
+  'Visvine has a router tool and a catalogue of actions behind it, each of which is also its own tool.',
   '',
   '- `visvine({ request: "<what the user asked, verbatim>", space_id })` — this document: the plan, and everything that exists.',
   '- `visvine({ action: "<name>" })` — that action\'s manual: what it does, every argument, the traps.',
-  '- `visvine({ action: "<name>", input: { … } })` — run it. Supplying `input` is what runs it, so nothing changes by accident.',
+  '- `visvine_<name>({ … })` — run it, as a named tool with the action\'s own typed schema. Prefer this once you know the action.',
+  '- `visvine({ action: "<name>", input: { … } })` — the same run through the router. Supplying `input` is what runs it, so nothing changes by accident.',
   '',
   'Every action is also a plain endpoint: `POST /api/actions/<name>`.',
 ].join('\n')

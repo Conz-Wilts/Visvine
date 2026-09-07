@@ -1,4 +1,4 @@
-// The registry invariant: what the one tool can reach, and what it costs.
+// The registry invariant: what the router and the named tools reach, and what it costs.
 //
 // This matters more than it looks. The scope check happens twice — once in the
 // transport, which answers an under-scoped call with an RFC 6750
@@ -23,47 +23,111 @@ import { McpServer } from '@modelcontextprotocol/server'
 import { DEFAULT_SCOPES, MCP_SCOPES, SCOPE_DESCRIPTIONS } from '@/lib/mcp/scopes'
 import { actionByName, allActions, scopeForAction, schemaOf } from '@/lib/actions/registry'
 import { registerTools } from '@/lib/mcp/register'
-import { TOOL_NAME } from '@/lib/mcp/gateway'
+import { TOOL_NAME, actionAnnotations, actionFromToolName, actionToolName } from '@/lib/mcp/gateway'
 import { mcpServerInfo } from '@/lib/mcp/config'
 
 /** A server that records what was registered on it and runs nothing. */
-function recordingServer(): { server: McpServer; names: string[]; descriptions: Map<string, string> } {
-  const names: string[] = []
-  const descriptions = new Map<string, string>()
-  const server = {
-    registerTool(name: string, config: { description: string }) {
-      names.push(name)
-      descriptions.set(name, config.description)
-    },
-  }
-  return { server: server as unknown as McpServer, names, descriptions }
+type Registered = {
+  description: string
+  inputSchema?: unknown
+  annotations?: Record<string, unknown>
+  handler: (args: unknown, extra: unknown) => Promise<unknown>
 }
 
-test('the server registers exactly one tool', () => {
-  // The property the whole surface is built on: connecting costs one tool
-  // schema, whatever the catalogue behind it grows to.
+function recordingServer(): { server: McpServer; names: string[]; tools: Map<string, Registered> } {
+  const names: string[] = []
+  const tools = new Map<string, Registered>()
+  const server = {
+    registerTool(name: string, config: Omit<Registered, 'handler'>, handler: Registered['handler']) {
+      names.push(name)
+      tools.set(name, { ...config, handler })
+    },
+  }
+  return { server: server as unknown as McpServer, names, tools }
+}
+
+test('the server registers the router, then one tool per action', () => {
+  // Two doors from one registry: the router for discovery and a named tool per
+  // action so a client can permit, deny and log each one by name.
   const { server, names } = recordingServer()
   registerTools(server)
-  assert.deepEqual(names, [TOOL_NAME])
+  assert.deepEqual(names, [TOOL_NAME, ...allActions().map((a) => actionToolName(a.name))])
 })
 
-test('the real SDK accepts the tool, and registers one of it', () => {
+test('the real SDK accepts every tool', () => {
   // The recording server proves what we CALL; this proves the SDK can actually
   // take it — a schema it cannot convert to JSON Schema would pass every other
   // test here and fail at the first `tools/list`.
   const server = new McpServer(mcpServerInfo())
   registerTools(server)
   const registered = (server as unknown as { _registeredTools?: Record<string, unknown> })._registeredTools
-  assert.deepEqual(Object.keys(registered ?? {}), [TOOL_NAME])
+  assert.deepEqual(Object.keys(registered ?? {}), [TOOL_NAME, ...allActions().map((a) => actionToolName(a.name))])
 })
 
-test("the one tool's description teaches the protocol and nothing perishable", () => {
+test('a tool name round-trips to its action, and nothing else does', () => {
+  for (const def of allActions()) {
+    assert.equal(actionFromToolName(actionToolName(def.name)), def.name)
+    assert.equal(actionByName(actionFromToolName(actionToolName(def.name)) ?? ''), def)
+  }
+  assert.equal(actionFromToolName(TOOL_NAME), null)
+  assert.equal(actionFromToolName(`${TOOL_NAME}_`), null)
+  assert.equal(actionFromToolName('other'), null)
+})
+
+test('a named tool carries the action\'s own schema, scope and hints', () => {
+  const { server, tools } = recordingServer()
+  registerTools(server)
+  for (const def of allActions()) {
+    const tool = tools.get(actionToolName(def.name))
+    assert.ok(tool, `${def.name} has no tool`)
+    // The schema is built from the definition's shape — no copy to drift.
+    assert.deepEqual((tool.inputSchema as { shape: unknown }).shape, def.input)
+    assert.ok(tool.description.startsWith(def.summary), `${def.name}'s tool must open with its catalogue line`)
+    assert.match(tool.description, new RegExp(`\\b${def.scope}\\b`), `${def.name}'s tool must name its scope`)
+    assert.deepEqual(tool.annotations, actionAnnotations(def))
+  }
+})
+
+test('the hints derive from scope unless the definition says otherwise', () => {
+  const byName = (name: string) => actionAnnotations(actionByName(name)!)
+  // A read scope is read-only, and a read-only tool is never destructive.
+  assert.equal(byName('read_context').readOnlyHint, true)
+  assert.equal(byName('read_context').destructiveHint, false)
+  // A write scope is neither read-only nor safe to retry blind.
+  assert.equal(byName('edit_context').readOnlyHint, false)
+  assert.equal(byName('edit_context').destructiveHint, true)
+  // Reaching outside the platform is the open-world hint.
+  assert.equal(byName('run_connector').openWorldHint, true)
+  assert.equal(byName('edit_context').openWorldHint, false)
+  // Read-only on a write scope is only ever an explicit claim by the definition
+  // (`preview_tool` reads the working copy under the authoring scope).
+  for (const a of allActions()) {
+    if (actionAnnotations(a).readOnlyHint && a.scope !== 'context:read') {
+      assert.equal(a.annotations?.readOnlyHint, true, `${a.name} is read-only on ${a.scope} without saying so`)
+    }
+  }
+})
+
+test('a named tool runs through runAction, so the scope gate holds there too', async () => {
+  const { server, tools } = recordingServer()
+  registerTools(server)
+  const tool = tools.get(actionToolName('edit_context'))!
+  const extra = { http: { authInfo: { token: 't', clientId: 'c', scopes: ['context:read'], extra: { userId: 'u1', name: 'U', email: 'u@x' } } } }
+  const out = (await tool.handler({ space_id: 's', path: 'a.md', content: '' }, extra)) as {
+    isError?: boolean
+    content: { text: string }[]
+  }
+  assert.equal(out.isError, true)
+  assert.match(out.content[0].text, /context:write/)
+})
+
+test("the router's description teaches the protocol and nothing perishable", () => {
   // A client caches this for the life of a connection, so it must not carry the
   // catalogue, the recipes or any per-space fact — all of which come from the
   // notes, on demand, and change without a deploy.
-  const { server, descriptions } = recordingServer()
+  const { server, tools } = recordingServer()
   registerTools(server)
-  const description = descriptions.get(TOOL_NAME) ?? ''
+  const description = tools.get(TOOL_NAME)?.description ?? ''
 
   assert.ok(description.length > 400, 'the only text a client reads before calling must earn its place')
   assert.match(description, /request/, 'it must say to pass the ask verbatim')
@@ -96,7 +160,7 @@ test('every action has a scope in the catalogue, and reads outnumber writes', ()
   assert.equal(actionByName('no_such_action'), null)
 })
 
-test('the load-bearing scope splits survive the collapse to one tool', () => {
+test('the load-bearing scope splits hold across both doors', () => {
   // Reading a Tool is reading notes; the SDK is a static document.
   assert.equal(scopeForAction('list_tools'), 'context:read')
   assert.equal(scopeForAction('read_tool'), 'context:read')

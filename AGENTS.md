@@ -480,26 +480,38 @@ doors, and it is the same definition either way:
 
 ```
 HTTP   POST /api/actions/<name>       session-authenticated, curl-able
-MCP    the single `visvine` tool      lib/mcp/gateway.ts
+MCP    the `visvine` router           lib/mcp/gateway.ts#registerGateway
+MCP    `visvine_<name>`, one per action   lib/mcp/gateway.ts#registerActionTools
 ```
 
-Both go through `runAction` (`lib/actions/run.ts`) — same registry lookup, same
-scope gate, same Zod validation, same body — so neither can drift and a
-behaviour proved through one holds through the other. `GET /api/actions` is the
+All go through `runAction` (`lib/actions/run.ts`) — same registry lookup, same
+scope gate, same Zod validation, same body — so none can drift and a
+behaviour proved through one holds through the others. `GET /api/actions` is the
 catalogue; `GET /api/actions/<name>` is that action's manual.
 
-The MCP servers register **one tool each**, and it has three modes:
+The MCP server registers **the router plus a named tool per action**, from the
+one registry. The router has three modes:
 
 ```
 visvine({ request })                  the plan for that ask, plus the catalogue
 visvine({ action })                   that action's manual
 visvine({ action, input })            run it
+visvine_<name>({ …input })            run it, as a named tool
 ```
 
-**Supplying `input` is what runs something.** That is the safety property worth
-having on a single-tool surface: naming an action to find out what it does
-cannot accidentally do it, and there is no mode flag to get wrong. An action
-taking no arguments is still run with `input: {}`.
+**Supplying `input` is what runs something** through the router: naming an
+action to find out what it does cannot accidentally do it, and there is no
+mode flag to get wrong. An action taking no arguments is still run with
+`input: {}`. **A named tool always runs.** It exists for what one schema
+cannot carry: a client permits or denies each by name (Claude Code's per-tool
+allow list), its log says which action ran, the arguments arrive against the
+action's own Zod shape, and the MCP hints — `readOnlyHint` from a read scope
+or the definition's own claim, `destructiveHint` on everything else,
+`openWorldHint` on connectors and machines (`gateway.ts#actionAnnotations`) —
+let a client gate on what a call does. The scope challenge reads the action
+out of the tool name for these and out of `params.arguments.action` for the
+router (`challenge.ts#actionToRun`). Descriptions are the catalogue line plus a
+pointer to the manual, never the manual itself: that stays in the notes.
 
 ### The action notes
 
@@ -507,8 +519,8 @@ The guidance lives in the **Visvine global space** as notes — `actions/<name>.
 and `recipes/<id>.md` — read at run time by `lib/actions/notes.ts`. That is the
 point of the shape: this platform's premise is that context notes are how you
 direct an agent, so its own capabilities are declared in notes rather than in a
-protocol. Connecting costs one tool schema whatever the catalogue grows to, and
-the manual is fetched when there is a reason to.
+protocol. A named tool carries only its catalogue line and its schema; the
+manual is fetched when there is a reason to.
 
 `pnpm --filter @visvine/web db:actions:sync` renders the shipped catalogues
 (`lib/actions/defs/*`, `lib/actions/recipes.ts`) into those notes. It is an
@@ -571,9 +583,11 @@ runs through the same gates, so a wrong recipe costs a refusal, never an escape.
 
 **One endpoint, `/api/mcp`**, on `mcp-handler` 2 + the official TS SDK v2
 (FastMCP was evaluated and rejected), and one OAuth protected resource. Every
-action is behind the one tool — context, Drive, events, connectors, agents and
+action is behind the router — context, Drive, events, connectors, agents and
 the Tool authoring loop — because which one a request needs is a question the
-action notes answer better than a client picking an endpoint could.
+action notes answer better than a client picking an endpoint could; and every
+action is also its own named tool, because a client's permissions and logs are
+per tool name.
 
 **Scopes carry the boundary**, and they are the only thing that does. What
 separates reading someone's notes from writing executable code into their space

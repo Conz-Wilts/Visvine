@@ -296,7 +296,8 @@ principalSet. Reverting is one `gh secret set`.
 
 What an agent reads to learn what Visvine can do — one note per action
 (`actions/<name>.md`) and per recipe (`recipes/<id>.md`) in the `visvine` global
-space. The MCP surface is a single tool; this is everything behind it.
+space. The MCP surface is a router tool plus one named tool per action; this
+is the guidance behind them.
 
 **They are not on the critical path.** With none of them written, the surface
 still routes and runs: the catalogue comes from the registry in code and the

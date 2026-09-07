@@ -277,17 +277,27 @@ test('an omitted application_type is inferred, not defaulted to web', () => {
 
 // ── MCP 2026-07-28: scope challenges / step-up ──
 
-/** A `tools/call` for the one tool, with whatever arguments. */
-function call(id: number, args: Record<string, unknown>) {
-  return { jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'visvine', arguments: args } }
+/** A `tools/call` for the router, with whatever arguments. */
+function call(id: number, args: Record<string, unknown>, name = 'visvine') {
+  return { jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } }
 }
 
 test('a read-only token running a write action is challenged for the missing scope', () => {
-  // The scope being challenged is the ACTION's, read out of the arguments —
-  // there is only one tool, so the tool name can no longer carry it.
+  // The scope being challenged is the ACTION's, read out of the router's arguments.
   const body = JSON.stringify(call(1, { action: 'edit_context', input: { space_id: 's', path: 'a.md', content: '' } }))
   assert.deepEqual(missingScopesForBody(body, ['context:read']), ['context:write'])
   assert.deepEqual(missingScopesForBody(body, ['context:read', 'context:write']), [])
+})
+
+test('a named tool is challenged for its action, read from the tool name', () => {
+  const body = JSON.stringify(call(1, { space_id: 's', path: 'a.md', content: '' }, 'visvine_edit_context'))
+  assert.deepEqual(missingScopesForBody(body, ['context:read']), ['context:write'])
+  assert.deepEqual(missingScopesForBody(body, ['context:read', 'context:write']), [])
+  // A named tool always RUNS: there is no manual mode to leave unchallenged.
+  assert.deepEqual(missingScopesForBody(JSON.stringify(call(2, {}, 'visvine_edit_context')), []), ['context:write'])
+  // The prefix alone, or a name nothing answers to, is the handler's problem.
+  assert.deepEqual(missingScopesForBody(JSON.stringify(call(3, {}, 'visvine_')), []), [])
+  assert.deepEqual(missingScopesForBody(JSON.stringify(call(4, {}, 'visvine_nope')), []), [])
 })
 
 test('discovery is never challenged, however little the token carries', () => {
