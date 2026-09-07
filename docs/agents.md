@@ -320,13 +320,19 @@ needs:
   of them with the ordinary note tools, because reading a note is not running
   one. A skill is advice, never authorization: every step it suggests still goes
   through `runAction`, the space's grants and the machine's egress policy.
-- **Cost and caps.** A machine is ~$0.10 an awake hour and sleeps after ten idle
-  minutes; the lease row (`agent_vms`) is reaped after fourteen days of nothing,
-  and the space's workspace outlives it. A space gets **120 machine-hours a
-  month** by default — `vmMonthlyHours` in its feature config, `null` for
-  uncapped — metered by the tick, refused at the lease, and shown in hours and
-  dollars at `GET /api/communities/<id>/vm/usage`. Past the cap, running
-  machines are stopped rather than left costing.
+- **Cost and caps.** A machine is ~$0.10 an awake hour. It is stopped when the
+  run ends — unless somebody is watching it or another run is already queued —
+  and the platform's ten idle minutes is the floor under everything that gets
+  there another way; the lease row (`agent_vms`) is reaped after fourteen days
+  of nothing, and the space's workspace outlives it. **A space is uncapped by
+  default**: machine time is a small fraction of what a space pays, and nobody
+  meets a ceiling they were never told about. A space that needs a limit is
+  given one as `vmMonthlyHours` in its feature config, and that cap is refused
+  at the lease with running machines stopped. Every awake minute is metered
+  either way, shown in hours and dollars at
+  `GET /api/communities/<id>/vm/usage`; past `SPEND_ALERT_HOURS` the meter warns
+  once rather than refusing, because a loop should reach a person, not a 3am
+  refusal of real work.
 - **Watching the boundary.** The tick sweeps the last hour of `agent_egress_log`
   for a run of refusals, a bulk copy through an allowed host, or one machine
   touching everything, and warns — none is proof, all are worth a look. The log

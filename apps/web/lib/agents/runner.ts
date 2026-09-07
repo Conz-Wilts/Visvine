@@ -31,6 +31,7 @@ import { findAgentBrief } from './briefs'
 import { eventsForRun, rearmIfPending, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, type DeactivationReason } from './hooks'
 import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS } from './limits'
+import { releaseMachineAfterRun } from '@/lib/vm/lease'
 import { principalForUser } from './principal'
 import { resolveAgentChatConfig } from './providers'
 import { clipEventText, finishRun, flushRunEvents, ledgerSpendForMonth, recordRunInput, spaceBudgetCents, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
@@ -114,7 +115,14 @@ async function release(
   if (moved.count !== 1) return null // reclaimed between the read and the write
   // Mail that arrived mid-run could not pull next_run_at (the row wasn't idle);
   // now it is, so pull it — one more run, debounce from now, no event lost.
-  await rearmIfPending(spaceId, name).catch(() => false)
+  const rearmed = await rearmIfPending(spaceId, name).catch(() => false)
+  // The machine sleeps as soon as the work is done rather than serving out the
+  // platform's ten idle minutes, which for a short scheduled run is most of what
+  // it costs. Not when another run is already queued: stopping a machine we are
+  // about to wake buys a cold start and saves nothing.
+  // `releaseMachineAfterRun` reports its own failures and answers false rather
+  // than throwing, so there is nothing here to handle.
+  if (!rearmed) await releaseMachineAfterRun(spaceId, name)
   if (outcome.deactivate) {
     await deactivateAgent(spaceId, name, outcome.deactivate.reason, outcome.deactivate.detail)
     return outcome.deactivate.reason

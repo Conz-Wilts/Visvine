@@ -13,8 +13,29 @@
 /** USD per awake hour of the default shape, for turning seconds into money a person recognises. */
 const USD_PER_AWAKE_HOUR = 0.1
 
-/** Hours of machine a space gets in a month before new work is refused. */
-export const DEFAULT_MONTHLY_HOURS = 120
+/**
+ * Hours of machine a space gets in a month before new work is refused.
+ *
+ * `null` — uncapped — is the product decision, not an oversight: machine time
+ * is a small fraction of what a space pays, so a member who needs a machine at
+ * 3am gets one, and nobody meets a ceiling they were never told about. A space
+ * that needs a limit is given one explicitly as `vmMonthlyHours`.
+ *
+ * That removes the refusal but NOT the accounting: every awake minute is still
+ * metered, and `SPEND_ALERT_HOURS` is what a runaway trips instead of a cap.
+ */
+export const DEFAULT_MONTHLY_HOURS: number | null = null
+
+/**
+ * Hours in a month that mean somebody should look, uncapped or not.
+ *
+ * With no ceiling to refuse at, this is the whole early warning: a space past
+ * it is doing something no ordinary use of agents produces — a loop, a machine
+ * that will not sleep, a schedule firing far more often than it reads. It warns
+ * and never refuses, because the cost of stopping real work at 3am is higher
+ * than the cost of the hours, and the alert reaches a person either way.
+ */
+export const SPEND_ALERT_HOURS = 300
 
 export interface Quota {
   /** Hours a month. Null = uncapped, which is a decision an admin makes explicitly. */
@@ -29,6 +50,16 @@ export interface Usage {
 export type QuotaVerdict =
   | { allowed: true; remainingSeconds: number | null }
   | { allowed: false; reason: string }
+
+/** Hours a space has burned this month, for a log line a person reads. */
+export function hoursOf(seconds: number): number {
+  return seconds / 3_600
+}
+
+/** Has this space passed the point where somebody should look? Never a refusal. */
+export function overSpendAlert(seconds: number): boolean {
+  return hoursOf(seconds) >= SPEND_ALERT_HOURS
+}
 
 /** Cost of some awake seconds, in USD. The bill people see is this, not seconds. */
 export function usdFor(seconds: number): number {

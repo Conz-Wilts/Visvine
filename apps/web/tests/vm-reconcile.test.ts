@@ -15,7 +15,10 @@
  *     does not charge its space;
  *   • a row the edge says is still up keeps its state and keeps being metered;
  *   • an edge that throws leaves the row alone — an outage must not silently
- *     zero a space's usage.
+ *     zero a space's usage;
+ *   • a finished run stops its machine rather than serving out the platform's
+ *     ten idle minutes, EXCEPT while somebody is watching the screen or holding
+ *     the keyboard.
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -152,6 +155,52 @@ test('an edge that cannot answer leaves the row as it found it', async (t) => {
     throw new Error('edge down')
   })
   assert.equal(await stateOf(ASLEEP), 'running')
+
+  await teardown()
+})
+
+test('a finished run stops its machine instead of paying out the idle timer', async (t) => {
+  const why = await probe()
+  if (why) return t.skip(why)
+  const { releaseMachineAfterRun } = await import('@/lib/vm/lease')
+
+  await setup([AWAKE])
+  const stopped: string[] = []
+  const released = await releaseMachineAfterRun(SPACE, AWAKE, {
+    status: async () => ({ running: true, watching: 0, takeover: false }),
+    stop: async (_space, agentName) => void stopped.push(agentName),
+  })
+
+  assert.equal(released, true)
+  assert.deepEqual(stopped, [AWAKE])
+  assert.equal(await stateOf(AWAKE), 'asleep')
+
+  await teardown()
+})
+
+test('a machine somebody is watching is left running', async (t) => {
+  const why = await probe()
+  if (why) return t.skip(why)
+  const { releaseMachineAfterRun } = await import('@/lib/vm/lease')
+
+  await setup([AWAKE])
+  let stopCalls = 0
+  // A person looking at the screen expects it to still be there when the agent
+  // stops; the ten-minute idle timer is the right policy for them.
+  const watched = await releaseMachineAfterRun(SPACE, AWAKE, {
+    status: async () => ({ running: true, watching: 1, takeover: false }),
+    stop: async () => void (stopCalls += 1),
+  })
+  assert.equal(watched, false)
+
+  const heldByAPerson = await releaseMachineAfterRun(SPACE, AWAKE, {
+    status: async () => ({ running: true, watching: 0, takeover: true }),
+    stop: async () => void (stopCalls += 1),
+  })
+  assert.equal(heldByAPerson, false)
+
+  assert.equal(stopCalls, 0)
+  assert.equal(await stateOf(AWAKE), 'running')
 
   await teardown()
 })

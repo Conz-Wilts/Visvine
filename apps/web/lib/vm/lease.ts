@@ -234,3 +234,54 @@ export async function reconcileSleptMachines(
   }
   return slept.length
 }
+
+/**
+ * Put the machine to sleep now that the run is over.
+ *
+ * The platform's idle timer is a floor, not a policy: an agent that used its
+ * machine for forty seconds still pays ten minutes for the silence afterwards,
+ * which for a scheduled agent is most of what it costs all month. The run
+ * knows it has finished — the timer can only guess — so the run says so.
+ *
+ * Refuses in the one case where idle is not idle: somebody is watching the
+ * screen, or has taken the keyboard. A person looking at a machine expects it
+ * to still be there when the agent stops, and the ten-minute timer is the right
+ * policy for THEM.
+ *
+ * Best-effort by construction. A machine that will not stop is left to the
+ * platform's timer, which is exactly where it would have been anyway, so
+ * nothing here is worth failing a finished run over.
+ */
+export async function releaseMachineAfterRun(
+  spaceId: string,
+  agentName: string,
+  /** The edge, injected the way the other tick helpers inject theirs, so a test can be the edge. */
+  ops: {
+    status?: (spaceId: string, agentName: string) => Promise<{ running: boolean; watching: number; takeover: boolean }>
+    stop?: (spaceId: string, agentName: string) => Promise<unknown>
+  } = {},
+): Promise<boolean> {
+  if (!edge.edgeConfigured()) return false
+  const askStatus = ops.status ?? ((space: string, agent: string) => edge.status(environment(), space, agent))
+  const askStop = ops.stop ?? ((space: string, agent: string) => edge.stop(environment(), space, agent))
+  const vm = await prisma.agentVm.findUnique({
+    where: { vm_identity: { spaceId, agentName } },
+    select: { id: true, state: true },
+  })
+  if (!vm || vm.state !== 'running') return false
+
+  try {
+    const state = await askStatus(spaceId, agentName)
+    if (!state.running) {
+      await prisma.agentVm.update({ where: { id: vm.id }, data: { state: 'asleep' } })
+      return false
+    }
+    if (state.watching > 0 || state.takeover) return false
+    await askStop(spaceId, agentName)
+    await prisma.agentVm.update({ where: { id: vm.id }, data: { state: 'asleep' } })
+    return true
+  } catch (err) {
+    logger.warn('vm.release.failed', { spaceId, agent: agentName, err })
+    return false
+  }
+}

@@ -10,6 +10,9 @@ import {
   DEFAULT_MONTHLY_HOURS,
   DENIAL_ALERT_THRESHOLD,
   detectAnomalies,
+  hoursOf,
+  overSpendAlert,
+  SPEND_ALERT_HOURS,
   SPREAD_THRESHOLD,
   usdFor,
   type EgressSample,
@@ -37,13 +40,23 @@ test('a space at its cap is refused, in money it recognises', () => {
   assert.match(verdict.allowed === false ? verdict.reason : '', /resets next month/)
 })
 
-test('uncapped is a decision an admin makes, not the absence of a setting', () => {
+test('a space is uncapped by default, and a cap is what an admin adds', () => {
   const uncapped = checkQuota({ monthlyHours: null }, { seconds: 10_000_000, execs: 0 })
   assert.equal(uncapped.allowed, true)
   assert.equal(uncapped.allowed && uncapped.remainingSeconds, null)
   // A cap of zero is a real cap: it stops everything.
   assert.equal(checkQuota({ monthlyHours: 0 }, { seconds: 0, execs: 0 }).allowed, false)
-  assert.ok(DEFAULT_MONTHLY_HOURS > 0)
+  // Nobody meets a ceiling they were never told about; a space that needs one
+  // is given it explicitly as `vmMonthlyHours`.
+  assert.equal(DEFAULT_MONTHLY_HOURS, null)
+})
+
+test('with no cap to refuse at, spend is what trips the alert', () => {
+  const belowByAnHour = (SPEND_ALERT_HOURS - 1) * 3_600
+  assert.equal(overSpendAlert(belowByAnHour), false)
+  assert.equal(overSpendAlert(SPEND_ALERT_HOURS * 3_600), true)
+  // The alert is about hours, and says so in the unit a person reads.
+  assert.equal(hoursOf(7_200), 2)
 })
 
 test('seconds become the dollars the plan costed them at', () => {

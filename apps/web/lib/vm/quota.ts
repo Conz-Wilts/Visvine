@@ -17,7 +17,7 @@
  */
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
-import { checkQuota, DEFAULT_MONTHLY_HOURS, usdFor, type QuotaVerdict } from '@/lib/vm/shared/limits'
+import { checkQuota, DEFAULT_MONTHLY_HOURS, hoursOf, overSpendAlert, usdFor, type QuotaVerdict } from '@/lib/vm/shared/limits'
 
 /** The UTC month an instant falls in. Usage is keyed on this. */
 export function monthOf(at: Date): Date {
@@ -82,11 +82,22 @@ export async function meterAwakeMachines(intervalSeconds: number, at = new Date(
   const month = monthOf(at)
   for (const row of awake) {
     const seconds = intervalSeconds * row._count._all
-    await prisma.agentVmUsage.upsert({
+    const updated = await prisma.agentVmUsage.upsert({
       where: { usage_identity: { spaceId: row.spaceId, month } },
       create: { spaceId: row.spaceId, month, seconds, execs: 0 },
       update: { seconds: { increment: seconds } },
+      select: { seconds: true },
     })
+    // Said once, on the tick that crosses it, rather than every minute after:
+    // an alert repeated sixty times an hour is an alert nobody reads.
+    if (!overSpendAlert(updated.seconds - seconds) && overSpendAlert(updated.seconds)) {
+      logger.warn('vm.spend.alert', {
+        spaceId: row.spaceId,
+        machines: row._count._all,
+        hours: hoursOf(updated.seconds).toFixed(1),
+        usd: usdFor(updated.seconds).toFixed(2),
+      })
+    }
   }
   return awake.length
 }

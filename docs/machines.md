@@ -395,9 +395,23 @@ An awake machine is roughly **$0.10 an hour** (`standard-3`, idle) on
 active-CPU billing plus provisioned memory and disk; asleep it costs nothing.
 The sleep policy is therefore not housekeeping but almost the whole bill: awake
 all month is tens of dollars doing nothing, woken an hour a day is single
-digits. The levers, in order: sleep after ten idle minutes (enforced by the
-platform's timer, not ours), keep the shape at `standard-3`, keep the image
-lean, and send frames only while watched.
+digits. The levers, in order: **stop the machine when the run ends**, sleep
+after ten idle minutes for everything that did not (enforced by the platform's
+timer, not ours), keep the shape at `standard-3`, keep the image lean, and send
+frames only while watched.
+
+**The run stops the machine; the timer is the floor.** The platform's ten idle
+minutes is a guess made by something that cannot know the work is over — an
+agent that used its machine for forty seconds pays ten minutes for the silence
+afterwards, which for a scheduled agent is most of its month. So the run says
+so: `release` calls `lease.ts#releaseMachineAfterRun` on every terminal path.
+Two exceptions, both deliberate. It does not stop a machine somebody is
+**watching or has taken the keyboard of** — a person looking at a screen expects
+it to still be there when the agent stops, and the idle timer is the right
+policy for them. And it does not stop one when the release **re-armed the agent**
+on pending mail: stopping a machine we are about to wake buys a cold start and
+saves nothing. Failure is not a failure of the run — a machine that will not
+stop is left to the timer, which is where it would have been anyway.
 
 The model is not on this bill — a space brings its own key
 (`MODEL_KEY_<PROVIDER>`), and Visvine never bills for tokens.
@@ -412,15 +426,23 @@ Durable Object, not the container, so reconciling never wakes anything, and an
 edge that cannot answer leaves the row alone — an outage must not zero a space's
 usage.
 
-**Quota.** A space gets **120 machine-hours a month** (`DEFAULT_MONTHLY_HOURS`
-in `lib/vm/shared/limits.ts`), overridable as `vmMonthlyHours` in its feature
-config; `null` is uncapped and an admin has to write it, because the absence of
-a setting must never mean "no limit". The tick meters every awake machine a
-minute at a time into `agent_vm_usage` (`AgentVmUsage`, one row per space per
-month) — the platform's timer is what bills, so it is what counts — refuses a
-lease past the cap (`vm_exec` answers 429 with the reason), and stops machines
-already running. `GET /api/communities/<id>/vm/usage` is the same numbers in
-hours and dollars before a refusal delivers them.
+**Quota. A space is uncapped, and that is the product decision**
+(`DEFAULT_MONTHLY_HOURS = null` in `lib/vm/shared/limits.ts`). Machine time is a
+small fraction of what a space pays, so a member who needs a machine at 3am gets
+one and nobody meets a ceiling they were never told about. A space that needs a
+limit is given one explicitly as `vmMonthlyHours` in its feature config, and
+that cap still refuses a lease (`vm_exec` answers 429 with the reason) and stops
+machines already running.
+
+Removing the refusal does not remove the accounting, and it must not. The tick
+still meters every awake machine a minute at a time into `agent_vm_usage`
+(`AgentVmUsage`, one row per space per month) — the platform's timer is what
+bills, so it is what counts — and `GET /api/communities/<id>/vm/usage` is those
+numbers in hours and dollars. What a runaway trips now is **`SPEND_ALERT_HOURS`**:
+past it the meter writes `vm.spend.alert` once, on the tick that crosses it,
+because an alert repeated every minute is an alert nobody reads. It warns and
+never refuses — the cost of stopping real work at 3am is higher than the cost of
+the hours, and either way a person is told.
 
 ## The tick
 
