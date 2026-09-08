@@ -154,9 +154,9 @@ export default function SpaceSelector() {
         >
           <span className="flex shrink-0 items-center justify-center" style={{ width: HEAD_CELL_W, height: ROW_H }}>
             {currentSpace && mark ? (
-              <SpaceAvatar name={mark.name} imageUrl={mark.imageUrl} size="md" rounded="rounded-[10px]" className="!w-10 !h-10 !text-base" />
+              <SpaceAvatar name={mark.name} imageUrl={mark.imageUrl} size="md" rounded="rounded-[8px]" className="!w-8 !h-8 !text-sm" />
             ) : (
-              <div className="w-10 h-10 rounded-[10px] bg-surface-3 flex-shrink-0" />
+              <div className="w-8 h-8 rounded-[8px] bg-surface-3 flex-shrink-0" />
             )}
           </span>
           {/* The name stays mounted so it can FADE with the rail's other labels

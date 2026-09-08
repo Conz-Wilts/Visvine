@@ -86,7 +86,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   };
 
   if (isPending) {
-    return <div className="h-11 w-11 rounded-[10px] bg-surface-3 animate-pulse" style={{ marginLeft: (ROW_H - 44) / 2 }} />;
+    return <div className="h-8 w-8 rounded-[8px] bg-surface-3 animate-pulse" style={{ marginLeft: (ROW_H - 32) / 2 }} />;
   }
 
   if (!session) return null;
@@ -205,9 +205,9 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
         href={profileHref ?? undefined}
         onClick={profileHref ? undefined : () => { setPinned((v) => !v); setOpen(true); }}
         icon={
-          <span className="h-11 w-11 overflow-hidden rounded-[10px] border-2 border-brand-green">
+          <span className="h-8 w-8 overflow-hidden rounded-[8px] border-2 border-brand-green">
             {user.image ? (
-              <Image src={user.image} alt="" width={44} height={44} className="h-full w-full object-cover" />
+              <Image src={user.image} alt="" width={32} height={32} className="h-full w-full object-cover" />
             ) : (
               <PersonSilhouette />
             )}
