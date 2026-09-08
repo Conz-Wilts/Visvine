@@ -371,7 +371,7 @@ export default function DirectoryTable({
                 setDropKey(null);
               }}
               className={clsx(
-                'bg-surface-1 p-0 align-middle',
+                'border-r border-border-subtle bg-surface-1 p-0 align-middle',
                 dropKey === 'end' && 'shadow-[inset_2px_0_0_var(--color-brand-green)]',
               )}
             >
@@ -415,32 +415,13 @@ export default function DirectoryTable({
                           litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
                         )}
                       >
-                        <div className="flex h-11 min-w-0 items-center gap-2.5 pl-3 pr-1">
-                          <span className="w-6 shrink-0 text-right text-[12px] tabular-nums text-text-muted">{index + 1}</span>
-                          <button
-                            type="button"
-                            onClick={() => onOpen(item)}
-                            className="flex min-w-0 items-center gap-2.5 text-left"
-                            title={`Open ${item.name}`}
-                          >
-                            <Avatar
-                              name={item.name}
-                              imageUrl={item.image_url}
-                              size="chip"
-                              accentColor={alias?.color ?? typeColor}
-                              fallback={item.type.toLowerCase() === 'person' ? 'silhouette' : 'initials'}
-                            />
-                            <span className="truncate font-medium text-text-primary hover:underline">{item.name}</span>
-                          </button>
-                          {onSaveCell && (
-                            <span className="min-w-0 flex-1">
-                              <RenameCell
-                                name={item.name}
-                                onSave={(next) => onSaveCell(item, column, next)}
-                              />
-                            </span>
-                          )}
-                        </div>
+                        <NameCell
+                          index={index}
+                          item={item}
+                          accentColor={alias?.color ?? typeColor ?? undefined}
+                          onOpen={() => onOpen(item)}
+                          onRename={onSaveCell ? (next) => onSaveCell(item, column, next) : undefined}
+                        />
                       </td>
                     );
                   }
@@ -457,7 +438,8 @@ export default function DirectoryTable({
                     </td>
                   );
                 })}
-                <td aria-hidden colSpan={2} className="bg-surface-1 p-0 group-hover:bg-surface-2" />
+                <td aria-hidden className="border-r border-border-subtle bg-surface-1 p-0 group-hover:bg-surface-2" />
+                <td aria-hidden className="bg-surface-1 p-0 group-hover:bg-surface-2" />
               </>
             );
         }}
@@ -505,6 +487,7 @@ export default function DirectoryTable({
                 </div>
               );
             })}
+            <div aria-hidden style={{ width: ADD_COLUMN_WIDTH }} className="h-full shrink-0 border-r border-border-subtle" />
           </div>
         </div>
       </div>
@@ -571,30 +554,62 @@ export default function DirectoryTable({
  * click opens the entry, the pencil edits it — because a name is what a row
  * is FOR and clicking it must never turn into a text field.
  */
-function RenameCell({ name, onSave }: { name: string; onSave: (next: unknown) => Promise<void> }) {
+/** The name cell: the row number, the entry's avatar and name (the click
+ *  that opens it), and for a viewer who may rename it a pencil that swaps the
+ *  name for an editor filling the rest of the cell. */
+function NameCell({ index, item, accentColor, onOpen, onRename }: {
+  index: number;
+  item: DirectoryItem;
+  accentColor: string | undefined;
+  onOpen: () => void;
+  onRename?: (next: unknown) => Promise<void>;
+}) {
   const [editing, setEditing] = useState(false);
-  if (!editing) {
-    return (
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        aria-label={`Rename ${name}`}
-        className="rounded p-1 text-text-muted opacity-0 transition-opacity hover:text-text-primary group-hover:opacity-100 focus-visible:opacity-100"
-      >
-        <PencilIcon className="h-3.5 w-3.5" />
-      </button>
-    );
-  }
   return (
-    <TableCell
-      column={{ key: 'name', label: 'Name', kind: 'text', source: 'name', origin: 'core', editable: true }}
-      value={name}
-      onSave={async (v) => {
-        await onSave(v);
-        setEditing(false);
-      }}
-      autoEdit
-      onDone={() => setEditing(false)}
-    />
+    <div className="flex h-11 min-w-0 items-center gap-2.5 pl-3 pr-1">
+      <span className="w-6 shrink-0 text-right text-[12px] tabular-nums text-text-muted">{index + 1}</span>
+      <Avatar
+        name={item.name}
+        imageUrl={item.image_url}
+        size="chip"
+        accentColor={accentColor}
+        fallback={item.type.toLowerCase() === 'person' ? 'silhouette' : 'initials'}
+      />
+      {editing && onRename ? (
+        <div className="h-full min-w-0 flex-1">
+          <TableCell
+            column={{ key: 'name', label: 'Name', kind: 'text', source: 'name', origin: 'core', editable: true }}
+            value={item.name}
+            onSave={async (v) => {
+              await onRename(v);
+              setEditing(false);
+            }}
+            autoEdit
+            onDone={() => setEditing(false)}
+          />
+        </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={onOpen}
+            className="flex min-w-0 items-center text-left"
+            title={`Open ${item.name}`}
+          >
+            <span className="truncate font-medium text-text-primary hover:underline">{item.name}</span>
+          </button>
+          {onRename && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              aria-label={`Rename ${item.name}`}
+              className="shrink-0 rounded p-1 text-text-muted opacity-0 transition-opacity hover:text-text-primary group-hover:opacity-100 focus-visible:opacity-100"
+            >
+              <PencilIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </>
+      )}
+    </div>
   );
 }

@@ -34,8 +34,11 @@ interface TableCellProps {
   onDone?: () => void;
 }
 
+// The editor fills the cell it opens in, with the text where the value was,
+// and the ring inside the cell's own edges: the cell lights up, nothing
+// floats over the grid.
 const INPUT_CLASS =
-  'h-8 w-full rounded-md bg-surface-1 px-2 text-sm text-text-primary outline-none ring-1 ring-border-default';
+  'h-full w-full bg-surface-1 px-3 text-sm text-text-primary outline-none ring-1 ring-inset ring-[var(--color-brand-green)]';
 
 export default function TableCell({ column, value, aliasColor, typeLabel, tagColors, onSave, autoEdit = false, onDone }: TableCellProps) {
   const [draft, setDraft] = useState<string | null>(autoEdit ? editValue(value, column) : null);
@@ -126,7 +129,7 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
       onBlur: () => void commit(draft),
     };
     return (
-      <div className="flex h-full flex-col justify-center px-1.5">
+      <div className="h-full">
         {column.kind === 'select' ? (
           <select
             {...shared}
@@ -152,7 +155,6 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
             }}
           />
         )}
-        {error && <span className="mt-0.5 truncate text-[11px] text-red-600">{error}</span>}
       </div>
     );
   }

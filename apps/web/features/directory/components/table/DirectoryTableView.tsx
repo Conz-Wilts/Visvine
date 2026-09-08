@@ -221,9 +221,10 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
       </div>
 
       {/* The table bleeds to the pane's right and bottom edges: it is the
-          pane's own grid, not a box on it. A hairline over the head is the
-          only line between it and the toolbar. */}
-      <div className="min-h-0 flex-1 border-t border-border-subtle">
+          pane's own grid, not a box on it. A hairline over the head and one
+          down its left edge close the grid; the right edge is the last
+          column's own line, so it shows only once you have scrolled to it. */}
+      <div className="min-h-0 flex-1 border-t border-l border-border-subtle">
         {/* Agents are not rows of a record: every column is live state — what
             it is doing, when it fires next, who for — so the type gets the
             roster with the clock over it rather than the cell grid. Same bar,
