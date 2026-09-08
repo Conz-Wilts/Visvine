@@ -182,28 +182,21 @@ export default function SpaceSelector() {
         </button>
       </div>
 
-      {/* The sheet. Unlike the account band — which grows into the empty air
-          above the avatar — this one LAYS OVER the rows beneath it rather than
-          pushing them down: absolutely positioned from the foot of the space's
-          row, painted opaque, so Create and the tools hold still while it
-          unfolds across them. It starts at the row's foot rather than at the
+      {/* The sheet. It sits IN the rail's flow, directly under the space's
+          row, so as it unfolds it pushes Create and the tools down rather than
+          covering them — the rail grows by the rows it reveals and settles
+          back when they go. It starts at the row's foot rather than at the
           line so the pointer never leaves the band on its way down to a row —
           the gap is part of the sheet. Clipped rather than unmounted so the
           stack is there to travel, and the labels fade on the rail's timing. */}
       <div
-        className="absolute left-0 right-0 z-20 overflow-hidden border-b"
+        className="relative z-20 overflow-hidden border-b"
         style={{
-          top: ROW_H,
           height: open ? openH : shutH,
           // The sheet's bottom edge is the rail's one hairline: the line under
-          // the space when shut, and the edge seen travelling down over the
-          // rows when open.
+          // the space when shut, and the line under its rows when open.
           borderBottomColor: 'var(--shell-border, #e5e7eb)',
           boxSizing: 'content-box',
-          // The rail paints nothing of its own (--shell-bg is transparent),
-          // so the sheet is painted in the page's backdrop, which is what the
-          // rows beneath it sit on.
-          background: 'var(--app-backdrop, #ffffff)',
           transition: reduced ? 'none' : `height ${dur} cubic-bezier(0.25, 0.1, 0.25, 1)`,
         }}
         aria-hidden={!open}

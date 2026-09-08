@@ -327,8 +327,9 @@ export default function Sidebar() {
             paddingLeft: ROW_INSET,
             paddingRight: ROW_INSET,
             // The line under the space is drawn by the space's own sheet
-            // (SpaceSelector) — it is that sheet's bottom edge, which travels
-            // down when it opens — so this border only holds the pixel.
+            // (SpaceSelector) — it is that sheet's bottom edge, which pushes
+            // this group down when it opens — so this border only holds the
+            // pixel.
             borderTopColor: "transparent",
           }}
         >
