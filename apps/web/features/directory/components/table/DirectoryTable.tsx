@@ -125,7 +125,7 @@ const TableRow = ({ item: _item, style, ...props }: React.ComponentPropsWithoutR
   <tr
     {...props}
     style={style}
-    className="group h-11 border-b border-border-subtle transition-colors hover:bg-surface-2"
+    className="group h-11 border-b border-border-subtle"
   />
 );
 
@@ -235,7 +235,7 @@ export default function DirectoryTable({
   }
 
   return (
-    <div className="h-full w-full overflow-hidden rounded-xl border border-border-subtle bg-surface-1">
+    <div className="h-full w-full overflow-hidden bg-surface-1">
       <TableVirtuoso<DirectoryItem, TableContext>
         data={items}
         context={tableContext}
@@ -405,7 +405,7 @@ export default function DirectoryTable({
                       <td
                         key={column.key}
                         className={clsx(
-                          'sticky left-0 z-10 border-r border-border-subtle p-0 align-middle transition-colors group-hover:bg-surface-2',
+                          'sticky left-0 z-10 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2',
                           litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
                         )}
                       >
@@ -439,7 +439,7 @@ export default function DirectoryTable({
                     );
                   }
                   return (
-                    <td key={column.key} className={clsx('h-11 border-r border-border-subtle p-0 align-middle', litKey === column.key && 'bg-surface-2')}>
+                    <td key={column.key} className={clsx('h-11 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2', litKey === column.key ? 'bg-surface-2' : 'bg-surface-1')}>
                       <TableCell
                         column={column}
                         value={value}
@@ -451,7 +451,7 @@ export default function DirectoryTable({
                     </td>
                   );
                 })}
-                <td aria-hidden colSpan={2} className="p-0" />
+                <td aria-hidden colSpan={2} className="bg-surface-1 p-0 group-hover:bg-surface-2" />
               </>
             );
         }}
