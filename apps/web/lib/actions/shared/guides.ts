@@ -33,7 +33,7 @@ const MENTIONS =
   'ALWAYS write the path with a leading slash — it is resolved from the context root, whereas a ' +
   "path without one is resolved from the mentioning note's own folder and will silently link to " +
   'nothing. Every tool that returns an entity also returns a ready-to-paste `mention` string; ' +
-  'use it verbatim. Mentions in your personal space do not create edges.'
+  'use it verbatim.'
 
 const LIFECYCLE =
   'MEMORY LIFECYCLE — a note that is no longer true is worse than a missing note, so say so in ' +

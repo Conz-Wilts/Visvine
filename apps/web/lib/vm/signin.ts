@@ -79,6 +79,12 @@ export async function signInOnMachine(input: {
 }): Promise<SignInResult> {
   const loaded = await loadConnector(input.principal, input.context, input.connectorName)
   if (!loaded) return { ok: false, reason: 'no_login', message: `No connector called ${input.connectorName} here (or it is not visible to you).` }
+  // The machine reaches only the space's own connectors, so a login held in
+  // the caller's personal space would open a page the policy refuses. Say
+  // that, rather than let the browser fail with a network error.
+  if (loaded.personal) {
+    return { ok: false, reason: 'no_login', message: `${input.connectorName} is a connector in your own space; the machine only reaches this space's connectors, so the login has to live here.` }
+  }
   const login = await loginCredentialsOf(loaded)
   if (!login) return { ok: false, reason: 'no_login', message: `${input.connectorName} holds no website login — it is not a Website login connector.` }
   if (!login.user || !login.password) return { ok: false, reason: 'no_login', message: `${input.connectorName} has no account set.` }

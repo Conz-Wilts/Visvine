@@ -45,7 +45,7 @@ import { MAX_DENIALS } from './perimeter'
 import { toolGroup, toolPermission, type ToolGroup, type ToolPermission } from './toolPolicy'
 import { isLegacyModelConnector } from '@/lib/models/config'
 import { catalogEntryFor } from './catalog'
-import { machineHostPatterns } from '@/lib/vm/shared/hosts'
+import { declaredReachHosts } from '@/lib/vm/policy'
 
 const CONNECTORS_DIR = 'connectors/'
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
@@ -542,12 +542,12 @@ export async function connectorReadiness(
  * What an agent's declared connectors give it, read once per run.
  *
  * `actions` is what each declares, for a tool description that lists them by
- * name; `hosts` is every host they name, as machine policy patterns — the
- * reach the agent's machine is narrowed to (`lib/vm/lease.ts#taskAllow`), so
- * the browser and the isolate answer to the SAME declaration. Absent,
- * invisible or invalid notes contribute nothing; the run reports the real
- * problem. A note read from the caller's own space contributes no hosts: the
- * machine is the space's, and only the space's connectors are its reach.
+ * name, read under the caller so an invisible note contributes none. `hosts`
+ * is every host they name, as machine policy patterns — the reach the agent's
+ * machine is narrowed to (`lib/vm/lease.ts#taskAllow`), so the browser and the
+ * isolate answer to the SAME declaration. Hosts are read grant-free
+ * (`declaredReachHosts`): the machine is the space's, its reach is the space's
+ * configuration, and a note read from the caller's own space is not part of it.
  */
 export async function connectorReachFor(
   p: ContextPrincipal,
@@ -555,21 +555,18 @@ export async function connectorReachFor(
   names: readonly string[],
 ): Promise<{ actions: Record<string, ConnectorActionSummary[]>; hosts: string[] }> {
   const actions: Record<string, ConnectorActionSummary[]> = {}
-  const hosts = new Set<string>()
-  await Promise.all(
-    names.map(async (name) => {
+  const [hosts] = await Promise.all([
+    declaredReachHosts(context.spaceId, names),
+    ...names.map(async (name) => {
       actions[name] = []
       const source = await readConnectorNote(p, context, name)
       if (source === null) return
-      const fm = parseFrontmatter(source.content)
-      const parsed = parseConnectorPerimeter(fm)
+      const parsed = parseConnectorPerimeter(parseFrontmatter(source.content))
       if (!parsed.ok) return
       actions[name] = summariseActions(parsed.perimeter.actions)
-      if (source.personal || !isConnectorEnabled(fm)) return
-      for (const host of machineHostPatterns(parsed.perimeter.hosts).patterns) hosts.add(host)
     }),
-  )
-  return { actions, hosts: [...hosts].sort() }
+  ])
+  return { actions, hosts }
 }
 
 /** Decrypt the named secrets for a space; every name must exist. */

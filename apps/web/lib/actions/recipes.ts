@@ -606,10 +606,10 @@ const RECIPES: Recipe[] = [
 
   {
     id: 'write_note',
-    when: 'Record, update or append to a note in the space (or in your personal space).',
+    when: 'Record, update or append to a note in the space.',
     summary:
       'edit_context replaces a whole note; append_context adds to one. Read before you edit or you will clobber it. ' +
-      'Writes go to your PERSONAL space unless you pass scope:"shared".',
+      "Every write lands in the named space's shared context; a new note is private to you and the admins until shared.",
     keywords: [
       ...kw('update|edit|revise|amend|append|add to', 'note|page|doc|context', 8),
       ...kw('edit_context|append_context', '', 8),

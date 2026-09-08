@@ -33,7 +33,7 @@ export async function GET(
   const skills = await loadSkills(spaceId, name);
   // The agent's OWN reach — its declared connectors' hosts, not the space's
   // whole list — because that is what its machine will actually be held to.
-  const policy = await agentMachinePolicy(await principalOf(resolved), { spaceId, ownerKey: SHARED }, name);
+  const policy = await agentMachinePolicy(spaceId, name);
   const actions = allActions().map((a) => a.name);
   const allowed = policy?.policy.allow ?? [];
 

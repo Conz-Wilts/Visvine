@@ -19,6 +19,7 @@ import { isAdmin } from '@/lib/auth'
 import { EdgeUnavailableError, edgeConfigured } from '@/lib/vm/edge'
 import { browseOnMachine, QuotaExceededError, runOnMachine } from '@/lib/vm/lease'
 import { agentPageHref } from '@/lib/agents/config'
+import { agentReachHosts } from '@/lib/agents/machineReach'
 
 const spaceArg = z
   .string()
@@ -33,6 +34,16 @@ function clip(text: string): string {
   return text.length > MAX_OUTPUT_CHARS ? `${text.slice(0, MAX_OUTPUT_CHARS)}\n… output truncated` : text
 }
 
+/**
+ * The reach the agent's own runs lease its machine under. The machine is one
+ * container per (space, agent) and a lease rewrites its policy in place, so a
+ * command from here on the space's whole list would widen a run in flight to
+ * hosts its brief never declared. An agent with no brief reaches nothing.
+ */
+async function reachOf(spaceId: string, agent: string): Promise<string[]> {
+  return (await agentReachHosts(spaceId, agent)) ?? []
+}
+
 export const VM_ACTIONS = [
   defineAction({
     name: 'vm_exec',
@@ -42,7 +53,7 @@ export const VM_ACTIONS = [
     description:
       "Run one command on the machine belonging to an agent in this space, and get back its exit code, stdout and stderr. " +
       'The machine is a container: it has Node, Python, uv, git and ripgrep, a /workspace the space shares, and NO route ' +
-      'to the internet except the hosts the space\'s connectors declare — every request it makes is judged and logged. ' +
+      "to the internet except the hosts the agent's declared connectors name — every request it makes is judged and logged. " +
       'It sleeps after ten idle minutes and wakes with a fresh disk, so anything worth keeping goes under /workspace. ' +
       'Use this for work a program does better than a prompt: parsing a file, running a script, transforming data.',
     input: {
@@ -79,6 +90,7 @@ export const VM_ACTIONS = [
       try {
         const result = await runOnMachine(target.context.spaceId, args.agent, args.command, {
           timeoutSeconds: args.timeout_seconds,
+          taskAllow: await reachOf(target.context.spaceId, args.agent),
         })
         return {
           exit_code: result.exitCode,
@@ -115,7 +127,7 @@ export const VM_ACTIONS = [
       url: z
         .string()
         .url()
-        .describe('The page to open, e.g. https://example.com/ — https only, and its host must be one the space allows'),
+        .describe("The page to open, e.g. https://example.com/ — https only, and its host must be one the agent's connectors declare"),
     },
     run: async (ctx, args) => {
       const target = await resolveTarget(ctx, args.space_id)
@@ -129,7 +141,9 @@ export const VM_ACTIONS = [
         throw new ActionError(400, 'The machine speaks https; give an https URL.')
       }
       try {
-        const result = await browseOnMachine(target.context.spaceId, args.agent, args.url)
+        const result = await browseOnMachine(target.context.spaceId, args.agent, args.url, {
+          taskAllow: await reachOf(target.context.spaceId, args.agent),
+        })
         return {
           opened: args.url,
           started: result.started,

@@ -42,16 +42,24 @@ export interface CompiledForSpace {
   rejected: readonly string[]
 }
 
-/** Every host the space's enabled connectors declare, as policy patterns. */
-async function spaceEgressHosts(
-  spaceId: string,
-): Promise<{ hosts: string[]; unreadable: string[]; rejected: string[] }> {
+interface EgressHosts {
+  hosts: string[]
+  unreadable: string[]
+  rejected: string[]
+}
+
+/**
+ * The hosts the named connector notes declare, read the way the space's own
+ * list is: grant-free, `type: connector`, switched on, perimeter parseable.
+ * `names` undefined means every connector the space has.
+ */
+async function egressHosts(spaceId: string, names?: readonly string[]): Promise<EgressHosts> {
   const rows = await prisma.contextNote.findMany({
     where: {
       spaceId,
       ownerKey: SHARED_OWNER_KEY,
       deletedAt: null,
-      path: { startsWith: 'connectors/', endsWith: '.md' },
+      path: names ? { in: names.map((name) => `connectors/${name}.md`) } : { startsWith: 'connectors/', endsWith: '.md' },
     },
     select: { path: true, content: true },
     orderBy: { path: 'asc' },
@@ -79,6 +87,18 @@ async function spaceEgressHosts(
 }
 
 /**
+ * What a brief's `connectors:` reach, as the `taskAllow` its machine is leased
+ * under. Read without a principal on purpose: the hosts a connector names are
+ * the space's configuration, not a member's view of it, so whoever asks — the
+ * runner, an admin's vm_exec, the skills dialog — gets the same answer the
+ * run will be held to. A brief naming nothing reaches nothing.
+ */
+export async function declaredReachHosts(spaceId: string, names: readonly string[]): Promise<string[]> {
+  if (names.length === 0) return []
+  return (await egressHosts(spaceId, names)).hosts
+}
+
+/**
  * The policy an agent's machine boots under.
  *
  * Compilation refuses rather than degrades: a pattern the grammar cannot
@@ -87,7 +107,7 @@ async function spaceEgressHosts(
  * wider list.
  */
 export async function compileForSpace(spaceId: string, options: CompileOptions = {}): Promise<CompiledForSpace> {
-  const { hosts, unreadable, rejected } = await spaceEgressHosts(spaceId)
+  const { hosts, unreadable, rejected } = await egressHosts(spaceId)
   if (unreadable.length > 0) {
     // The app working as designed for a malformed note — a warn, not an error.
     logger.warn('vm.policy.unreadable_connector', { spaceId, paths: unreadable })
@@ -106,10 +126,12 @@ export async function compileForSpace(spaceId: string, options: CompileOptions =
   if (dropped.length > 0) {
     logger.warn('vm.policy.task_narrowing_dropped', { spaceId, dropped })
   }
-  if (policy.allow.length === 0) {
+  if (policy.allow.length === 0 && options.taskAllow === undefined) {
     // Denies everything, which is the safe direction — but it means the space
     // has no connectors, or every one of them is off, and an agent about to sit
-    // there unable to reach anything is worth saying out loud.
+    // there unable to reach anything is worth saying out loud. A run that
+    // narrowed to nothing is a brief declaring no connectors, which is that
+    // brief's choice and not the space's problem.
     logger.warn('vm.policy.empty_allow_list', { spaceId })
   }
 

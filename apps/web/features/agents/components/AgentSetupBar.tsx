@@ -2,12 +2,8 @@
 
 import {
   BlocksIcon,
-  CodeIcon,
   GlobeIcon,
-  HammerIcon,
-  MessageSquareIcon,
   UsersIcon,
-  SparklesIcon,
 } from '@/features/shared/icons';
 import ConnectorLogo from '@/features/connectors/components/ConnectorLogo';
 import { modelCatalogEntryFor } from '@/lib/models/catalog';
@@ -21,12 +17,12 @@ import type { AgentSummary } from '@/lib/agents/service';
  * so the setup is read at a glance and never as a paragraph.
  */
 
+// Only the keys that grant a run something. `sandbox`, `messages` and `machine`
+// still parse in a brief and add nothing (a machine comes with the space), so
+// a mark for them would advertise reach the run does not have.
 const TOOL_MARK: Record<string, { label: string; Icon: (props: { className?: string }) => React.ReactNode }> = {
   web: { label: 'Web', Icon: GlobeIcon },
   actions: { label: 'Actions', Icon: BlocksIcon },
-  sandbox: { label: 'Sandbox', Icon: CodeIcon },
-  machine: { label: 'Machine', Icon: HammerIcon },
-  messages: { label: 'Messages', Icon: MessageSquareIcon },
   directory: { label: 'Directory', Icon: UsersIcon },
 };
 
@@ -43,7 +39,7 @@ export default function AgentSetupBar({ agent }: { agent: AgentSummary }) {
   const provider = model ? model.split('/')[0] : null;
   const modelEntry = provider ? modelCatalogEntryFor(null, provider) : null;
   const modelId = model ? model.slice(model.indexOf('/') + 1) : null;
-  const marks = [...agent.connectors.map((c) => ({ kind: 'connector' as const, id: c })), ...agent.tools.map((t) => ({ kind: 'tool' as const, id: t }))];
+  const marks = [...agent.connectors.map((c) => ({ kind: 'connector' as const, id: c })), ...agent.tools.filter((t) => t in TOOL_MARK).map((t) => ({ kind: 'tool' as const, id: t }))];
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -62,8 +58,8 @@ export default function AgentSetupBar({ agent }: { agent: AgentSummary }) {
                 <ConnectorLogo name={m.id} size="sm" />
               </span>
             ) : (
-              <Mark key={`t:${m.id}`} title={TOOL_MARK[m.id]?.label ?? m.id}>
-                {(TOOL_MARK[m.id]?.Icon ?? SparklesIcon)({ className: 'h-4 w-4 text-text-secondary' })}
+              <Mark key={`t:${m.id}`} title={TOOL_MARK[m.id].label}>
+                {TOOL_MARK[m.id].Icon({ className: 'h-4 w-4 text-text-secondary' })}
               </Mark>
             ),
           )}

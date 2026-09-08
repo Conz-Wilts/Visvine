@@ -164,7 +164,7 @@ const visibilityArg = z
   .describe(
     "For a NEW shared-context note only: 'private' (the default) restricts it so only space " +
       "admins and you can see it until someone shares it; 'inherit' leaves it visible to whoever " +
-      'can see its folder. Ignored for personal-space writes and for edits of existing notes.',
+      'can see its folder. Ignored for edits of existing notes.',
   )
 
 /**
@@ -400,12 +400,12 @@ export const CONTEXT_ACTIONS = [
         let notes = [...metas].sort((a, b) => a.path.localeCompare(b.path))
         if (args.path_prefix) notes = notes.filter((m) => m.path.startsWith(args.path_prefix!))
 
-        // Grant-derived context — only meaningful for a real space's context
-        // (a personal space is never gated). One indexed query per piece; the grant table is bounded by
-        // alias/folder rows, not by member count, so this stays cheap however
-        // large the space is.
-        const isGatedShared = !resolved.isPersonalSpace
-        const [space, aliasRows, spaceAccess] = isGatedShared
+        // Grant-derived context — only meaningful for a real space (a personal
+        // space is never gated). One indexed query per piece; the grant table
+        // is bounded by alias/folder rows, not by member count, so this stays
+        // cheap however large the space is.
+        const gated = !resolved.isPersonalSpace
+        const [space, aliasRows, spaceAccess] = gated
           ? await Promise.all([
               prisma.space.findUnique({
                 where: { id: args.space_id },
@@ -491,7 +491,7 @@ export const CONTEXT_ACTIONS = [
           entity_count: entityTotal,
           // The space's node-type vocabulary — closed: pick the best
           // existing type; nobody (agents included) creates new ones.
-          ...(isGatedShared
+          ...(gated
             ? {
                 types: buildTypeCatalog({
                   featureConfig: (space?.featureConfig ?? null) as SpaceFeatureConfig | null,
@@ -1145,10 +1145,10 @@ export const CONTEXT_ACTIONS = [
       run: async (ctx, args) => {
         const { principal, context, resolved } = await resolveTarget(ctx, args.space_id)
         // Private-by-default applies only to a note this call CREATES in a real
-        // space's shared context — checked before the write, since afterwards
-        // the note always exists. Personal spaces are private already.
-        const isGatedShared = !resolved.isPersonalSpace
-        const existed = isGatedShared ? (await readNoteOrNull(context, args.path)) !== null : true
+        // space — checked before the write, since afterwards the note always
+        // exists. Personal spaces are private already.
+        const gated = !resolved.isPersonalSpace
+        const existed = gated ? (await readNoteOrNull(context, args.path)) !== null : true
         // Stamped as an agent revision so human and agent edits stay
         // distinguishable in the note's history.
         const result = unwrapWrite(
@@ -1161,9 +1161,6 @@ export const CONTEXT_ACTIONS = [
         return {
           status: 'applied',
           path: result.path,
-          // Every shared-context write re-syncs that note's mention set, so the
-          // edges it draws are already up to date by the time this returns.
-          links_synced: true,
           // Index paths are folders: the store holds them to the index contract
           // (a title, the managed child markers, and an entity's type and
           // `node:` when the folder is one) whatever the write carried.
@@ -1184,7 +1181,7 @@ export const CONTEXT_ACTIONS = [
                   'prose, flat `- [Title](/path.md)` bullets. No tables.',
               }
             : {}),
-          ...(isGatedShared
+          ...(gated
             ? {
                 visibility: existed ? 'unchanged' : wantPrivate && !visibilityError ? 'private' : 'inherit',
                 ...(wantPrivate && !visibilityError ? { audience: 'you + admins only' } : {}),
@@ -1372,7 +1369,7 @@ export const CONTEXT_ACTIONS = [
       },
       run: async (ctx, args) => {
         const { principal, resolved } = await resolveTarget(ctx, args.space_id)
-        if (resolved === null || resolved.isPersonalSpace) {
+        if (resolved.isPersonalSpace) {
           throw new ActionError(400, 'A personal space has no aliases')
         }
         if (args.action === 'list') {
@@ -1600,7 +1597,7 @@ export const CONTEXT_ACTIONS = [
       annotations: { destructiveHint: true },
       run: async (ctx, args) => {
         const { principal, context, resolved } = await resolveTarget(ctx, args.space_id)
-        if (!resolved?.isAdmin) {
+        if (!resolved.isAdmin) {
           throw new ActionError(403, "Only a space admin can store this space's connector secrets")
         }
         const connector = await describeConnector(principal, context, args.connector)
