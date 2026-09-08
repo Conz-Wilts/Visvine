@@ -268,7 +268,7 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
 the view on the URL (`?view=table&type=person`). Grid and Table share
 `useDirectoryBrowse`; Table is per TYPE because the columns are, picked from
 `table/TypeStrip.tsx`. `?type=all` is the one cross-type table (core columns
-only). Grid cells wear the `tint` chip tone, the only surface that does.
+only).
 
 - **A type's columns come from three places, in order**
   (`lib/directory/table.ts#columnsForType`, pure and tested): the core every

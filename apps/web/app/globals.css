@@ -676,12 +676,3 @@ input[type="time"]::-webkit-calendar-picker-indicator:active {
   height: auto;
   max-width: 100%;
 }
-
-
-/* A chip as a wash of its colour (Chip tone `tint`): the label in a deeper
-   shade of the hue, on a pale field of it, both mixed from the one
-   `--chip-base` the chip is given, so a palette of tags stays one idea. */
-.chip-tint {
-  background: color-mix(in srgb, var(--chip-base) 16%, var(--color-surface-1));
-  color: color-mix(in srgb, var(--chip-base) 78%, var(--color-text-primary));
-}

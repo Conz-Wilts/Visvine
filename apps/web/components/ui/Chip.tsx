@@ -11,12 +11,9 @@
 //
 // Tones, not variants: `solid` is the chip painted in its own colour (the
 // colour IS the identity, and the label is white on top of it), `muted` is a
-// chip with no colour of its own, `dashed` is the empty slot that invites one
-// ("+ Add tag"), and `tint` is the colour as a wash — the label in a deeper
-// shade of its own hue on a pale field of it, mixed against the surface so it
-// reads in both themes. `tint` is the data grid's chip: a column of forty
-// painted squares shouts, and a cell is read across a row, not picked out of
-// a card. Everywhere else a coloured chip is painted.
+// chip with no colour of its own, and `dashed` is the empty slot that invites
+// one ("+ Add tag"). A coloured chip is painted the same everywhere, the data
+// grid included — one look for one idea.
 //
 // `chipClass`/`chipStyle` are exported for the handful of places that need the
 // look on markup they must own themselves (a dropdown trigger with a chevron,
@@ -26,7 +23,7 @@ import { clsx } from 'clsx';
 import { XIcon } from '@/features/shared/icons';
 import type { CSSProperties, ReactNode } from 'react';
 
-export type ChipTone = 'solid' | 'muted' | 'dashed' | 'tint';
+export type ChipTone = 'solid' | 'muted' | 'dashed';
 export type ChipSize = 'xs' | 'sm' | 'md' | 'lg';
 
 const BASE =
@@ -61,7 +58,6 @@ const TONE_CLASS: Record<ChipTone, string> = {
   // accent, others just to the text colour, and two competing `hover:text-*`
   // rules resolve by stylesheet order rather than by the order they're written.
   dashed: 'border border-dashed border-border-default text-text-muted transition-colors disabled:opacity-40',
-  tint: 'chip-tint',
 };
 
 /**
@@ -72,12 +68,12 @@ export const CHIP_ACCENT_HOVER =
   'hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]';
 
 /**
- * A tone with nothing to colour it falls back to the neutral chip rather than
- * rendering invisibly — callers pass `color` straight from data that may not
- * have one (a node type the console never configured, an alias-less member).
+ * A solid chip with nothing to colour it falls back to the neutral chip rather
+ * than rendering invisibly — callers pass `color` straight from data that may
+ * not have one (a node type the console never configured, an alias-less member).
  */
 function resolveTone(tone: ChipTone, color?: string | null): ChipTone {
-  if ((tone === 'solid' || tone === 'tint') && !color) return 'muted';
+  if (tone === 'solid' && !color) return 'muted';
   return tone;
 }
 
@@ -103,10 +99,7 @@ export function chipClass(options?: {
 
 export function chipStyle(color?: string | null, tone: ChipTone = 'solid'): CSSProperties | undefined {
   if (!color) return undefined;
-  const resolved = resolveTone(tone, color);
-  if (resolved === 'solid') return { background: color };
-  if (resolved === 'tint') return { '--chip-base': color } as CSSProperties;
-  return undefined;
+  return resolveTone(tone, color) === 'solid' ? { background: color } : undefined;
 }
 
 interface ChipProps {

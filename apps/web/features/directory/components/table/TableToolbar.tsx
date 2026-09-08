@@ -286,7 +286,7 @@ function FilterMenu({ aliases, selectedAliases, onChangeAliases, tags, selectedT
       className="flex w-full items-center gap-2.5 px-3.5 py-1.5 transition-colors hover:bg-surface-2"
     >
       <span className="flex min-w-0 flex-1 justify-start">
-        <Chip color={opt.color} tone="tint" size="sm">{opt.value}</Chip>
+        <Chip color={opt.color} size="sm">{opt.value}</Chip>
       </span>
       <span className="shrink-0 text-[11px] tabular-nums text-text-muted">{opt.count}</span>
       <span
