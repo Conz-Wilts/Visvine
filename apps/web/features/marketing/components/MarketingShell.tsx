@@ -11,17 +11,11 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Vines from "@/features/marketing/components/Vines";
 import SignInModal from "@/features/auth/components/SignInModal";
 import { BRAND } from "@/lib/brand";
 import { useSession, signOut } from "@/features/auth/lib/auth-client";
-
-const LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/manifesto", label: "Manifesto" },
-  { href: "/contact", label: "Contact" },
-];
 
 type SignInMode = "signin" | "signup";
 
@@ -36,9 +30,10 @@ export function useSignInModal() {
 }
 
 /**
- * The marketing site's frame. In the desktop shell (`desktop`) the website
- * falls away: no nav, no pages — just the vines, the wordmark and a Login
- * button, since the only thing to do there is sign in.
+ * The marketing site's frame: the wordmark and the auth buttons sit at the
+ * top of the page over the vines, with no bar beneath them. In the desktop
+ * shell (`desktop`) the website falls away: just the vines, the wordmark and
+ * a Login button, since the only thing to do there is sign in.
  */
 export default function MarketingShell({
   children,
@@ -49,7 +44,6 @@ export default function MarketingShell({
   devAuthEnabled?: boolean;
   desktop?: boolean;
 }) {
-  const pathname = usePathname();
   const router = useRouter();
   const [signInOpen, setSignInOpen] = useState(false);
   const [signInMode, setSignInMode] = useState<SignInMode>("signin");
@@ -138,9 +132,8 @@ export default function MarketingShell({
   return (
     <main className="font-brand relative min-h-[100svh] bg-white text-black flex flex-col overflow-hidden">
       <Vines />
-      {/* White navbar — sits above the vines so the buttons keep their contrast */}
-      <header className="relative z-30 w-full border-b border-neutral-200 bg-white">
-        <div className="mx-auto grid w-full max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-4 px-4 sm:px-6 lg:px-8 h-16">
+      <header className="relative z-30 w-full">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 h-16">
           {/* Left: brand */}
           <Link
             href="/"
@@ -150,23 +143,6 @@ export default function MarketingShell({
             Visvine
           </Link>
 
-          {/* Center: nav */}
-          <nav className="hidden md:flex items-center justify-center gap-6 lg:gap-10 text-sm lg:text-base text-neutral-600">
-            {LINKS.map((l) => {
-              const active =
-                l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
-              return (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  style={active ? { color: BRAND } : undefined}
-                  className={active ? "" : "hover:text-black"}
-                >
-                  {l.label}
-                </Link>
-              );
-            })}
-          </nav>
 
           {/* Right: auth */}
           <div className="flex items-center justify-end gap-2">

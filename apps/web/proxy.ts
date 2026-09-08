@@ -12,9 +12,6 @@ const PUBLIC_PATHS = [
   "/api/health",
   "/claim",
   "/api/media",
-  // Marketing / pre-auth surfaces (the bare "/" home is already public below).
-  "/manifesto",
-  "/contact",
   // Public event share pages + their no-login RSVP API (visvine.com/e/<slug>).
   "/e/",
   "/api/public",
