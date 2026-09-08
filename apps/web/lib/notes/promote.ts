@@ -12,7 +12,7 @@ import { SHARED_OWNER_KEY, type Context } from './store'
 import prisma from '@/lib/prisma'
 import type { ContextMoveProposal } from '@prisma/client'
 import { publishNote } from './publications'
-import { personalSpaceId } from '@/lib/spaces/personalSpace'
+import { personalSpaceId } from '@/lib/spaces/personalSpaceAccess'
 import { logAudit } from './audit'
 import { folderIdOfPath } from './shared/placement'
 import { principalCanManage } from './shared/permissions'
@@ -47,6 +47,7 @@ function toEntry(row: ContextMoveProposal): MoveProposalEntry {
  */
 export async function queuePublishProposal(
   p: ContextPrincipal,
+  fromSpaceId: string,
   fromPath: string,
   toPath: string,
   contentSnapshot: string,
@@ -54,6 +55,7 @@ export async function queuePublishProposal(
   const row = await prisma.contextMoveProposal.create({
     data: {
       spaceId: p.spaceId,
+      fromSpaceId,
       fromPath,
       toPath,
       folderId: folderIdOfPath(toPath),
@@ -83,9 +85,9 @@ export async function listProposals(p: ContextPrincipal): Promise<MoveProposalEn
  * something an edit grant on the destination confers. Approving a copy writes
  * the proposal's snapshot into
  * the shared folder; approving a PUBLISH proposal creates the live publication
- * from the proposer's personal context (reading its CURRENT content — the
- * snapshot is only the preview). The personal original is left to its owner —
- * an admin cannot reach into a personal context.
+ * from the source space (reading its CURRENT content — the snapshot is only
+ * the preview). The original is left where it is — an admin here cannot reach
+ * into another space.
  */
 export async function resolveProposal(
   p: ContextPrincipal,
@@ -123,7 +125,9 @@ export async function resolveProposal(
     try {
       if (existing.kind === 'publish') {
         const result = await publishNote(
-          personalSpaceId(existing.proposedBy),
+          // A row from before the source was recorded came from the
+          // proposer's `me:` space, the only source there was then.
+          existing.fromSpaceId ?? personalSpaceId(existing.proposedBy),
           existing.fromPath,
           p.spaceId,
           existing.toPath,

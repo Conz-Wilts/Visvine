@@ -19,7 +19,6 @@ import {
   listMySpaces,
   resolveTarget,
   requireSpaceContext,
-  type ContextScope,
 } from '@/lib/actions/resolve'
 import {
   visibleVault,
@@ -115,13 +114,6 @@ import { defineAction, ActionError, type ActionCaller } from '@/lib/actions/type
 const spaceArg = z
   .string()
   .describe('The space to act in — list_spaces returns the ids you can act in')
-
-const scopeArg = z
-  .enum(['shared', 'personal'])
-  .optional()
-  .describe(
-    "Which context: 'shared' = the space's context (the default for reads), 'personal' = your own private personal space",
-  )
 
 /**
  * The one line of the writing contract every write action carries itself:
@@ -390,7 +382,6 @@ export const CONTEXT_ACTIONS = [
         'for what you write.',
       input: {
         space_id: spaceArg,
-        scope: scopeArg,
         type: z
           .string()
           .optional()
@@ -400,8 +391,7 @@ export const CONTEXT_ACTIONS = [
       },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        const scope: ContextScope = args.scope ?? 'shared'
-        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, scope)
+        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id)
         const limit = args.limit ?? 100
 
         // Notes (visibility lens applied inside visibleVault; a public
@@ -410,12 +400,11 @@ export const CONTEXT_ACTIONS = [
         let notes = [...metas].sort((a, b) => a.path.localeCompare(b.path))
         if (args.path_prefix) notes = notes.filter((m) => m.path.startsWith(args.path_prefix!))
 
-        // Grant-derived context — only meaningful for a real space's shared
-        // context (personal spaces are never gated, and the personal scope has no
-        // directory). One indexed query per piece; the grant table is bounded by
+        // Grant-derived context — only meaningful for a real space's context
+        // (a personal space is never gated). One indexed query per piece; the grant table is bounded by
         // alias/folder rows, not by member count, so this stays cheap however
         // large the space is.
-        const isGatedShared = scope === 'shared' && resolved !== null && !resolved.isPersonalSpace
+        const isGatedShared = !resolved.isPersonalSpace
         const [space, aliasRows, spaceAccess] = isGatedShared
           ? await Promise.all([
               prisma.space.findUnique({
@@ -430,36 +419,32 @@ export const CONTEXT_ACTIONS = [
             ])
           : [null, [], null]
 
-        // Entities live in the space directory, not in the personal space,
-        // so a personal-scope call reports notes only.
         const entitiesByType: Record<string, ReturnType<typeof describeNode>[]> = {}
         let entityTotal = 0
         const usageByType: Record<string, number> = {}
-        if (scope === 'shared') {
-          const rows = await prisma.node.findMany({
-            where: { spaceId: args.space_id },
-            select: NODE_SELECT,
-            orderBy: { name: 'asc' },
-          })
-          // Usage counts feed the type catalog and run over the FULL row set,
-          // before the structural filter, so Space/Channel/Connector show their
-          // live counts even though the directory listing hides them.
-          for (const row of rows) {
-            const t = canonicalNodeType(row.type)
-            usageByType[t] = (usageByType[t] ?? 0) + 1
-          }
-          // Structural types (section/channel/note/file) describe the
-          // container, not the directory — the grid hides them and so do we.
-          // Canonicalised both sides: legacy rows still carry retired spellings
-          // ('org', 'group'), so a raw string compare silently returns nothing.
-          const wanted = args.type ? canonicalNodeType(args.type) : null
-          const directory = rows
-            .filter((r) => !isStructuralNodeType(r.type))
-            .filter((r) => !wanted || canonicalNodeType(r.type) === wanted)
-          entityTotal = directory.length
-          for (const row of directory.slice(0, limit)) {
-            ;(entitiesByType[row.type] ??= []).push(describeNode(row))
-          }
+        const rows = await prisma.node.findMany({
+          where: { spaceId: args.space_id },
+          select: NODE_SELECT,
+          orderBy: { name: 'asc' },
+        })
+        // Usage counts feed the type catalog and run over the FULL row set,
+        // before the structural filter, so Space/Channel/Connector show their
+        // live counts even though the directory listing hides them.
+        for (const row of rows) {
+          const t = canonicalNodeType(row.type)
+          usageByType[t] = (usageByType[t] ?? 0) + 1
+        }
+        // Structural types (section/channel/note/file) describe the
+        // container, not the directory — the grid hides them and so do we.
+        // Canonicalised both sides: legacy rows still carry retired spellings
+        // ('org', 'group'), so a raw string compare silently returns nothing.
+        const wanted = args.type ? canonicalNodeType(args.type) : null
+        const directory = rows
+          .filter((r) => !isStructuralNodeType(r.type))
+          .filter((r) => !wanted || canonicalNodeType(r.type) === wanted)
+        entityTotal = directory.length
+        for (const row of directory.slice(0, limit)) {
+          ;(entitiesByType[row.type] ??= []).push(describeNode(row))
         }
 
         // A grant's resource path can be a single NOTE, not a folder
@@ -493,7 +478,6 @@ export const CONTEXT_ACTIONS = [
         const isNotePath = (path: string) => path.toLowerCase().endsWith('.md')
 
         return {
-          scope,
           you: {
             name: ctx.name,
             admin: principal.spaceAdmin === true,
@@ -554,7 +538,6 @@ export const CONTEXT_ACTIONS = [
       input: {
         space_id: spaceArg,
         query: z.string().describe('Natural-language or keyword query'),
-        scope: scopeArg,
         k: z.number().int().min(1).max(50).optional().describe('Max results per kind (default 10)'),
         type: z.string().optional().describe("Filter notes by frontmatter `type`, entities by node type"),
         tags: z.array(z.string()).optional().describe('Require ALL of these tags (notes)'),
@@ -571,8 +554,7 @@ export const CONTEXT_ACTIONS = [
       },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        const scope: ContextScope = args.scope ?? 'shared'
-        const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         const k = args.k ?? 10
 
         const { hits, semantic, plan } = await searchFederated(
@@ -590,9 +572,7 @@ export const CONTEXT_ACTIONS = [
           { rewrite: args.rewrite },
         )
 
-        const entities =
-          scope === 'shared'
-            ? (
+        const entities = (
                 await prisma.node.findMany({
                   where: {
                     spaceId: args.space_id,
@@ -622,7 +602,6 @@ export const CONTEXT_ACTIONS = [
                     mention: mentionFor(r.name, notePath),
                   }
                 })
-            : []
 
         return {
           semantic,
@@ -681,7 +660,7 @@ export const CONTEXT_ACTIONS = [
         if (!args.node_id && !args.note_path) {
           throw new ActionError(400, 'Pass either node_id or note_path')
         }
-        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
 
         // node_id resolves directly; note_path has to go through the node list,
         // because entityNotePath is lossy and only invertible over real nodes.
@@ -820,16 +799,13 @@ export const CONTEXT_ACTIONS = [
         'Each entry reports its extraction status; only `ready` sources are searchable and readable.',
       input: {
         space_id: spaceArg,
-        scope: scopeArg,
         folder: z.string().optional().describe("Only sources in this top-level folder ('' = the context root)"),
       },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        const scope: ContextScope = args.scope ?? 'shared'
-        const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         const sources = await listVisibleSources(principal, context, args.folder)
         return {
-          scope,
           sources: sources.map((s) => ({
             path: s.path,
             name: s.name,
@@ -858,7 +834,6 @@ export const CONTEXT_ACTIONS = [
       input: {
         space_id: spaceArg,
         path: z.string().describe("The source's path, exactly as search_context or list_files reported it"),
-        scope: scopeArg,
         offset_chars: z.number().int().min(0).optional().describe('Start here in the extracted text (default 0)'),
         max_chars: z
           .number()
@@ -870,8 +845,7 @@ export const CONTEXT_ACTIONS = [
       },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        const scope: ContextScope = args.scope ?? 'shared'
-        const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         // A trailing '#<seq>' chunk marker names the same file.
         const path = args.path.replace(/#\d+$/, '')
         const result = await readSourceVisible(principal, context, path, {
@@ -1153,8 +1127,7 @@ export const CONTEXT_ACTIONS = [
         'It CANNOT write under agents/, tools/ or settings/: those are frozen against AI writes. An agent is ' +
         'created with create_agent and a Tool with the tool authoring actions — both write at a human origin. ' +
         'Never work around a refusal here by writing the note somewhere else; a brief outside agents/ is not an agent. ' +
-        "Writes go to your PERSONAL space by default — pass scope:'shared' to write the space's shared context, " +
-        'which is gated on your write access to that folder. A NEW shared note is PRIVATE by default — only ' +
+        "Writes go to the space's context, gated on your write access to that folder. A NEW note is PRIVATE by default — only " +
         "space admins and you can see it — pass visibility:'inherit' to make it visible to whoever can see " +
         'its folder (list_context shows each folder\'s audience). Writes are attributed to the authenticated ' +
         'caller — list_context\'s `you` says who that is here. Read the note first when editing, or you will ' +
@@ -1167,18 +1140,14 @@ export const CONTEXT_ACTIONS = [
         space_id: spaceArg,
         path: z.string().describe("Context-relative path ending in .md, e.g. 'people/craig-piggott.md'"),
         content: z.string().describe('The full markdown content of the note, including frontmatter'),
-        scope: scopeArg.describe(
-          "Target context — defaults to 'personal'; pass 'shared' explicitly to write the space's shared context",
-        ),
         visibility: visibilityArg,
       },
       run: async (ctx, args) => {
-        const scope: ContextScope = args.scope ?? 'personal'
-        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, scope)
+        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id)
         // Private-by-default applies only to a note this call CREATES in a real
         // space's shared context — checked before the write, since afterwards
         // the note always exists. Personal spaces are private already.
-        const isGatedShared = scope === 'shared' && resolved !== null && !resolved.isPersonalSpace
+        const isGatedShared = !resolved.isPersonalSpace
         const existed = isGatedShared ? (await readNoteOrNull(context, args.path)) !== null : true
         // Stamped as an agent revision so human and agent edits stay
         // distinguishable in the note's history.
@@ -1191,11 +1160,10 @@ export const CONTEXT_ACTIONS = [
           : null
         return {
           status: 'applied',
-          scope,
           path: result.path,
           // Every shared-context write re-syncs that note's mention set, so the
           // edges it draws are already up to date by the time this returns.
-          links_synced: scope === 'shared',
+          links_synced: true,
           // Index paths are folders: the store holds them to the index contract
           // (a title, the managed child markers, and an entity's type and
           // `node:` when the folder is one) whatever the write carried.
@@ -1235,7 +1203,6 @@ export const CONTEXT_ACTIONS = [
         "Append a dated, attributed entry to a note's '## Log' section, creating the section if it is absent. " +
         'The safe way to add one fact to an existing note — nothing else in the note can be lost. The entry is ' +
         "attributed to the authenticated caller (list_context's `you`). " +
-        "Defaults to your personal space; pass scope:'shared' for the space's shared context. " +
         LINK_RULE +
         'The rest of the writing contract is the writing_notes guide, appended below.',
       guides: ['writing_notes'],
@@ -1243,15 +1210,13 @@ export const CONTEXT_ACTIONS = [
         space_id: spaceArg,
         path: z.string().describe('Path of the existing note to append to'),
         entry: z.string().describe('The entry text — one update. The date and your name are added for you.'),
-        scope: scopeArg.describe("Target context — defaults to 'personal'; pass 'shared' for the space's shared context"),
       },
       run: async (ctx, args) => {
-        const scope: ContextScope = args.scope ?? 'personal'
-        const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         const result = unwrapWrite(
           await appendLogGated(principal, context, args.path, args.entry, 'agent', 'mcp'),
         )
-        return { status: 'applied', scope, path: result.path }
+        return { status: 'applied', path: result.path }
       },
     }),
     defineAction({
@@ -1275,13 +1240,11 @@ export const CONTEXT_ACTIONS = [
             'New path, ending in .md. Folders are implicit in the path, so none need creating first; ' +
               'a note already at that path is an error rather than an overwrite.',
           ),
-        scope: scopeArg.describe("Target context — defaults to 'personal'; pass 'shared' for the space's shared context"),
       },
       run: async (ctx, args) => {
-        const scope: ContextScope = args.scope ?? 'personal'
-        const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         const result = unwrapWrite(await moveGated(principal, context, args.from, args.to, 'agent'))
-        return { status: 'applied', scope, from: args.from, path: result.path, links_rewritten: true }
+        return { status: 'applied', from: args.from, path: result.path, links_rewritten: true }
       },
     }),
     defineAction({
@@ -1313,9 +1276,6 @@ export const CONTEXT_ACTIONS = [
       guides: ['writing_notes'],
       input: {
         space_id: spaceArg,
-        scope: scopeArg.describe(
-          "Which context to clean — defaults to 'shared' (the space's context); 'personal' cleans your own space",
-        ),
         action: z
           .enum(['analyze', 'apply_fixes', 'trash'])
           .optional()
@@ -1337,10 +1297,9 @@ export const CONTEXT_ACTIONS = [
         limit: z.number().int().min(1).max(100).optional().describe('Max items per worklist category (default 20)'),
       },
       run: async (ctx, args) => {
-        const scope: ContextScope = args.scope ?? 'shared'
-        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, scope)
+        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id)
         const role: CleanRole =
-          scope === 'personal' || resolved?.isPersonalSpace
+          resolved.isPersonalSpace
             ? 'owner'
             : principal.spaceAdmin
               ? 'admin'
@@ -1361,7 +1320,7 @@ export const CONTEXT_ACTIONS = [
           const result = await applyCleanFixes(principal, context, opts)
           return { action, ...result }
         }
-        return { action, scope, ...(await runClean(principal, context, opts)) }
+        return { action, ...(await runClean(principal, context, opts)) }
       },
     }),
     defineAction({
@@ -1412,7 +1371,7 @@ export const CONTEXT_ACTIONS = [
           ),
       },
       run: async (ctx, args) => {
-        const { principal, resolved } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal, resolved } = await resolveTarget(ctx, args.space_id)
         if (resolved === null || resolved.isPersonalSpace) {
           throw new ActionError(400, 'A personal space has no aliases')
         }
@@ -1496,7 +1455,7 @@ export const CONTEXT_ACTIONS = [
       input: { space_id: spaceArg },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         // `personal: true` — the caller's own connectors resolve here too, so
         // the catalogue has to name them or they cannot be asked for.
         return { connectors: await listConnectors(principal, context, { personal: true }) }
@@ -1516,7 +1475,7 @@ export const CONTEXT_ACTIONS = [
       input: { space_id: spaceArg },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        const { context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { context } = await resolveTarget(ctx, args.space_id)
         const models = await spaceModels(context.spaceId)
         const fallback = defaultModelOf(models)
         return {
@@ -1573,7 +1532,7 @@ export const CONTEXT_ACTIONS = [
         args: z.record(z.string(), z.unknown()).optional().describe('Arguments for the action, per its params'),
       },
       run: async (ctx, args) => {
-        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         const hasCode = typeof args.code === 'string' && args.code.trim().length > 0
         const hasAction = typeof args.action === 'string' && args.action.trim().length > 0
         if (hasCode === hasAction) {
@@ -1640,7 +1599,7 @@ export const CONTEXT_ACTIONS = [
       },
       annotations: { destructiveHint: true },
       run: async (ctx, args) => {
-        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id)
         if (!resolved?.isAdmin) {
           throw new ActionError(403, "Only a space admin can store this space's connector secrets")
         }
@@ -1697,7 +1656,7 @@ export const CONTEXT_ACTIONS = [
         'something people can turn up to.\n' +
         'The intended shape of the job: list_drive to see what the space has, read_file the run sheet or plan, ' +
         'create_event with the picture as `cover_resource_id`, then write the marketing copy as a sub-note of ' +
-        "the event — edit_context, scope:'shared', path 'events/<slug>/marketing.md' — so the copy sits with " +
+        "the event — edit_context, path 'events/<slug>/marketing.md' — so the copy sits with " +
         'the event rather than in a chat log. Mentions there link it to the people and organisations involved.\n' +
         'It is created as a DRAFT unless you pass status:"published": publishing is what makes it visible to ' +
         'the space (or to the world, at visibility:"public"), and that stays a decision someone takes ' +
@@ -1771,7 +1730,7 @@ export const CONTEXT_ACTIONS = [
           cover_image_set: !!event.coverImageUrl,
           public_url: event.visibility === 'public' ? `/e/${event.slug}` : null,
           next: notePath
-            ? `Write the marketing copy as a sub-note: edit_context path '${notePath.replace(/\.md$/, '')}/marketing.md', scope 'shared'.`
+            ? `Write the marketing copy as a sub-note: edit_context path '${notePath.replace(/\.md$/, '')}/marketing.md'.`
             : null,
           ...(event.status === 'draft'
             ? { publish_with: "update_event with status:'published' — nobody else can see a draft" }
@@ -1864,7 +1823,7 @@ export const CONTEXT_ACTIONS = [
       input: { space_id: spaceArg },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         const { agents, heartbeatAt } = await listAgents(principal, context)
         return {
           scheduler_last_tick_at: heartbeatAt,
@@ -1912,7 +1871,7 @@ export const CONTEXT_ACTIONS = [
           .describe('Something to say to it for this run — a question, an instruction, a thing to look at. Optional.'),
       },
       run: async (ctx, args) => {
-        const { principal } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal } = await resolveTarget(ctx, args.space_id)
         if (!(await canTriggerRun(principal, args.space_id, args.agent))) {
           throw new ActionError(403, 'Only someone who can edit this agent can run it')
         }
@@ -2010,7 +1969,7 @@ export const CONTEXT_ACTIONS = [
           ),
       },
       run: async (ctx, args) => {
-        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         const r = await createAgentBrief(principal, context, {
           name: args.name,
           title: args.title,
@@ -2082,7 +2041,7 @@ export const CONTEXT_ACTIONS = [
       },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         const agent = await describeAgent(principal, context, args.agent)
         if (!agent) throw new ActionError(404, `No agent '${args.agent}' in this space`)
         if (agent.invalid) throw new ActionError(409, `That brief does not parse: ${agent.invalid}`)
@@ -2176,7 +2135,7 @@ export const CONTEXT_ACTIONS = [
           .describe('Coalesce window for triggers: "30s", "2m" (5s…30m). Defaults to 60s'),
       },
       run: async (ctx, args) => {
-        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         const schedule = parseScheduleFields(args)
         if (!schedule.ok) throw new ActionError(400, schedule.error)
         let on: AgentTriggers | null = null
@@ -2218,7 +2177,7 @@ export const CONTEXT_ACTIONS = [
         agent: z.string().describe("The agent's name, from list_agents"),
       },
       run: async (ctx, args) => {
-        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         const r = await switchOffAgent(principal, context, args.agent)
         if (!r.ok) throw new ActionError(r.status, r.error)
         return { agent: args.agent, active: false, page: agentPageHref(args.agent) }

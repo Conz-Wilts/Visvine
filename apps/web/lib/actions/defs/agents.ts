@@ -44,7 +44,7 @@ export const AGENT_ACTIONS = [
       message: z.string().min(1).max(MAX_BODY).describe('What to say to it, in plain words'),
     },
     run: async (ctx, args) => {
-      const target = await resolveTarget(ctx, args.space_id, 'shared')
+      const target = await resolveTarget(ctx, args.space_id)
       const result = await deliverMessage({
         channel: 'in_app',
         spaceId: target.context.spaceId,
@@ -90,7 +90,7 @@ export const AGENT_ACTIONS = [
         .describe('How many hands this has already passed through. Leave unset unless you were delegated to.'),
     },
     run: async (ctx, args) => {
-      const target = await resolveTarget(ctx, args.space_id, 'shared')
+      const target = await resolveTarget(ctx, args.space_id)
       const spaceId = target.context.spaceId
       const depth = (args.depth ?? 0) + 1
       if (depth > MAX_DELEGATION_DEPTH) {

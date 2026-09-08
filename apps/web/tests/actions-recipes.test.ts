@@ -103,11 +103,10 @@ test('the connector recipe carries the literal note contract, not a description 
   assert.match(contract, /^type: connector$/m)
   assert.match(contract, /hosts:/)
   assert.match(contract, /\{\{secret:STRIPE_KEY\}\}/)
-  // The write step must be fully specified — path, scope and visibility are all
+  // The write step must be fully specified — path and visibility are both
   // load-bearing, and the visibility default is the one that silently hides the
   // connector from every member.
   const write = recipe.steps(ctx(adminSpace())).find((s) => s.tool === 'edit_context')
-  assert.equal(write?.args.scope, 'shared')
   assert.equal(write?.args.path, 'connectors/<name>.md')
   assert.equal(write?.args.visibility, 'inherit')
   assert.ok(

@@ -21,7 +21,7 @@ export async function spaceFactsFor(
 ): Promise<PlanSpaceFacts | null> {
   if (!spaceId) return null
   try {
-    const { principal, context } = await resolveTarget(caller, spaceId, 'shared')
+    const { principal, context } = await resolveTarget(caller, spaceId)
     const row = await prisma.space.findUnique({
       where: { id: spaceId },
       select: { name: true, featureConfig: true },

@@ -68,7 +68,7 @@ export const VM_ACTIONS = [
       // Machines are an admin capability while the runtime is young: a machine
       // is the space's money and the space's reach, and neither is a member's
       // to spend. This is the one place that decision is made.
-      const target = await resolveTarget(ctx, args.space_id, 'shared')
+      const target = await resolveTarget(ctx, args.space_id)
       if (!(await isAdmin(ctx.userId, args.space_id, ctx.email))) {
         throw new ActionError(403, "Only a space admin can run commands on an agent's machine.")
       }
@@ -118,7 +118,7 @@ export const VM_ACTIONS = [
         .describe('The page to open, e.g. https://example.com/ — https only, and its host must be one the space allows'),
     },
     run: async (ctx, args) => {
-      const target = await resolveTarget(ctx, args.space_id, 'shared')
+      const target = await resolveTarget(ctx, args.space_id)
       if (!(await isAdmin(ctx.userId, args.space_id, ctx.email))) {
         throw new ActionError(403, "Only a space admin can drive an agent's browser.")
       }

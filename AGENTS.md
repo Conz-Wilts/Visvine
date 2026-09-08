@@ -124,7 +124,14 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   bypasses per-space checks.
 - Context access is grant-based (`lib/notes/access.ts` for DB,
   `lib/notes/shared/authz.ts` for pure checks). Grants apply to **shared**
-  contexts only; personal spaces bypass the model (`lib/notes/principal.ts`).
+  contexts only; a `me:<userId>` space bypasses the model
+  (`lib/notes/principal.ts`).
+- **Nobody is given a space.** A new account holds no space until the person
+  creates one (`provisionSpace`) or joins one; `currentSpace` is null until
+  then and `/home` sends them to the directory. `me:<userId>` rows
+  (`personalOwnerId` set) exist only from before this rule: still private to
+  their owner, never grant-gated, and nothing provisions one. Every action
+  targets the space named in `space_id` — there is no `scope` argument.
 - Account deletion (`lib/account/deleteAccount.ts`, `DELETE /api/account`) is
   the one place a person erases themselves. Cascades cover only half — personal
   context tables key `owner_key`, aliases/grants/OAuth key a bare `user_id`,
@@ -306,8 +313,7 @@ of its own.
   restructuring is judgment, and judgment goes to the worklist.
 - **Cleaning happens in the space that OWNS the notes, at the top level.** A
   sub-space holds no schedule and a parent never cleans one: `buildCleanScope`
-  puts `spaces/` out of scope, `normalizeCleanTarget` refuses one as a target. A
-  personal space is cleaned by its owner, not on a clock.
+  puts `spaces/` out of scope, `normalizeCleanTarget` refuses one as a target.
 - **The minute tick fires it**, claiming due rows with a conditional UPDATE that
   advances `next_run_at` itself — N instances racing produce one run, and a
   night the deployment was down is skipped, never replayed. One tick runs at
@@ -486,7 +492,7 @@ belongs in `events/<slug>/marketing.md` (the `run_event` recipe is that loop).
 Both doors build the record through `lib/events/build.ts`; nothing else may
 derive an event id or its defaults.
 
-Reads default to the **shared** context, writes to your **personal** one. Notes
+Every call reads and writes the named space's **shared** context. Notes
 created in a real space's shared context are private by default (author gets
 FULL, then the path is restricted); pass `visibility: 'inherit'` to follow the
 folder. Actions call the domain layer directly and **never re-implement
@@ -593,13 +599,11 @@ connector.
   current space has none of that name (`readConnectorNote`, off with
   `{ personal: false }` for the Tools bridge and the console's test run) — a
   space's own note always wins its name, and `LoadedConnector` carries the space
-  it came from so secrets, account and budget are the owner's. No UI writes such
-  a note; the lookup keeps notes an action wrote there working.
-- `GET /api/user/personal-space` provisions and returns the id (it is derivable,
-  but a personal space is created lazily and every space-scoped route 404s on
-  one that does not exist). The admin gate there is
-  `resolveContext(...).isAdmin`, never `isAdmin()`: a personal space holds no
-  aliases and its owner administers it by definition.
+  it came from so secrets, account and budget are the owner's. Nothing writes
+  such a note any more; the lookup keeps notes written there earlier working.
+- The admin gate on a `me:<userId>` space is `resolveContext(...).isAdmin`,
+  never `isAdmin()`: it holds no aliases and its owner administers it by
+  definition.
 
 ### Models
 

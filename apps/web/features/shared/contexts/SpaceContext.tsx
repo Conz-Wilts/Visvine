@@ -153,9 +153,9 @@ export function SpaceProvider({ children, initialSpaces, initialMemberships }: S
   // against memberships (not the full visible list, which includes public
   // spaces anyone can discover) matters because the stored id may belong to a
   // different account that used this browser — without the membership check a
-  // signed-in user could land "inside" a public space they never joined. The
-  // fallback also lands a brand-new user in their personal space even when
-  // localStorage was never written (e.g. their first ever session).
+  // signed-in user could land "inside" a public space they never joined. A
+  // brand-new member has joined nothing and resolves to null — nobody is
+  // given a space; they create or join one.
   const currentSpace = useMemo(
     () =>
       joinedSpaces.find(c => c.id === currentSpaceId) ?? joinedSpaces[0] ?? null,

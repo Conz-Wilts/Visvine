@@ -3,9 +3,8 @@
 //        participates in publishing, from this space's point of view, with
 //        space names for the banner/panel. Requires read access to the path.
 //   POST { spaceId, action, ... }:
-//        'publish'   { fromSpaceId?, fromPath, toPath } — publish a note the
-//             caller can READ (default source: their personal context) into THIS
-//             space. Needs edit at the destination; otherwise the request
+//        'publish'   { fromSpaceId, fromPath, toPath } — publish a note the
+//             caller can READ in the source space into THIS space. Needs edit at the destination; otherwise the request
 //             queues as a publish proposal for a space admin to approve.
 //        'unpublish' { id } — deactivate; the replica stays as a plain copy.
 //             Allowed for the publication's creator or an admin of either space.
@@ -14,9 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireSession } from '@/lib/session'
 import { requireContext, fail, failFromError } from '@/lib/notes/api'
-import { principalOf, resolveContext, resolvePersonalContext } from '@/lib/notes/resolve'
-import { personalPrincipal } from '@/lib/notes/principal'
-import { personalSpaceId } from '@/lib/spaces/personalSpace'
+import { principalOf, resolveContext } from '@/lib/notes/resolve'
 import { writeDenial } from '@/lib/notes/contextService'
 import { readNoteOrNull } from '@/lib/notes/store'
 import {
@@ -71,11 +68,6 @@ async function resolveSourcePrincipal(
   session: SessionPayload,
   fromSpaceId: string,
 ): Promise<ContextPrincipal | Response> {
-  if (fromSpaceId === personalSpaceId(session.userId)) {
-    const identity = { userId: session.userId, name: session.name, email: session.email }
-    await resolvePersonalContext(identity) // provisions on first use
-    return personalPrincipal(identity)
-  }
   const resolved = await resolveContext(session, fromSpaceId)
   if (resolved instanceof Response) return resolved
   return principalOf(resolved)
@@ -94,18 +86,16 @@ export async function POST(req: NextRequest) {
       const fromPath = typeof body.fromPath === 'string' ? body.fromPath : null
       const toPath = typeof body.toPath === 'string' ? body.toPath : null
       if (!fromPath || !toPath) return fail('fromPath and toPath are required')
-      if (context.isPersonalSpace) {
-        return fail('Publish into a space context — your personal space is the source')
-      }
       const fromSpaceId =
-        typeof body.fromSpaceId === 'string' && body.fromSpaceId
-          ? body.fromSpaceId
-          : personalSpaceId(session.userId)
+        typeof body.fromSpaceId === 'string' && body.fromSpaceId ? body.fromSpaceId : null
+      if (!fromSpaceId) return fail('fromSpaceId is required')
+      if (fromSpaceId === context.spaceId) return fail('Publish into a different space')
 
       const sourceP = await resolveSourcePrincipal(session, fromSpaceId)
       if (sourceP instanceof Response) return sourceP
-      const sourcePersonal = fromSpaceId === personalSpaceId(session.userId)
-      if (!sourcePersonal && !principalCanRead(sourceP, fromPath)) {
+      // The source's own lens applies: a personal space is ungated, a shared
+      // one hides what the caller cannot read.
+      if (!principalCanRead(sourceP, fromPath)) {
         return fail(`Note not found: ${fromPath}`, 404)
       }
 
@@ -119,7 +109,7 @@ export async function POST(req: NextRequest) {
           fromPath,
         )
         if (snapshot === null) return fail(`Note not found: ${fromPath}`, 404)
-        const proposal = await queuePublishProposal(targetP, fromPath, toPath, snapshot)
+        const proposal = await queuePublishProposal(targetP, fromSpaceId, fromPath, toPath, snapshot)
         return NextResponse.json({ status: 'proposed', proposalId: proposal.id })
       }
 

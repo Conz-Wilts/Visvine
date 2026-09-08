@@ -158,7 +158,7 @@ export interface AppToolDeps {
 }
 
 const liveDeps: AppToolDeps = {
-  resolveTarget: (ctx, spaceId) => resolveTarget(ctx, spaceId, 'shared'),
+  resolveTarget: (ctx, spaceId) => resolveTarget(ctx, spaceId),
   featureAccessForbidden: (userId, spaceId, email) =>
     featureAccessForbidden(userId, spaceId, 'tools', email),
   listAuthoredTools: listAuthoredToolsService,

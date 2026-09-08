@@ -926,7 +926,8 @@ model ContextPublication {
 model ContextMoveProposal {
   id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId      String    @map("space_id")
-  fromPath     String    @map("from_path") // in the proposer's PERSONAL context
+  fromSpaceId  String?   @map("from_space_id") // the source space; null on rows from before it was recorded, whose source was the proposer's `me:` space
+  fromPath     String    @map("from_path") // in the source space's context
   toPath       String    @map("to_path") // in this space's SHARED context
   folderId     String    @map("folder_id")
   content      String

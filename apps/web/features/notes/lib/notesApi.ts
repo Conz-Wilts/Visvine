@@ -224,7 +224,7 @@ export const notesApi = {
     getJson<PublicationStateResponse>(`/api/notes/publications?${qs(c, { path })}`),
   /** Publish a note the caller can read (default source: their personal context)
    *  into space `c`. Queues a proposal when they can't write the target. */
-  publish: (c: string, input: { fromSpaceId?: string; fromPath: string; toPath: string }) =>
+  publish: (c: string, input: { fromSpaceId: string; fromPath: string; toPath: string }) =>
     sendJson<
       | { status: 'applied'; publication: PublicationInfo }
       | { status: 'proposed'; proposalId: string }

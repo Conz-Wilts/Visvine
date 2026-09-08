@@ -1,8 +1,9 @@
 // Context resolution + authorization for the notes feature. Every space has
-// exactly ONE context — its shared context (ownerKey 'shared'). A user's personal
-// context lives in the shared context of their personal-space space
-// (`me:<userId>`, provisioned on first use) — there are no per-space personal
-// contexts anymore. Access to a normal space's context is grant-gated
+// exactly ONE context — its shared context (ownerKey 'shared'). Nobody is given
+// a space: a person's own notes live in a space they created, which is a
+// space like any other. (A `me:<userId>` row provisioned before that rule is
+// still private to its owner — `isPersonalSpace` — but nothing creates one.)
+// Access to a normal space's context is grant-gated
 // (lib/notes/access.ts): joining the space does not by itself grant context
 // access until a grant reaches you. Routes call resolveContext() right after
 // requireSession(); it returns either a ResolvedContext or a ready-to-return
@@ -12,7 +13,6 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { isAdmin, canReadSpace } from '@/lib/auth'
 import type { SessionPayload } from '@/lib/session'
-import { provisionPersonalSpace, personalSpaceId } from '@/lib/spaces/personalSpace'
 import { SHARED_OWNER_KEY, type Context, type Actor } from './store'
 import type { ContextPrincipal } from './shared/contextTypes'
 import { OPEN_ACCESS } from './shared/authz'
@@ -80,24 +80,6 @@ export async function resolveContext(
     isPersonalSpace: space.personalOwnerId !== null,
     actor: { id: session.userId, name: session.name, email: session.email },
   }
-}
-
-/**
- * The caller's personal context: the shared context of their personal-space
- * space, provisioning it on first use (idempotent). This is the only
- * place personal spaces get created.
- */
-export async function resolvePersonalContext(identity: {
-  userId: string
-  name: string
-  email?: string | null
-}): Promise<Context> {
-  const spaceId = personalSpaceId(identity.userId)
-  const existing = await prisma.space.findUnique({ where: { id: spaceId }, select: { id: true } })
-  if (!existing) {
-    await provisionPersonalSpace(identity)
-  }
-  return { spaceId, ownerKey: SHARED_OWNER_KEY }
 }
 
 /**

@@ -23,6 +23,7 @@ import type { AuthoredToolDetail } from '@/lib/tools/service'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
 import type { Target } from '@/lib/actions/resolve'
+import type { ResolvedContext } from '@/lib/notes/resolve'
 import type { InstallSummary } from '@/lib/tools/installs'
 import type { ToolVersionSummary } from '@/lib/tools/registry'
 
@@ -46,7 +47,16 @@ const PRINCIPAL = {
 
 const CONTEXT: Context = { spaceId: SPACE, ownerKey: 'shared' }
 
-const TARGET: Target = { principal: PRINCIPAL, context: CONTEXT, resolved: null }
+const RESOLVED = {
+  spaceId: SPACE,
+  ownerKey: 'shared',
+  scope: 'shared',
+  isAdmin: false,
+  isPersonalSpace: false,
+  actor: { id: PRINCIPAL.userId, name: PRINCIPAL.name, email: PRINCIPAL.email },
+} as unknown as ResolvedContext
+
+const TARGET: Target = { principal: PRINCIPAL, context: CONTEXT, resolved: RESOLVED }
 
 function config(over: Partial<ToolConfig> = {}): ToolConfig {
   return {

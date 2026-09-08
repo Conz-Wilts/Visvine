@@ -227,7 +227,6 @@ const RECIPES: Recipe[] = [
         why: 'THE STEP THAT CREATES THE CONNECTOR. A full-content write of the note; see `contract` for the exact shape.',
         args: {
           space_id: spaceId(ctx),
-          scope: 'shared',
           path: 'connectors/<name>.md',
           content: '<the note — frontmatter perimeter + documented example code>',
           visibility: 'inherit',
@@ -533,7 +532,7 @@ const RECIPES: Recipe[] = [
         n: 2,
         tool: 'read_file',
         why: "Read the run sheet or brief before writing anything — it is where the date, venue and the event's actual pitch come from.",
-        args: { space_id: spaceId(ctx), path: '<the `readable` path from step 1>', scope: 'shared' },
+        args: { space_id: spaceId(ctx), path: '<the `readable` path from step 1>' },
         optional: true,
       },
       {
@@ -559,7 +558,6 @@ const RECIPES: Recipe[] = [
           'link the event to the people and organisations involved.',
         args: {
           space_id: spaceId(ctx),
-          scope: 'shared',
           path: 'events/<slug>/marketing.md',
           content: '<the copy — social posts, invite email, blurb>',
           visibility: 'inherit',
@@ -602,7 +600,6 @@ const RECIPES: Recipe[] = [
     ],
     mustKnow: () => [
       'Retired notes still rank, below current ones. Every hit reports its `status` — do not present a `stale` or `superseded` note as current, and follow `superseded_by` when it is set.',
-      "Reads default to the space's shared context; pass scope:'personal' for your own private space.",
     ],
     blockers: () => [],
   },
@@ -620,7 +617,7 @@ const RECIPES: Recipe[] = [
     ],
     steps: (ctx) => [
       { n: 1, tool: 'read_context', why: 'edit_context is a FULL-CONTENT write. Read first or you overwrite what is there.', args: { space_id: spaceId(ctx), path: '<path>' }, optional: true },
-      { n: 2, tool: 'edit_context', why: 'Write it. Pass scope:"shared" for the space\'s context, and visibility:"inherit" if it should be visible to whoever can see its folder.', args: { space_id: spaceId(ctx), path: '<folder>/<slug>.md', content: '<markdown incl. frontmatter>', scope: 'shared' } },
+      { n: 2, tool: 'edit_context', why: 'Write it. Pass visibility:"inherit" if it should be visible to whoever can see its folder.', args: { space_id: spaceId(ctx), path: '<folder>/<slug>.md', content: '<markdown incl. frontmatter>' } },
     ],
     mustKnow: () => [
       'A new SHARED note is private by default — only admins and you can read it. Pass visibility:"inherit" to make it follow its folder.',

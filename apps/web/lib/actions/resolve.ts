@@ -12,20 +12,11 @@
 import prisma from '@/lib/prisma'
 import type { SessionPayload } from '@/lib/session'
 import { adminSpaceIds } from '@/lib/auth'
-import {
-  resolveContext,
-  resolvePersonalContext,
-  principalOf,
-  type ResolvedContext,
-} from '@/lib/notes/resolve'
+import { resolveContext, principalOf, type ResolvedContext } from '@/lib/notes/resolve'
 import { findAliasByRef, personAliases, type SpaceAlias } from '@/lib/types/context'
-import { personalPrincipal } from '@/lib/notes/principal'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { ActionError, type ActionCaller } from '@/lib/actions/types'
-
-/** Which context a call targets. */
-export type ContextScope = 'shared' | 'personal'
 
 function sessionOf(ctx: ActionCaller): SessionPayload {
   return {
@@ -65,37 +56,21 @@ export async function requireSpaceContext(
 export interface Target {
   principal: ContextPrincipal
   context: Context
-  /** Present only for `scope: 'shared'` — the write path needs the full record. */
-  resolved: ResolvedContext | null
+  /** The full record — the write path needs it. */
+  resolved: ResolvedContext
 }
 
 /**
- * The (principal, context) pair a call targets. `'shared'` is the requested
- * space's context under that space's principal; `'personal'` is the
- * caller's own personal-space context (`me:<userId>`, provisioned on demand) —
- * personal context lives there, not in a per-space personal context.
- *
- * Membership in the requested space is checked either way, so `scope:
- * 'personal'` can't be used to skip the tenant boundary.
+ * The (principal, context) pair a call targets: the requested space's context
+ * under that space's principal. There is no other context — a person's own
+ * notes live in a space they created, resolved the same way.
  */
-export async function resolveTarget(
-  ctx: ActionCaller,
-  spaceId: string,
-  scope: ContextScope,
-): Promise<Target> {
+export async function resolveTarget(ctx: ActionCaller, spaceId: string): Promise<Target> {
   const resolved = await requireSpaceContext(ctx, spaceId)
-  if (scope === 'shared') {
-    return {
-      principal: await principalOf(resolved),
-      context: { spaceId, ownerKey: SHARED_OWNER_KEY },
-      resolved,
-    }
-  }
-  const identity = { userId: ctx.userId, name: ctx.name || 'Unknown', email: ctx.email }
   return {
-    principal: personalPrincipal(identity),
-    context: await resolvePersonalContext(identity),
-    resolved: null,
+    principal: await principalOf(resolved),
+    context: { spaceId, ownerKey: SHARED_OWNER_KEY },
+    resolved,
   }
 }
 
