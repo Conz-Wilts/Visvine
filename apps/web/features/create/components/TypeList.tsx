@@ -12,19 +12,19 @@ import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 // cell at the far left (empty on a kind with no aliases, so every mark lines
 // up), then the mark, then one gap before the name. The chevron stands as far
 // off the mark as the name does on the other side.
-const CHEVRON_W = 44;
-const MARK_PX = 18;
+const CHEVRON_W = 36;
+const MARK_PX = 14;
 const MARK_GAP = 8;
 const CELL_W = CHEVRON_W + MARK_PX + MARK_GAP;
 const MARK_CENTER = CHEVRON_W + MARK_PX / 2;
 // The list's own type scale. A rail row's name sits beside a glyph you
 // already know; here the name IS the choice, so it is read a step larger and
 // the mark grows with it.
-const LIST_TEXT = 'text-[17px] whitespace-nowrap';
+const LIST_TEXT = 'text-[14px] whitespace-nowrap';
 // TreeSpine draws its line 14px in (the tree glyph's centre).
 const SPINE_DEFAULT_ML = 14;
 /** An alias row is shorter than its kind's: a line of a list under it. */
-const ALIAS_ROW_H = 56;
+const ALIAS_ROW_H = 40;
 
 /**
  * The Create panel's list: a mark and a name per kind, a hairline before the
@@ -131,7 +131,7 @@ export default function TypeList({
                   aria-label={expanded ? `Hide ${rowLabel(row)} aliases` : `Show ${rowLabel(row)} aliases`}
                   aria-expanded={expanded}
                   onClick={(e) => { e.stopPropagation(); toggle(key); }}
-                  className="absolute left-0 top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-5 [&>svg]:w-5"
+                  className="absolute left-0 top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-4 [&>svg]:w-4"
                   style={{ width: CHEVRON_W, height: ROW_H }}
                 >
                   <span className="flex transition-transform duration-150" style={{ transform: expanded ? 'rotate(90deg)' : 'none' }}>
@@ -152,7 +152,7 @@ export default function TypeList({
                       // type" leads the panel's: it is the row you are looking
                       // for when the one you want isn't there.
                       last={aliases.length === 0}
-                      swatch={<span aria-hidden className="shrink-0 rounded-[3px] border border-dashed border-text-muted" style={{ width: 15, height: 15 }} />}
+                      swatch={<span aria-hidden className="shrink-0 rounded-[3px] border border-dashed border-text-muted" style={{ width: 12, height: 12 }} />}
                       label="New alias"
                       onClick={() => onNewAlias(row)}
                     />
@@ -161,7 +161,7 @@ export default function TypeList({
                     <AliasRow
                       key={alias.id ?? alias.name}
                       last={j === aliases.length - 1}
-                      swatch={<span aria-hidden className="shrink-0 rounded-[3px]" style={{ width: 15, height: 15, background: alias.color }} />}
+                      swatch={<span aria-hidden className="shrink-0 rounded-[3px]" style={{ width: 12, height: 12, background: alias.color }} />}
                       label={alias.name}
                       onClick={() => onPick(row, alias)}
                     />

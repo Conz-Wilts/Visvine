@@ -7,13 +7,13 @@ import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { TREE_ROW_BLEED, TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
 
 /** A sub-space row is shorter than its parent's: a line of a list under it. */
-const SUBSPACE_ROW_H = 56;
+const SUBSPACE_ROW_H = 40;
 /** The chevron's cell on a parent row: the row's left edge, ahead of the
  *  avatar, so nothing else on the row moves whether or not a row has one.
  *  Wide enough that the glyph, centred in it, stands as far off the avatar as
  *  the name does on the other side. */
-const CHEVRON_W = 44;
-const AVATAR_PX = 40;
+const CHEVRON_W = 36;
+const AVATAR_PX = 32;
 const AVATAR_GAP = 8;
 /** The avatar's cell on a list row: the chevron's cell, the avatar, a gap.
  *  Narrower than the rail's glyph cell — the rail shuts under the list, so the
@@ -72,9 +72,9 @@ export function SpaceListRow({
         }}
       >
         <span className="flex shrink-0 items-center justify-end" style={{ width: LIST_CELL_W, height: ROW_H, paddingRight: AVATAR_GAP }}>
-          {/* The same avatar the space wears at the rail's head — 40px on
-              10px corners — so the list reads as more of that row. */}
-          <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" rounded="rounded-[10px]" className="!w-10 !h-10 !text-base" />
+          {/* The same avatar the space wears at the rail's head — 32px on
+              8px corners — so the list reads as more of that row. */}
+          <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" rounded="rounded-[8px]" className="!w-8 !h-8 !text-sm" />
         </span>
         <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: LABEL_ML }}>{space.name}</span>
         {current && check}
@@ -86,7 +86,7 @@ export function SpaceListRow({
           aria-expanded={open}
           tabIndex={tabbable ? 0 : -1}
           onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
-          className="absolute top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-5 [&>svg]:w-5"
+          className="absolute top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-4 [&>svg]:w-4"
           style={{ left: 0, width: CHEVRON_W, height: ROW_H }}
         >
           <span className="flex transition-transform duration-150" style={{ transform: open ? 'rotate(90deg)' : 'none' }}>
@@ -161,7 +161,7 @@ export function NewSpaceRow({ tabbable, onClick }: { tabbable: boolean; onClick:
     >
       <span className="flex shrink-0 items-center justify-end" style={{ width: LIST_CELL_W, height: ROW_H, paddingRight: AVATAR_GAP }}>
         <span
-          className="flex items-center justify-center rounded-[10px] border border-dashed border-border-default text-text-muted [&>svg]:h-5 [&>svg]:w-5"
+          className="flex items-center justify-center rounded-[8px] border border-dashed border-border-default text-text-muted [&>svg]:h-4 [&>svg]:w-4"
           style={{ width: AVATAR_PX, height: AVATAR_PX }}
         >
           <PlusIcon />
@@ -194,7 +194,7 @@ export function NewSubspaceRow({ parentName, nested, tabbable, onClick }: {
       style={{ height: SUBSPACE_ROW_H, color: 'var(--shell-fg-muted, #111827)' }}
     >
       <TreeSpineJoin kind={nested} />
-      <span aria-hidden className="flex shrink-0 items-center justify-center rounded-[5px] border border-dashed border-text-muted text-text-muted [&>svg]:h-3.5 [&>svg]:w-3.5" style={{ width: 22, height: 22 }}>
+      <span aria-hidden className="flex shrink-0 items-center justify-center rounded-[5px] border border-dashed border-text-muted text-text-muted [&>svg]:h-3 [&>svg]:w-3" style={{ width: 18, height: 18 }}>
         <PlusIcon />
       </span>
       <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`}>New sub-space</span>

@@ -61,7 +61,7 @@ const TABS: Array<{ id: ConnectorsTab; label: string; view: PanelView; blurb: st
 
 /** The width the panel needs: a catalogue row is a logo, a name, a line under
  *  it and a button, which the switcher's column would crowd. */
-export const ACCOUNT_PANEL_W = 400;
+export const ACCOUNT_PANEL_W = 360;
 
 export default function AccountRailPanel({ initialTab }: {
   /** The connectors list to open on — set by the `?connectors=` return. */
@@ -123,7 +123,7 @@ export default function AccountRailPanel({ initialTab }: {
           head, so the panel reads as the rail continuing. The name of what
           the row opened, and its close. */}
       <div className="flex shrink-0 items-center justify-between pl-5 pr-3" style={{ height: ROW_H }}>
-        <h2 className="text-[15px] font-semibold text-text-primary">{modelsOnly ? 'Models' : 'Connectors'}</h2>
+        <h2 className="text-[13px] font-semibold text-text-primary">{modelsOnly ? 'Models' : 'Connectors'}</h2>
         <button
           type="button"
           onClick={close}
