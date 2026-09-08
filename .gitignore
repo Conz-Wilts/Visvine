@@ -26,11 +26,11 @@
 # misc
 .DS_Store
 Thumbs.db
-# Keep .claude local by default, but share project hooks + their config with the team.
-# (.claude/.cache runtime markers and .claude/settings.local.json stay ignored.)
-.claude/*
-!.claude/settings.json
-!.claude/hooks/
+# Claude Code's config is per developer, not per project — how the agent runs
+# on someone's machine says nothing about how this app is built. Un-ignore a
+# specific file here only if the team ever needs to SHARE one (a project hook
+# and the settings entry registering it).
+.claude/
 CLAUDE.md
 .idea/
 *.swp
