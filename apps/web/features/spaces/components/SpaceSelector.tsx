@@ -33,7 +33,7 @@ import { HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/
  */
 export default function SpaceSelector() {
   const { currentSpace, spaces, isAdmin } = useSpace();
-  const { expanded, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
+  const { expanded, reduced, switcherOpen, setSwitcherOpen, setAccountPanel } = useSidebar();
   // The switcher and Create new share the rail's edge, one at a time.
   const { close: closeCreate } = useCreateModal();
   const { data: session } = useSession();
@@ -75,6 +75,7 @@ export default function SpaceSelector() {
   // the rail's edge, so it goes away first.
   const openSwitcher = () => {
     closeCreate();
+    setAccountPanel(null);
     setSwitcherOpen(true);
   };
 

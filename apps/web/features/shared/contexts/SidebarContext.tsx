@@ -19,7 +19,15 @@ interface SidebarContextValue {
    *  head; the Sidebar owns the column it slides into. */
   switcherOpen: boolean;
   setSwitcherOpen: (v: boolean) => void;
+  /** The account's panel — Connectors or Models — open in the same column
+   *  (AccountRailPanel). Opened from the rows of the account band at the
+   *  rail's foot; unlike the switcher it is HELD open until it is closed,
+   *  because a form is filled in and a sign-in leaves for a provider from it. */
+  accountPanel: AccountPanel | null;
+  setAccountPanel: (v: AccountPanel | null) => void;
 }
+
+export type AccountPanel = 'connectors' | 'models';
 
 /**
  * Dock motion, shared by the Sidebar's panel column and the Create panel that
@@ -41,6 +49,8 @@ const SidebarContext = createContext<SidebarContextValue>({
   reduced: false,
   switcherOpen: false,
   setSwitcherOpen: () => {},
+  accountPanel: null,
+  setAccountPanel: () => {},
 });
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
@@ -51,11 +61,12 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const [hovered, setHovered] = useState(false);
   const [reduced, setReduced] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [accountPanel, setAccountPanel] = useState<AccountPanel | null>(null);
 
   useEffect(() => setReduced(prefersReducedMotion()), []);
 
   return (
-    <SidebarContext.Provider value={{ expanded: hovered, setHovered, reduced, switcherOpen, setSwitcherOpen }}>
+    <SidebarContext.Provider value={{ expanded: hovered, setHovered, reduced, switcherOpen, setSwitcherOpen, accountPanel, setAccountPanel }}>
       {children}
     </SidebarContext.Provider>
   );

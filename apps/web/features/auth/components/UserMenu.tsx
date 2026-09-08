@@ -6,7 +6,8 @@ import { PlugIcon, SparklesIcon } from "@/features/shared/icons";
 import Image from "next/image";
 import { useSession, signOut } from "@/features/auth/lib/auth-client";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
-import ConnectorsDialog, { CONNECTORS_PARAM, connectorsSegment, type ConnectorsTab } from "@/features/settings/components/ConnectorsDialog";
+import { CONNECTORS_PARAM, connectorsSegment } from "@/features/settings/components/AccountRailPanel";
+import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
 
 /**
@@ -28,22 +29,23 @@ import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRo
  * be transitioned. Keyboard focus opens it too, so the actions are reachable
  * without a pointer.
  *
- * Connectors are a row rather than a settings section because they are about
- * the space you are in, from where you stand in it: the dialog opens over the
- * page you were on and closing it leaves you there. The band is shell chrome
- * on every page, so `?connectors=` re-opens it ANYWHERE — which is what the
- * OAuth round trip returns to — on the tab (connected, disconnected, all or
- * models) the sign-in started from.
+ * Connectors and Models are rows rather than settings sections because they
+ * are about the space you are in, from where you stand in it: each opens the
+ * rail's panel beside the rail (AccountRailPanel, hosted by the Sidebar the
+ * way the space switcher is) and closing it leaves you on the page you were
+ * on. The band is shell chrome on every page, so `?connectors=` re-opens it
+ * ANYWHERE — which is what the OAuth round trip returns to — on the tab
+ * (connected, disconnected, all or models) the sign-in started from.
  */
 export default function UserMenu({ expanded, reduced }: { expanded: boolean; reduced: boolean }) {
   const { data: session, isPending } = useSession();
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
-  const [connectorsOpen, setConnectorsOpen] = useState<ConnectorsTab | null>(null);
+  const { setAccountPanel, setSwitcherOpen } = useSidebar();
   const bandRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  // `?connectors=` opens the dialog: the sign-in round trip comes back to the
+  // `?connectors=` opens the panel: the sign-in round trip comes back to the
   // page it started on, and this is what re-opens what the person was in.
   // Read off `location` rather than useSearchParams — the account band is shell
   // chrome on every page, and a hook that forces a Suspense boundary there
@@ -51,8 +53,8 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   useEffect(() => {
     if (typeof window === "undefined") return;
     const segment = connectorsSegment(new URLSearchParams(window.location.search).get(CONNECTORS_PARAM));
-    if (segment) setConnectorsOpen(segment);
-  }, []);
+    if (segment) setAccountPanel(segment === "models" ? "models" : "connectors");
+  }, [setAccountPanel]);
 
   // A pinned band closes on the next click outside it, the way the rail's own
   // popups do. Hover-opened bands need nothing: the pointer leaving closes them.
@@ -76,14 +78,11 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
     }
   }, [expanded]);
 
-  const closeConnectors = () => {
-    setConnectorsOpen(null);
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (!params.has(CONNECTORS_PARAM)) return;
-    params.delete(CONNECTORS_PARAM);
-    const q = params.toString();
-    router.replace(q ? `${window.location.pathname}?${q}` : window.location.pathname, { scroll: false });
+  // One panel at a time: the two account panels share the rail's edge with
+  // the switcher.
+  const openPanel = (panel: "connectors" | "models") => {
+    setSwitcherOpen(false);
+    setAccountPanel(panel);
   };
 
   if (isPending) {
@@ -110,16 +109,15 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
     {
       key: "connectors",
       label: "Connectors",
-      onClick: () => setConnectorsOpen("connected"),
+      onClick: () => openPanel("connectors"),
       icon: <PlugIcon />,
     },
     {
-      // What the space's agents run on hangs off Connectors — a model IS a
-      // connector note — but it is one decision a space makes once, so it is
-      // its own row rather than a section inside the list of services.
+      // What the space's agents run on is one decision a space makes once,
+      // so it is its own row rather than a section inside the list of services.
       key: "models",
       label: "Models",
-      onClick: () => setConnectorsOpen("models"),
+      onClick: () => openPanel("models"),
       icon: <SparklesIcon />,
     },
     {
@@ -216,8 +214,6 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
           </span>
         }
       />
-
-      {connectorsOpen && <ConnectorsDialog initial={connectorsOpen} onClose={closeConnectors} />}
     </div>
   );
 }

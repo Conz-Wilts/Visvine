@@ -17,6 +17,7 @@ import UserMenu from "@/features/auth/components/UserMenu";
 import CreatePanel from "@/features/create/components/CreatePanel";
 import SpaceSelector from "@/features/spaces/components/SpaceSelector";
 import SpaceSwitcherPanel from "@/features/spaces/components/SpaceSwitcherPanel";
+import AccountRailPanel, { ACCOUNT_PANEL_W, CONNECTORS_PARAM, connectorsSegment, type ConnectorsTab } from "@/features/settings/components/AccountRailPanel";
 import type { SpaceFeatureConfig } from "@/lib/types";
 import {
   COLLAPSED_W,
@@ -95,7 +96,12 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen: createOpen, formOpen: createFormOpen, close: closeCreate } = useCreateModal();
   const createSurface = useCreateSurface();
-  const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
+  const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen, accountPanel, setAccountPanel } = useSidebar();
+  // The list the account panel opens on when a sign-in's return names one.
+  const [accountTab, setAccountTab] = useState<ConnectorsTab | null>(null);
+  useEffect(() => {
+    setAccountTab(connectorsSegment(new URLSearchParams(window.location.search).get(CONNECTORS_PARAM)));
+  }, []);
   const { currentSpace, isAdmin, loading: spaceLoading } = useSpace();
   const { setHost, dockTopInset } = useContextPanel();
   // Rows that change which panel is out act only once the pointer has rested
@@ -173,13 +179,18 @@ export default function Sidebar() {
   // the rail's edge (below), not this column: clamped so they can't outgrow a
   // narrow viewport even beside the open rail.
   const railPanelW = `min(${RAIL_PANEL_W}px, calc(100vw - ${EXPANDED_W}px))`;
+  const accountPanelW = `min(${ACCOUNT_PANEL_W}px, calc(100vw - ${EXPANDED_W}px))`;
   const columnW = docked ? `${panelW}px` : "0px";
   // One of the rail's panels is out beside it. The rail is NOT held open under
   // a panel: the pointer crossing into the panel lets the rail shut to its
   // glyph column, and the panel — pinned to the rail's edge on the rail's own
   // motion — glides left with it, so the pair settles at a column of glyphs
   // and one list rather than two full columns side by side.
-  const railPanelOpen = switcherOpen || createOpen;
+  const railPanelOpen = switcherOpen || createOpen || accountPanel !== null;
+  // The account panel is held open — a form is filled in and a sign-in leaves
+  // from it — so it is never shut by the pointer, only by the rows that open
+  // another panel in its place, its own close, Escape or navigating away.
+  const held = (createOpen && createFormOpen) || accountPanel !== null;
   const railW = expanded ? EXPANDED_W : COLLAPSED_W;
   // A rail panel is open only while the pointer is on the row that opened it
   // or in the panel itself: pointing at any other row of the rail puts both
@@ -199,6 +210,7 @@ export default function Sidebar() {
     releaseTimer.current = null;
   };
   const shutRailPanels = () => {
+    if (accountPanel !== null) return;
     const panelsGone = reduced ? 0 : DOCK_MS;
     setSwitcherOpen(false);
     closeCreate();
@@ -271,7 +283,7 @@ export default function Sidebar() {
   };
   const leaveCard = () => {
     if (!railPanelOpen) return;
-    if (createOpen && createFormOpen) return;
+    if (held) return;
     if (phase.current === "slide") return;
     stopTracking();
     shutRailPanels();
@@ -323,8 +335,9 @@ export default function Sidebar() {
           {!noSpace && (
             <div
               {...intent(() => {
-                // One panel at a time: the two share the edge of the rail.
+                // One panel at a time: the panels share the edge of the rail.
                 setSwitcherOpen(false);
+                setAccountPanel(null);
                 if (!createOpen) createSurface();
               })}
             >
@@ -591,6 +604,14 @@ export default function Sidebar() {
         style={{ left: railW, width: railPanelW, transition: reduced ? "none" : `left ${RAIL_MOTION}` }}
       >
         <CreatePanel />
+      </div>
+      {/* Connectors and Models, from the account band: the same layer, wider
+          for a catalogue row, and held rather than hover-bound. */}
+      <div
+        className={`absolute top-0 bottom-0 z-20 overflow-hidden ${accountPanel ? '' : 'pointer-events-none'}`}
+        style={{ left: railW, width: accountPanelW, transition: reduced ? "none" : `left ${RAIL_MOTION}` }}
+      >
+        <AccountRailPanel initialTab={accountTab} />
       </div>
 
       {/* "More" popup — the same centered modal shell as the Create-new modal,
