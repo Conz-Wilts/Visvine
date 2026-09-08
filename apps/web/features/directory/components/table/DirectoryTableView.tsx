@@ -1,7 +1,7 @@
 'use client';
 
-// The Directory's Table view: a slim control bar (TableToolbar), the strip
-// of tables (TypeStrip) and one of them. A table is per type because the
+// The Directory's Table view: the strip of tables (TypeStrip), a slim control
+// bar under it (TableToolbar) and one of them. A table is per type because the
 // columns are — a Person has a role and a company, an Event has a date and a
 // capacity — so the grid's type filter becomes the strip here, and the bar's
 // filters (search, alias, tag) narrow within the table picked. `All` is the
@@ -179,6 +179,12 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col">
       <div className="shrink-0 px-6 pt-1">
+        {/* Which table you are in comes first: the strip names the thing, the
+            bar below it narrows that thing. */}
+        <div className="pb-1">
+          <TypeStrip types={types} activeKey={activeKey ?? ''} nodeTypes={space?.nodeTypes} onChange={onTypeChange} />
+        </div>
+
         {/* Search is one of the bar's controls here, not a band of its own: the
             Table already states what it is showing and narrows it from that
             line, so the box belongs on it, at the height of the buttons beside
@@ -206,10 +212,6 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
             ) : null
           }
         />
-
-        <div className="pb-3 pt-1">
-          <TypeStrip types={types} activeKey={activeKey ?? ''} nodeTypes={space?.nodeTypes} onChange={onTypeChange} />
-        </div>
 
         {(error || saveError) && (
           <div className="py-2">

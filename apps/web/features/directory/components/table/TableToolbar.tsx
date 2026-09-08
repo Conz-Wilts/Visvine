@@ -2,7 +2,7 @@
 
 // The Table view's control bar, one quiet line: search, then the three menus
 // that act on the table — Filter, Sort, Columns — then the active filters as
-// removable pills. Which table you are in is the TypeStrip under the bar, not
+// removable pills. Which table you are in is the TypeStrip above the bar, not
 // a control on it. Search rides the same line, sized to the buttons beside it
 // — the Table names what it is showing and narrows it from one bar, so a
 // full-width search band above would be a second bar doing the same job. The
@@ -92,7 +92,7 @@ export default function TableToolbar({ browse, typeKey, columns, sort, onSortCha
   const activeCount = filterAliases.size + filterTags.size;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 py-2">
+    <div className="flex flex-wrap items-center gap-2 pb-3 pt-1">
       {/* Search leads the bar, then the three menus that act on the table -
           Filter, Sort, Columns - as one run, because they are one job; nothing
           is parked at the far end. The active filters trail them as removable

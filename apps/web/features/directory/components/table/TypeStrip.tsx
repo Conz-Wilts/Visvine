@@ -1,6 +1,7 @@
 'use client';
 
-// Which table you are in, as one row of tabs above it: All, then every type
+// Which table you are in, as one row of tabs over the bar and the table:
+// All, then every type
 // with rows, each under its colour square with its count beside it. The
 // current one sits on a rounded square, the shape every label in the app
 // wears; the rest are plain text that fill on hover.

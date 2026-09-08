@@ -5,12 +5,14 @@
 // fills its pane, with a numbered name column, each header wearing its kind's glyph and
 // opening a menu of what can be done to the column — sort, step, hide, and
 // an admin's edit — with the column it opened for lit under it; a drag
-// reorders a column, its right edge resizes it, and the "+" past the last
-// one shows a hidden column or mints a new field without leaving the table.
+// reorders a column, its right edge resizes it, and "Add column" — the last
+// column itself, filling the pane past the data — shows a hidden column or
+// mints a new field without leaving the table.
 // Columns nobody has sized share out the pane's spare width, so a table with
-// few columns is never a strip beside a blank. A footer row on the pane's
-// bottom edge counts what is there: how many entries, and per column how
-// many carry a value.
+// few columns is never a strip beside a blank. The table's own tfoot sticks
+// to the pane's bottom edge and counts what is there: how many entries, and
+// per column how many carry a value — with the horizontal scrollbar under
+// it, since it is inside the scroll box.
 //
 // The table is its own scroll box (the view sizes it to the pane): the head
 // sticks to its top and the name column to its left, so a wide table keeps
@@ -50,7 +52,7 @@ import { getNodeTypeConfig, type DirectoryItem, type NodeTypeConfig, type SpaceA
 interface DirectoryTableProps {
   items: DirectoryItem[];
   columns: TableColumn[];
-  /** The type's columns this view hides — the "+" menu's stock. */
+  /** The type's columns this view hides — the "Add column" menu's stock. */
   hiddenColumns: TableColumn[];
   typeName: string;
   sort: TableSort | null;
@@ -71,8 +73,10 @@ interface DirectoryTableProps {
   onSaveCell?: (item: DirectoryItem, column: TableColumn, value: unknown) => Promise<void>;
 }
 
-/** The width of the "+" header cell at the row's end. */
-const ADD_COLUMN_WIDTH = 44;
+/** The narrowest the "Add column" cell gets. It is the table's last column,
+ *  not a button parked before a blank one, so it takes every pixel past the
+ *  data and never less than this. */
+const ADD_COLUMN_MIN_WIDTH = 168;
 
 /** What the table's frame components need that a row's content doesn't: the
  *  column layout the `<colgroup>` is built from. */
@@ -105,9 +109,9 @@ function Table({ style, children, context }: React.ComponentPropsWithoutRef<'tab
         {columns.map((c) => (
           <col key={c.key} style={{ width: widthOf?.(c) }} />
         ))}
-        <col style={{ width: ADD_COLUMN_WIDTH }} />
-        {/* The filler absorbs any pane width past the columns, so the
-            gridlines end where the data does rather than stretching. */}
+        {/* "Add column" is the last column and carries no width, so fixed
+            layout hands it every pixel past the data: the gridlines end where
+            the data does and the header still reaches the pane's edge. */}
         <col />
       </colgroup>
       {children}
@@ -123,6 +127,16 @@ const TableHead = React.forwardRef<HTMLTableSectionElement, React.ComponentProps
   },
 );
 
+// The count row rides INSIDE the scroll box, sticky to its bottom, so the
+// horizontal scrollbar sits under it rather than between it and the rows —
+// and it follows the columns sideways for free. z-20 for the same reason the
+// head takes it: the body's sticky name cells are z-10.
+const TableFoot = React.forwardRef<HTMLTableSectionElement, React.ComponentPropsWithoutRef<'tfoot'>>(
+  function TableFoot({ style, ...props }, ref) {
+    return <tfoot ref={ref} {...props} style={{ ...style, zIndex: 20 }} className="bg-surface-1" />;
+  },
+);
+
 const TableRow = ({ item: _item, style, ...props }: React.ComponentPropsWithoutRef<'tr'> & { item?: DirectoryItem }) => (
   <tr
     {...props}
@@ -131,7 +145,7 @@ const TableRow = ({ item: _item, style, ...props }: React.ComponentPropsWithoutR
   />
 );
 
-const tableComponents = { Scroller, Table, TableHead, TableRow } as unknown as TableComponents<DirectoryItem, TableContext>;
+const tableComponents = { Scroller, Table, TableHead, TableFoot, TableRow } as unknown as TableComponents<DirectoryItem, TableContext>;
 
 export default function DirectoryTable({
   items, columns, hiddenColumns, typeName, sort, widths, loading = false,
@@ -199,7 +213,7 @@ export default function DirectoryTable({
   const effectiveWidth = useMemo(() => {
     const sized = (c: TableColumn) => (liveWidth?.key === c.key ? liveWidth.width : widths[c.key]);
     const base = (c: TableColumn) => sized(c) ?? defaultWidth(c);
-    const total = columns.reduce((sum, c) => sum + base(c), 0) + ADD_COLUMN_WIDTH;
+    const total = columns.reduce((sum, c) => sum + base(c), 0) + ADD_COLUMN_MIN_WIDTH;
     const free = columns.filter((c) => sized(c) === undefined);
     const freeWidth = free.reduce((sum, c) => sum + base(c), 0);
     const slack = paneWidth - total;
@@ -207,25 +221,12 @@ export default function DirectoryTable({
     const widened = new Map(free.map((c) => [c.key, Math.min(MAX_COLUMN_WIDTH, Math.floor(base(c) + (slack * base(c)) / freeWidth))]));
     return (c: TableColumn) => widened.get(c.key) ?? base(c);
   }, [columns, liveWidth, paneWidth, widths]);
-  const totalWidth = columns.reduce((sum, c) => sum + effectiveWidth(c), 0) + ADD_COLUMN_WIDTH;
+  const totalWidth = columns.reduce((sum, c) => sum + effectiveWidth(c), 0) + ADD_COLUMN_MIN_WIDTH;
   const tableContext = useMemo<TableContext>(
     () => ({ columns, widthOf: effectiveWidth, totalWidth }),
     [columns, effectiveWidth, totalWidth],
   );
 
-  // The footer rides under the scroll box rather than inside it, so it sits
-  // on the pane's bottom edge however few rows there are; it follows the
-  // scroller's horizontal position by hand.
-  const footerRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const scroller = frameRef.current?.querySelector<HTMLElement>('[data-virtuoso-scroller]');
-    const track = footerRef.current;
-    if (!scroller || !track) return;
-    const follow = () => { track.style.transform = `translateX(${-scroller.scrollLeft}px)`; };
-    follow();
-    scroller.addEventListener('scroll', follow, { passive: true });
-    return () => scroller.removeEventListener('scroll', follow);
-  }, [loading, items.length]);
   const menuColumn = menu ? columns.find((c) => c.key === menu.key) ?? null : null;
   const menuIndex = menuColumn ? columns.indexOf(menuColumn) : -1;
   // The column the open menu is for: lit down its whole length, so what the
@@ -270,211 +271,146 @@ export default function DirectoryTable({
   return (
     <div ref={frameRef} className="flex h-full w-full flex-col overflow-hidden bg-surface-1">
       <div className="min-h-0 min-w-0 flex-1">
-      <TableVirtuoso<DirectoryItem, TableContext>
-        data={items}
-        context={tableContext}
-        components={tableComponents}
-        computeItemKey={(_, item) => item.id}
-        increaseViewportBy={{ top: 240, bottom: 480 }}
-        fixedHeaderContent={() => (
-          <tr className="h-10 border-b border-border-default">
-            {columns.map((column) => {
-              const active = sort?.key === column.key;
-              const isName = column.source === 'name';
-              const lit = litKey === column.key;
-              return (
-                <th
-                  key={column.key}
-                  scope="col"
-                  aria-sort={active ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                  draggable
-                  onDragStart={(e) => {
-                    setDragKey(column.key);
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', column.key);
-                  }}
-                  onDragOver={(e) => {
-                    if (!dragKey || dragKey === column.key) return;
-                    e.preventDefault();
-                    setDropKey(column.key);
-                  }}
-                  onDragLeave={() => setDropKey((k) => (k === column.key ? null : k))}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (dragKey && dragKey !== column.key) onReorder(dragKey, column.key);
-                    setDragKey(null);
-                    setDropKey(null);
-                  }}
-                  onDragEnd={() => { setDragKey(null); setDropKey(null); }}
-                  className={clsx(
-                    'group/th relative border-r border-border-subtle px-0 text-left align-middle text-[13px] font-medium text-text-secondary select-none',
-                    lit ? 'bg-surface-2' : 'bg-surface-1',
-                    isName && 'sticky left-0 z-10',
-                    dragKey === column.key && 'opacity-40',
-                    dropKey === column.key && 'shadow-[inset_2px_0_0_var(--color-brand-green)]',
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      setAddAnchor(null);
-                      setMenu((m) => (m?.key === column.key ? null : { key: column.key, anchor: e.currentTarget }));
+        <TableVirtuoso<DirectoryItem, TableContext>
+          data={items}
+          context={tableContext}
+          components={tableComponents}
+          computeItemKey={(_, item) => item.id}
+          increaseViewportBy={{ top: 240, bottom: 480 }}
+          fixedHeaderContent={() => (
+            <tr className="h-10 border-b border-border-default">
+              {columns.map((column) => {
+                const active = sort?.key === column.key;
+                const isName = column.source === 'name';
+                const lit = litKey === column.key;
+                return (
+                  <th
+                    key={column.key}
+                    scope="col"
+                    aria-sort={active ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                    draggable
+                    onDragStart={(e) => {
+                      setDragKey(column.key);
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.dataTransfer.setData('text/plain', column.key);
                     }}
-                    aria-haspopup="menu"
-                    aria-expanded={menu?.key === column.key}
+                    onDragOver={(e) => {
+                      if (!dragKey || dragKey === column.key) return;
+                      e.preventDefault();
+                      setDropKey(column.key);
+                    }}
+                    onDragLeave={() => setDropKey((k) => (k === column.key ? null : k))}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragKey && dragKey !== column.key) onReorder(dragKey, column.key);
+                      setDragKey(null);
+                      setDropKey(null);
+                    }}
+                    onDragEnd={() => { setDragKey(null); setDropKey(null); }}
                     className={clsx(
-                      'flex h-10 w-full min-w-0 items-center gap-2 px-3 transition-colors hover:text-text-primary',
-                      column.kind === 'number' && 'justify-end',
-                      (active || lit) && 'text-text-primary',
+                      'group/th relative border-r border-border-subtle px-0 text-left align-middle text-[13px] font-medium text-text-secondary select-none',
+                      lit ? 'bg-surface-2' : 'bg-surface-1',
+                      isName && 'sticky left-0 z-10',
+                      dragKey === column.key && 'opacity-40',
+                      dropKey === column.key && 'shadow-[inset_2px_0_0_var(--color-brand-green)]',
                     )}
-                    title={`${column.label} column`}
                   >
-                    {isName && <span aria-hidden className="w-6 shrink-0" />}
-                    <ColumnKindIcon column={column} className="h-4 w-4 shrink-0 text-text-muted" />
-                    <span className="truncate">{column.label}</span>
-                    {active && (
-                      sort!.dir === 'asc'
-                        ? <ArrowUpIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-text-muted" />
-                        : <ArrowDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-text-muted" />
-                    )}
-                  </button>
-                  {/* The resize grip: the last 6px of every header. */}
-                  <span
-                    role="separator"
-                    aria-orientation="vertical"
-                    aria-label={`Resize ${column.label}`}
-                    onPointerDown={(e) => beginResize(e, column)}
-                    onPointerMove={moveResize}
-                    onPointerUp={endResize}
-                    onPointerCancel={endResize}
-                    onClick={(e) => e.stopPropagation()}
-                    className={clsx(
-                      'absolute inset-y-2 right-0 w-1.5 cursor-col-resize rounded-full transition-colors hover:bg-border-default',
-                      liveWidth?.key === column.key && 'bg-brand-green',
-                    )}
-                  />
-                </th>
-              );
-            })}
-            <th
-              scope="col"
-              onDragOver={(e) => {
-                if (!dragKey) return;
-                e.preventDefault();
-                setDropKey('end');
-              }}
-              onDragLeave={() => setDropKey((k) => (k === 'end' ? null : k))}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (dragKey) onReorder(dragKey, null);
-                setDragKey(null);
-                setDropKey(null);
-              }}
-              className={clsx(
-                'border-r border-border-subtle bg-surface-1 p-0 align-middle',
-                dropKey === 'end' && 'shadow-[inset_2px_0_0_var(--color-brand-green)]',
-              )}
-            >
-              <button
-                type="button"
-                onClick={(e) => {
-                  setMenu(null);
-                  setAddAnchor((a) => (a ? null : e.currentTarget));
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        setAddAnchor(null);
+                        setMenu((m) => (m?.key === column.key ? null : { key: column.key, anchor: e.currentTarget }));
+                      }}
+                      aria-haspopup="menu"
+                      aria-expanded={menu?.key === column.key}
+                      className={clsx(
+                        'flex h-10 w-full min-w-0 items-center gap-2 px-3 transition-colors hover:text-text-primary',
+                        column.kind === 'number' && 'justify-end',
+                        (active || lit) && 'text-text-primary',
+                      )}
+                      title={`${column.label} column`}
+                    >
+                      {isName && <span aria-hidden className="w-6 shrink-0" />}
+                      <ColumnKindIcon column={column} className="h-4 w-4 shrink-0 text-text-muted" />
+                      <span className="truncate">{column.label}</span>
+                      {active && (
+                        sort!.dir === 'asc'
+                          ? <ArrowUpIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-text-muted" />
+                          : <ArrowDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-text-muted" />
+                      )}
+                    </button>
+                    {/* The resize grip: the last 6px of every header. */}
+                    <span
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-label={`Resize ${column.label}`}
+                      onPointerDown={(e) => beginResize(e, column)}
+                      onPointerMove={moveResize}
+                      onPointerUp={endResize}
+                      onPointerCancel={endResize}
+                      onClick={(e) => e.stopPropagation()}
+                      className={clsx(
+                        'absolute inset-y-2 right-0 w-1.5 cursor-col-resize rounded-full transition-colors hover:bg-border-default',
+                        liveWidth?.key === column.key && 'bg-brand-green',
+                      )}
+                    />
+                  </th>
+                );
+              })}
+              <th
+                scope="col"
+                onDragOver={(e) => {
+                  if (!dragKey) return;
+                  e.preventDefault();
+                  setDropKey('end');
                 }}
-                aria-haspopup="menu"
-                aria-expanded={addAnchor !== null}
-                aria-label="Add a column"
-                title="Add a column"
+                onDragLeave={() => setDropKey((k) => (k === 'end' ? null : k))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragKey) onReorder(dragKey, null);
+                  setDragKey(null);
+                  setDropKey(null);
+                }}
                 className={clsx(
-                  'flex h-10 w-full items-center justify-center text-text-muted transition-colors hover:text-text-primary',
-                  addAnchor && 'text-text-primary',
+                  'bg-surface-1 p-0 text-left align-middle',
+                  dropKey === 'end' && 'shadow-[inset_2px_0_0_var(--color-brand-green)]',
                 )}
               >
-                <PlusIcon className="h-4 w-4" />
-              </button>
-            </th>
-            <th aria-hidden className="bg-surface-1 p-0" />
-          </tr>
-        )}
-        itemContent={(index, item) => {
-            const typeColor = getTypeColor(item.type, nodeTypes);
-            // What the row is, in the space's own words — the Type cell's
-            // reading for a row wearing no alias.
-            const typeLabel = getNodeTypeConfig(item.type, nodeTypes).name;
-            const alias = item.alias ? aliases?.find((a) => a.name === item.alias) : undefined;
-            return (
-              <>
-                {columns.map((column) => {
-                  const value = cellValue(item, column);
-                  if (column.source === 'name') {
-                    return (
-                      <td
-                        key={column.key}
-                        className={clsx(
-                          'sticky left-0 z-10 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2',
-                          litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
-                        )}
-                      >
-                        <NameCell
-                          index={index}
-                          item={item}
-                          accentColor={alias?.color ?? typeColor ?? undefined}
-                          onOpen={() => onOpen(item)}
-                          onRename={onSaveCell ? (next) => onSaveCell(item, column, next) : undefined}
-                        />
-                      </td>
-                    );
-                  }
-                  return (
-                    <td key={column.key} className={clsx('h-11 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2', litKey === column.key ? 'bg-surface-2' : 'bg-surface-1')}>
-                      <TableCell
-                        column={column}
-                        value={value}
-                        aliasColor={alias?.color ?? typeColor}
-                        typeLabel={typeLabel}
-                        tagColors={tagColors}
-                        onSave={onSaveCell && column.editable ? (v) => onSaveCell(item, column, v) : undefined}
-                      />
-                    </td>
-                  );
-                })}
-                <td aria-hidden className="border-r border-border-subtle bg-surface-1 p-0 group-hover:bg-surface-2" />
-                <td aria-hidden className="bg-surface-1 p-0 group-hover:bg-surface-2" />
-              </>
-            );
-        }}
-      />
-      </div>
-
-      {/* The count row: how many entries, and per column how many carry a
-          value. The name cell holds still the way the column does; the rest
-          slides with the scroller. */}
-      <div className="flex h-10 shrink-0 items-center overflow-hidden border-t border-border-default text-[12.5px]">
-        {columns.map((column, i) =>
-          i === 0 && column.source === 'name' ? (
-            <div
-              key={column.key}
-              style={{ width: effectiveWidth(column) }}
-              className={clsx('z-10 flex h-full shrink-0 items-center border-r border-border-subtle px-3', litKey === column.key ? 'bg-surface-2' : 'bg-surface-1')}
-            >
-              <span className="text-text-secondary">
-                <span className="font-semibold tabular-nums text-text-primary">{items.length}</span> count
-              </span>
-            </div>
-          ) : null,
-        )}
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <div ref={footerRef} className="flex h-10 items-center">
-            {columns.map((column, i) => {
-              if (i === 0 && column.source === 'name') return null;
-              return (
-                <div
-                  key={column.key}
-                  style={{ width: effectiveWidth(column) }}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    setMenu(null);
+                    setAddAnchor((a) => (a ? null : e.currentTarget));
+                  }}
+                  aria-haspopup="menu"
+                  aria-expanded={addAnchor !== null}
+                  title="Add a column"
                   className={clsx(
-                    'flex h-full shrink-0 items-center border-r border-border-subtle px-3',
-                    litKey === column.key && 'bg-surface-2',
-                    column.kind === 'number' && 'justify-end',
+                    'flex h-10 w-full items-center gap-2 px-3 text-[13px] font-medium text-text-muted transition-colors hover:text-text-primary',
+                    addAnchor && 'text-text-primary',
+                  )}
+                >
+                  <PlusIcon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Add column</span>
+                </button>
+              </th>
+            </tr>
+          )}
+          fixedFooterContent={() => (
+            // The count row: how many entries, and per column how many carry a
+            // value. It is the table's own tfoot, so it sits on the pane's
+            // bottom edge however few rows there are, slides with the columns,
+            // and leaves the horizontal scrollbar below it. The name cell holds
+            // still the way its column does.
+            <tr className="h-10 border-t border-border-default text-[12.5px]">
+              {columns.map((column, i) => (
+                <td
+                  key={column.key}
+                  className={clsx(
+                    'border-r border-border-subtle px-3 align-middle',
+                    litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
+                    i === 0 && column.source === 'name' && 'sticky left-0 z-10',
+                    column.kind === 'number' && 'text-right',
                   )}
                 >
                   {column.source === 'name' ? (
@@ -484,12 +420,58 @@ export default function DirectoryTable({
                   ) : (
                     <span className="tabular-nums text-text-muted">{filled.get(column.key) ?? 0} filled</span>
                   )}
-                </div>
+                </td>
+              ))}
+              <td aria-hidden className="bg-surface-1 p-0" />
+            </tr>
+          )}
+          itemContent={(index, item) => {
+              const typeColor = getTypeColor(item.type, nodeTypes);
+              // What the row is, in the space's own words — the Type cell's
+              // reading for a row wearing no alias.
+              const typeLabel = getNodeTypeConfig(item.type, nodeTypes).name;
+              const alias = item.alias ? aliases?.find((a) => a.name === item.alias) : undefined;
+              return (
+                <>
+                  {columns.map((column) => {
+                    const value = cellValue(item, column);
+                    if (column.source === 'name') {
+                      return (
+                        <td
+                          key={column.key}
+                          className={clsx(
+                            'sticky left-0 z-10 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2',
+                            litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
+                          )}
+                        >
+                          <NameCell
+                            index={index}
+                            item={item}
+                            accentColor={alias?.color ?? typeColor ?? undefined}
+                            onOpen={() => onOpen(item)}
+                            onRename={onSaveCell ? (next) => onSaveCell(item, column, next) : undefined}
+                          />
+                        </td>
+                      );
+                    }
+                    return (
+                      <td key={column.key} className={clsx('h-11 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2', litKey === column.key ? 'bg-surface-2' : 'bg-surface-1')}>
+                        <TableCell
+                          column={column}
+                          value={value}
+                          aliasColor={alias?.color ?? typeColor}
+                          typeLabel={typeLabel}
+                          tagColors={tagColors}
+                          onSave={onSaveCell && column.editable ? (v) => onSaveCell(item, column, v) : undefined}
+                        />
+                      </td>
+                    );
+                  })}
+                  <td aria-hidden className="bg-surface-1 p-0 group-hover:bg-surface-2" />
+                </>
               );
-            })}
-            <div aria-hidden style={{ width: ADD_COLUMN_WIDTH }} className="h-full shrink-0 border-r border-border-subtle" />
-          </div>
-        </div>
+          }}
+        />
       </div>
 
       <HeaderPopover anchor={menu?.anchor ?? null} onClose={closeMenus}>

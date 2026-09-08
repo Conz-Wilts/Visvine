@@ -1,6 +1,7 @@
 'use client';
 
-// The header's "+" menu (the Attio gesture): the columns the type has but
+// The "Add column" menu, opened from the table's last column (the Attio
+// gesture): the columns the type has but
 // this view hides, each one click from showing — and, for an admin, the
 // place a NEW field is minted without leaving the table. A viewer sees what
 // can be shown; only an admin sees what can be created, because showing is
