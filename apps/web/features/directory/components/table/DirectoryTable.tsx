@@ -1,14 +1,16 @@
 'use client';
 
 // The Directory as rows: one type at a time, one row per entry, one column
-// per thing the type tracks. The shape is the spreadsheet one: a framed grid
-// with a numbered name column, each header wearing its kind's glyph and
+// per thing the type tracks. The shape is the spreadsheet one: a grid that
+// fills its pane, with a numbered name column, each header wearing its kind's glyph and
 // opening a menu of what can be done to the column — sort, step, hide, and
 // an admin's edit — with the column it opened for lit under it; a drag
 // reorders a column, its right edge resizes it, and the "+" past the last
 // one shows a hidden column or mints a new field without leaving the table.
-// A footer row under the grid counts what is there: how many entries, and
-// per column how many carry a value.
+// Columns nobody has sized share out the pane's spare width, so a table with
+// few columns is never a strip beside a blank. A footer row on the pane's
+// bottom edge counts what is there: how many entries, and per column how
+// many carry a value.
 //
 // The table is its own scroll box (the view sizes it to the pane): the head
 // sticks to its top and the name column to its left, so a wide table keeps
@@ -22,7 +24,7 @@
 // scroll box IS the virtualiser's scroller, so the head and name column stay
 // sticky against the same element that windows the rows.
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { TableVirtuoso, type TableComponents } from 'react-virtuoso';
 import Avatar from '@/components/ui/Avatar';
@@ -129,34 +131,43 @@ const TableRow = ({ item: _item, style, ...props }: React.ComponentPropsWithoutR
   />
 );
 
-// Sticky at the foot the way the head is at the top, and above the name
-// column for the same reason.
-const TableFoot = React.forwardRef<HTMLTableSectionElement, React.ComponentPropsWithoutRef<'tfoot'>>(
-  function TableFoot({ style, ...props }, ref) {
-    return <tfoot ref={ref} {...props} style={{ ...style, zIndex: 20 }} className="bg-surface-1" />;
-  },
-);
-
-const tableComponents = { Scroller, Table, TableHead, TableRow, TableFoot } as unknown as TableComponents<DirectoryItem, TableContext>;
+const tableComponents = { Scroller, Table, TableHead, TableRow } as unknown as TableComponents<DirectoryItem, TableContext>;
 
 export default function DirectoryTable({
   items, columns, hiddenColumns, typeName, sort, widths, loading = false,
   nodeTypes, aliases, tagColors, fields,
   onSortChange, onResize, onReorder, onShowColumn, onHideColumn, onOpen, onSaveCell,
 }: DirectoryTableProps) {
-  const widthOf = (c: TableColumn) => widths[c.key] ?? defaultWidth(c);
-  const totalWidth = columns.reduce((sum, c) => sum + widthOf(c), 0) + ADD_COLUMN_WIDTH;
+  // ── filling the pane: spare width goes to the columns nobody has sized ──
+  // A table narrower than its pane would leave a blank strip past the last
+  // column while the columns themselves truncate, so the slack is shared out
+  // over the columns still at their default width, in proportion to those
+  // widths. A column the viewer has dragged keeps the width they gave it; if
+  // they have sized every one, the filler column past "+" takes the slack.
+  const frameRef = useRef<HTMLDivElement>(null);
+  const [paneWidth, setPaneWidth] = useState(0);
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const measure = () => {
+      const scroller = frame.querySelector<HTMLElement>('[data-virtuoso-scroller]');
+      setPaneWidth((scroller ?? frame).clientWidth);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
 
   // ── resizing: a pointer drag on the header's right edge ────────────────
   const resizing = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
   const [liveWidth, setLiveWidth] = useState<{ key: string; width: number } | null>(null);
-  const beginResize = useCallback((e: React.PointerEvent, column: TableColumn) => {
+  const beginResize = (e: React.PointerEvent, column: TableColumn) => {
     e.preventDefault();
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    resizing.current = { key: column.key, startX: e.clientX, startWidth: widthOf(column) };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [widths]);
+    resizing.current = { key: column.key, startX: e.clientX, startWidth: effectiveWidth(column) };
+  };
   const moveResize = (e: React.PointerEvent) => {
     const r = resizing.current;
     if (!r) return;
@@ -185,14 +196,36 @@ export default function DirectoryTable({
     setAddAnchor(null);
   }, []);
 
-  const effectiveWidth = useCallback(
-    (c: TableColumn) => (liveWidth?.key === c.key ? liveWidth.width : widths[c.key] ?? defaultWidth(c)),
-    [liveWidth, widths],
-  );
+  const effectiveWidth = useMemo(() => {
+    const sized = (c: TableColumn) => (liveWidth?.key === c.key ? liveWidth.width : widths[c.key]);
+    const base = (c: TableColumn) => sized(c) ?? defaultWidth(c);
+    const total = columns.reduce((sum, c) => sum + base(c), 0) + ADD_COLUMN_WIDTH;
+    const free = columns.filter((c) => sized(c) === undefined);
+    const freeWidth = free.reduce((sum, c) => sum + base(c), 0);
+    const slack = paneWidth - total;
+    if (slack <= 0 || freeWidth === 0) return base;
+    const widened = new Map(free.map((c) => [c.key, Math.min(MAX_COLUMN_WIDTH, Math.floor(base(c) + (slack * base(c)) / freeWidth))]));
+    return (c: TableColumn) => widened.get(c.key) ?? base(c);
+  }, [columns, liveWidth, paneWidth, widths]);
+  const totalWidth = columns.reduce((sum, c) => sum + effectiveWidth(c), 0) + ADD_COLUMN_WIDTH;
   const tableContext = useMemo<TableContext>(
     () => ({ columns, widthOf: effectiveWidth, totalWidth }),
     [columns, effectiveWidth, totalWidth],
   );
+
+  // The footer rides under the scroll box rather than inside it, so it sits
+  // on the pane's bottom edge however few rows there are; it follows the
+  // scroller's horizontal position by hand.
+  const footerRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const scroller = frameRef.current?.querySelector<HTMLElement>('[data-virtuoso-scroller]');
+    const track = footerRef.current;
+    if (!scroller || !track) return;
+    const follow = () => { track.style.transform = `translateX(${-scroller.scrollLeft}px)`; };
+    follow();
+    scroller.addEventListener('scroll', follow, { passive: true });
+    return () => scroller.removeEventListener('scroll', follow);
+  }, [loading, items.length]);
   const menuColumn = menu ? columns.find((c) => c.key === menu.key) ?? null : null;
   const menuIndex = menuColumn ? columns.indexOf(menuColumn) : -1;
   // The column the open menu is for: lit down its whole length, so what the
@@ -235,7 +268,8 @@ export default function DirectoryTable({
   }
 
   return (
-    <div className="h-full w-full overflow-hidden bg-surface-1">
+    <div ref={frameRef} className="flex h-full w-full flex-col overflow-hidden bg-surface-1">
+      <div className="min-h-0 min-w-0 flex-1">
       <TableVirtuoso<DirectoryItem, TableContext>
         data={items}
         context={tableContext}
@@ -362,34 +396,6 @@ export default function DirectoryTable({
             <th aria-hidden className="bg-surface-1 p-0" />
           </tr>
         )}
-        fixedFooterContent={() => (
-          <tr className="h-10 border-t border-border-default text-[12.5px]">
-            {columns.map((column) => {
-              const isName = column.source === 'name';
-              const lit = litKey === column.key;
-              return (
-                <td
-                  key={column.key}
-                  className={clsx(
-                    'border-r border-border-subtle px-3 align-middle',
-                    lit ? 'bg-surface-2' : 'bg-surface-1',
-                    isName && 'sticky left-0 z-10',
-                    column.kind === 'number' && 'text-right',
-                  )}
-                >
-                  {isName ? (
-                    <span className="text-text-secondary">
-                      <span className="font-semibold tabular-nums text-text-primary">{items.length}</span> count
-                    </span>
-                  ) : (
-                    <span className="tabular-nums text-text-muted">{filled.get(column.key) ?? 0} filled</span>
-                  )}
-                </td>
-              );
-            })}
-            <td aria-hidden colSpan={2} className="bg-surface-1 p-0" />
-          </tr>
-        )}
         itemContent={(index, item) => {
             const typeColor = getTypeColor(item.type, nodeTypes);
             // What the row is, in the space's own words — the Type cell's
@@ -456,6 +462,52 @@ export default function DirectoryTable({
             );
         }}
       />
+      </div>
+
+      {/* The count row: how many entries, and per column how many carry a
+          value. The name cell holds still the way the column does; the rest
+          slides with the scroller. */}
+      <div className="flex h-10 shrink-0 items-center overflow-hidden border-t border-border-default text-[12.5px]">
+        {columns.map((column, i) =>
+          i === 0 && column.source === 'name' ? (
+            <div
+              key={column.key}
+              style={{ width: effectiveWidth(column) }}
+              className={clsx('z-10 flex h-full shrink-0 items-center border-r border-border-subtle px-3', litKey === column.key ? 'bg-surface-2' : 'bg-surface-1')}
+            >
+              <span className="text-text-secondary">
+                <span className="font-semibold tabular-nums text-text-primary">{items.length}</span> count
+              </span>
+            </div>
+          ) : null,
+        )}
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <div ref={footerRef} className="flex h-10 items-center">
+            {columns.map((column, i) => {
+              if (i === 0 && column.source === 'name') return null;
+              return (
+                <div
+                  key={column.key}
+                  style={{ width: effectiveWidth(column) }}
+                  className={clsx(
+                    'flex h-full shrink-0 items-center border-r border-border-subtle px-3',
+                    litKey === column.key && 'bg-surface-2',
+                    column.kind === 'number' && 'justify-end',
+                  )}
+                >
+                  {column.source === 'name' ? (
+                    <span className="text-text-secondary">
+                      <span className="font-semibold tabular-nums text-text-primary">{items.length}</span> count
+                    </span>
+                  ) : (
+                    <span className="tabular-nums text-text-muted">{filled.get(column.key) ?? 0} filled</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
       <HeaderPopover anchor={menu?.anchor ?? null} onClose={closeMenus}>
         {menuColumn && (
