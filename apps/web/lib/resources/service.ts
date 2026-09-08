@@ -32,8 +32,8 @@ import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import {
   deleteResourceFile,
+  downloadResourceFile,
   getSignedUrl,
-  getStorage,
   RESOURCES_BUCKET,
   uploadResourceFile,
 } from '@/lib/gcs'
@@ -283,7 +283,7 @@ export async function reindexResource(resourceId: string): Promise<DriveFile | n
   }
 
   const context = contextOf(resource.spaceId)
-  const [bytes] = await getStorage().bucket(RESOURCES_BUCKET()).file(resource.gcsPath).download()
+  const bytes = await downloadResourceFile(resource.gcsPath)
   await alignFolderPrivacy(resource.spaceId)
 
   // Reuse the existing source row when there is one, so a re-index replaces this

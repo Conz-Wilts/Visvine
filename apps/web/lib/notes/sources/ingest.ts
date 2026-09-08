@@ -6,7 +6,7 @@
 // Embeddings unconfigured → text-only chunks and still 'ready' (list/read/BM25-
 // free search paths work; only the vector stage skips them).
 
-import { getStorage, RESOURCES_BUCKET, uploadResourceFile } from '@/lib/gcs'
+import { downloadResourceFile, uploadResourceFile } from '@/lib/gcs'
 import { contextSourceObjectPath } from '@/lib/storage/objectPaths'
 import { type Context } from '../store'
 import { embedTexts, embeddingsConfig } from '../embeddings'
@@ -154,7 +154,7 @@ export async function reingestSource(context: Context, path: string): Promise<Co
     })
     return sourceStore.getSource(context, path)
   }
-  const [contents] = await getStorage().bucket(RESOURCES_BUCKET()).file(row.gcsPath).download()
+  const contents = await downloadResourceFile(row.gcsPath)
   await sourceStore.updateSourceStatus(row.id, { status: 'pending', error: null })
   return processSource(context, { id: row.id, path: row.path, kind: row.kind as SourceKind }, contents)
 }

@@ -339,7 +339,7 @@ secret is in the repo; `pnpm env:check` and the CI step guard that.
 | `SECRETS_KEY` | At-rest encryption of every connector secret and stored OAuth token |
 | `GOOGLE_CLIENT_ID` / `_SECRET` | Google sign-in |
 | `SUPER_ADMIN_EMAILS` | Per-space admin bypass |
-| `GCS_MEDIA_BUCKET` / `GCS_RESOURCES_BUCKET` | Object storage |
+| `GCS_MEDIA_BUCKET` / `GCS_RESOURCES_BUCKET` | Object storage. `STORAGE_DRIVER` picks `gcs` (production default) or `local` (a folder; dev default, refused in production) |
 | `AGENT_EMAIL_DOMAIN` / `EMAIL_INBOUND_SECRET` | Inbound email to agents (`<agent>@<space>.<domain>`). The secret authenticates the mail provider; with either unset there is no inbound email and nothing else changes |
 | `AGENT_EDGE_URL` / `EDGE_SERVICE_TOKEN` | The agent edge (`apps/agent-edge`) — agents' machines. The token must match `wrangler secret put EDGE_SERVICE_TOKEN` on the Worker; with either unset there are no machines and nothing else degrades |
 

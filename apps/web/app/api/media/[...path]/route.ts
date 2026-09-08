@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MEDIA_BUCKET, getStorage } from '@/lib/gcs';
+import { readMediaObject } from '@/lib/gcs';
 import { logger } from '@/lib/logger';
 
 // Cache for 5 minutes — images can be re-uploaded so we need revalidation.
@@ -16,9 +16,8 @@ export async function GET(
   const objectPath = path.map(decodeURIComponent).join('/');
 
   try {
-    const storage = getStorage();
-    const file = storage.bucket(MEDIA_BUCKET()).file(objectPath);
-    const [buffer] = await file.download();
+    const buffer = await readMediaObject(objectPath);
+    if (!buffer) return new NextResponse(null, { status: 404 });
 
     // MEDIA_BUCKET stores only WebP variants — Content-Type is always image/webp.
     // Do not use this proxy for RESOURCES_BUCKET (mixed content types).

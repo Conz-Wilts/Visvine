@@ -47,6 +47,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+
+# Local storage driver (STORAGE_DRIVER=local): the buckets as folders
+apps/web/.storage/
 !.env.example
 !**/.env.example
 !.env.*.example

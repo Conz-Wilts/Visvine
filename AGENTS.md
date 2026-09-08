@@ -10,7 +10,11 @@ seed layers. This file is the parts an agent needs before editing code.
 ## Working rules
 
 - Local dev runs against the Docker Postgres; production is Cloud SQL. They
-  share zero data. Never point the local app at production.
+  share zero data. Never point the local app at production. That includes
+  bytes: object storage is `lib/gcs.ts` behind two drivers, `local` (a folder,
+  `apps/web/.storage/`, the default outside production) and `gcs` (the
+  default in production, refused nowhere but `local` is refused there). The
+  bucket names stay the logical names under both.
 - `apps/web/AGENTS.md` is written by `next dev` — do not hand-edit it. Next 16
   differs from older training data: read `apps/web/node_modules/next/dist/docs/`
   before writing framework code.

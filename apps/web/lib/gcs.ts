@@ -1,10 +1,37 @@
 import { Storage } from '@google-cloud/storage';
 import sharp from 'sharp';
+import { localDelete, localList, localRead, localSave, localSignedUrl } from '@/lib/storage/localStore';
+
+// Object storage, behind one set of functions and two drivers.
+//
+// `gcs` is the production driver: the two buckets the deployment names, read
+// with Application Default Credentials or the service account in env. `local`
+// is a directory on disk (lib/storage/localStore.ts) — the default outside
+// production, so a dev checkout never holds a credential for, or writes a
+// byte into, the production buckets. STORAGE_DRIVER picks explicitly; `local`
+// is refused in production because Cloud Run's disk is neither shared nor
+// kept. The bucket names stay the logical names either way (GCS_MEDIA_BUCKET,
+// GCS_RESOURCES_BUCKET): under `local` they are folder names, and every
+// caller's "is storage configured" check keeps reading them.
+
+export type StorageDriver = 'gcs' | 'local';
+
+export function storageDriver(): StorageDriver {
+  const set = process.env.STORAGE_DRIVER;
+  const production = process.env.NODE_ENV === 'production';
+  if (set === 'local') {
+    if (production) throw new Error('STORAGE_DRIVER=local is not allowed in production');
+    return 'local';
+  }
+  if (set === 'gcs') return 'gcs';
+  if (set) throw new Error(`Unknown STORAGE_DRIVER: ${set}`);
+  return production ? 'gcs' : 'local';
+}
 
 // GCS client singleton
 let _storage: Storage | null = null;
 
-export function getStorage(): Storage {
+function getStorage(): Storage {
   if (_storage) return _storage;
 
   const projectId = process.env.GCS_PROJECT_ID;
@@ -47,9 +74,6 @@ export async function uploadProfileImage(
   prefix: string, // e.g. "media/nodeId" or "media/space-spaceId"
   buffer: Buffer
 ): Promise<string> {
-  const storage = getStorage();
-  const bucket = storage.bucket(MEDIA_BUCKET());
-
   // Sharp strips all metadata (EXIF/GPS) by default — just auto-rotate then process
   const base = sharp(buffer).rotate();
 
@@ -60,14 +84,7 @@ export async function uploadProfileImage(
         .resize(size, size, { fit: 'inside', withoutEnlargement: true })
         .webp({ quality, effort: 4 })
         .toBuffer();
-
-      const objectPath = `${prefix}/${name}.webp`;
-      const file = bucket.file(objectPath);
-      await file.save(processed, {
-        contentType: 'image/webp',
-        resumable: false,
-        metadata: { cacheControl: 'public, max-age=86400' },
-      });
+      await saveObject(MEDIA_BUCKET(), `${prefix}/${name}.webp`, processed, 'image/webp', 'public, max-age=86400');
     })
   );
 
@@ -75,14 +92,34 @@ export async function uploadProfileImage(
 }
 
 export async function deleteProfileImage(prefix: string): Promise<void> {
-  const storage = getStorage();
-  const bucket = storage.bucket(MEDIA_BUCKET());
+  await Promise.all(AVATAR_VARIANTS.map(({ name }) => deleteObject(MEDIA_BUCKET(), `${prefix}/${name}.webp`)));
+}
 
-  await Promise.all(
-    AVATAR_VARIANTS.map(({ name }) =>
-      bucket.file(`${prefix}/${name}.webp`).delete({ ignoreNotFound: true })
-    )
-  );
+/** A media variant's bytes for the /api/media proxy, or null when there is none. */
+export async function readMediaObject(objectPath: string): Promise<Buffer | null> {
+  return downloadObject(MEDIA_BUCKET(), objectPath);
+}
+
+// ── the two drivers, behind the primitives every function above builds on ──
+
+async function saveObject(bucketName: string, objectPath: string, bytes: Buffer, contentType: string, cacheControl?: string): Promise<void> {
+  if (storageDriver() === 'local') return localSave(bucketName, objectPath, bytes, contentType);
+  await getStorage().bucket(bucketName).file(objectPath).save(bytes, {
+    contentType,
+    resumable: false,
+    ...(cacheControl ? { metadata: { cacheControl } } : {}),
+  });
+}
+
+async function downloadObject(bucketName: string, objectPath: string): Promise<Buffer | null> {
+  if (storageDriver() === 'local') return (await localRead(bucketName, objectPath))?.bytes ?? null;
+  try {
+    const [contents] = await getStorage().bucket(bucketName).file(objectPath).download();
+    return contents;
+  } catch (err) {
+    if ((err as { code?: number }).code === 404) return null;
+    throw err;
+  }
 }
 
 // Upload a resource file (PDF, XLSX, CSV, DOCX, or image)
@@ -92,10 +129,7 @@ export async function uploadResourceFile(
   buffer: Buffer,
   contentType: string
 ): Promise<string> {
-  const storage = getStorage();
-  const bucket = storage.bucket(RESOURCES_BUCKET());
-  const file = bucket.file(objectPath);
-  await file.save(buffer, { contentType, resumable: false });
+  await saveObject(RESOURCES_BUCKET(), objectPath, buffer, contentType);
   return objectPath;
 }
 
@@ -109,8 +143,8 @@ export async function uploadResourceFile(
  * owns the tenant check.
  */
 export async function downloadResourceFile(objectPath: string): Promise<Buffer> {
-  const storage = getStorage();
-  const [contents] = await storage.bucket(RESOURCES_BUCKET()).file(objectPath).download();
+  const contents = await downloadObject(RESOURCES_BUCKET(), objectPath);
+  if (!contents) throw new Error(`No such object in storage: ${objectPath}`);
   return contents;
 }
 
@@ -141,6 +175,7 @@ export interface StoredObject {
  * collecting somebody's file.
  */
 export async function listObjects(bucketName: string, prefix?: string): Promise<StoredObject[]> {
+  if (storageDriver() === 'local') return localList(bucketName, prefix);
   const [files] = await getStorage().bucket(bucketName).getFiles(prefix ? { prefix } : {});
   return files.map((f) => ({
     name: f.name,
@@ -151,6 +186,7 @@ export async function listObjects(bucketName: string, prefix?: string): Promise<
 
 /** Delete one object, ignoring a miss. */
 export async function deleteObject(bucketName: string, objectPath: string): Promise<void> {
+  if (storageDriver() === 'local') return localDelete(bucketName, objectPath);
   await getStorage().bucket(bucketName).file(objectPath).delete({ ignoreNotFound: true });
 }
 
@@ -167,22 +203,17 @@ export async function deleteObjectsByPrefix(bucketName: string, prefix: string):
   }
   const names = (await listObjects(bucketName, prefix)).map((o) => o.name);
   if (names.length === 0) return 0;
-  const bucket = getStorage().bucket(bucketName);
   // Bounded concurrency: a space can hold thousands of objects and an unbounded
   // Promise.all would open a socket per file.
   const CONCURRENCY = 16;
   for (let i = 0; i < names.length; i += CONCURRENCY) {
-    await Promise.all(
-      names.slice(i, i + CONCURRENCY).map((name) => bucket.file(name).delete({ ignoreNotFound: true }))
-    );
+    await Promise.all(names.slice(i, i + CONCURRENCY).map((name) => deleteObject(bucketName, name)));
   }
   return names.length;
 }
 
 export async function deleteResourceFile(objectPath: string): Promise<void> {
-  const storage = getStorage();
-  const bucket = storage.bucket(RESOURCES_BUCKET());
-  await bucket.file(objectPath).delete({ ignoreNotFound: true });
+  await deleteObject(RESOURCES_BUCKET(), objectPath);
 }
 
 // Generate a signed URL (15-minute expiry) for private GCS objects.
@@ -210,6 +241,12 @@ export async function getSignedUrl(
     return cached.url;
   }
   if (cached) signedUrlCache.delete(key);
+
+  if (storageDriver() === 'local') {
+    const url = localSignedUrl(bucketName, objectPath, now + expiresInMs);
+    signedUrlCache.set(key, { url, expiresAt: now + expiresInMs });
+    return url;
+  }
 
   const storage = getStorage();
   const [url] = await storage
