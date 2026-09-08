@@ -7,13 +7,13 @@ import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { TREE_ROW_BLEED, TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
 
 /** A sub-space row is shorter than its parent's: a line of a list under it. */
-const SUBSPACE_ROW_H = 40;
+const SUBSPACE_ROW_H = 44;
 /** The chevron's cell on a parent row: the row's left edge, ahead of the
  *  avatar, so nothing else on the row moves whether or not a row has one.
  *  Wide enough that the glyph, centred in it, stands as far off the avatar as
  *  the name does on the other side. */
-const CHEVRON_W = 36;
-const AVATAR_PX = 32;
+const CHEVRON_W = 40;
+const AVATAR_PX = 36;
 const AVATAR_GAP = 8;
 /** The avatar's cell on a list row: the chevron's cell, the avatar, a gap.
  *  Narrower than the rail's glyph cell — the rail shuts under the list, so the
@@ -72,9 +72,9 @@ export function SpaceListRow({
         }}
       >
         <span className="flex shrink-0 items-center justify-end" style={{ width: LIST_CELL_W, height: ROW_H, paddingRight: AVATAR_GAP }}>
-          {/* The same avatar the space wears at the rail's head — 32px on
+          {/* The same avatar the space wears at the rail's head — 36px on
               8px corners — so the list reads as more of that row. */}
-          <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" rounded="rounded-[8px]" className="!w-8 !h-8 !text-sm" />
+          <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" rounded="rounded-[8px]" className="!w-9 !h-9 !text-sm" />
         </span>
         <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: LABEL_ML }}>{space.name}</span>
         {current && check}
@@ -194,7 +194,7 @@ export function NewSubspaceRow({ parentName, nested, tabbable, onClick }: {
       style={{ height: SUBSPACE_ROW_H, color: 'var(--shell-fg-muted, #111827)' }}
     >
       <TreeSpineJoin kind={nested} />
-      <span aria-hidden className="flex shrink-0 items-center justify-center rounded-[5px] border border-dashed border-text-muted text-text-muted [&>svg]:h-3 [&>svg]:w-3" style={{ width: 18, height: 18 }}>
+      <span aria-hidden className="flex shrink-0 items-center justify-center rounded-[5px] border border-dashed border-text-muted text-text-muted [&>svg]:h-3 [&>svg]:w-3" style={{ width: 20, height: 20 }}>
         <PlusIcon />
       </span>
       <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`}>New sub-space</span>

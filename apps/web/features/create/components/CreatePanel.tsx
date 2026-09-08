@@ -210,7 +210,7 @@ export default function CreatePanel() {
             </span>
           </div>
         ) : (
-          <div className="flex h-9 w-full items-center gap-2 rounded-lg border border-border-default bg-surface-1 px-3 transition-colors focus-within:border-brand-green">
+          <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-border-default bg-surface-1 px-3 transition-colors focus-within:border-brand-green">
             <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
@@ -222,7 +222,7 @@ export default function CreatePanel() {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKeyDown}
               tabIndex={isOpen ? 0 : -1}
-              className="min-w-0 flex-1 bg-transparent text-[13px] text-text-primary placeholder:text-text-muted focus:outline-none"
+              className="min-w-0 flex-1 bg-transparent text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none"
             />
           </div>
         )}

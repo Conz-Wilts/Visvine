@@ -11,8 +11,8 @@ import type { ReactNode } from "react";
 // widths — change them here and the whole shell stays in sync.
 // The closed rail is a column of glyphs: wide enough to hold one at a size you
 // can read at a glance, with air either side of it.
-export const COLLAPSED_W = 60;
-export const EXPANDED_W = 240;
+export const COLLAPSED_W = 68;
+export const EXPANDED_W = 256;
 export const ROW_INSET = 0;   // row ↔ rail edge: none, a row runs edge to edge
 // The glyph column is the same width open or closed, and it is the CLOSED
 // rail's full inner width — so a glyph's centre lands on COLLAPSED_W / 2 in
@@ -24,7 +24,7 @@ const GLYPH_CELL_W = COLLAPSED_W - ROW_INSET * 2;
 // draw their rows on this same square: ROW_H tall, the mark centred in a cell
 // ROW_H wide, the name LABEL_ML beyond it, so the list beside the rail reads
 // as more of the rail.
-export const ROW_H = 52;
+export const ROW_H = 56;
 export const LABEL_ML = 8;    // glyph cell → label, on the open row
 // Row ↔ row, and row ↔ hairline. None: the tiles stack flush, and a band's
 // line sits directly against the tile on either side of it. The same open or
@@ -35,16 +35,16 @@ export const ITEM_GAP = 0;
 // column and its hover block is the same square as every row below it.
 export const HEAD_CELL_W = GLYPH_CELL_W;
 // The nav icons ship at h-5 w-5 from the feature registry (they are also drawn
-// on the launcher cards at that size); the rail draws them at 20px unfilled, so
+// on the launcher cards at that size); the rail draws them at 22px unfilled, so
 // each cell scales its own svg rather than the registry carrying a second set.
-const GLYPH = "[&>svg]:h-5 [&>svg]:w-5";
+const GLYPH = "[&>svg]:h-[22px] [&>svg]:w-[22px]";
 // One row shape for every entry — Create, each tool, More, each account action.
 // At rest a row is bare: no border, no fill, just the glyph (and the label once
 // the rail is open). The block appears under the pointer only — square-cornered,
 // edge to edge, so shut it is a square tile of the rail rather than a pill.
 export const ROW_CLASS =
   "relative z-10 flex w-full items-center transition-colors duration-150 hover:bg-surface-3";
-export const ROW_TEXT = "text-[13px] whitespace-nowrap";
+export const ROW_TEXT = "text-[14px] whitespace-nowrap";
 // A name fades in once the rail is open and is gone before it shuts. The
 // rail's width takes 300ms, and a label revealed BY that width reads as sliding
 // out from under the glyph column — so it is held back until the width has
