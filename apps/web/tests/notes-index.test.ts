@@ -21,9 +21,12 @@ import {
   isIndexPath,
   newIndexContent,
   nextIndexTitle,
+  foldCuratedChildren,
+  normalizeIndexNote,
   parseChildrenBlock,
   reattachChildrenBlock,
   splitChildrenBlock,
+  stripDuplicateTitleHeading,
 } from '../lib/notes/shared/indexNote'
 import { parseFrontmatter, splitFrontmatter } from '../lib/notes/shared/markdown'
 
@@ -143,25 +146,33 @@ test('applyChildrenBlock replaces an existing block in place, leaving prose alon
   assert.equal(second.split(CHILDREN_OPEN).length - 1, 1, 'exactly one managed block')
 })
 
-// A curated index that walks through its own contents keeps that writing; the
-// block only picks up what the prose hasn't already introduced.
-test('applyChildrenBlock leaves out children the curated prose already links', () => {
-  const curated = '---\ntitle: People\n---\n\n- [Zoe](/people/zoe.md) — leads the seed fund\n'
+// The block is the folder's listing, whole: prose that mentions a child does
+// not take it out of the list, so deleting the note removes it from the index
+// without anyone editing prose.
+test('applyChildrenBlock lists every child, whatever the prose already links', () => {
+  const curated = '---\ntitle: People\n---\n\nZoe ([here](/people/zoe.md)) leads the seed fund.\n'
   const after = applyChildrenBlock(curated, CHILDREN)
   assert.ok(after.includes('leads the seed fund'))
-  assert.ok(after.includes('- [Craig](/people/craig.md)'))
-  assert.equal(
-    after.slice(after.indexOf(CHILDREN_OPEN)).includes('zoe.md'),
-    false,
-    'already linked above — not repeated in the block',
-  )
+  const block = after.slice(after.indexOf(CHILDREN_OPEN))
+  assert.ok(block.includes('- [Craig](/people/craig.md)'))
+  assert.ok(block.includes('- [Zoe](/people/zoe.md)'))
 })
 
-test('a fully curated index grows an empty block, not a duplicate list', () => {
-  const curated =
-    '---\ntitle: People\n---\n\n- [Craig](/people/craig.md)\n- [Zoe](/people/zoe.md)\n'
-  const after = applyChildrenBlock(curated, CHILDREN)
-  assert.ok(after.endsWith(`${CHILDREN_OPEN}\n${CHILDREN_CLOSE}\n`))
+test('the block puts sub-folders first, then notes, and carries each description', () => {
+  const after = applyChildrenBlock('---\ntitle: Home\n---\n\n', [
+    { path: 'thesis.md', title: 'Investment thesis', description: 'what we look for' },
+    { path: 'team/index.md', title: 'Team', folder: true, description: 'who covers\n  what' },
+    { path: 'data/index.md', title: 'Data', folder: true },
+    { path: 'about.md', title: 'About' },
+  ])
+  assert.deepEqual(splitFrontmatter(after).body.trim().split('\n'), [
+    CHILDREN_OPEN,
+    '- [Data](/data/index.md)',
+    '- [Team](/team/index.md) — who covers what',
+    '- [About](/about.md)',
+    '- [Investment thesis](/thesis.md) — what we look for',
+    CHILDREN_CLOSE,
+  ])
 })
 
 test('applyChildrenBlock is a no-op when nothing changed — callers skip the write', () => {
@@ -169,11 +180,11 @@ test('applyChildrenBlock is a no-op when nothing changed — callers skip the wr
   assert.equal(applyChildrenBlock(once, CHILDREN), once)
 })
 
-test('applyChildrenBlock keeps trailing prose below the block on a refresh', () => {
+test('applyChildrenBlock moves a block found mid-body to the end', () => {
   const before = `---\ntitle: People\n---\n\nAbove.\n\n${CHILDREN_OPEN}\n${CHILDREN_CLOSE}\n\nBelow.\n`
   const after = applyChildrenBlock(before, CHILDREN)
-  assert.ok(after.includes('Above.'))
-  assert.ok(after.endsWith('Below.\n'))
+  assert.ok(after.includes('Above.\n\nBelow.\n\n' + CHILDREN_OPEN))
+  assert.ok(after.endsWith(`${CHILDREN_CLOSE}\n`))
 })
 
 test('newIndexContent seeds a folder home page with an empty block ready to fill', () => {
@@ -181,7 +192,7 @@ test('newIndexContent seeds a folder home page with an empty block ready to fill
   assert.equal(parseFrontmatter(content).type, undefined)
   assert.equal(parseFrontmatter(content).title, 'Research')
   assert.equal(declaresIndexType(content), false)
-  assert.ok(content.includes('# Research'))
+  assert.ok(!content.includes('# Research'), 'the title renders from frontmatter, never as a body heading')
   assert.ok(content.includes('Live work.'))
   assert.equal(hasChildrenBlock(content), true)
 })
@@ -219,14 +230,18 @@ test('parseChildrenBlock reads back exactly what renderChildrenBlock wrote', () 
     { path: 'people/ann.md', title: 'Ann' },
   ])
   assert.deepEqual(parseChildrenBlock(splitChildrenBlock(listed).block), [
-    { path: 'people/ann.md', title: 'Ann' },
-    { path: 'people/zoe.md', title: 'Zoe' },
+    { path: 'people/ann.md', title: 'Ann', description: null },
+    { path: 'people/zoe.md', title: 'Zoe', description: null },
   ])
+  assert.deepEqual(
+    parseChildrenBlock(`${CHILDREN_OPEN}\n- [Ann](/people/ann.md) — runs ops\n${CHILDREN_CLOSE}`),
+    [{ path: 'people/ann.md', title: 'Ann', description: 'runs ops' }],
+  )
   assert.deepEqual(parseChildrenBlock(null), [])
   // A block somebody hand-mangled loses the bad rows, not the good ones.
   assert.deepEqual(
     parseChildrenBlock(`${CHILDREN_OPEN}\nloose text\n- [Ann](/people/ann.md)\n${CHILDREN_CLOSE}`),
-    [{ path: 'people/ann.md', title: 'Ann' }],
+    [{ path: 'people/ann.md', title: 'Ann', description: null }],
   )
 })
 
@@ -239,9 +254,8 @@ test('the root index path is the bare basename, and names the context', () => {
 
   // What ensureRootIndex writes must satisfy the repo's own note invariant
   // (scripts/verify-notes-rules.ts: an index.md carries a title, and nobody
-  // declares `type: Index`), and carry a children block so the root opts in to
-  // auto-listing — a root WITHOUT one is deliberately left alone by
-  // refreshFolderIndex.
+  // declares `type: Index`), and carry a children block like every folder —
+  // the root is one.
   const content = newIndexContent({ title: "Connor's Space" })
   assert.equal(parseFrontmatter(content).type, undefined)
   assert.equal(parseFrontmatter(content).title, "Connor's Space")
@@ -329,4 +343,74 @@ test('an entity folder index fills a missing title and node from the entity', ()
   assert.equal(fm.type, 'Person')
   assert.equal(fm.title, 'Connor')
   assert.equal(fm.node, 'person:connor')
+})
+
+// The one shape, held on every index write and refresh.
+test('normalizeIndexNote strips type: note, a duplicate title heading, and lists the folder', () => {
+  const written =
+    '---\ntimestamp: 2026-09-03T16:48:12.049Z\ntype: note\ntitle: Deals\ntags: [deals]\n---\n\n# Deals\n\nHow deals move.\n'
+  const fixed = normalizeIndexNote(written, 'deals', [{ path: 'deals/pipeline.md', title: 'Pipeline' }])
+  const fm = parseFrontmatter(fixed)
+  assert.equal(fm.type, undefined)
+  assert.deepEqual(Object.keys(fm), ['title', 'tags', 'timestamp'], 'leading keys first, the rest after')
+  const body = splitFrontmatter(fixed).body
+  assert.ok(body.startsWith('How deals move.'), `body: ${body}`)
+  assert.ok(body.endsWith(`${CHILDREN_OPEN}\n- [Pipeline](/deals/pipeline.md)\n${CHILDREN_CLOSE}\n`))
+  assert.equal(normalizeIndexNote(fixed, 'deals', [{ path: 'deals/pipeline.md', title: 'Pipeline' }]), fixed)
+})
+
+test('normalizeIndexNote keeps an entity index whole and a writer\'s own heading', () => {
+  const brief =
+    '---\ntype: agent\ntitle: Inbox triage\nnode: agent:inbox-triage\ndescription: Sorts mail\ntags: [Operations]\nschedule: hourly\n---\n\n## What to do\n\nRead the inbox.\n\n' +
+    `${CHILDREN_OPEN}\n${CHILDREN_CLOSE}\n`
+  const agent = { typeLabel: 'agent', nodeId: 'agent:inbox-triage', name: 'Inbox triage' }
+  assert.equal(normalizeIndexNote(brief, 'agents/inbox-triage', [], agent), brief)
+})
+
+test('stripDuplicateTitleHeading only takes a heading that repeats the title', () => {
+  assert.equal(stripDuplicateTitleHeading('# People\n\nWho we back.\n', 'people'), 'Who we back.\n')
+  assert.equal(stripDuplicateTitleHeading('# Start here\n\nProse.\n', 'People'), '# Start here\n\nProse.\n')
+  assert.equal(stripDuplicateTitleHeading('Prose.\n', ''), 'Prose.\n')
+})
+
+// The rebuild folds a hand-written listing into the block.
+test('foldCuratedChildren removes bare child bullets and hands back their descriptions', () => {
+  const home =
+    '---\ntitle: Home\ntags: [home]\n---\n\nThe firm\'s working context.\n\n## Start here\n\n' +
+    '- [Portfolio](/communities/index.md) — all 182 companies\n' +
+    '- [Sectors](/sectors/index.md) (23) — where we invest\n' +
+    '- [Thesis](/thesis.md)\n' +
+    '- [Elsewhere](/other/thing.md) — not a child, stays\n' +
+    '- [Both](/thesis.md) and [more](/team/index.md) — says more than a listing\n\n' +
+    '> Every note is plain Markdown.\n\n' +
+    `${CHILDREN_OPEN}\n${CHILDREN_CLOSE}\n`
+  const children = [
+    { path: 'communities/index.md', title: 'Portfolio', folder: true },
+    { path: 'sectors/index.md', title: 'Sectors', folder: true },
+    { path: 'thesis.md', title: 'Thesis' },
+    { path: 'team/index.md', title: 'Team', folder: true },
+  ]
+  const { content, descriptions } = foldCuratedChildren(home, children)
+  assert.deepEqual(
+    [...descriptions],
+    [
+      ['communities/index.md', 'all 182 companies'],
+      ['sectors/index.md', 'where we invest'],
+    ],
+  )
+  const body = splitFrontmatter(content).body
+  assert.ok(body.includes('- [Elsewhere](/other/thing.md) — not a child, stays'))
+  assert.ok(body.includes('- [Both](/thesis.md) and [more](/team/index.md)'))
+  assert.ok(!body.includes('[Portfolio]'))
+  assert.ok(body.includes('## Start here'), 'a heading with something left under it stays')
+  assert.ok(body.includes('> Every note is plain Markdown.'))
+  assert.ok(body.endsWith(`${CHILDREN_OPEN}\n${CHILDREN_CLOSE}\n`))
+})
+
+test('foldCuratedChildren drops a heading whose whole section folded away, and is a no-op otherwise', () => {
+  const listing = '---\ntitle: Team\n---\n\nWho\'s who.\n\n## People\n\n- [Niki](/team/niki.md) — Partner\n\n## Notes\n'
+  const { content } = foldCuratedChildren(listing, [{ path: 'team/niki.md', title: 'Niki' }])
+  assert.equal(splitFrontmatter(content).body, 'Who\'s who.\n\n## Notes\n')
+  const plain = '---\ntitle: Team\n---\n\nJust prose.\n'
+  assert.equal(foldCuratedChildren(plain, [{ path: 'team/niki.md', title: 'Niki' }]).content, plain)
 })

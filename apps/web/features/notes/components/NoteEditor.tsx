@@ -42,6 +42,8 @@ import {
   parseChildrenBlock,
   reattachChildrenBlock,
   splitChildrenBlock,
+  stripDuplicateTitleHeading,
+  type IndexChild,
 } from '@/lib/notes/shared/indexNote'
 import { notesApi } from '../lib/notesApi'
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext'
@@ -137,16 +139,9 @@ function buildPrefix(frontmatter: string | null): string {
 
 // The note title renders as a heading above the body (from frontmatter), so a body
 // that still opens with a `# Title` line duplicating it — older notes, or notes from
-// a space whose seed predates this — gets that leading heading stripped on load.
+// a space whose seed predates this — gets that leading heading stripped on load
+// (stripDuplicateTitleHeading, the same rule the store holds index notes to).
 // Display-side only: the stored markdown migrates the next time the note is saved.
-function stripLeadingTitleHeading(body: string, title: string): string {
-  if (!title.trim()) return body
-  const m = body.match(/^\s*#{1,6}[ \t]+(.+?)[ \t]*(?:\r?\n|$)/)
-  if (m && m[1].trim().toLowerCase() === title.trim().toLowerCase()) {
-    return body.slice(m[0].length).replace(/^\s*\r?\n/, '')
-  }
-  return body
-}
 
 // The title shown above the body: frontmatter title, else the filename slug.
 function titleFromContent(content: string, path: string): string {
@@ -223,7 +218,7 @@ export function NoteEditor({
   // same way the frontmatter prefix is (see splitChildrenBlock) and put back on
   // every save. Null for the notes that aren't folders — almost all of them.
   const childrenBlockRef = useRef<string | null>(null)
-  const [children, setChildren] = useState<{ path: string; title: string }[]>([])
+  const [children, setChildren] = useState<IndexChild[]>([])
   const rawRef = useRef<HTMLTextAreaElement>(null)
   const pathRef = useRef(path)
   const originRef = useRef<string>('edit')
@@ -372,7 +367,7 @@ export function NoteEditor({
     pathRef.current = path
     const { frontmatter, body } = splitFrontmatter(initialContent)
     prefixRef.current = buildPrefix(frontmatter)
-    const split = splitChildrenBlock(stripLeadingTitleHeading(body, titleFromContent(initialContent, path)))
+    const split = splitChildrenBlock(stripDuplicateTitleHeading(body, titleFromContent(initialContent, path)))
     childrenBlockRef.current = split.block
     setChildren(parseChildrenBlock(split.block))
     editor.commands.setContent(split.body, { emitUpdate: false })
@@ -638,10 +633,13 @@ export function NoteEditor({
                 <h3 className="notes-ref-head">In this folder</h3>
                 <ul className="flex flex-col gap-1">
                   {children.map((child) => (
-                    <li key={child.path}>
+                    <li key={child.path} className="flex items-baseline gap-2">
                       <button type="button" className="notes-ref-from" onClick={() => onOpenNote(child.path)}>
                         {child.title}
                       </button>
+                      {child.description && (
+                        <span className="truncate text-sm text-text-secondary">{child.description}</span>
+                      )}
                     </li>
                   ))}
                 </ul>

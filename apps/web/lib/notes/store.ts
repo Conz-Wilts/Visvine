@@ -54,15 +54,14 @@ import { syncPublicationsOnDelete, syncPublicationsOnRename } from './publicatio
 import {
   INDEX_BASENAME,
   ancestorFolders,
-  applyChildrenBlock,
   buildIndexStub,
-  enforceIndexFrontmatter,
   folderOfIndexPath,
-  hasChildrenBlock,
   indexFolderPathOf,
   indexPathOf,
   isIndexPath,
   newIndexContent,
+  normalizeIndexNote,
+  oneLineDescription,
   nextIndexTitle,
   humanizeFolderName,
   type IndexChild,
@@ -316,35 +315,34 @@ async function directChildrenOf(context: Context, folder: string): Promise<Index
   for (const row of rows) {
     if (row.path === own || row.path.startsWith(':trash:')) continue
     const rel = row.path.slice(prefix.length)
-    const declared = String(parseFrontmatter(row.content).title ?? '').trim()
+    const fm = parseFrontmatter(row.content)
+    const declared = String(fm.title ?? '').trim()
+    const description = oneLineDescription(fm.description)
     if (!rel.includes('/')) {
       // A direct note. The context root's own index.md is a note like any other
       // here only when `folder` is not the root — handled by the `own` skip.
-      children.push({ path: row.path, title: declared || rel.replace(/\.md$/i, '') })
+      children.push({ path: row.path, title: declared || rel.replace(/\.md$/i, ''), description })
     } else if (rel.split('/').length === 2 && isIndexPath(rel)) {
       // A direct subfolder, addressed by its index — the folder IS that note.
       const segment = rel.split('/')[0]
-      children.push({ path: row.path, title: declared || humanizeFolderName(segment) })
+      children.push({ path: row.path, title: declared || humanizeFolderName(segment), description, folder: true })
     }
   }
   return children
 }
 
 /**
- * Refresh a folder's index so its managed child block matches the folder. Curated
- * prose and frontmatter are untouched (see applyChildrenBlock); the write is a
- * direct row update rather than writeNote, because index upkeep is machinery and
- * should not spawn a revision every time a note is added next door.
- *
- * The context root is only refreshed if its index already opted in by carrying a
- * block — the root index is a hand-written home page, not a listing.
+ * Refresh a folder's index so it is in the one index shape with the folder's
+ * current children in its block (normalizeIndexNote). Curated prose is
+ * untouched; the write is a direct row update rather than writeNote, because
+ * index upkeep is machinery and should not spawn a revision every time a note
+ * is added next door. The context root is a folder like any other here.
  */
 export async function refreshFolderIndex(context: Context, folder: string): Promise<void> {
   const idx = indexPathOf(folder)
   const row = await findLive(context, idx)
   if (!row) return
-  if (!folder && !hasChildrenBlock(row.content)) return
-  const next = applyChildrenBlock(row.content, await directChildrenOf(context, folder))
+  const next = await enforceIndexContract(context, idx, row.content)
   if (next === row.content) return
   await prisma.contextNote.update({ where: { id: row.id }, data: { content: next } })
   invalidateVault(context)
@@ -505,19 +503,14 @@ export async function writeNote(
   // An upsert-create under `a/b/` makes `a/b` a folder first, exactly as
   // createNote does. Replica writes never restructure their target context.
   if (!existing && origin !== 'publish') await ensureParentFolderNote(context, p, actor)
-  // A save at an index path is a save to a FOLDER's home page: the contract
-  // (a title — the folder's display name — plus the entity's type and `node:`
-  // when the folder is an entity's) is enforced whatever the incoming
-  // frontmatter says.
+  // A save at an index path is a save to a FOLDER's home page, and every one
+  // has the same shape: the frontmatter contract (a title — the folder's
+  // display name — plus the entity's type and `node:` when the folder is an
+  // entity's), no duplicate title heading, and the folder's child list last —
+  // whatever the incoming content says. A raw write that dropped the markers
+  // gets the list back rather than ending the listing.
   if (isIndexPath(p)) content = await enforceIndexContract(context, p, content)
   const prev = existing?.content ?? null
-
-  // An index that carried the managed child block keeps it: a raw write that
-  // drops the markers would end the auto-listing (the root index opts in by
-  // carrying one). Re-seed it empty; refreshIndexesForNote below refills it.
-  if (isIndexPath(p) && prev !== null && hasChildrenBlock(prev) && !hasChildrenBlock(content)) {
-    content = applyChildrenBlock(content, [])
-  }
 
   // The note row and the record that its projections are owed commit together.
   // Before the outbox these were the same statement plus six bare awaits, so a
@@ -1079,7 +1072,7 @@ export async function ensureEntityFolder(
     const idx = await findLive(context, dest, tx)
     let content = idx?.content ?? ''
     if (idx) {
-      const next = enforceIndexFrontmatter(idx.content, folder, entityContractOf(node))
+      const next = normalizeIndexNote(idx.content, folder, [], entityContractOf(node))
       if (next !== idx.content) {
         await tx.contextNote.update({ where: { id: idx.id }, data: { content: next } })
         content = next
@@ -1217,6 +1210,7 @@ async function ensureParentFolderNote(
  */
 async function enforceIndexContract(context: Context, p: string, content: string): Promise<string> {
   const folder = folderOfIndexPath(p)
+  const children = await directChildrenOf(context, folder)
   if (isEntityFolderIndex(p)) {
     let node = await nodeForEntityPath(context.spaceId, p)
     if (
@@ -1226,9 +1220,9 @@ async function enforceIndexContract(context: Context, p: string, content: string
     ) {
       node = await nodeForEntityPath(context.spaceId, p)
     }
-    if (node) return enforceIndexFrontmatter(content, folder, entityContractOf(node))
+    if (node) return normalizeIndexNote(content, folder, children, entityContractOf(node))
   }
-  return enforceIndexFrontmatter(content, folder)
+  return normalizeIndexNote(content, folder, children)
 }
 
 /**

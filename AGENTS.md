@@ -283,12 +283,20 @@ that form or routes. Starting a space you run stays on the switcher
   inside another shared-context note, is what creates a `mentioned` edge. There is
   no create-link operation anywhere in the system.
 - **An index note IS a folder, and folder-ness is the PATH.** Every folder
-  carries an `index.md`; its `title` is the folder's display name, its body is
-  prose plus a machine-maintained child list between `<!-- index:children -->`
-  markers. Its `type:` says what the folder is ABOUT — `Person` on a person's
-  context folder, nothing at all on a folder that just groups notes. `Index` is
-  not a type and no note may declare it. A folder appears when one is needed:
-  write `a/b/c.md` and `a/b.md` becomes `a/b/index.md` by itself. Rules live in
+  carries an `index.md`, and **every index has ONE shape**, held by
+  `indexNote.ts#normalizeIndexNote` on every write and every refresh:
+  frontmatter (`type` only when the folder is about something, `title` — the
+  folder's display name — `node`, `description`, `tags`, then whatever else
+  the type needs), prose, then the machine-maintained child list between
+  `<!-- index:children -->` markers, LAST. No `# Title` line in the body. The
+  block lists EVERY direct child — sub-folders first, then notes, each with
+  its own `description:` after a dash — so deleting a note removes it from the
+  folder's index and nobody edits prose. `Index` and `Note` name a shape, not
+  a subject, and are stripped from a plain folder's `type:`. A folder appears
+  when one is needed: write `a/b/c.md` and `a/b.md` becomes `a/b/index.md` by
+  itself. `db:index-notes:rebuild` puts old indexes in the shape, folding a
+  hand-written child listing into the block and moving its per-line
+  descriptions onto the children (`foldCuratedChildren`). Rules live in
   `lib/notes/shared/indexNote.ts`; `pnpm --filter @visvine/web db:notes:verify`
   is what keeps seeded data honest — run it after hand-editing any seed layer.
 - Folders marked **"Freeze for AI"** bind the write gate for autonomous origins

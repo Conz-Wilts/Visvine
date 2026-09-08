@@ -12,7 +12,8 @@
  *      (people/<slug>/index.md, an entity note that has become a folder, see
  *      lib/notes/entities.ts) additionally declares the entity's own type and a
  *      `node:` naming a real node of this space;
- *   4. an index's managed child block is present and current;
+ *   4. an index's managed child block is present and current, and the note is
+ *      in the one index shape (no shape-word `type:`, no duplicate `# Title`);
  *   5. a `/…​.md` link in an index body points at a note that exists;
  *   6. a node's `metadata.notePath` pointer and the entity-folder index agree:
  *      the pointer names the live index (shared context), and a live entity-
@@ -38,6 +39,8 @@ import {
   indexPathOf,
   declaresIndexType,
   isIndexPath,
+  oneLineDescription,
+  stripDuplicateTitleHeading,
   type IndexChild,
 } from '../lib/notes/shared/indexNote';
 import { extractMarkdownLinks, parseFrontmatter, splitFrontmatter } from '../lib/notes/shared/markdown';
@@ -71,11 +74,13 @@ function directChildrenOf(notes: Note[], folder: string): IndexChild[] {
   for (const note of notes) {
     if (note.path === own || !note.path.startsWith(prefix)) continue;
     const rel = note.path.slice(prefix.length);
-    const declared = titleOf(note.content);
+    const fm = parseFrontmatter(note.content);
+    const declared = String(fm.title ?? '').trim();
+    const description = oneLineDescription(fm.description);
     if (!rel.includes('/')) {
-      children.push({ path: note.path, title: declared || rel.replace(/\.md$/i, '') });
+      children.push({ path: note.path, title: declared || rel.replace(/\.md$/i, ''), description });
     } else if (rel.split('/').length === 2 && isIndexPath(rel)) {
-      children.push({ path: note.path, title: declared || humanizeFolderName(rel.split('/')[0]) });
+      children.push({ path: note.path, title: declared || humanizeFolderName(rel.split('/')[0]), description, folder: true });
     }
   }
   return children;
@@ -194,6 +199,16 @@ async function main() {
       }
       if (applyChildrenBlock(note.content, directChildrenOf(notes, folder)) !== note.content) {
         violations.push(`${label} ${idx}: child block is stale (run db:index-notes:rebuild)`);
+      }
+      // 4b: the one shape — no `type:` naming the shape, no `# Title` line.
+      const fm = parseFrontmatter(note.content);
+      const declaredType = typeof fm.type === 'string' ? fm.type.trim().toLowerCase() : '';
+      if (declaredType === 'note') {
+        violations.push(`${label} ${idx}: \`type: note\` names a shape, not a subject (run db:index-notes:rebuild)`);
+      }
+      const body = splitFrontmatter(note.content).body;
+      if (stripDuplicateTitleHeading(body, titleOf(note.content)) !== body) {
+        violations.push(`${label} ${idx}: body repeats the title as a heading (run db:index-notes:rebuild)`);
       }
     }
 

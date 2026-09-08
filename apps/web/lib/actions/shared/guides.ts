@@ -56,10 +56,14 @@ const FOLDERS =
   'it findable in search) rather than creating or replacing one. Never hand-write the child list; the ' +
   'markers are refreshed for you on every change in the folder, and a write that drops them is ' +
   'restored. ' +
-  'INDEX LAYOUT (fixed, keep it simple): `# <Title>`, then one or two short paragraphs saying what the ' +
-  'folder holds and who it is for, then optional grouped `- [Title](/path.md) — one-line note` bullets. ' +
-  'NO tables, no columns, no HTML, no nested headings deeper than `##` — a flat list of links reads best ' +
-  'in search and costs models the fewest tokens. Every index in a space must look the same. ' +
+  'INDEX LAYOUT (fixed, and the store holds every index to it): frontmatter with `title:` (plus ' +
+  "`description:` — one line, shown beside the folder wherever it is listed — and `tags:`), then one or " +
+  'two short paragraphs saying what the folder holds and who it is for, then the child list, last. ' +
+  'No `# <Title>` line (the title renders from frontmatter; one you write is removed). Do NOT re-list ' +
+  "the folder's own notes in the prose: the child list already names every direct child with its " +
+  "`description:`, sub-folders first — give a note a `description:` and that is what the folder shows " +
+  'for it. NO tables, no columns, no HTML, no nested headings deeper than `##` — a flat list of links ' +
+  'reads best in search and costs models the fewest tokens. Every index in a space looks the same. ' +
   'MAKING A FOLDER: write a note INSIDE it. `a/b.md` becomes `a/b/index.md` — the folder\'s home page — ' +
   'the moment you add `a/b/<anything>.md`. That is the only gesture; there is no retype and no ' +
   'separate convert step. ' +

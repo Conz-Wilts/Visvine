@@ -2,6 +2,32 @@
 // folder carries an `index.md` whose title is the folder's display name and
 // whose body lists the folder's notes.
 //
+// Every index has ONE shape, held by normalizeIndexNote on every write and
+// every refresh, so the root of a space, `people/craig/index.md` and a folder
+// somebody made yesterday all read the same way:
+//
+//   ---
+//   type: Person            only when the folder is ABOUT something (an entity)
+//   title: Craig            always — the folder's display name
+//   node: person:craig      entity folders only
+//   description: …          optional, one line
+//   tags: []                optional
+//   …                       whatever else the type needs (an agent's schedule)
+//   ---
+//
+//   Prose about the folder — optional, the writer's, never touched.
+//
+//   <!-- index:children -->
+//   - [Sub-folder](/a/b/index.md) — its description
+//   - [Note](/a/note.md) — its description
+//   <!-- /index:children -->
+//
+// The body carries no `# Title` line (the title renders from frontmatter), and
+// the child block is last, lists EVERY direct child — sub-folders first, then
+// notes, each alphabetical, each with the child's own `description:` — and is
+// rewritten by the store whenever a note lands in, leaves or is renamed inside
+// the folder. Delete a note and it leaves the list; nothing has to be edited.
+//
 // Index-ness is the PATH, and only the path. A note's `type:` says what it is
 // ABOUT — so a person's context folder is `type: Person`, and a folder about
 // nothing in particular carries no type at all. There is no `Index` type in
@@ -15,7 +41,6 @@
 // lib/notes/shared/*.
 
 import {
-  extractMarkdownLinks,
   joinFrontmatter,
   parseFrontmatter,
   splitFrontmatter,
@@ -47,6 +72,48 @@ export function folderOfIndexPath(indexPath: string): string {
 export function declaresIndexType(content: string): boolean {
   const declared = parseFrontmatter(content).type
   return typeof declared === 'string' && declared.trim().toLowerCase() === 'index'
+}
+
+/**
+ * A `type:` that names a SHAPE rather than a subject — `Index` (the folder
+ * itself) or `Note` (the default every plain note is seeded with). Neither says
+ * what a folder is about, so a plain folder's index carries no type at all;
+ * an entity folder keeps the entity's type through `acceptsType`.
+ */
+function isShapeType(declared: string): boolean {
+  const t = declared.trim().toLowerCase()
+  return t === 'index' || t === 'note'
+}
+
+// The frontmatter keys every index leads with, in this order; anything else the
+// note carries (an agent's schedule, a tool's perimeter) follows in its own order.
+const LEADING_KEYS = ['type', 'title', 'node', 'description', 'tags'] as const
+
+function orderFrontmatter(fm: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const k of LEADING_KEYS) if (k in fm && fm[k] !== undefined) out[k] = fm[k]
+  for (const k of Object.keys(fm)) if (!(k in out) && fm[k] !== undefined) out[k] = fm[k]
+  return out
+}
+
+function sameKeyOrder(fm: Record<string, unknown>): boolean {
+  const keys = Object.keys(fm)
+  const ordered = Object.keys(orderFrontmatter(fm))
+  return keys.length === ordered.length && keys.every((k, i) => k === ordered[i])
+}
+
+/**
+ * Take a leading `# Title` off a body when it only repeats the note's title —
+ * the title renders from frontmatter, so the line is a duplicate heading. Any
+ * other heading is the writer's and stays.
+ */
+export function stripDuplicateTitleHeading(body: string, title: string): string {
+  if (!title.trim()) return body
+  const m = body.match(/^\s*#{1,6}[ \t]+(.+?)[ \t]*(?:\r?\n|$)/)
+  if (m && m[1].trim().toLowerCase() === title.trim().toLowerCase()) {
+    return body.slice(m[0].length).replace(/^\s*\r?\n/, '')
+  }
+  return body
 }
 
 // The folder a non-index note becomes when it is converted to one:
@@ -122,17 +189,17 @@ export function enforceIndexFrontmatter(
   folderPath: string,
   entity?: { typeLabel: string; nodeId: string; name: string; acceptsType?: (declared: string) => boolean },
 ): string {
-  const fm = parseFrontmatter(content)
+  const fm = parseFrontmatter(content) as Record<string, unknown>
   const declaredType = typeof fm.type === 'string' ? fm.type.trim() : ''
   const declaredTitle = typeof fm.title === 'string' ? fm.title.trim() : ''
   const declaredNode = typeof fm.node === 'string' ? fm.node.trim() : ''
-  const claimsShape = declaredType.toLowerCase() === 'index'
+  const claimsShape = declaredType !== '' && isShapeType(declaredType)
   const typeOk = entity
     ? declaredType.toLowerCase() === entity.typeLabel.toLowerCase() ||
       (!claimsShape && declaredType !== '' && (entity.acceptsType?.(declaredType) ?? false))
     : !claimsShape
   const nodeOk = !entity || declaredNode === entity.nodeId
-  if (typeOk && nodeOk && declaredTitle) return content
+  if (typeOk && nodeOk && declaredTitle && sameKeyOrder(fm)) return content
 
   const { body } = splitFrontmatter(content)
   const segment = folderPath.split('/').pop() ?? folderPath
@@ -144,7 +211,32 @@ export function enforceIndexFrontmatter(
   } else if (claimsShape) {
     delete next.type
   }
-  return joinFrontmatter(next, body)
+  return joinFrontmatter(orderFrontmatter(next), body)
+}
+
+/**
+ * Hold a whole index note to the one shape (see the header of this file):
+ * the frontmatter contract above, no `# Title` line repeating the title, and
+ * the managed child block last, listing `children`. Pass the children the
+ * folder currently holds; a caller that does not know them yet passes `[]`
+ * and the store's refresh fills the block in the same shape.
+ *
+ * Byte-identical when the note already conforms, so it is safe — and cheap —
+ * to apply on every index-path write and every refresh.
+ */
+export function normalizeIndexNote(
+  content: string,
+  folderPath: string,
+  children: IndexChild[],
+  entity?: { typeLabel: string; nodeId: string; name: string; acceptsType?: (declared: string) => boolean },
+): string {
+  const withFrontmatter = enforceIndexFrontmatter(content, folderPath, entity)
+  const { frontmatter, body } = splitFrontmatter(withFrontmatter)
+  const title = String(parseFrontmatter(withFrontmatter).title ?? '')
+  const prose = stripDuplicateTitleHeading(body, title)
+  const prefix = frontmatter === null ? '' : `---\n${frontmatter}\n---\n\n`
+  const next = applyChildrenBlock(prefix + prose, children)
+  return next === content ? content : next
 }
 
 /**
@@ -187,11 +279,10 @@ export function entityNameClashDenial(name: string, kindLabel: string, howToCrea
 // rendered markdown), so the store can refresh the list on every add/rename/
 // delete in the folder without touching a word anybody wrote.
 //
-// The block lists what the prose does NOT already link. A curated index that
-// walks through its own contents ("Companies, grouped by sector…") keeps that
-// writing and grows an empty block; an index nobody has tended lists everything.
-// Either way a note added to a folder shows up in its index — and stops showing
-// up there the moment somebody gives it a proper mention above.
+// The block is the folder's listing, whole: every direct child, whether or not
+// the prose above mentions it. Sub-folders come first, then notes, each set
+// alphabetical by title, and a child that carries a `description:` shows it
+// after an em dash. It always sits at the end of the body.
 
 export const CHILDREN_OPEN = '<!-- index:children -->'
 export const CHILDREN_CLOSE = '<!-- /index:children -->'
@@ -199,6 +290,10 @@ export const CHILDREN_CLOSE = '<!-- /index:children -->'
 export interface IndexChild {
   path: string
   title: string
+  /** The child's own `description:`, one line, when it has one. */
+  description?: string | null
+  /** True when the child is a sub-folder (listed at its index). */
+  folder?: boolean
 }
 
 // Everything between the markers, inclusive. Non-greedy so a body carrying two
@@ -211,12 +306,29 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// The marker-wrapped list of a folder's direct children, sorted by title.
-// Absolute /path.md hrefs, matching how the seeded indexes link.
+// One line of a child's description: whitespace collapsed, nothing that would
+// break the list row.
+export function oneLineDescription(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const flat = value.replace(/\s+/g, ' ').trim()
+  return flat || null
+}
+
+function childOrder(a: IndexChild, b: IndexChild): number {
+  const fa = a.folder ? 0 : 1
+  const fb = b.folder ? 0 : 1
+  return fa - fb || a.title.localeCompare(b.title)
+}
+
+function renderChildLine(c: IndexChild): string {
+  const desc = oneLineDescription(c.description)
+  return `- [${c.title}](/${c.path})${desc ? ` — ${desc}` : ''}`
+}
+
+// The marker-wrapped list of a folder's direct children. Absolute /path.md
+// hrefs, matching how the seeded indexes link.
 function renderChildrenBlock(children: IndexChild[]): string {
-  const lines = [...children]
-    .sort((a, b) => a.title.localeCompare(b.title))
-    .map((c) => `- [${c.title}](/${c.path})`)
+  const lines = [...children].sort(childOrder).map(renderChildLine)
   return [CHILDREN_OPEN, ...lines, CHILDREN_CLOSE].join('\n')
 }
 
@@ -225,22 +337,18 @@ export function hasChildrenBlock(content: string): boolean {
 }
 
 /**
- * Put the current child list into an index note: replace the managed block in
- * place if it has one, otherwise append it to the end of the body. Frontmatter
- * and every curated line ride through untouched, and anything the curated part
- * already links is left out of the block rather than listed twice.
+ * Put the current child list into an index note: the managed block, holding
+ * every child, at the end of the body. A block found elsewhere is moved there;
+ * frontmatter and every curated line ride through untouched.
  *
  * Returns `content` byte-identical when nothing changed, so callers can skip
  * the write (and the revision) on a no-op refresh.
  */
 export function applyChildrenBlock(content: string, children: IndexChild[]): string {
-  const curated = content.replace(CHILDREN_BLOCK_RE, '')
-  const linked = new Set(extractMarkdownLinks(curated).map((href) => href.replace(/^\//, '')))
-  const block = renderChildrenBlock(children.filter((c) => !linked.has(c.path)))
-  if (CHILDREN_BLOCK_RE.test(content)) {
-    return content.replace(CHILDREN_BLOCK_RE, block)
-  }
-  return `${content.trimEnd()}\n\n${block}\n`
+  const block = renderChildrenBlock(children)
+  const curated = content.replace(CHILDREN_BLOCK_RE, '').replace(/\n{3,}/g, '\n\n').trimEnd()
+  const next = curated ? `${curated}\n\n${block}\n` : `${block}\n`
+  return next === content ? content : next
 }
 
 /**
@@ -283,8 +391,8 @@ export function parseChildrenBlock(block: string | null): IndexChild[] {
   if (!block) return []
   const children: IndexChild[] = []
   for (const line of block.split('\n')) {
-    const m = line.match(/^-\s+\[([^\]]+)\]\(\/([^)]+)\)\s*$/)
-    if (m) children.push({ title: m[1], path: m[2] })
+    const m = line.match(/^-\s+\[([^\]]+)\]\(\/([^)]+)\)(?:\s+—\s+(.*))?\s*$/)
+    if (m) children.push({ title: m[1], path: m[2], description: m[3]?.trim() || null })
   }
   return children
 }
@@ -304,9 +412,10 @@ export function buildIndexStub(folderPath: string, children: IndexChild[]): stri
 }
 
 /**
- * Seed body for a folder somebody just created — its home page. Mirrors
- * newNoteContent in ./newContext.ts (same frontmatter shape, H1, starting text),
- * plus the empty managed block the store fills as notes land in the folder.
+ * Seed body for a folder somebody just created — its home page, in the one
+ * index shape: frontmatter, the starting prose, and the empty managed block
+ * the store fills as notes land in the folder. No `# Title` line — the title
+ * renders from frontmatter.
  *
  * `type` is the folder's SUBJECT, and it is optional: a folder about a person
  * is `type: Person`, a folder that just groups notes carries no type. Nothing
@@ -330,8 +439,99 @@ export function newIndexContent(input: {
     authorLine +
     `tags: [${tags.join(', ')}]\n` +
     `---\n\n` +
-    `# ${input.title}\n\n` +
     (body ? `${body}\n\n` : '') +
     `${renderChildrenBlock([])}\n`
   )
+}
+
+// folding a hand-written listing into the block
+//
+// Before the block listed every child, an index that walked through its own
+// folder did so in prose — `- [Team](/team/index.md) — who covers what` — and
+// the block held only the rest. Those lines are the listing the block now IS,
+// so a rebuild folds them: the line goes, and a description it carried moves
+// onto the child's own `description:` (when the child has none), where the
+// block reads it from. Prose that is not a bare child link — a sentence that
+// mentions one, a bullet linking two — is the writer's and stays.
+
+// `- [Title](/path.md) …rest` (also `*`), capturing the path and whatever follows.
+const CHILD_BULLET_RE = /^\s*[-*]\s+\[[^\]]*\]\(\/?([^)\s"]+)\)(.*)$/
+
+// What a bullet says after the link: an optional `(23)` count, then a dash or
+// colon, then the description. Null when the tail carries another link (the
+// line says more than the listing would) or does not parse as a description.
+function bulletDescription(tail: string): string | null | undefined {
+  let rest = tail.trim()
+  rest = rest.replace(/^\(\d+\)\s*/, '')
+  if (!rest) return null
+  const sep = rest.match(/^(?:—|–|-|:)\s*(.*)$/)
+  if (!sep) return undefined
+  const desc = sep[1].trim()
+  if (!desc || /\]\(/.test(desc)) return undefined
+  return desc
+}
+
+export interface FoldedListing {
+  content: string
+  /** Descriptions the folded lines carried, by child path. */
+  descriptions: Map<string, string>
+}
+
+/**
+ * Fold the bullets in an index's prose that only re-list its direct children
+ * into the managed block. Returns the note with those lines gone and the
+ * descriptions they carried, for the caller to write onto the children before
+ * the block is refreshed. A heading left with nothing under it goes too.
+ *
+ * `children` are the folder's current direct children; a bullet linking
+ * anything else is left alone.
+ */
+export function foldCuratedChildren(content: string, children: IndexChild[]): FoldedListing {
+  const paths = new Set(children.map((c) => c.path))
+  const descriptions = new Map<string, string>()
+  const { frontmatter, body } = splitFrontmatter(content)
+  const split = splitChildrenBlock(body)
+  const lines = split.body.split('\n')
+  // Each kept line, tagged with whether a fold happened since the last heading
+  // — a heading whose section folded away entirely goes with it.
+  const kept: { line: string; heading: boolean }[] = []
+  let inFence = false
+  let sectionStart = -1
+  let foldedInSection = false
+  let keptInSection = false
+  const closeSection = () => {
+    if (sectionStart >= 0 && foldedInSection && !keptInSection) kept.splice(sectionStart, 1)
+  }
+  for (const line of lines) {
+    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence
+    const heading = !inFence && /^\s*#{1,6}\s+\S/.test(line)
+    if (heading) {
+      closeSection()
+      sectionStart = kept.length
+      foldedInSection = false
+      keptInSection = false
+      kept.push({ line, heading })
+      continue
+    }
+    if (!inFence) {
+      const m = line.match(CHILD_BULLET_RE)
+      if (m && paths.has(m[1])) {
+        const desc = bulletDescription(m[2])
+        if (desc !== undefined) {
+          if (desc) descriptions.set(m[1], desc)
+          foldedInSection = true
+          continue
+        }
+      }
+    }
+    if (line.trim()) keptInSection = true
+    kept.push({ line, heading })
+  }
+  closeSection()
+  const pruned = kept.map((k) => k.line)
+  const prose = pruned.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+  const prefix = frontmatter === null ? '' : `---\n${frontmatter}\n---\n\n`
+  const rebuilt = split.block ? reattachChildrenBlock(prose, split.block) : prose ? `${prose}\n` : ''
+  const next = prefix + rebuilt
+  return { content: next === content ? content : next, descriptions }
 }
