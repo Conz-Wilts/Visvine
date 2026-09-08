@@ -83,16 +83,11 @@ export default function SpaceSelector() {
   // itself): pointing at any row of the band puts it away.
   const shutSwitcher = () => setSwitcherOpen(false);
   const actions: { key: string; label: string; onClick: () => void; onHover: () => void; icon: React.ReactNode }[] = [
-    // Discover leads the band: leaving this space for another is the same
-    // question the switcher under the pointer is asking, so it belongs beside
-    // the spaces you are already in rather than among the tools below.
-    {
-      key: 'discover',
-      label: 'Discover',
-      onClick: () => router.push('/discover'),
-      onHover: shutSwitcher,
-      icon: <CompassIcon />,
-    },
+    // The console leads the band for an admin: it is THIS space's own
+    // settings, hung directly under the space's name. Discover follows —
+    // leaving this space for another is the same question the switcher under
+    // the pointer is asking, so it belongs beside the spaces you are already
+    // in rather than among the tools below.
     ...(canManage
       ? [
           {
@@ -104,6 +99,13 @@ export default function SpaceSelector() {
           },
         ]
       : []),
+    {
+      key: 'discover',
+      label: 'Discover',
+      onClick: () => router.push('/discover'),
+      onHover: shutSwitcher,
+      icon: <CompassIcon />,
+    },
   ];
 
   // A sub-space wears its parent's mark (spaceMark), so the head row says
