@@ -101,7 +101,8 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
     provider: 'openrouter',
     fields: [
       { key: 'MODEL_KEY_OPENROUTER', label: 'API key', placeholder: 'sk-or-v1-…', secret: true, required: true, hint: 'openrouter.ai/keys → Create key.' },
-      { key: 'model', label: 'Model', required: true, hint: MODEL_FIELD_HINT, choices: modelChoices('openrouter'), placeholder: 'model id' },
+      // No choices: OpenRouter serves hundreds of ids, and any of them is valid here.
+      { key: 'model', label: 'Model', required: true, placeholder: 'vendor/model-id, as on openrouter.ai/models', hint: MODEL_FIELD_HINT },
     ],
   },
   {
