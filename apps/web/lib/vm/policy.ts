@@ -17,7 +17,8 @@ import prisma from '@/lib/prisma'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { isConnectorEnabled, parseConnectorPerimeter } from '@/lib/connectors/config'
 import { logger } from '@/lib/logger'
-import { assertPattern, canonical, compile, type InjectRule, type VmPolicy } from '@visvine/vm-policy'
+import { canonical, compile, type InjectRule, type VmPolicy } from '@visvine/vm-policy'
+import { machineHostPatterns } from './shared/hosts'
 
 const SHARED_OWNER_KEY = 'shared'
 
@@ -41,15 +42,7 @@ export interface CompiledForSpace {
   rejected: readonly string[]
 }
 
-/**
- * Every host the space's enabled connectors declare, as policy patterns.
- *
- * `hosts:` entries may carry a port; policy is written in hostnames, so the
- * port is dropped rather than encoded. A narrower grant is the safe direction:
- * a connector that may reach `db.example.com:5432` does not thereby let an
- * agent's browser reach anything the port was standing in for, because the
- * machine speaks HTTPS and nothing else.
- */
+/** Every host the space's enabled connectors declare, as policy patterns. */
 async function spaceEgressHosts(
   spaceId: string,
 ): Promise<{ hosts: string[]; unreadable: string[]; rejected: string[] }> {
@@ -78,21 +71,9 @@ async function spaceEgressHosts(
       unreadable.push(row.path)
       continue
     }
-    for (const entry of parsed.perimeter.hosts) {
-      const host = entry.split(':')[0]?.trim()
-      if (!host) continue
-      // A connector may legitimately name something this grammar cannot
-      // enforce — an IP for a database, `localhost` in development. Those hosts
-      // are dropped from the machine's reach rather than allowed to fail the
-      // compile, because one such connector must not leave every agent in the
-      // space without a policy. The isolate still reaches them; the machine
-      // does not.
-      try {
-        hosts.add(assertPattern(host))
-      } catch {
-        rejected.push(`${row.path}: ${host}`)
-      }
-    }
+    const found = machineHostPatterns(parsed.perimeter.hosts)
+    for (const host of found.patterns) hosts.add(host)
+    for (const host of found.rejected) rejected.push(`${row.path}: ${host}`)
   }
   return { hosts: [...hosts].sort(), unreadable, rejected }
 }

@@ -8,7 +8,7 @@ import { splitFrontmatter } from '@/lib/notes/shared/markdown';
 import { writeGated } from '@/lib/notes/contextService';
 import { principalOf, resolveContext } from '@/lib/notes/resolve';
 import { skillIndexPath, unmetReach } from '@/lib/agents/shared/skills';
-import { compileForSpace } from '@/lib/vm/policy';
+import { agentMachinePolicy } from '@/lib/agents/machineReach';
 import { allActions } from '@/lib/actions/registry';
 
 const SHARED = 'shared';
@@ -31,10 +31,10 @@ export async function GET(
   if (resolved instanceof Response) return resolved;
 
   const skills = await loadSkills(spaceId, name);
-  const [policy, actions] = await Promise.all([
-    compileForSpace(spaceId).catch(() => null),
-    Promise.resolve(allActions().map((a) => a.name)),
-  ]);
+  // The agent's OWN reach — its declared connectors' hosts, not the space's
+  // whole list — because that is what its machine will actually be held to.
+  const policy = await agentMachinePolicy(await principalOf(resolved), { spaceId, ownerKey: SHARED }, name);
+  const actions = allActions().map((a) => a.name);
   const allowed = policy?.policy.allow ?? [];
 
   return NextResponse.json({

@@ -46,9 +46,9 @@ interface Fakes {
   appends: { path: string; text: string }[]
   created: { type: string; name: string; stamp?: { origin?: string; model?: string } }[]
   links: { from: string; to: string; relationship: string }[]
-  commands: { cmd: string[]; runId: string | null }[]
-  pages: string[]
-  signIns: string[]
+  commands: { cmd: string[]; runId: string | null; taskAllow: string[] | undefined }[]
+  pages: { url: string; taskAllow: string[] | undefined }[]
+  signIns: { connector: string; taskAllow: string[] | undefined }[]
 }
 
 function fakes(): Fakes {
@@ -83,16 +83,16 @@ function fakes(): Fakes {
         return null
       },
       machineAvailable: () => true,
-      runOnMachine: (async (_space: string, _agent: string, cmd: readonly string[], opts?: { runId?: string | null }) => {
-        f.commands.push({ cmd: [...cmd], runId: opts?.runId ?? null })
+      runOnMachine: (async (_space: string, _agent: string, cmd: readonly string[], opts?: { runId?: string | null; taskAllow?: readonly string[] }) => {
+        f.commands.push({ cmd: [...cmd], runId: opts?.runId ?? null, taskAllow: opts?.taskAllow ? [...opts.taskAllow] : undefined })
         return { exitCode: 0, stdout: 'ok', stderr: '', timedOut: false, vmId: 'vm-1', booted: true }
       }) as AgentToolDeps['runOnMachine'],
-      browseOnMachine: (async (_space: string, _agent: string, url: string) => {
-        f.pages.push(url)
+      browseOnMachine: (async (_space: string, _agent: string, url: string, opts?: { taskAllow?: readonly string[] }) => {
+        f.pages.push({ url, taskAllow: opts?.taskAllow ? [...opts.taskAllow] : undefined })
         return { started: true, alreadyRunning: false, vmId: 'vm-1' }
       }) as AgentToolDeps['browseOnMachine'],
-      signInOnMachine: (async (input: { connectorName: string }) => {
-        f.signIns.push(input.connectorName)
+      signInOnMachine: (async (input: { connectorName: string; taskAllow?: readonly string[] }) => {
+        f.signIns.push({ connector: input.connectorName, taskAllow: input.taskAllow ? [...input.taskAllow] : undefined })
         return input.connectorName === 'crm-login'
           ? { ok: true, url: 'https://crm.example.com/home', title: 'Home', user: 'ops@acme.com' }
           : { ok: false, reason: 'no_login', message: `${input.connectorName} holds no website login` }
@@ -146,13 +146,31 @@ test('the surface: always-on tools, and extras only when the brief asks', () => 
   assert.ok(!base.includes('sign_in'), 'no sign_in without a declared connector')
 })
 
+test('the machine reaches what the brief declares: machineAllow rides every lease, and absent means none', async () => {
+  const f = fakes()
+  const reach = ['api.hubspot.com', 'crm.example.com']
+  const tools = agentTools(ctx(f, { brief: brief({ connectors: ['hubspot', 'crm-login'] }), machineAllow: reach }))
+  assert.match(tool(tools, 'run_command').spec.description, /api\.hubspot\.com, crm\.example\.com/, 'the description says what is reachable')
+  await tool(tools, 'run_command').run({ command: ['ls'] })
+  await tool(tools, 'open_page').run({ url: 'https://crm.example.com/' })
+  await tool(tools, 'sign_in').run({ connector: 'crm-login' })
+  assert.deepEqual(f.commands.map((c) => c.taskAllow), [reach])
+  assert.deepEqual(f.pages.map((p) => p.taskAllow), [reach])
+  assert.deepEqual(f.signIns.map((s) => s.taskAllow), [reach])
+
+  const none = agentTools(ctx(f))
+  assert.match(tool(none, 'run_command').spec.description, /declares no connectors, so nothing is reachable/)
+  await tool(none, 'run_command').run({ command: ['ls'] })
+  assert.deepEqual(f.commands.at(-1)?.taskAllow, [], 'no declaration is an empty list, never the space\'s whole reach')
+})
+
 test('sign_in: only a declared connector, and the answer never carries a password', async () => {
   const f = fakes()
   const t = tool(agentTools(ctx(f, { brief: brief({ connectors: ['crm-login', 'hubspot'] }) })), 'sign_in')
   assert.match(await t.run({ connector: 'other' }), /not one of this agent's connectors/)
   assert.equal(await t.run({ connector: 'crm-login' }), 'signed in as ops@acme.com — now on https://crm.example.com/home (Home)')
   assert.match(await t.run({ connector: 'hubspot' }), /^not signed in: hubspot holds no website login/)
-  assert.deepEqual(f.signIns, ['crm-login', 'hubspot'])
+  assert.deepEqual(f.signIns.map((s) => s.connector), ['crm-login', 'hubspot'])
   const dry = tool(agentTools(ctx(f, { brief: brief({ connectors: ['crm-login'], dryRun: true }) })), 'sign_in')
   assert.equal(await dry.run({ connector: 'crm-login' }), 'DRY RUN — would sign in with crm-login')
 })
@@ -252,11 +270,11 @@ test('the machine comes with the space: run_command and open_page, stamped with 
   const out = await tool(live, 'run_command').run({ command: ['python3', '-c', 'print(1)'] })
   assert.match(out, /^exit 0/)
   assert.match(out, /machine woke/)
-  assert.deepEqual(f.commands, [{ cmd: ['python3', '-c', 'print(1)'], runId: 'run-root' }])
+  assert.deepEqual(f.commands, [{ cmd: ['python3', '-c', 'print(1)'], runId: 'run-root', taskAllow: [] }])
   assert.match(await tool(live, 'run_command').run({ command: [] }), /^error/)
   assert.match(await tool(live, 'open_page').run({ url: 'http://x' }), /^error/)
   assert.match(await tool(live, 'open_page').run({ url: 'https://x.example/' }), /^opened https:\/\/x\.example\//)
-  assert.deepEqual(f.pages, ['https://x.example/'])
+  assert.deepEqual(f.pages, [{ url: 'https://x.example/', taskAllow: [] }])
 
   const dry = agentTools(ctx(f, { brief: brief({ tools: ['machine'], dryRun: true }) }))
   assert.match(await tool(dry, 'run_command').run({ command: ['rm', '-rf', '/workspace'] }), /^DRY RUN/)

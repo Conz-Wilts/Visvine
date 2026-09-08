@@ -14,6 +14,7 @@ import {
   isAddressLiteral,
   type VmPolicy,
 } from '@visvine/vm-policy'
+import { machineHostPatterns } from '@/lib/vm/shared/hosts'
 
 const SPACE = ['api.github.com', '*.slack.com', 'registry.npmjs.org']
 
@@ -168,4 +169,18 @@ test('the canonical form is stable regardless of input order', () => {
   const a = compile({ spaceAllow: ['b.example.com', 'a.example.com'] }).policy
   const b = compile({ spaceAllow: ['a.example.com', 'b.example.com'] }).policy
   assert.equal(canonical(a), canonical(b))
+})
+
+test("a connector's hosts: become machine patterns — port dropped, the unenforceable rejected, never thrown", () => {
+  const { patterns, rejected } = machineHostPatterns([
+    'db.example.com:5432',
+    'API.Example.com',
+    '10.0.0.4',
+    'localhost',
+    '*.slack.com',
+    '',
+    'api.example.com',
+  ])
+  assert.deepEqual(patterns, ['*.slack.com', 'api.example.com', 'db.example.com'])
+  assert.deepEqual(rejected, ['10.0.0.4', 'localhost'])
 })

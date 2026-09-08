@@ -40,7 +40,7 @@ description: Summarises the week into reports/weekly.md
                                    # Pin `<provider>/<model-id>` only for a different one
                                    # the space also has (Models, in the account menu).
 connectors: [hubspot]              # declared reach
-tools: [web, actions]              # optional: web, sandbox, messages, directory, actions
+tools: [web, actions]              # optional: web, directory, actions
 agents: [crm-sync]                 # optional: the agents this one has in mind for run_agent
 dry_run: false                     # optional: true = rehearse — writes are captured, not applied
 max_turns: 40                      # 1..200
@@ -242,8 +242,7 @@ in `lib/agents/tools.ts`; side effects go through an injectable `AgentToolDeps` 
 | `run_connector {name, action\|code, args}` | `connectors: [names]` (never `kind: model` ones) | `loadConnector → executeConnectorScript` — the same single path the console and MCP use |
 | `fetch_url {url}` | `tools: [web]` | public https page → text, redirects re-gated per hop (`lib/connectors/publicFetch.ts`). **This is also how an agent searches**: a search engine's results URL is a public page (`https://duckduckgo.com/html/?q=…`), so there is no search vendor, no search key and no per-provider code. A results page that only renders in a browser is one for the machine below |
 | `run_action {action, input?}` | `tools: [actions]` | the whole Action registry — events, the Drive, connectors, Tool authoring — through `runAction` as the author. `action` alone returns that action's manual; `action` + `input` runs it. Every scope but `secrets:write` |
-| `run_code {language, code}` | `tools: [sandbox]` | the named seam in `lib/agents/sandbox.ts`; nothing is built until a vendor is chosen (`AGENT_SANDBOX_PROVIDER`) |
-| `run_command {command[], timeout_seconds?}`, `open_page {url}` | whenever the space has a machine | the agent's OWN machine (`docs/machines.md`) — `runOnMachine` / `browseOnMachine`, a real Chromium for anything `fetch_url` cannot read (a JavaScript-rendered search page, a site behind a login a human established during a takeover). Note the asymmetry: `fetch_url` reaches any public host, the machine reaches only the hosts the space's connectors declare, so a browsing agent needs those hosts allowed. Every command stamped with the run id so the machine's timeline reads back under the step that asked for it. Not a brief switch: the boundary is the egress policy, the quota and the egress log. A dry run refuses both |
+| `run_command {command[], timeout_seconds?}`, `open_page {url}` | whenever the space has a machine | the agent's OWN machine (`docs/machines.md`) — `runOnMachine` / `browseOnMachine`, a real Chromium for anything `fetch_url` cannot read (a JavaScript-rendered search page, a site behind a login a human established during a takeover). Note the asymmetry: `fetch_url` reaches any public host, the machine reaches only the hosts the brief's DECLARED connectors name (`machineAllow`, the run's `taskAllow`) — the same reach as `run_connector`, so a browsing agent declares the connector whose hosts it needs. The preamble states the ladder: `fetch_url`, then `run_connector`, then `run_command`, then `open_page` — the cheapest door that does the job. Every command stamped with the run id so the machine's timeline reads back under the step that asked for it. Not a brief switch: the boundary is the egress policy, the quota and the egress log. A dry run refuses both |
 | `run_agent {name}` | always | starts another agent of the space now via `claimManualRun` and returns its run id without waiting. `agents:` in the brief lists the ones it has in mind, it is not a fence: never itself, target must be active and idle (a chained run skips the one-run-per-space check — the parent holds that slot) and runs as ITS OWN author. Chains carry `input.chain = {parent, depth}`; a run at depth ≥ 5 may not chain further |
 | `create_node {type, name, description?, tags?, url?}` | `tools: [directory]` | `createEntity` (the same path as `POST /api/directory/entities` and MCP `add_context`): a person / space / resource / event node plus its context note, created by the author with the same `agent` / `agent:<name>` stamp as `write_context` (so it is held to Freeze-for-AI and never wakes this agent); duplicates are refused with the existing id |
 | `link_nodes {from, to, type?, note?}` | `tools: [directory]` | `upsertLink` (origin `manual`, `createdBy` author) between two node ids of the space, default relationship `related` |
@@ -442,7 +441,7 @@ deadline, UTC) was already correct and was left untouched.
 
 ## Code map
 
-`lib/agents/{registry,providers,config,hooks,principal,tools,sandbox,budget,runs,runner,schedule,dispatch,internalAuth,service,route,limits,events,options,templates,briefEdit}.ts`
+`lib/agents/{registry,providers,config,hooks,principal,tools,machineReach,budget,runs,runner,schedule,dispatch,internalAuth,service,route,limits,events,options,templates,briefEdit}.ts`
 (`events.ts` is the mailbox: `enqueueAgentEvent`, `claimEvents`, `matchNoteTriggers`,
 `fireNoteTriggers`, `webhookRecipients`, `rearmIfPending`, `pruneEvents`),
 the shared loop `lib/notes/toolLoop.ts`, the entity sync

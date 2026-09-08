@@ -204,8 +204,18 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   nothing else — **searching is fetching a search engine's results URL**, so
   there is no search vendor and no per-provider code. `actions` is the whole
   Action registry through `runAction` as the author (every scope but
-  `secrets:write`). `sandbox`, `messages`, `directory` as named. A machine comes
-  with any space that has one, no brief key needed (`docs/machines.md`).
+  `secrets:write`). `directory` as named (`sandbox` and `messages` still parse
+  and add nothing). A machine comes with any space that has one, no brief key
+  needed (`docs/machines.md`) — **but its reach is the brief's `connectors:`**:
+  every lease passes those connectors' hosts as the narrowing `taskAllow`
+  (`connectorReachFor` → `machineAllow`), so the browser and `run_connector`
+  answer to one declaration and a brief declaring none gets a machine with no
+  network. Anything judging an agent's reach outside a run goes through
+  `lib/agents/machineReach.ts`. The split is a **secrets boundary, not a cost
+  one**: the isolate hands connector JS the plaintext of its env inside one
+  connector's perimeter; the machine never holds plaintext at all. The
+  preamble says the ladder — `fetch_url`, then `run_connector`, then
+  `run_command`, then `open_page` — cheapest door that does the job.
 - **One agent can run FOR many people.** Identity is per RUN
   (`agent_runs.run_as_user_id`). A scheduled fire runs as the brief's author (or
   `runs_as`), then once per **subscriber** (`agent_subscriptions`, self-service

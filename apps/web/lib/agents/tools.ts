@@ -16,10 +16,11 @@
  *
  * Names mirror the MCP tools (list/search/read/write/append_context,
  * run_connector) so there is one vocabulary. Connector reach is DECLARED — only
- * the names in the brief's `connectors:` are offered — and the extras appear
- * only when the brief asks: `fetch_url` (`tools: [web]`), `run_code`
- * (`[sandbox]`), `create_node` / `link_nodes` (`[directory]`), `run_agent`
- * (`agents: [...]`).
+ * the names in the brief's `connectors:` are offered, and the machine's
+ * network is narrowed to those connectors' hosts (`machineAllow`), so the two
+ * doors onto the outside world answer to one declaration. The extras appear
+ * only when the brief asks: `fetch_url` (`tools: [web]`), `create_node` /
+ * `link_nodes` (`[directory]`), `run_agent` (`agents: [...]`).
  *
  * `dry_run: true` in the brief turns every WRITE (notes, nodes, links, chained
  * runs) into a transcript line — "DRY RUN — would …" — while reads still
@@ -48,7 +49,6 @@ import { edgeConfigured, EdgeUnavailableError } from '@/lib/vm/edge'
 import { browseOnMachine, QuotaExceededError, runOnMachine } from '@/lib/vm/lease'
 import { signInOnMachine } from '@/lib/vm/signin'
 import type { RunNowResult } from './schedule'
-import { sandboxProvider } from './sandbox'
 
 const READ_CAP_CHARS = 160_000
 const LIST_CAP = 2_000
@@ -124,6 +124,13 @@ export interface AgentToolContext {
   connectorActions?: Readonly<Record<string, readonly ConnectorActionSummary[]>>
   /** The run these tools serve — stamped onto every machine command so its timeline joins the trace. */
   runId?: string
+  /**
+   * The hosts this run's machine may reach: what the brief's declared
+   * connectors name (connectorReachFor), passed to every lease as the
+   * narrowing `taskAllow`. Absent means none — a machine with no network is
+   * the safe direction, and a caller that wants reach says so.
+   */
+  machineAllow?: readonly string[]
   /** How deep in a run_agent chain this run is (root = 0). */
   chainDepth?: number
   /**
@@ -353,7 +360,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       spec: {
         name: 'run_connector',
         description:
-          `Run one of this agent's declared connectors (${runnable.join(', ')}) — either a named action with \`args\`, or JavaScript in \`code\` (exactly one of the two). Code is the body of an async function with \`fetch\`, \`sql\`, \`mcp\`, \`env\`, \`visvine.crypto\` and \`visvine.state\` available; network is limited to the connector's hosts. Read the connector note (connectors/<name>.md) first for its documented API and env names.` +
+          `Run one of this agent's declared connectors (${runnable.join(', ')}) — either a named action with \`args\`, or JavaScript in \`code\` (exactly one of the two). This is how a connected service is used: it holds the credentials, costs no machine time and answers at once, so prefer it over the machine whenever the service has an API for the job. Code is the body of an async function with \`fetch\`, \`sql\`, \`mcp\`, \`env\`, \`visvine.crypto\` and \`visvine.state\` available; network is limited to the connector's hosts. Read the connector note (connectors/<name>.md) first for its documented API and env names.` +
           (actionLines.length > 0 ? ` Declared actions — ${actionLines.join('; ')}.` : ''),
         parameters: {
           type: 'object',
@@ -420,13 +427,17 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
 
   // ── The machine ────────────────────────────────────────────────────────────
   // The agent's own computer (lib/vm, docs/machines.md), as ordinary tools,
-  // offered whenever the space HAS one. The brief is not the switch: an agent
-  // that already reads the space's notes and calls its connectors is not made
-  // safer by being denied a container whose egress is the same allow-list. The
-  // boundary is the compiled policy, the quota and the egress log. Every
-  // command is stamped with the run, so the machine's timeline
-  // (agent_vm_events) reads back under the step that asked for it, and an admin
-  // watching the window sees the screen and the terminal move as it runs.
+  // offered whenever the space HAS one. The brief is not the switch, but it IS
+  // the reach: every lease carries `machineAllow` — the hosts of the connectors
+  // the brief declares — as the narrowing taskAllow, so the machine's browser
+  // can reach exactly what run_connector can and not the rest of the space's
+  // connectors. A brief declaring none gets a computer with no network, which
+  // still computes over /workspace. The boundary is the compiled policy, the
+  // quota and the egress log. Every command is stamped with the run, so the
+  // machine's timeline (agent_vm_events) reads back under the step that asked
+  // for it, and an admin watching the window sees the screen and the terminal
+  // move as it runs.
+  const machineAllow = ctx.machineAllow ?? []
   if (deps.machineAvailable()) {
     const machineError = (err: unknown): string | null => {
       if (err instanceof QuotaExceededError) return `error: the space's machine-hours are used up — ${err.message}`
@@ -438,7 +449,11 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
         name: 'run_command',
         description:
           'Run one command on your own machine — a container with Node, Python, uv, git and ripgrep, a /workspace that ' +
-          'lasts between runs, and no network except the hosts the space\'s connectors allow. Returns the exit code, ' +
+          'lasts between runs, and no network except the hosts your declared connectors name' +
+          (machineAllow.length ? ` (${machineAllow.join(', ')})` : ' (none: your brief declares no connectors, so nothing is reachable)') +
+          '. It costs the space machine-hours and the first call may wait for a cold boot, so reach for it only when ' +
+          'run_connector or fetch_url cannot do the job: computation over data you already have, files that must ' +
+          'survive the run, or reading a page open in your browser. Returns the exit code, ' +
           'stdout and stderr. Not a shell line: give the program and its arguments as a list (no pipes or globs). ' +
           'The disk outside /workspace is fresh on every wake, so keep anything worth keeping under /workspace.',
         parameters: {
@@ -460,7 +475,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
           return `DRY RUN — would run ${command.join(' ')} on the machine`
         }
         try {
-          const r = await deps.runOnMachine(spaceId, ctx.agentName, command, { timeoutSeconds: timeout, runId: ctx.runId })
+          const r = await deps.runOnMachine(spaceId, ctx.agentName, command, { timeoutSeconds: timeout, runId: ctx.runId, taskAllow: machineAllow })
           return [
             `exit ${r.exitCode}${r.timedOut ? ' (timed out)' : ''}${r.booted ? ' · machine woke for this' : ''}`,
             r.stdout ? `stdout:\n${clip(r.stdout)}` : null,
@@ -480,7 +495,9 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
         name: 'open_page',
         description:
           "Open an https page in your machine's own browser (a real Chromium with a profile that remembers logins) and " +
-          'leave it open — a person can watch and take over. The page loads only if the space allows its host. One ' +
+          'leave it open — a person can watch and take over. The last resort for a page, not the first: fetch_url ' +
+          'reads any public page for free; open the page here only when it renders with JavaScript, sits behind a login, ' +
+          'or is a workflow only a browser can do. The page loads only if one of your declared connectors names its host. One ' +
           'browser per machine: calling this again steers the same one. To READ what you opened, run a script with ' +
           "run_command that attaches to it — `node --input-type=module -e \"import { chromium } from " +
           "'/usr/local/lib/node_modules/playwright/index.mjs'; const b = await chromium.connectOverCDP('http://127.0.0.1:9222'); " +
@@ -495,7 +512,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
         if (!url.startsWith('https://')) return 'error: the machine speaks https; give an https URL'
         if (dry) return `DRY RUN — would open ${url} in the machine's browser`
         try {
-          const r = await deps.browseOnMachine(spaceId, ctx.agentName, url)
+          const r = await deps.browseOnMachine(spaceId, ctx.agentName, url, { taskAllow: machineAllow })
           return `${r.started ? 'opened' : r.alreadyRunning ? 'steered the open browser to' : 'opened'} ${url}`
         } catch (err) {
           const known = machineError(err)
@@ -528,7 +545,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
         if (!runnable.includes(name)) return `error: ${name} is not one of this agent's connectors`
         if (dry) return `DRY RUN — would sign in with ${name}`
         try {
-          const r = await deps.signInOnMachine({ principal, context, spaceId, agentName: ctx.agentName, connectorName: name, runId: ctx.runId })
+          const r = await deps.signInOnMachine({ principal, context, spaceId, agentName: ctx.agentName, connectorName: name, runId: ctx.runId, taskAllow: machineAllow })
           if (r.ok) return `signed in as ${r.user} — now on ${r.url}${r.title ? ` (${r.title})` : ''}`
           return `not signed in: ${r.message}`
         } catch (err) {
@@ -536,38 +553,6 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
           if (known) return known
           throw err
         }
-      },
-    })
-  }
-
-  const sandbox = brief.tools.includes('sandbox') ? sandboxProvider() : null
-  if (sandbox) {
-    tools.push({
-      spec: {
-        name: 'run_code',
-        description:
-          'Run code on a disposable computer (no credentials, no network except package registries). Returns stdout/stderr and any files written to ./out. Save results you want to keep with write_context.',
-        parameters: {
-          type: 'object',
-          properties: {
-            language: { type: 'string', enum: ['python', 'node', 'bash'] },
-            code: { type: 'string' },
-          },
-          required: ['language', 'code'],
-        },
-      },
-      describe: (a) => `${str(a.language)}: ${str(a.code).slice(0, 120)}`,
-      run: async (a) => {
-        const language = str(a.language) as 'python' | 'node' | 'bash'
-        const result = await sandbox.run({ language, code: str(a.code) })
-        return [
-          `exit ${result.exitCode}`,
-          result.stdout ? `stdout:\n${clip(result.stdout)}` : null,
-          result.stderr ? `stderr:\n${clip(result.stderr)}` : null,
-          result.files.length ? `files:\n${result.files.map((f) => `- ${f.path} (${f.content.length} chars)`).join('\n')}` : null,
-        ]
-          .filter(Boolean)
-          .join('\n')
       },
     })
   }

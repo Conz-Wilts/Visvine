@@ -74,6 +74,8 @@ export async function signInOnMachine(input: {
   agentName: string
   connectorName: string
   runId?: string | null
+  /** The run's machine reach — the same narrowing its other commands carry. */
+  taskAllow?: readonly string[]
 }): Promise<SignInResult> {
   const loaded = await loadConnector(input.principal, input.context, input.connectorName)
   if (!loaded) return { ok: false, reason: 'no_login', message: `No connector called ${input.connectorName} here (or it is not visible to you).` }
@@ -83,7 +85,7 @@ export async function signInOnMachine(input: {
 
   // The browser has to be up for CDP to have something to attach to; opening
   // the page here also puts it on screen for whoever is watching.
-  await browseOnMachine(input.spaceId, input.agentName, login.url)
+  await browseOnMachine(input.spaceId, input.agentName, login.url, { taskAllow: input.taskAllow })
   const result = await runOnMachine(
     input.spaceId,
     input.agentName,
@@ -94,6 +96,7 @@ export async function signInOnMachine(input: {
     {
       timeoutSeconds: 120,
       runId: input.runId ?? null,
+      taskAllow: input.taskAllow,
       env: { LOGIN_USER: login.user, LOGIN_PASSWORD: login.password },
     },
   )

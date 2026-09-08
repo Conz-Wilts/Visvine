@@ -59,7 +59,11 @@ export function environment(): string {
  *
  * Every call recompiles the policy and hands it down, so a connector an admin
  * just turned off stops being reachable on the next lease rather than at the
- * next boot. `taskAllow` narrows further for one run and can never widen.
+ * next boot. `taskAllow` narrows further and can never widen: an agent's run
+ * passes the hosts of the connectors its brief declares, so its machine
+ * reaches what its `run_connector` may and nothing more (an empty list is a
+ * machine with no network). Undefined is the space's whole list, which is what
+ * a person's own vm_exec / vm_browse get.
  */
 async function leaseMachine(
   spaceId: string,
@@ -152,8 +156,9 @@ export async function browseOnMachine(
   spaceId: string,
   agentName: string,
   url: string,
+  options: { taskAllow?: readonly string[] } = {},
 ): Promise<{ started: boolean; alreadyRunning: boolean; vmId: string }> {
-  const leased = await leaseMachine(spaceId, agentName)
+  const leased = await leaseMachine(spaceId, agentName, { taskAllow: options.taskAllow })
   const result = await edge.browse(environment(), spaceId, agentName, url)
   await prisma.agentVm.update({ where: { id: leased.vmId }, data: { lastActiveAt: new Date() } })
   return { ...result, vmId: leased.vmId }

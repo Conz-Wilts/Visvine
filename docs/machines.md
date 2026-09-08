@@ -185,8 +185,16 @@ The control plane compiles the policy (`lib/vm/policy.ts#compileForSpace`) from
 **the hosts the space's enabled connector notes already declare** — `hosts:` is
 admin-written, literal and already the answer to "what may this space talk to"
 for the isolate, so a machine gets the same answer from the same place rather
-than a second list that drifts. A run may pass `taskAllow` to narrow; an entry
-the space does not cover is dropped with a warn, never granted. A connector
+than a second list that drifts. That list is the SPACE's reach — what a
+person's own `vm_exec` / `vm_browse` get. **An agent's run narrows it to the
+hosts its brief's `connectors:` name** (`connectorReachFor` in
+`lib/connectors/service.ts` → `machineAllow` on the tools → `taskAllow` on
+every lease), so its machine can open exactly what its `run_connector` may
+call and none of the space's other connectors; a brief declaring none gets a
+machine with no network. An entry the space does not cover is dropped with a
+warn, never granted, and a personal-space connector note contributes nothing.
+`lib/agents/machineReach.ts#agentMachinePolicy` compiles the same narrowed
+policy for anything that judges an agent's reach outside a run. A connector
 host the grammar cannot enforce — an IP, `localhost` — is dropped from the
 machine's reach (the isolate still reaches it); a connector note that does not
 parse grants nothing. The sha256 of the canonical policy rides the lease row as

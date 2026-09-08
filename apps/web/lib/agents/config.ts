@@ -13,7 +13,7 @@
  *   model: anthropic/claude-sonnet-5  # OPTIONAL — omit to use the space's model
  *   connectors: [hubspot]             # declared reach — names under connectors/
  *   tools: [web]                      # optional extras: web (fetch_url — any public page,
- *                                     #   a search engine's results included), sandbox (run_code),
+ *                                     #   a search engine's results included),
  *                                     #   directory (create_node/link_nodes), actions (run_action)
  *   agents: [digest]                  # optional — agents this one may chain into with run_agent
  *                                     #   (omit it and any agent in the space may be chained)
@@ -77,12 +77,12 @@ export type AgentToolExtra = (typeof AGENT_TOOL_EXTRAS)[number]
  */
 export const AGENT_TOOL_OPTIONS: ReadonlyArray<{ id: AgentToolExtra; label: string; description: string }> = [
   { id: 'web', label: 'Web', description: 'Read public web pages, search engines included (fetch_url). A machine renders what needs JavaScript.' },
-  { id: 'sandbox', label: 'Sandbox', description: 'Run JavaScript in an isolated sandbox (run_code).' },
   { id: 'directory', label: 'Directory', description: 'Create records and link them (create_node, link_nodes).' },
-  // `machine` and `messages` are deliberately absent. An agent gets a computer
-  // whenever the space HAS one (lib/agents/tools.ts), so it is not a checkbox;
-  // `messages` grants nothing at all now. Old briefs that list either still
-  // parse — AGENT_TOOL_EXTRAS keeps both names.
+  // `machine`, `sandbox` and `messages` are deliberately absent. An agent gets
+  // a computer whenever the space HAS one (lib/agents/tools.ts), so it is not a
+  // checkbox, and that computer is what `sandbox` once promised; `messages`
+  // grants nothing at all now. Old briefs that list any of them still parse —
+  // AGENT_TOOL_EXTRAS keeps the names.
   {
     id: 'actions',
     label: 'Actions',

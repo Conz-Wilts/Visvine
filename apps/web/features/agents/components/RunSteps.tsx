@@ -53,7 +53,6 @@ const TOOL_VERB: Record<string, { verb: string; Icon: (props: { className?: stri
   append_context: { verb: 'Appended to', Icon: PencilIcon },
   run_connector: { verb: 'Called', Icon: PlugIcon },
   fetch_url: { verb: 'Fetched', Icon: GlobeIcon },
-  run_code: { verb: 'Ran code', Icon: CodeIcon },
   run_command: { verb: 'Ran', Icon: CodeIcon },
   open_page: { verb: 'Opened', Icon: GlobeIcon },
   run_agent: { verb: 'Started agent', Icon: BotIcon },

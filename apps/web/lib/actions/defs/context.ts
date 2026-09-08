@@ -1994,15 +1994,19 @@ export const CONTEXT_ACTIONS = [
         connectors: z
           .array(z.string())
           .optional()
-          .describe("Connectors it may call, by name. This list is its ENTIRE external reach — omit for none"),
+          .describe(
+            "Connectors it may call, by name. This list is its ENTIRE external reach: run_connector offers only these, " +
+              "and its machine's browser can open only the hosts they name — omit for none",
+          ),
         tools: z
           .array(z.enum(AGENT_TOOL_EXTRAS))
           .optional()
           .describe(
             "Extra capabilities: 'web' (fetch any public page, including a search engine's results), 'actions' (run any " +
-              "platform action — events, the Drive, connectors, Tools), 'sandbox' (run code on a disposable computer), " +
-              "'messages' (post to a channel), 'directory' (create nodes and links), 'machine' (its own computer with a " +
-              "browser an admin can watch). Omit for none",
+              "platform action — events, the Drive, connectors, Tools), 'directory' (create nodes and links). Omit for " +
+              "none. A machine — run_command and a browser an admin can watch — needs no key: every agent of a space " +
+              "that has one gets it, reaching only its declared connectors' hosts ('machine', 'sandbox' and 'messages' " +
+              "are accepted for old briefs and add nothing)",
           ),
       },
       run: async (ctx, args) => {

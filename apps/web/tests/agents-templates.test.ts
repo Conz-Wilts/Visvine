@@ -34,13 +34,13 @@ test('every template writes a brief the parser accepts', () => {
   assert.equal(agentTemplateById('nope'), null)
 })
 
-test('every tool option is a real extra; machine and messages are unlisted', () => {
+test('every tool option is a real extra; machine, sandbox and messages are unlisted', () => {
   const options = AGENT_TOOL_OPTIONS.map((o) => o.id).sort()
   for (const id of options) assert.ok((AGENT_TOOL_EXTRAS as readonly string[]).includes(id), id)
-  // Neither is a checkbox: an agent gets a computer whenever the space has one,
-  // and `messages` grants nothing at all. Both names stay valid so an older
-  // brief still parses.
-  assert.deepEqual([...AGENT_TOOL_EXTRAS].filter((id) => !options.includes(id)), ['messages', 'machine'])
+  // None is a checkbox: an agent gets a computer whenever the space has one
+  // (which is what `sandbox` once promised), and `messages` grants nothing at
+  // all. The names stay valid so an older brief still parses.
+  assert.deepEqual([...AGENT_TOOL_EXTRAS].filter((id) => !options.includes(id)), ['sandbox', 'messages', 'machine'])
 })
 
 test('updateBriefSettings rewrites settings and keeps the prose and hand-written keys', () => {

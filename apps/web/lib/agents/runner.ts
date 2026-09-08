@@ -20,7 +20,7 @@
  */
 import prisma from '@/lib/prisma'
 import { ModelError, type ChatUsage } from '@/lib/notes/ai'
-import { connectorActionsFor } from '@/lib/connectors/service'
+import { connectorReachFor } from '@/lib/connectors/service'
 import { readVisible, writeGated } from '@/lib/notes/contextService'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
@@ -310,7 +310,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       }
     }
     const signal = AbortSignal.timeout(opts.maxRunMs ?? MAX_RUN_MS)
-    const connectorActions = await connectorActionsFor(principal, context, brief.connectors)
+    const reach = await connectorReachFor(principal, context, brief.connectors)
     // The action catalogue for run_action's description. Imported here rather
     // than in lib/agents/tools.ts because an action definition imports the
     // agent service, which reaches that module — a cycle at eval time.
@@ -334,7 +334,8 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
         spaceId,
         agentName: name,
         brief,
-        connectorActions,
+        connectorActions: reach.actions,
+        machineAllow: reach.hosts,
         runId,
         chainDepth,
         // A manual run is one somebody pressed Run on and is watching; every

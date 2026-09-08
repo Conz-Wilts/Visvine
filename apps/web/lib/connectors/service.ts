@@ -45,6 +45,7 @@ import { MAX_DENIALS } from './perimeter'
 import { toolGroup, toolPermission, type ToolGroup, type ToolPermission } from './toolPolicy'
 import { isLegacyModelConnector } from '@/lib/models/config'
 import { catalogEntryFor } from './catalog'
+import { machineHostPatterns } from '@/lib/vm/shared/hosts'
 
 const CONNECTORS_DIR = 'connectors/'
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
@@ -538,26 +539,37 @@ export async function connectorReadiness(
 
 
 /**
- * The actions each of these runnable connectors declares — for a tool
- * description that lists them by name. Absent, invisible or invalid notes
- * contribute an empty list; the run reports the real problem.
+ * What an agent's declared connectors give it, read once per run.
+ *
+ * `actions` is what each declares, for a tool description that lists them by
+ * name; `hosts` is every host they name, as machine policy patterns — the
+ * reach the agent's machine is narrowed to (`lib/vm/lease.ts#taskAllow`), so
+ * the browser and the isolate answer to the SAME declaration. Absent,
+ * invisible or invalid notes contribute nothing; the run reports the real
+ * problem. A note read from the caller's own space contributes no hosts: the
+ * machine is the space's, and only the space's connectors are its reach.
  */
-export async function connectorActionsFor(
+export async function connectorReachFor(
   p: ContextPrincipal,
   context: Context,
   names: readonly string[],
-): Promise<Record<string, ConnectorActionSummary[]>> {
-  const out: Record<string, ConnectorActionSummary[]> = {}
+): Promise<{ actions: Record<string, ConnectorActionSummary[]>; hosts: string[] }> {
+  const actions: Record<string, ConnectorActionSummary[]> = {}
+  const hosts = new Set<string>()
   await Promise.all(
     names.map(async (name) => {
-      out[name] = []
+      actions[name] = []
       const source = await readConnectorNote(p, context, name)
       if (source === null) return
-      const parsed = parseConnectorPerimeter(parseFrontmatter(source.content))
-      if (parsed.ok) out[name] = summariseActions(parsed.perimeter.actions)
+      const fm = parseFrontmatter(source.content)
+      const parsed = parseConnectorPerimeter(fm)
+      if (!parsed.ok) return
+      actions[name] = summariseActions(parsed.perimeter.actions)
+      if (source.personal || !isConnectorEnabled(fm)) return
+      for (const host of machineHostPatterns(parsed.perimeter.hosts).patterns) hosts.add(host)
     }),
   )
-  return out
+  return { actions, hosts: [...hosts].sort() }
 }
 
 /** Decrypt the named secrets for a space; every name must exist. */
