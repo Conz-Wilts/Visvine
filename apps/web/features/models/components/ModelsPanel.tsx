@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert, Button, Field, Input, Skeleton } from '@/components/ui';
-import Select from '@/components/ui/Select';
 import NewRow from '@/components/ui/NewRow';
 import { ArrowLeftIcon } from '@/features/shared/icons';
 import ConnectorLogo from '@/features/connectors/components/ConnectorLogo';
@@ -186,6 +185,10 @@ export default function ModelsPanel({ space, onLeave, onFormOpen }: {
  * desktop shell asking the binaries themselves; nothing here reads a
  * credential. Sign in hands over to the vendor's own login and the row
  * refreshes when the dialog is next opened, or on Check.
+ *
+ * It is the DESKTOP shell's section and renders nowhere else: in a browser
+ * there is no bridge to ask, so every row would be a name with no status and
+ * no act — a heading standing over nothing.
  */
 function YourPlan({ enabled }: { enabled: Record<LocalRuntimeId, boolean> }) {
   const bridge = desktopRuntimes();
@@ -208,19 +211,17 @@ function YourPlan({ enabled }: { enabled: Record<LocalRuntimeId, boolean> }) {
   }, []);
 
   const runtimes = LOCAL_RUNTIMES.filter((r) => enabled[r.id]);
+  if (!bridge) return null;
   return (
     <section className="flex flex-col border-t border-border-subtle pt-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="min-w-0 text-sm font-semibold text-text-primary">Your plan</h3>
-        {bridge && (
-          <Button variant="neutral" size="sm" className={ACTION_SLOT} disabled={busy !== null} onClick={() => void refresh()}>
-            {busy === 'refresh' ? 'Checking…' : 'Check'}
-          </Button>
-        )}
+        <Button variant="neutral" size="sm" className={ACTION_SLOT} disabled={busy !== null} onClick={() => void refresh()}>
+          {busy === 'refresh' ? 'Checking…' : 'Check'}
+        </Button>
       </div>
       {notice && <p className="mt-2 text-xs text-text-muted">{notice}</p>}
-      {bridge && (
-        <ul className="mt-2 divide-y divide-border-subtle border-t border-border-subtle">
+      <ul className="mt-2 divide-y divide-border-subtle border-t border-border-subtle">
           {runtimes.map((r) => {
             const s = statuses?.find((x) => x.id === r.id) ?? null;
             const state = !statuses
@@ -264,8 +265,7 @@ function YourPlan({ enabled }: { enabled: Record<LocalRuntimeId, boolean> }) {
               </li>
             );
           })}
-        </ul>
-      )}
+      </ul>
     </section>
   );
 }
@@ -292,11 +292,7 @@ function AddModelForm({
   onCreated: (name: string) => void;
 }) {
   const [title, setTitle] = useState(entry.name);
-  // A field with choices starts on its first one: nobody should have to pick
-  // the obvious model before they may paste a key.
-  const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(entry.fields.flatMap((f) => (f.choices && f.choices.length > 0 ? [[f.key, f.choices[0].value]] : []))),
-  );
+  const [values, setValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -358,38 +354,14 @@ function AddModelForm({
           label={<>{f.label}{f.required && <span className="text-red-500"> *</span>}</>}
           hint={f.hint}
         >
-          {f.choices && f.choices.length > 0 ? (
-            <>
-              <Select
-                value={f.choices.some((c) => c.value === (values[f.key] ?? '')) ? (values[f.key] ?? '') : ''}
-                onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-                aria-label={f.label}
-              >
-                <option value="">Something else…</option>
-                {f.choices.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </Select>
-              {!f.choices.some((c) => c.value === (values[f.key] ?? '')) && (
-                <Input
-                  autoComplete="off"
-                  placeholder={f.placeholder}
-                  value={values[f.key] ?? ''}
-                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value.trim() }))}
-                  className="mt-2 font-mono text-sm"
-                />
-              )}
-            </>
-          ) : (
-            <Input
-              type={f.secret ? 'password' : 'text'}
-              autoComplete="off"
-              placeholder={f.placeholder}
-              value={values[f.key] ?? ''}
-              onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-              className={f.secret ? 'font-mono' : undefined}
-            />
-          )}
+          <Input
+            type={f.secret ? 'password' : 'text'}
+            autoComplete="off"
+            placeholder={f.placeholder}
+            value={values[f.key] ?? ''}
+            onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+            className={f.secret ? 'font-mono' : undefined}
+          />
         </Field>
       ))}
 

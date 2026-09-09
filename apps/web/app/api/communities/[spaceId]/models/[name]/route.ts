@@ -5,7 +5,7 @@ import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes
 import { validateCustomEndpoint } from '@/lib/agents/providers'
 import { PROVIDERS } from '@/lib/agents/registry'
 import { parseModel } from '@/lib/models/config'
-import { describeModel, modelHistory, modelUsage } from '@/lib/models/service'
+import { describeModel, modelHistory } from '@/lib/models/service'
 
 /**
  * One model, for its page: the note's facts, whether its key is stored, what
@@ -31,10 +31,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
   const model = await describeModel(ctx.principal, ctx.resolved, name)
   if (!model) return bad('Model not found', 404)
   const provider = model.info?.provider ?? null
-  const [usage, history] = provider
-    ? await Promise.all([modelUsage(spaceId, provider), modelHistory(spaceId, provider)])
-    : [{ months: [], currentMonth: new Date().toISOString() }, { runs: [], users: [] }]
-  return NextResponse.json({ model, usage, history })
+  const history = provider ? await modelHistory(spaceId, provider) : { runs: [], users: [] }
+  return NextResponse.json({ model, history })
 }
 
 interface PatchBody {

@@ -636,12 +636,19 @@ sweep.
 - A run records the model it ACTUALLY used, not the brief's absent pin.
 - **A model has a node and a page**: `model:<name>` synced like a connector's
   node, `/directory/model:<name>` the Model tab (`ModelPageContent.tsx`), admins
-  only — provider and id (editable), the key (write-only), **the bill** (six
-  months of `agent_model_usage`, this month by model id and by agent) and **who
-  ran on it**. Spend is keyed `<provider>/<modelId>` and a note stands for its
-  PROVIDER, so a sibling model on the same key appears here too.
+  only — provider and id (editable), the key (write-only), and **who ran on
+  it** (the recent runs and their tokens, folded per person). A note stands for
+  its PROVIDER, so a sibling model on the same key appears here too.
   `GET/PATCH /api/communities/<id>/models/<name>` + `lib/models/service.ts`;
   `list_models` is the action.
+- **Nothing reports what was spent.** There is no bill on a model's page, no
+  cost on a run, no Usage section: what a provider key was billed is that
+  provider's account to show, and a second copy inside Visvine is a number to
+  reconcile rather than one to trust. `agent_model_usage` is still written and
+  `registry.ts` still carries `pricing` — the BUDGET CAP is computed from them
+  (`lib/agents/budget.ts`), and removing either would silently uncap every
+  space. The cap alone is the console's **Budget** section
+  (`/admin?section=budget`, `BudgetPanel`).
 - **A member's own plan is a model only the desktop app can run.** A brief may
   pin `model: local/claude` or `local/codex` (`lib/agents/local.ts`). The server
   can name it and never call it: `resolveAgentChatConfig` answers

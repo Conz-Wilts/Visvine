@@ -22,7 +22,6 @@ import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import { principalCanWrite, principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
-import { microsToCents } from './budget'
 import {
   AGENT_NAME_RE,
   agentBriefPath,
@@ -44,7 +43,7 @@ import { deactivateAgent, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
 import { localRuntimeOf, localRuntimeRefusal } from './local'
-import { currentStepOf, latestRun, spendForMonth, type RunListItem } from './runs'
+import { currentStepOf, latestRun, type RunListItem } from './runs'
 import { memoryPath } from './shared/memory'
 import { lastHeartbeat } from './schedule'
 
@@ -122,23 +121,23 @@ export interface AgentSummary {
   modelProblem: string | null
   rowState: AgentRowState
   /** Admin-only; stripped for members by the route. */
-  spend: { monthCents: number | null; budgetMonthlyCents: number | null } | null
+  /** The agent's monthly cap. Nothing reports what it spent — see BudgetPanel. */
+  spend: { budgetMonthlyCents: number | null } | null
 }
 
 export interface SerializedRun extends Omit<RunListItem, 'startedAt' | 'endedAt' | 'costMicros'> {
   startedAt: string
   endedAt: string | null
-  costCents: number | null
 }
 
 export function serializeRun(run: RunListItem): SerializedRun {
-  // costMicros is a BigInt, which JSON cannot carry: it leaves as cents.
-  const { costMicros, ...rest } = run
+  // costMicros stays behind: it is a BigInt JSON cannot carry, and nothing
+  // reads a run's cost — the ledger exists for the budget cap, not to report.
+  const { costMicros: _costMicros, ...rest } = run
   return {
     ...rest,
     startedAt: run.startedAt.toISOString(),
     endedAt: run.endedAt ? run.endedAt.toISOString() : null,
-    costCents: microsToCents(costMicros),
   }
 }
 
@@ -283,15 +282,7 @@ async function summarise(
   }
   summary.rowState = rowStateOf(summary, opts.now, opts.heartbeatAt)
   if (opts.includeSpend) {
-    const month = await spendForMonth(spaceId, name, opts.now)
-    // Recorded cost is shown whatever the brief runs on NOW — past runs priced
-    // at run time keep their dollars when the model changes. Null only when
-    // nothing was ever priced AND the current model has no registry price:
-    // that agent is genuinely tokens-only.
-    summary.spend = {
-      monthCents: month > BigInt(0) || brief?.modelRef?.pricing ? microsToCents(month) : null,
-      budgetMonthlyCents: state?.budgetMonthlyCents ?? null,
-    }
+    summary.spend = { budgetMonthlyCents: state?.budgetMonthlyCents ?? null }
   }
   return summary
 }

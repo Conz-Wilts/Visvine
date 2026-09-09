@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { Alert, Skeleton } from '@/components/ui';
 import { clockEntries, groupAgents, whoLabel } from '@/lib/agents/shared/roster';
 import StatusDot from './StatusDot';
-import { fmtAgo, fmtCents, fmtUntil, statusLine, terminalLabel } from '../lib/rowState';
+import { fmtAgo, fmtUntil, statusLine, terminalLabel } from '../lib/rowState';
 
 import type { RosterResponse } from '../lib/useAgentsRoster';
 
@@ -160,11 +160,6 @@ export default function AgentsRoster({
                             ? fmtUntil(a.state.nextRunAt, now)
                             : ''}
                       </span>
-                      {data.isAdmin && (
-                        <span className="hidden w-16 shrink-0 text-right text-[12px] tabular-nums text-text-muted xl:inline">
-                          {a.spend?.monthCents != null ? fmtCents(a.spend.monthCents) : ''}
-                        </span>
-                      )}
                     </button>
                   </li>
                 );

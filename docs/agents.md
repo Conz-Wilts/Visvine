@@ -73,7 +73,7 @@ Read this week's notes under updates/ and write a digest to reports/weekly.md �
   `provider: gemini|openai|anthropic|openrouter|custom`, `model: <id>`, plus `base_url:` for
   `custom` (added from Models in the account menu, `lib/models/catalog.ts`). Its page is the Model
   tab beside Context and Raw: the provider and id (editable), the `MODEL_KEY_<PROVIDER>` key
-  editor, the bill under `<provider>/` for the last six months, and who ran on it. It is not a
+  editor, and who ran on it — the recent runs and their tokens. It is not a
   connector — no perimeter, not in `connectors/`, never named in a brief's `connectors:`, and
   nothing runs it directly. Base URL always comes from the registry, never the note
   (`lib/models/config.ts`). The shape before `models/` — `connectors/<name>.md` with `kind: model` —
@@ -213,12 +213,13 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   durable ledger keyed (space, UTC month, agent, model) — run rows are pruned, these survive
   (`runs.ts#finishRun`; `pnpm db:usage:backfill` recomputes months from retained runs, run it once
   after deploying). Teaching (`vm/teach`) meters onto the same ledger under the agent's name —
-  it spends the space's key like a run does. The Space Console's **Usage** section
-  (`/admin?section=usage`, admin-only like the budget route) renders it per month, by model and
-  by agent, via `GET /api/communities/<id>/usage` and the pure shaper `lib/agents/shared/usage.ts`;
-  a model's page shows its provider's slice as its Usage section.
+  it spends the space's key like a run does. **Nothing reads the ledger back as a bill**: there
+  is no Usage section, no cost on a run and none on a model's page. It is written for one
+  purpose, the budget cap below, which is why `registry.ts` still carries `pricing` even though
+  no surface prints a dollar.
 - **The space-wide monthly cap** is `agentBudgetMonthlyCents` in the space's featureConfig
-  (set inline in the Usage section, `PUT …/usage` — no schema, no deploy, like `vmMonthlyHours`),
+  (set in the console's **Budget** section, `/admin?section=budget` → `BudgetPanel`,
+  `PUT …/usage` — no schema, no deploy, like `vmMonthlyHours`),
   compared against the whole ledger, so every agent and every teaching counts toward it. Checked
   beside the agent's own cap before every run and between turns (`budget.ts#preRunStop` says which
   cap bound, so the failure message does too); reaching it pauses runs, never deactivates.
@@ -399,8 +400,8 @@ deadline, UTC) was already correct and was left untouched.
   sits **the clock**: the next 24 hours across every agent, what is running first with its
   current step (`runs.ts#currentStepOf`, the last tool event of the run in flight), the nightly
   clean among them; under it every agent filed under its **group** — the brief's first tag —
-  one row each: dot, name, what it is doing or when it fires, who it runs for, last run, spend
-  (admins). The bar's search and tag filter apply; the click goes to the agent's page. Pure
+  one row each: dot, name, what it is doing or when it fires, who it runs for, last run. The
+  bar's search and tag filter apply; the click goes to the agent's page. Pure
   shapes in `lib/agents/shared/roster.ts`. The `agents/` folder in the context tree is the same
   roster as files. Nothing about agents is switchable per space — the `agent` type belongs to
   Context, which is always on.
@@ -425,7 +426,7 @@ deadline, UTC) was already correct and was left untouched.
   **Settings** (`AgentSettingsPanel`, author or admin) — the same fields as the draft plus dry run
   and the turn cap, saved by rewriting only those frontmatter keys (`lib/agents/briefEdit.ts`) and
   writing the note through the ordinary notes API — the same note the activation lives in, so a save
-  keeps the schedule it already had; spend + budget (admins); the latest runs, each a
+  keeps the schedule it already had; the monthly cap (admins); the latest runs, each a
   link into the window. The note page is the agent as a thing to configure; the window is the
   agent at work.
 - Console → Agents: **gone.** Everything it held now lives on the agent: the run timezone is part of

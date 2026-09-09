@@ -11,7 +11,7 @@ import CleanPanel from '@/features/admin/components/CleanPanel';
 import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
 import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
 import { useConnectorRequestCount } from '@/features/connectors/hooks/useConnectorRequestCount';
-import UsagePanel from '@/features/agents/components/UsagePanel';
+import BudgetPanel from '@/features/agents/components/BudgetPanel';
 import ToolReviewPanel, { useToolReviewQueue } from '@/features/admin/components/ToolReviewPanel';
 import {
   AuthoredToolsPanel,
@@ -75,7 +75,7 @@ function AdminConsole({ space, onSaved }: {
     // whom, and what every pass did. A sub-space's panel says why it holds none.
     { id: 'clean', label: 'Clean', width: 'form' },
     // The model bill: what agents spent, per month, by model and by agent.
-    { id: 'usage', label: 'Usage', width: 'form' },
+    { id: 'budget', label: 'Budget', width: 'form' },
     // Both queues a person can be waiting in — to join, and for context access —
     // are resolved here, so one badge counts them both.
     { id: 'members', label: 'Members', width: 'wide', badge: pending.members + pending.requests },
@@ -119,8 +119,8 @@ function AdminConsole({ space, onSaved }: {
               return <ConnectorsPanel key={space.id} onRequestsChanged={connectorRequests.refresh} />;
             case 'clean':
               return <CleanPanel key={space.id} spaceId={space.id} />;
-            case 'usage':
-              return <UsagePanel key={space.id} spaceId={space.id} />;
+            case 'budget':
+              return <BudgetPanel key={space.id} spaceId={space.id} />;
             case 'members':
               return <MembersPanel key={space.id} />;
             case 'types':

@@ -5,12 +5,15 @@
  * beside Context and Raw.
  *
  * The note says which provider and which model id; this tab is what the note
- * cannot say. Whether the key behind it is stored. What running on it cost —
- * this month first, by model id and by agent, then the earlier months one
- * line each, from the durable ledger. And who ran on it: the recent runs,
- * each with the agent, the person it ran for and what it spent, folded per
- * person above the list. Admins only, like the Usage section — the bill is
- * the space's, and a member reads the note on the Context tab.
+ * cannot say. Whether the key behind it is stored. And who ran on it: the
+ * recent runs, each with the agent, the person it ran for and the tokens it
+ * used, folded per person above the list. Admins only; a member reads the
+ * note on the Context tab.
+ *
+ * There is no bill here. What a space's provider keys were billed is the
+ * provider's own account to show, and a second copy of it inside Visvine is a
+ * number to reconcile rather than one to trust. Tokens are still metered —
+ * the budget cap needs them — and tokens are what this tab reports.
  *
  * The note is still the source of truth: the provider, model id and base URL
  * are read from — and written back to — the frontmatter the Raw tab edits, as
@@ -26,19 +29,16 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 import ConnectorLogo from '@/features/connectors/components/ConnectorLogo';
-import { fmtCents } from '@/features/agents/lib/rowState';
-import { fmtTokens, LinesTable, monthLabel } from '@/features/agents/components/UsageLines';
+import { fmtTokens } from '@/features/agents/lib/rowState';
 import { FIELD, GHOST_BUTTON, SAVE_BUTTON, Section, SecretEditor } from './pageChrome';
 import { agentPageHref } from '@/lib/agents/config';
 import { PROVIDERS } from '@/lib/agents/registry';
 import { modelCatalogEntryFor } from '@/lib/models/catalog';
 import type { ModelDetail, ModelRunRow, ModelUserLine } from '@/lib/models/service';
-import type { MonthUsage } from '@/lib/agents/shared/usage';
 import { timeAgo } from '@/lib/date';
 
 interface DetailResponse {
   model: ModelDetail;
-  usage: { months: MonthUsage[]; currentMonth: string };
   history: { runs: ModelRunRow[]; users: ModelUserLine[] };
 }
 
@@ -115,12 +115,10 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
     return <p className="py-10 text-center text-sm text-text-muted">{error ?? 'Model not found'}</p>;
   }
 
-  const { model, usage, history } = data;
+  const { model, history } = data;
   const status = statusOf(model);
   const info = model.info;
   const entry = modelCatalogEntryFor(model.recipe, info?.provider);
-  const thisMonth = usage.months.find((m) => m.month === usage.currentMonth) ?? null;
-  const earlier = usage.months.filter((m) => m.month !== usage.currentMonth);
   const registryModels = PROVIDERS.find((p) => p.id === provider)?.models ?? [];
 
   const openEditor = () => {
@@ -278,60 +276,6 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
         </Section>
       )}
 
-      {/* ══ USAGE — the bill on this provider's key ══ */}
-      {info && (
-        <Section
-          title="Usage"
-          meta={thisMonth ? monthLabel(thisMonth.month) : 'this month'}
-          action={<Link href="/admin?section=usage" className="text-xs text-text-muted underline hover:text-text-primary">Whole space</Link>}
-        >
-          {!thisMonth && earlier.length === 0 ? (
-            <p className="text-sm text-text-muted">Nothing has run on {info.providerLabel} in the last six months.</p>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {thisMonth && (
-                <>
-                  <p className="text-sm text-text-primary">
-                    <span className="font-semibold tabular-nums">{thisMonth.unpricedRuns === thisMonth.runs ? 'tokens only' : fmtCents(thisMonth.costCents)}</span>
-                    <span className="ml-2 text-text-muted">
-                      across {thisMonth.runs} run{thisMonth.runs === 1 ? '' : 's'} · {fmtTokens(thisMonth.promptTokens)} in · {fmtTokens(thisMonth.completionTokens)} out
-                      {thisMonth.unpricedRuns > 0 && thisMonth.unpricedRuns < thisMonth.runs ? ` · ${thisMonth.unpricedRuns} unpriced` : ''}
-                    </span>
-                  </p>
-                  <LinesTable title="By model" lines={thisMonth.byModel} />
-                  <LinesTable
-                    title="By agent"
-                    lines={thisMonth.byAgent}
-                    nameOf={(key) => <Link href={agentPageHref(key)} className="hover:underline">{key}</Link>}
-                  />
-                </>
-              )}
-              {earlier.length > 0 && (
-                <div>
-                  <h3 className="mb-1.5 text-xs font-medium uppercase tracking-wide text-text-muted">Earlier</h3>
-                  <table className="w-full text-[13px]">
-                    <tbody>
-                      {earlier.map((m) => (
-                        <tr key={m.month} className="border-b border-border-subtle last:border-b-0">
-                          <td className="py-1.5 pr-3 text-text-primary">{monthLabel(m.month)}</td>
-                          <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{m.runs} run{m.runs === 1 ? '' : 's'}</td>
-                          <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{fmtTokens(m.promptTokens + m.completionTokens)} tokens</td>
-                          <td className="py-1.5 text-right tabular-nums text-text-primary">{m.unpricedRuns === m.runs ? 'tokens only' : fmtCents(m.costCents)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              <p className="text-xs text-text-muted">
-                Billed to this space’s own {info.providerLabel} key. Everything under <code className="font-mono">{info.provider}/</code> counts,
-                including a model a brief pinned that this note does not name.
-              </p>
-            </div>
-          )}
-        </Section>
-      )}
-
       {/* ══ WHO — the recent runs folded per person ══ */}
       {info && history.users.length > 0 && (
         <Section title="Who has run on it" meta={`last ${history.runs.length} runs`}>
@@ -341,7 +285,6 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
                 <th className="py-1 pr-3 font-normal" />
                 <th className="py-1 pr-3 text-right font-normal">Runs</th>
                 <th className="py-1 pr-3 text-right font-normal">Tokens</th>
-                <th className="py-1 pr-3 text-right font-normal">Cost</th>
                 <th className="py-1 text-right font-normal">Last</th>
               </tr>
             </thead>
@@ -351,7 +294,6 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
                   <td className="py-1.5 pr-3 text-text-primary">{u.user.name}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{u.runs}</td>
                   <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{fmtTokens(u.promptTokens + u.completionTokens)}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums text-text-primary">{fmtCents(u.costCents)}</td>
                   <td className="py-1.5 text-right text-text-muted">{timeAgo(new Date(u.lastAt).getTime())}</td>
                 </tr>
               ))}
@@ -378,7 +320,6 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
                     <th className="py-1 pr-3 font-normal">For</th>
                     <th className="py-1 pr-3 font-normal">Model</th>
                     <th className="py-1 pr-3 text-right font-normal">Tokens</th>
-                    <th className="py-1 pr-3 text-right font-normal">Cost</th>
                     <th className="py-1 font-normal">Outcome</th>
                   </tr>
                 </thead>
@@ -394,7 +335,6 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
                         <td className="py-1.5 pr-3 text-text-primary">{who ? who.name : <span className="text-text-muted">—</span>}</td>
                         <td className="py-1.5 pr-3 font-mono text-[12px] text-text-muted">{r.model.slice(r.model.indexOf('/') + 1)}</td>
                         <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{fmtTokens(r.promptTokens + r.completionTokens)}</td>
-                        <td className="py-1.5 pr-3 text-right tabular-nums text-text-primary">{r.costCents === null ? 'tokens only' : fmtCents(r.costCents)}</td>
                         <td className="py-1.5 text-text-muted">{r.status === 'running' ? 'running' : r.terminalReason ?? r.status}</td>
                       </tr>
                     );

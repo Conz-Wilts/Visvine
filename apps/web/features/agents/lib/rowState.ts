@@ -135,10 +135,11 @@ export function fmtDuration(startedAt: string, endedAt: string | null): string |
   return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`;
 }
 
-export function fmtCents(cents: number | null | undefined): string {
-  if (cents === null || cents === undefined) return '—';
-  if (cents > 0 && cents < 1) return '<$0.01';
-  return `$${(cents / 100).toFixed(2)}`;
+/** Tokens as a person reads them — the one unit a run is reported in. */
+export function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
+  return n.toLocaleString();
 }
 
 /**

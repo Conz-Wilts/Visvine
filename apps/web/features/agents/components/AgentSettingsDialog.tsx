@@ -10,7 +10,6 @@ import { memoryPath, memorySummary } from '@/lib/agents/shared/memory';
 import AgentSettingsPanel from './AgentSettingsPanel';
 import MachinePane from './MachinePane';
 import SkillsPanel from './SkillsPanel';
-import { fmtCents } from '../lib/rowState';
 
 /**
  * Everything about an agent you set up or look into rather than watch, behind
@@ -119,7 +118,6 @@ export default function AgentSettingsDialog({
                 <Button variant="ghost" size="sm" onClick={saveBudget} disabled={busy}>
                   Save
                 </Button>
-                <span className="text-[12px] text-text-muted">{fmtCents(agent.spend?.monthCents)} this month</span>
                 {error && <span className="text-[12px] text-red-600">{error}</span>}
               </div>
             )}

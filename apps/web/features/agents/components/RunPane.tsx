@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { hrefForNotePath } from '@/lib/notes/entities';
 import { useRun, type RunDetail } from '../lib/useRun';
-import { fmtCents, fmtDuration, terminalLabel } from '../lib/rowState';
+import { fmtDuration, terminalLabel } from '../lib/rowState';
 import { stepsOf } from '@/lib/agents/shared/trace';
 import RunSteps, { type EndNode, type TriggerNode } from './RunSteps';
 import StatusDot from './StatusDot';
@@ -31,7 +31,6 @@ export default function RunPane({
   agentName,
   runId,
   maxTurns,
-  isAdmin,
   onFinished,
   onEditBrief,
 }: {
@@ -39,7 +38,6 @@ export default function RunPane({
   agentName: string;
   runId: string;
   maxTurns: number | null;
-  isAdmin: boolean;
   onFinished?: (run: RunDetail) => void;
   /** Offered after a run, for anyone who may: the run is where you learn what the brief should have said. */
   onEditBrief?: () => void;
@@ -101,7 +99,6 @@ export default function RunPane({
           fmtDuration(run.startedAt, run.endedAt),
           `${run.turns} turn${run.turns === 1 ? '' : 's'}`,
           toolCalls ? `${toolCalls} step${toolCalls === 1 ? '' : 's'}` : null,
-          isAdmin && run.costCents !== null ? fmtCents(run.costCents) : null,
         ]
           .filter(Boolean)
           .join(' · ');

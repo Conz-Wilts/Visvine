@@ -18,7 +18,6 @@
  * {@link modelCatalogEntryFor} is display-only: a wrong or missing answer
  * costs a logo, never a key or a permission.
  */
-import { PROVIDERS } from '@/lib/agents/registry'
 import { newModelNote } from './config'
 
 interface ModelCatalogField {
@@ -31,12 +30,6 @@ interface ModelCatalogField {
   /** Stored in the secret store; never written into the note. */
   secret?: boolean
   required?: boolean
-  /**
-   * A fixed set of values, rendered as a picker. A suggestion, not a gate —
-   * the ids the registry ships, with a newer one still typeable, because a
-   * provider releases models faster than this file is edited.
-   */
-  choices?: readonly { value: string; label: string }[]
 }
 
 export interface ModelCatalogEntry {
@@ -51,12 +44,10 @@ export interface ModelCatalogEntry {
   fields: readonly ModelCatalogField[]
 }
 
-/** The model ids a registry provider ships, as picker choices. */
-function modelChoices(providerId: string): { value: string; label: string }[] {
-  const provider = PROVIDERS.find((p) => p.id === providerId)
-  return (provider?.models ?? []).map((m) => ({ value: m.id, label: m.label }))
-}
-
+// The id is TYPED, never picked. A vendor ships models faster than this file
+// is edited, so a list here is out of date the week it is written and a picker
+// makes the newest model the awkward case. The placeholder carries an example
+// of the shape instead, and any id the provider serves is valid.
 const MODEL_FIELD_HINT = 'Which model this runs. Agents use it unless their brief pins another.'
 
 export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
@@ -68,7 +59,7 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
     provider: 'openai',
     fields: [
       { key: 'MODEL_KEY_OPENAI', label: 'API key', placeholder: 'sk-…', secret: true, required: true, hint: 'platform.openai.com → API keys.' },
-      { key: 'model', label: 'Model', required: true, hint: MODEL_FIELD_HINT, choices: modelChoices('openai'), placeholder: 'model id' },
+      { key: 'model', label: 'Model', required: true, hint: MODEL_FIELD_HINT, placeholder: 'model id, e.g. gpt-4.1' },
     ],
   },
   {
@@ -79,7 +70,7 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
     provider: 'anthropic',
     fields: [
       { key: 'MODEL_KEY_ANTHROPIC', label: 'API key', placeholder: 'sk-ant-…', secret: true, required: true, hint: 'console.anthropic.com → API keys.' },
-      { key: 'model', label: 'Model', required: true, hint: MODEL_FIELD_HINT, choices: modelChoices('anthropic'), placeholder: 'model id' },
+      { key: 'model', label: 'Model', required: true, hint: MODEL_FIELD_HINT, placeholder: 'model id, e.g. claude-sonnet-5' },
     ],
   },
   {
@@ -90,7 +81,7 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
     provider: 'gemini',
     fields: [
       { key: 'MODEL_KEY_GEMINI', label: 'API key', placeholder: 'AIza…', secret: true, required: true, hint: 'aistudio.google.com → Get API key.' },
-      { key: 'model', label: 'Model', required: true, hint: MODEL_FIELD_HINT, choices: modelChoices('gemini'), placeholder: 'model id' },
+      { key: 'model', label: 'Model', required: true, hint: MODEL_FIELD_HINT, placeholder: 'model id, e.g. gemini-2.5-flash' },
     ],
   },
   {
@@ -101,7 +92,6 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
     provider: 'openrouter',
     fields: [
       { key: 'MODEL_KEY_OPENROUTER', label: 'API key', placeholder: 'sk-or-v1-…', secret: true, required: true, hint: 'openrouter.ai/keys → Create key.' },
-      // No choices: OpenRouter serves hundreds of ids, and any of them is valid here.
       { key: 'model', label: 'Model', required: true, placeholder: 'vendor/model-id, as on openrouter.ai/models', hint: MODEL_FIELD_HINT },
     ],
   },
@@ -114,7 +104,6 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
     fields: [
       { key: 'base_url', label: 'Base URL', placeholder: 'https://llm.example.com/v1/', required: true, hint: 'An https endpoint; no query or fragment.' },
       { key: 'MODEL_KEY_CUSTOM', label: 'API key', secret: true, required: true },
-      // No choices: nobody but the admin knows what their gateway serves.
       { key: 'model', label: 'Model', required: true, placeholder: 'model id at your endpoint', hint: MODEL_FIELD_HINT },
     ],
   },

@@ -16,8 +16,6 @@
  * page; the ids stay on the row for deleteAccount to clear.
  */
 import prisma from '@/lib/prisma'
-import { monthBounds } from '@/lib/agents/budget'
-import { rollupUsage, type MonthUsage } from '@/lib/agents/shared/usage'
 import { readVisible } from '@/lib/notes/contextService'
 import type { Context } from '@/lib/notes/store'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
@@ -25,7 +23,6 @@ import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { isConnectorEnabled } from '@/lib/connectors/config'
 import { isLegacyModelConnector, isModelNote, modelInfo, modelPath, parseModel, type ModelInfo } from './config'
 
-const MONTHS_SHOWN = 6
 const HISTORY_LIMIT = 60
 
 export interface ModelDetail {
@@ -86,20 +83,6 @@ export async function describeModel(p: ContextPrincipal, context: Context, name:
   }
 }
 
-/**
- * The bill for one provider's key: the last six months of the ledger, rows
- * under `<provider>/` only, each month broken out by model id and by agent.
- */
-export async function modelUsage(spaceId: string, provider: string): Promise<{ months: MonthUsage[]; currentMonth: string }> {
-  const { start } = monthBounds(new Date())
-  const since = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - (MONTHS_SHOWN - 1), 1))
-  const rows = await prisma.agentModelUsage.findMany({
-    where: { spaceId, month: { gte: since }, model: { startsWith: `${provider}/` } },
-    select: { month: true, name: true, model: true, runs: true, promptTokens: true, completionTokens: true, costMicros: true, unpricedRuns: true },
-  })
-  return { months: rollupUsage(rows), currentMonth: start.toISOString() }
-}
-
 /** One recent run on the provider's key, with the people behind it named. */
 export interface ModelRunRow {
   id: string
@@ -112,8 +95,6 @@ export interface ModelRunRow {
   model: string
   promptTokens: number
   completionTokens: number
-  /** Null when the run was not priced. */
-  costCents: number | null
   terminalReason: string | null
   /** Whose principal the run acted as — the subscriber a fan-out run served, or the author. */
   ranFor: { id: string; name: string } | null
@@ -127,11 +108,8 @@ export interface ModelUserLine {
   runs: number
   promptTokens: number
   completionTokens: number
-  costCents: number
   lastAt: string
 }
-
-const MICROS_PER_CENT = 10_000
 
 /**
  * The recent runs on this provider's key, newest first, and the same runs
@@ -146,7 +124,7 @@ export async function modelHistory(spaceId: string, provider: string): Promise<{
     take: HISTORY_LIMIT,
     select: {
       id: true, name: true, trigger: true, status: true, startedAt: true, endedAt: true, startedBy: true,
-      runAsUserId: true, model: true, promptTokens: true, completionTokens: true, costMicros: true, terminalReason: true,
+      runAsUserId: true, model: true, promptTokens: true, completionTokens: true, terminalReason: true,
     },
   })
   const ids = new Set<string>()
@@ -170,7 +148,6 @@ export async function modelHistory(spaceId: string, provider: string): Promise<{
     model: r.model ?? `${provider}/`,
     promptTokens: r.promptTokens,
     completionTokens: r.completionTokens,
-    costCents: r.costMicros === null ? null : Number(r.costMicros) / MICROS_PER_CENT,
     terminalReason: r.terminalReason,
     ranFor: person(r.runAsUserId),
     startedBy: person(r.startedBy),
@@ -180,14 +157,19 @@ export async function modelHistory(spaceId: string, provider: string): Promise<{
   for (const run of runs) {
     const who = run.ranFor ?? run.startedBy
     if (!who) continue
-    const line = byUser.get(who.id) ?? { user: who, runs: 0, promptTokens: 0, completionTokens: 0, costCents: 0, lastAt: run.startedAt }
+    const line = byUser.get(who.id) ?? { user: who, runs: 0, promptTokens: 0, completionTokens: 0, lastAt: run.startedAt }
     line.runs += 1
     line.promptTokens += run.promptTokens
     line.completionTokens += run.completionTokens
-    line.costCents += run.costCents ?? 0
+
     if (run.startedAt > line.lastAt) line.lastAt = run.startedAt
     byUser.set(who.id, line)
   }
-  const users = [...byUser.values()].sort((a, b) => b.costCents - a.costCents || b.runs - a.runs || a.user.name.localeCompare(b.user.name))
+  const users = [...byUser.values()].sort(
+    (a, b) =>
+      b.promptTokens + b.completionTokens - (a.promptTokens + a.completionTokens) ||
+      b.runs - a.runs ||
+      a.user.name.localeCompare(b.user.name),
+  )
   return { runs, users }
 }

@@ -307,7 +307,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
               agentName={name}
               runId={shownRun.id}
               maxTurns={maxTurns ? Number(maxTurns) : null}
-              isAdmin={isAdmin}
               onFinished={() => void reload()}
               onEditBrief={canManage ? editBrief : undefined}
             />

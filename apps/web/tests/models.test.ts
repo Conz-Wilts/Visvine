@@ -169,7 +169,7 @@ Body prose.
 function sampleValues(entry: (typeof MODEL_CATALOG)[number]): Record<string, string> {
   const values: Record<string, string> = {}
   for (const f of entry.fields) {
-    values[f.key] = f.key === 'base_url' ? 'https://llm.example.com/v1/' : f.choices?.[0]?.value ?? (f.key === 'model' ? 'some-model' : `${f.key}-value`)
+    values[f.key] = f.key === 'base_url' ? 'https://llm.example.com/v1/' : f.key === 'model' ? 'some-model' : `${f.key}-value`
   }
   return values
 }
