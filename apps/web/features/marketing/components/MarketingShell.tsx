@@ -34,6 +34,14 @@ export function useSignInModal() {
  * top of the page over the vines, with no bar beneath them. In the desktop
  * shell (`desktop`) the website falls away: just the vines, the wordmark and
  * a Login button, since the only thing to do there is sign in.
+ *
+ * The vines are taller than the page and are clipped by a layer of their OWN
+ * rather than by an overflow on <main>. A clip on <main> makes it a scroll
+ * port, and a scroll port can be scrolled by anything — arriving from the app
+ * after Sign out, the router scrolls the new page's section into view and
+ * shunts the whole frame up by the header's height, taking the wordmark and
+ * the auth buttons off the top of the screen with no scrollbar to bring them
+ * back. Clipping the layer that actually overflows leaves nothing to scroll.
  */
 export default function MarketingShell({
   children,
@@ -104,8 +112,10 @@ export default function MarketingShell({
 
   if (desktop) {
     return (
-      <main className="font-brand relative min-h-[100svh] bg-white text-black flex flex-col items-center justify-center overflow-hidden">
-        <Vines />
+      <main className="font-brand relative min-h-[100svh] bg-white text-black flex flex-col items-center justify-center">
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <Vines />
+        </div>
         <div className="relative z-30 flex flex-col items-center gap-8">
           <h1
             className="text-5xl sm:text-6xl font-semibold tracking-tight"
@@ -130,8 +140,10 @@ export default function MarketingShell({
   }
 
   return (
-    <main className="font-brand relative min-h-[100svh] bg-white text-black flex flex-col overflow-hidden">
-      <Vines />
+    <main className="font-brand relative min-h-[100svh] bg-white text-black flex flex-col">
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <Vines />
+      </div>
       <header className="relative z-30 w-full">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 h-16">
           {/* Left: brand */}
