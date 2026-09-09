@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { XIcon } from '@/features/shared/icons';
 import { DOCK_EASE, DOCK_MS, useSidebar, type AccountPanel } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { ROW_H } from '@/features/shared/components/layout/railRow';
@@ -30,11 +29,14 @@ import ModelsPanel from '@/features/models/components/ModelsPanel';
  * space's agents run on is a decision of its own rather than a service among
  * forty, and a model is not a connector (lib/models).
  *
- * Unlike the switcher, this panel is HELD: a form is filled in here and a
- * sign-in leaves for a provider from here, so it stays until its close, Escape
- * or navigating away — never the pointer wandering off the card. The one
- * thing that leaves the app is the sign-in, and a panel cannot survive a
- * round trip to a provider — so the return path is THIS page plus
+ * It closes the way the switcher and Create new do — the pointer leaving the
+ * card — so it carries no close button. A form is the exception: while an add
+ * form, a manage view or a confirm is up the panel is HELD (the Sidebar reads
+ * `accountFormOpen`), because a half-filled form must not be taken away by the
+ * pointer wandering off. Escape and navigating away close it either way.
+ *
+ * The one thing that leaves the app is the sign-in, and a panel cannot survive
+ * a round trip to a provider — so the return path is THIS page plus
  * `?connectors=<tab>`, which is what UserMenu re-opens the panel on, landing
  * on the list showing the account you just linked.
  */
@@ -53,10 +55,10 @@ export function connectorsSegment(value: string | null): ConnectorsTab | null {
 
 type PanelView = 'mine' | 'connected' | 'disconnected' | 'catalog';
 
-const TABS: Array<{ id: ConnectorsTab; label: string; view: PanelView; blurb: string }> = [
-  { id: 'connected', label: 'Connected', view: 'connected', blurb: 'What works for you here, now.' },
-  { id: 'disconnected', label: 'Not connected', view: 'disconnected', blurb: 'What this space has that is not working for you yet. Sign in where a connector needs your own account.' },
-  { id: 'all', label: 'All connectors', view: 'catalog', blurb: 'Every service Visvine can connect. Ask for one this space does not have yet.' },
+const TABS: Array<{ id: ConnectorsTab; label: string; view: PanelView }> = [
+  { id: 'connected', label: 'Connected', view: 'connected' },
+  { id: 'disconnected', label: 'Not connected', view: 'disconnected' },
+  { id: 'all', label: 'All connectors', view: 'catalog' },
 ];
 
 /** The width the panel needs: a catalogue row is a logo, a name, a line under
@@ -67,8 +69,8 @@ export default function AccountRailPanel({ initialTab }: {
   /** The connectors list to open on — set by the `?connectors=` return. */
   initialTab: ConnectorsTab | null;
 }) {
-  const { accountPanel, setAccountPanel, reduced } = useSidebar();
-  const { currentSpace, isAdmin } = useSpace();
+  const { accountPanel, setAccountPanel, setAccountFormOpen, reduced } = useSidebar();
+  const { currentSpace } = useSpace();
   const router = useRouter();
   const pathname = usePathname();
   const isOpen = accountPanel !== null;
@@ -79,15 +81,21 @@ export default function AccountRailPanel({ initialTab }: {
     if (initialTab && initialTab !== 'models') setTab(initialTab);
   }, [initialTab]);
 
-  const close = () => {
-    setAccountPanel(null);
+  // The `?connectors=` the sign-in returned on is dropped whenever the panel
+  // ends up closed — by Escape, by a row, or by the pointer leaving the card,
+  // which shuts it from the Sidebar without coming through here.
+  useEffect(() => {
+    if (isOpen) return;
+    setAccountFormOpen(false);
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     if (!params.has(CONNECTORS_PARAM)) return;
     params.delete(CONNECTORS_PARAM);
     const q = params.toString();
     router.replace(q ? `${window.location.pathname}?${q}` : window.location.pathname, { scroll: false });
-  };
+  }, [isOpen, router, setAccountFormOpen]);
+
+  const close = () => setAccountPanel(null);
   useEscapeKey(close, isOpen);
 
   // Navigating away shuts it — a CHANGE of route, not the mount, so the
@@ -121,22 +129,13 @@ export default function AccountRailPanel({ initialTab }: {
     >
       {/* The head: one rail row tall, level with the space in the rail's
           head, so the panel reads as the rail continuing. The name of what
-          the row opened, and its close. */}
-      <div className="flex shrink-0 items-center justify-between pl-5 pr-3" style={{ height: ROW_H }}>
+          the row opened, and nothing else — leaving the card is the close. */}
+      <div className="flex shrink-0 items-center pl-5 pr-3" style={{ height: ROW_H }}>
         <h2 className="text-[14px] font-semibold text-text-primary">{modelsOnly ? 'Models' : 'Connectors'}</h2>
-        <button
-          type="button"
-          onClick={close}
-          aria-label="Close"
-          tabIndex={isOpen ? 0 : -1}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
-        >
-          <XIcon className="h-4 w-4" />
-        </button>
       </div>
 
       {!modelsOnly && (
-        <div className="flex shrink-0 flex-col gap-3 px-4 pb-3">
+        <div className="flex shrink-0 flex-col px-4 pb-3">
           <div className="flex gap-1 rounded-lg bg-surface-2 p-1">
             {TABS.map((t) => (
               <button
@@ -155,11 +154,6 @@ export default function AccountRailPanel({ initialTab }: {
               </button>
             ))}
           </div>
-          <p className="text-xs text-text-muted">
-            {tab === 'all' && isAdmin
-              ? 'Every service Visvine can connect. Connect one for this space, or answer what members asked for.'
-              : current.blurb}
-          </p>
         </div>
       )}
 
@@ -169,13 +163,14 @@ export default function AccountRailPanel({ initialTab }: {
         {!currentSpace ? (
           <p className="py-8 text-center text-sm text-text-muted">Open a space to see its {modelsOnly ? 'models' : 'connectors'}.</p>
         ) : modelsOnly ? (
-          <ModelsPanel space={currentSpace.id} onLeave={close} />
+          <ModelsPanel space={currentSpace.id} onLeave={close} onFormOpen={setAccountFormOpen} />
         ) : (
           <ConnectorsPanel
             space={currentSpace.id}
             view={current.view}
             returnTo={returnTo}
             onLeave={close}
+            onFormOpen={setAccountFormOpen}
             // Adding one is choosing from the catalogue, which is this
             // panel's own third tab.
             onAdd={() => setTab('all')}

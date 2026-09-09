@@ -262,6 +262,7 @@ export default function ConnectorsPanel({
   onLeave,
   onAdd,
   onRequestsChanged,
+  onFormOpen,
 }: {
   /** The space to work in; defaults to the one the app is showing. */
   space?: string | null;
@@ -283,6 +284,11 @@ export default function ConnectorsPanel({
   onAdd?: () => void;
   /** A member's request was answered — the console re-counts its badge. */
   onRequestsChanged?: () => void;
+  /**
+   * A form, a manage view or a confirm is up. The rail's panel closes when the
+   * pointer leaves the card, so it needs to know when it must not.
+   */
+  onFormOpen?: (open: boolean) => void;
 } = {}) {
   const router = useRouter();
   const { currentSpace } = useSpace();
@@ -348,6 +354,10 @@ export default function ConnectorsPanel({
   // The connector whose on/off write is in flight, and what went wrong if it did.
   const [toggling, setToggling] = useState<string | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
+
+  // Anything with a half-finished act in it holds the rail's panel open.
+  const formOpen = entry !== null || manage !== null || confirmDelete !== null || fulfilling !== null;
+  useEffect(() => { onFormOpen?.(formOpen); }, [formOpen, onFormOpen]);
 
   // Re-read what's connected on mount, on a space switch, and after a delete.
   const [reloadKey, setReloadKey] = useState(0);
@@ -786,7 +796,6 @@ export default function ConnectorsPanel({
       {!readOnly && (tab === 'mine' || tab === 'catalog') && requests.length > 0 && (
         <section className="flex flex-col">
           <h3 className="text-sm font-semibold text-text-primary">Requested ({requests.length})</h3>
-          <p className="text-xs text-text-muted">Members asked for these from All connectors.</p>
           <ul className="mt-2 divide-y divide-border-subtle border-t border-border-subtle">
             {requests.map((r) => {
               const service = CONNECTOR_CATALOG.find((e) => e.id === r.recipe) ?? null;
@@ -887,7 +896,6 @@ export default function ConnectorsPanel({
               <li className="py-1">
                 <NewRow
                   label="Add a connector"
-                  hint="Connect another service, or write one yourself"
                   onClick={() => { setQuery(''); if (view === undefined) setTab('catalog'); else onAdd?.(); }}
                 />
               </li>
@@ -1093,8 +1101,7 @@ export default function ConnectorsPanel({
           {/* The service that isn't on the list: a connector is only ever a
               note, so a custom one is written on the draft surface. */}
           {!readOnly && (
-            <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4 mt-2">
-              <p className="text-xs text-text-muted">Something not on the list? Write its note yourself.</p>
+            <div className="flex justify-end border-t border-border-subtle pt-4 mt-2">
               <Button variant="neutral" size="sm" onClick={() => openCreate('connector')}>
                 Custom connector
               </Button>
@@ -1273,7 +1280,6 @@ function EntryForm({
       <Field
         label="Title"
         error={clash ? `This space already has a connector called ${name} — give this one a different title.` : undefined}
-        hint={`Saved as connectors/${name}.md; agents call it ${name}.`}
       >
         <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={64} />
       </Field>

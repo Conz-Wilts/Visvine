@@ -21,10 +21,15 @@ interface SidebarContextValue {
   setSwitcherOpen: (v: boolean) => void;
   /** The account's panel — Connectors or Models — open in the same column
    *  (AccountRailPanel). Opened from the rows of the account band at the
-   *  rail's foot; unlike the switcher it is HELD open until it is closed,
-   *  because a form is filled in and a sign-in leaves for a provider from it. */
+   *  rail's foot, and closed the way the switcher and Create new are: by the
+   *  pointer leaving the card. */
   accountPanel: AccountPanel | null;
   setAccountPanel: (v: AccountPanel | null) => void;
+  /** A form is being filled in inside that panel — an add form, a manage
+   *  view, a confirm — so the pointer wandering off must not take it away.
+   *  The same hold Create new has while its form is open. */
+  accountFormOpen: boolean;
+  setAccountFormOpen: (v: boolean) => void;
 }
 
 export type AccountPanel = 'connectors' | 'models';
@@ -51,6 +56,8 @@ const SidebarContext = createContext<SidebarContextValue>({
   setSwitcherOpen: () => {},
   accountPanel: null,
   setAccountPanel: () => {},
+  accountFormOpen: false,
+  setAccountFormOpen: () => {},
 });
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
@@ -62,11 +69,12 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const [reduced, setReduced] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [accountPanel, setAccountPanel] = useState<AccountPanel | null>(null);
+  const [accountFormOpen, setAccountFormOpen] = useState(false);
 
   useEffect(() => setReduced(prefersReducedMotion()), []);
 
   return (
-    <SidebarContext.Provider value={{ expanded: hovered, setHovered, reduced, switcherOpen, setSwitcherOpen, accountPanel, setAccountPanel }}>
+    <SidebarContext.Provider value={{ expanded: hovered, setHovered, reduced, switcherOpen, setSwitcherOpen, accountPanel, setAccountPanel, accountFormOpen, setAccountFormOpen }}>
       {children}
     </SidebarContext.Provider>
   );

@@ -97,7 +97,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen: createOpen, formOpen: createFormOpen, close: closeCreate } = useCreateModal();
   const createSurface = useCreateSurface();
-  const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen, accountPanel, setAccountPanel } = useSidebar();
+  const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen, accountPanel, setAccountPanel, accountFormOpen } = useSidebar();
   // The list the account panel opens on when a sign-in's return names one.
   const [accountTab, setAccountTab] = useState<ConnectorsTab | null>(null);
   useEffect(() => {
@@ -188,10 +188,11 @@ export default function Sidebar() {
   // motion — glides left with it, so the pair settles at a column of glyphs
   // and one list rather than two full columns side by side.
   const railPanelOpen = switcherOpen || createOpen || accountPanel !== null;
-  // The account panel is held open — a form is filled in and a sign-in leaves
-  // from it — so it is never shut by the pointer, only by the rows that open
-  // another panel in its place, its own close, Escape or navigating away.
-  const held = (createOpen && createFormOpen) || accountPanel !== null;
+  // A panel with a form in it is held: Create new while its form is open, and
+  // Connectors or Models while an add form, a manage view or a confirm is up.
+  // A list is not held — the pointer leaving the card puts it away, the same
+  // gesture that closes the switcher.
+  const held = (createOpen && createFormOpen) || (accountPanel !== null && accountFormOpen);
   const railW = expanded ? EXPANDED_W : COLLAPSED_W;
   // A rail panel is open only while the pointer is on the row that opened it
   // or in the panel itself: pointing at any other row of the rail puts both
@@ -211,9 +212,10 @@ export default function Sidebar() {
     releaseTimer.current = null;
   };
   const shutRailPanels = () => {
-    if (accountPanel !== null) return;
+    if (accountPanel !== null && accountFormOpen) return;
     const panelsGone = reduced ? 0 : DOCK_MS;
     setSwitcherOpen(false);
+    setAccountPanel(null);
     closeCreate();
     cancelRelease();
     releaseTimer.current = setTimeout(() => {

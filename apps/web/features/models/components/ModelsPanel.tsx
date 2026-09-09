@@ -33,6 +33,9 @@ import { desktopRuntimes, type DesktopRuntimeStatus } from '@/features/desktop/l
  * runs for them (lib/agents/local.ts). In a browser the section says where
  * to go; in the desktop app it says whether each is installed and signed
  * in, and Sign in opens the vendor's own login in a terminal.
+ *
+ * The panel is rows and their acts, not prose: what a row is is the row, so
+ * nothing here explains the list above it.
  */
 
 /** One row of GET …/models. */
@@ -61,7 +64,12 @@ function statusOf(m: ModelRow): { label: string; tone: 'ok' | 'warn' | 'bad' | '
   return null;
 }
 
-export default function ModelsPanel({ space, onLeave }: { space: string; onLeave?: () => void }) {
+export default function ModelsPanel({ space, onLeave, onFormOpen }: {
+  space: string;
+  onLeave?: () => void;
+  /** The add form is up — the rail holds the panel open while it is. */
+  onFormOpen?: (open: boolean) => void;
+}) {
   const router = useRouter();
   const [rows, setRows] = useState<ModelRow[]>([]);
   const [canManage, setCanManage] = useState(false);
@@ -70,6 +78,8 @@ export default function ModelsPanel({ space, onLeave }: { space: string; onLeave
   const [picker, setPicker] = useState(false);
   const [entry, setEntry] = useState<ModelCatalogEntry | null>(null);
   const [localOn, setLocalOn] = useState<Record<LocalRuntimeId, boolean>>({ claude: true, codex: true });
+
+  useEffect(() => { onFormOpen?.(entry !== null); }, [entry, onFormOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,12 +116,6 @@ export default function ModelsPanel({ space, onLeave }: { space: string; onLeave
 
   return (
     <div className="flex flex-col gap-4">
-      <p className="min-w-0 text-xs text-text-muted">
-        {rows.length === 0
-          ? 'What this space’s agents run on. Add one and they can run.'
-          : 'Agents run on the first of these unless their brief names another.'}
-      </p>
-
       {error && <Alert>{error}</Alert>}
 
       {loading ? (
@@ -126,11 +130,7 @@ export default function ModelsPanel({ space, onLeave }: { space: string; onLeave
                 providers under itself, and nothing else. */}
             {canManage && (
               <li className="py-1">
-                <NewRow
-                  label="Add model"
-                  hint={picker ? 'Pick a provider below' : 'A provider and the id it runs'}
-                  onClick={() => setPicker((p) => !p)}
-                />
+                <NewRow label="Add model" onClick={() => setPicker((p) => !p)} />
               </li>
             )}
             {rows.map((m) => {
@@ -211,14 +211,7 @@ function YourPlan({ enabled }: { enabled: Record<LocalRuntimeId, boolean> }) {
   return (
     <section className="flex flex-col border-t border-border-subtle pt-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-text-primary">Your plan</h3>
-          <p className="text-xs text-text-muted">
-            {bridge
-              ? 'Your own Claude or ChatGPT plan, run on this machine. A brief pins it under Model; it runs when you press Run here.'
-              : 'Run agents on your own Claude or ChatGPT plan from the desktop app. Nothing to set up in the browser.'}
-          </p>
-        </div>
+        <h3 className="min-w-0 text-sm font-semibold text-text-primary">Your plan</h3>
         {bridge && (
           <Button variant="neutral" size="sm" className={ACTION_SLOT} disabled={busy !== null} onClick={() => void refresh()}>
             {busy === 'refresh' ? 'Checking…' : 'Check'}
@@ -355,7 +348,6 @@ function AddModelForm({
       <Field
         label="Title"
         error={clash ? `This space already has a model called ${name} — give this one a different title.` : undefined}
-        hint={`Saved as ${modelPath(name)}; briefs pin it as ${entry.provider}/<model-id>.`}
       >
         <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={64} />
       </Field>
