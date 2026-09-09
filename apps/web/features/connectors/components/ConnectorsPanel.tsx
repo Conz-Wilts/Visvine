@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Avatar, Button, ConfirmDialog, Field, Input, SearchInput, Skeleton, Alert } from '@/components/ui';
 import Select from '@/components/ui/Select';
+import NewRow from '@/components/ui/NewRow';
 import { ArrowLeftIcon, Trash2Icon } from '@/features/shared/icons';
 import ConnectorLogo from './ConnectorLogo';
 import ConnectorToolPermissions from './ConnectorToolPermissions';
@@ -259,6 +260,7 @@ export default function ConnectorsPanel({
   returnTo = null,
   view,
   onLeave,
+  onAdd,
   onRequestsChanged,
 }: {
   /** The space to work in; defaults to the one the app is showing. */
@@ -273,6 +275,12 @@ export default function ConnectorsPanel({
   returnTo?: string | null;
   /** Called just before the panel sends the browser to another page — a dialog closes on it. */
   onLeave?: () => void;
+  /**
+   * Where a pinned list sends "Add a connector": the host owns the tabs, so
+   * it is the host that opens the catalogue. Unpinned, the panel opens its
+   * own. Absent on a pinned list, the row is not offered.
+   */
+  onAdd?: () => void;
   /** A member's request was answered — the console re-counts its badge. */
   onRequestsChanged?: () => void;
 } = {}) {
@@ -871,8 +879,19 @@ export default function ConnectorsPanel({
           )}
 
           {/* One row per CONNECTOR, not per service: two Drives are two rows,
-              each with its own key, its own on/off and its own note. */}
+              each with its own key, its own on/off and its own note. Adding
+              one leads the list, a row of it — the shape "New space" and
+              "New type" have at the head of theirs — and opens the catalogue. */}
           <ul className="divide-y divide-border-subtle">
+            {!readOnly && (view === undefined || onAdd) && (
+              <li className="py-1">
+                <NewRow
+                  label="Add a connector"
+                  hint="Connect another service, or write one yourself"
+                  onClick={() => { setQuery(''); if (view === undefined) setTab('catalog'); else onAdd?.(); }}
+                />
+              </li>
+            )}
             {(tab === 'connected' ? connected : tab === 'disconnected' ? notConnected : mine).map((c) => {
               const status = statusOf(c);
               const service = serviceOf(c);
@@ -960,15 +979,6 @@ export default function ConnectorsPanel({
               );
             })}
           </ul>
-
-          {!readOnly && view === undefined && (
-            <div className="flex items-center justify-between gap-4 border-t border-border-subtle pt-4 mt-2">
-              <p className="text-xs text-text-muted">Connect another service, or write one yourself.</p>
-              <Button variant="neutral" size="sm" onClick={() => { setQuery(''); setTab('catalog'); }}>
-                Add a connector
-              </Button>
-            </div>
-          )}
         </div>
       ) : (
         <div className="border-t border-border-subtle pt-2">

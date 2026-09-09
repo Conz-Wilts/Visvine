@@ -171,7 +171,15 @@ export default function AccountRailPanel({ initialTab }: {
         ) : modelsOnly ? (
           <ModelsPanel space={currentSpace.id} onLeave={close} />
         ) : (
-          <ConnectorsPanel space={currentSpace.id} view={current.view} returnTo={returnTo} onLeave={close} />
+          <ConnectorsPanel
+            space={currentSpace.id}
+            view={current.view}
+            returnTo={returnTo}
+            onLeave={close}
+            // Adding one is choosing from the catalogue, which is this
+            // panel's own third tab.
+            onAdd={() => setTab('all')}
+          />
         )}
       </div>
     </aside>

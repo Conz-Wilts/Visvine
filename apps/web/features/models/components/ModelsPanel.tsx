@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert, Button, Field, Input, Skeleton } from '@/components/ui';
 import Select from '@/components/ui/Select';
+import NewRow from '@/components/ui/NewRow';
 import { ArrowLeftIcon } from '@/features/shared/icons';
 import ConnectorLogo from '@/features/connectors/components/ConnectorLogo';
 import { notesApi } from '@/features/notes/lib/notesApi';
@@ -105,23 +106,11 @@ export default function ModelsPanel({ space, onLeave }: { space: string; onLeave
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="min-w-0 text-xs text-text-muted">
-          {rows.length === 0
-            ? 'What this space’s agents run on. Add one and they can run.'
-            : 'Agents run on the first of these unless their brief names another.'}
-        </p>
-        {canManage && (
-          <Button
-            variant={rows.length === 0 ? 'brand' : 'neutral'}
-            size="sm"
-            className={ACTION_SLOT}
-            onClick={() => setPicker((p) => !p)}
-          >
-            {rows.length === 0 ? 'Add model' : picker ? 'Close' : '+ Add'}
-          </Button>
-        )}
-      </div>
+      <p className="min-w-0 text-xs text-text-muted">
+        {rows.length === 0
+          ? 'What this space’s agents run on. Add one and they can run.'
+          : 'Agents run on the first of these unless their brief names another.'}
+      </p>
 
       {error && <Alert>{error}</Alert>}
 
@@ -130,8 +119,20 @@ export default function ModelsPanel({ space, onLeave }: { space: string; onLeave
           {[0, 1].map((i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
         </div>
       ) : (
-        rows.length > 0 && (
+        (rows.length > 0 || canManage) && (
           <ul className="divide-y divide-border-subtle border-t border-border-subtle">
+            {/* Adding one leads the list, a row of it — the shape "New space"
+                and "New type" have at the head of theirs. It opens the
+                providers under itself, and nothing else. */}
+            {canManage && (
+              <li className="py-1">
+                <NewRow
+                  label="Add model"
+                  hint={picker ? 'Pick a provider below' : 'A provider and the id it runs'}
+                  onClick={() => setPicker((p) => !p)}
+                />
+              </li>
+            )}
             {rows.map((m) => {
               const status = statusOf(m);
               return (
@@ -154,8 +155,8 @@ export default function ModelsPanel({ space, onLeave }: { space: string; onLeave
         )
       )}
 
-      {/* The + opens the providers, and nothing else: choosing a model is
-          choosing among five, not searching a catalogue of forty. */}
+      {/* Choosing a model is choosing among five, not searching a catalogue
+          of forty. */}
       {picker && canManage && (
         <ul className="divide-y divide-border-subtle border-t border-border-subtle">
           {MODEL_CATALOG.map((e) => (

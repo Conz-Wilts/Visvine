@@ -344,7 +344,9 @@ export default function Sidebar() {
               label="Discover"
               href="/discover"
               active={pathname === "/discover" || pathname.startsWith("/discover/")}
-              icon={<CompassIcon />}
+              // Drawn at the Create disc's size rather than a glyph's: the two
+              // rows of the top group are a pair, and read as one.
+              icon={<CompassIcon className="!h-9 !w-9" strokeWidth={1.4} />}
             />
           </div>
           {!noSpace && (
