@@ -8,6 +8,7 @@ import { useSession, signOut } from "@/features/auth/lib/auth-client";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
 import { CONNECTORS_PARAM, connectorsSegment } from "@/features/settings/components/AccountRailPanel";
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
+import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
 import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
 
 /**
@@ -30,10 +31,11 @@ import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRo
  * without a pointer.
  *
  * Connectors and Models are rows rather than settings sections because they
- * are about the space you are in, from where you stand in it: each opens the
- * rail's panel beside the rail (AccountRailPanel, hosted by the Sidebar the
- * way the space switcher is) and closing it leaves you on the page you were
- * on. The band is shell chrome on every page, so `?connectors=` re-opens it
+ * are about the space you are in, from where you stand in it: pointing at
+ * either slides the rail's panel out beside the rail (AccountRailPanel, hosted
+ * by the Sidebar the way the space switcher is), the way pointing at the space
+ * or Create new does; pointing at any other row of the band puts it away, and
+ * closing it leaves you on the page you were on. The band is shell chrome on every page, so `?connectors=` re-opens it
  * ANYWHERE — which is what the OAuth round trip returns to — on the tab
  * (connected, disconnected, all or models) the sign-in started from.
  */
@@ -44,6 +46,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   const { setAccountPanel, setSwitcherOpen } = useSidebar();
   const bandRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const intent = useHoverIntent();
 
   // `?connectors=` opens the panel: the sign-in round trip comes back to the
   // page it started on, and this is what re-opens what the person was in.
@@ -84,6 +87,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
     setSwitcherOpen(false);
     setAccountPanel(panel);
   };
+  const closePanel = () => setAccountPanel(null);
 
   if (isPending) {
     return <div className="h-9 w-9 rounded-[8px] bg-surface-3 animate-pulse" style={{ marginLeft: (ROW_H - 36) / 2 }} />;
@@ -105,11 +109,16 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
     router.refresh();
   }
 
-  const actions = [
+  // A row that opens a panel opens it on hover (and click, for the keyboard
+  // and for a pointer that did not rest); a row that goes somewhere puts the
+  // panel away on hover and leaves the band on press.
+  const actions: { key: string; label: string; onClick: () => void; onHover: () => void; panel?: boolean; icon: React.ReactNode }[] = [
     {
       key: "connectors",
       label: "Connectors",
       onClick: () => openPanel("connectors"),
+      onHover: () => openPanel("connectors"),
+      panel: true,
       icon: <PlugIcon />,
     },
     {
@@ -118,12 +127,15 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
       key: "models",
       label: "Models",
       onClick: () => openPanel("models"),
+      onHover: () => openPanel("models"),
+      panel: true,
       icon: <SparklesIcon />,
     },
     {
       key: "settings",
       label: "Settings",
       onClick: () => router.push("/settings"),
+      onHover: closePanel,
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -135,6 +147,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
       key: "signout",
       label: "Sign out",
       onClick: () => { void handleSignOut(); },
+      onHover: closePanel,
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -176,19 +189,24 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
         aria-hidden={!open}
       >
         <div className="flex flex-col" style={{ gap: ITEM_GAP, paddingBottom: ITEM_GAP }}>
-          {actions.map(({ key, label, icon, onClick }) => (
-            <Row
-              key={key}
-              expanded={expanded}
-              reduced={reduced}
-              label={label}
-              icon={icon}
-              onClick={() => {
-                setPinned(false);
-                setOpen(false);
-                onClick();
-              }}
-            />
+          {actions.map(({ key, label, icon, onClick, onHover, panel }) => (
+            <div key={key} {...intent(onHover)}>
+              <Row
+                expanded={expanded}
+                reduced={reduced}
+                label={label}
+                icon={icon}
+                onClick={() => {
+                  // A panel row keeps the band: the panel is beside it, and
+                  // the pointer is still here.
+                  if (!panel) {
+                    setPinned(false);
+                    setOpen(false);
+                  }
+                  onClick();
+                }}
+              />
+            </div>
           ))}
         </div>
       </div>
@@ -197,23 +215,25 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
           a glyph goes and your name where a tool's name goes — and, like every
           other name in the app, it is a link to the person's page. Pointing at
           the row is what opens the band above it; nothing is drawn to say so. */}
-      <Row
-        expanded={expanded}
-        reduced={reduced}
-        label={user.name ?? "Account"}
-        active={open}
-        href={profileHref ?? undefined}
-        onClick={profileHref ? undefined : () => { setPinned((v) => !v); setOpen(true); }}
-        icon={
-          <span className="h-9 w-9 overflow-hidden rounded-[8px] border-2 border-brand-green">
-            {user.image ? (
-              <Image src={user.image} alt="" width={36} height={36} className="h-full w-full object-cover" />
-            ) : (
-              <PersonSilhouette />
-            )}
-          </span>
-        }
-      />
+      <div {...intent(closePanel)}>
+        <Row
+          expanded={expanded}
+          reduced={reduced}
+          label={user.name ?? "Account"}
+          active={open}
+          href={profileHref ?? undefined}
+          onClick={profileHref ? undefined : () => { setPinned((v) => !v); setOpen(true); }}
+          icon={
+            <span className="h-9 w-9 overflow-hidden rounded-[8px] border-2 border-brand-green">
+              {user.image ? (
+                <Image src={user.image} alt="" width={36} height={36} className="h-full w-full object-cover" />
+              ) : (
+                <PersonSilhouette />
+              )}
+            </span>
+          }
+        />
+      </div>
     </div>
   );
 }
