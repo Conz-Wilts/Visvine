@@ -35,9 +35,15 @@ export const ITEM_GAP = 0;
 // column and its hover block is the same square as every row below it.
 export const HEAD_CELL_W = GLYPH_CELL_W;
 // The nav icons ship at h-5 w-5 from the feature registry (they are also drawn
-// on the launcher cards at that size); the rail draws them at 22px unfilled, so
-// each cell scales its own svg rather than the registry carrying a second set.
-const GLYPH = "[&>svg]:h-[22px] [&>svg]:w-[22px]";
+// on the launcher cards at that size); the rail draws them larger, so each cell
+// scales its own svg rather than the registry carrying a second set.
+//
+// 28px, not 22: the two rows of the top group are drawn at 36 (the Create disc,
+// and the compass sized to match it), and a 22px glyph under them read as a
+// different, smaller family rather than the same column continuing. This sits
+// close enough to belong to them while staying plainly subordinate — the row
+// you come here to press is still the one drawn largest.
+const GLYPH = "[&>svg]:h-[28px] [&>svg]:w-[28px]";
 // One row shape for every entry — Create, each tool, More, each account action.
 // At rest a row is bare: no border, no fill, just the glyph (and the label once
 // the rail is open). The block appears under the pointer only — square-cornered,
