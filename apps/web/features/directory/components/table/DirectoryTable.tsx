@@ -425,7 +425,7 @@ export default function DirectoryTable({
               <td aria-hidden className="bg-surface-1 p-0" />
             </tr>
           )}
-          itemContent={(index, item) => {
+          itemContent={(_index, item) => {
               const typeColor = getTypeColor(item.type, nodeTypes);
               // What the row is, in the space's own words — the Type cell's
               // reading for a row wearing no alias.
@@ -440,12 +440,15 @@ export default function DirectoryTable({
                         <td
                           key={column.key}
                           className={clsx(
-                            'sticky left-0 z-10 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2',
-                            litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
+                            // Opaque, always: surface-2 is a tint with alpha, so
+                            // a hovered sticky cell painted in it would show the
+                            // columns sliding underneath. The tint goes on as an
+                            // image over an opaque surface-1 instead.
+                            'sticky left-0 z-10 border-r border-border-subtle bg-surface-1 p-0 align-middle group-hover:bg-[image:linear-gradient(var(--color-surface-2),var(--color-surface-2))]',
+                            litKey === column.key && 'bg-[image:linear-gradient(var(--color-surface-2),var(--color-surface-2))]',
                           )}
                         >
                           <NameCell
-                            index={index}
                             item={item}
                             accentColor={alias?.color ?? typeColor ?? undefined}
                             onOpen={() => onOpen(item)}
@@ -536,11 +539,10 @@ export default function DirectoryTable({
  * click opens the entry, the pencil edits it — because a name is what a row
  * is FOR and clicking it must never turn into a text field.
  */
-/** The name cell: the row number, the entry's avatar and name (the click
- *  that opens it), and for a viewer who may rename it a pencil that swaps the
- *  name for an editor filling the rest of the cell. */
-function NameCell({ index, item, accentColor, onOpen, onRename }: {
-  index: number;
+/** The name cell: the entry's avatar and name (the click that opens it), and
+ *  for a viewer who may rename it a pencil that swaps the name for an editor
+ *  filling the rest of the cell. */
+function NameCell({ item, accentColor, onOpen, onRename }: {
   item: DirectoryItem;
   accentColor: string | undefined;
   onOpen: () => void;
@@ -549,7 +551,6 @@ function NameCell({ index, item, accentColor, onOpen, onRename }: {
   const [editing, setEditing] = useState(false);
   return (
     <div className="flex h-11 min-w-0 items-center gap-2.5 pl-3 pr-1">
-      <span className="w-6 shrink-0 text-right text-[12px] tabular-nums text-text-muted">{index + 1}</span>
       <Avatar
         name={item.name}
         imageUrl={item.image_url}
