@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -48,7 +48,6 @@ export default function SpaceSwitcherPanel() {
   // branch offered it. One dialog either way (NewSpaceDialog).
   const [creating, setCreating] = useState<null | { id: string; name: string }>(null);
   const [makingSpace, setMakingSpace] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const close = () => setSwitcherOpen(false);
   useEscapeKey(close, isOpen);
@@ -65,14 +64,14 @@ export default function SpaceSwitcherPanel() {
       return next;
     });
 
-  // Opening focuses the search once the panel has slid out; closing clears the
-  // search and every open branch after the slide, so the list does not visibly
-  // reset on its way behind the rail.
+  // Opening collapses every branch; closing clears the search and the branches
+  // after the slide, so the list does not visibly reset on its way behind the
+  // rail. Nothing takes focus — the panel opens as a list to read, and a
+  // caret blinking in a box nobody asked to type in reads as a demand.
   useEffect(() => {
     if (isOpen) {
       setExpanded(new Set());
-      const t = setTimeout(() => inputRef.current?.focus({ preventScroll: true }), reduced ? 0 : DOCK_MS);
-      return () => clearTimeout(t);
+      return;
     }
     const t = setTimeout(() => { setQuery(''); setExpanded(new Set()); }, reduced ? 0 : DOCK_MS);
     return () => clearTimeout(t);
@@ -129,7 +128,6 @@ export default function SpaceSwitcherPanel() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
             <input
-              ref={inputRef}
               type="text"
               placeholder="Search spaces…"
               value={query}

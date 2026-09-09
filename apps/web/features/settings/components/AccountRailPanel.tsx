@@ -128,11 +128,10 @@ export default function AccountRailPanel({ initialTab }: {
       }}
     >
       {/* The head: one rail row tall, level with the space in the rail's
-          head, so the panel reads as the rail continuing. The name of what
-          the row opened, and nothing else — leaving the card is the close. */}
-      <div className="flex shrink-0 items-center pl-5 pr-3" style={{ height: ROW_H }}>
-        <h2 className="text-[14px] font-semibold text-text-primary">{modelsOnly ? 'Models' : 'Connectors'}</h2>
-      </div>
+          head, so the panel reads as the rail continuing. It carries no title
+          — the row you pressed named it — and no close, because leaving the
+          card is the close. */}
+      <div className="shrink-0" style={{ height: ROW_H }} />
 
       {!modelsOnly && (
         <div className="flex shrink-0 flex-col px-4 pb-3">

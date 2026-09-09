@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -62,7 +62,6 @@ export default function CreatePanel() {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const [step, setStep] = useState<Step>({ kind: 'pick' });
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const rowsInput = useMemo(
     () => ({
@@ -86,18 +85,15 @@ export default function CreatePanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, defaultType]);
 
-  // The search takes focus once the panel has slid out; closing clears it
-  // after the slide, so the list does not visibly reset on its way behind the rail.
+  // Closing clears the search after the slide, so the list does not visibly
+  // reset on its way behind the rail. Nothing takes focus on the way in — the
+  // panel opens as rows to choose from, and a caret blinking in the search
+  // reads as a demand to type.
   useEffect(() => {
-    if (isOpen && step.kind === 'pick') {
-      const t = setTimeout(() => inputRef.current?.focus({ preventScroll: true }), reduced ? 0 : DOCK_MS);
-      return () => clearTimeout(t);
-    }
-    if (!isOpen) {
-      const t = setTimeout(() => { setQuery(''); setStep({ kind: 'pick' }); }, reduced ? 0 : DOCK_MS);
-      return () => clearTimeout(t);
-    }
-  }, [isOpen, step.kind, reduced]);
+    if (isOpen) return;
+    const t = setTimeout(() => { setQuery(''); setStep({ kind: 'pick' }); }, reduced ? 0 : DOCK_MS);
+    return () => clearTimeout(t);
+  }, [isOpen, reduced]);
 
   useEffect(() => { setActive(firstPickIndex(list)); }, [list]);
 
@@ -215,7 +211,6 @@ export default function CreatePanel() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
             <input
-              ref={inputRef}
               type="text"
               placeholder="Search or name a type…"
               value={query}
