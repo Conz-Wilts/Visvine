@@ -44,6 +44,12 @@ const GLYPH = "[&>svg]:h-[22px] [&>svg]:w-[22px]";
 // edge to edge, so shut it is a square tile of the rail rather than a pill.
 export const ROW_CLASS =
   "relative z-10 flex w-full items-center transition-colors duration-150 hover:bg-surface-3";
+// Sign out is the one row that undoes something, so it says so under the
+// pointer: the same red the danger buttons use, on the row's own hover block.
+// It carries no colour at rest — a red row in the band would read as an alert
+// rather than as the last thing you do.
+const ROW_DANGER_CLASS =
+  "relative z-10 flex w-full items-center transition-colors duration-150 hover:bg-red-50 hover:text-red-600";
 export const ROW_TEXT = "text-[14px] whitespace-nowrap";
 // A name fades in once the rail is open and is gone before it shuts. The
 // rail's width takes 300ms, and a label revealed BY that width reads as sliding
@@ -79,6 +85,7 @@ export function Row({
   onClick,
   active = false,
   badge,
+  danger = false,
   expanded,
   reduced,
   ...aria
@@ -88,6 +95,8 @@ export function Row({
   href?: string;
   onClick?: () => void;
   active?: boolean;
+  /** The row undoes something — it goes red under the pointer (Sign out). */
+  danger?: boolean;
   badge?: ReactNode;
   expanded: boolean;
   /** prefers-reduced-motion — no fade, the name is simply there or not. */
@@ -117,16 +126,22 @@ export function Row({
       </span>
     </>
   );
-  const style = { height: ROW_H, color: rowColor(active), transition: "color 0.2s, background-color 0.15s" };
+  // A danger row's resting colour is INHERITED from the wrapper rather than set
+  // on the row: an inline colour would win over the hover rule and the row
+  // would never turn. Every other row keeps it inline, where it always was.
+  const style = danger
+    ? { height: ROW_H, transition: "color 0.2s, background-color 0.15s" }
+    : { height: ROW_H, color: rowColor(active), transition: "color 0.2s, background-color 0.15s" };
+  const rowClass = danger ? ROW_DANGER_CLASS : ROW_CLASS;
 
   return (
-    <div className="relative">
+    <div className="relative" style={danger ? { color: rowColor(active) } : undefined}>
       {href ? (
-        <Link href={href} className={ROW_CLASS} style={style} aria-label={label}>
+        <Link href={href} className={rowClass} style={style} aria-label={label}>
           {inner}
         </Link>
       ) : (
-        <button type="button" onClick={onClick} className={ROW_CLASS} style={style} aria-label={label} {...aria}>
+        <button type="button" onClick={onClick} className={rowClass} style={style} aria-label={label} {...aria}>
           {inner}
         </button>
       )}

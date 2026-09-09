@@ -112,7 +112,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   // A row that opens a panel opens it on hover (and click, for the keyboard
   // and for a pointer that did not rest); a row that goes somewhere puts the
   // panel away on hover and leaves the band on press.
-  const actions: { key: string; label: string; onClick: () => void; onHover: () => void; panel?: boolean; icon: React.ReactNode }[] = [
+  const actions: { key: string; label: string; onClick: () => void; onHover: () => void; panel?: boolean; danger?: boolean; icon: React.ReactNode }[] = [
     {
       key: "connectors",
       label: "Connectors",
@@ -144,10 +144,13 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
       ),
     },
     {
+      // The one row in the band that undoes something, so it goes red under
+      // the pointer — at rest it is a row like the others.
       key: "signout",
       label: "Sign out",
       onClick: () => { void handleSignOut(); },
       onHover: closePanel,
+      danger: true,
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -189,13 +192,14 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
         aria-hidden={!open}
       >
         <div className="flex flex-col" style={{ gap: ITEM_GAP, paddingBottom: ITEM_GAP }}>
-          {actions.map(({ key, label, icon, onClick, onHover, panel }) => (
+          {actions.map(({ key, label, icon, onClick, onHover, panel, danger }) => (
             <div key={key} {...intent(onHover)}>
               <Row
                 expanded={expanded}
                 reduced={reduced}
                 label={label}
                 icon={icon}
+                danger={danger}
                 onClick={() => {
                   // A panel row keeps the band: the panel is beside it, and
                   // the pointer is still here.
