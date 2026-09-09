@@ -7,7 +7,7 @@ import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useHoverIntent } from '@/features/shared/hooks/useHoverIntent';
 import { useSession } from '@/features/auth/lib/auth-client';
-import { CompassIcon, SettingsIcon } from '@/features/shared/icons';
+import { SettingsIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { spaceMark } from '@/lib/spaces/subspaces';
 import { HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
@@ -83,11 +83,9 @@ export default function SpaceSelector() {
   // itself): pointing at any row of the band puts it away.
   const shutSwitcher = () => setSwitcherOpen(false);
   const actions: { key: string; label: string; onClick: () => void; onHover: () => void; icon: React.ReactNode }[] = [
-    // The console leads the band for an admin: it is THIS space's own
-    // settings, hung directly under the space's name. Discover follows —
-    // leaving this space for another is the same question the switcher under
-    // the pointer is asking, so it belongs beside the spaces you are already
-    // in rather than among the tools below.
+    // The console: THIS space's own settings, hung directly under the
+    // space's name, for whoever administers it. (Discover is not here — it is
+    // a row of the rail's top group, above Create new.)
     ...(canManage
       ? [
           {
@@ -99,13 +97,6 @@ export default function SpaceSelector() {
           },
         ]
       : []),
-    {
-      key: 'discover',
-      label: 'Discover',
-      onClick: () => router.push('/discover'),
-      onHover: shutSwitcher,
-      icon: <CompassIcon />,
-    },
   ];
 
   // A sub-space wears its parent's mark (spaceMark), so the head row says

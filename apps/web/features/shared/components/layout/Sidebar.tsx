@@ -10,6 +10,7 @@ import { useSpace } from "@/features/shared/contexts/SpaceContext";
 import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
+import { CompassIcon } from "@/features/shared/icons";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
 import Modal from "@/components/ui/Modal";
@@ -306,11 +307,11 @@ export default function Sidebar() {
       <div className="flex shrink-0 flex-col" style={{ gap: ITEM_GAP }}>
         <SpaceSelector />
 
-        {/* The top group — Create new. It rides with the head rather than the
-            nav below because it never scrolls: the one thing you come here to
-            DO stays put however many tools the space has switched on. The ways
-            OUT of the space (Discover, New space) hang off the space itself,
-            in the band above.
+        {/* The top group — Discover, then Create new. It rides with the head
+            rather than the nav below because it never scrolls: the way OUT to
+            other spaces and the one thing you come here to DO stay put however
+            many tools the space has switched on. New space hangs off the space
+            itself, in the switcher above.
 
             Create acts on the current space, so with none selected there is
             nothing for it to make (creating a space itself lives on the
@@ -333,6 +334,19 @@ export default function Sidebar() {
             borderTopColor: "transparent",
           }}
         >
+          {/* Discover: the open spaces. It is here even with no space chosen,
+              because it is where someone with none goes to find one. Pointing
+              at it puts the rail's panels away like any tool row. */}
+          <div {...intent(leaveRailPanels)}>
+            <Row
+              expanded={expanded}
+              reduced={reduced}
+              label="Discover"
+              href="/discover"
+              active={pathname === "/discover" || pathname.startsWith("/discover/")}
+              icon={<CompassIcon />}
+            />
+          </div>
           {!noSpace && (
             <div
               {...intent(() => {
