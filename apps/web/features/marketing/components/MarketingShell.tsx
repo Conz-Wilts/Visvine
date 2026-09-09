@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
@@ -18,16 +11,6 @@ import { BRAND } from "@/lib/brand";
 import { useSession, signOut } from "@/features/auth/lib/auth-client";
 
 type SignInMode = "signin" | "signup";
-
-/**
- * Lets any client component rendered inside the marketing shell (e.g. the home
- * page CTAs) open the sign-in popup in a chosen mode. Provided by MarketingShell.
- */
-const SignInModalContext = createContext<(mode?: SignInMode) => void>(() => {});
-
-export function useSignInModal() {
-  return useContext(SignInModalContext);
-}
 
 /**
  * The marketing site's frame: the wordmark and the auth buttons sit at the
@@ -216,9 +199,7 @@ export default function MarketingShell({
           </div>
         </div>
       </header>
-      <SignInModalContext.Provider value={openSignIn}>
-        {children}
-      </SignInModalContext.Provider>
+      {children}
       {signInModal}
     </main>
   );
