@@ -329,8 +329,9 @@ export function CoinsIcon(props: IconProps) {
 export function CompassIcon(props: IconProps) {
   return (
     <IconBase strokeWidth={2} {...props}>
-      <path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z" />
       <circle cx="12" cy="12" r="10" />
+      <path d="M16.24 7.76 14.1 14.1 9.9 9.9z" fill="currentColor" />
+      <path d="M7.76 16.24 9.9 9.9 14.1 14.1z" />
     </IconBase>
   );
 }
