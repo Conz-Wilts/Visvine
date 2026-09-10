@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CalendarIcon, CalendarPlusIcon, CheckIcon, ChevronRightIcon, EarthIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
+import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import { hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, type NodeTypeConfig } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
@@ -99,15 +100,26 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
-  const fetchOverview = useCallback(async () => {
+  // Through the request cache: coming back to a space's page paints its
+  // overview at once and revalidates behind it. A join or leave reads fresh,
+  // because the viewer's own standing is part of the answer.
+  const overviewKey = `spaces:overview:${spaceId}`;
+  const fetchOverview = useCallback(async (fresh = false) => {
+    if (fresh) invalidateRequestCache(overviewKey);
     try {
-      setData(await fetchJson<Overview>(`/api/communities/${encodeURIComponent(spaceId)}/overview`));
+      await swrFetch(
+        overviewKey,
+        () => fetchJson<Overview>(`/api/communities/${encodeURIComponent(spaceId)}/overview`),
+        (overview) => {
+          setData(overview);
+          setLoading(false);
+        },
+      );
     } catch {
       setNotFound(true);
-    } finally {
       setLoading(false);
     }
-  }, [spaceId]);
+  }, [overviewKey, spaceId]);
 
   useEffect(() => { fetchOverview(); }, [fetchOverview]);
 
@@ -135,7 +147,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     setJoining(true);
     try {
       await joinSpace(spaceId);
-      await Promise.all([fetchOverview(), refreshSpace()]);
+      await Promise.all([fetchOverview(true), refreshSpace()]);
     } catch {
       // join API errors (e.g. invite-only) just leave the button enabled
     } finally {
@@ -147,7 +159,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     setLeaving(true);
     try {
       await leaveSpace(spaceId);
-      await fetchOverview();
+      await fetchOverview(true);
     } finally {
       setLeaving(false);
       setConfirmLeave(false);

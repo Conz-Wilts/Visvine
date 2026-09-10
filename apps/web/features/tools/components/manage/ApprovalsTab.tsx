@@ -15,46 +15,28 @@
  * things they cannot act on is a list. The tab is hidden for everyone else.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Chip, EmptyState, Skeleton, Textarea } from '@/components/ui';
 import Button from '@/components/ui/Button';
 import { ClipboardListIcon } from '@/features/shared/icons';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
-import { fetchApprovalQueue, reviewSpaceVersion } from '@/features/tools/lib/client';
+import { reviewSpaceVersion } from '@/features/tools/lib/client';
 import { timeAgo } from '@/lib/date';
 import type { ApprovalQueueItem } from '@/lib/tools/api';
 
 export default function ApprovalsTab({
   spaceId,
+  queue,
   onReviewed,
   onToast,
 }: {
   spaceId: string | null;
-  /** The queue changed — the shell re-reads the badge count and the rosters. */
+  /** The queue the console already read for its badge; null while loading. */
+  queue: ApprovalQueueItem[] | null;
+  /** The queue changed — the console re-reads it, and the badge with it. */
   onReviewed: () => void;
   onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
 }) {
-  const [queue, setQueue] = useState<ApprovalQueueItem[] | null>(null);
-
-  const load = useCallback(async () => {
-    if (!spaceId) {
-      setQueue([]);
-      return;
-    }
-    try {
-      const body = await fetchApprovalQueue(spaceId);
-      setQueue(body.queue);
-    } catch (err) {
-      setQueue([]);
-      onToast('error', err instanceof Error ? err.message : 'Could not read the approval queue.');
-    }
-  }, [spaceId, onToast]);
-
-  useEffect(() => {
-    setQueue(null);
-    void load();
-  }, [load]);
-
   if (queue === null) return <QueueSkeleton />;
   if (queue.length === 0) {
     return (
@@ -73,10 +55,7 @@ export default function ApprovalsTab({
           key={item.id}
           spaceId={spaceId}
           item={item}
-          onDone={() => {
-            void load();
-            onReviewed();
-          }}
+          onDone={onReviewed}
           onToast={onToast}
         />
       ))}

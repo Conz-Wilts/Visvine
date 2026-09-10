@@ -29,6 +29,7 @@
  */
 
 import { revalidateTag } from 'next/cache';
+import { loadSpaceGate } from '@/lib/auth';
 import type { Prisma, Space } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import type { NodeTypeConfig, SpaceAlias, LinkTypeConfig } from '@/lib/types/context';
@@ -164,6 +165,9 @@ export async function updateSpaceConfig(
   }
 
   if (!options.skipRevalidate) bustSpaceConfigCache();
+  // The auth gates read this row once per request; a handler that changed it
+  // and then reads again in the same request must see the new aliases/config.
+  await loadSpaceGate.forget(spaceId);
   return result;
 }
 

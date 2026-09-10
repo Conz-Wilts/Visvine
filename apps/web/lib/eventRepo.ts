@@ -262,6 +262,12 @@ export async function getEventsData(spaceId: string): Promise<EventsData> {
   try {
     const eventRows = await prisma.node.findMany({
       where: { spaceId, type: 'event' },
+      // Only what nodeRowToNBEvent reads: an event's metadata is the record,
+      // the node's other columns are the directory's.
+      select: {
+        id: true, spaceId: true, name: true, subtitle: true, imageUrl: true,
+        alias: true, metadata: true, createdAt: true, updatedAt: true,
+      },
     });
     const eventIds = eventRows.map(e => e.id);
     const attendeeRows = eventIds.length > 0

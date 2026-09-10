@@ -6,13 +6,10 @@
 // clicked. Profile pages call usePrefetchEntityContext on mount instead, so by
 // the time the user clicks over to Context everything is in flight or done.
 //
-// The cache stores promises keyed by request. Within FRESH_MS a key is served
-// as-is (a prefetch and a panel mount share one network call); resolved values
-// are additionally kept for KEEP_MS so swrFetch can paint a re-opened Context
-// tab instantly from the stale value while revalidating in the background.
-// Rejected promises evict themselves (an error never sticks), and mutations
-// invalidate their read keys so a save/delete can't resurrect stale content on
-// the next mount.
+// The cache is the shared request cache (features/shared/lib/requestCache):
+// promises keyed by request, one network call per key per fresh window, stale
+// values painted instantly while revalidating. The names here are the notes
+// surface's own spelling of it.
 
 import { useEffect } from 'react'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
@@ -20,139 +17,29 @@ import { entityNotePath } from '@/lib/notes/entities'
 import type { NBNode } from '@/lib/types'
 import { notesApi } from './notesApi'
 
-const FRESH_MS = 60_000 // within this window, don't refetch at all
-const KEEP_MS = 10 * 60_000 // stale values still paint instantly, then revalidate
+import {
+  cachedFetch,
+  evictRequestCache,
+  invalidateRequestCache,
+  peekRequestCache,
+  primeRequestCache,
+  swrFetch,
+  watchRequestCache,
+} from '@/features/shared/lib/requestCache'
 
-interface Entry {
-  promise: Promise<unknown>
-  ts: number
-  /** Set once the promise resolves — what swrFetch serves synchronously. */
-  value?: unknown
-  hasValue?: boolean
-}
-
-const cache = new Map<string, Entry>()
-
-function startFetch<T>(key: string, fn: () => Promise<T>): Entry {
-  const promise = fn()
-  const entry: Entry = { promise, ts: Date.now() }
-  cache.set(key, entry)
-  promise.then(
-    (value) => {
-      if (cache.get(key) === entry) {
-        entry.value = value
-        entry.hasValue = true
-      }
-    },
-    () => {
-      if (cache.get(key) === entry) cache.delete(key)
-    },
-  )
-  return entry
-}
-
-/** Run `fn` once per `key` per fresh window; concurrent/later callers within
- *  the window get the same promise. Rejections evict immediately so a transient
- *  failure during prefetch never poisons the panel's own attempt. */
-export function cachedFetch<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const hit = cache.get(key)
-  if (hit && Date.now() - hit.ts < FRESH_MS) return hit.promise as Promise<T>
-  return startFetch(key, fn).promise as Promise<T>
-}
-
-/**
- * Stale-while-revalidate read. A resolved value younger than KEEP_MS is
- * delivered via `onData` immediately (synchronously — the caller paints with no
- * spinner); if it's older than FRESH_MS a background refetch follows and
- * `onData` fires again with the fresh value. Cold cache degrades to a plain
- * cachedFetch. Returns a promise settling with the freshest value delivered,
- * so await-style callers keep working; rejections only occur on a cold-cache
- * fetch failure (a failed background revalidation keeps the stale value).
- */
-export function swrFetch<T>(key: string, fn: () => Promise<T>, onData: (data: T) => void): Promise<T> {
-  const hit = cache.get(key)
-  const age = hit ? Date.now() - hit.ts : Infinity
-
-  if (hit?.hasValue && age < KEEP_MS) {
-    onData(hit.value as T)
-    if (age < FRESH_MS) return hit.promise as Promise<T>
-    // Stale: revalidate in the background; deliver again when it lands.
-    const next = startFetch(key, fn).promise as Promise<T>
-    return next.then(
-      (value) => {
-        onData(value)
-        return value
-      },
-      () => hit.value as T,
-    )
-  }
-
-  // Cold (or still in flight and fresh): behave like cachedFetch + deliver.
-  const promise = cachedFetch(key, fn)
-  return promise.then((value) => {
-    onData(value)
-    return value
-  })
-}
+export { cachedFetch, swrFetch }
 
 /** The cached value for a key, if one is already resolved and still fresh
- *  enough to act on. Read-only and synchronous: a caller deciding whether it
- *  can skip a round trip (the Context tab's "is the root note there?") asks
- *  here rather than awaiting a fetch it may not need. */
-export function peekContextCache<T>(key: string): T | undefined {
-  const hit = cache.get(key)
-  if (!hit?.hasValue || Date.now() - hit.ts >= KEEP_MS) return undefined
-  return hit.value as T
-}
-
-// Subscribers per key. Invalidation is a mutation signal, not just an eviction:
-// a live surface holding the key's data in React state (the docked tree's note
-// index) has no other way to learn a save elsewhere changed it, and would keep
-// painting the pre-save titles and stars until it remounted.
-const watchers = new Map<string, Set<() => void>>()
-
-/** Watch a cache key for invalidation. Returns the unsubscribe. */
-export function watchContextCache(keys: string[], onInvalidate: () => void): () => void {
-  for (const key of keys) {
-    const set = watchers.get(key) ?? new Set()
-    set.add(onInvalidate)
-    watchers.set(key, set)
-  }
-  return () => {
-    for (const key of keys) {
-      const set = watchers.get(key)
-      if (!set) continue
-      set.delete(onInvalidate)
-      if (set.size === 0) watchers.delete(key)
-    }
-  }
-}
-
-export function invalidateContextCache(...keys: string[]) {
-  const notify = new Set<() => void>()
-  for (const key of keys) {
-    cache.delete(key)
-    const set = watchers.get(key)
-    if (set) for (const fn of set) notify.add(fn)
-  }
-  // One pass over the union, so invalidating list + tree together wakes a
-  // watcher of both exactly once.
-  for (const fn of notify) fn()
-}
-
-/**
- * Seed the cache with a value we already hold, so the next reader paints from it
- * synchronously instead of fetching. Used by the note-first create commit: it
- * just wrote the note, so priming `contextKeys.read` means the entity's Context
- * tab renders its content on first paint rather than flashing a skeleton across
- * the route change.
- *
- * The entry is stamped as if it had just been fetched, which is accurate — the
- * value came from the write that created it.
- */
-export function primeContextCache<T>(key: string, value: T): void {
-  cache.set(key, { promise: Promise.resolve(value), ts: Date.now(), value, hasValue: true })
-}
+ *  enough to act on — the Context tab's "is the root note there?". */
+export const peekContextCache = peekRequestCache
+/** Watch cache keys for invalidation. Returns the unsubscribe. */
+export const watchContextCache = watchRequestCache
+export const invalidateContextCache = invalidateRequestCache
+/** Seed the cache with a value we already hold, so the next reader paints from
+ *  it synchronously instead of fetching. Used by the note-first create commit:
+ *  it just wrote the note, so priming `contextKeys.read` means the entity's
+ *  Context tab renders its content on first paint. */
+export const primeContextCache = primeRequestCache
 
 // Shared key builders — the panel and the prefetch must agree exactly, or they
 // fetch twice and the cache is pure overhead.
@@ -164,6 +51,9 @@ export const contextKeys = {
   tree: (c: string) => `notes:tree:${c}`,
   settings: (c: string) => `notes:settings:${c}`,
   references: (c: string, path: string) => `notes:refs:${c}:${path}`,
+  trash: (c: string) => `notes:trash:${c}`,
+  overview: (c: string) => `notes:overview:${c}`,
+  publications: (c: string, path: string) => `notes:pubs:${c}:${path}`,
 }
 
 export type NoteRead =
@@ -198,7 +88,7 @@ async function readNoteWithStatus(spaceId: string, path: string): Promise<NoteRe
 export function readNote(spaceId: string, path: string): Promise<NoteRead> {
   const key = contextKeys.read(spaceId, path)
   return cachedFetch(key, () => readNoteWithStatus(spaceId, path)).then((r) => {
-    if (r.status === 'error') cache.delete(key)
+    if (r.status === 'error') evictRequestCache(key)
     return r
   })
 }

@@ -11,18 +11,25 @@
  *
  * Each panel owns its own fetch. They are siblings in the console, not tabs of
  * one screen sharing a shell, and a panel the admin has not opened should cost
- * nothing.
+ * nothing. The reads go through the shared request cache, so a return to the
+ * console paints what it last saw and revalidates behind it.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SettingsSection } from '@/components/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchApprovalQueue, fetchAuthoredTools, fetchInstalls } from '@/features/tools/lib/client';
-import type { AuthoredToolSummary, InstallSummary } from '@/lib/tools/api';
+import type { ApprovalQueueItem, AuthoredToolSummary, InstallSummary } from '@/lib/tools/api';
+import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import ApprovalsTab from './ApprovalsTab';
 import InstalledTab from './InstalledTab';
 import MineTab from './MineTab';
 import { ToastHost, useToasts, type ToastTone } from './Toasts';
+
+const toolKeys = {
+  installs: (spaceId: string) => `tools:installs:${spaceId}`,
+  approvals: (spaceId: string) => `tools:approvals:${spaceId}`,
+};
 
 /**
  * Toasts, scoped to one panel.
@@ -59,14 +66,19 @@ export function InstalledToolsPanel() {
    */
   const run = useRef(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (fresh = false) => {
     const token = ++run.current;
     if (!spaceId) {
       setInstalls([]);
       return;
     }
     try {
-      const body = await fetchInstalls(spaceId);
+      if (fresh) invalidateRequestCache(toolKeys.installs(spaceId));
+      const body = await swrFetch(toolKeys.installs(spaceId), () => fetchInstalls(spaceId), (cached) => {
+        if (token !== run.current) return;
+        setInstalls(cached.installs);
+        setInstallAdmin(cached.isAdmin);
+      });
       if (token !== run.current) return;
       setInstalls(body.installs);
       setInstallAdmin(body.isAdmin);
@@ -96,7 +108,7 @@ export function InstalledToolsPanel() {
         isAdmin={installAdmin ?? true}
         loading={installs === null}
         onChanged={() => {
-          void load();
+          void load(true);
           // Rail rows and the `/t/<slug>` routes come off the space record, so
           // an enable, an upgrade or an uninstall has to reach the shell too.
           void refreshSpace();
@@ -158,50 +170,65 @@ export function AuthoredToolsPanel() {
 }
 
 /**
- * The Approvals badge — read separately from the queue's own content, because
- * the count is what tells an admin the section is worth opening.
+ * This space's approval queue, read once for the badge and the section alike:
+ * the count is what tells an admin the section is worth opening, and the panel
+ * lists the same rows, so one read serves both.
  */
-export function useToolApprovalCount(): { count: number; refresh: () => void } {
+export function useToolApprovalQueue(): {
+  queue: ApprovalQueueItem[] | null;
+  count: number;
+  refresh: () => void;
+} {
   const { currentSpace } = useSpace();
   const spaceId = currentSpace?.id ?? null;
-  const [count, setCount] = useState(0);
+  const [queue, setQueue] = useState<ApprovalQueueItem[] | null>(null);
   const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     let live = true;
     if (!spaceId) {
-      setCount(0);
+      setQueue([]);
       return;
     }
-    fetchApprovalQueue(spaceId)
-      .then((body) => {
-        if (live) setCount(body.queue.length);
-      })
+    if (nonce > 0) invalidateRequestCache(toolKeys.approvals(spaceId));
+    swrFetch(toolKeys.approvals(spaceId), () => fetchApprovalQueue(spaceId), (body) => {
+      if (live) setQueue(body.queue);
+    })
       // A count is decoration; a toast for one would be noise over a screen
-      // the admin did not ask for.
+      // the admin did not ask for. The panel says so in its own words.
       .catch(() => {
-        if (live) setCount(0);
+        if (live) setQueue([]);
       });
     return () => {
       live = false;
     };
   }, [spaceId, nonce]);
 
-  return { count, refresh: useCallback(() => setNonce((n) => n + 1), []) };
+  return {
+    queue,
+    count: queue?.length ?? 0,
+    refresh: useCallback(() => setNonce((n) => n + 1), []),
+  };
 }
 
 /**
  * "Approvals" — the versions this space's members published that nobody with
  * the authority to say yes has looked at yet.
  */
-export function ToolApprovalsPanel({ onReviewed }: { onReviewed: () => void }) {
+export function ToolApprovalsPanel({
+  queue,
+  onReviewed,
+}: {
+  queue: ApprovalQueueItem[] | null;
+  onReviewed: () => void;
+}) {
   const { currentSpace } = useSpace();
   const spaceId = currentSpace?.id ?? null;
   const { toasts, toast, dismiss } = usePanelToasts();
 
   return (
     <>
-      <ApprovalsTab spaceId={spaceId} onReviewed={onReviewed} onToast={toast} />
+      <ApprovalsTab spaceId={spaceId} queue={queue} onReviewed={onReviewed} onToast={toast} />
       <ToastHost toasts={toasts} onDismiss={dismiss} />
     </>
   );

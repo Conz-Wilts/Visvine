@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { FullProfile } from '@/lib/types/profile';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { useProfileCache } from '@/features/shared/contexts/ProfileContext';
+import { cachedFetch, evictRequestCache } from '@/features/shared/lib/requestCache';
 
 export function useProfile(personId: string | null) {
   const { getCached, setCache, patchCache } = useProfileCache();
@@ -32,7 +33,8 @@ export function useProfile(personId: string | null) {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchJson<FullProfile>(`/api/profile/${encodeURIComponent(personId)}`);
+      const url = `/api/profile/${encodeURIComponent(personId)}`;
+      const data = await cachedFetch(url, () => fetchJson<FullProfile>(url));
       if (latestIdRef.current !== personId) return; // stale response — drop it
       setProfile(data);
     } catch (e: unknown) {
@@ -63,7 +65,9 @@ export function useProfile(personId: string | null) {
     patchCache(personId, patch);
     setProfile(prev => prev ? { ...prev, ...patch } : prev);
 
-    const updated = await fetchJsonBody<FullProfile>(`/api/profile/${encodeURIComponent(personId)}`, 'PATCH', patch);
+    const url = `/api/profile/${encodeURIComponent(personId)}`;
+    evictRequestCache(url);
+    const updated = await fetchJsonBody<FullProfile>(url, 'PATCH', patch);
     setProfile(prev => prev ? { ...prev, ...updated } : updated);
   }, [personId, patchCache]);
 

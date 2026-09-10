@@ -82,9 +82,16 @@ export async function GET(request: NextRequest) {
       : [];
     const hostNameById = new Map(hostNodes.map((n) => [n.id, n.name]));
 
-    // Add summary stats to each event
+    // Add summary stats to each event: attendees grouped once, not scanned
+    // per event.
+    const attendeesByEvent = new Map<string, typeof eventsData.attendees>();
+    for (const a of eventsData.attendees) {
+      const list = attendeesByEvent.get(a.eventId);
+      if (list) list.push(a);
+      else attendeesByEvent.set(a.eventId, [a]);
+    }
     const eventsWithStats = visibleEvents.map((event) => {
-      const attendees = eventsData.attendees.filter((a) => a.eventId === event.id);
+      const attendees = attendeesByEvent.get(event.id) ?? [];
       const goingCount = attendees.filter((a) => normalizeStatus(a.status) === 'going').length;
       const waitlistedCount = attendees.filter((a) => normalizeStatus(a.status) === 'waitlisted').length;
       const checkedInCount = attendees.filter((a) => normalizeStatus(a.status) === 'checked_in').length;

@@ -17,9 +17,10 @@
 // length of useNodeProfile's 60s TTL.
 
 import { useCallback, useEffect, useState } from 'react'
-import { useSession } from '@/features/auth/lib/auth-client'
+import { useAuth } from '@/features/auth/contexts/AuthContext'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { fetchJson } from '@/lib/fetchJson'
+import { inflightFetch } from '@/features/shared/lib/requestCache'
 
 export interface MemberConnectionInfo {
   userId: string
@@ -35,7 +36,7 @@ export function useMemberConnection({
   nodeId: string
   onChange?: (userId: string | null) => void
 }) {
-  const { data: session } = useSession()
+  const { session } = useAuth()
   const { isAdmin } = useSpace()
   // undefined = still loading; null = definitely unconnected.
   const [connection, setConnection] = useState<MemberConnectionInfo | null | undefined>(undefined)
@@ -53,8 +54,9 @@ export function useMemberConnection({
     let cancelled = false
     setConnection(undefined)
     setUnavailable(false)
-    fetch(endpoint)
-      .then((res) => (res.ok ? res.json() : { connected: null, unavailable: true }))
+    inflightFetch(endpoint, () =>
+      fetch(endpoint).then((res) => (res.ok ? res.json() : { connected: null, unavailable: true })),
+    )
       .then((data) => {
         if (cancelled) return
         setConnection(data.connected ?? null)

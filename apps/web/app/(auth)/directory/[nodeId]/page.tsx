@@ -18,7 +18,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import { ArrowLeftIcon } from '@/features/shared/icons';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { useSession } from '@/features/auth/lib/auth-client';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { isFeatureEnabled } from '@/lib/featureAccess';
 import { entityFolderPathOf, entityKindOf, entityNotePath } from '@/lib/notes/entities';
 import { isOwnSpaceNode } from '@/lib/types/context';
@@ -255,7 +255,7 @@ const PERSON_TABS: PaneTabItem[] = [
 // showing "Profile not found" — see /api/nodes/resolve.
 function PersonRoute({ nodeId }: { nodeId: string }) {
   const { data, loading, error } = useNodeProfile(nodeId);
-  const { data: session } = useSession();
+  const { session } = useAuth();
   const missing = !data?.node && !loading && !!error;
   const resolved = useResolvedNodeId(missing ? nodeId : null);
 

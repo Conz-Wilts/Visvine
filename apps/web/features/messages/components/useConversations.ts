@@ -11,6 +11,7 @@ import {
 } from 'react';
 import type { ConversationSummary } from '@/lib/messages/types';
 import { fetchJson } from '@/lib/fetchJson';
+import { inflightFetch } from '@/features/shared/lib/requestCache';
 
 interface UseConversationsArgs {
   /** Mirror of the selected conversation id owned by the orchestrator. */
@@ -39,7 +40,8 @@ export function useConversations({ selectedConversationRef, onSelectionLost, set
     try {
       const params = new URLSearchParams();
       if (query?.trim()) params.set('query', query.trim());
-      const payload = await fetchJson<{ conversations?: ConversationSummary[] }>(`/api/messages/conversations?${params.toString()}`, { cache: 'no-store' });
+      const url = `/api/messages/conversations?${params.toString()}`;
+      const payload = await inflightFetch(url, () => fetchJson<{ conversations?: ConversationSummary[] }>(url, { cache: 'no-store' }));
       const nextConversations: ConversationSummary[] = payload.conversations ?? [];
       setConversations(nextConversations);
       const currentId = selectedConversationRef.current;
@@ -53,9 +55,22 @@ export function useConversations({ selectedConversationRef, onSelectionLost, set
     }
   }, [onSelectionLost, selectedConversationRef, setError]);
 
-  // Debounce the sidebar search into a list refetch.
+  // The first list read goes out at once; only a CHANGED search is debounced
+  // into its refetch, so the sidebar never waits 200 ms behind mount, and a
+  // re-run of the effect with the same query (dev double-mount, a rebuilt
+  // callback) asks nothing again — the realtime stream keeps the list current.
+  const lastQuery = useRef<string | null>(null);
   useEffect(() => {
-    const t = setTimeout(() => void fetchConversations(conversationSearch), 200);
+    if (lastQuery.current === conversationSearch) return;
+    if (lastQuery.current === null) {
+      lastQuery.current = conversationSearch;
+      void fetchConversations(conversationSearch);
+      return;
+    }
+    const t = setTimeout(() => {
+      lastQuery.current = conversationSearch;
+      void fetchConversations(conversationSearch);
+    }, 200);
     return () => clearTimeout(t);
   }, [conversationSearch, fetchConversations]);
 

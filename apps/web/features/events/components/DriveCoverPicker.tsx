@@ -11,26 +11,13 @@
  * with `cover_resource_id`, so a person and an agent set a cover the same way.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import { Alert } from '@/components/ui';
-import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
+import { fetchJsonBody } from '@/lib/fetchJson';
+import { useResources } from '@/features/resources/hooks/useResources';
 import { FolderIcon, LoaderCircleIcon, SearchIcon } from '@/features/shared/icons';
 import type { NBEvent } from '@/lib/types';
-
-/** The Drive rows this picker cares about — the listing's own shape, narrowed. */
-interface DriveImage {
-  id: string;
-  name: string;
-  fileType: string;
-  fileUrl: string | null;
-  folderId: string | null;
-}
-
-interface DriveFolder {
-  id: string;
-  name: string;
-}
 
 interface Props {
   spaceId: string;
@@ -41,34 +28,16 @@ interface Props {
 }
 
 export function DriveCoverPicker({ spaceId, eventId, onClose, onPicked }: Props) {
-  const [images, setImages] = useState<DriveImage[] | null>(null);
-  const [folders, setFolders] = useState<DriveFolder[]>([]);
+  // The same Drive listing the Resources tab holds, through the same cache —
+  // opening the picker after browsing the Drive costs no request.
+  const { resources, folders, loading, error: driveError } = useResources(spaceId);
+  const images = useMemo(
+    () => (loading && resources.length === 0 ? null : resources.filter((f) => f.fileType === 'image')),
+    [loading, resources],
+  );
   const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [applying, setApplying] = useState<string | null>(null);
-
-  useEffect(() => {
-    let live = true;
-    (async () => {
-      try {
-        const [files, folderRows] = await Promise.all([
-          fetchJson<DriveImage[]>(`/api/resources?space_id=${encodeURIComponent(spaceId)}`),
-          fetchJson<DriveFolder[]>(`/api/resources/folders?space_id=${encodeURIComponent(spaceId)}`).catch(() => []),
-        ]);
-        if (!live) return;
-        setImages(files.filter((f) => f.fileType === 'image'));
-        setFolders(folderRows);
-      } catch (e) {
-        if (live) {
-          setImages([]);
-          setError(e instanceof Error ? e.message : 'Could not read the Drive');
-        }
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [spaceId]);
 
   const folderName = useMemo(() => new Map(folders.map((f) => [f.id, f.name])), [folders]);
 
@@ -108,7 +77,7 @@ export function DriveCoverPicker({ spaceId, eventId, onClose, onPicked }: Props)
         />
       </div>
 
-      {error && <Alert className="mb-3">{error}</Alert>}
+      {(error ?? driveError) && <Alert className="mb-3">{error ?? driveError}</Alert>}
 
       {images === null ? (
         <div className="py-12 flex justify-center">

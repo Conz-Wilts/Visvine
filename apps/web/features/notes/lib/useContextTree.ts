@@ -6,7 +6,7 @@
 // from a note, a source or a profile) — the loading, the trash, the access
 // badges and every mutation live here rather than in the component.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { contextDisplayName } from '@/lib/notes/shared/contextSettings'
@@ -224,14 +224,14 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
   useEffect(() => {
     if (!spaceId || !active) return
     let cancelled = false
-    notesApi
-      .trash(spaceId)
-      .then(({ trash }) => {
-        if (!cancelled) setTrash(trash ?? [])
-      })
-      .catch(() => {
-        if (!cancelled) setTrash([])
-      })
+    // A tree change (a delete, a restore) is what moves the trash, so it is
+    // the one thing that drops the cached list; a plain remount paints it.
+    if (treeVersion > 0) invalidateContextCache(contextKeys.trash(spaceId))
+    swrFetch(contextKeys.trash(spaceId), () => notesApi.trash(spaceId), ({ trash }) => {
+      if (!cancelled) setTrash(trash ?? [])
+    }).catch(() => {
+      if (!cancelled) setTrash([])
+    })
     return () => {
       cancelled = true
     }
@@ -257,20 +257,27 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
 
   // Access overview: restricted/locked boundaries (folders AND private notes)
   // for the 🔒 badges. Personal spaces have no boundaries — skip the fetch.
-  // shareOpen is a dep so closing the Share panel repaints badges it changed.
+  // The Share panel changes what this says, so its CLOSING drops the cached
+  // overview and reads it again; opening it reads nothing new.
   const shareOpen = shareTarget !== null
+  const shareWasOpen = useRef(false)
   useEffect(() => {
     if (!spaceId || !active || spaceId.startsWith('me:')) {
       setOverview(null)
       return
     }
+    if (shareOpen) {
+      shareWasOpen.current = true
+      return
+    }
+    if (shareWasOpen.current) {
+      shareWasOpen.current = false
+      invalidateContextCache(contextKeys.overview(spaceId))
+    }
     let cancelled = false
-    notesApi
-      .getAccessOverview(spaceId)
-      .then((o) => {
-        if (!cancelled) setOverview(o)
-      })
-      .catch(() => {})
+    swrFetch(contextKeys.overview(spaceId), () => notesApi.getAccessOverview(spaceId), (o) => {
+      if (!cancelled) setOverview(o)
+    }).catch(() => {})
     return () => {
       cancelled = true
     }

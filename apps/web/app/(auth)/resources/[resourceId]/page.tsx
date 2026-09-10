@@ -13,7 +13,7 @@ import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { useSession } from '@/features/auth/lib/auth-client';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import PDFViewer from '@/features/resources/components/PDFViewer';
 import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';
@@ -58,7 +58,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
   const { resourceId: rawResourceId } = use(params);
   const resourceId = decodeURIComponent(rawResourceId);
   const router = useRouter();
-  const { data: session } = useSession();
+  const { session } = useAuth();
   const { isAdmin } = useSpace();
 
   const [detail, setDetail] = useState<ResourceDetail | null>(null);
@@ -72,7 +72,6 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
   const [selectedCell, setSelectedCell] = useState<string | null>(null);
   const [selectedCellValue, setSelectedCellValue] = useState('');
   const [showPropose, setShowPropose] = useState(false);
-  const [changeKey, setChangeKey] = useState(0);
   const [reindexing, setReindexing] = useState(false);
 
   const [comments, setComments] = useState<ResourceComment[]>([]);
@@ -138,7 +137,6 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
       await fetchJsonBody(`/api/resources/${encodeURIComponent(resourceId)}/changes/${encodeURIComponent(changeId)}`, 'PUT', { status });
     } catch { return; }
     fetchChanges();
-    setChangeKey((k) => k + 1); // re-render the sheet with the applied overlay
   };
 
   if (loading) {
@@ -278,8 +276,9 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
           ) : isSpreadsheet ? (
             <div className="flex-1 overflow-hidden flex flex-col bg-surface-1">
               <SpreadsheetViewer
-                key={`${resource.id}-${changeKey}`}
+                key={resource.id}
                 resourceId={resource.id}
+                changes={changes}
                 fileUrl={resource.fileUrl}
                 onCellSelect={(ref: string, val: string) => { setSelectedCell(ref); setSelectedCellValue(val); }}
                 selectedCell={selectedCell}
@@ -341,7 +340,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
           cellRef={selectedCell}
           originalValue={selectedCellValue}
           onClose={() => setShowPropose(false)}
-          onProposed={() => { setChangeKey((k) => k + 1); fetchChanges(); }}
+          onProposed={fetchChanges}
         />
       )}
     </div>

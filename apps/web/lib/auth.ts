@@ -5,6 +5,49 @@ import { isGlobalSpace } from '@/lib/spaces/globalSpace';
 import { canAccessFeature } from '@/lib/featureAccess';
 import { personAliases, type SpaceAlias } from '@/lib/types/context';
 import type { SpaceFeatureConfig } from '@/lib/types';
+import { requestMemo } from '@/lib/requestMemo';
+
+/**
+ * The gate inputs, read once per request. Every gate below used to issue its
+ * own `space.findUnique` / `userAlias.findMany` / `spaceMember.findFirst`, so
+ * a notes request re-fetched the same three rows up to three times as
+ * `resolveContext` → `canReadSpace` → `isAdmin` each asked again. These are
+ * request-memoized (lib/requestMemo.ts): the first caller pays, the rest share
+ * the promise, and nothing survives the request.
+ */
+export const loadSpaceGate = requestMemo('spaceGate', async (spaceId: string) =>
+  prisma.space.findUnique({
+    where: { id: spaceId },
+    select: { id: true, personalOwnerId: true, featureConfig: true, aliases: true },
+  }),
+);
+
+/** The alias ids a user holds in one space. */
+export const heldAliasIds = requestMemo('heldAliases', async (userId: string, spaceId: string) => {
+  const rows = await prisma.userAlias.findMany({
+    where: { userId, spaceId },
+    select: { aliasId: true },
+  });
+  return rows.map((r) => r.aliasId);
+});
+
+/** The user's membership row status in a space, or null when there is none. */
+export const membershipStatus = requestMemo('membership', async (userId: string, spaceId: string) => {
+  const row = await prisma.spaceMember.findUnique({
+    where: { userId_spaceId: { userId, spaceId } },
+    select: { status: true },
+  });
+  return row?.status ?? null;
+});
+
+function owningAliasIds(aliases: unknown): Set<string> {
+  return new Set(
+    personAliases((aliases ?? []) as unknown as SpaceAlias[])
+      .filter((a) => a.admin === true || a.system === true)
+      .map((a) => a.id)
+      .filter((id): id is string => Boolean(id)),
+  );
+}
 
 /**
  * The ids of a space's Person aliases whose holders own (manage) it.
@@ -21,12 +64,30 @@ async function adminAliasIds(spaceIds: string[]): Promise<Map<string, Set<string
     select: { id: true, aliases: true },
   });
   const out = new Map<string, Set<string>>();
-  for (const c of spaces) {
-    const owning = personAliases((c.aliases ?? []) as unknown as SpaceAlias[])
-      .filter((a) => a.admin === true || a.system === true)
-      .map((a) => a.id)
-      .filter((id): id is string => Boolean(id));
-    out.set(c.id, new Set(owning));
+  for (const c of spaces) out.set(c.id, owningAliasIds(c.aliases));
+  return out;
+}
+
+/**
+ * `adminSpaceIds` for spaces whose alias lists the caller already holds — the
+ * layout and the space-list endpoints load `aliases` for every row anyway, so
+ * asking the database for them again was a third copy of the same JSON.
+ */
+export async function adminSpaceIdsFrom(
+  userId: string,
+  spaces: { id: string; aliases: unknown }[],
+  email?: string | null,
+): Promise<Set<string>> {
+  if (isSuperAdmin(email)) return new Set(spaces.map((s) => s.id));
+  if (spaces.length === 0) return new Set();
+  const held = await prisma.userAlias.findMany({
+    where: { userId, spaceId: { in: spaces.map((s) => s.id) } },
+    select: { spaceId: true, aliasId: true },
+  });
+  const owning = new Map(spaces.map((s) => [s.id, owningAliasIds(s.aliases)]));
+  const out = new Set<string>();
+  for (const h of held) {
+    if (owning.get(h.spaceId)?.has(h.aliasId)) out.add(h.spaceId);
   }
   return out;
 }
@@ -43,7 +104,10 @@ export async function isAdmin(
   email?: string | null,
 ): Promise<boolean> {
   if (isSuperAdmin(email)) return true;
-  return (await adminSpaceIds(userId, [spaceId])).has(spaceId);
+  const [space, held] = await Promise.all([loadSpaceGate(spaceId), heldAliasIds(userId, spaceId)]);
+  if (!space) return false;
+  const owning = owningAliasIds(space.aliases);
+  return held.some((id) => owning.has(id));
 }
 
 /**
@@ -97,20 +161,13 @@ export async function spaceReadForbidden(
   userId: string,
   spaceId: string,
 ): Promise<boolean> {
-  const space = await prisma.space.findUnique({
-    where: { id: spaceId },
-    select: { personalOwnerId: true },
-  });
+  const space = await loadSpaceGate(spaceId);
   return space ? isForeignPersonalSpace(space.personalOwnerId, userId) : false;
 }
 
 /** Whether the user holds an active membership row in `spaceId`. */
 async function isActiveMember(userId: string, spaceId: string): Promise<boolean> {
-  const membership = await prisma.spaceMember.findFirst({
-    where: { userId, spaceId, status: 'active' },
-    select: { id: true },
-  });
-  return membership !== null;
+  return (await membershipStatus(userId, spaceId)) === 'active';
 }
 
 /**
@@ -129,10 +186,7 @@ export async function spaceMemberForbidden(
   email?: string | null,
 ): Promise<boolean> {
   const [space, activeMember] = await Promise.all([
-    prisma.space.findUnique({
-      where: { id: spaceId },
-      select: { personalOwnerId: true },
-    }),
+    loadSpaceGate(spaceId),
     isActiveMember(userId, spaceId),
   ]);
   if (!space) return false;
@@ -171,10 +225,7 @@ export async function featureAccessForbidden(
   featureKey: string,
   email?: string | null,
 ): Promise<boolean> {
-  const space = await prisma.space.findUnique({
-    where: { id: spaceId },
-    select: { featureConfig: true },
-  });
+  const space = await loadSpaceGate(spaceId);
   if (!space) return false;
   const config = (space.featureConfig ?? {}) as SpaceFeatureConfig;
   // Cheap path first: when the feature is open to members there's nothing to
@@ -205,10 +256,7 @@ export async function directoryAccessForbidden(
 export async function getFeatureConfig(
   spaceId: string,
 ): Promise<SpaceFeatureConfig | null> {
-  const space = await prisma.space.findUnique({
-    where: { id: spaceId },
-    select: { featureConfig: true },
-  });
+  const space = await loadSpaceGate(spaceId);
   return (space?.featureConfig as SpaceFeatureConfig | null) ?? null;
 }
 

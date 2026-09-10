@@ -1,7 +1,7 @@
 // Server-side only (imports prisma) — do not import from client components.
 import prisma from '@/lib/prisma';
 import { isSuperAdmin, type SessionPayload } from '@/lib/session';
-import { adminSpaceIds } from '@/lib/auth';
+import { adminSpaceIdsFrom } from '@/lib/auth';
 import { installedToolsForSpaces } from '@/lib/tools/installs';
 import type { Space, SpaceAlias } from '@/lib/types';
 
@@ -141,9 +141,10 @@ const MEMBERSHIP_SPACE_SELECT = {
 
 /**
  * The current user's space memberships, serialized to the exact shape
- * `GET /api/user/communities` returns. `isAdmin` is resolved in one query
- * across every membership (lib/auth.ts#adminSpaceIds); super-admins are
- * admins everywhere.
+ * `GET /api/user/communities` returns. `isAdmin` is read off the alias lists
+ * this query already loaded, in one `user_aliases` query across every
+ * membership (lib/auth.ts#adminSpaceIdsFrom); super-admins are admins
+ * everywhere.
  */
 export async function listUserSpaces(session: SessionPayload): Promise<SpaceMembership[]> {
   const memberships = await prisma.spaceMember.findMany({
@@ -152,9 +153,9 @@ export async function listUserSpaces(session: SessionPayload): Promise<SpaceMemb
     orderBy: { joinedAt: 'asc' },
   });
 
-  const adminIds = await adminSpaceIds(
+  const adminIds = await adminSpaceIdsFrom(
     session.userId,
-    memberships.map(m => m.space.id),
+    memberships.map(m => m.space),
     session.email,
   );
 
@@ -181,4 +182,26 @@ export async function listUserSpaces(session: SessionPayload): Promise<SpaceMemb
   });
 
   return memberships.map(m => toDto(m.space, m.joinedAt));
+}
+
+/**
+ * The thin form the (auth) layout hydrates the client with: which spaces the
+ * caller belongs to and which they administer. `listVisibleSpaces` already
+ * carries every one of these rows in full, so this reads only the two columns
+ * that decide admin rather than the JSON blobs a second time.
+ */
+export async function listUserSpaceIds(
+  session: SessionPayload,
+): Promise<{ id: string; isAdmin: boolean }[]> {
+  const memberships = await prisma.spaceMember.findMany({
+    where: { userId: session.userId },
+    select: { space: { select: { id: true, aliases: true } } },
+    orderBy: { joinedAt: 'asc' },
+  });
+  const adminIds = await adminSpaceIdsFrom(
+    session.userId,
+    memberships.map(m => m.space),
+    session.email,
+  );
+  return memberships.map(m => ({ id: m.space.id, isAdmin: adminIds.has(m.space.id) }));
 }

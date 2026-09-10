@@ -6,7 +6,7 @@ import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useHoverIntent } from '@/features/shared/hooks/useHoverIntent';
-import { useSession } from '@/features/auth/lib/auth-client';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { SettingsIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { spaceMark } from '@/lib/spaces/subspaces';
@@ -36,7 +36,7 @@ export default function SpaceSelector() {
   const { expanded, reduced, switcherOpen, setSwitcherOpen, setAccountPanel } = useSidebar();
   // The switcher and Create new share the rail's edge, one at a time.
   const { close: closeCreate } = useCreateModal();
-  const { data: session } = useSession();
+  const { session } = useAuth();
   const router = useRouter();
   // The console is the space's own settings, so it hangs off the space — not
   // off a rail row of its own. Same gate the console page applies.

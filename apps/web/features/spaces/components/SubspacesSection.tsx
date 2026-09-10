@@ -15,6 +15,7 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { ensureRootIndexNote } from '@/features/notes/lib/rootIndex';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
+import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import { PlusIcon } from '@/features/shared/icons';
 
 interface SubspaceDto {
@@ -32,14 +33,21 @@ export default function SubspacesSection({ spaceId, spaceName }: { spaceId: stri
   const [rows, setRows] = useState<SubspaceDto[] | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const load = useCallback(async () => {
+  // Through the shared request cache: a return to General paints the last
+  // list at once. A write here drops the key first, so it reads fresh.
+  const key = `spaces:subspaces:${spaceId}`;
+  const load = useCallback(async (fresh = false) => {
+    if (fresh) invalidateRequestCache(key);
     try {
-      const data = await fetchJson<{ subspaces: SubspaceDto[] }>(`/api/communities/${encodeURIComponent(spaceId)}/subspaces`);
-      setRows(data.subspaces);
+      await swrFetch(
+        key,
+        () => fetchJson<{ subspaces: SubspaceDto[] }>(`/api/communities/${encodeURIComponent(spaceId)}/subspaces`),
+        (data) => setRows(data.subspaces),
+      );
     } catch {
       setRows([]);
     }
-  }, [spaceId]);
+  }, [key, spaceId]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -102,7 +110,7 @@ export default function SubspacesSection({ spaceId, spaceName }: { spaceId: stri
           parentName={spaceName}
           onClose={() => setCreating(false)}
           onCreated={async () => {
-            await Promise.all([refreshSpace(), load()]);
+            await Promise.all([refreshSpace(), load(true)]);
           }}
         />
       )}

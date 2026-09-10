@@ -20,6 +20,7 @@ import { CustomDateTimePicker } from './CustomDateTimePicker';
 import { DriveCoverPicker } from './DriveCoverPicker';
 import Select from '@/components/ui/Select';
 import { fetchJsonBody } from '@/lib/fetchJson';
+import { invalidateEventDetail } from '@/features/events/lib/eventDetail';
 import { ArrowLeftIcon, CalendarPlusIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, ExternalLinkIcon, FolderIcon, GlobeIcon, ImagePlusIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PlusIcon, SparklesIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
 
 type EventType = 'in-person' | 'virtual' | 'hybrid';
@@ -212,11 +213,13 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
           throw err;
         }
       }
-      return fetchJsonBody<NBEvent>(
+      const saved = await fetchJsonBody<NBEvent>(
         `/api/events/${draftIdRef.current}?spaceId=${encodeURIComponent(spaceId)}`,
         'PATCH',
         body,
       );
+      invalidateEventDetail(saved.id);
+      return saved;
     },
     [buildBody, spaceId],
   );

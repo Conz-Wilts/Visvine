@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
 import { Alert, Button } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import type { MachineEvent } from '@/lib/agents/shared/trace';
@@ -137,11 +138,12 @@ export default function MachinePane({
 
   // While a run is on and nobody is attached, the stored timeline is the only
   // view — keep it moving.
+  const visible = usePageVisible();
   useEffect(() => {
-    if (!autoWatch || watching) return;
+    if (!autoWatch || watching || !visible) return;
     const t = setInterval(reload, 5000);
     return () => clearInterval(t);
-  }, [autoWatch, watching, reload]);
+  }, [autoWatch, watching, visible, reload]);
 
   const stopWatching = useCallback(() => {
     socketRef.current?.close();

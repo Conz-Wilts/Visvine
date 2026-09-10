@@ -6,6 +6,7 @@
 // model entirely (lib/notes/principal.ts#OPEN_ACCESS).
 
 import prisma from '@/lib/prisma'
+import { heldAliasIds } from '@/lib/auth'
 import { SHARED_OWNER_KEY } from './store'
 import { readJson, writeJson } from './sidecar'
 import { resolveRegistry } from './registry'
@@ -165,13 +166,9 @@ async function loadFolderFlags(spaceId: string): Promise<FolderFlags> {
   }
 }
 
-/** The Person alias ids the user holds inside this space. */
+/** The Person alias ids the user holds inside this space (request-memoized with the admin gate). */
 async function aliasIdsOf(spaceId: string, userId: string): Promise<string[]> {
-  const rows = await prisma.userAlias.findMany({
-    where: { userId, spaceId },
-    select: { aliasId: true },
-  })
-  return rows.map((r) => r.aliasId)
+  return heldAliasIds(userId, spaceId)
 }
 
 /**

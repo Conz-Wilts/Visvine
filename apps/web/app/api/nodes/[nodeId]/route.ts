@@ -24,6 +24,8 @@ type RouteContext = {
   params: Promise<{ nodeId: string }>;
 };
 
+/** The most connections one profile read returns; the count is still exact. */
+const MAX_CONNECTIONS = 500;
 const MAX_TAGS = 30;
 const MAX_TAG_LEN = 40;
 
@@ -52,13 +54,27 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   const { nodeId } = await context.params;
 
-  // Single parallel fetch: node, links, and all potentially connected nodes
-  // Use a raw query to get links + connected node data in one shot
-  const [node, linksWithNodes] = await Promise.all([
-    prisma.node.findUnique({
-      where: { id: nodeId },
-      select: { id: true, type: true, name: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, alias: true, spaceId: true, createdAt: true, identity: { select: { userId: true } } },
-    }),
+  const node = await prisma.node.findUnique({
+    where: { id: nodeId },
+    select: { id: true, type: true, name: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, alias: true, spaceId: true, createdAt: true, identity: { select: { userId: true } } },
+  });
+
+  if (!node) {
+    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+  }
+
+  // The node's profile + full connection graph are space-scoped confidential
+  // data: only an active member (or admin) of its space may read them. A
+  // personal space is likewise private to its owner. Anyone else gets a 404 so
+  // the endpoint reveals nothing — not even that the node exists. The gate
+  // runs before the graph is read, so a refused caller costs one row.
+  if (node.spaceId && (await spaceMemberForbidden(session.userId, node.spaceId, session.email))) {
+    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+  }
+
+  // Links + connected node data in one shot, bounded: a hub's page shows its
+  // first MAX_CONNECTIONS with the true total beside them.
+  const [linksWithNodes, connectionCount] = await Promise.all([
     prisma.$queryRaw<Array<{
       source_id: string;
       target_id: string;
@@ -80,20 +96,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         ELSE l.source_id
       END
       WHERE l.source_id = ${nodeId} OR l.target_id = ${nodeId}
+      LIMIT ${MAX_CONNECTIONS}
     `,
+    prisma.link.count({ where: { OR: [{ sourceId: nodeId }, { targetId: nodeId }] } }),
   ]);
-
-  if (!node) {
-    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
-  }
-
-  // The node's profile + full connection graph are space-scoped confidential
-  // data: only an active member (or admin) of its space may read them. A
-  // personal space is likewise private to its owner. Anyone else gets a 404 so
-  // the endpoint reveals nothing — not even that the node exists.
-  if (node.spaceId && (await spaceMemberForbidden(session.userId, node.spaceId, session.email))) {
-    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
-  }
 
   // The member this node is connected to: the identity link is canonical; a
   // member's own node (User.nodeId) counts before the personal space has
@@ -150,7 +156,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         connected_user_id: connectedUserId ?? undefined,
         createdAt: node.createdAt.toISOString(),
       },
-      connectionCount: linksWithNodes.length,
+      connectionCount,
       spaceCount,
       connections: resolvedConnections,
     },

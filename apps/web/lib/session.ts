@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies, headers } from "next/headers";
+import { requestMemo } from "@/lib/requestMemo";
 
 export const COOKIE_NAME = "auth_session";
 export const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
@@ -90,7 +91,11 @@ export async function sessionUserValid(userId: string): Promise<boolean> {
   return userExistsCheck ? userExistsCheck(userId) : true;
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
+/**
+ * The caller's session, read once per request: a route's own gate, the
+ * context resolver and any helper underneath all share one verification.
+ */
+export const getSession = requestMemo('session', async (): Promise<SessionPayload | null> => {
   const headerStore = await headers();
   const authHeader = headerStore.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
@@ -103,7 +108,7 @@ export async function getSession(): Promise<SessionPayload | null> {
   const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
   return verifySession(token);
-}
+});
 
 /**
  * Returns the current session or a 401 JSON response.

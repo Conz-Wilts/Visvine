@@ -13,6 +13,7 @@ import { useCopied } from '@/features/shared/hooks/useCopied';
 import { Alert, Button, ConfirmDialog } from '@/components/ui';
 import { useConsoleAction } from '@/features/admin/components/console/ConsoleSaveContext';
 import { fetchJson } from '@/lib/fetchJson';
+import { primeRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 
 /**
  * Reusable invite link for the space. Admins copy it to share; regenerating
@@ -27,8 +28,11 @@ export default function InviteLink({ spaceId }: { spaceId: string }) {
 
   useEffect(() => {
     let alive = true;
-    fetchJson<{ url?: string }>(`/api/communities/${spaceId}/invite`)
-      .then((d) => { if (alive) setUrl(d.url ?? ''); })
+    // Cached: the link only changes when an admin regenerates it, and that
+    // path writes the new one straight into state.
+    swrFetch(`spaces:invite:${spaceId}`, () => fetchJson<{ url?: string }>(`/api/communities/${spaceId}/invite`), (d) => {
+      if (alive) setUrl(d.url ?? '');
+    })
       .catch((e: unknown) => {
         if (!alive) return;
         setUrl('');
@@ -44,6 +48,7 @@ export default function InviteLink({ spaceId }: { spaceId: string }) {
     try {
       await runAction(async () => {
         const data = await fetchJson<{ url?: string }>(`/api/communities/${spaceId}/invite`, { method: 'POST' });
+        primeRequestCache(`spaces:invite:${spaceId}`, data);
         setUrl(data.url ?? '');
         setLoadError(null);
       });

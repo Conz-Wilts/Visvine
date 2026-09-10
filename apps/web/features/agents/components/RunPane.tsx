@@ -8,6 +8,7 @@ import { stepsOf } from '@/lib/agents/shared/trace';
 import RunSteps, { type EndNode, type TriggerNode } from './RunSteps';
 import StatusDot from './StatusDot';
 import { useEffect, useState } from 'react';
+import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
 
 function Caption({ children }: { children: React.ReactNode }) {
   return <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{children}</p>;
@@ -45,11 +46,13 @@ export default function RunPane({
   const { run, error } = useRun(spaceId, agentName, runId, onFinished);
   const [now, setNow] = useState(() => Date.now());
   const running = !run || run.status === 'running';
+  const visible = usePageVisible();
   useEffect(() => {
-    if (!running) return;
+    if (!running || !visible) return;
+    setNow(Date.now());
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [running]);
+  }, [running, visible]);
 
   const startedAt = run ? new Date(run.startedAt).getTime() : now;
   const elapsed = Math.max(0, Math.round(((run?.endedAt ? new Date(run.endedAt).getTime() : now) - startedAt) / 1000));

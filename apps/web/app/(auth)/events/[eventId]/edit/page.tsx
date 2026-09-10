@@ -7,6 +7,7 @@
 import { use, useEffect, useState } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
 import { useRouter } from 'next/navigation';
+import { invalidateEventDetail, loadEventDetail } from '@/features/events/lib/eventDetail';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { EventComposer } from '@/features/events/components/EventComposer';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -21,15 +22,23 @@ export default function EditEventPage({ params }: { params: Promise<{ eventId: s
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  // The same read the event page just made, from the same cache.
+  const spaceId = currentSpace?.id ?? null;
   useEffect(() => {
-    if (!currentSpace) return;
+    if (!spaceId) return;
+    let live = true;
     setLoading(true);
-    fetch(`/api/events/${eventId}?spaceId=${currentSpace.id}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => setEvent(d.event))
-      .catch(() => setEvent(null))
-      .finally(() => setLoading(false));
-  }, [currentSpace, eventId]);
+    loadEventDetail(spaceId, eventId, (d) => {
+      if (!live) return;
+      setEvent(d.event ?? null);
+      setLoading(false);
+    }).catch(() => {
+      if (!live) return;
+      setEvent(null);
+      setLoading(false);
+    });
+    return () => { live = false; };
+  }, [spaceId, eventId]);
 
   const wrap = (children: React.ReactNode) => (
     <div className="px-4 sm:px-6 lg:px-8 py-10">{children}</div>
@@ -60,6 +69,7 @@ export default function EditEventPage({ params }: { params: Promise<{ eventId: s
           setDeleteError(null);
           try {
             await fetchJson(`/api/events/${event.id}?spaceId=${currentSpace.id}`, { method: 'DELETE' });
+            invalidateEventDetail(event.id);
             router.push('/events');
           } catch (err) {
             setDeleteError(err instanceof Error ? err.message : 'Failed to delete event');

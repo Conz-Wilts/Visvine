@@ -19,6 +19,7 @@ import type {
 } from '@/lib/messages/types';
 import AddMembersModal from './AddMembersModal';
 import { mergeMessages } from './MessageRow';
+import { inflightFetch } from '@/features/shared/lib/requestCache';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import ProfilePanel from './ProfilePanel';
 import ConversationListPanel, { type ChannelListGroup } from './ConversationListPanel';
@@ -204,17 +205,23 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   }, [sendTypingState]);
 
   const markConversationRead = useCallback(async (conversationId: string) => {
+    // The sidebar's count is patched here rather than refetched: the read
+    // route answers only this user, and the list already knows the rest.
+    setConversations((prev) => prev.some((c) => c.id === conversationId && c.unreadCount > 0)
+      ? prev.map((c) => c.id === conversationId ? { ...c, unreadCount: 0 } : c)
+      : prev);
     try {
       await fetchJsonBody(`/api/messages/conversations/${conversationId}/read`, 'POST', {});
     } catch { /* best-effort */ }
-  }, []);
+  }, [setConversations]);
 
   const spaceId = spaceCtx?.currentSpace?.id;
 
   const fetchChannels = useCallback(async () => {
     if (!spaceId) return;
     try {
-      const payload = await fetchJson<{ channels?: ChannelDirectoryEntry[]; sections?: ChannelSectionEntry[] }>(`/api/messages/channels?spaceId=${encodeURIComponent(spaceId)}`, { cache: 'no-store' });
+      const url = `/api/messages/channels?spaceId=${encodeURIComponent(spaceId)}`;
+      const payload = await inflightFetch(url, () => fetchJson<{ channels?: ChannelDirectoryEntry[]; sections?: ChannelSectionEntry[] }>(url, { cache: 'no-store' }));
       setChannelDirectory(payload.channels ?? []);
       setChannelSections(payload.sections ?? []);
     } catch { /* best-effort */ }

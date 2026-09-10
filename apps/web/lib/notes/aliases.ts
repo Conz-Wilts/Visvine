@@ -20,6 +20,7 @@
 // Space admins manage all of it; there is no per-alias manager role.
 
 import type { Prisma } from '@prisma/client'
+import { heldAliasIds } from '@/lib/auth'
 import prisma from '@/lib/prisma'
 import {
   personAliases,
@@ -391,6 +392,7 @@ export async function addAliasHolder(
     create: { spaceId, userId, aliasId: alias.id, addedBy: actor.userId },
     update: {},
   })
+  await heldAliasIds.forget(userId, spaceId)
 }
 
 export async function removeAliasHolder(
@@ -401,6 +403,7 @@ export async function removeAliasHolder(
   const alias = await requireAlias(spaceId, name)
   await assertAdminSurvives(spaceId, { kind: 'removeHolder', name, userId })
   await prisma.userAlias.deleteMany({ where: { spaceId, userId, aliasId: alias.id } })
+  await heldAliasIds.forget(userId, spaceId)
 }
 
 /** Guard departures from the space (the caller then removes the rows). */

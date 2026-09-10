@@ -24,10 +24,12 @@ export async function GET(
 
     const session = await requireApiSession();
     if (session instanceof NextResponse) return session;
-    if (
-      (await spaceMemberForbidden(session.userId, spaceId, session.email)) ||
-      (await directoryAccessForbidden(session.userId, spaceId, session.email))
-    ) {
+    // Independent gates over the same request-memoized rows: one round trip.
+    const [memberForbidden, featureForbidden] = await Promise.all([
+      spaceMemberForbidden(session.userId, spaceId, session.email),
+      directoryAccessForbidden(session.userId, spaceId, session.email),
+    ]);
+    if (memberForbidden || featureForbidden) {
       return forbiddenResponse();
     }
 

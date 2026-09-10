@@ -7,7 +7,7 @@ export const dynamicParams = true;
 
 import AuthLayoutClient from './AuthLayoutClient';
 import { getSession, isSuperAdmin } from '@/lib/session';
-import { listVisibleSpaces, listUserSpaces } from '@/lib/spaces/queries';
+import { listVisibleSpaces, listUserSpaceIds } from '@/lib/spaces/queries';
 import { listLockedSubspaces } from '@/lib/spaces/subspaceAccess';
 import type { Session } from '@/features/auth/lib/auth-client';
 
@@ -27,7 +27,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
 
   const [spaces, memberships, lockedSubspaces] = await Promise.all([
     listVisibleSpaces(session),
-    listUserSpaces(session),
+    listUserSpaceIds(session),
     listLockedSubspaces(session.userId),
   ]);
 
@@ -46,7 +46,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
     <AuthLayoutClient
       initialSession={initialSession}
       initialSpaces={spaces}
-      initialMemberships={memberships.map(m => ({ id: m.id, isAdmin: m.isAdmin }))}
+      initialMemberships={memberships}
       initialLockedSubspaces={lockedSubspaces}
     >
       {children}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Avatar, Button, ConfirmDialog, Field, Input, SearchInput, Skeleton, Alert } from '@/components/ui';
 import Select from '@/components/ui/Select';
 import NewRow from '@/components/ui/NewRow';
@@ -298,20 +298,23 @@ export default function ConnectorsPanel({
   // What the OAuth round trip said on its way back here. Read once and then
   // wiped from the URL, so a refresh doesn't re-announce a connection made
   // minutes ago (the connector's own page does the same with these params).
+  // Read off `location` rather than useSearchParams: this panel is shell
+  // chrome on every page, and a hook that forces a Suspense boundary there
+  // would be paid by all of them.
   const pathname = usePathname();
-  const params = useSearchParams();
   const [outcome, setOutcome] = useState<{ ok: boolean; message: string } | null>(null);
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
     const ok = params.get('connected');
     const bad = params.get('connect_error');
     if (!ok && !bad) return;
     setOutcome({ ok: Boolean(ok), message: ok ?? bad ?? '' });
-    const next = new URLSearchParams(params.toString());
-    next.delete('connected');
-    next.delete('connect_error');
-    const qs = next.toString();
+    params.delete('connected');
+    params.delete('connect_error');
+    const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [params, pathname, router]);
+  }, [pathname, router]);
 
   const [query, setQuery] = useState('');
   const [chosenTab, setTab] = useState<Tab>('mine');
@@ -337,8 +340,10 @@ export default function ConnectorsPanel({
   // sign in to — and none of the acts: those are an admin's, and each write
   // behind them refuses a member anyway. Read off the response rather than
   // the space context so the panel is right for whichever space it was given.
-  const [canManage, setCanManage] = useState(true);
-  const readOnly = !canManage;
+  // Null until the list has answered, so nothing admin-only is asked for on
+  // a guess.
+  const [canManage, setCanManage] = useState<boolean | null>(null);
+  const readOnly = canManage === false;
   // The catalog row whose one-click connect is in flight, by entry id: the note
   // is written, then the browser leaves for the provider, so the button stays
   // busy until navigation rather than settling back.
@@ -365,7 +370,8 @@ export default function ConnectorsPanel({
   const landedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!spaceId) return;
-    let cancelled = false;
+    const controller = new AbortController();
+    const cancelled = () => controller.signal.aborted;
     setLoading(true);
     fetchJson<{
       connectors: ExistingConnector[];
@@ -373,9 +379,9 @@ export default function ConnectorsPanel({
       requested?: string[];
       platformClients?: string[];
       canManage?: boolean;
-    }>(`/api/communities/${encodeURIComponent(spaceId)}/connectors`)
+    }>(`/api/communities/${encodeURIComponent(spaceId)}/connectors`, { signal: controller.signal })
       .then((data) => {
-        if (cancelled) return;
+        if (cancelled()) return;
         setExisting(data.connectors);
         setHidden(data.hidden ?? []);
         setRequested(data.requested ?? []);
@@ -393,25 +399,26 @@ export default function ConnectorsPanel({
         }
       })
       .catch((e: Error) => {
-        if (!cancelled) setError(e.message);
+        if (!cancelled()) setError(e.message);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled()) setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => controller.abort();
   }, [spaceId, reloadKey, view]);
 
   // The asks, for the admin who answers them. Read only once the list has
   // said the caller can manage, and re-read with it.
   useEffect(() => {
-    if (!spaceId || !canManage) { setRequests([]); return; }
-    let cancelled = false;
+    if (!spaceId || canManage !== true) { setRequests([]); return; }
+    const controller = new AbortController();
     void fetchJson<{ requests: ConnectorRequest[] }>(
       `/api/communities/${encodeURIComponent(spaceId)}/connector-requests`,
+      { signal: controller.signal },
     )
-      .then((data) => { if (!cancelled) setRequests(data.requests.filter((r) => r.status === 'pending')); })
-      .catch(() => { if (!cancelled) setRequests([]); });
-    return () => { cancelled = true; };
+      .then((data) => { if (!controller.signal.aborted) setRequests(data.requests.filter((r) => r.status === 'pending')); })
+      .catch(() => { if (!controller.signal.aborted) setRequests([]); });
+    return () => controller.abort();
   }, [spaceId, canManage, reloadKey]);
 
   /** The service a connector is to, where it came from a recipe. */
@@ -475,7 +482,6 @@ export default function ConnectorsPanel({
       setConfirmDelete(null);
       setManage(null);
       setReloadKey((k) => k + 1);
-      router.refresh();
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Could not delete the connector');
     }

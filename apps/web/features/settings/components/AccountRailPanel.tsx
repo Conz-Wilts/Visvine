@@ -112,6 +112,11 @@ export default function AccountRailPanel({ initialTab }: {
   const shown = useRef<AccountPanel>('connectors');
   if (accountPanel) shown.current = accountPanel;
   const kind = shown.current;
+  // The body mounts on the first open and stays mounted after: a panel nobody
+  // has pressed fetches nothing, and one that has keeps its lists across
+  // closes. The `?connectors=` return opens the panel, so it mounts here too.
+  const everOpened = useRef(false);
+  if (isOpen) everOpened.current = true;
   const modelsOnly = kind === 'models';
   const current = TABS.find((t) => t.id === tab) ?? TABS[0];
   const returnTo = `${pathname}?${CONNECTORS_PARAM}=${tab}`;
@@ -159,7 +164,7 @@ export default function AccountRailPanel({ initialTab }: {
       {/* The panel's rows bleed 12px either side to draw their hover fill,
           so the body owns the gutter. */}
       <div className="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-4 pt-1">
-        {!currentSpace ? (
+        {!everOpened.current ? null : !currentSpace ? (
           <p className="py-8 text-center text-sm text-text-muted">Open a space to see its {modelsOnly ? 'models' : 'connectors'}.</p>
         ) : modelsOnly ? (
           <ModelsPanel space={currentSpace.id} onLeave={close} onFormOpen={setAccountFormOpen} />

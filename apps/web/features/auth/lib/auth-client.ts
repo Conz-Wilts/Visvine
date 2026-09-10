@@ -27,13 +27,19 @@ export function useSession(initialData?: Session | null) {
 
   useEffect(() => {
     if (hasInitial) return;
-    fetch("/api/auth/session")
+    const controller = new AbortController();
+    fetch("/api/auth/session", { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         setData(json?.session ?? null);
         setIsPending(false);
       })
-      .catch(() => setIsPending(false));
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        void err;
+        setIsPending(false);
+      });
+    return () => controller.abort();
   }, [hasInitial]);
 
   return { data, isPending };

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
+import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
 import type { AgentRunEvent } from '@/lib/agents/runs';
 import type { SerializedRun } from '@/lib/agents/service';
 import type { MachineEvent } from '@/lib/agents/shared/trace';
@@ -31,14 +32,23 @@ export function useRun(
 ): { run: RunDetail | null; error: string | null } {
   const [run, setRun] = useState<RunDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A hidden tab stops following; the flip back re-runs the effect, which is
+  // the catch-up read.
+  const visible = usePageVisible();
+  // Whether the last poll saw the run still going — kept across a hidden
+  // stretch so a run that ended while the tab was away still fires onFinished.
+  const wasRunning = useRef<boolean | null>(null);
 
   useEffect(() => {
     setRun(null);
     setError(null);
-    if (!spaceId || !agentName || !runId) return;
+    wasRunning.current = null;
+  }, [spaceId, agentName, runId]);
+
+  useEffect(() => {
+    if (!spaceId || !agentName || !runId || !visible) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    let wasRunning: boolean | null = null;
     const load = async () => {
       try {
         const data = await fetchJson<{ run: RunDetail }>(
@@ -49,8 +59,8 @@ export function useRun(
         setError(null);
         const running = data.run.status === 'running';
         if (running) timer = setTimeout(load, 2000);
-        else if (wasRunning) onFinished?.(data.run);
-        wasRunning = running;
+        else if (wasRunning.current) onFinished?.(data.run);
+        wasRunning.current = running;
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : 'Could not follow the run');
@@ -65,7 +75,7 @@ export function useRun(
     // onFinished is a notification, not an input: a new callback identity must
     // not restart the poll mid-run.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spaceId, agentName, runId]);
+  }, [spaceId, agentName, runId, visible]);
 
   return { run, error };
 }

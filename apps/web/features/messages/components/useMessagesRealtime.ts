@@ -146,7 +146,12 @@ export function useMessagesRealtime({
         }
         // conversation.updated carries no data (rename, membership change) —
         // a refetch is required, but coalesced so bursts can't stampede.
-        if (payload.type === 'conversation.updated') scheduleConversationsRefetch();
+        if (payload.type === 'conversation.updated') {
+          // Our own read marker for the conversation on screen was patched
+          // locally when it was sent; only another tab needs the list again.
+          const ownRead = payload.readBy === currentUserId && payload.conversationId === selectedConversationRef.current;
+          if (!ownRead) scheduleConversationsRefetch();
+        }
         if (payload.type === 'typing') {
           if (payload.userId === currentUserId || payload.conversationId !== selectedConversationRef.current) return;
           if (!payload.isTyping) {

@@ -113,29 +113,28 @@ export async function federateTree(
   root: TreeNode,
   treeFor: (context: Context, principal: ContextPrincipal) => Promise<TreeNode>,
 ): Promise<void> {
-  for (const reader of await subspaceReaders(p, context)) {
-    const subRoot = await treeFor(reader.context, reader.principal)
-    graftSubspace(root, reader.space, subRoot)
-  }
-  // The private ones are named after them, and nothing of theirs is read to do
-  // it — a locked folder is the name and the lock. Only for a signed-in caller
-  // standing in this space, which is the only person the row would mean
-  // anything to.
-  if (mayFederate(context) && p.userId) {
-    for (const sub of await lockedSubspacesOf(context.spaceId, p.userId)) {
-      graftLockedSubspace(root, sub)
-    }
-  }
+  // Every sub-space is read at once; grafting keeps the readers' order so the
+  // tree is the same whichever answers first. The private ones are named after
+  // them, and nothing of theirs is read to do it — a locked folder is the name
+  // and the lock. Only for a signed-in caller standing in this space, which is
+  // the only person the row would mean anything to.
+  const [readers, locked] = await Promise.all([
+    subspaceReaders(p, context),
+    mayFederate(context) && p.userId ? lockedSubspacesOf(context.spaceId, p.userId) : Promise.resolve([]),
+  ])
+  const subRoots = await Promise.all(readers.map((r) => treeFor(r.context, r.principal)))
+  readers.forEach((reader, i) => graftSubspace(root, reader.space, subRoots[i]))
+  for (const sub of locked) graftLockedSubspace(root, sub)
 }
 
 /** The context's visible note index plus every flowing sub-space's, rebased. */
 export async function federatedMetas(p: ContextPrincipal, context: Context): Promise<NoteMeta[]> {
-  const { metas } = await visibleVault(p, context)
+  const [{ metas }, readers] = await Promise.all([visibleVault(p, context), subspaceReaders(p, context)])
   const out = [...metas]
-  for (const reader of await subspaceReaders(p, context)) {
-    const sub = await visibleVault(reader.principal, reader.context)
-    for (const meta of sub.metas) out.push(rebaseMeta(meta, reader.space.id))
-  }
+  const subs = await Promise.all(readers.map((r) => visibleVault(r.principal, r.context)))
+  readers.forEach((reader, i) => {
+    for (const meta of subs[i].metas) out.push(rebaseMeta(meta, reader.space.id))
+  })
   return out
 }
 
@@ -168,25 +167,31 @@ export async function searchFederated(
 ): Promise<BrainSearchResult> {
   const subsOnly = filters.folderId === SUBSPACE_FOLDER
   const ownOnly = filters.folderId !== undefined && !subsOnly
-  const own = await searchContext(p, context, query, subsOnly ? { ...filters, folderId: undefined } : filters, k, opts)
+  const [own, readers] = await Promise.all([
+    searchContext(p, context, query, subsOnly ? { ...filters, folderId: undefined } : filters, k, opts),
+    ownOnly ? Promise.resolve([]) : subspaceReaders(p, context),
+  ])
   if (ownOnly) return own
   if (subsOnly) own.hits = []
-  const readers = await subspaceReaders(p, context)
   if (readers.length === 0) return own
   const hits = [...own.hits]
-  for (const reader of readers) {
-    const sub = await searchContext(
-      reader.principal,
-      reader.context,
-      query,
-      { ...filters, folderId: undefined },
-      k,
-      // The rewrite is one LLM call per search; the parent's plan already
-      // paid for it, and a sub-space's search reuses the same words.
-      { ...opts, rewrite: false },
-    )
-    for (const h of sub.hits) hits.push({ ...h, path: rebasePath(reader.space.id, h.path) })
-  }
+  const subs = await Promise.all(
+    readers.map((reader) =>
+      searchContext(
+        reader.principal,
+        reader.context,
+        query,
+        { ...filters, folderId: undefined },
+        k,
+        // The rewrite is one LLM call per search; the parent's plan already
+        // paid for it, and a sub-space's search reuses the same words.
+        { ...opts, rewrite: false },
+      ),
+    ),
+  )
+  readers.forEach((reader, i) => {
+    for (const h of subs[i].hits) hits.push({ ...h, path: rebasePath(reader.space.id, h.path) })
+  })
   hits.sort((a, b) => b.score - a.score)
   return { ...own, hits: k ? hits.slice(0, k) : hits }
 }

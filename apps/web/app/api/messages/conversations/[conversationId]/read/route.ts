@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
 import { markReadSchema } from '@/lib/messages/schemas';
-import { getConversationMemberIds, markConversationRead } from '@/lib/messages';
+import { markConversationRead } from '@/lib/messages';
 import { publishToUsers } from '@/lib/messages/realtime';
 
 export async function POST(
@@ -30,11 +30,14 @@ export async function POST(
     const readAt = parsed.data.readAt ? new Date(parsed.data.readAt) : undefined;
     await markConversationRead(user.id, conversationId, readAt);
 
-    const memberIds = await getConversationMemberIds(conversationId);
-
-    publishToUsers(memberIds, {
+    // A read marker is the reader's own state — the unread count on their
+    // other tabs. Nothing renders another member's read position, so the rest
+    // of the conversation is not told (each such event costs every member a
+    // full list refetch).
+    publishToUsers([user.id], {
       type: 'conversation.updated',
       conversationId,
+      readBy: user.id,
     });
 
     return NextResponse.json({ success: true });

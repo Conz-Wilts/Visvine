@@ -13,9 +13,11 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
 }
 
-// No consumer hook is exported today; the guarded hook can be exposed as
-// `useAuth` if/when a consumer needs it.
-const [AuthContext] = createSafeContext<AuthContextValue>("Auth");
+// `useAuth` is the one client read of the session under the authed shell. The
+// provider is hydrated from the server layout, so consumers never fetch
+// /api/auth/session themselves.
+const [AuthContext, useAuth] = createSafeContext<AuthContextValue>("Auth");
+export { useAuth };
 
 interface AuthProviderProps {
   children: ReactNode;

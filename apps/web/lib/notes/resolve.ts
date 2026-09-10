@@ -10,8 +10,7 @@
 // error Response (mirroring requireSession).
 
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
-import { isAdmin, canReadSpace } from '@/lib/auth'
+import { isAdmin, canReadSpace, loadSpaceGate, membershipStatus } from '@/lib/auth'
 import type { SessionPayload } from '@/lib/session'
 import { SHARED_OWNER_KEY, type Context, type Actor } from './store'
 import type { ContextPrincipal } from './shared/contextTypes'
@@ -31,11 +30,7 @@ export interface ResolvedContext extends Context {
 }
 
 async function isMember(userId: string, spaceId: string): Promise<boolean> {
-  const membership = await prisma.spaceMember.findUnique({
-    where: { userId_spaceId: { userId, spaceId } },
-    select: { userId: true },
-  })
-  return membership !== null
+  return (await membershipStatus(userId, spaceId)) !== null
 }
 
 /**
@@ -54,21 +49,22 @@ export async function resolveContext(
   if (!spaceId) {
     return NextResponse.json({ error: 'spaceId is required' }, { status: 400 })
   }
-  const space = await prisma.space.findUnique({
-    where: { id: spaceId },
-    select: { personalOwnerId: true },
-  })
+  // One round trip for the three gate inputs; every check below reads the
+  // request-memoized rows rather than asking the database again.
+  const [space, adminByAlias, membership] = await Promise.all([
+    loadSpaceGate(spaceId),
+    isAdmin(session.userId, spaceId, session.email),
+    isMember(session.userId, spaceId),
+  ])
   if (!space) {
     return NextResponse.json({ error: 'Unknown space' }, { status: 404 })
   }
   // A personal space's owner administers it by definition — it holds no
   // aliases, and never will (grants don't apply there at all).
-  const admin =
-    space.personalOwnerId === session.userId ||
-    (await isAdmin(session.userId, spaceId, session.email))
+  const admin = space.personalOwnerId === session.userId || adminByAlias
   // Membership, or — for a space that inherits its visibility — membership of
   // the parent; the same door the switcher and the API gates use.
-  const member = admin || (await isMember(session.userId, spaceId)) || (await canReadSpace(session.userId, spaceId, session.email))
+  const member = admin || membership || (await canReadSpace(session.userId, spaceId, session.email))
   if (!member) {
     return NextResponse.json({ error: 'Not a member of this space' }, { status: 403 })
   }

@@ -18,7 +18,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { useSession } from '@/features/auth/lib/auth-client';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { isFeatureEnabled } from '@/lib/featureAccess';
 import { GuestManager } from '@/features/events/components/GuestManager';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
@@ -39,6 +39,7 @@ import { useMapLink } from '../hooks/useMapLink';
 import { CalendarPlusIcon, CheckIcon, ClipboardListIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, Trash2Icon, UsersIcon, VideoIcon } from '@/features/shared/icons';
 import Select from '@/components/ui/Select';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
+import { invalidateEventDetail, loadEventDetail, type EventDetail, type EventStats, type GuestPreview, type ViewerRsvp } from '@/features/events/lib/eventDetail';
 import { AboutText } from '@/features/profile/components/profileCards';
 
 // The Context tab pulls in Tiptap + the notes stack; load it only when a note
@@ -60,35 +61,10 @@ const EVENT_TABS: TabConfig[] = [
 ];
 const isNoteTab = (tab: PageTab) => tab === 'context' || tab === 'raw';
 
-interface EventStats {
-  total: number;
-  going?: number;
-  registered: number;
-  waitlisted: number;
-  pending?: number;
-  invited: number;
-  checkedIn: number;
-  cancelled: number;
-  noShow: number;
-  maybe?: number;
-}
-
-interface ViewerRsvp {
-  status: string;
-  response: RSVPResponse | null;
-  plusOnes: number;
-}
-
-interface GuestPreview {
-  name: string;
-  personId?: string;
-  imageUrl?: string | null;
-}
-
 export default function EventDetailClient({ eventId, manage = false }: { eventId: string; manage?: boolean }) {
   const router = useRouter();
   const { currentSpace } = useSpace();
-  const { data: session } = useSession();
+  const { session } = useAuth();
   const { theme: userTheme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -108,23 +84,38 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   // retract window right after arriving from a /directory context note.
   const barEdgeClass = useDockEdgeClass();
 
+  const spaceId = currentSpace?.id ?? null;
+  const applyDetail = useCallback((data: EventDetail) => {
+    setEvent(data.event ?? null);
+    setStats(data.stats ?? null);
+    setOccupied(data.occupied ?? 0);
+    setViewer(data.viewer ?? null);
+    setGuests(data.guests ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!spaceId) return;
+    let live = true;
+    loadEventDetail(spaceId, eventId, (data) => {
+      if (live) applyDetail(data);
+    }).catch((error: unknown) => {
+      console.error('Failed to load event:', error);
+      if (live) setLoading(false);
+    });
+    return () => { live = false; };
+  }, [spaceId, eventId, applyDetail]);
+
+  // After a write of our own: drop the cached answer and read it again.
   const loadEvent = useCallback(async () => {
-    if (!currentSpace) return;
+    if (!spaceId) return;
+    invalidateEventDetail(eventId);
     try {
-      const data = await fetchJson<{ event?: NBEvent | null; stats?: EventStats | null; occupied?: number; viewer?: ViewerRsvp | null; guests?: GuestPreview[] }>(`/api/events/${encodeURIComponent(eventId)}?spaceId=${currentSpace.id}`);
-      setEvent(data.event ?? null);
-      setStats(data.stats ?? null);
-      setOccupied(data.occupied ?? 0);
-      setViewer(data.viewer ?? null);
-      setGuests(data.guests ?? []);
+      applyDetail(await loadEventDetail(spaceId, eventId, applyDetail));
     } catch (error) {
       console.error('Failed to load event:', error);
-    } finally {
-      setLoading(false);
     }
-  }, [currentSpace, eventId]);
-
-  useEffect(() => { loadEvent(); }, [loadEvent]);
+  }, [spaceId, eventId, applyDetail]);
   const mapLink = useMapLink(event?.location);
 
   // Follow the viewer's theme colour from Settings → Appearance (not a
@@ -478,6 +469,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
           setDeleteError(null);
           try {
             await fetchJson(`/api/events/${event.id}?spaceId=${currentSpace.id}`, { method: 'DELETE' });
+            invalidateEventDetail(event.id);
             router.push('/events');
           } catch (err) {
             setDeleteError(err instanceof Error ? err.message : 'Failed to delete event');

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson, FetchJsonError } from '@/lib/fetchJson';
 
@@ -8,6 +8,11 @@ import { fetchJson, FetchJsonError } from '@/lib/fetchJson';
 // `${resourceKey}:${spaceId}` so distinct resources never collide.
 const resourceCache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_DURATION = 30 * 1000; // 30 seconds
+
+// Requests still on the wire, keyed like the cache. Two views mounting the
+// same resource in one tick (the grid and its toolbar, say) share one request
+// instead of each issuing their own; the entry is dropped once it settles.
+const inFlight = new Map<string, Promise<unknown>>();
 
 // The nodeTypes signature each cache entry was loaded under, so a nodeTypes
 // change busts the entry. Module-level (not a per-instance ref) because the
@@ -23,10 +28,14 @@ const cacheKey = (resourceKey: string, spaceId: string) => `${resourceKey}:${spa
 export function clearCachedSpaceResource(resourceKey: string, spaceId?: string) {
   if (spaceId) {
     resourceCache.delete(cacheKey(resourceKey, spaceId));
+    inFlight.delete(cacheKey(resourceKey, spaceId));
   } else {
     const prefix = `${resourceKey}:`;
     for (const key of resourceCache.keys()) {
       if (key.startsWith(prefix)) resourceCache.delete(key);
+    }
+    for (const key of inFlight.keys()) {
+      if (key.startsWith(prefix)) inFlight.delete(key);
     }
   }
 }
@@ -52,8 +61,8 @@ interface UseCachedSpaceResourceArgs<T> {
  * Generic loader for a per-space resource backed by a 30s in-memory cache.
  *
  * Handles the shared lifecycle: space gating, nodeTypes-driven cache
- * busting, AbortController cancellation, and a `refresh` that drops the cache
- * entry and refetches. Concrete hooks (context, directory) wrap this and expose
+ * busting, one shared request per key while it is on the wire, and a
+ * `refresh` that drops the cache entry and refetches. Concrete hooks (context, directory) wrap this and expose
  * their own field names on top of `data`.
  */
 export function useCachedSpaceResource<T>({
@@ -66,30 +75,34 @@ export function useCachedSpaceResource<T>({
   cacheDuration = CACHE_DURATION,
 }: UseCachedSpaceResourceArgs<T>) {
   const { currentSpace, loading: spaceLoading } = useSpace();
+  const spaceId = currentSpace?.id ?? null;
   const [data, setData] = useState<T>(initialData);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const currentNodeTypesStr = JSON.stringify(currentSpace?.nodeTypes || []);
 
   // Refresh function to clear cache and refetch
   const refresh = useCallback(() => {
-    if (currentSpace) {
-      resourceCache.delete(cacheKey(resourceKey, currentSpace.id));
+    if (spaceId) {
+      resourceCache.delete(cacheKey(resourceKey, spaceId));
+      inFlight.delete(cacheKey(resourceKey, spaceId));
       setRefreshTrigger(prev => prev + 1);
     }
-  }, [currentSpace, resourceKey]);
+  }, [spaceId, resourceKey]);
 
   useEffect(() => {
-    if (!currentSpace) {
+    if (!spaceId) {
       // Only mark loading done if space context has finished loading too
       if (!spaceLoading) setLoading(false);
       return;
     }
 
-    const key = cacheKey(resourceKey, currentSpace.id);
+    const key = cacheKey(resourceKey, spaceId);
+    // The request is shared with any sibling mount, so it is never aborted
+    // on unmount — this flag just keeps a late answer out of a gone component.
+    let cancelled = false;
 
     const loadResource = async () => {
       try {
@@ -99,6 +112,7 @@ export function useCachedSpaceResource<T>({
         // Check if nodeTypes changed - if so, bust the cache
         if (nodeTypesSignatures.get(key) !== currentNodeTypesStr) {
           resourceCache.delete(key);
+          inFlight.delete(key);
           nodeTypesSignatures.set(key, currentNodeTypesStr);
         }
 
@@ -111,45 +125,43 @@ export function useCachedSpaceResource<T>({
           return;
         }
 
-        // Cancel any pending requests
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
+        let pending = inFlight.get(key) as Promise<T> | undefined;
+        if (!pending) {
+          pending = fetchJson(path(spaceId))
+            .catch((err: unknown) => {
+              throw err instanceof FetchJsonError ? new Error(`Failed to load ${errorLabel}: ${err.message}`) : err;
+            })
+            .then((json: unknown) => {
+              const parsed = parse(json);
+              resourceCache.set(key, { data: parsed, timestamp: Date.now() });
+              return parsed;
+            })
+            .finally(() => {
+              if (inFlight.get(key) === pending) inFlight.delete(key);
+            });
+          inFlight.set(key, pending);
         }
 
-        abortControllerRef.current = new AbortController();
-
-        const json: unknown = await fetchJson(path(currentSpace.id), {
-          signal: abortControllerRef.current.signal,
-        }).catch((err: unknown) => {
-          throw err instanceof FetchJsonError ? new Error(`Failed to load ${errorLabel}: ${err.message}`) : err;
-        });
-        const parsed = parse(json);
+        const parsed = await pending;
+        if (cancelled) return;
         setData(parsed);
-
-        // Cache the result
-        resourceCache.set(key, { data: parsed, timestamp: now });
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') {
-          return; // Request was cancelled, ignore
-        }
+        if (cancelled) return;
         console.error(err);
         setError(err instanceof Error ? err.message : fallbackError);
         setData(initialData);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     loadResource();
 
     return () => {
-      // Cancel the request if component unmounts
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSpace, spaceLoading, currentNodeTypesStr, refreshTrigger]);
+  }, [spaceId, spaceLoading, currentNodeTypesStr, refreshTrigger]);
 
   return { data, loading, error, space: currentSpace, refresh };
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
 import Link from 'next/link';
 import {
   BotIcon,
@@ -364,11 +365,13 @@ export default function RunSteps({
   // duration counts up rather than sitting at the last flush.
   const [now, setNow] = useState(() => Date.now());
   const anyOpen = live && steps.some((s) => s.kind === 'tool' && s.result === undefined);
+  const visible = usePageVisible();
   useEffect(() => {
-    if (!anyOpen) return;
+    if (!anyOpen || !visible) return;
+    setNow(Date.now());
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [anyOpen]);
+  }, [anyOpen, visible]);
 
   // Follow the tail while live, the way a terminal does — unless the person
   // has scrolled up to read something, in which case leave them there.

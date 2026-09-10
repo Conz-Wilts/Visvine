@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { fetchJsonBody } from '@/lib/fetchJson';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
+import { evictRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import { useCopied } from '@/features/shared/hooks/useCopied';
 import { CalendarIcon, CameraIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, EarthIcon, LinkedinIcon, LoaderCircleIcon, MailIcon, MapPinIcon, PencilIcon, PhoneIcon, Share2Icon, TwitterIcon } from '@/features/shared/icons';
 import Image from 'next/image';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import { useMemberConnection } from '@/features/profile/hooks/useMemberConnection';
 import { useNodeProfile, patchCachedNodeProfile } from '@/features/shared/hooks/useNodeProfile';
-import { useSession } from '@/features/auth/lib/auth-client';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { getPalette, hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, findAlias } from '@/lib/types';
@@ -43,7 +44,7 @@ interface ProfilePageContentProps {
 }
 
 export default function ProfilePageContent({ nodeId, overlay = false }: ProfilePageContentProps) {
-  const { data: session } = useSession();
+  const { session } = useAuth();
   const { currentSpace } = useSpace();
   const { profile, loading, error, updateBasicInfo, reload } = useProfile(nodeId);
   const { data: nodeData } = useNodeProfile(nodeId);
@@ -59,16 +60,18 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   useEffect(() => {
     let cancelled = false;
     setProfileSpaces([]);
-    fetch(`/api/profile/${encodeURIComponent(nodeId)}/communities`)
-      .then((res) => (res.ok ? res.json() : { spaces: [] }))
-      .then((data) => { if (!cancelled) setProfileSpaces(data.spaces ?? []); })
-      .catch(() => {});
+    const url = `/api/profile/${encodeURIComponent(nodeId)}/communities`;
+    swrFetch(url, () => fetchJson<{ spaces?: ProfileSpace[] }>(url), (data) => {
+      if (!cancelled) setProfileSpaces(data.spaces ?? []);
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, [nodeId]);
 
   const toggleSpaceVisibility = useCallback(async (spaceId: string, showOnProfile: boolean) => {
     try {
-      await fetchJsonBody(`/api/profile/${encodeURIComponent(nodeId)}/communities`, 'PATCH', { spaceId, showOnProfile });
+      const url = `/api/profile/${encodeURIComponent(nodeId)}/communities`;
+      evictRequestCache(url);
+      await fetchJsonBody(url, 'PATCH', { spaceId, showOnProfile });
     } catch { return; }
     setProfileSpaces((prev) => prev.map((c) =>
       c.id === spaceId ? { ...c, showOnProfile, visible: c.role === 'admin' || showOnProfile } : c

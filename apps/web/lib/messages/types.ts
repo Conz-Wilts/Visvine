@@ -160,6 +160,9 @@ interface RealtimeMessageDeletedEvent {
 interface RealtimeConversationEvent {
   type: 'conversation.updated';
   conversationId: string;
+  /** Set when the change is one member's own read marker: the tab that
+   *  wrote it has already patched its list and need not ask again. */
+  readBy?: string;
 }
 
 interface RealtimeTypingEvent {

@@ -17,10 +17,10 @@ import {
   AuthoredToolsPanel,
   InstalledToolsPanel,
   ToolApprovalsPanel,
-  useToolApprovalCount,
+  useToolApprovalQueue,
 } from '@/features/tools/components/manage/ToolsConsole';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
-import { useSession } from '@/features/auth/lib/auth-client';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { LoadingText, Alert } from '@/components/ui';
 import { Space } from '@/lib/types';
 
@@ -52,13 +52,14 @@ function AdminConsole({ space, onSaved }: {
   // global and the gate is Visvine super admin, so a space admin never sees the
   // tab. The routes behind it are gated the same way — hiding it is the courtesy,
   // not the security.
-  const { data: session } = useSession();
+  const { session } = useAuth();
   const isSuperAdmin = session?.user?.isSuperAdmin === true;
   const reviewQueue = useToolReviewQueue(isSuperAdmin);
 
-  // This space's own queue — the versions its members published. Counted here
-  // so the tab carries the badge, and re-read when the panel acts on one.
-  const approvals = useToolApprovalCount();
+  // This space's own queue — the versions its members published. Read once
+  // here: the tab carries the count, the panel lists the rows, and acting on
+  // one re-reads both.
+  const approvals = useToolApprovalQueue();
   // What members asked the space to connect — the Connectors badge.
   const connectorRequests = useConnectorRequestCount();
 
@@ -112,6 +113,7 @@ function AdminConsole({ space, onSaved }: {
               return (
                 <ToolApprovalsPanel
                   key={space.id}
+                  queue={approvals.queue}
                   onReviewed={approvals.refresh}
                 />
               );

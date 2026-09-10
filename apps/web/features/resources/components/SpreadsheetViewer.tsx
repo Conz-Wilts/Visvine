@@ -5,6 +5,9 @@ import type { ResourceChange } from '@/lib/types';
 
 interface SpreadsheetViewerProps {
   resourceId: string;
+  /** The change list a parent already holds; the viewer reads it instead of
+   *  asking for the same rows again. Absent, it fetches its own. */
+  changes?: ResourceChange[];
   fileUrl: string;
   onCellSelect: (cellRef: string, value: string) => void;
   selectedCell: string | null;
@@ -12,11 +15,12 @@ interface SpreadsheetViewerProps {
 
 type CellData = (string | number | null)[][];
 
-export default function SpreadsheetViewer({ resourceId, fileUrl, onCellSelect, selectedCell }: SpreadsheetViewerProps) {
+export default function SpreadsheetViewer({ resourceId, changes: givenChanges, fileUrl, onCellSelect, selectedCell }: SpreadsheetViewerProps) {
   const [sheets, setSheets] = useState<Record<string, CellData>>({});
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [activeSheet, setActiveSheet] = useState<string>('');
-  const [changes, setChanges] = useState<ResourceChange[]>([]);
+  const [ownChanges, setOwnChanges] = useState<ResourceChange[]>([]);
+  const changes = givenChanges ?? ownChanges;
   const [loading, setLoading] = useState(true);
   const [truncated, setTruncated] = useState(false);
 
@@ -44,10 +48,11 @@ export default function SpreadsheetViewer({ resourceId, fileUrl, onCellSelect, s
   }, [fileUrl]);
 
   useEffect(() => {
+    if (givenChanges) return;
     fetchJson<ResourceChange[]>(`/api/resources/${resourceId}/changes`)
-      .then(setChanges)
+      .then(setOwnChanges)
       .catch(() => {});
-  }, [resourceId]);
+  }, [resourceId, givenChanges]);
 
   if (loading) return <div className="p-4 text-sm text-text-muted">Parsing spreadsheet...</div>;
   if (!sheetNames.length) return <div className="p-4 text-sm text-text-muted">Could not parse file.</div>;

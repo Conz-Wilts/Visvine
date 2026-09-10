@@ -9,7 +9,7 @@
 // (lib/notes/federation.ts), read under the sub-space's everyone-principal.
 
 import { NextRequest, NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { getFeatureConfig } from '@/lib/auth'
 import { requireSession } from '@/lib/session'
 import { principalOf, resolveContext } from '@/lib/notes/resolve'
 import { federateTree } from '@/lib/notes/federation'
@@ -18,7 +18,6 @@ import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { visibleVault } from '@/lib/notes/contextService'
 import { listFolders } from '@/lib/notes/store'
 import { structuralFolders } from '@/lib/notes/entities'
-import type { SpaceFeatureConfig } from '@/lib/types'
 import { buildTree, sortTree } from '@/lib/notes/shared/context'
 import { principalSeesFolder } from '@/lib/notes/shared/permissions'
 import type { TreeNode } from '@/lib/notes/shared/types'
@@ -47,10 +46,11 @@ function ensureFolderPath(root: TreeNode, folderPath: string): void {
  *  `gated` = the folder-visibility lens applies (a shared context that is not
  *  a personal space). */
 async function treeFor(context: Context, p: ContextPrincipal, gated: boolean): Promise<TreeNode> {
-  const [{ metas }, folders, space] = await Promise.all([
+  const [{ metas }, folders, featureConfig] = await Promise.all([
     visibleVault(p, context),
     listFolders(context),
-    prisma.space.findUnique({ where: { id: context.spaceId }, select: { featureConfig: true } }),
+    // Request-memoized: the resolver already loaded this space's row.
+    getFeatureConfig(context.spaceId),
   ])
   const root = buildTree(metas)
   // The folders a space has by virtue of the tools it runs — Agents on means
@@ -60,7 +60,7 @@ async function treeFor(context: Context, p: ContextPrincipal, gated: boolean): P
   // and the same graft is what makes them un-missable: deleting one is refused
   // (namespaceFolderDenial), and a space that turns the tool off simply stops
   // being handed the folder.
-  for (const dir of structuralFolders((space?.featureConfig ?? null) as SpaceFeatureConfig | null)) {
+  for (const dir of structuralFolders(featureConfig)) {
     ensureFolderPath(root, dir)
   }
   for (const folder of folders) {

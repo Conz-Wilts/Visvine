@@ -7,9 +7,9 @@
  * events are ever returned, which is the same bar the public `/e/<slug>` page
  * already uses — no membership check is needed beyond being signed in.
  *
- * Prototype-level: reads event nodes and filters in JS rather than pushing the
- * JSON predicates into Postgres. Fine at seed scale; revisit with a metadata
- * path filter + index if this ever serves a real corpus.
+ * `visibility: public` is the selective predicate, so it is pushed into the
+ * query as a JSON path filter; only the public rows come back, and the status
+ * and date checks run in JS over that far smaller set, under a hard cap.
  */
 
 import { NextResponse } from 'next/server';
@@ -18,6 +18,8 @@ import { requireApiSession, handleApiError } from '@/lib/api/route';
 import { isEventUpcoming } from '@/lib/eventUtils';
 
 const LIMIT = 60;
+/** The most public event rows one read will consider — a cap, not a page. */
+const SCAN_CAP = 1000;
 
 export async function GET() {
   try {
@@ -25,7 +27,9 @@ export async function GET() {
     if (session instanceof NextResponse) return session;
 
     const rows = await prisma.node.findMany({
-      where: { type: 'event' },
+      where: { type: 'event', metadata: { path: ['visibility'], equals: 'public' } },
+      orderBy: { createdAt: 'desc' },
+      take: SCAN_CAP,
       select: {
         id: true,
         name: true,

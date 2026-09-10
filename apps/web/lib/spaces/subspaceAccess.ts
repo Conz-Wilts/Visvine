@@ -167,11 +167,14 @@ const LOCKED_SELECT = {
  * Standing in the parent is what earns the sight of it — discovering the
  * parent (public, unjoined) does not.
  */
-export async function listLockedSubspaces(userId: string): Promise<LockedSubspace[]> {
+export async function listLockedSubspaces(
+  userId: string,
+  parentId?: string,
+): Promise<LockedSubspace[]> {
   const rows = await prisma.space.findMany({
     where: {
       visibility: 'private',
-      parentId: { not: null },
+      parentId: parentId ?? { not: null },
       personalOwnerId: null,
       // Standing in the parent...
       parent: { members: { some: { userId, status: 'active' } } },
@@ -200,8 +203,7 @@ export async function listLockedSubspaces(userId: string): Promise<LockedSubspac
 
 /** The locked rows under one parent — the context tree's read. */
 export async function lockedSubspacesOf(parentId: string, userId: string): Promise<LockedSubspace[]> {
-  const all = await listLockedSubspaces(userId)
-  return all.filter((s) => s.parentId === parentId)
+  return listLockedSubspaces(userId, parentId)
 }
 
 /**

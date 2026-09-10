@@ -184,7 +184,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
           if (loadSeq.current === seq) setReferences(refs)
         }).catch(() => {})
         // Replica banner: is this note a live published copy?
-        notesApi.getPublications(spaceId, path).then((state) => {
+        swrFetch(contextKeys.publications(spaceId, path), () => notesApi.getPublications(spaceId, path), (state) => {
           if (loadSeq.current === seq) setPubs(state)
         }).catch(() => {})
       }

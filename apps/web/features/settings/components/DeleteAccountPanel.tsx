@@ -11,7 +11,7 @@
 import { useState } from 'react';
 import { Alert, Button, Input, Modal, SettingsSection } from '@/components/ui';
 import { fetchJsonBody } from '@/lib/fetchJson';
-import { useSession } from '@/features/auth/lib/auth-client';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
 
 const REMOVED = [
   'Your profile — name, photo, bio, contact details and links',
@@ -22,7 +22,7 @@ const REMOVED = [
 ];
 
 export default function DeleteAccountPanel() {
-  const { data: session } = useSession();
+  const { session } = useAuth();
   const email = session?.user.email ?? null;
 
   const [open, setOpen] = useState(false);

@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PlugIcon, SparklesIcon } from "@/features/shared/icons";
 import Image from "next/image";
-import { useSession, signOut } from "@/features/auth/lib/auth-client";
+import { signOut } from "@/features/auth/lib/auth-client";
+import { useAuth } from "@/features/auth/contexts/AuthContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
 import { CONNECTORS_PARAM, connectorsSegment } from "@/features/settings/components/AccountRailPanel";
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
@@ -40,7 +41,7 @@ import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRo
  * (connected, disconnected, all or models) the sign-in started from.
  */
 export default function UserMenu({ expanded, reduced }: { expanded: boolean; reduced: boolean }) {
-  const { data: session, isPending } = useSession();
+  const { session, isLoading: isPending } = useAuth();
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const { setAccountPanel, setSwitcherOpen } = useSidebar();

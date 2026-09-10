@@ -21,7 +21,7 @@ export async function GET(
     if (session instanceof NextResponse) return session;
 
     const { spaceId } = await params;
-    const [space, membership, adminIds] = await Promise.all([
+    const [space, membership] = await Promise.all([
       prisma.space.findUnique({
         where: { id: spaceId },
         select: {
@@ -34,18 +34,22 @@ export async function GET(
         where: { userId_spaceId: { userId: session.userId, spaceId } },
         select: { id: true },
       }),
-      // Who "organizes" this space = who holds a Person alias that owns it.
-      prisma.userAlias.findMany({ where: { spaceId }, select: { userId: true, aliasId: true } }),
     ]);
     if (!space) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const owning = new Set(
-      personAliases((space.aliases ?? []) as unknown as SpaceAlias[])
-        .filter((a) => a.admin === true || a.system === true)
-        .map((a) => a.id),
-    );
-    const organizerIds = new Set(
-      adminIds.filter((a) => owning.has(a.aliasId)).map((a) => a.userId),
-    );
+    // Who "organizes" this space = who holds a Person alias that owns it. The
+    // owning ids come off the row just read, so only their holders are fetched
+    // rather than every alias row in the space.
+    const owning = personAliases((space.aliases ?? []) as unknown as SpaceAlias[])
+      .filter((a) => a.admin === true || a.system === true)
+      .map((a) => a.id)
+      .filter((id): id is string => Boolean(id));
+    const organizerRows = owning.length
+      ? await prisma.userAlias.findMany({
+          where: { spaceId, aliasId: { in: owning } },
+          select: { userId: true },
+        })
+      : [];
+    const organizerIds = new Set(organizerRows.map((a) => a.userId));
     const isMember = membership !== null || isSuperAdmin(session.email);
 
     const [memberTotal, nodeCount, resourceCount, memberships, latestResources] =

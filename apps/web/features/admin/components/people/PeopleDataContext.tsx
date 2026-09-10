@@ -20,6 +20,8 @@ import {
 } from 'react';
 import { useConsoleAction } from '@/features/admin/components/console/ConsoleSaveContext';
 import { fetchJson } from '@/lib/fetchJson';
+import { cachedFetch, contextKeys } from '@/features/notes/lib/contextPrefetch';
+import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextDisplayName } from '@/lib/notes/shared/contextSettings';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -47,6 +49,8 @@ const PeopleDataCtx = createContext<PeopleDataValue | null>(null);
  * error belongs to the mutation that raised it and to the section you were on
  * when it happened, so each section starts clean.
  */
+const peopleKey = (spaceId: string) => `admin:people:${spaceId}`;
+
 export function usePeopleSection(): PeopleDataValue {
   const value = useContext(PeopleDataCtx);
   if (!value) throw new Error('usePeopleSection must be used inside <PeopleDataProvider>');
@@ -74,33 +78,55 @@ export default function PeopleDataProvider({
   const { currentSpace } = useSpace();
   const spaceName = currentSpace?.name ?? null;
 
+  // One composite read, through the shared request cache: a return to the
+  // console paints the last roll at once and revalidates behind it, and the
+  // tree and settings share their keys with the Directory's own prefetch. A
+  // write invalidates the key first, so `reload` after an action is fresh.
+  const load = useCallback(
+    (onData: (next: PeopleData) => void) =>
+      swrFetch(
+        peopleKey(spaceId),
+        async () => {
+          const [membersRes, aliasesRes, overview, treeRes, settingsRes, requestsRes] = await Promise.all([
+            fetchJson<{ members: SpaceMember[] }>(`/api/communities/${spaceId}/members`),
+            notesApi.listAliases(spaceId),
+            notesApi.getAccessOverview(spaceId).catch(() => null),
+            cachedFetch(contextKeys.tree(spaceId), () => notesApi.tree(spaceId)).catch(() => null),
+            cachedFetch(contextKeys.settings(spaceId), () => notesApi.getContextSettings(spaceId)).catch(() => null),
+            notesApi.listAccessRequests(spaceId).catch(() => null),
+          ]);
+          return {
+            members: membersRes.members,
+            aliases: aliasesRes.aliases,
+            overview,
+            paths: flattenTree(treeRes?.tree ?? null),
+            tree: treeRes?.tree ?? null,
+            contextName: contextDisplayName(settingsRes?.settings.contextName, spaceName),
+            requests: requestsRes?.requests ?? [],
+          };
+        },
+        onData,
+      ),
+    [spaceId, spaceName],
+  );
+
   const reload = useCallback(async () => {
-    const [membersRes, aliasesRes, overview, treeRes, settingsRes, requestsRes] = await Promise.all([
-      fetchJson<{ members: SpaceMember[] }>(`/api/communities/${spaceId}/members`),
-      notesApi.listAliases(spaceId),
-      notesApi.getAccessOverview(spaceId).catch(() => null),
-      notesApi.tree(spaceId).catch(() => null),
-      notesApi.getContextSettings(spaceId).catch(() => null),
-      notesApi.listAccessRequests(spaceId).catch(() => null),
-    ]);
-    setData({
-      members: membersRes.members,
-      aliases: aliasesRes.aliases,
-      overview,
-      paths: flattenTree(treeRes?.tree ?? null),
-      tree: treeRes?.tree ?? null,
-      contextName: contextDisplayName(settingsRes?.settings.contextName, spaceName),
-      requests: requestsRes?.requests ?? [],
-    });
-  }, [spaceId, spaceName]);
+    invalidateRequestCache(peopleKey(spaceId), contextKeys.tree(spaceId), contextKeys.settings(spaceId));
+    await load(setData);
+  }, [load, spaceId]);
 
   useEffect(() => {
-    setData(null);
+    let live = true;
     setError(null);
-    reload().catch((e: unknown) =>
-      setError(e instanceof Error ? e.message : 'Failed to load people and access'),
-    );
-  }, [reload]);
+    load((next) => {
+      if (live) setData(next);
+    }).catch((e: unknown) => {
+      if (live) setError(e instanceof Error ? e.message : 'Failed to load people and access');
+    });
+    return () => {
+      live = false;
+    };
+  }, [load]);
 
   // Two "needs your attention" numbers, added into the one badge on the section
   // that resolves them both — people waiting to join, and members asking for
