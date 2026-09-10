@@ -1,27 +1,28 @@
 'use client';
 
 import { useMemo } from 'react';
-import { CountryFlagIcon, EmptyState } from '@/components/ui';
-import { FilterDropdown } from '@/features/directory/components/FilterDropdown';
+import { Chip, EmptyState } from '@/components/ui';
 import { spaceMark } from '@/lib/spaces/subspaces';
-import { countryOptions, filterSpaces, sectorOptions, spaceCountryCode } from '@/lib/discover/filters';
+import { tagPalette } from '@/lib/tagColors';
+import { filterSpaces, sectorOptions } from '@/lib/discover/filters';
 import type { Space } from '@/lib/types';
-import FilterStrip from './FilterStrip';
-import SpaceCard from './SpaceCard';
+import SpaceTile from './SpaceTile';
 
-/** How many sectors the strip shows before it is a dropdown's job. */
-const SECTOR_STRIP_MAX = 8;
+const SPACE_GRID_STYLE: React.CSSProperties = {
+  display: 'grid',
+  gap: '20px',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
+};
 
 /**
- * Every open space, as a grid. Narrowed by where (a country dropdown, flags
- * and all) and by sector (the tags the spaces declare, as a strip of words
- * with counts — "browse by category", without the tiles).
+ * Every open space as a grid of tiles, under a strip of the sectors they
+ * declare — browse by category, as a row of coloured chips with counts.
+ * Search and the Where filter arrive from the toolbar.
  */
 export default function SpacesView({
   spaces,
   search,
   countries,
-  onCountries,
   sectors,
   onSectors,
   isJoined,
@@ -30,58 +31,43 @@ export default function SpacesView({
   spaces: Space[];
   search: string;
   countries: Set<string>;
-  onCountries: (next: Set<string>) => void;
   sectors: Set<string>;
   onSectors: (next: Set<string>) => void;
   isJoined: (id: string) => boolean;
   onJoin: (space: Space) => void;
 }) {
-  const countryOpts = useMemo(() => countryOptions(spaces.map(spaceCountryCode)), [spaces]);
   const sectorOpts = useMemo(() => sectorOptions(spaces), [spaces]);
   const shown = useMemo(() => filterSpaces(spaces, { search, countries, sectors }), [spaces, search, countries, sectors]);
   const nameOf = (id: string | null | undefined) => (id ? (spaces.find((s) => s.id === id)?.name ?? null) : null);
-
-  const stripSectors = sectorOpts.slice(0, SECTOR_STRIP_MAX);
   const hasFilter = countries.size > 0 || sectors.size > 0 || search.trim() !== '';
 
-  return (
-    <div>
-      {(countryOpts.length > 0 || sectorOpts.length > 0) && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pb-1">
-          {countryOpts.length > 0 && (
-            <FilterDropdown
-              label="Where"
-              options={countryOpts.map((o) => ({ value: o.value, label: o.label, count: o.count }))}
-              selected={countries}
-              onChange={onCountries}
-            />
-          )}
-          {countryOpts.length > 0 && sectorOpts.length > 0 && <div className="hidden h-6 w-px shrink-0 bg-border-subtle sm:block" />}
-          {stripSectors.length > 0 && (
-            <FilterStrip
-              label="Sector"
-              showLabel
-              options={stripSectors.map((o) => ({ value: o.value, label: o.label, count: o.count }))}
-              value={sectors}
-              onChange={(next) => onSectors(next as Set<string>)}
-            />
-          )}
-          {sectorOpts.length > SECTOR_STRIP_MAX && (
-            <FilterDropdown
-              label="More"
-              options={sectorOpts.slice(SECTOR_STRIP_MAX).map((o) => ({ value: o.value, label: o.label, count: o.count }))}
-              selected={sectors}
-              onChange={onSectors}
-            />
-          )}
-        </div>
-      )}
+  const toggleSector = (key: string) => {
+    const next = new Set(sectors);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    onSectors(next);
+  };
 
-      {countries.size > 0 && (
-        <p className="flex items-center gap-2 pt-3 text-[13px] text-text-muted">
-          {[...countries].map((c) => <CountryFlagIcon key={c} code={c} className="h-[11px] w-[15px]" />)}
-          <span>{shown.length} {shown.length === 1 ? 'space' : 'spaces'}</span>
-        </p>
+  return (
+    <div className="flex flex-col gap-6">
+      {sectorOpts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[13px] font-semibold text-text-primary">Browse by sector</span>
+          {sectorOpts.map((o) => {
+            const on = sectors.has(o.value);
+            return (
+              <Chip
+                key={o.value}
+                size="lg"
+                tone={on ? 'solid' : 'muted'}
+                color={tagPalette(o.label).base}
+                onClick={() => toggleSector(o.value)}
+              >
+                {o.label}
+                <span className={`tabular-nums ${on ? 'text-white/80' : 'text-text-muted'}`}>{o.count}</span>
+              </Chip>
+            );
+          })}
+        </div>
       )}
 
       {shown.length === 0 ? (
@@ -90,9 +76,9 @@ export default function SpacesView({
           description={hasFilter ? 'Try a wider search, or clear a filter.' : 'Spaces that choose to be public appear here.'}
         />
       ) : (
-        <div className="grid gap-x-6 gap-y-8 pt-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        <div style={SPACE_GRID_STYLE} className="w-full">
           {shown.map((space) => (
-            <SpaceCard
+            <SpaceTile
               key={space.id}
               space={space}
               mark={spaceMark(space, spaces)}

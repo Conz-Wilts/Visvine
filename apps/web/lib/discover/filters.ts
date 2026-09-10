@@ -33,6 +33,8 @@ export interface DiscoverEvent {
   /** `in-person` when it has a place, `virtual` otherwise. */
   eventType: 'in-person' | 'virtual';
   coverImageUrl: string | null;
+  /** The host's chosen accent, worn by the poster when there is no cover. */
+  themeColor: string | null;
   spaceId: string | null;
   spaceName: string | null;
   spaceImageUrl: string | null;

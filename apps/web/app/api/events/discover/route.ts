@@ -60,6 +60,7 @@ export async function GET() {
           locationLabel: location?.label ?? null,
           eventType: declaredType === 'virtual' || (!declaredType && !location?.label) ? 'virtual' : 'in-person',
           coverImageUrl: row.imageUrl ?? null,
+          themeColor: ((meta.theme as { color?: string } | undefined)?.color) ?? null,
           spaceId: row.space?.id ?? null,
           spaceName: row.space?.name ?? null,
           spaceImageUrl: row.space?.imageUrl ?? null,

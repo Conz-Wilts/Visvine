@@ -1,20 +1,26 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { SearchInput, ViewToggle, type ViewToggleOption } from '@/components/ui';
-import type { EventFormat, EventWhen } from '@/lib/discover/filters';
+import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
+import { FilterDropdown } from '@/features/directory/components/FilterDropdown';
+import ContentReveal from '@/components/ui/ContentReveal';
+import { Chip, SearchInput } from '@/components/ui';
+import { getCountry } from '@/lib/countries';
+import { tagPalette } from '@/lib/tagColors';
+import { countryOptions, sectorOptions, spaceCountryCode, type EventFormat, type EventWhen } from '@/lib/discover/filters';
 import { useDiscoverEvents } from '../hooks/useDiscoverEvents';
 import { useJoinFlow } from '../hooks/useJoinFlow';
 import EcosystemsView from './EcosystemsView';
 import EventsBoard from './EventsBoard';
 import JoinRoleDialog from './JoinRoleDialog';
 import SpacesView from './SpacesView';
+import { SPACE_COLOR } from './SpaceTile';
 
 export type DiscoverView = 'spaces' | 'events' | 'ecosystems';
 
-const VIEWS: ViewToggleOption<DiscoverView>[] = [
+const TABS: PaneTabItem[] = [
   { id: 'spaces', label: 'Spaces' },
   { id: 'events', label: 'Events' },
   { id: 'ecosystems', label: 'Ecosystems' },
@@ -25,17 +31,29 @@ function isDiscoverView(v: string | null): v is DiscoverView {
 }
 
 const PLACEHOLDER: Record<DiscoverView, string> = {
-  spaces: 'Search spaces by name, sector or place…',
+  spaces: 'Search open spaces…',
   events: 'Search events…',
   ecosystems: 'Search ecosystems…',
 };
 
+const WHEN: Array<{ value: EventWhen; label: string }> = [
+  { value: 'today', label: 'Today' },
+  { value: 'week', label: 'This week' },
+  { value: 'month', label: 'This month' },
+];
+
+const FORMAT: Array<{ value: EventFormat; label: string }> = [
+  { value: 'in-person', label: 'In person' },
+  { value: 'virtual', label: 'Online' },
+];
+
 /**
  * Discover: what is open to you beyond the spaces you are in. Three views on
- * the URL (`?view=`), the way the Directory keeps its tabs — Spaces, a grid
- * narrowed by where and by sector; Events, every public upcoming event on one
- * board; Ecosystems, the spaces that hold other spaces. One search field
- * serves whichever view is open; the filters belong to the view.
+ * the pane's tab bar and the URL (`?view=`), the way the Directory keeps its
+ * tabs — Spaces, a grid of tiles narrowed by where and by sector; Events,
+ * every public upcoming event as posters on one board; Ecosystems, the spaces
+ * that hold other spaces. The Directory's own toolbar rides under the tabs:
+ * the search, then the filters as words.
  */
 export default function DiscoverPage() {
   const router = useRouter();
@@ -44,51 +62,123 @@ export default function DiscoverPage() {
   const view: DiscoverView = isDiscoverView(params.get('view')) ? (params.get('view') as DiscoverView) : 'spaces';
 
   const setView = useCallback(
-    (next: DiscoverView) => {
-      const q = new URLSearchParams(params.toString());
-      if (next === 'spaces') q.delete('view'); else q.set('view', next);
-      const qs = q.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    (id: string) => {
+      if (!isDiscoverView(id)) return;
+      router.replace(id === 'spaces' ? pathname : `${pathname}?view=${id}`, { scroll: false });
     },
-    [params, pathname, router],
+    [pathname, router],
   );
 
-  const { spaces } = useSpace();
+  usePaneChrome({
+    tabs: TABS,
+    activeId: view,
+    onSelect: setView,
+    attachedOpen: false,
+    ariaLabel: 'Discover views',
+    surface: null,
+  });
+
+  const { spaces, loading: spacesLoading } = useSpace();
   const { join, confirm, cancel, pending, joining, isJoined } = useJoinFlow();
-  const { events, loading, error } = useDiscoverEvents();
+  const { events, loading: eventsLoading, error } = useDiscoverEvents();
 
   const [search, setSearch] = useState('');
-  const [spaceCountries, setSpaceCountries] = useState<Set<string>>(() => new Set());
+  const [countries, setCountries] = useState<Set<string>>(() => new Set());
   const [sectors, setSectors] = useState<Set<string>>(() => new Set());
   const [when, setWhen] = useState<EventWhen>('all');
   const [format, setFormat] = useState<EventFormat>('all');
-  const [eventCountries, setEventCountries] = useState<Set<string>>(() => new Set());
+
+  // Where counts what the open view holds: spaces by their country, events by
+  // their host's. One filter, so switching views keeps the place.
+  const countryOpts = useMemo(
+    () => countryOptions(view === 'events' ? events.map((e) => e.country) : spaces.map(spaceCountryCode)),
+    [view, events, spaces],
+  );
+  const sectorOpts = useMemo(() => sectorOptions(spaces), [spaces]);
+
+  const without = (set: Set<string>, value: string) => {
+    const next = new Set(set);
+    next.delete(value);
+    return next;
+  };
+  const activeCount = countries.size + (view === 'spaces' ? sectors.size : 0) + (view === 'events' ? (when !== 'all' ? 1 : 0) + (format !== 'all' ? 1 : 0) : 0);
+  const clearAll = () => { setCountries(new Set()); setSectors(new Set()); setWhen('all'); setFormat('all'); };
+
+  const ready = view === 'events' ? !eventsLoading : !spacesLoading;
 
   return (
-    <div className="w-full">
-      <div className="w-full px-4 pb-10 sm:px-6 lg:px-8">
-        {/* The page's own nav line: the three views, and the one search. It
-            pins under the shell band like the Directory's bar. */}
-        <div className="sticky top-0 z-10 -mx-4 bg-glass px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-border-subtle">
-            <ViewToggle options={VIEWS} value={view} onChange={setView} size="lg" />
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder={PLACEHOLDER[view]}
-              size="sm"
-              className="w-full max-w-[320px] sm:w-[260px]"
+    <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 112px)' }}>
+      {/* The Directory's toolbar, welded under the pane tab bar. */}
+      <div className="sticky top-0 z-10 -ml-6 bg-glass pt-1 pb-2 pl-12 pr-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder={PLACEHOLDER[view]}
+            size="lg"
+            className="w-full max-w-[420px] flex-1 sm:min-w-[280px]"
+          />
+
+          <div className="hidden h-6 w-px shrink-0 bg-border-subtle sm:block" />
+
+          {countryOpts.length > 0 && (
+            <FilterDropdown label="Where" options={countryOpts} selected={countries} onChange={setCountries} />
+          )}
+
+          {view === 'spaces' && sectorOpts.length > 0 && (
+            <FilterDropdown
+              label="Sector"
+              options={sectorOpts}
+              selected={sectors}
+              onChange={setSectors}
+              getColor={(v) => tagPalette(sectorOpts.find((o) => o.value === v)?.label ?? v).base}
             />
-          </div>
+          )}
+
+          {view === 'events' && (
+            <>
+              {/* The default is "All": no selection, so the word stays quiet. */}
+              <FilterDropdown label="When" options={WHEN} selected={new Set(when === 'all' ? [] : [when])} onChange={(s) => setWhen(([...s][0] as EventWhen) ?? 'all')} singleSelect />
+              <FilterDropdown label="Format" options={FORMAT} selected={new Set(format === 'all' ? [] : [format])} onChange={(s) => setFormat(([...s][0] as EventFormat) ?? 'all')} singleSelect />
+            </>
+          )}
         </div>
 
-        <div className="pt-4">
+        {activeCount > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {[...countries].map((c) => (
+              <Chip key={c} color={SPACE_COLOR} onRemove={() => setCountries(without(countries, c))} removeLabel={`Remove ${c} filter`}>
+                {getCountry(c)?.name ?? c}
+              </Chip>
+            ))}
+            {view === 'spaces' && [...sectors].map((s) => {
+              const label = sectorOpts.find((o) => o.value === s)?.label ?? s;
+              return (
+                <Chip key={s} color={tagPalette(label).base} onRemove={() => setSectors(without(sectors, s))} removeLabel={`Remove ${label} filter`}>
+                  {label}
+                </Chip>
+              );
+            })}
+            {view === 'events' && when !== 'all' && (
+              <Chip color={SPACE_COLOR} onRemove={() => setWhen('all')} removeLabel="Remove when filter">{WHEN.find((w) => w.value === when)?.label}</Chip>
+            )}
+            {view === 'events' && format !== 'all' && (
+              <Chip color={SPACE_COLOR} onRemove={() => setFormat('all')} removeLabel="Remove format filter">{FORMAT.find((f) => f.value === format)?.label}</Chip>
+            )}
+            {activeCount > 1 && (
+              <button type="button" onClick={clearAll} className="text-[12px] font-medium text-text-muted hover:text-text-primary">Clear all</button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <ContentReveal ready={ready} id={`panel-${view}`} role="tabpanel">
+        <div className="w-full px-6 pt-7 pb-8">
           {view === 'spaces' && (
             <SpacesView
               spaces={spaces}
               search={search}
-              countries={spaceCountries}
-              onCountries={setSpaceCountries}
+              countries={countries}
               sectors={sectors}
               onSectors={setSectors}
               isJoined={isJoined}
@@ -98,22 +188,19 @@ export default function DiscoverPage() {
           {view === 'events' && (
             <EventsBoard
               events={events}
-              loading={loading}
+              loading={eventsLoading}
               error={error}
               search={search}
               when={when}
-              onWhen={setWhen}
               format={format}
-              onFormat={setFormat}
-              countries={eventCountries}
-              onCountries={setEventCountries}
+              countries={countries}
             />
           )}
           {view === 'ecosystems' && (
-            <EcosystemsView spaces={spaces} search={search} isJoined={isJoined} onJoin={join} />
+            <EcosystemsView spaces={spaces} search={search} countries={countries} isJoined={isJoined} onJoin={join} />
           )}
         </div>
-      </div>
+      </ContentReveal>
 
       {pending && (
         <JoinRoleDialog

@@ -71,6 +71,7 @@ const event = (over: Partial<DiscoverEvent> & { id: string; startAt: string }): 
   locationLabel: null,
   eventType: 'virtual',
   coverImageUrl: null,
+  themeColor: null,
   spaceId: null,
   spaceName: null,
   spaceImageUrl: null,
