@@ -101,7 +101,9 @@ export default function SpaceSelector() {
 
   // A sub-space wears its parent's mark (spaceMark), so the head row says
   // which space you are in with the picture and WHERE by the parent's name
-  // under it — the sub-space's own name is the only thing that differs.
+  // ABOVE it, with the tree's own elbow dropping out of it into the
+  // sub-space's name — the same guide the switcher hangs a branch on, so the
+  // head reads as one row of that tree rather than as a name with a caption.
   const mark = currentSpace ? spaceMark(currentSpace, spaces) : null;
   const parentName = currentSpace?.parentId
     ? (spaces.find((s) => s.id === currentSpace.parentId)?.name ?? null)
@@ -140,6 +142,15 @@ export default function SpaceSelector() {
           onClick={() => (switcherOpen ? setSwitcherOpen(false) : openSwitcher())}
           aria-haspopup="dialog"
           aria-expanded={switcherOpen}
+          // A sub-space wears its parent's mark, so the avatar's initials and
+          // the line above the name both read "Test" — one label instead.
+          aria-label={
+            currentSpace
+              ? parentName
+                ? `${currentSpace.name}, in ${parentName}`
+                : currentSpace.name
+              : 'Select space'
+          }
           className={`relative z-10 flex w-full items-center transition-colors duration-150 hover:bg-surface-3 ${
             switcherOpen ? 'bg-surface-3' : ''
           }`}
@@ -164,12 +175,27 @@ export default function SpaceSelector() {
             }}
           >
             <span className="flex min-w-0 flex-1 flex-col text-left">
-              <span className="min-w-0 truncate text-[15px] font-open-sauce font-semibold text-text-primary">
-                {currentSpace?.name || 'Select space'}
-              </span>
               {parentName && (
-                <span className="min-w-0 truncate text-[13px] font-open-sauce text-text-muted">{parentName}</span>
+                <span className="min-w-0 truncate text-[12px] leading-tight font-open-sauce text-text-muted">
+                  {parentName}
+                </span>
               )}
+              <span className="flex min-w-0 items-center">
+                {/* The elbow: a stroke down from under the parent's first
+                    letter, then a tick into the name. Its own drawing rather
+                    than TreeGuide's, because it has to climb INTO the line
+                    above (-mt) to leave the parent's baseline — a guide that
+                    starts at this row's top edge reads as a stray mark. It
+                    ends in a corner because a sub-space holds no sub-spaces. */}
+                {parentName && (
+                  <span aria-hidden className="relative -mt-[7px] mr-1.5 h-[20px] w-2.5 shrink-0">
+                    <span className="absolute left-0 top-0 h-[17px] w-2.5 rounded-bl-[5px] border-b border-l border-border-default" />
+                  </span>
+                )}
+                <span className="min-w-0 truncate text-[15px] font-open-sauce font-semibold text-text-primary">
+                  {currentSpace?.name || 'Select space'}
+                </span>
+              </span>
             </span>
           </span>
         </button>
