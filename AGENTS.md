@@ -50,6 +50,14 @@ scripts/               repo-level db/env tooling
   Each returns a value or a `NextResponse` — check `instanceof NextResponse`.
 - Reuse `lib/fetchJson.ts`, `lib/date.ts`, `components/ui/Modal.tsx`,
   `lib/logger.ts` rather than re-rolling them.
+- **One read per fact.** A client read that outlives a mount goes through
+  `features/shared/lib/requestCache.ts` (`swrFetch` / `cachedFetch`, or
+  `inflightFetch` for must-be-fresh lists) so a sibling, a tab toggle or a
+  back-navigation never re-asks; a write invalidates its keys. The session is
+  `useAuth()`, never a bare `useSession()`. Polls take `usePageVisible`. On the
+  server, per-request authority reads (space row, aliases, membership,
+  feature config) are `lib/requestMemo.ts` — React `cache()` is a no-op in a
+  Route Handler — and a writer calls `.forget()` before reading again.
 - Zod v4 for all input validation. Prisma client is the singleton in
   `lib/prisma.ts`.
 - **A table is named after the tool that owns it** — `context_*`, `connector_*`,
