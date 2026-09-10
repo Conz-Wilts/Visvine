@@ -207,6 +207,54 @@ function idSlug(id: string): string {
 // still resolves); a sub-note is NOT an entity path — it belongs to the
 // folder's node (entityOwnerPathOf / resolveEntityOwner).
 
+// adopted entity notes
+//
+// A note is an entity because of what it DECLARES, not because of where it was
+// filed. `Team/Alex Apoifis.md` carrying `type: Person` is a person, and gets
+// the same node, profile page, backlinks and [[mentions]] as one written at
+// people/alex-apoifis/index.md — a space organises its context the way it
+// wants to, and the namespaces are where the app PUTS things, never the only
+// place it will recognise them (lib/notes/entityLinks.ts#syncAdoptedNode makes
+// the node on write).
+//
+// Such a node records where its note lives in `metadata.notePath` — the same
+// pointer connectors and agents already carry — and that path is then the one
+// and only path that names it: the derived people/<slug>.md is NOT registered
+// as an alias, because some other note may legitimately live there.
+//
+// Only the record kinds adopt. The config kinds (connector, model, agent,
+// tool, section, channel) are machine configuration read out of fixed folders
+// under an admin-only write gate, and a note anywhere that could mint one is a
+// way around that gate, not a convenience.
+const ADOPTABLE_ENTITY_KINDS: ReadonlySet<EntityKind> = new Set<EntityKind>([
+  'person',
+  'space',
+  'resource',
+  'event',
+])
+
+/** Can a note declaring this type be adopted from wherever it sits? */
+export function isAdoptableEntityType(type: string | null | undefined): boolean {
+  const kind = entityKindOf(type)
+  return kind !== null && ADOPTABLE_ENTITY_KINDS.has(kind)
+}
+
+/**
+ * The note an adopted node was made from — a path OUTSIDE every entity
+ * namespace, recorded as `metadata.notePath`. Null for a node whose note lives
+ * where its kind says it should, which is every node the Directory created.
+ * Pure, and the one place the pointer is read as an adoption.
+ */
+export function adoptedNotePath(node: EntityNodeLike): string | null {
+  if (!isAdoptableEntityType(node.type)) return null
+  const pointer = node.metadata?.notePath
+  if (typeof pointer !== 'string' || !pointer) return null
+  const raw = pointer.startsWith('/') ? pointer.slice(1) : pointer
+  // A pointer that names a path in an entity namespace is the lazy-kind
+  // pointer, not an adoption — entityNotePath reads it as before.
+  return parseEntityHref(raw) ? null : raw
+}
+
 // The flat form: person → people/<slug>.md, space → communities/<slug>.md,
 // resource → resources/<slug>.md. Null if the node isn't an entity kind.
 //
@@ -218,6 +266,15 @@ export function entityFlatPath(node: EntityNodeLike): string | null {
   const slug = idSlug(node.id)
   if (!kind || !slug) return null
   return `${ENTITY_DIRS[kind]}/${slug}.md`
+}
+
+/** The context folder an entity note stands at the head of, read off the path
+ *  rather than derived from the node: 'people/craig/index.md' and
+ *  'Team/Alex.md' both name the folder beside them ('people/craig',
+ *  'Team/Alex'). The one form that works for an adopted note too. */
+export function entityFolderOfNotePath(notePath: string): string {
+  const raw = notePath.startsWith('/') ? notePath.slice(1) : notePath
+  return isIndexPath(raw) ? raw.slice(0, -(INDEX_BASENAME.length + 1)) : raw.replace(/\.md$/i, '')
 }
 
 // The node's context folder ('people/<slug>') — a real folder only once the
@@ -243,6 +300,10 @@ export function entityNotePath(node: EntityNodeLike): string | null {
   const kind = entityKindOf(node.type)
   const flat = entityFlatPath(node)
   if (!kind || !flat) return null
+  // An adopted note is where the node's note IS — the derived namespace path
+  // names nothing.
+  const adopted = adoptedNotePath(node)
+  if (adopted) return adopted
   const index = entityIndexPathOf(node)
   if (isFolderOnlyEntityKind(kind)) return index
   const pointer = node.metadata?.notePath
@@ -260,6 +321,10 @@ export function entityNotePaths(node: EntityNodeLike): string[] {
   const flat = entityFlatPath(node)
   const index = entityIndexPathOf(node)
   if (!kind || !flat || !index) return []
+  // An adopted node answers to its own note and nothing else: registering the
+  // derived people/<slug>.md would claim a path another note may hold.
+  const adopted = adoptedNotePath(node)
+  if (adopted) return [adopted]
   if (!isFolderOnlyEntityKind(kind) || FLAT_ALIAS_ENTITY_KINDS.has(kind)) return [flat, index]
   return [index]
 }
@@ -538,7 +603,9 @@ export function resolveEntityNode(
   path: string,
   entityByPath: ReadonlyMap<string, { id: string }> | null | undefined,
 ): string | null {
-  if (!entityKindOfPath(path)) return null
+  // The map is asked first and its answer is final: it holds exactly the paths
+  // real nodes claim, adopted notes (which live outside every namespace)
+  // included, so a namespace test in front of it would hide them.
   return entityByPath?.get(path)?.id ?? null
 }
 
@@ -557,10 +624,58 @@ export function resolveEntityOwner(
   const direct = resolveEntityNode(path, entityByPath)
   if (direct) return { id: direct, subPath: null }
   const owner = entityOwnerPathOf(path)
-  if (!owner) return null
-  const id =
-    entityByPath?.get(`${owner}/${INDEX_BASENAME}`)?.id ?? entityByPath?.get(`${owner}.md`)?.id
-  return id ? { id, subPath: path.slice(owner.length + 1) } : null
+  if (owner) {
+    const id =
+      entityByPath?.get(`${owner}/${INDEX_BASENAME}`)?.id ?? entityByPath?.get(`${owner}.md`)?.id
+    if (id) return { id, subPath: path.slice(owner.length + 1) }
+  }
+  // Outside the namespaces the same rule holds, just without a shape to match
+  // on: an adopted entity's folder is whichever ancestor's index the map
+  // claims, so walk up from the note. Nearest ancestor wins, the way the
+  // namespace form takes the entity folder and not the namespace above it.
+  const segments = (path.startsWith('/') ? path.slice(1) : path).split('/')
+  for (let depth = segments.length - 1; depth > 0; depth--) {
+    const folder = segments.slice(0, depth).join('/')
+    const id = entityByPath?.get(`${folder}/${INDEX_BASENAME}`)?.id
+    if (id) return { id, subPath: path.slice(folder.length + 1) }
+  }
+  return null
+}
+
+/** Percent-decode a link target, leaving it alone when it isn't valid encoding. */
+function decodeNotePath(path: string): string {
+  try {
+    return decodeURIComponent(path)
+  } catch {
+    return path
+  }
+}
+
+/**
+ * Every note this note's body links to, self excluded — the candidates for a
+ * `mentioned` edge, before anything decides which of them name entities.
+ *
+ * Wider than entityMentionPaths on purpose: an adopted entity's note lives
+ * outside the namespaces (see "adopted entity notes"), so a namespace filter
+ * here would silently drop every mention of one. The reverse map is the filter
+ * instead — it holds exactly the paths real nodes claim — which is the same
+ * answer for a namespace note and the right one for an adopted note.
+ * Frontmatter is ignored; each `[[Mention]]` is an ordinary markdown link.
+ */
+export function linkedNotePaths(notePath: string, content: string): string[] {
+  const { body } = splitFrontmatter(content)
+  const out = new Set<string>()
+  for (const href of extractMarkdownLinks(body)) {
+    const resolved = resolveOkfLink(href, notePath)
+    if (!resolved || resolved === notePath) continue
+    if (!/\.md$/i.test(resolved)) continue
+    // Percent-decoded, unlike the namespace-only reader above: an adopted
+    // note's path is the words a person filed it under, so `Alex Apoifis.md`
+    // arrives from an editor-written href as `Alex%20Apoifis.md` and must come
+    // back out as the path the store holds.
+    out.add(decodeNotePath(resolved.startsWith('/') ? resolved.slice(1) : resolved))
+  }
+  return [...out]
 }
 
 // The entity-note paths a note's body links to (people/… & communities/…),

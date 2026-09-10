@@ -25,6 +25,10 @@ import {
   entityContextHref,
   hrefForNotePath,
   noteHref,
+  adoptedNotePath,
+  entityFolderOfNotePath,
+  isAdoptableEntityType,
+  linkedNotePaths,
 } from '../lib/notes/entities';
 import { isCreatableType } from '../lib/directory/createEntity';
 import { parseFrontmatter } from '../lib/notes/shared/markdown';
@@ -474,8 +478,14 @@ test('resolveEntityNode resolves through the node map, never by string surgery',
   // Entity-shaped path with no node in the map (deleted node / other space /
   // map still loading) → null, so callers fall back to opening in place.
   assert.equal(resolveEntityNode('people/unknown.md', people), null);
-  // Non-entity paths are never resolved, whatever the map contains.
-  assert.equal(resolveEntityNode('notes/welcome.md', new Map([['notes/welcome.md', { id: 'x' }]])), null);
+  // The map is the authority, not the namespace: an adopted entity's note sits
+  // outside every namespace, so a path the map claims resolves wherever it is.
+  assert.equal(
+    resolveEntityNode('Team/alex.md', new Map([['Team/alex.md', { id: 'person:alex' }]])),
+    'person:alex',
+  );
+  // A path no node claims resolves to nothing, whatever it looks like.
+  assert.equal(resolveEntityNode('notes/welcome.md', new Map([['notes/other.md', { id: 'x' }]])), null);
   // Tolerates a missing map.
   assert.equal(resolveEntityNode('people/craig-piggott.md', null), null);
 });
@@ -517,4 +527,98 @@ test('structuralFolders: the four built-in folders are always there', () => {
     structuralFolders({ enabled: { agents: false, notes: false, connectors: false, tools: false } }).sort(),
     ['agents', 'connectors', 'models', 'tools'],
   );
+});
+
+
+// ── adopted entity notes ────────────────────────────────────────────────────
+// A note is an entity because of what it declares, not where it was filed.
+
+const adoptedAlex = {
+  id: 'person:alex-apoifis',
+  type: 'person',
+  metadata: { notePath: 'Team/Alex Apoifis.md' },
+};
+
+test('adoptedNotePath reads a pointer that leaves the namespaces, and only that', () => {
+  assert.equal(adoptedNotePath(adoptedAlex), 'Team/Alex Apoifis.md');
+  // A pointer INTO a namespace is the lazy-kind pointer, not an adoption.
+  assert.equal(
+    adoptedNotePath({ id: 'person:craig', type: 'person', metadata: { notePath: 'people/craig/index.md' } }),
+    null,
+  );
+  // No pointer at all, and a node with no metadata.
+  assert.equal(adoptedNotePath({ id: 'person:craig', type: 'person' }), null);
+  // Only the record kinds adopt — a connector's note is admin-gated config.
+  assert.equal(
+    adoptedNotePath({ id: 'connector:x', type: 'connector', metadata: { notePath: 'anywhere/x.md' } }),
+    null,
+  );
+});
+
+test('isAdoptableEntityType covers the record kinds and no config kind', () => {
+  for (const type of ['person', 'Person', 'space', 'company', 'resource', 'event']) {
+    assert.equal(isAdoptableEntityType(type), true, type);
+  }
+  for (const type of ['connector', 'model', 'agent', 'tool', 'section', 'channel', 'Note', '']) {
+    assert.equal(isAdoptableEntityType(type), false, type);
+  }
+});
+
+test('an adopted node answers to its own note and claims no namespace path', () => {
+  assert.equal(entityNotePath(adoptedAlex), 'Team/Alex Apoifis.md');
+  assert.deepEqual(entityNotePaths(adoptedAlex), ['Team/Alex Apoifis.md']);
+  // people/alex-apoifis.md stays free for whatever really lives there.
+  assert.equal(entityNotePaths(adoptedAlex).includes('people/alex-apoifis.md'), false);
+});
+
+test('an adopted entity owns the folder beside its note', () => {
+  assert.equal(entityFolderOfNotePath('Team/Alex Apoifis.md'), 'Team/Alex Apoifis');
+  assert.equal(entityFolderOfNotePath('Team/Alex/index.md'), 'Team/Alex');
+  assert.equal(entityFolderOfNotePath('people/craig/index.md'), 'people/craig');
+  assert.equal(entityFolderOfNotePath('/people/craig.md'), 'people/craig');
+});
+
+test('resolveEntityOwner reaches an adopted entity and its sub-notes', () => {
+  const map = new Map([['Team/Alex/index.md', { id: 'person:alex' }]]);
+  assert.deepEqual(resolveEntityOwner('Team/Alex/index.md', map), {
+    id: 'person:alex',
+    subPath: null,
+  });
+  assert.deepEqual(resolveEntityOwner('Team/Alex/comms.md', map), {
+    id: 'person:alex',
+    subPath: 'comms.md',
+  });
+  // Any depth below the folder, exactly as under people/<slug>/.
+  assert.deepEqual(resolveEntityOwner('Team/Alex/2026/q1.md', map), {
+    id: 'person:alex',
+    subPath: '2026/q1.md',
+  });
+  // A sibling of the folder belongs to nobody.
+  assert.equal(resolveEntityOwner('Team/Bob.md', map), null);
+});
+
+test('hrefForNotePath sends an adopted note to its profile', () => {
+  const map = new Map([['Team/Alex Apoifis.md', { id: 'person:alex-apoifis' }]]);
+  assert.equal(
+    hrefForNotePath('Team/Alex Apoifis.md', map),
+    entityContextHref('person:alex-apoifis'),
+  );
+  assert.equal(hrefForNotePath('Team/index.md', map), noteHref('Team/index.md'));
+});
+
+test('linkedNotePaths offers every linked note, so an adopted one can be mentioned', () => {
+  const md = [
+    '---',
+    'title: Deal',
+    '---',
+    'Met [Alex](/Team/Alex%20Apoifis.md) and [Craig](/people/craig.md).',
+    'Read the [brief](/notes/brief.md) and see [an image](logo.png).',
+  ].join('\n');
+  assert.deepEqual(linkedNotePaths('deals/acme.md', md), [
+    'Team/Alex Apoifis.md',
+    'people/craig.md',
+    'notes/brief.md',
+  ]);
+  // Self-links never count.
+  assert.deepEqual(linkedNotePaths('deals/acme.md', 'See [me](/deals/acme.md).'), []);
 });

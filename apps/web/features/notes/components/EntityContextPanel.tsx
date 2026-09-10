@@ -25,9 +25,8 @@ import { fetchJsonBody } from '@/lib/fetchJson'
 import {
   entityContextHref,
   entityFolderPathOf,
-  entityIndexPathOf,
+  entityFolderOfNotePath,
   entityNotePath,
-  entityOwnerPathOf,
   entityStub,
   noteHref,
   resolveEntityOwner,
@@ -108,10 +107,20 @@ export function EntityContextPanel({
             : (node.metadata ?? null),
       })
     : null
-  const folder = node ? entityFolderPathOf({ id: nodeId, type: node.type }) : null
-  const indexPath = node ? entityIndexPathOf({ id: nodeId, type: node.type }) : null
+  // An adopted entity's folder is beside the note it was declared at, not under
+  // the namespace its type implies — so the folder is read off the note's path
+  // whenever there is one, and only derived from the node as a fallback for an
+  // entity whose note has not been written yet.
+  const folder = entityPath
+    ? entityFolderOfNotePath(entityPath)
+    : node
+      ? entityFolderPathOf({ id: nodeId, type: node.type })
+      : null
+  const indexPath = folder ? `${folder}/index.md` : null
   const path =
-    notePath && folder && entityOwnerPathOf(notePath) === folder ? notePath : entityPath
+    notePath && folder && notePath.startsWith(`${folder}/`) && notePath !== indexPath
+      ? notePath
+      : entityPath
   // Relative to the folder ('sams-comms.md'); null on the entity's own note.
   const subPath = path && folder && path !== entityPath ? path.slice(folder.length + 1) : null
 

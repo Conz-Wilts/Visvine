@@ -180,6 +180,20 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   turns `a/b.md` into `a/b/index.md` by itself. Rules:
   `lib/notes/shared/indexNote.ts`. `db:index-notes:rebuild` migrates old shapes;
   `db:notes:verify` keeps seeds honest — run it after hand-editing a seed layer.
+- **A note is an entity because of what it DECLARES, not where it was filed.**
+  A note anywhere carrying `type: Person` (or Space, Resource, Event) is
+  adopted: it gets a node, a profile page, backlinks and `[[mentions]]` exactly
+  as one written under `people/`. The node records where its note lives in
+  `metadata.notePath`, and that path is then the only path naming it — the
+  derived `people/<slug>.md` is never registered, so it stays free.
+  `entities.ts#adoptedNotePath` is the one read of the pointer as an adoption;
+  `entityLinks.ts#syncAdoptedNode` makes the node on write and drops it when the
+  `type:` or the note goes. Only the record kinds adopt
+  (`ADOPTABLE_ENTITY_KINDS`) and never under `connectors/`, `models/`,
+  `agents/`, `tools/`, `settings/` or `spaces/` — a note that could mint one of
+  those is a way around an admin-only write gate, not a convenience. A rename
+  carries the node (`repointAdoptedNodes`); an adopted folder's index carries
+  `node:` like any entity index.
 - **Links are derived, not authored.** A markdown link to an entity's note,
   inside another shared-context note, creates the `mentioned` edge. There is no
   create-link operation anywhere.

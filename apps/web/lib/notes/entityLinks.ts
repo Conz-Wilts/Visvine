@@ -29,14 +29,19 @@ import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { excerptsForTargets } from './shared/references'
 import { declaredFolderOnlyEntity, entityNameClashDenial, isIndexPath } from './shared/indexNote'
 import {
+  adoptedNotePath,
   agentNameOfPath,
+  entityKindOf,
   entityKindOfPath,
-  entityMentionPaths,
   entityNotePath,
   entityNotePaths,
   entityOwnerPathOf,
+  isAdoptableEntityType,
   isAgentBriefPath,
+  linkedNotePaths,
 } from './entities'
+import { slugify } from '@/lib/eventUtils'
+import { Prisma } from '@prisma/client'
 import { toolFileKindOfPath, toolNameOfPath } from '@/lib/tools/config'
 
 // Matches store.ts's SHARED_OWNER_KEY — redeclared here (not imported) so the
@@ -92,6 +97,9 @@ async function loadEntityMaps(spaceId: string): Promise<EntityMaps> {
     const entity = { ...node, metadata: (node.metadata as Record<string, unknown> | null) ?? null }
     const canonical = entityNotePath(entity)
     if (!canonical) continue
+    // entityNotePath/entityNotePaths already answer with the adopted note when
+    // the node has one, so an adopted entity registers exactly the path it was
+    // declared at and none of the namespace paths it never occupied.
     for (const path of entityNotePaths(entity)) idByPath.set(path, node.id)
     pathById.set(node.id, canonical)
   }
@@ -108,7 +116,16 @@ function ownerIdOf(path: string, maps: EntityMaps): string | null {
   const direct = maps.idByPath.get(path)
   if (direct) return direct
   const owner = entityOwnerPathOf(path)
-  return owner ? (maps.idByPath.get(`${owner}/index.md`) ?? null) : null
+  if (owner) return maps.idByPath.get(`${owner}/index.md`) ?? null
+  // An adopted entity's folder is wherever it was declared, so there is no
+  // shape to match — the nearest ancestor whose index a node claims is the
+  // owner. Mirrors resolveEntityOwner, which is the client's half of this.
+  const segments = path.split('/')
+  for (let depth = segments.length - 1; depth > 0; depth--) {
+    const id = maps.idByPath.get(`${segments.slice(0, depth).join('/')}/index.md`)
+    if (id) return id
+  }
+  return null
 }
 
 /**
@@ -146,7 +163,7 @@ async function heirFor(
   except: string,
 ): Promise<{ path: string; content: string; target: string } | null> {
   for (const note of await siblingNotesOf(spaceId, speakerId, maps, except)) {
-    const target = entityMentionPaths(note.path, note.content).find(
+    const target = linkedNotePaths(note.path, note.content).find(
       (m) => maps.idByPath.get(m) === targetId,
     )
     if (target) return { path: note.path, content: note.content, target }
@@ -158,6 +175,198 @@ async function heirFor(
 function notePathOfNode(metadata: unknown): string | null {
   const value = (metadata as Record<string, unknown> | null)?.notePath
   return typeof value === 'string' && value ? value : null
+}
+
+// Folders whose notes the platform reads as configuration or as another
+// space's context. A `type: Person` note under one of them is not an invitation
+// to mint a node: connectors/ and models/ are admin-gated perimeters, agents/
+// and tools/ are note-first kinds with their own sync, settings/ is the space's
+// own vocabulary, and spaces/ is a sub-space's context grafted in read-only.
+const UNADOPTABLE_ROOTS = new Set([
+  'agents',
+  'connectors',
+  'models',
+  'tools',
+  'settings',
+  'spaces',
+])
+
+/** How many `-2`, `-3`… suffixes to try before giving up on a free node id. */
+const MAX_ID_ATTEMPTS = 5
+
+/** May a note at this path be adopted at all, whatever it declares? */
+function adoptablePath(path: string): boolean {
+  const root = path.split('/')[0] ?? ''
+  if (UNADOPTABLE_ROOTS.has(root)) return false
+  // Inside an entity namespace the shape already decides: the entity note is
+  // an entity note, and everything else there is one of its sub-notes.
+  return entityOwnerPathOf(path) === null && entityKindOfPath(path) === null
+}
+
+/** The type a note declares, as an adoptable entity kind, or null. */
+function declaredAdoptableKind(content: string): 'person' | 'space' | 'resource' | 'event' | null {
+  const declared = parseFrontmatter(content).type
+  if (typeof declared !== 'string' || !isAdoptableEntityType(declared)) return null
+  return entityKindOf(declared) as 'person' | 'space' | 'resource' | 'event'
+}
+
+/** The display name an adopted note goes by: its `title:`, else its filename
+ *  (or, for a folder index, the folder's name). */
+function adoptedNameOf(path: string, content: string): string {
+  const title = parseFrontmatter(content).title
+  if (typeof title === 'string' && title.trim()) return title.trim()
+  const segments = path.replace(/\.md$/i, '').split('/')
+  const last = isIndexPath(path) ? segments[segments.length - 2] : segments[segments.length - 1]
+  return (last ?? path).replace(/[-_]+/g, ' ').trim() || path
+}
+
+/** The node currently bound to `path` by its `metadata.notePath` pointer. */
+async function adoptedNodeAt(spaceId: string, path: string) {
+  const rows = await prisma.node.findMany({
+    where: { spaceId, metadata: { path: ['notePath'], equals: path } },
+    select: { id: true, type: true, name: true, metadata: true },
+  })
+  return rows.find((row) => adoptedNotePath({ ...row, metadata: row.metadata as Record<string, unknown> | null }) === path) ?? null
+}
+
+/** What an adopted note is a note ABOUT, as a key two paths can be matched on:
+ *  the kind it declares and the name it goes by. */
+function adoptionKey(kind: string, name: string): string {
+  return `${kind}:${slugify(name)}`
+}
+
+/**
+ * Carry adopted nodes across a rename before anything else looks at the paths.
+ *
+ * A move reaches the sync as remove-then-add, and an adopted node is bound to
+ * the path it was declared at — so left alone, moving `Team/Alex.md` would
+ * delete Alex and mint a new Alex, losing the links, the tracked fields and
+ * every href anyone had to the profile. The same kind under the same name
+ * arriving as one of the added paths is that note landing, so the pointer
+ * follows it and both halves then read as an ordinary re-save.
+ */
+async function repointAdoptedNodes(
+  spaceId: string,
+  removed: string[],
+  added: Array<[path: string, content: string]>,
+): Promise<void> {
+  if (removed.length === 0 || added.length === 0) return
+  const landedAt = new Map<string, string>()
+  for (const [path, content] of added) {
+    if (!adoptablePath(path)) continue
+    const kind = declaredAdoptableKind(content)
+    if (kind) landedAt.set(adoptionKey(kind, adoptedNameOf(path, content)), path)
+  }
+  if (landedAt.size === 0) return
+  for (const from of removed) {
+    const bound = await adoptedNodeAt(spaceId, from)
+    if (!bound) continue
+    const kind = entityKindOf(bound.type)
+    const to = kind ? landedAt.get(adoptionKey(kind, bound.name ?? '')) : undefined
+    if (!to || to === from) continue
+    await prisma.node.update({
+      where: { id: bound.id },
+      data: {
+        metadata: {
+          ...((bound.metadata as Record<string, unknown> | null) ?? {}),
+          notePath: to,
+        } as Prisma.InputJsonObject,
+      },
+    })
+  }
+}
+
+/**
+ * The node behind a note that DECLARES an entity type from wherever it happens
+ * to sit — `Team/Alex Apoifis.md` with `type: Person` is a person, with the
+ * same node, profile page and backlinks as one written at
+ * people/alex-apoifis/index.md. See "adopted entity notes" in entities.ts for
+ * why the pointer rather than the path carries the binding, and
+ * ADOPTABLE_ENTITY_KINDS for why only the record kinds qualify.
+ *
+ * Idempotent. Re-declaring keeps the id (and so the links, the tracked-field
+ * values and the saved position); dropping the `type:`, or the note itself,
+ * drops the node. Metadata is MERGED, never replaced: the node's tracked-field
+ * values are the Directory table's, not this sync's.
+ *
+ * A note carrying `node:` for a node this space already has binds to it rather
+ * than minting a second — that is what carries an adopted folder through a
+ * move, since its index keeps the pointer in its frontmatter.
+ */
+export async function syncAdoptedNode(
+  spaceId: string,
+  path: string,
+  content: string | null,
+): Promise<boolean> {
+  if (!adoptablePath(path)) return false
+  const bound = await adoptedNodeAt(spaceId, path)
+  const kind = content === null ? null : declaredAdoptableKind(content)
+  if (!kind) {
+    // Gone, or no longer claiming a type: the note stops speaking for a node.
+    if (!bound) return false
+    await prisma.node.delete({ where: { id: bound.id } })
+    return true
+  }
+
+  const name = adoptedNameOf(path, content as string)
+  const fm = parseFrontmatter(content as string)
+  const description = typeof fm.description === 'string' ? fm.description.trim() : ''
+  const tags = Array.isArray(fm.tags)
+    ? fm.tags.filter((t): t is string => typeof t === 'string' && t.trim() !== '')
+    : []
+  const fields = {
+    type: kind,
+    name,
+    ...(description ? { subtitle: description } : {}),
+    tags,
+  }
+
+  // The note names its node (an adopted folder's index carries `node:`): bind
+  // to that row when this space has it and nothing else holds it.
+  const declaredId = typeof fm.node === 'string' && fm.node.trim() ? fm.node.trim() : null
+  const claimant =
+    bound ??
+    (declaredId
+      ? await prisma.node.findFirst({
+          where: { spaceId, id: declaredId },
+          select: { id: true, type: true, metadata: true },
+        })
+      : null)
+
+  if (claimant) {
+    const metadata = {
+      ...((claimant.metadata as Record<string, unknown> | null) ?? {}),
+      notePath: path,
+    }
+    await prisma.node.update({
+      where: { id: claimant.id },
+      data: { ...fields, metadata: metadata as Prisma.InputJsonObject },
+    })
+    return true
+  }
+
+  const baseId = `${kind}:${slugify(name) || slugify(path) || kind}`
+  for (let attempt = 1; attempt <= MAX_ID_ATTEMPTS; attempt++) {
+    const id = attempt === 1 ? baseId : `${baseId}-${attempt}`
+    try {
+      await prisma.node.create({
+        data: {
+          id,
+          ...fields,
+          metadata: { notePath: path } as Prisma.InputJsonObject,
+          spaceId,
+        },
+        select: { id: true },
+      })
+      return true
+    } catch (err) {
+      // Node ids are global, so a taken id is expected — suffix and retry.
+      const taken = err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
+      if (!taken) throw err
+    }
+  }
+  logger.warn('notes.adoptedNode.noFreeId', { spaceId, path, baseId })
+  return false
 }
 
 /**
@@ -189,6 +398,10 @@ async function syncNoteNode(
   // Tool's does — the store calls it ahead of the index contract for the same
   // reason (see ensureToolNode).
   if (kind === 'agent') return syncAgentNode(spaceId, path, content)
+  // A note OUTSIDE the namespaces that declares an entity type owns a node
+  // too — index or not, since an entity's note is its folder's index wherever
+  // the folder sits. Checked before the index skip for exactly that reason.
+  if (!kind) return syncAdoptedNode(spaceId, path, content)
   if (isIndexPath(path)) return false
   if (kind === 'connector') return syncConnectorNode(spaceId, path, content)
   if (kind === 'model') return syncModelNode(spaceId, path, content)
@@ -407,7 +620,7 @@ async function syncOne(
   const keepKey = (key: string) => ownerIdOf(key, maps) !== null
   const desired =
     content !== null && selfId
-      ? entityMentionPaths(path, content)
+      ? linkedNotePaths(path, content)
           .map((p) => ({ targetPath: p, id: maps.idByPath.get(p) }))
           .filter(
             (d): d is { targetPath: string; id: string } => Boolean(d.id) && d.id !== selfId,
@@ -549,6 +762,9 @@ export async function syncContextLinksBulk(
   if (removed.length === 0 && added.length === 0) return
   try {
     let changed = false
+    // Before the removes read the old paths as gone: a rename is a move, not a
+    // death, and an adopted node's binding has to travel with its note.
+    await repointAdoptedNodes(context.spaceId, removed, added)
     for (const path of removed) {
       changed = (await syncNoteNode(context.spaceId, path, null)) || changed
     }

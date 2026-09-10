@@ -19,7 +19,7 @@ import type {
 } from './shared/types'
 import { TRASH_RETENTION_DAYS } from './shared/types'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from './shared/markdown'
-import { ensureAgentNode, ensureToolNode, syncContextLinksBulk } from './entityLinks'
+import { ensureAgentNode, ensureToolNode, syncAdoptedNode, syncContextLinksBulk } from './entityLinks'
 import { agentNoteDeleted, agentNoteRenamed } from '@/lib/agents/hooks'
 import { toolNoteDeleted, toolNoteRenamed } from '@/lib/tools/hooks'
 // The write path's outbox. Every mutator below enqueues the rebuild its write
@@ -33,6 +33,7 @@ import {
   type ProjectionInput,
 } from './projections'
 import {
+  adoptedNotePath,
   canonicalEntityPath,
   entityFlatPath,
   entityIndexPathOf,
@@ -998,6 +999,24 @@ async function nodeForEntityPath(
   return null
 }
 
+/** The node an ADOPTED index note speaks for — bound by `metadata.notePath`
+ *  rather than by the path's shape, since an adopted entity's folder can sit
+ *  anywhere (see "adopted entity notes" in lib/notes/entities.ts). */
+async function adoptedNodeForIndex(
+  spaceId: string,
+  indexPath: string,
+): Promise<(EntityNodeLike & { id: string; name: string | null }) | null> {
+  const rows = await prisma.node.findMany({
+    where: { spaceId, metadata: { path: ['notePath'], equals: indexPath } },
+    select: { id: true, type: true, name: true, subtitle: true, metadata: true },
+  })
+  for (const row of rows) {
+    const node = { ...row, metadata: (row.metadata as Record<string, unknown> | null) ?? null }
+    if (adoptedNotePath(node) === indexPath) return node
+  }
+  return null
+}
+
 /**
  * Make `node`'s context a folder — idempotent. Moves people/<slug>.md to
  * people/<slug>/index.md (row id, history, links, publications and grants all
@@ -1211,6 +1230,16 @@ async function ensureParentFolderNote(
 async function enforceIndexContract(context: Context, p: string, content: string): Promise<string> {
   const folder = folderOfIndexPath(p)
   const children = await directChildrenOf(context, folder)
+  // A folder about an entity owes the entity contract wherever it sits: an
+  // index declaring `type: Person` outside the namespaces is adopted here —
+  // before the frontmatter is decided, for the same reason a Tool's is — so it
+  // gains its node and its `node:` back-pointer on the very first save rather
+  // than on the second.
+  if (!isEntityFolderIndex(p) && context.ownerKey === SHARED_OWNER_KEY) {
+    await syncAdoptedNode(context.spaceId, p, content)
+    const adopted = await adoptedNodeForIndex(context.spaceId, p)
+    if (adopted) return normalizeIndexNote(content, folder, children, entityContractOf(adopted))
+  }
   if (isEntityFolderIndex(p)) {
     let node = await nodeForEntityPath(context.spaceId, p)
     if (

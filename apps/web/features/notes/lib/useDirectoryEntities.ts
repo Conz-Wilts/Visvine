@@ -34,7 +34,10 @@ export function useDirectoryEntities(): DirectoryEntities {
         const key = tag.trim().toLowerCase()
         if (key && !tagByKey.has(key)) tagByKey.set(key, tag.trim())
       }
-      const paths = entityNotePaths({ id: n.id, type: n.type })
+      // metadata rides along because it is what says where the note LIVES:
+      // an adopted entity's note is wherever it was declared, not under the
+      // namespace its type implies (see lib/notes/entities.ts).
+      const paths = entityNotePaths({ id: n.id, type: n.type, metadata: n.metadata ?? null })
       if (paths.length === 0) continue
       const e: PickerEntity = {
         id: n.id,
