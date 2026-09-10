@@ -2,8 +2,7 @@
 // how it is narrowed. Every function here is deterministic over plain data so
 // the page's filters are testable without a browser or a database.
 //
-// Three surfaces share it: Spaces (a filterable grid), Ecosystems (top-level
-// spaces with the sub-spaces that flow up from them) and the event board
+// Two surfaces share it: Spaces (a filterable grid) and the event board
 // (every public upcoming event, grouped by day). Countries are ISO codes so
 // the same filter serves a space's `country` and an event's host space.
 
@@ -118,33 +117,6 @@ export function filterSpaces<T extends DiscoverSpace>(spaces: readonly T[], filt
     }
     return true;
   });
-}
-
-export interface Ecosystem<T extends DiscoverSpace> {
-  parent: T;
-  children: T[];
-}
-
-/**
- * An ecosystem is a top-level space with sub-spaces the viewer can see. A
- * sub-space whose parent is NOT in the list (a public room of a private space)
- * is not an ecosystem — it is listed on its own in Spaces.
- */
-export function ecosystemsOf<T extends DiscoverSpace>(spaces: readonly T[]): Ecosystem<T>[] {
-  const byParent = new Map<string, T[]>();
-  for (const space of spaces) {
-    if (!space.parentId) continue;
-    const list = byParent.get(space.parentId) ?? [];
-    list.push(space);
-    byParent.set(space.parentId, list);
-  }
-  return spaces
-    .filter((s) => !s.parentId && byParent.has(s.id))
-    .map((parent) => ({
-      parent,
-      children: [...(byParent.get(parent.id) ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
-    }))
-    .sort((a, b) => b.children.length - a.children.length || a.parent.name.localeCompare(b.parent.name));
 }
 
 export type EventWhen = 'all' | 'today' | 'week' | 'month';

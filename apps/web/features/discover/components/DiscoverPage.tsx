@@ -12,28 +12,25 @@ import { tagPalette } from '@/lib/tagColors';
 import { countryOptions, sectorOptions, spaceCountryCode, type EventFormat, type EventWhen } from '@/lib/discover/filters';
 import { useDiscoverEvents } from '../hooks/useDiscoverEvents';
 import { useJoinFlow } from '../hooks/useJoinFlow';
-import EcosystemsView from './EcosystemsView';
 import EventsBoard from './EventsBoard';
 import JoinRoleDialog from './JoinRoleDialog';
 import SpacesView from './SpacesView';
 import { SPACE_COLOR } from './SpaceTile';
 
-export type DiscoverView = 'spaces' | 'events' | 'ecosystems';
+export type DiscoverView = 'spaces' | 'events';
 
 const TABS: PaneTabItem[] = [
   { id: 'spaces', label: 'Spaces' },
   { id: 'events', label: 'Events' },
-  { id: 'ecosystems', label: 'Ecosystems' },
 ];
 
 function isDiscoverView(v: string | null): v is DiscoverView {
-  return v === 'spaces' || v === 'events' || v === 'ecosystems';
+  return v === 'spaces' || v === 'events';
 }
 
 const PLACEHOLDER: Record<DiscoverView, string> = {
   spaces: 'Search open spaces…',
   events: 'Search events…',
-  ecosystems: 'Search ecosystems…',
 };
 
 const WHEN: Array<{ value: EventWhen; label: string }> = [
@@ -48,11 +45,10 @@ const FORMAT: Array<{ value: EventFormat; label: string }> = [
 ];
 
 /**
- * Discover: what is open to you beyond the spaces you are in. Three views on
+ * Discover: what is open to you beyond the spaces you are in. Two views on
  * the pane's tab bar and the URL (`?view=`), the way the Directory keeps its
  * tabs — Spaces, a grid of tiles narrowed by where and by sector; Events,
- * every public upcoming event as posters on one board; Ecosystems, the spaces
- * that hold other spaces. The Directory's own toolbar rides under the tabs:
+ * every public upcoming event as posters on one board. The Directory's own toolbar rides under the tabs:
  * the search, then the filters as words.
  */
 export default function DiscoverPage() {
@@ -195,9 +191,6 @@ export default function DiscoverPage() {
               format={format}
               countries={countries}
             />
-          )}
-          {view === 'ecosystems' && (
-            <EcosystemsView spaces={spaces} search={search} countries={countries} isJoined={isJoined} onJoin={join} />
           )}
         </div>
       </ContentReveal>

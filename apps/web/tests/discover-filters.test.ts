@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   countryOptions,
-  ecosystemsOf,
   filterEvents,
   filterSpaces,
   groupEventsByDay,
@@ -47,13 +46,6 @@ test('spaces filter by search, country and sector together', () => {
   assert.deepEqual(filterSpaces(spaces, { sectors: new Set(['fintech']), countries: new Set(['AU']) }).map((s) => s.id), ['syd']);
   assert.deepEqual(filterSpaces(spaces, { search: 'climate' }).map((s) => s.id), ['orphan']);
   assert.equal(filterSpaces(spaces, {}).length, 4);
-});
-
-test('an ecosystem is a visible parent with its sub-spaces; an orphan room is none', () => {
-  const eco = ecosystemsOf(spaces);
-  assert.equal(eco.length, 1);
-  assert.equal(eco[0].parent.id, 'nzvc');
-  assert.deepEqual(eco[0].children.map((c) => c.id), ['room']);
 });
 
 const now = new Date(2026, 8, 10, 9, 0, 0); // Thu 10 Sep 2026, local

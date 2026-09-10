@@ -11,7 +11,7 @@ import { spaceCountryCode } from '@/lib/discover/filters';
 import type { Space } from '@/lib/types';
 import JoinWord from './JoinWord';
 
-export function formatMemberCount(count: number): string {
+function formatMemberCount(count: number): string {
   if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
   if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
   return String(count);
