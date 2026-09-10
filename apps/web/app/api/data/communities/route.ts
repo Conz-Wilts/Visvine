@@ -19,7 +19,7 @@ import {
   publicNameTakenMessage,
 } from '@/lib/spaces/publicName';
 import { defaultFeatureConfig } from '@/lib/featureAccess';
-import { listLockedSubspaces, listSubspaces } from '@/lib/spaces/subspaceAccess';
+import { findSiblingNameConflict, listLockedSubspaces, listSubspaces } from '@/lib/spaces/subspaceAccess';
 import { updateSpaceConfig } from '@/lib/spaces/spaceConfig';
 import { mergeAliasList, mergeLinkTypeList } from '@/lib/spaces/configMerge';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
@@ -173,12 +173,23 @@ export async function PUT(request: NextRequest) {
     // to land on a free name (lib/spaces/publicName.ts).
     const current = await prisma.space.findUnique({
       where: { id: space.id },
-      select: { name: true, visibility: true, personalOwnerId: true },
+      select: { name: true, visibility: true, personalOwnerId: true, parentId: true },
     });
     if (!current) {
       return NextResponse.json({ error: 'Space not found' }, { status: 404 });
     }
     const effective = effectiveNameAndVisibility({ name: space.name }, current);
+    // A sub-space's name is unique among its siblings whatever its visibility
+    // (`spaces_sibling_name_unique`), so two sub-spaces of one space can never
+    // be told apart by name alone. The user-facing create and rename both ask
+    // this; without it here the index refused the write as a raw P2002, which
+    // reached the caller as a 500 and Error Reporting as a fault.
+    if (current.parentId) {
+      const sibling = await findSiblingNameConflict(current.parentId, effective.name, space.id);
+      if (sibling) {
+        return NextResponse.json({ error: sibling.message, code: 'name_taken' }, { status: 409 });
+      }
+    }
     if (effective.isPublic && !current.personalOwnerId) {
       const clash = await findPublicNameConflict(effective.name, space.id);
       if (clash) {

@@ -15,10 +15,12 @@ import {
   rebaseMeta,
   rebaseNoteLinks,
   rebasePath,
+  siblingNameTakenMessage,
   spaceTrail,
   subspaceFolderPath,
   subspaceWriteDenial,
 } from '../lib/spaces/subspaces'
+import { normalizePublicName } from '../lib/spaces/publicName'
 import type { TreeNode } from '../lib/notes/shared/types'
 
 describe('parentDenial — one level deep', () => {
@@ -224,5 +226,31 @@ describe('graftLockedSubspace — named, not opened', () => {
     assert.equal(holders.length, 1)
     assert.deepEqual(holders[0].children?.map((c) => c.name), ['open', 'shut'])
     assert.equal(holders[0].children?.[0].locked, undefined)
+  })
+})
+
+describe('sibling names — the key the index and the routes share', () => {
+  // findSiblingNameConflict compares on normalizePublicName because the partial
+  // index does (migration 20260910120000). The comparison is the whole rule, so
+  // it is pinned here: a sub-space's name is unique among its siblings whatever
+  // its VISIBILITY — a private one that reads the same as a sibling is refused
+  // like any other, since two sub-spaces of one space must never be told apart
+  // by name alone.
+  const same = (a: string, b: string) => normalizePublicName(a) === normalizePublicName(b)
+
+  it('case and inner whitespace do not make a new name', () => {
+    assert.ok(same('Finance Team', 'finance   team'))
+    assert.ok(same('  Ops  ', 'ops'))
+  })
+
+  it('different names stay different', () => {
+    assert.ok(!same('Finance Team', 'Finance Teams'))
+    assert.ok(!same('Ops', 'Op s'))
+  })
+
+  it('the refusal names the sibling that holds it and its parent', () => {
+    const msg = siblingNameTakenMessage('Finance Team', 'Test')
+    assert.match(msg, /Test/)
+    assert.match(msg, /Finance Team/)
   })
 })
