@@ -1,6 +1,6 @@
 /**
  * GET /api/events/discover — publicly discoverable upcoming events across every
- * space, for the navbar calendar when no space is selected.
+ * space: the Discover page's event board.
  *
  * Deliberately space-agnostic: `/api/events` is space-scoped and gated on
  * membership, so it can't answer "what's on anywhere". Only `visibility: public`
@@ -10,14 +10,18 @@
  * `visibility: public` is the selective predicate, so it is pushed into the
  * query as a JSON path filter; only the public rows come back, and the status
  * and date checks run in JS over that far smaller set, under a hard cap.
+ *
+ * The shape is `lib/discover/filters.ts#DiscoverEvent`: the board filters by
+ * format (a place or not) and by the host space's country, so both ride along.
  */
 
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireApiSession, handleApiError } from '@/lib/api/route';
 import { isEventUpcoming } from '@/lib/eventUtils';
+import { spaceCountryCode, type DiscoverEvent } from '@/lib/discover/filters';
 
-const LIMIT = 60;
+const LIMIT = 120;
 /** The most public event rows one read will consider — a cap, not a page. */
 const SCAN_CAP = 1000;
 
@@ -37,7 +41,7 @@ export async function GET() {
         imageUrl: true,
         alias: true,
         metadata: true,
-        space: { select: { id: true, name: true } },
+        space: { select: { id: true, name: true, imageUrl: true, country: true, location: true } },
       },
     });
 
@@ -45,15 +49,26 @@ export async function GET() {
       .map((row) => {
         const meta = (row.metadata as Record<string, unknown>) ?? {};
         const location = meta.locationData as { label?: string } | undefined;
-        return {
+        const declaredType = meta.eventType as string | undefined;
+        const event: DiscoverEvent = {
           id: row.id,
           slug: row.alias ?? row.id.replace(/^event:/, ''),
           title: row.name,
           description: (meta.description as string) ?? row.subtitle ?? null,
           startAt: (meta.start_at as string) ?? '',
+          endAt: (meta.end_at as string) ?? null,
           locationLabel: location?.label ?? null,
+          eventType: declaredType === 'virtual' || (!declaredType && !location?.label) ? 'virtual' : 'in-person',
           coverImageUrl: row.imageUrl ?? null,
+          spaceId: row.space?.id ?? null,
           spaceName: row.space?.name ?? null,
+          spaceImageUrl: row.space?.imageUrl ?? null,
+          country: row.space
+            ? spaceCountryCode({ country: row.space.country ?? undefined, location: row.space.location ?? undefined })
+            : null,
+        };
+        return {
+          event,
           visibility: (meta.visibility as string) ?? 'space',
           status: (meta.status as string) ?? 'published',
         };
@@ -62,25 +77,14 @@ export async function GET() {
         (e) =>
           e.visibility === 'public' &&
           e.status === 'published' &&
-          e.startAt &&
-          isEventUpcoming(e.startAt),
+          e.event.startAt &&
+          isEventUpcoming(e.event.startAt),
       )
+      .map((e) => e.event)
       .sort((a, b) => a.startAt.localeCompare(b.startAt))
       .slice(0, LIMIT);
 
-    // Drop the fields that only existed to run the gate above.
-    const events = visible.map((e) => ({
-      id: e.id,
-      slug: e.slug,
-      title: e.title,
-      description: e.description,
-      startAt: e.startAt,
-      locationLabel: e.locationLabel,
-      coverImageUrl: e.coverImageUrl,
-      spaceName: e.spaceName,
-    }));
-
-    return NextResponse.json({ events });
+    return NextResponse.json({ events: visible });
   } catch (error) {
     return handleApiError(error, 'api.events.discover.failed');
   }
