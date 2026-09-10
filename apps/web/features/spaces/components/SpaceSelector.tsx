@@ -188,8 +188,13 @@ export default function SpaceSelector() {
                     starts at this row's top edge reads as a stray mark. It
                     ends in a corner because a sub-space holds no sub-spaces. */}
                 {parentName && (
-                  <span aria-hidden className="relative -mt-[7px] mr-1.5 h-[20px] w-2.5 shrink-0">
-                    <span className="absolute left-0 top-0 h-[17px] w-2.5 rounded-bl-[5px] border-b border-l border-border-default" />
+                  // ml: the stroke drops from the MIDDLE of the parent's first
+                  // letter, not its left edge — half a cap-width at 12px. mt:
+                  // it starts below that letter rather than against it, so the
+                  // two read as connected rather than collided. The corner
+                  // lands at the name's own middle, and the tick clears it.
+                  <span aria-hidden className="relative -mt-[3px] ml-[4px] mr-2 h-[20px] w-2.5 shrink-0">
+                    <span className="absolute left-0 top-0 h-[13px] w-2.5 rounded-bl-[5px] border-b border-l border-border-default" />
                   </span>
                 )}
                 <span className="min-w-0 truncate text-[15px] font-open-sauce font-semibold text-text-primary">
