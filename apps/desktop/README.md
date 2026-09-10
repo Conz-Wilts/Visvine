@@ -53,7 +53,8 @@ The e2e run boots the built app, checks the app origin loads, that the preload
 bridge (`window.visvineDesktop`) and `VisvineDesktop/<version>` UA are present, does a
 dev login as `admin@local.dev`, renders `/home` and `/directory`, proves external
 links and off-origin server redirects leave the shell (`shell.openExternal` is stubbed and asserted), checks
-window-state persistence, cold-start deep links (`visvine-desktop://open/directory`)
+window-state persistence, that a signed-in profile is still signed in after a
+restart, cold-start deep links (`visvine-desktop://open/directory`)
 and the offline fallback.
 
 ## Your own plan (local runtimes)

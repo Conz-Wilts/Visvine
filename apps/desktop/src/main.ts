@@ -18,6 +18,7 @@ import { cancelRun, isRuntimeId, listRuntimes, loginRuntime, startRun, type RunI
 const APP_NAME = "Visvine";
 const OFFLINE_PAGE = path.join(__dirname, "..", "resources", "offline.html");
 const SERVER_POLL_MS = 2500;
+const COOKIE_FLUSH_MS = 750;
 const ALLOWED_PERMISSIONS = new Set(["clipboard-read", "clipboard-sanitized-write", "fullscreen"]);
 
 app.setName(APP_NAME);
@@ -83,6 +84,38 @@ function showOffline(win: BrowserWindow) {
       void win.loadURL(startUrl());
     });
   }, SERVER_POLL_MS);
+}
+
+// ---------------------------------------------------------------------------
+// Staying signed in
+// ---------------------------------------------------------------------------
+
+/**
+ * Keeps the session cookie across restarts. The web session is a 30-day
+ * persistent cookie, but Chromium writes its jar to disk lazily — sign in and
+ * quit within the same minute and the cookie was only ever in memory, so the
+ * next launch lands on the sign-in wall. Flush shortly after any persistent
+ * cookie changes, and again on the way out.
+ *
+ * Only persistent cookies are worth a flush: a session cookie is not written to
+ * disk at all, so flushing for one is pure I/O.
+ */
+function keepSessionOnDisk() {
+  const cookies = session.defaultSession.cookies;
+  let flushTimer: NodeJS.Timeout | null = null;
+  const flush = () => {
+    if (flushTimer) clearTimeout(flushTimer);
+    flushTimer = null;
+    void cookies.flushStore();
+  };
+  cookies.on("changed", (_event, cookie) => {
+    if (cookie.session) return;
+    if (flushTimer) clearTimeout(flushTimer);
+    flushTimer = setTimeout(flush, COOKIE_FLUSH_MS);
+  });
+  // `before-quit` cannot be awaited, so this is a best-effort last chance; the
+  // debounced flush above is what actually makes the session durable.
+  app.on("before-quit", flush);
 }
 
 // ---------------------------------------------------------------------------
@@ -274,6 +307,8 @@ if (!app.requestSingleInstanceLock()) {
       callback(permitted(permission, details.requestingUrl));
     });
     session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => permitted(permission, origin));
+
+    keepSessionOnDisk();
 
     Menu.setApplicationMenu(buildMenu({ appUrl, getWindow: () => mainWindow }));
     registerRuntimeIpc();

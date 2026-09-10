@@ -3,8 +3,8 @@
 // the script exits 2 with a hint if it isn't).
 //
 // Covers: window boots → app loads → dev login → authenticated shell renders →
-// bridge/UA are exposed → external links leave the shell → deep links resolve →
-// offline fallback when the server is unreachable.
+// bridge/UA are exposed → external links leave the shell → the session survives a
+// quit → deep links resolve → offline fallback when the server is unreachable.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -33,8 +33,8 @@ const assert = (cond, msg) => {
   if (!cond) throw new Error(msg);
 };
 
-async function launch({ url, args = [] }) {
-  const userData = fs.mkdtempSync(path.join(os.tmpdir(), "visvine-desktop-e2e-"));
+async function launch({ url, args = [], userData: reuse }) {
+  const userData = reuse ?? fs.mkdtempSync(path.join(os.tmpdir(), "visvine-desktop-e2e-"));
   const app = await electron.launch({
     cwd: root,
     args: [".", ...args],
@@ -219,6 +219,49 @@ if (!(await serverUp(APP_URL))) {
     });
   } finally {
     await app.close().catch(() => {});
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The session survives a quit (Chromium flushes its cookie jar on the way out)
+// ---------------------------------------------------------------------------
+{
+  let userData = null;
+  {
+    const { app, page, userData: dir } = await launch({ url: APP_URL });
+    userData = dir;
+    try {
+      await step("sign in, then quit the app", async () => {
+        await page.goto(`${APP_URL}/dev/login?callbackUrl=%2Fhome`, { waitUntil: "domcontentloaded" });
+        const button = page.locator("form button", { hasText: ADMIN_EMAIL });
+        await button.first().waitFor({ timeout: 30_000 });
+        await Promise.all([
+          page.waitForURL((u) => !u.pathname.startsWith("/dev") && !u.pathname.startsWith("/api"), { timeout: 60_000 }),
+          button.first().click(),
+        ]);
+        const cookies = await page.context().cookies(APP_URL);
+        assert(cookies.some((c) => c.name === "auth_session"), "auth_session cookie not set");
+      });
+    } finally {
+      await app.close().catch(() => {});
+    }
+  }
+  {
+    const { app, page } = await launch({ url: APP_URL, userData });
+    try {
+      await step("relaunching the same profile is still signed in", async () => {
+        await page.waitForLoadState("domcontentloaded", { timeout: 60_000 });
+        await page.goto(`${APP_URL}/home`, { waitUntil: "domcontentloaded" });
+        await page.waitForLoadState("networkidle", { timeout: 60_000 }).catch(() => {});
+        const landed = new URL(page.url());
+        assert(
+          landed.pathname !== "/signin" && landed.searchParams.get("signin") !== "1",
+          `signed out after restart: ${page.url()}`,
+        );
+      });
+    } finally {
+      await app.close().catch(() => {});
+    }
   }
 }
 
