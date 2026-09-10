@@ -87,8 +87,19 @@ rail. `visibility` is `public | private`. Creation always goes through
   index, single read, search each have a federated form). Read under the
   sub-space's **everyone-principal** — no admin standing, space-wide grants
   only, capped to view (`access.ts#spaceWideAccessFor`). A public sub-space is
-  born with a space-wide view grant at its root. `spaces/` is reserved in every
-  space's own context (`subspaceWriteDenial`).
+  born with a space-wide view grant at its root, and one made public LATER gets
+  the same grant from `ensureFlowUpGrant` — without it the parent grafts a
+  folder it can read nothing through. `spaces/` is reserved in every space's own
+  context (`subspaceWriteDenial`).
+- **A private sub-space is closed, not secret: the parent's members see its
+  NAME.** `listLockedSubspaces` returns its own thin shape (never a `Space`,
+  which carries aliases and tool config) for private sub-spaces of a space the
+  caller actively belongs to. Drawn twice — a locked row on the switcher's
+  branch, and a `spaces/<id>/` folder stamped `locked` holding nothing
+  (`graftLockedSubspace`). Pressing either asks: `POST …/join` writes a
+  **pending** membership when `mayRequestSubspaceAccess` holds, answered on
+  Members → Wants to join beside the invite-link requests. Asking is not
+  entering — a pending join writes no person node, no alias, no cache bust.
 - Deleting a space with sub-spaces is children-first in
   `DELETE /api/data/communities` (the parent relation is Restrict).
 - Listings are flat lists with "in *Parent*" beside a sub-space only when the

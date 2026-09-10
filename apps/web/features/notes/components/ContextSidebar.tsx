@@ -26,6 +26,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import SearchInput from '@/components/ui/SearchInput'
 import { NoteSidebar } from './NoteSidebar'
 import { SharePanel } from './SharePanel'
+import RequestSubspaceAccessDialog from '@/features/spaces/components/RequestSubspaceAccessDialog'
 import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext'
 
 /** Width of the tree column. The pane tab bars inset their toolbar tray by the
@@ -67,7 +68,7 @@ export function ContextSidebar({
   focusPath?: string | null
 }) {
   const router = useRouter()
-  const { currentSpace } = useSpace()
+  const { currentSpace, lockedSubspaces } = useSpace()
   // The toolbar tray only centres over the note column, so the tree climbs
   // past it to sit flush under the tab row whenever it's open.
   const trayOpen = !!usePaneChromeState().chrome?.attachedOpen
@@ -83,6 +84,8 @@ export function ContextSidebar({
   // The Directory's search, on the Context tab: the tree is this tab's browse
   // surface the way the cards are the Grid's, so the box filters it.
   const [query, setQuery] = useState('')
+  // A locked `spaces/<id>` row was pressed: the door, not a note.
+  const [askingSubspace, setAskingSubspace] = useState<string | null>(null)
 
   // Keep the highlight on the open entity's note as the profile view navigates
   // between entities (the column itself survives in the pane shell).
@@ -194,6 +197,7 @@ export function ContextSidebar({
                   : (path) => setShareTarget({ path, kind: 'folder' })
               }
               onShareNote={(path) => setShareTarget({ path, kind: 'note' })}
+              onOpenLockedSubspace={setAskingSubspace}
               onDeleteFolder={ctx.handleDeleteFolder}
               // Drag a note (or a whole folder) onto another folder to file it
               // there; the same move is in each row's menu as "Move to...".
@@ -221,6 +225,19 @@ export function ContextSidebar({
       {/* Every delete in the tree asks here — in the middle of the screen, in
           the app's own chrome, rather than in a browser confirm. */}
       <ConfirmDialog {...ctx.confirm} />
+      {/* The door on a locked sub-space named in this tree. Resolved from the
+          locked list rather than the tree node, because the row carries only a
+          name and the dialog says who is in there. */}
+      {askingSubspace && currentSpace && (() => {
+        const sub = lockedSubspaces.find((s) => s.id === askingSubspace)
+        return sub ? (
+          <RequestSubspaceAccessDialog
+            space={sub}
+            parentName={currentSpace.name}
+            onClose={() => setAskingSubspace(null)}
+          />
+        ) : null
+      })()}
     </aside>
   )
 }

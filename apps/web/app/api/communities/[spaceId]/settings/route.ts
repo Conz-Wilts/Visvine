@@ -10,7 +10,7 @@ import {
   publicNameTakenMessage,
 } from '@/lib/spaces/publicName';
 import { updateSpaceConfig, UnknownSpaceError } from '@/lib/spaces/spaceConfig';
-import { findSiblingNameConflict } from '@/lib/spaces/subspaceAccess';
+import { ensureFlowUpGrant, findSiblingNameConflict } from '@/lib/spaces/subspaceAccess';
 import { mergeDesignConfig } from '@/lib/spaces/configMerge';
 
 /**
@@ -173,6 +173,14 @@ export async function PUT(
       return NextResponse.json({ error: 'Space not found' }, { status: 404 });
     }
     throw err;
+  }
+
+  // Turning a sub-space public is what makes its context flow up, and it
+  // flows nothing without the root grant it is read under. Born-public
+  // sub-spaces get this in provisionSpace; one made public later would
+  // otherwise appear in its parent as an empty folder.
+  if (visibility === 'public' && updated.parentId) {
+    await ensureFlowUpGrant(spaceId, session.userId);
   }
 
   revalidateTag('context-data-v2', { expire: 0 });

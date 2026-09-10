@@ -22,6 +22,7 @@ import { AuthProvider } from "@/features/auth/contexts/AuthContext";
 import type { Space } from "@/lib/types";
 import type { Session } from "@/features/auth/lib/auth-client";
 import type { InitialMembership } from "@/features/shared/contexts/SpaceContext";
+import type { LockedSubspace } from "@/lib/spaces/subspaceAccess";
 
 // If this user can't open the feature whose page is currently on screen —
 // either the space removed it, or the tool is admins-only and they're a
@@ -137,6 +138,7 @@ interface AuthLayoutClientProps {
   initialSession?: Session | null;
   initialSpaces?: Space[];
   initialMemberships?: InitialMembership[];
+  initialLockedSubspaces?: LockedSubspace[];
 }
 
 export default function AuthLayoutClient({
@@ -144,11 +146,16 @@ export default function AuthLayoutClient({
   initialSession,
   initialSpaces,
   initialMemberships,
+  initialLockedSubspaces,
 }: AuthLayoutClientProps) {
   return (
     <AuthProvider initialSession={initialSession}>
     <ThemeProvider>
-      <SpaceProvider initialSpaces={initialSpaces} initialMemberships={initialMemberships}>
+      <SpaceProvider
+        initialSpaces={initialSpaces}
+        initialMemberships={initialMemberships}
+        initialLockedSubspaces={initialLockedSubspaces}
+      >
         <SpaceDesignProvider>
         <ProfileProvider>
           <HeaderProvider>

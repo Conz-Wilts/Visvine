@@ -48,7 +48,8 @@ index, a single-note read and search each have a *federated* form
 every public sub-space's, rebased under that folder, as of now. A change in
 the sub-space is a change at the parent on the next read; a sub-space turned
 private disappears from the parent on the next read; a private sub-space
-shows nothing at the parent — not its notes, not its name.
+shows nothing at the parent but **its name** (see *A private sub-space is
+closed, not secret* below).
 
 Which surfaces federate:
 
@@ -78,6 +79,47 @@ A public sub-space is born with one grant so that it flows something: a
 space-wide **view** grant at its root, written by `provisionSpace` (and by the
 seed). Its admins can narrow or revoke it like any grant, and what they leave
 is exactly what the parent sees.
+
+A sub-space is usually born *private* and made public later, so the same grant
+is written by the visibility patch — `subspaceAccess.ts#ensureFlowUpGrant`,
+called from `PATCH /api/communities/<id>/settings` when `visibility` becomes
+`public` on a space with a parent. It is idempotent and never widens a grant
+that is already there, so a later toggle cannot undo a narrowing its admins
+chose. Without it a sub-space made public after creation grafted an empty
+`spaces/<id>/` at the parent with nothing to explain it.
+
+## A private sub-space is closed, not secret
+
+**Members of the parent see a private sub-space's NAME, and can ask to join
+it.** Hiding it entirely left a member with no way to discover the room they
+were meant to be in, let alone ask for it — so the door is drawn, and only the
+door.
+
+`subspaceAccess.ts#listLockedSubspaces(userId)` is the one read: private
+sub-spaces of a space the caller is an **active member** of, that they are not
+a member of themselves. It returns its own shape (`LockedSubspace` — id, name,
+description, image, member count, and whether this caller has already asked)
+rather than a `Space` with fields blanked, because a `Space` carries the
+aliases, the type vocabulary and the tool config, and none of that may cross.
+Discovering the parent (public, unjoined) earns nothing; standing in it does.
+
+Two surfaces draw it, both from `SpaceContext.lockedSubspaces`:
+
+| surface | row |
+|---|---|
+| the space switcher | `LockedSubspaceRow` on the parent's branch, after the sub-spaces you are in — the name dimmed, a lock, "Asked" once you have |
+| the parent's context tree | `spaces/<id>/`, stamped `locked`, holding nothing — no chevron, no drag, no share (`graftLockedSubspace`, `NoteSidebar#LockedSubspaceFolderRow`) |
+
+Pressing either opens `RequestSubspaceAccessDialog`: what the space is, how
+many people are in it, and one button.
+
+**Asking is not entering.** The request is a `pending` row in `space_members`
+— the same status an invite link's request lands in, so admins of the
+sub-space answer both in one place (Members → *Wants to join*). It is written
+by `POST /api/communities/<id>/join`, which allows a private space only when
+`mayRequestSubspaceAccess` says the caller is an active member of its parent;
+a pending join creates no person node, no alias and no cache bust, because
+nothing about the space has opened.
 
 ### `spaces/` is reserved
 

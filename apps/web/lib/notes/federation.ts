@@ -23,9 +23,10 @@ import { SHARED_OWNER_KEY, type Context } from './store'
 import type { ContextPrincipal } from './shared/contextTypes'
 import type { NoteMeta, TreeNode } from './shared/types'
 import type { SearchFilters } from './shared/retrieval'
-import { flowingSubspace, flowingSubspacesOf } from '@/lib/spaces/subspaceAccess'
+import { flowingSubspace, flowingSubspacesOf, lockedSubspacesOf } from '@/lib/spaces/subspaceAccess'
 import {
   SUBSPACE_FOLDER,
+  graftLockedSubspace,
   graftSubspace,
   isSubspacePath,
   parseSubspacePath,
@@ -115,6 +116,15 @@ export async function federateTree(
   for (const reader of await subspaceReaders(p, context)) {
     const subRoot = await treeFor(reader.context, reader.principal)
     graftSubspace(root, reader.space, subRoot)
+  }
+  // The private ones are named after them, and nothing of theirs is read to do
+  // it — a locked folder is the name and the lock. Only for a signed-in caller
+  // standing in this space, which is the only person the row would mean
+  // anything to.
+  if (mayFederate(context) && p.userId) {
+    for (const sub of await lockedSubspacesOf(context.spaceId, p.userId)) {
+      graftLockedSubspace(root, sub)
+    }
   }
 }
 

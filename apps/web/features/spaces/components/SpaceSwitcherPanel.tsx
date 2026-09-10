@@ -6,8 +6,10 @@ import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/Sideb
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { ITEM_GAP, ROW_H, ROW_INSET } from '@/features/shared/components/layout/railRow';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
-import { LIST_AVATAR_CENTER, LIST_AVATAR_PX, NewSpaceRow, NewSubspaceRow, SpaceListRow, SubspaceRow } from '@/features/spaces/components/SpaceListRow';
+import { LIST_AVATAR_CENTER, LIST_AVATAR_PX, LockedSubspaceRow, NewSpaceRow, NewSubspaceRow, SpaceListRow, SubspaceRow } from '@/features/spaces/components/SpaceListRow';
 import NewSpaceDialog from '@/features/spaces/components/NewSpaceDialog';
+import RequestSubspaceAccessDialog from '@/features/spaces/components/RequestSubspaceAccessDialog';
+import type { LockedSubspace } from '@/lib/spaces/subspaceAccess';
 import { TreeSpine } from '@/components/ui/TreeChrome';
 import { scoreName } from '@/lib/rankName';
 import { spaceBranches } from '@/lib/spaces/subspaces';
@@ -41,13 +43,15 @@ const SPINE_DEFAULT_ML = 14;
 
 export default function SpaceSwitcherPanel() {
   const { switcherOpen: isOpen, setSwitcherOpen, reduced } = useSidebar();
-  const { currentSpace, joinedSpaces, setCurrentSpace, manages } = useSpace();
+  const { currentSpace, joinedSpaces, lockedSubspaces, setCurrentSpace, manages } = useSpace();
   const pathname = usePathname();
   const [query, setQuery] = useState('');
   // What is being made: a top-level space, or a sub-space of the row whose
   // branch offered it. One dialog either way (NewSpaceDialog).
   const [creating, setCreating] = useState<null | { id: string; name: string }>(null);
   const [makingSpace, setMakingSpace] = useState(false);
+  // The locked row that was pressed — the door, not a space to switch to.
+  const [asking, setAsking] = useState<null | { space: LockedSubspace; parentName: string }>(null);
 
   const close = () => setSwitcherOpen(false);
   useEscapeKey(close, isOpen);
@@ -87,16 +91,20 @@ export default function SpaceSwitcherPanel() {
   // under it. A search flattens the whole tree: the match is what you are
   // looking for, wherever it sits.
   const rows = useMemo(() => {
+    const lockedOf = (id: string) => lockedSubspaces.filter((s) => s.parentId === id);
     const q = query.trim().toLowerCase();
     if (!q) {
-      return spaceBranches([...joinedSpaces].sort((a, b) => a.name.localeCompare(b.name)));
+      return spaceBranches([...joinedSpaces].sort((a, b) => a.name.localeCompare(b.name))).map((b) => ({
+        ...b,
+        locked: lockedOf(b.space.id),
+      }));
     }
     return joinedSpaces
       .map((space) => ({ space, score: scoreName(space.name, q) }))
       .filter(({ score }) => score > -Infinity)
       .sort((a, b) => b.score - a.score)
-      .map(({ space }) => ({ space, children: [] }));
-  }, [joinedSpaces, query]);
+      .map(({ space }) => ({ space, children: [], locked: [] as typeof lockedSubspaces }));
+  }, [joinedSpaces, lockedSubspaces, query]);
 
   const select = (spaceId: string) => {
     setCurrentSpace(spaceId);
@@ -153,13 +161,16 @@ export default function SpaceSwitcherPanel() {
             <div className="p-4 text-center text-sm text-text-muted">No spaces found</div>
           ) : (
             <div className="flex flex-col" style={{ gap: ITEM_GAP }}>
-              {rows.map(({ space, children }) => {
+              {rows.map(({ space, children, locked }) => {
                 // An admin's own space opens whether or not it has sub-spaces
                 // yet: the branch is where they are read, so it is where the
                 // first one is made. Spaces nest one level, so a sub-space
                 // never offers it.
                 const canAddSub = !space.parentId && manages(space.id);
-                const branches = children.length + (canAddSub ? 1 : 0);
+                // A locked sub-space is a branch too: it is drawn precisely so
+                // the chevron opens on a space whose only sub-spaces are ones
+                // you are not in yet.
+                const branches = children.length + locked.length + (canAddSub ? 1 : 0);
                 const open = branches > 0 && expanded.has(space.id);
                 return (
                   <div key={space.id}>
@@ -191,9 +202,21 @@ export default function SpaceSwitcherPanel() {
                               key={child.id}
                               space={child}
                               current={currentSpace?.id === child.id}
-                              nested={i === children.length - 1 ? 'last' : 'mid'}
+                              nested={i === children.length - 1 && locked.length === 0 ? 'last' : 'mid'}
                               tabbable={isOpen}
                               onSelect={() => select(child.id)}
+                            />
+                          ))}
+                          {/* The ones you cannot open, after the ones you can:
+                              the branch reads as what is yours first, then what
+                              is there to ask for. */}
+                          {locked.map((child, i) => (
+                            <LockedSubspaceRow
+                              key={child.id}
+                              space={child}
+                              nested={i === locked.length - 1 ? 'last' : 'mid'}
+                              tabbable={isOpen}
+                              onSelect={() => setAsking({ space: child, parentName: space.name })}
                             />
                           ))}
                         </TreeSpine>
@@ -205,6 +228,13 @@ export default function SpaceSwitcherPanel() {
             </div>
           )}
         </div>
+        {asking && (
+          <RequestSubspaceAccessDialog
+            space={asking.space}
+            parentName={asking.parentName}
+            onClose={() => setAsking(null)}
+          />
+        )}
         {(makingSpace || creating) && (
           <NewSpaceDialog
             parent={creating}

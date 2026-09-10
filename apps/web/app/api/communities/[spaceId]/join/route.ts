@@ -8,6 +8,7 @@ import { removeMemberAccess } from '@/lib/notes/access';
 import { findAliasByRef, selfJoinAliases, type SpaceAlias } from '@/lib/types';
 import { ensureMemberNode } from '@/lib/spaces/memberNode';
 import { isGlobalSpace } from '@/lib/spaces/globalSpace';
+import { mayRequestSubspaceAccess } from '@/lib/spaces/subspaceAccess';
 
 /**
  * POST: Current user joins a space (self-service)
@@ -43,17 +44,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
     }
 
     // Private spaces are not self-joinable — entry is via an invite link
-    // (which creates a pending request) or an admin adding the user directly.
+    // (which creates a pending request), an admin adding the user directly,
+    // or, for a private SUB-space, the request this route writes: a member of
+    // the parent can see the locked row and ask through it
+    // (lib/spaces/subspaceAccess.ts#mayRequestSubspaceAccess). Asking is not
+    // entering — the row lands `pending` and an admin of the sub-space answers
+    // it on Members → Wants to join.
+    let requesting = false;
     if (space.visibility === 'private') {
       const existing = await prisma.spaceMember.findUnique({
         where: { userId_spaceId: { userId: session.userId, spaceId } },
         select: { id: true },
       });
       if (!existing) {
-        return NextResponse.json(
-          { error: 'This space is private. Ask an admin for an invite link.' },
-          { status: 403 }
-        );
+        requesting = await mayRequestSubspaceAccess(spaceId, session.userId);
+        if (!requesting) {
+          return NextResponse.json(
+            { error: 'This space is private. Ask an admin for an invite link.' },
+            { status: 403 }
+          );
+        }
       }
     }
 
@@ -69,10 +79,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
 
     const membership = await prisma.spaceMember.upsert({
       where: { userId_spaceId: { userId: session.userId, spaceId } },
-      create: { userId: session.userId, spaceId },
+      create: { userId: session.userId, spaceId, status: requesting ? 'pending' : 'active' },
       update: {},
       select: { id: true, status: true },
     });
+
+    // A request is not a membership yet, so nothing else happens: no person
+    // node in a space they cannot see, no alias, no cache bust. The row is the
+    // whole act.
+    if (membership.status === 'pending') {
+      return NextResponse.json(
+        { membership: { id: membership.id, status: membership.status } },
+        { status: 201 }
+      );
+    }
 
     // The joiner's connected person node in this space's directory. This
     // replaces the old `node.updateMany({ id: person.id, spaceId })`, which

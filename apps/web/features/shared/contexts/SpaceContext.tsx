@@ -4,15 +4,22 @@ import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, Reac
 import { Space } from '@/lib/types';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { createSafeContext } from './createSafeContext';
+import type { LockedSubspace } from '@/lib/spaces/subspaceAccess';
 
 interface SpaceContextValue {
   spaces: Space[];
   currentSpace: Space | null;
   joinedSpaces: Space[];
+  /** Private sub-spaces of a space you are in, which you are not in: the
+   *  locked rows the switcher and the context tree draw. */
+  lockedSubspaces: LockedSubspace[];
   setCurrentSpace: (spaceId: string) => void;
   joinSpace: (spaceId: string, alias?: string) => Promise<void>;
   leaveSpace: (spaceId: string) => Promise<void>;
   refreshSpace: () => Promise<void>;
+  /** Ask to join a locked sub-space. Writes a pending membership its admins
+   *  answer on Members → Wants to join; nothing about the space opens yet. */
+  requestSubspaceAccess: (spaceId: string) => Promise<void>;
   loading: boolean;
   error: string | null;
   isAdmin: boolean;
@@ -51,11 +58,18 @@ interface SpaceProviderProps {
    */
   initialSpaces?: Space[];
   initialMemberships?: InitialMembership[];
+  initialLockedSubspaces?: LockedSubspace[];
 }
 
-export function SpaceProvider({ children, initialSpaces, initialMemberships }: SpaceProviderProps) {
+export function SpaceProvider({
+  children,
+  initialSpaces,
+  initialMemberships,
+  initialLockedSubspaces,
+}: SpaceProviderProps) {
   const hasInitialData = initialSpaces !== undefined && initialMemberships !== undefined;
   const [spaces, setSpaces] = useState<Space[]>(initialSpaces ?? []);
+  const [lockedSubspaces, setLockedSubspaces] = useState<LockedSubspace[]>(initialLockedSubspaces ?? []);
   // spaceId → whether the user manages it (holds an alias marked `admin`
   // there). Membership is the key's presence; standing is the value.
   const [memberships, setMemberships] = useState<Map<string, boolean>>(
@@ -76,8 +90,11 @@ export function SpaceProvider({ children, initialSpaces, initialMemberships }: S
   const loadAllSpaces = useCallback(async () => {
     // fetchJson sends the whole page to /signin on a 401, so a signed-out
     // session can't keep rendering a stale space list.
-    const data = await fetchJson<{ spaces?: Space[] }>('/api/data/communities');
+    const data = await fetchJson<{ spaces?: Space[]; lockedSubspaces?: LockedSubspace[] }>(
+      '/api/data/communities',
+    );
     setSpaces(data.spaces || []);
+    setLockedSubspaces(data.lockedSubspaces || []);
   }, []);
 
   const loadUserSpaces = useCallback(async () => {
@@ -119,6 +136,14 @@ export function SpaceProvider({ children, initialSpaces, initialMemberships }: S
   const joinSpace = useCallback(async (spaceId: string, alias?: string) => {
     await fetchJsonBody(`/api/communities/${spaceId}/join`, 'POST', { alias });
     setMemberships(prev => new Map(prev).set(spaceId, false));
+  }, []);
+
+  // Asking is its own act: the membership lands `pending`, so the row stays
+  // locked and only changes its label. Marking it here rather than refetching
+  // keeps the button from offering itself a second time while an admin decides.
+  const requestSubspaceAccess = useCallback(async (spaceId: string) => {
+    await fetchJsonBody(`/api/communities/${spaceId}/join`, 'POST', {});
+    setLockedSubspaces(prev => prev.map(s => (s.id === spaceId ? { ...s, requested: true } : s)));
   }, []);
 
   const leaveSpace = useCallback(async (spaceId: string) => {
@@ -173,10 +198,12 @@ export function SpaceProvider({ children, initialSpaces, initialMemberships }: S
       spaces,
       currentSpace,
       joinedSpaces,
+      lockedSubspaces,
       setCurrentSpace,
       joinSpace,
       leaveSpace,
       refreshSpace,
+      requestSubspaceAccess,
       loading,
       error,
       isAdmin,
@@ -186,10 +213,12 @@ export function SpaceProvider({ children, initialSpaces, initialMemberships }: S
       spaces,
       currentSpace,
       joinedSpaces,
+      lockedSubspaces,
       setCurrentSpace,
       joinSpace,
       leaveSpace,
       refreshSpace,
+      requestSubspaceAccess,
       loading,
       error,
       isAdmin,

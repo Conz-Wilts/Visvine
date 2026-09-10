@@ -113,13 +113,43 @@ function rebaseNode(node: TreeNode, subspaceId: string): TreeNode {
  * (`subspaceWriteDenial`), so nothing can collide. The folder is stamped
  * `space` so the sidebar can draw it as what it is.
  */
-export function graftSubspace(root: TreeNode, sub: { id: string; name: string }, subRoot: TreeNode): TreeNode {
+/**
+ * Name a PRIVATE sub-space in the parent's tree without opening it: the same
+ * `spaces/<id>` folder, stamped `locked`, holding nothing.
+ *
+ * It is here for the reason the switcher's locked row is: a member of the
+ * parent who cannot see the room has no way to ask for it. Nothing of the
+ * sub-space crosses — not a note, not a child count — because nothing was
+ * read; only the name it is listed under.
+ */
+export function graftLockedSubspace(root: TreeNode, sub: { id: string; name: string }): TreeNode {
+  const holder = subspaceHolder(root)
+  const folder: TreeNode = {
+    name: sub.id,
+    path: subspaceFolderPath(sub.id),
+    kind: 'folder',
+    title: sub.name,
+    space: sub.id,
+    locked: true,
+  }
+  holder.children ??= []
+  holder.children.push(folder)
+  return folder
+}
+
+/** The `spaces/` folder in `root`, made if it is not there yet. */
+function subspaceHolder(root: TreeNode): TreeNode {
   root.children ??= []
   let holder = root.children.find((c) => c.kind === 'folder' && c.path === SUBSPACE_FOLDER)
   if (!holder) {
     holder = { name: SUBSPACE_FOLDER, path: SUBSPACE_FOLDER, kind: 'folder', title: 'Spaces', children: [] }
     root.children.push(holder)
   }
+  return holder
+}
+
+export function graftSubspace(root: TreeNode, sub: { id: string; name: string }, subRoot: TreeNode): TreeNode {
+  const holder = subspaceHolder(root)
   const folder: TreeNode = {
     name: sub.id,
     path: subspaceFolderPath(sub.id),

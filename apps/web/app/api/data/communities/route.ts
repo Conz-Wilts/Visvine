@@ -19,7 +19,7 @@ import {
   publicNameTakenMessage,
 } from '@/lib/spaces/publicName';
 import { defaultFeatureConfig } from '@/lib/featureAccess';
-import { listSubspaces } from '@/lib/spaces/subspaceAccess';
+import { listLockedSubspaces, listSubspaces } from '@/lib/spaces/subspaceAccess';
 import { updateSpaceConfig } from '@/lib/spaces/spaceConfig';
 import { mergeAliasList, mergeLinkTypeList } from '@/lib/spaces/configMerge';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
@@ -33,10 +33,17 @@ export async function GET() {
     const session = await requireSession();
     if (session instanceof Response) return session;
 
-    const spaces = await listVisibleSpaces(session);
+    // Two lists, deliberately different shapes: the spaces the caller is in or
+    // can discover, and the private sub-spaces they can see the door of but not
+    // open (lib/spaces/subspaceAccess.ts#listLockedSubspaces). A locked row
+    // carries a name and nothing a member of it would recognise as config.
+    const [spaces, lockedSubspaces] = await Promise.all([
+      listVisibleSpaces(session),
+      listLockedSubspaces(session.userId),
+    ]);
 
     return NextResponse.json(
-      { spaces },
+      { spaces, lockedSubspaces },
       {
         headers: {
           'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',

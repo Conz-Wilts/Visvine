@@ -177,7 +177,7 @@ function NewSubspaceDialog({
             <p className="mt-0.5 text-xs text-text-muted">
               {isPublic
                 ? `Anyone can find and join it, and its context shows in ${parentName}'s Context.`
-                : `Invite or admin only. Nothing of it shows in ${parentName}.`}
+                : `Members of ${parentName} see its name with a lock and can ask to join. Its context stays closed.`}
             </p>
           </div>
           <Toggle checked={isPublic} onChange={setIsPublic} aria-label="Public sub-space" />

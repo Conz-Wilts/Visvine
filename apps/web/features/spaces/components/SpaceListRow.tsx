@@ -1,8 +1,9 @@
 'use client';
 
 import type { Space } from '@/lib/types';
+import type { LockedSubspace } from '@/lib/spaces/subspaceAccess';
 import { LABEL_ML, ROW_CLASS, ROW_H, ROW_TEXT } from '@/features/shared/components/layout/railRow';
-import { ChevronRightIcon, PlusIcon } from '@/features/shared/icons';
+import { ChevronRightIcon, LockIcon, PlusIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { TREE_ROW_BLEED, TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
 
@@ -138,6 +139,44 @@ export function SubspaceRow({
           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
         </svg>
       )}
+    </button>
+  );
+}
+
+/**
+ * A private sub-space of a space you are in, that you are not in: the name,
+ * and a lock where the check would be.
+ *
+ * It is drawn at all because a private sub-space is closed, not secret — a
+ * member who cannot see the room has no way to ask for it, and the ask is the
+ * point. Pressing it does not switch space (there is nothing to switch to);
+ * it opens the door: who is in there, and a button that puts the request in
+ * front of that sub-space's admins.
+ */
+export function LockedSubspaceRow({
+  space,
+  nested,
+  tabbable,
+  onSelect,
+}: {
+  space: LockedSubspace;
+  nested: TreeGuideKind;
+  tabbable: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      tabIndex={tabbable ? 0 : -1}
+      aria-label={`${space.name} — private${space.requested ? ', access requested' : ', request access'}`}
+      className={`${ROW_CLASS} !z-0 !w-[calc(100%+999px)] ${TREE_ROW_BLEED} min-w-0 gap-3 pr-4 text-left font-normal`}
+      style={{ height: SUBSPACE_ROW_H, color: 'var(--shell-fg-muted, #111827)' }}
+    >
+      <TreeSpineJoin kind={nested} />
+      <span className={`${ROW_TEXT} min-w-0 flex-1 truncate opacity-70`}>{space.name}</span>
+      {space.requested && <span className="shrink-0 text-[11px] text-text-muted">Asked</span>}
+      <LockIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />
     </button>
   );
 }

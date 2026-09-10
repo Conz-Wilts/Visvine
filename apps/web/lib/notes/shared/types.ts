@@ -55,6 +55,11 @@ export interface TreeNode {
   // the id of that space. Everything under it is that space's own context,
   // rebased into this tree read-only (lib/spaces/subspaces.ts).
   space?: string
+  // Set on a `spaces/<id>` folder standing for a PRIVATE sub-space: it is
+  // named here, and holds nothing. A private sub-space is closed, not secret —
+  // the row exists so a member of the parent can see it and ask
+  // (lib/spaces/subspaceAccess.ts#listLockedSubspaces).
+  locked?: boolean
 }
 
 // A note sitting in the trash (soft-deleted), awaiting restore or purge.
