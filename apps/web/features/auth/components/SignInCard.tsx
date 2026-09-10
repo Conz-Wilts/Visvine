@@ -42,18 +42,13 @@ export default function SignInCard({
       {/* Logo */}
       <span className="inline-flex items-center gap-2">
         <img src="/images/brand-icon.png" alt="" className="w-7 h-7 rounded-lg" />
-        <span className="font-medium text-lg text-brand-green tracking-tight">Visvine</span>
+        <span className="font-brand font-medium text-lg text-brand-green tracking-tight">Visvine</span>
       </span>
 
       {/* Heading */}
       <h1 className="mt-6 text-2xl font-bold text-text-primary leading-tight">
-        {isSignup ? "Create your account" : "Welcome back"}
+        {isSignup ? "Create your account" : "Sign in"}
       </h1>
-      <p className="mt-2 text-text-muted text-sm">
-        {isSignup
-          ? "Join Visvine to explore spaces"
-          : "Sign in to continue to Visvine"}
-      </p>
 
       <div className="mt-7 w-full">
         <a
@@ -78,12 +73,6 @@ export default function SignInCard({
           {formError}
         </p>
       )}
-
-      <p className="mt-5 text-xs text-text-muted">
-        {isSignup
-          ? "We'll create your account the first time you continue with Google."
-          : "New here? Continuing with Google creates your account."}
-      </p>
 
       {devAuthEnabled && (
         <a
