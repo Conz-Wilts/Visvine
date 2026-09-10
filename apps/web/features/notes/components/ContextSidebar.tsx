@@ -32,11 +32,14 @@ import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from '@/features/shared/contexts/Them
 /** Width of the tree column. The pane tab bars inset their toolbar tray by the
  *  same amount so the tray centres over the note, not the whole pane. */
 export const CONTEXT_PANEL_W = 300
-/** <main>'s bottom padding (pb-6 in AuthLayoutClient). The column stops short
- *  of it: a column that ran to the viewport's bottom edge would make <main>
- *  overflow by exactly that padding, and those few pixels of scroll have no
- *  sticky range to absorb them — the whole column would ride up under the tab
- *  row on notes short enough that the column is the tallest thing in the row. */
+/** <main>'s bottom padding (pb-6 in AuthLayoutClient). The column runs THROUGH
+ *  it to the viewport's bottom edge, and carries a matching negative
+ *  margin-bottom so it does that without growing the row it sits in: the extra
+ *  24px would otherwise make <main> overflow by exactly that padding, and those
+ *  few pixels of scroll have no sticky range to absorb them — the whole column
+ *  would ride up under the tab row on notes short enough that the column is the
+ *  tallest thing in the row. Cancelled here rather than in the four surfaces
+ *  that render the column, so the geometry stays in one file. */
 const MAIN_PAD_B = 24
 /** Below this the column is hidden (Tailwind lg); anything that lines up with
  *  it — the tab bar's toolbar tray — reads the same breakpoint through here. */
@@ -123,8 +126,8 @@ export function ContextSidebar({
   if (!notesEnabled || !spaceId) return null
 
   // Starts at the content line — <main>'s content-box top, where the note card
-  // and the connections rail start — and runs to just above <main>'s bottom
-  // padding, scrolling on its own while the note scrolls the page.
+  // and the connections rail start — and runs edge to edge, all the way to the
+  // viewport's bottom, scrolling on its own while the note scrolls the page.
   //
   // `top: 0`, not SHELL_PANE_TOP: a sticky offset is measured from the
   // scrollport ALREADY inset by <main>'s padding, so SHELL_PANE_TOP there
@@ -144,8 +147,9 @@ export function ContextSidebar({
       style={{
         width: CONTEXT_PANEL_W,
         top: 0,
-        height: `calc(100dvh - ${SHELL_TOP_BAR_H + SHELL_PANE_TOP + MAIN_PAD_B}px)`,
+        height: `calc(100dvh - ${SHELL_TOP_BAR_H + SHELL_PANE_TOP}px)`,
         marginTop: trayOpen ? -TRAY_ROW_H : 0,
+        marginBottom: -MAIN_PAD_B,
         transition: 'margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
