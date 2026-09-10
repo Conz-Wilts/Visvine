@@ -222,17 +222,20 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
         )}
       </div>
 
-      {/* The table bleeds to the pane's right and bottom edges: it is the
-          pane's own grid, not a box on it. A hairline over the head and one
-          down its left edge close the grid; the right edge is the last
-          column's own line, so it shows only once you have scrolled to it. */}
-      <div className="min-h-0 flex-1 border-t border-l border-border-subtle">
+      {/* The frame draws no lines: a border here sits outside the scroll box's
+          scrollbars, so its right one would stand clear of where every row
+          line ends and its sides would run on under the horizontal bar. The
+          table traces its own box on the scrollport instead (DirectoryTable);
+          the roster, which does not scroll sideways, takes a plain frame. */}
+      <div className="min-h-0 flex-1">
         {/* Agents are not rows of a record: every column is live state — what
             it is doing, when it fires next, who for — so the type gets the
             roster with the clock over it rather than the cell grid. Same bar,
             same search and tag filter, same click-through. */}
         {isAgents && spaceId ? (
-          <AgentsRoster data={roster.data} error={roster.error} now={roster.now} search={browse.searchTerm} tags={browse.filterTags} onNavigate={(href) => router.push(href)} />
+          <div className="h-full border-t border-l border-border-subtle">
+            <AgentsRoster data={roster.data} error={roster.error} now={roster.now} search={browse.searchTerm} tags={browse.filterTags} onNavigate={(href) => router.push(href)} />
+          </div>
         ) : (
         <DirectoryTable
           items={items}

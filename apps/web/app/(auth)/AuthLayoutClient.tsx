@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/features/shared/components/layout/Sidebar";
 import { HeaderProvider } from "@/features/shared/contexts/HeaderContext";
@@ -45,8 +45,26 @@ function useFeatureRouteGuard() {
   }, [currentSpace, loading, isAdmin, pathname, router]);
 }
 
+/** Set by a pane that sizes itself to the viewport and scrolls inside itself.
+ *  <main> reserves a scrollbar gutter it never uses for such a pane, and 8px of
+ *  dead white down the right is exactly where a full-bleed grid's own edge
+ *  should be. Told by the pane rather than read off the path, because it is one
+ *  VIEW of a route: the Directory's Table, not /directory. */
+const ViewportPaneContext = createContext<(fills: boolean) => void>(() => {});
+
+/** Declare, for as long as this component is mounted, that the pane fills the
+ *  viewport and <main> has nothing to scroll. */
+export function useViewportPane(fills = true) {
+  const declare = useContext(ViewportPaneContext);
+  useEffect(() => {
+    declare(fills);
+    return () => declare(false);
+  }, [declare, fills]);
+}
+
 function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   const { expanded } = useSidebar();
+  const [viewportPane, setViewportPane] = useState(false);
   const pathname = usePathname();
   useFeatureRouteGuard();
 
@@ -119,10 +137,15 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
             // Nothing is reserved for the connections rail: it's a pure
             // overlay over the surface's right edge, so opening it never
             // narrows <main> and never shifts the pane's tab row across.
-            ...(fullBleed ? {} : { scrollbarGutter: 'stable' as const }),
+            // A pane that fills the viewport (the Directory's Table) has
+            // nothing for <main> to scroll, so the reserved gutter is 8px of
+            // dead white between its right edge and the screen's.
+            ...(fullBleed || viewportPane ? {} : { scrollbarGutter: 'stable' as const }),
           }}
         >
-          {mainInner}
+          <ViewportPaneContext.Provider value={setViewportPane}>
+            {mainInner}
+          </ViewportPaneContext.Provider>
         </main>
       </div>
 

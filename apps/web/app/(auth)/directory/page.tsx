@@ -8,6 +8,7 @@ import DirectoryTableView from '@/features/directory/components/table/DirectoryT
 import ResourcesBrowser from '@/features/resources/components/ResourcesBrowser';
 import ContentReveal from '@/components/ui/ContentReveal';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
+import { useViewportPane } from '@/app/(auth)/AuthLayoutClient';
 import { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -132,6 +133,11 @@ function DirectoryPane() {
   useEffect(() => {
     if (!wantsContext) resetContextTreeState();
   }, [wantsContext]);
+
+  // The Table sizes itself to the viewport and scrolls inside itself, so
+  // <main> keeps no scrollbar gutter for it and the grid reaches the screen's
+  // right edge. Grid and Resources scroll <main> and keep theirs.
+  useViewportPane(view === 'table');
 
   const browse = useDirectoryBrowse();
   const { space, loading, error, filteredItems, handleItemClick } = browse;

@@ -14,6 +14,15 @@
 // per column how many carry a value — with the horizontal scrollbar under
 // it, since it is inside the scroll box.
 //
+// The box around it all is traced on the SCROLLPORT, as an overlay: four
+// hairlines on the scroll box's own edges, inset past whatever the scrollbars
+// take. Neither of the obvious places can draw it. A border on the pane's
+// frame sits outside the scrollbars, so its right line stands clear of where
+// every row line ends and its sides run on under the horizontal bar; a border
+// on the cells rides the TABLE, which collapses its borders — the name
+// column's left line and "Add column"'s right one are at the table's edges,
+// and a table wider than the pane keeps both of them off screen.
+//
 // The table is its own scroll box (the view sizes it to the pane): the head
 // sticks to its top and the name column to its left, so a wide table keeps
 // the entry's name in view while its fields scroll. The header menus portal
@@ -160,18 +169,49 @@ export default function DirectoryTable({
   // they have sized every one, the filler column past "+" takes the slack.
   const frameRef = useRef<HTMLDivElement>(null);
   const [paneWidth, setPaneWidth] = useState(0);
+  // What the scrollbars take off the scroll box, so the box's lines can be
+  // traced on the scrollport rather than around the bars.
+  const [gutter, setGutter] = useState({ right: 0, bottom: 0 });
+  // The frame is behind the loading and empty returns below, so this waits for
+  // it: with no dependency the one run happens while the skeleton is up, the
+  // ref is null, and the gutters stay 0 — tracing the box around the
+  // scrollbars rather than inside them.
+  const mounted = !loading && items.length > 0;
   useLayoutEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
     const measure = () => {
       const scroller = frame.querySelector<HTMLElement>('[data-virtuoso-scroller]');
-      setPaneWidth((scroller ?? frame).clientWidth);
+      const box = scroller ?? frame;
+      setPaneWidth(box.clientWidth);
+      const next = {
+        right: box.offsetWidth - box.clientWidth,
+        bottom: box.offsetHeight - box.clientHeight,
+      };
+      setGutter((g) => (g.right === next.right && g.bottom === next.bottom ? g : next));
     };
     measure();
+    // Both: the frame moves with the window, the scroll box also when a
+    // scrollbar appears or goes — which is what the gutters are. The scroller
+    // is Virtuoso's and may land a frame after this, so it is waited for.
     const observer = new ResizeObserver(measure);
     observer.observe(frame);
-    return () => observer.disconnect();
-  }, []);
+    let raf = 0;
+    const attach = () => {
+      const scroller = frame.querySelector<HTMLElement>('[data-virtuoso-scroller]');
+      if (scroller) {
+        observer.observe(scroller);
+        measure();
+      } else {
+        raf = requestAnimationFrame(attach);
+      }
+    };
+    attach();
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
+  }, [mounted]);
 
   // ── resizing: a pointer drag on the header's right edge ────────────────
   const resizing = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
@@ -233,22 +273,6 @@ export default function DirectoryTable({
   // menu acts on is never in doubt.
   const litKey = menu?.key ?? null;
 
-  // The footer's figures: how many rows carry a value in each column.
-  const filled = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const column of columns) {
-      if (column.source === 'name') continue;
-      let n = 0;
-      for (const item of items) {
-        const v = cellValue(item, column);
-        if (v === null || v === undefined || v === '' || v === false || (Array.isArray(v) && v.length === 0)) continue;
-        n += 1;
-      }
-      counts.set(column.key, n);
-    }
-    return counts;
-  }, [items, columns]);
-
   if (loading) {
     return (
       <div className="flex flex-col divide-y divide-border-subtle">
@@ -269,7 +293,12 @@ export default function DirectoryTable({
   }
 
   return (
-    <div ref={frameRef} className="flex h-full w-full flex-col overflow-hidden bg-surface-1">
+    <div ref={frameRef} className="relative flex h-full w-full flex-col overflow-hidden bg-surface-1">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-30 border border-border-subtle"
+        style={{ right: gutter.right, bottom: gutter.bottom }}
+      />
       <div className="min-h-0 min-w-0 flex-1">
         <TableVirtuoso<DirectoryItem, TableContext>
           data={items}
@@ -397,11 +426,11 @@ export default function DirectoryTable({
             </tr>
           )}
           fixedFooterContent={() => (
-            // The count row: how many entries, and per column how many carry a
-            // value. It is the table's own tfoot, so it sits on the pane's
-            // bottom edge however few rows there are, slides with the columns,
-            // and leaves the horizontal scrollbar below it. The name cell holds
-            // still the way its column does.
+            // The count row: how many entries there are, said once under the
+            // name column. It is the table's own tfoot, so it sits on the
+            // pane's bottom edge however few rows there are, slides with the
+            // columns, and leaves the horizontal scrollbar below it. The name
+            // cell holds still the way its column does.
             <tr className="h-10 border-t border-border-default text-[12.5px]">
               {columns.map((column, i) => (
                 <td
@@ -413,12 +442,10 @@ export default function DirectoryTable({
                     column.kind === 'number' && 'text-right',
                   )}
                 >
-                  {column.source === 'name' ? (
+                  {column.source === 'name' && (
                     <span className="text-text-secondary">
                       <span className="font-semibold tabular-nums text-text-primary">{items.length}</span> count
                     </span>
-                  ) : (
-                    <span className="tabular-nums text-text-muted">{filled.get(column.key) ?? 0} filled</span>
                   )}
                 </td>
               ))}
@@ -458,7 +485,13 @@ export default function DirectoryTable({
                       );
                     }
                     return (
-                      <td key={column.key} className={clsx('h-11 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2', litKey === column.key ? 'bg-surface-2' : 'bg-surface-1')}>
+                      <td
+                        key={column.key}
+                        className={clsx(
+                          'h-11 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2',
+                          litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
+                        )}
+                      >
                         <TableCell
                           column={column}
                           value={value}
