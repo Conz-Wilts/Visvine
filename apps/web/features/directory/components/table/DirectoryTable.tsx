@@ -9,10 +9,11 @@
 // column itself, filling the pane past the data — shows a hidden column or
 // mints a new field without leaving the table.
 // Columns nobody has sized share out the pane's spare width, so a table with
-// few columns is never a strip beside a blank. The table's own tfoot sticks
-// to the pane's bottom edge and counts what is there: how many entries, and
-// per column how many carry a value — with the horizontal scrollbar under
-// it, since it is inside the scroll box.
+// few columns is never a strip beside a blank, and blank rows carry the grid
+// past the last entry, so a short table fills its pane rather than stopping
+// mid-screen. The table's own tfoot sits on the pane's bottom edge and counts
+// what is there — with the horizontal scrollbar under it, since it is inside
+// the scroll box.
 //
 // The box around it all is traced on the SCROLLPORT, as an overlay: four
 // hairlines on the scroll box's own edges, inset past whatever the scrollbars
@@ -93,6 +94,15 @@ interface TableContext {
   columns: TableColumn[];
   widthOf: (column: TableColumn) => number;
   totalWidth: number;
+  /** Blank rows drawn under the last entry so the grid runs to the pane's
+   *  bottom edge and the count row sits on it. */
+  fillerRows: number;
+  /** The last blank row's height: a row's worth plus whatever the division
+   *  left over, so the count row lands ON the bottom edge rather than a few
+   *  pixels above it. */
+  lastFillerHeight: number;
+  /** The column an open header menu acts on, lit down its whole length. */
+  litKey: string | null;
 }
 
 // The virtualiser's frame: the scroll box, the table, its head and body. Each
@@ -146,6 +156,45 @@ const TableFoot = React.forwardRef<HTMLTableSectionElement, React.ComponentProps
   },
 );
 
+// The blank rows past the last entry. A table with three rows in a tall pane
+// would otherwise end mid-screen with its count row hanging under it; the grid
+// keeps going instead, empty, and the count lands on the pane's bottom edge.
+// They are appended to the body rather than drawn as an overlay so they take
+// the same colgroup, gridlines and sticky name column the real rows do — and
+// they only exist when the data is SHORTER than the pane, which is exactly
+// when nothing is virtualised.
+const TableBody = React.forwardRef<
+  HTMLTableSectionElement,
+  React.ComponentPropsWithoutRef<'tbody'> & { context?: TableContext }
+>(function TableBody({ context, children, ...props }, ref) {
+  const { columns = [], fillerRows = 0, lastFillerHeight = 0, litKey = null } = context ?? {};
+  return (
+    <tbody ref={ref} {...props}>
+      {children}
+      {Array.from({ length: fillerRows }).map((_, i) => (
+        <tr
+          key={`filler-${i}`}
+          aria-hidden
+          className="h-11 border-b border-border-subtle"
+          style={i === fillerRows - 1 ? { height: lastFillerHeight } : undefined}
+        >
+          {columns.map((column, j) => (
+            <td
+              key={column.key}
+              className={clsx(
+                'border-r border-border-subtle p-0',
+                litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
+                j === 0 && column.source === 'name' && 'sticky left-0 z-10',
+              )}
+            />
+          ))}
+          <td className="bg-surface-1 p-0" />
+        </tr>
+      ))}
+    </tbody>
+  );
+});
+
 const TableRow = ({ item: _item, style, ...props }: React.ComponentPropsWithoutRef<'tr'> & { item?: DirectoryItem }) => (
   <tr
     {...props}
@@ -154,7 +203,7 @@ const TableRow = ({ item: _item, style, ...props }: React.ComponentPropsWithoutR
   />
 );
 
-const tableComponents = { Scroller, Table, TableHead, TableFoot, TableRow } as unknown as TableComponents<DirectoryItem, TableContext>;
+const tableComponents = { Scroller, Table, TableHead, TableBody, TableFoot, TableRow } as unknown as TableComponents<DirectoryItem, TableContext>;
 
 export default function DirectoryTable({
   items, columns, hiddenColumns, typeName, sort, widths, loading = false,
@@ -172,11 +221,15 @@ export default function DirectoryTable({
   // What the scrollbars take off the scroll box, so the box's lines can be
   // traced on the scrollport rather than around the bars.
   const [gutter, setGutter] = useState({ right: 0, bottom: 0 });
+  // How many blank rows it takes to reach the pane's bottom edge, and how tall
+  // the last of them is.
+  const [filler, setFiller] = useState({ rows: 0, lastHeight: 0 });
   // The frame is behind the loading and empty returns below, so this waits for
   // it: with no dependency the one run happens while the skeleton is up, the
   // ref is null, and the gutters stay 0 — tracing the box around the
   // scrollbars rather than inside them.
   const mounted = !loading && items.length > 0;
+  const itemCount = items.length;
   useLayoutEffect(() => {
     const frame = frameRef.current;
     if (!frame) return;
@@ -189,6 +242,20 @@ export default function DirectoryTable({
         bottom: box.offsetHeight - box.clientHeight,
       };
       setGutter((g) => (g.right === next.right && g.bottom === next.bottom ? g : next));
+
+      // The blanks are counted from the parts, never from the table's own
+      // height: the fillers are IN that height, so measuring it would feed
+      // back on itself. Head, foot and one real row are enough.
+      const headHeight = frame.querySelector('thead')?.getBoundingClientRect().height ?? 0;
+      const footHeight = frame.querySelector('tfoot')?.getBoundingClientRect().height ?? 0;
+      const rowHeight = frame.querySelector('tbody tr')?.getBoundingClientRect().height ?? 0;
+      if (rowHeight <= 0) return;
+      const spare = box.clientHeight - headHeight - footHeight - itemCount * rowHeight;
+      // The division rarely comes out whole; the remainder goes on the last
+      // blank row rather than as a strip of nothing under the count.
+      const rows = spare < 2 ? 0 : Math.max(1, Math.floor(spare / rowHeight));
+      const blanks = { rows, lastHeight: rows > 0 ? spare - (rows - 1) * rowHeight : 0 };
+      setFiller((f) => (f.rows === blanks.rows && f.lastHeight === blanks.lastHeight ? f : blanks));
     };
     measure();
     // Both: the frame moves with the window, the scroll box also when a
@@ -211,7 +278,7 @@ export default function DirectoryTable({
       cancelAnimationFrame(raf);
       observer.disconnect();
     };
-  }, [mounted]);
+  }, [mounted, itemCount, columns]);
 
   // ── resizing: a pointer drag on the header's right edge ────────────────
   const resizing = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
@@ -263,8 +330,15 @@ export default function DirectoryTable({
   }, [columns, liveWidth, paneWidth, widths]);
   const totalWidth = columns.reduce((sum, c) => sum + effectiveWidth(c), 0) + ADD_COLUMN_MIN_WIDTH;
   const tableContext = useMemo<TableContext>(
-    () => ({ columns, widthOf: effectiveWidth, totalWidth }),
-    [columns, effectiveWidth, totalWidth],
+    () => ({
+      columns,
+      widthOf: effectiveWidth,
+      totalWidth,
+      fillerRows: filler.rows,
+      lastFillerHeight: filler.lastHeight,
+      litKey: menu?.key ?? null,
+    }),
+    [columns, effectiveWidth, filler, menu, totalWidth],
   );
 
   const menuColumn = menu ? columns.find((c) => c.key === menu.key) ?? null : null;
