@@ -88,6 +88,11 @@ interface DirectoryTableProps {
  *  data and never less than this. */
 const ADD_COLUMN_MIN_WIDTH = 168;
 
+/** How far inside the scrollport an edge with no scrollbar draws its line. A
+ *  hairline ON the scrollport's last pixel is the window's last pixel too, and
+ *  reads as no line at all. */
+const BOX_INSET = 1;
+
 /** What the table's frame components need that a row's content doesn't: the
  *  column layout the `<colgroup>` is built from. */
 interface TableContext {
@@ -219,7 +224,10 @@ export default function DirectoryTable({
   const frameRef = useRef<HTMLDivElement>(null);
   const [paneWidth, setPaneWidth] = useState(0);
   // What the scrollbars take off the scroll box, so the box's lines can be
-  // traced on the scrollport rather than around the bars.
+  // traced on the scrollport rather than around the bars. With no scrollbar
+  // the pane runs to the window's own edge, where a hairline on the last pixel
+  // row is clipped or lost to display scaling — so an edge with no bar to hide
+  // behind is still held one pixel in (BOX_INSET).
   const [gutter, setGutter] = useState({ right: 0, bottom: 0 });
   // How many blank rows it takes to reach the pane's bottom edge, and how tall
   // the last of them is.
@@ -250,7 +258,7 @@ export default function DirectoryTable({
       const footHeight = frame.querySelector('tfoot')?.getBoundingClientRect().height ?? 0;
       const rowHeight = frame.querySelector('tbody tr')?.getBoundingClientRect().height ?? 0;
       if (rowHeight <= 0) return;
-      const spare = box.clientHeight - headHeight - footHeight - itemCount * rowHeight;
+      const spare = box.clientHeight - (next.bottom || BOX_INSET) - headHeight - footHeight - itemCount * rowHeight;
       // The division rarely comes out whole; the remainder goes on the last
       // blank row rather than as a strip of nothing under the count.
       const rows = spare < 2 ? 0 : Math.max(1, Math.floor(spare / rowHeight));
@@ -371,7 +379,7 @@ export default function DirectoryTable({
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-30 border border-border-subtle"
-        style={{ right: gutter.right, bottom: gutter.bottom }}
+        style={{ right: gutter.right || BOX_INSET, bottom: gutter.bottom || BOX_INSET }}
       />
       <div className="min-h-0 min-w-0 flex-1">
         <TableVirtuoso<DirectoryItem, TableContext>
