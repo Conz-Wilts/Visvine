@@ -180,6 +180,7 @@ const TableBody = React.forwardRef<
         <tr
           key={`filler-${i}`}
           aria-hidden
+          data-filler
           className="h-11 border-b border-border-subtle"
           style={i === fillerRows - 1 ? { height: lastFillerHeight } : undefined}
         >
@@ -251,31 +252,48 @@ export default function DirectoryTable({
       };
       setGutter((g) => (g.right === next.right && g.bottom === next.bottom ? g : next));
 
-      // The blanks are counted from the parts, never from the table's own
-      // height: the fillers are IN that height, so measuring it would feed
-      // back on itself. Head, foot and one real row are enough.
-      const headHeight = frame.querySelector('thead')?.getBoundingClientRect().height ?? 0;
-      const footHeight = frame.querySelector('tfoot')?.getBoundingClientRect().height ?? 0;
-      const rowHeight = frame.querySelector('tbody tr')?.getBoundingClientRect().height ?? 0;
-      if (rowHeight <= 0) return;
-      const spare = box.clientHeight - (next.bottom || BOX_INSET) - headHeight - footHeight - itemCount * rowHeight;
+      // The blanks are counted from what is rendered, never from the table's
+      // own height: the fillers are IN that height, so measuring it would feed
+      // back on itself. Head, foot and every real row are measured as they
+      // are — a real row is a pixel taller than a blank one, since its cells
+      // carry content the collapsed border sits under, so one row's height
+      // stands for nothing but itself. A blank row's height is read off a
+      // blank row once one exists (never the last, whose height is this
+      // state); until then a real row's stands in, and the next pass, fired
+      // by the table's own resize, corrects it.
+      const height = (el: Element | null) => el?.getBoundingClientRect().height ?? 0;
+      const headHeight = height(frame.querySelector('thead'));
+      const footHeight = height(frame.querySelector('tfoot'));
+      const realRows = [...frame.querySelectorAll('tbody tr:not([data-filler])')];
+      if (realRows.length === 0) return;
+      const realHeight = realRows.reduce((sum, row) => sum + height(row), 0);
+      const blanks = [...frame.querySelectorAll('tbody tr[data-filler]')];
+      const blankHeight = height(blanks.length > 1 ? blanks[0] : realRows[0]);
+      if (blankHeight <= 0) return;
+      const spare = box.clientHeight - (next.bottom || BOX_INSET) - headHeight - footHeight - realHeight;
       // The division rarely comes out whole; the remainder goes on the last
       // blank row rather than as a strip of nothing under the count.
-      const rows = spare < 2 ? 0 : Math.max(1, Math.floor(spare / rowHeight));
-      const blanks = { rows, lastHeight: rows > 0 ? spare - (rows - 1) * rowHeight : 0 };
-      setFiller((f) => (f.rows === blanks.rows && f.lastHeight === blanks.lastHeight ? f : blanks));
+      const rows = spare < 2 ? 0 : Math.max(1, Math.floor(spare / blankHeight));
+      const fill = { rows, lastHeight: rows > 0 ? spare - (rows - 1) * blankHeight : 0 };
+      setFiller((f) => (f.rows === fill.rows && f.lastHeight === fill.lastHeight ? f : fill));
     };
     measure();
-    // Both: the frame moves with the window, the scroll box also when a
-    // scrollbar appears or goes — which is what the gutters are. The scroller
-    // is Virtuoso's and may land a frame after this, so it is waited for.
+    // All three: the frame moves with the window; the scroll box when a
+    // scrollbar appears or goes — which is what the gutters are; and the
+    // TABLE, because a scrollbar comes and goes with the table's size and the
+    // scroll box's own observation does not always fire for one — a gutter
+    // measured while a wider table was up would otherwise stay, holding the
+    // box's line a bar's width in from an edge with no bar. The scroller is
+    // Virtuoso's and may land a frame after this, so it is waited for.
     const observer = new ResizeObserver(measure);
     observer.observe(frame);
     let raf = 0;
     const attach = () => {
       const scroller = frame.querySelector<HTMLElement>('[data-virtuoso-scroller]');
-      if (scroller) {
+      const table = scroller?.querySelector('table');
+      if (scroller && table) {
         observer.observe(scroller);
+        observer.observe(table);
         measure();
       } else {
         raf = requestAnimationFrame(attach);
