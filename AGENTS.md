@@ -174,8 +174,12 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   write: frontmatter (`type` only when the folder is about something, `title`,
   `node`, `description`, `tags`, then the type's own keys), prose, then the
   machine-maintained child list between `<!-- index:children -->` markers, LAST.
-  No `# Title` in the body. The block lists every direct child (sub-folders
-  first) with its `description:`. `Index` and `Note` name a shape, not a
+  No `# Title` in the body. The block is the **Open Knowledge Format's index**
+  (OKF v0.2 §8): `## Section` headings — `Subdirectories`, then one per child
+  `type:` (pluralised), then `Notes` — over rows
+  `* [Title](relative-path.md) - description`, hrefs relative to the folder, so
+  a space's context reads as an OKF bundle checked out of git. Every direct
+  child is listed, with its own `description:`. `Index` and `Note` name a shape, not a
   subject, and are stripped from a plain folder's `type:`. Writing `a/b/c.md`
   turns `a/b.md` into `a/b/index.md` by itself. Rules:
   `lib/notes/shared/indexNote.ts`. `db:index-notes:rebuild` migrates old shapes;

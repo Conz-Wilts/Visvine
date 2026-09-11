@@ -59,6 +59,9 @@ const FOLDERS =
   'INDEX LAYOUT (fixed, and the store holds every index to it): frontmatter with `title:` (plus ' +
   "`description:` — one line, shown beside the folder wherever it is listed — and `tags:`), then one or " +
   'two short paragraphs saying what the folder holds and who it is for, then the child list, last. ' +
+  "The child list is the Open Knowledge Format's index (OKF v0.2 §8): a `## Section` heading per group " +
+  '— `Subdirectories` first, then a section per child `type:`, then `Notes` — and one row per child, ' +
+  '`* [Title](relative-path.md) - description`. It is machine-written; never type it yourself. ' +
   'No `# <Title>` line (the title renders from frontmatter; one you write is removed). Do NOT re-list ' +
   "the folder's own notes in the prose: the child list already names every direct child with its " +
   "`description:`, sub-folders first — give a note a `description:` and that is what the folder shows " +

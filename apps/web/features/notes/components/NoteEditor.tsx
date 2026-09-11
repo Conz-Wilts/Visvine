@@ -40,6 +40,8 @@ import { NoteModeToggle, type NoteMode } from './NoteModeToggle'
 import { parseEntityHref } from '@/lib/notes/entities'
 import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
 import {
+  folderOfIndexPath,
+  isIndexPath,
   parseChildrenBlock,
   reattachChildrenBlock,
   splitChildrenBlock,
@@ -220,6 +222,22 @@ export function NoteEditor({
   // every save. Null for the notes that aren't folders — almost all of them.
   const childrenBlockRef = useRef<string | null>(null)
   const [children, setChildren] = useState<IndexChild[]>([])
+  // The folder this note IS, when it is one — what the block's relative hrefs
+  // are relative to. Empty for every note that isn't a folder's index.
+  const childFolder = useMemo(() => (isIndexPath(path) ? folderOfIndexPath(path) : ''), [path])
+  // The listing as OKF writes it: the block's sections, in block order, each
+  // holding its rows. One section (the common case) renders headless — the
+  // "In this folder" heading is already saying it.
+  const childSections = useMemo(() => {
+    const groups: { section: string; children: IndexChild[] }[] = []
+    for (const child of children) {
+      const section = child.section ?? 'Notes'
+      const last = groups[groups.length - 1]
+      if (last && last.section === section) last.children.push(child)
+      else groups.push({ section, children: [child] })
+    }
+    return groups
+  }, [children])
   const rawRef = useRef<HTMLTextAreaElement>(null)
   const pathRef = useRef(path)
   const originRef = useRef<string>('edit')
@@ -370,7 +388,7 @@ export function NoteEditor({
     prefixRef.current = buildPrefix(frontmatter)
     const split = splitChildrenBlock(stripDuplicateTitleHeading(body, titleFromContent(initialContent, path)))
     childrenBlockRef.current = split.block
-    setChildren(parseChildrenBlock(split.block))
+    setChildren(parseChildrenBlock(split.block, childFolder))
     editor.commands.setContent(split.body, { emitUpdate: false })
     setRawContent(initialContent)
     pendingRef.current = null
@@ -383,7 +401,7 @@ export function NoteEditor({
       loadingRef.current = false
     }, 0)
     return () => clearTimeout(t)
-  }, [path, initialContent, editor, flush])
+  }, [path, childFolder, initialContent, editor, flush])
 
   // Round-trip the body when the workspace flips Edit ⇄ Raw. Going to Raw snapshots
   // the live editor markdown; coming back parses the (possibly hand-edited) raw text
@@ -401,7 +419,7 @@ export function NoteEditor({
       prefixRef.current = buildPrefix(frontmatter)
       const split = splitChildrenBlock(body)
       childrenBlockRef.current = split.block
-      setChildren(parseChildrenBlock(split.block))
+      setChildren(parseChildrenBlock(split.block, childFolder))
       editor.commands.setContent(split.body, { emitUpdate: false })
       if (canEdit) queueSave(rawContent)
       setTimeout(() => {
@@ -409,7 +427,7 @@ export function NoteEditor({
       }, 0)
     }
     prevModeRef.current = mode
-  }, [mode, editor, rawContent, canEdit, queueSave])
+  }, [mode, editor, rawContent, canEdit, queueSave, childFolder])
 
   // Embedded raw: grow the textarea to its content so the page owns the scroll.
   // A fixed-height textarea would scroll inside the 760px writing column, putting
@@ -629,21 +647,24 @@ export function NoteEditor({
                 store — so it renders below the body as a read-only list rather
                 than as editable text carrying its own marker comments. Empty
                 folders (a just-created space) show nothing at all. */}
-            {children.length > 0 && (
+            {childSections.length > 0 && (
               <section className="notes-ref-group mt-8">
                 <h3 className="notes-ref-head">In this folder</h3>
-                <ul className="flex flex-col gap-1">
-                  {children.map((child) => (
-                    <li key={child.path} className="flex items-baseline gap-2">
-                      <button type="button" className="notes-ref-from" onClick={() => onOpenNote(child.path)}>
-                        {child.title}
-                      </button>
-                      {child.description && (
-                        <span className="truncate text-sm text-text-secondary">{child.description}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                {childSections.map((group) => (
+                  <div key={group.section} className="notes-child-section">
+                    {childSections.length > 1 && <h4 className="notes-child-head">{group.section}</h4>}
+                    <ul className="notes-children">
+                      {group.children.map((child) => (
+                        <li key={child.path}>
+                          <button type="button" className="notes-child" onClick={() => onOpenNote(child.path)}>
+                            <span className="notes-child-title">{child.title}</span>
+                            {child.description && <span className="notes-child-desc">{child.description}</span>}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
               </section>
             )}
           </>

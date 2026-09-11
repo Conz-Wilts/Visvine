@@ -24,6 +24,7 @@ import {
   foldCuratedChildren,
   normalizeIndexNote,
   parseChildrenBlock,
+  pluralizeType,
   reattachChildrenBlock,
   splitChildrenBlock,
   stripDuplicateTitleHeading,
@@ -61,10 +62,13 @@ test('buildIndexStub emits a titled folder note and a sorted linked list', () =>
   assert.equal(fm.type, undefined)
   assert.equal(fm.title, 'People')
   const { body } = splitFrontmatter(stub)
+  // The OKF index shape: a section heading, then `* [Title](relative) - desc`.
   assert.deepEqual(body.trim().split('\n'), [
     CHILDREN_OPEN,
-    '- [Craig Piggott](/people/craig-piggott.md)',
-    '- [Zoe](/people/zoe.md)',
+    '## Notes',
+    '',
+    '* [Craig Piggott](craig-piggott.md)',
+    '* [Zoe](zoe.md)',
     CHILDREN_CLOSE,
   ])
 })
@@ -130,18 +134,18 @@ const CHILDREN = [
 
 test('applyChildrenBlock appends a block to a body that has none', () => {
   const before = '---\ntitle: People\n---\n\n# People\n\nWho we back.\n'
-  const after = applyChildrenBlock(before, CHILDREN)
+  const after = applyChildrenBlock(before, CHILDREN, 'people')
   assert.ok(after.startsWith(before.trimEnd()), 'curated prose is preserved verbatim')
   assert.ok(hasChildrenBlock(after))
   assert.equal(parseFrontmatter(after).title, 'People')
-  assert.match(after, /- \[Craig\]\(\/people\/craig\.md\)\n- \[Zoe\]\(\/people\/zoe\.md\)/)
+  assert.match(after, /\* \[Craig\]\(craig\.md\)\n\* \[Zoe\]\(zoe\.md\)/)
 })
 
 test('applyChildrenBlock replaces an existing block in place, leaving prose alone', () => {
-  const first = applyChildrenBlock('---\ntitle: People\n---\n\nWho we back.\n', CHILDREN)
-  const second = applyChildrenBlock(first, [{ path: 'people/ann.md', title: 'Ann' }])
+  const first = applyChildrenBlock('---\ntitle: People\n---\n\nWho we back.\n', CHILDREN, 'people')
+  const second = applyChildrenBlock(first, [{ path: 'people/ann.md', title: 'Ann' }], 'people')
   assert.ok(second.includes('Who we back.'))
-  assert.ok(second.includes('- [Ann](/people/ann.md)'))
+  assert.ok(second.includes('* [Ann](ann.md)'))
   assert.ok(!second.includes('Zoe'))
   assert.equal(second.split(CHILDREN_OPEN).length - 1, 1, 'exactly one managed block')
 })
@@ -151,38 +155,64 @@ test('applyChildrenBlock replaces an existing block in place, leaving prose alon
 // without anyone editing prose.
 test('applyChildrenBlock lists every child, whatever the prose already links', () => {
   const curated = '---\ntitle: People\n---\n\nZoe ([here](/people/zoe.md)) leads the seed fund.\n'
-  const after = applyChildrenBlock(curated, CHILDREN)
+  const after = applyChildrenBlock(curated, CHILDREN, 'people')
   assert.ok(after.includes('leads the seed fund'))
   const block = after.slice(after.indexOf(CHILDREN_OPEN))
-  assert.ok(block.includes('- [Craig](/people/craig.md)'))
-  assert.ok(block.includes('- [Zoe](/people/zoe.md)'))
+  assert.ok(block.includes('* [Craig](craig.md)'))
+  assert.ok(block.includes('* [Zoe](zoe.md)'))
 })
 
-test('the block puts sub-folders first, then notes, and carries each description', () => {
+// Sub-folders lead under `Subdirectories`, then a section per type (alphabetical),
+// then whatever carries no type at all — the OKF listing, with the descriptions
+// the children declared.
+test('the block sections the listing: sub-folders, then types, then untyped', () => {
   const after = applyChildrenBlock('---\ntitle: Home\n---\n\n', [
     { path: 'thesis.md', title: 'Investment thesis', description: 'what we look for' },
     { path: 'team/index.md', title: 'Team', folder: true, description: 'who covers\n  what' },
     { path: 'data/index.md', title: 'Data', folder: true },
     { path: 'about.md', title: 'About' },
+    { path: 'ann.md', title: 'Ann', type: 'Person', description: 'runs ops' },
+    { path: 'halter/index.md', title: 'Halter', folder: true, type: 'Company' },
   ])
   assert.deepEqual(splitFrontmatter(after).body.trim().split('\n'), [
     CHILDREN_OPEN,
-    '- [Data](/data/index.md)',
-    '- [Team](/team/index.md) — who covers what',
-    '- [About](/about.md)',
-    '- [Investment thesis](/thesis.md) — what we look for',
+    '## Subdirectories',
+    '',
+    '* [Data](data/index.md)',
+    '* [Team](team/index.md) - who covers what',
+    '',
+    '## Companies',
+    '',
+    '* [Halter](halter/index.md)',
+    '',
+    '## People',
+    '',
+    '* [Ann](ann.md) - runs ops',
+    '',
+    '## Notes',
+    '',
+    '* [About](about.md)',
+    '* [Investment thesis](thesis.md) - what we look for',
     CHILDREN_CLOSE,
   ])
 })
 
+test('pluralizeType labels a section without mangling a producer-chosen type', () => {
+  assert.equal(pluralizeType('Person'), 'People')
+  assert.equal(pluralizeType('Company'), 'Companies')
+  assert.equal(pluralizeType('BigQuery Table'), 'BigQuery Tables')
+  assert.equal(pluralizeType('Metrics'), 'Metrics')
+  assert.equal(pluralizeType(''), 'Notes')
+})
+
 test('applyChildrenBlock is a no-op when nothing changed — callers skip the write', () => {
-  const once = applyChildrenBlock('---\ntitle: People\n---\n\nProse.\n', CHILDREN)
-  assert.equal(applyChildrenBlock(once, CHILDREN), once)
+  const once = applyChildrenBlock('---\ntitle: People\n---\n\nProse.\n', CHILDREN, 'people')
+  assert.equal(applyChildrenBlock(once, CHILDREN, 'people'), once)
 })
 
 test('applyChildrenBlock moves a block found mid-body to the end', () => {
   const before = `---\ntitle: People\n---\n\nAbove.\n\n${CHILDREN_OPEN}\n${CHILDREN_CLOSE}\n\nBelow.\n`
-  const after = applyChildrenBlock(before, CHILDREN)
+  const after = applyChildrenBlock(before, CHILDREN, 'people')
   assert.ok(after.includes('Above.\n\nBelow.\n\n' + CHILDREN_OPEN))
   assert.ok(after.endsWith(`${CHILDREN_CLOSE}\n`))
 })
@@ -201,7 +231,7 @@ test('newIndexContent seeds a folder home page with an empty block ready to fill
 // WYSIWYG surface renders HTML comments literally, so the block is split off
 // before the body reaches the editor and put back on the way out.
 test('splitChildrenBlock takes the block out and reattach puts it back', () => {
-  const block = `${CHILDREN_OPEN}\n- [Zoe](/people/zoe.md)\n${CHILDREN_CLOSE}`
+  const block = `${CHILDREN_OPEN}\n* [Zoe](zoe.md)\n${CHILDREN_CLOSE}`
   const body = `Who we back.\n\n${block}\n`
   const split = splitChildrenBlock(body)
   assert.equal(split.body, 'Who we back.')
@@ -228,20 +258,22 @@ test('parseChildrenBlock reads back exactly what renderChildrenBlock wrote', () 
   const listed = applyChildrenBlock('---\ntitle: People\n---\n\n', [
     { path: 'people/zoe.md', title: 'Zoe' },
     { path: 'people/ann.md', title: 'Ann' },
+  ], 'people')
+  assert.deepEqual(parseChildrenBlock(splitChildrenBlock(listed).block, 'people'), [
+    { path: 'people/ann.md', title: 'Ann', description: null, folder: false, section: 'Notes' },
+    { path: 'people/zoe.md', title: 'Zoe', description: null, folder: false, section: 'Notes' },
   ])
-  assert.deepEqual(parseChildrenBlock(splitChildrenBlock(listed).block), [
-    { path: 'people/ann.md', title: 'Ann', description: null },
-    { path: 'people/zoe.md', title: 'Zoe', description: null },
-  ])
+  // A block an older build wrote — `-` bullets, absolute hrefs, an em dash —
+  // still reads back whole.
   assert.deepEqual(
-    parseChildrenBlock(`${CHILDREN_OPEN}\n- [Ann](/people/ann.md) — runs ops\n${CHILDREN_CLOSE}`),
-    [{ path: 'people/ann.md', title: 'Ann', description: 'runs ops' }],
+    parseChildrenBlock(`${CHILDREN_OPEN}\n- [Ann](/people/ann.md) — runs ops\n${CHILDREN_CLOSE}`, 'people'),
+    [{ path: 'people/ann.md', title: 'Ann', description: 'runs ops', folder: false, section: 'Notes' }],
   )
   assert.deepEqual(parseChildrenBlock(null), [])
   // A block somebody hand-mangled loses the bad rows, not the good ones.
   assert.deepEqual(
-    parseChildrenBlock(`${CHILDREN_OPEN}\nloose text\n- [Ann](/people/ann.md)\n${CHILDREN_CLOSE}`),
-    [{ path: 'people/ann.md', title: 'Ann', description: null }],
+    parseChildrenBlock(`${CHILDREN_OPEN}\nloose text\n* [Ann](ann.md)\n${CHILDREN_CLOSE}`, 'people'),
+    [{ path: 'people/ann.md', title: 'Ann', description: null, folder: false, section: 'Notes' }],
   )
 })
 
@@ -355,7 +387,7 @@ test('normalizeIndexNote strips type: note, a duplicate title heading, and lists
   assert.deepEqual(Object.keys(fm), ['title', 'tags', 'timestamp'], 'leading keys first, the rest after')
   const body = splitFrontmatter(fixed).body
   assert.ok(body.startsWith('How deals move.'), `body: ${body}`)
-  assert.ok(body.endsWith(`${CHILDREN_OPEN}\n- [Pipeline](/deals/pipeline.md)\n${CHILDREN_CLOSE}\n`))
+  assert.ok(body.endsWith(`${CHILDREN_OPEN}\n## Notes\n\n* [Pipeline](pipeline.md)\n${CHILDREN_CLOSE}\n`), `body: ${body}`)
   assert.equal(normalizeIndexNote(fixed, 'deals', [{ path: 'deals/pipeline.md', title: 'Pipeline' }]), fixed)
 })
 

@@ -18,8 +18,13 @@
 //   Prose about the folder — optional, the writer's, never touched.
 //
 //   <!-- index:children -->
-//   - [Sub-folder](/a/b/index.md) — its description
-//   - [Note](/a/note.md) — its description
+//   ## Subdirectories
+//
+//   * [Sub-folder](b/index.md) - its description
+//
+//   ## Notes
+//
+//   * [Note](note.md) - its description
 //   <!-- /index:children -->
 //
 // The body carries no `# Title` line (the title renders from frontmatter), and
@@ -43,6 +48,7 @@
 import {
   joinFrontmatter,
   parseFrontmatter,
+  resolveOkfLink,
   splitFrontmatter,
 } from './markdown'
 
@@ -235,7 +241,7 @@ export function normalizeIndexNote(
   const title = String(parseFrontmatter(withFrontmatter).title ?? '')
   const prose = stripDuplicateTitleHeading(body, title)
   const prefix = frontmatter === null ? '' : `---\n${frontmatter}\n---\n\n`
-  const next = applyChildrenBlock(prefix + prose, children)
+  const next = applyChildrenBlock(prefix + prose, children, folderPath)
   return next === content ? content : next
 }
 
@@ -280,9 +286,16 @@ export function entityNameClashDenial(name: string, kindLabel: string, howToCrea
 // delete in the folder without touching a word anybody wrote.
 //
 // The block is the folder's listing, whole: every direct child, whether or not
-// the prose above mentions it. Sub-folders come first, then notes, each set
-// alphabetical by title, and a child that carries a `description:` shows it
-// after an em dash. It always sits at the end of the body.
+// the prose above mentions it. It always sits at the end of the body.
+//
+// Its shape is the Open Knowledge Format's index (OKF v0.2 §8): sections under
+// headings, each row `* [Title](relative-url) - description`, hrefs relative to
+// the folder so a bundle of these notes reads the same checked out of git as it
+// does here. Sub-folders lead, under `Subdirectories`; the notes follow, under
+// their own `type:` (pluralised — a folder of people reads `## People`), and
+// anything untyped under `Notes`, last. Each section is alphabetical by title.
+// The HTML-comment markers are what makes the block machine-maintained; OKF
+// neither knows nor minds about them.
 
 export const CHILDREN_OPEN = '<!-- index:children -->'
 export const CHILDREN_CLOSE = '<!-- /index:children -->'
@@ -294,6 +307,47 @@ export interface IndexChild {
   description?: string | null
   /** True when the child is a sub-folder (listed at its index). */
   folder?: boolean
+  /** The child's own `type:`, which is the section it is listed under. */
+  type?: string | null
+  /** The section heading it was read under, when parsed back out of a block. */
+  section?: string
+}
+
+/** The heading sub-folders are listed under — OKF's own word for them. */
+const SUBDIRECTORY_SECTION = 'Subdirectories'
+/** The heading a note with no `type:` is listed under. */
+const UNTYPED_SECTION = 'Notes'
+
+// A type name as a section heading: one folder of people reads `## People`, not
+// `## Person`. English-shaped and deliberately small — a producer-chosen type
+// the rule mangles still round-trips, because the heading is a label and the
+// child's own `type:` is the record.
+export function pluralizeType(type: string): string {
+  const word = type.trim()
+  if (!word) return UNTYPED_SECTION
+  if (/person$/i.test(word)) return word.replace(/person$/i, (m) => (m === 'PERSON' ? 'PEOPLE' : 'People'))
+  // A type already written plural (`Metrics`) is left alone; `Class` is not.
+  if (/[^s]s$/i.test(word)) return word
+  if (/(s|x|z|ch|sh)$/i.test(word)) return `${word}es`
+  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`
+  return `${word}s`
+}
+
+// The section a child belongs in, and the order the sections come in:
+// Subdirectories first, then each type alphabetically, then untyped notes.
+function sectionOf(c: IndexChild): string {
+  // What a child IS wins over how it is stored: a folder of companies is a
+  // folder of Companies, not of "Subdirectories". That heading is for the
+  // sub-folders that are only grouping — the ones carrying no `type:`.
+  const declared = (c.type ?? '').trim()
+  if (declared) return pluralizeType(declared)
+  return c.folder ? SUBDIRECTORY_SECTION : UNTYPED_SECTION
+}
+
+function sectionRank(section: string): number {
+  if (section === SUBDIRECTORY_SECTION) return 0
+  if (section === UNTYPED_SECTION) return 2
+  return 1
 }
 
 // Everything between the markers, inclusive. Non-greedy so a body carrying two
@@ -315,20 +369,42 @@ export function oneLineDescription(value: unknown): string | null {
 }
 
 function childOrder(a: IndexChild, b: IndexChild): number {
-  const fa = a.folder ? 0 : 1
-  const fb = b.folder ? 0 : 1
-  return fa - fb || a.title.localeCompare(b.title)
+  const sa = sectionOf(a)
+  const sb = sectionOf(b)
+  return sectionRank(sa) - sectionRank(sb) || sa.localeCompare(sb) || a.title.localeCompare(b.title)
 }
 
-function renderChildLine(c: IndexChild): string {
+/**
+ * A child's href as OKF writes it: relative to the folder whose index this is.
+ * `people/ann.md` inside `people` is `ann.md`; a sub-folder is its own index,
+ * `team/index.md`. A path that somehow isn't under the folder falls back to the
+ * root-relative form, which resolveOkfLink reads just as well.
+ */
+function childHref(path: string, folder: string): string {
+  const prefix = folder ? `${folder}/` : ''
+  return path.startsWith(prefix) ? path.slice(prefix.length) : `/${path}`
+}
+
+function renderChildLine(c: IndexChild, folder: string): string {
   const desc = oneLineDescription(c.description)
-  return `- [${c.title}](/${c.path})${desc ? ` — ${desc}` : ''}`
+  return `* [${c.title}](${childHref(c.path, folder)})${desc ? ` - ${desc}` : ''}`
 }
 
-// The marker-wrapped list of a folder's direct children. Absolute /path.md
-// hrefs, matching how the seeded indexes link.
-function renderChildrenBlock(children: IndexChild[]): string {
-  const lines = [...children].sort(childOrder).map(renderChildLine)
+// The marker-wrapped listing, in the OKF index shape: a heading per section,
+// blank line, its rows. `folder` is the folder this index belongs to, which is
+// what the relative hrefs are relative to.
+function renderChildrenBlock(children: IndexChild[], folder: string): string {
+  const lines: string[] = []
+  let section: string | null = null
+  for (const child of [...children].sort(childOrder)) {
+    const own = sectionOf(child)
+    if (own !== section) {
+      if (section !== null) lines.push('')
+      lines.push(`## ${own}`, '')
+      section = own
+    }
+    lines.push(renderChildLine(child, folder))
+  }
   return [CHILDREN_OPEN, ...lines, CHILDREN_CLOSE].join('\n')
 }
 
@@ -344,8 +420,8 @@ export function hasChildrenBlock(content: string): boolean {
  * Returns `content` byte-identical when nothing changed, so callers can skip
  * the write (and the revision) on a no-op refresh.
  */
-export function applyChildrenBlock(content: string, children: IndexChild[]): string {
-  const block = renderChildrenBlock(children)
+export function applyChildrenBlock(content: string, children: IndexChild[], folder = ''): string {
+  const block = renderChildrenBlock(children, folder)
   const curated = content.replace(CHILDREN_BLOCK_RE, '').replace(/\n{3,}/g, '\n\n').trimEnd()
   const next = curated ? `${curated}\n\n${block}\n` : `${block}\n`
   return next === content ? content : next
@@ -387,12 +463,30 @@ export function reattachChildrenBlock(body: string, block: string | null): strin
  * ignores anything else, so a hand-mangled block degrades to fewer rows instead
  * of garbage ones.
  */
-export function parseChildrenBlock(block: string | null): IndexChild[] {
+export function parseChildrenBlock(block: string | null, folder = ''): IndexChild[] {
   if (!block) return []
   const children: IndexChild[] = []
+  let section = UNTYPED_SECTION
   for (const line of block.split('\n')) {
-    const m = line.match(/^-\s+\[([^\]]+)\]\(\/([^)]+)\)(?:\s+—\s+(.*))?\s*$/)
-    if (m) children.push({ title: m[1], path: m[2], description: m[3]?.trim() || null })
+    const head = line.match(/^#{1,6}\s+(.+?)\s*$/)
+    if (head) {
+      section = head[1]
+      continue
+    }
+    // `* [Title](href) - description`. The bullet, the separator (OKF's hyphen,
+    // or the em dash blocks written before it used) and a leading `/` are all
+    // optional, so a block written by an older build still reads back whole.
+    const m = line.match(/^[-*]\s+\[([^\]]+)\]\(([^)\s"]+)\)(?:\s+(?:-|—|–)\s+(.*))?\s*$/)
+    if (!m) continue
+    const path = resolveOkfLink(m[2], indexPathOf(folder))
+    if (!path) continue
+    children.push({
+      title: m[1],
+      path,
+      description: m[3]?.trim() || null,
+      folder: isIndexPath(path),
+      section,
+    })
   }
   return children
 }
@@ -407,7 +501,7 @@ export function buildIndexStub(folderPath: string, children: IndexChild[]): stri
     `title: ${JSON.stringify(humanizeFolderName(name))}\n` +
     `tags: []\n` +
     `---\n\n` +
-    `${renderChildrenBlock(children)}\n`
+    `${renderChildrenBlock(children, folderPath)}\n`
   )
 }
 
@@ -440,7 +534,7 @@ export function newIndexContent(input: {
     `tags: [${tags.join(', ')}]\n` +
     `---\n\n` +
     (body ? `${body}\n\n` : '') +
-    `${renderChildrenBlock([])}\n`
+    `${renderChildrenBlock([], '')}\n`
   )
 }
 
@@ -454,8 +548,9 @@ export function newIndexContent(input: {
 // block reads it from. Prose that is not a bare child link — a sentence that
 // mentions one, a bullet linking two — is the writer's and stays.
 
-// `- [Title](/path.md) …rest` (also `*`), capturing the path and whatever follows.
-const CHILD_BULLET_RE = /^\s*[-*]\s+\[[^\]]*\]\(\/?([^)\s"]+)\)(.*)$/
+// `- [Title](path.md) …rest` (also `*`), capturing the href — absolute or
+// relative, resolved against the folder — and whatever follows it.
+const CHILD_BULLET_RE = /^\s*[-*]\s+\[[^\]]*\]\(([^)\s"]+)\)(.*)$/
 
 // What a bullet says after the link: an optional `(23)` count, then a dash or
 // colon, then the description. Null when the tail carries another link (the
@@ -486,7 +581,7 @@ export interface FoldedListing {
  * `children` are the folder's current direct children; a bullet linking
  * anything else is left alone.
  */
-export function foldCuratedChildren(content: string, children: IndexChild[]): FoldedListing {
+export function foldCuratedChildren(content: string, children: IndexChild[], folder = ''): FoldedListing {
   const paths = new Set(children.map((c) => c.path))
   const descriptions = new Map<string, string>()
   const { frontmatter, body } = splitFrontmatter(content)
@@ -515,10 +610,11 @@ export function foldCuratedChildren(content: string, children: IndexChild[]): Fo
     }
     if (!inFence) {
       const m = line.match(CHILD_BULLET_RE)
-      if (m && paths.has(m[1])) {
+      const linked = m ? resolveOkfLink(m[1], indexPathOf(folder)) : null
+      if (m && linked && paths.has(linked)) {
         const desc = bulletDescription(m[2])
         if (desc !== undefined) {
-          if (desc) descriptions.set(m[1], desc)
+          if (desc) descriptions.set(linked, desc)
           foldedInSection = true
           continue
         }

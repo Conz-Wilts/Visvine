@@ -319,14 +319,16 @@ async function directChildrenOf(context: Context, folder: string): Promise<Index
     const fm = parseFrontmatter(row.content)
     const declared = String(fm.title ?? '').trim()
     const description = oneLineDescription(fm.description)
+    // The child's own `type:` is the section it is listed under (OKF §8).
+    const type = typeof fm.type === 'string' ? fm.type.trim() || null : null
     if (!rel.includes('/')) {
       // A direct note. The context root's own index.md is a note like any other
       // here only when `folder` is not the root — handled by the `own` skip.
-      children.push({ path: row.path, title: declared || rel.replace(/\.md$/i, ''), description })
+      children.push({ path: row.path, title: declared || rel.replace(/\.md$/i, ''), description, type })
     } else if (rel.split('/').length === 2 && isIndexPath(rel)) {
       // A direct subfolder, addressed by its index — the folder IS that note.
       const segment = rel.split('/')[0]
-      children.push({ path: row.path, title: declared || humanizeFolderName(segment), description, folder: true })
+      children.push({ path: row.path, title: declared || humanizeFolderName(segment), description, folder: true, type })
     }
   }
   return children

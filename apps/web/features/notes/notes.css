@@ -469,3 +469,71 @@
   background: var(--color-surface-2, #f9fafb);
   font-weight: 600;
 }
+
+/* The child list under an index note. One child is ONE LINE: the name, then its
+ * description running to the edge of the column. The name never wraps — a
+ * two-word title breaking across lines was what made the list read as a table
+ * with a broken column — and the description takes whatever is left, clipped
+ * with an ellipsis rather than pushing the row taller. */
+.notes-children {
+  display: flex;
+  flex-direction: column;
+}
+.notes-child {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 3px 8px;
+  margin-left: -8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.notes-child:hover {
+  background: color-mix(in srgb, var(--color-border-subtle, #e5e7eb) 22%, transparent);
+}
+.notes-child:focus-visible {
+  outline: 2px solid var(--color-brand-dark-green, #2f7a3e);
+  outline-offset: 2px;
+}
+.notes-child-title {
+  flex: 0 0 auto;
+  max-width: 45%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--color-text-primary, #111827);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.notes-child-desc {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text-secondary, #4b5563);
+}
+/* An OKF section inside the listing — `Subdirectories`, then a heading per
+ * type. Quiet and small: the sections are a grouping aid, not a second title. */
+.notes-child-section + .notes-child-section {
+  margin-top: 18px;
+}
+.notes-child-head {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted, #4b5563);
+}

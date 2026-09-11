@@ -48,10 +48,11 @@ function directChildrenOf(notes: Note[], folder: string): IndexChild[] {
     const fm = parseFrontmatter(note.content);
     const declared = String(fm.title ?? '').trim();
     const description = oneLineDescription(fm.description);
+    const type = typeof fm.type === 'string' ? fm.type.trim() || null : null;
     if (!rel.includes('/')) {
-      children.push({ path: note.path, title: declared || rel.replace(/\.md$/i, ''), description });
+      children.push({ path: note.path, title: declared || rel.replace(/\.md$/i, ''), description, type });
     } else if (rel.split('/').length === 2 && isIndexPath(rel)) {
-      children.push({ path: note.path, title: declared || humanizeFolderName(rel.split('/')[0]), description, folder: true });
+      children.push({ path: note.path, title: declared || humanizeFolderName(rel.split('/')[0]), description, folder: true, type });
     }
   }
   return children;
@@ -69,7 +70,7 @@ async function foldListings(context: Context, notes: Note[]): Promise<number> {
   for (const note of notes) {
     if (!isIndexPath(note.path)) continue;
     const folder = note.path.slice(0, Math.max(0, note.path.length - 'index.md'.length - 1));
-    const { content, descriptions } = foldCuratedChildren(note.content, directChildrenOf(notes, folder));
+    const { content, descriptions } = foldCuratedChildren(note.content, directChildrenOf(notes, folder), folder);
     if (content === note.content) continue;
     for (const [childPath, description] of descriptions) {
       const child = byPath.get(childPath);

@@ -1177,8 +1177,10 @@ export const CONTEXT_ACTIONS = [
                 index_contract:
                   "This path is a FOLDER's home page. A `title:` and the <!-- index:children --> block " +
                   'are enforced on it — read the note back if you need the exact stored content. Its ' +
-                  '`type:` is what the folder is about (never `Index`). Layout is fixed: H1, short ' +
-                  'prose, flat `- [Title](/path.md)` bullets. No tables.',
+                  '`type:` is what the folder is about (never `Index`). Layout is fixed: no H1, short ' +
+                  "prose, then the machine-written child list in the Open Knowledge Format's index " +
+                  'shape — `## Section` headings over `* [Title](relative-path.md) - description` rows. ' +
+                  'No tables.',
               }
             : {}),
           ...(gated
