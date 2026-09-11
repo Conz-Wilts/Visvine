@@ -44,12 +44,7 @@ export default function TypeStrip({ types, activeKey, nodeTypes, onChange }: {
           >
             {!all && <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: getTypeColor(type.name, nodeTypes) }} />}
             <span>{type.name}</span>
-            <span
-              className={clsx(
-                'shrink-0 tabular-nums',
-                active ? 'rounded bg-surface-1 px-1.5 py-px text-[11px] text-text-secondary ring-1 ring-border-subtle' : 'text-[11px] text-text-muted',
-              )}
-            >
+            <span className={clsx('shrink-0 text-[11px] tabular-nums', active ? 'text-text-secondary' : 'text-text-muted')}>
               {type.count}
             </span>
           </button>
