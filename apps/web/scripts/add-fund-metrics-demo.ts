@@ -167,8 +167,20 @@ Run the connector rather than trusting anything written here:
     )
 `;
 
+// The folder's own home page, so its row in the space's index says what it
+// holds rather than standing there as a bare name.
+const FUNDS_INDEX = `---
+title: Funds
+description: The funds, their marks and where those numbers come from.
+tags: [funds]
+---
+
+What the firm manages, read through the fund-metrics connector.
+`;
+
 const NOTES = [
   { path: 'connectors/fund-metrics.md', content: CONNECTOR_NOTE },
+  { path: 'funds/index.md', content: FUNDS_INDEX },
   { path: 'funds/fund-portfolio.md', content: CONTEXT_NOTE },
 ];
 

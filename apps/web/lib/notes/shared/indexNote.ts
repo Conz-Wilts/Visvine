@@ -93,6 +93,22 @@ function isShapeType(declared: string): boolean {
 
 // The frontmatter keys every index leads with, in this order; anything else the
 // note carries (an agent's schedule, a tool's perimeter) follows in its own order.
+/**
+ * The folders the platform owns, and the one line each says it holds. A
+ * reserved folder is made by the runtime, not by a person, so nobody is there
+ * to describe it — and without a `description:` its row in the parent's listing
+ * is a bare name. Filled only when the folder has none; a description somebody
+ * wrote is theirs and is never replaced.
+ */
+const RESERVED_FOLDER_DESCRIPTIONS: Record<string, string> = {
+  agents: 'The agents this space runs.',
+  connectors: 'The services this space is connected to.',
+  models: 'The models this space\'s agents run on.',
+  settings: "This space's own configuration.",
+  spaces: 'Context flowing up from this space\'s public sub-spaces — read-only.',
+  tools: 'The tools built in this space.',
+}
+
 const LEADING_KEYS = ['type', 'title', 'node', 'description', 'tags'] as const
 
 function orderFrontmatter(fm: Record<string, unknown>): Record<string, unknown> {
@@ -205,12 +221,18 @@ export function enforceIndexFrontmatter(
       (!claimsShape && declaredType !== '' && (entity.acceptsType?.(declaredType) ?? false))
     : !claimsShape
   const nodeOk = !entity || declaredNode === entity.nodeId
-  if (typeOk && nodeOk && declaredTitle && sameKeyOrder(fm)) return content
+  const declaredDescription = typeof fm.description === 'string' ? fm.description.trim() : ''
+  const reserved = declaredDescription ? undefined : RESERVED_FOLDER_DESCRIPTIONS[folderPath]
+  if (typeOk && nodeOk && declaredTitle && !reserved && sameKeyOrder(fm)) return content
 
   const { body } = splitFrontmatter(content)
   const segment = folderPath.split('/').pop() ?? folderPath
   const title = declaredTitle || entity?.name || humanizeFolderName(segment)
-  const next: Record<string, unknown> = { ...fm, ...(title ? { title } : {}) }
+  const next: Record<string, unknown> = {
+    ...fm,
+    ...(title ? { title } : {}),
+    ...(reserved ? { description: reserved } : {}),
+  }
   if (entity) {
     next.type = typeOk ? declaredType : entity.typeLabel
     next.node = entity.nodeId

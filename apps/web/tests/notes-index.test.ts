@@ -361,6 +361,17 @@ test('an entity folder index keeps a spelling its entity accepts, and rewrites o
   assert.equal(shape.type, 'Space')
 })
 
+// A folder the platform makes has nobody to describe it, so the contract fills
+// one in — and never touches a description somebody wrote.
+test('a reserved folder gets the one line saying what it holds', () => {
+  const fm = parseFrontmatter(enforceIndexFrontmatter('---\ntitle: Connectors\ntags: []\n---\n\n', 'connectors'))
+  assert.equal(fm.description, 'The services this space is connected to.')
+  const own = '---\ntitle: Tools\ndescription: what we built for the deal team\ntags: []\n---\n\nbody\n'
+  assert.equal(enforceIndexFrontmatter(own, 'tools'), own)
+  // Only the reserved names — a folder the space named is the space's to describe.
+  assert.equal(parseFrontmatter(enforceIndexFrontmatter('---\ntitle: Funds\ntags: []\n---\n\n', 'funds')).description, undefined)
+})
+
 test('an entity folder index is a byte no-op on conforming content', () => {
   const ok = '---\ntype: Person\ntitle: Connor W\nnode: person:connor\n---\n\nbody\n'
   assert.equal(enforceIndexFrontmatter(ok, 'people/connor', CONNOR), ok)
