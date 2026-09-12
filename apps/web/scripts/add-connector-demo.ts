@@ -13,7 +13,7 @@
  * the same way the admin console writes them.
  *
  * Usage:
- *   pnpm db:connectors:demo                      # community:blackbird-ventures
+ *   pnpm db:connectors:demo                      # the demo space (scripts/seed/space.ts)
  *   pnpm db:connectors:demo <spaceId>
  *   pnpm db:connectors:demo <spaceId> --remove
  *
@@ -30,14 +30,15 @@ import prisma from '../lib/prisma';
 import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { encryptSecret } from '../lib/crypto/secrets';
 import { syncContextLinksBulk } from '../lib/notes/entityLinks';
+import { SPACE_ID } from './seed/space'
 
 /** Kept in step with the same expression in the sandbox route by hand — the
  *  route is a Next entry point and isn't worth importing into a CLI script. */
 const SANDBOX_KEY = process.env.CONNECTOR_SANDBOX_KEY || 'sk_sandbox_local_dev';
 
 const spaceId = process.argv[2]?.startsWith('--')
-  ? 'community:blackbird-ventures'
-  : (process.argv[2] ?? 'community:blackbird-ventures');
+  ? SPACE_ID
+  : (process.argv[2] ?? SPACE_ID);
 const REMOVE = process.argv.includes('--remove');
 const SHARED = 'shared';
 

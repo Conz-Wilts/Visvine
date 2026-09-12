@@ -19,8 +19,9 @@ import prisma from '../lib/prisma';
 import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { mintAccessToken } from '../lib/mcp/tokens';
 import { MCP_SCOPES } from '../lib/mcp/scopes';
+import { SPACE_ID } from './seed/space'
 
-const SPACE = process.argv[2] ?? 'community:blackbird-ventures';
+const SPACE = process.argv[2] ?? SPACE_ID;
 const APP = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 const MCP_URL = new URL(`${APP}/api/mcp`);
 

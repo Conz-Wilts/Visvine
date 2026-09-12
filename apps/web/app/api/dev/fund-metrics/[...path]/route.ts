@@ -41,7 +41,7 @@ interface Fund {
 const FUNDS: Fund[] = [
   {
     id: 'fund_bb3',
-    name: 'Blackbird Fund III',
+    name: 'Kereru Fund III',
     vintage: 2019,
     currency: 'USD',
     strategy: 'Early-stage venture',
@@ -56,7 +56,7 @@ const FUNDS: Fund[] = [
   },
   {
     id: 'fund_bb4',
-    name: 'Blackbird Fund IV',
+    name: 'Kereru Fund IV',
     vintage: 2022,
     currency: 'USD',
     strategy: 'Early-stage venture',
@@ -71,7 +71,7 @@ const FUNDS: Fund[] = [
   },
   {
     id: 'fund_bbg1',
-    name: 'Blackbird Growth I',
+    name: 'Kereru Growth I',
     vintage: 2023,
     currency: 'USD',
     strategy: 'Growth',
@@ -97,13 +97,13 @@ interface Position {
 }
 
 const POSITIONS: Position[] = [
-  { fund_id: 'fund_bb3', company: 'Canva', sector: 'Software', invested_usd: 18_000_000, fair_value_usd: 214_000_000, ownership_pct: 3.1, status: 'active' },
-  { fund_id: 'fund_bb3', company: 'Halter', sector: 'Agtech', invested_usd: 12_500_000, fair_value_usd: 88_000_000, ownership_pct: 7.4, status: 'active' },
-  { fund_id: 'fund_bb3', company: 'Zeller', sector: 'Fintech', invested_usd: 9_000_000, fair_value_usd: 41_500_000, ownership_pct: 5.2, status: 'active' },
-  { fund_id: 'fund_bb3', company: 'Propeller', sector: 'Drones', invested_usd: 7_500_000, fair_value_usd: 0, ownership_pct: 0, status: 'written_off' },
-  { fund_id: 'fund_bb4', company: 'Kitchen Ai', sector: 'Software', invested_usd: 22_000_000, fair_value_usd: 61_000_000, ownership_pct: 9.8, status: 'active' },
-  { fund_id: 'fund_bb4', company: 'Relevance', sector: 'AI', invested_usd: 15_000_000, fair_value_usd: 74_000_000, ownership_pct: 6.6, status: 'active' },
-  { fund_id: 'fund_bbg1', company: 'Sunfed', sector: 'Foodtech', invested_usd: 20_000_000, fair_value_usd: 24_800_000, ownership_pct: 11.2, status: 'active' },
+  { fund_id: 'fund_bb3', company: 'Lumenfold', sector: 'Software', invested_usd: 18_000_000, fair_value_usd: 214_000_000, ownership_pct: 3.1, status: 'active' },
+  { fund_id: 'fund_bb3', company: 'Paddock Sense', sector: 'Agtech', invested_usd: 12_500_000, fair_value_usd: 88_000_000, ownership_pct: 7.4, status: 'active' },
+  { fund_id: 'fund_bb3', company: 'Harbour Pay', sector: 'Fintech', invested_usd: 9_000_000, fair_value_usd: 41_500_000, ownership_pct: 5.2, status: 'active' },
+  { fund_id: 'fund_bb3', company: 'Skylark Drones', sector: 'Drones', invested_usd: 7_500_000, fair_value_usd: 0, ownership_pct: 0, status: 'written_off' },
+  { fund_id: 'fund_bb4', company: 'Cookpath AI', sector: 'Software', invested_usd: 22_000_000, fair_value_usd: 61_000_000, ownership_pct: 9.8, status: 'active' },
+  { fund_id: 'fund_bb4', company: 'Inferly', sector: 'AI', invested_usd: 15_000_000, fair_value_usd: 74_000_000, ownership_pct: 6.6, status: 'active' },
+  { fund_id: 'fund_bbg1', company: 'Green Pasture Foods', sector: 'Foodtech', invested_usd: 20_000_000, fair_value_usd: 24_800_000, ownership_pct: 11.2, status: 'active' },
 ]
 
 /** Quarterly NAV/TVPI series per fund — enough points to chart or aggregate. */

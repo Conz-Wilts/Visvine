@@ -1,5 +1,5 @@
 /**
- * Seed the **Portfolio Board** — the demo space's resident Tool.
+ * Seed the **Accounts Board** — the demo space's resident Tool.
  *
  * A local database with no Tool in it leaves four tables empty (app_tool_builds,
  * app_tool_versions, app_tool_installs, app_tool_state) and, more to the point,
@@ -9,14 +9,14 @@
  *   appToolHandlers.createTool / writeTool ×3 → checkTool → publish →
  *   super-admin approve → install → seed its per-install state
  *
- * The sources live in `examples/tools/portfolio-board/` as real files a member
+ * The sources live in `examples/tools/accounts-board/` as real files a member
  * could have written. Nothing here compiles them by hand or reaches past the
  * handlers.
  *
- * The Tool itself is deliberately dull: a read-only board over the
- * `communities/*.md` notes the Blackbird layers already seed, with a `write: []`
- * perimeter. It invents no node types and dispatches no agent, so it adds no
- * surface area to the seeded space beyond its own rail row.
+ * The Tool itself is deliberately dull: a read-only board over the organisation
+ * notes under `communities/` that the seed layers already write, with a
+ * `write: []` perimeter. It invents no node types and dispatches no agent, so it
+ * adds no surface area to the seeded space beyond its own rail row.
  *
  * Idempotent. Every step checks first: an existing Tool is written over rather
  * than re-created, an unchanged working copy is not re-published, and an install
@@ -41,9 +41,10 @@ import { ActionError, type ActionCaller } from '../lib/actions/types';
 import { appToolHandlers } from '../lib/actions/defs/apps';
 import { applyUpgrade, listInstalls } from '../lib/tools/installs';
 import { getVersion, reviewVersion, toolKey, versionHistory } from '../lib/tools/registry';
+import { SPACE_ID } from './seed/space'
 
-const SPACE = process.argv[2] ?? 'community:blackbird-ventures';
-const TOOL = 'portfolio-board';
+const SPACE = process.argv[2] ?? SPACE_ID;
+const TOOL = 'accounts-board';
 const REVIEW_NOTE = 'seed-placeholder-tool';
 
 const SOURCES = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'examples', 'tools', TOOL);
@@ -65,7 +66,7 @@ function check(what: string, ok: boolean, detail: string) {
 
 async function main() {
   const space = await prisma.space.findUnique({ where: { id: SPACE }, select: { id: true } });
-  if (!space) throw new Error(`Space ${SPACE} not found — run \`pnpm db:blackbird:full\` first.`);
+  if (!space) throw new Error(`Space ${SPACE} not found — run \`pnpm db:hq:full\` first.`);
 
   // Author as somebody who actually manages the space, so the handlers'
   // own authorization is doing the work rather than being bypassed.
@@ -106,8 +107,8 @@ async function main() {
     const created = await appToolHandlers.createTool(ctx, {
       space_id: SPACE,
       name: TOOL,
-      title: 'Portfolio Board',
-      description: "The space's portfolio companies, grouped by sector.",
+      title: 'Accounts Board',
+      description: "Every organisation the space works with, grouped by segment.",
     });
     done(`scaffolded ${created.files.join(', ')}`);
   } catch (e) {
@@ -215,7 +216,7 @@ async function main() {
   // and inventing a write it does not make would be the wrong kind of fixture.
   step('4. per-install state');
   const state = [
-    { key: 'board:collapsedSectors', value: { sectors: ['Unsorted'] } },
+    { key: 'board:collapsedSegments', value: { segments: ['Unsorted'] } },
     { key: 'ui:lastOpenedAt', value: { at: '2026-08-23T03:30:00.000Z' } },
   ];
   for (const row of state) {
@@ -228,7 +229,7 @@ async function main() {
   done(`${state.length} key(s) on install ${install.slug}`);
 
   step('done');
-  console.log(`  Open the Portfolio rail item in ${SPACE}.`);
+  console.log(`  Open the Accounts rail item in ${SPACE}.`);
   console.log(`  ${failures} check(s) failed`);
   if (failures > 0) process.exitCode = 1;
 }

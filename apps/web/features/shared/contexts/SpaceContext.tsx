@@ -174,16 +174,25 @@ export function SpaceProvider({
   );
 
   // Use the stored selection when it still resolves to a space the user is
-  // a MEMBER of; otherwise fall back to the first joined space. Resolving
+  // a MEMBER of; otherwise fall back to a joined space. Resolving
   // against memberships (not the full visible list, which includes public
   // spaces anyone can discover) matters because the stored id may belong to a
   // different account that used this browser — without the membership check a
   // signed-in user could land "inside" a public space they never joined. A
   // brand-new member has joined nothing and resolves to null — nobody is
   // given a space; they create or join one.
+  //
+  // The fallback prefers a TOP-LEVEL space over a sub-space. `joinedSpaces` is
+  // sorted by name, so the plain first entry handed someone a sub-space
+  // whenever one happened to sort ahead of its parent — landing them inside a
+  // narrow room (one working group, one cohort) rather than the space that
+  // contains it, and making the default depend on the alphabet.
   const currentSpace = useMemo(
     () =>
-      joinedSpaces.find(c => c.id === currentSpaceId) ?? joinedSpaces[0] ?? null,
+      joinedSpaces.find(c => c.id === currentSpaceId) ??
+      joinedSpaces.find(c => !c.parentId) ??
+      joinedSpaces[0] ??
+      null,
     [currentSpaceId, joinedSpaces]
   );
 

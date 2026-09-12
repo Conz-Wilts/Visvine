@@ -14,9 +14,10 @@
  */
 import 'dotenv/config';
 import { environment } from '../lib/vm/lease';
+import { SPACE_ID } from './seed/space'
 
 const ENV = environment();
-const SPACE = process.env.REDTEAM_SPACE ?? 'community:blackbird-ventures';
+const SPACE = process.env.REDTEAM_SPACE ?? SPACE_ID;
 const AGENT = 'redteam';
 const edge = process.env.AGENT_EDGE_URL;
 const secret = process.env.EDGE_SERVICE_TOKEN;

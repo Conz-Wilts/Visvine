@@ -1,7 +1,8 @@
 /**
- * Fill the LAST-MILE tables of the Blackbird Ventures demo space.
+ * Fill the LAST-MILE tables of the demo space (Visvine HQ by default; pass a
+ * space id to fill another one).
  *
- * `db:blackbird:full` builds the space people actually look at — notes, nodes,
+ * `db:hq:full` builds the space people actually look at — notes, nodes,
  * links, members, channels, resources — and `seed-placeholder-tool.ts` drives one
  * Tool through its real lifecycle. What both leave behind is the machinery that
  * only fills up once a space has been LIVED IN: agent runs and their event
@@ -29,8 +30,8 @@
  * every other destructive db:* script.
  *
  * Usage:
- *   pnpm db:blackbird:placeholders
- *   pnpm --filter @visvine/web exec tsx scripts/add-blackbird-placeholders.ts [spaceId]
+ *   pnpm db:hq:placeholders
+ *   pnpm --filter @visvine/web exec tsx scripts/add-placeholders.ts [spaceId]
  */
 
 import '../../../scripts/guard-local-db.mjs';
@@ -38,8 +39,10 @@ import 'dotenv/config';
 import { createHash } from 'node:crypto';
 import prisma from '../lib/prisma';
 import { encryptSecret } from '../lib/crypto/secrets';
+import { SPACE_ID } from './seed/space';
 
-const SPACE = process.argv[2] ?? 'community:blackbird-ventures';
+const SPACE = process.argv[2] ?? SPACE_ID;
+/** The platform's global space — a real space, and the publication target below. */
 const PEER_SPACE = 'visvine';
 const SHARED = 'shared';
 
@@ -111,17 +114,17 @@ async function seedAgents() {
       scheduleHash: createHash('sha256').update('0 9 * * 1-5|Pacific/Auckland').digest('hex').slice(0, 32),
       budgetMonthlyCents: 2500,
       consecutiveFailures: 0,
-      triggersJson: { context: ['deals/**/*.md', 'communities/*.md'], webhook: 'dealflow-inbound' },
+      triggersJson: { context: ['deals/**/*.md', 'communities/**/*.md'], webhook: 'dealflow-inbound' },
       debounceMs: 120_000,
     },
     update: {},
   });
 
   const weekly = await prisma.agentState.upsert({
-    where: { agent_identity: { spaceId: SPACE, name: 'lp-report-drafter' } },
+    where: { agent_identity: { spaceId: SPACE, name: 'investor-update-drafter' } },
     create: {
       spaceId: SPACE,
-      name: 'lp-report-drafter',
+      name: 'investor-update-drafter',
       runAsUserId: ADMIN,
       active: false,
       status: 'idle',
@@ -131,7 +134,7 @@ async function seedAgents() {
       deactivatedReason: 'brief_changed',
       deactivatedDetail: 'Dev Admin edited the brief on 2026-08-20',
       consecutiveFailures: 1,
-      triggersJson: { context: ['data/fund-metrics.md'] },
+      triggersJson: { context: ['data/revenue-roll-up.md'] },
       debounceMs: 60_000,
     },
     update: {},
@@ -159,7 +162,7 @@ async function seedAgents() {
     events: unknown;
   }> = [
     {
-      id: 'run_bb_digest_001',
+      id: 'run_hq_digest_001',
       state: digest,
       trigger: 'scheduled',
       status: 'succeeded',
@@ -167,7 +170,7 @@ async function seedAgents() {
       endedAt: ago(63),
       terminalReason: 'finished',
       summary:
-        'Six new deals reached the pipeline this week. Three are ANZ climate-hardware, which continues the cluster flagged on 2026-08-11. Azonic is the only one at term-sheet stage; the rest are first meetings.',
+        'Six spaces asked about pricing this week. Four are accelerators, which continues the cluster flagged on 2026-08-11. Quarterdeck Partners is the only one at proposal stage; the rest are first conversations.',
       errorMessage: null,
       promptTokens: 18_442,
       completionTokens: 1_205,
@@ -185,14 +188,14 @@ async function seedAgents() {
       ],
     },
     {
-      id: 'run_bb_digest_002',
+      id: 'run_hq_digest_002',
       state: digest,
       trigger: 'event',
       status: 'succeeded',
       startedAt: ago(190),
       endedAt: ago(188),
       terminalReason: 'finished',
-      summary: 'Azonic moved to term sheet; the deal note and the pipeline index now agree.',
+      summary: 'Quarterdeck moved to proposal; the deal note and the pipeline index now agree.',
       errorMessage: null,
       promptTokens: 9_871,
       completionTokens: 640,
@@ -203,22 +206,22 @@ async function seedAgents() {
         events: [
           {
             kind: 'note_written',
-            source: 'deals/azonic.md',
+            source: 'deals/quarterdeck-partners.md',
             summary: 'stage: diligence → term-sheet',
             at: ago(192).toISOString(),
           },
         ],
       },
       events: [
-        { type: 'tool', tool: 'read_context', at: ago(190).getTime(), detail: 'deals/azonic.md' },
-        { type: 'tool_result', tool: 'read_context', at: ago(190).getTime(), text: '# Azonic\\nStage: term sheet' },
+        { type: 'tool', tool: 'read_context', at: ago(190).getTime(), detail: 'deals/quarterdeck-partners.md' },
+        { type: 'tool_result', tool: 'read_context', at: ago(190).getTime(), text: '# Quarterdeck Partners\\nStage: proposal' },
         { type: 'tool', tool: 'write_context', at: ago(189).getTime(), detail: 'deals/index.md' },
         { type: 'tool_result', tool: 'write_context', at: ago(188).getTime(), text: 'written deals/index.md' },
         { type: 'assistant', at: ago(188).getTime(), text: 'Pipeline index updated.' },
       ],
     },
     {
-      id: 'run_bb_weekly_001',
+      id: 'run_hq_weekly_001',
       state: weekly,
       trigger: 'scheduled',
       status: 'failed',
@@ -236,7 +239,7 @@ async function seedAgents() {
       events: [{ type: 'system', at: ago(4_318).getTime(), text: 'auth: provider rejected the key' }],
     },
     {
-      id: 'run_bb_digest_003',
+      id: 'run_hq_digest_003',
       state: digest,
       trigger: 'manual',
       status: 'running',
@@ -258,7 +261,7 @@ async function seedAgents() {
   // The fifth RunTrigger value. Worth its own row: a webhook run is the only
   // one whose input arrives from outside the space entirely.
   runs.push({
-    id: 'run_bb_digest_004',
+    id: 'run_hq_digest_004',
     state: digest,
     trigger: 'webhook',
     status: 'succeeded',
@@ -316,25 +319,25 @@ async function seedAgents() {
   // overlap suppression is reading a state no tick could have produced.
   await prisma.agentState.update({
     where: { id: digest.id },
-    data: { status: 'running', runningSince: ago(2), currentRunId: 'run_bb_digest_003' },
+    data: { status: 'running', runningSince: ago(2), currentRunId: 'run_hq_digest_003' },
   });
 
   // The mailbox: two rows already consumed by the runs above, two still pending
   // (one of them carrying a dedupe key, which is the partial-unique case).
   const events = [
     {
-      id: 'agev_bb_001',
+      id: 'agev_hq_001',
       agentName: 'dealflow-digest',
       kind: 'note_written',
-      source: 'deals/azonic.md',
+      source: 'deals/quarterdeck-partners.md',
       summary: 'stage: diligence → term-sheet',
-      payload: { path: 'deals/azonic.md', actor: 'Dev Admin', changed: true },
+      payload: { path: 'deals/quarterdeck-partners.md', actor: 'Dev Admin', changed: true },
       dedupeKey: null,
       createdAt: ago(192),
-      consumedBy: 'run_bb_digest_002',
+      consumedBy: 'run_hq_digest_002',
     },
     {
-      id: 'agev_bb_002',
+      id: 'agev_hq_002',
       agentName: 'dealflow-digest',
       kind: 'webhook',
       source: 'dealflow-inbound',
@@ -342,21 +345,21 @@ async function seedAgents() {
       payload: { provider: 'affinity', opportunities: 2 },
       dedupeKey: null,
       createdAt: ago(200),
-      consumedBy: 'run_bb_digest_002',
+      consumedBy: 'run_hq_digest_002',
     },
     {
-      id: 'agev_bb_003',
+      id: 'agev_hq_003',
       agentName: 'dealflow-digest',
       kind: 'note_written',
-      source: 'communities/halter/index.md',
+      source: 'communities/kowhai-labs/index.md',
       summary: 'Series D close added to the company note',
-      payload: { path: 'communities/halter/index.md', actor: 'Dev Admin', changed: true },
-      dedupeKey: 'note_written:communities/halter/index.md',
+      payload: { path: 'communities/kowhai-labs/index.md', actor: 'Dev Admin', changed: true },
+      dedupeKey: 'note_written:communities/kowhai-labs/index.md',
       createdAt: ago(9),
       consumedBy: null,
     },
     {
-      id: 'agev_bb_004',
+      id: 'agev_hq_004',
       agentName: 'dealflow-digest',
       kind: 'reply',
       source: 'Dev Admin',
@@ -414,7 +417,7 @@ async function seedConnectors() {
       // '' is the space-mode sentinel — NULL would let two space connections coexist.
       userId: '',
       mode: 'space',
-      accountLabel: 'Blackbird Ventures (workspace)',
+      accountLabel: 'Visvine HQ (workspace)',
       scopes: ['read_content', 'update_content'],
       expiresAt: ahead(50),
       brokenAt: null as Date | null,
@@ -482,8 +485,8 @@ async function seedGovernance() {
     { ownerKey: SHARED, path: 'data', restricted: false, locked: true },
     { ownerKey: SHARED, path: 'team', restricted: true, locked: false },
     { ownerKey: SHARED, path: 'communities', restricted: false, locked: false },
-    { ownerKey: SHARED, path: 'sectors', restricted: false, locked: false },
-    { ownerKey: ADMIN, path: 'diligence', restricted: false, locked: false },
+    { ownerKey: SHARED, path: 'segments', restricted: false, locked: false },
+    { ownerKey: ADMIN, path: 'discovery', restricted: false, locked: false },
     { ownerKey: ADMIN, path: 'journal', restricted: false, locked: true },
   ];
 
@@ -500,11 +503,11 @@ async function seedGovernance() {
   // resolved rows are the audit trail behind Console → People → Waiting.
   const requests = [
     {
-      id: 'car_bb_001',
+      id: 'car_hq_001',
       userId: MEMBER,
       resourcePath: 'deals',
       level: 10,
-      message: 'Working on the Azonic diligence pack — I need to read the deal notes.',
+      message: 'Working on the Quarterdeck proposal — I need to read the deal notes.',
       status: 'pending',
       createdAt: ago(180),
       resolvedBy: null as string | null,
@@ -514,7 +517,7 @@ async function seedGovernance() {
     {
       // '' = the context root gate. The path is recorded even when it doesn't
       // exist, so the denial copy never admits whether it does.
-      id: 'car_bb_004',
+      id: 'car_hq_004',
       userId: MEMBER,
       resourcePath: '',
       level: 10,
@@ -540,9 +543,9 @@ async function seedGovernance() {
   // land in a shared folder they cannot write to.
   const proposals = [
     {
-      id: 'cmp_bb_001',
-      fromPath: 'diligence/azonic.md',
-      toPath: 'deals/azonic-diligence.md',
+      id: 'cmp_hq_001',
+      fromPath: 'discovery/quarterdeck.md',
+      toPath: 'deals/quarterdeck-notes.md',
       folderId: 'deals',
       kind: 'copy',
       status: 'pending',
@@ -552,12 +555,12 @@ async function seedGovernance() {
       resolvedBy: null as string | null,
       resolvedAt: null as Date | null,
       content:
-        '---\ntitle: Azonic — diligence\ntype: Deal\n---\n\nSecond meeting notes, reference calls pending. Hardware margin is the open question.\n',
+        '---\ntitle: Quarterdeck Partners — discovery\ntype: Deal\n---\n\nSecond meeting notes. Procurement timing is the open question, not the product.\n',
     },
     {
-      id: 'cmp_bb_002',
-      fromPath: 'journal/2026-06-26.md',
-      toPath: 'team/partner-notes-june.md',
+      id: 'cmp_hq_002',
+      fromPath: 'journal/2026-09-11.md',
+      toPath: 'team/onboarding-notes-september.md',
       folderId: 'team',
       // A 'publish' proposal's content is only the PREVIEW: approval reads the
       // proposer's current note and creates a live publication instead.
@@ -568,12 +571,12 @@ async function seedGovernance() {
       proposedAt: ago(9_000),
       resolvedBy: ADMIN,
       resolvedAt: ago(8_940),
-      content: '---\ntitle: Partner notes — June\n---\n\nPreview snapshot taken at proposal time.\n',
+      content: '---\ntitle: Onboarding notes — September\n---\n\nPreview snapshot taken at proposal time.\n',
     },
     {
-      id: 'cmp_bb_003',
-      fromPath: 'journal/2026-06-19.md',
-      toPath: 'data/june-scratch.md',
+      id: 'cmp_hq_003',
+      fromPath: 'journal/2026-09-04.md',
+      toPath: 'data/september-scratch.md',
       folderId: 'data',
       kind: 'copy',
       status: 'denied',
@@ -582,7 +585,7 @@ async function seedGovernance() {
       proposedAt: ago(10_000),
       resolvedBy: ADMIN,
       resolvedAt: ago(9_800),
-      content: '---\ntitle: June scratch\n---\n\nSuperseded by the Q3 roll-up.\n',
+      content: '---\ntitle: September scratch\n---\n\nSuperseded by the Q3 revenue roll-up.\n',
     },
   ];
 
@@ -598,10 +601,10 @@ async function seedGovernance() {
   // A publication is a live link plus a REAL replica note in the target space.
   // Seeding the link without the replica would describe a sync that never ran.
   const publications = [
-    { sourcePath: 'communities/halter/index.md', targetPath: 'partners/blackbird/halter.md', active: true },
-    { sourcePath: 'communities/canva/index.md', targetPath: 'partners/blackbird/canva.md', active: true },
+    { sourcePath: 'communities/kowhai-labs/index.md', targetPath: 'spaces/visvine-hq/kowhai-labs.md', active: true },
+    { sourcePath: 'communities/harbourline-capital/index.md', targetPath: 'spaces/visvine-hq/harbourline-capital.md', active: true },
     // Unlinked: the replica stays behind as a plain editable copy.
-    { sourcePath: 'sectors/climate-energy.md', targetPath: 'partners/blackbird/climate-energy.md', active: false },
+    { sourcePath: 'segments/venture-capital.md', targetPath: 'spaces/visvine-hq/venture-capital.md', active: false },
   ];
 
   for (const publication of publications) {
@@ -659,34 +662,34 @@ async function seedGovernance() {
 /** `path` must NOT end in .md: the note namespace and the source one stay disjoint. */
 const SOURCES = [
   {
-    path: 'data/fund-roll-up-q3.csv',
-    name: 'Fund roll-up (Q3).csv',
+    path: 'data/revenue-roll-up-q3.csv',
+    name: 'Revenue roll-up (Q3).csv',
     kind: 'csv',
     mimeType: 'text/csv',
     status: 'ready',
-    resourceName: 'Fund roll-up (Q3)',
+    resourceName: 'Revenue roll-up (Q3)',
     chunks: [
-      'fund,vintage,committed_musd,called_musd,dpi,tvpi,irr_pct\nBlackbird Ventures I,2013,30,30,3.41,11.80,42.1',
-      'Blackbird Ventures II,2015,200,196,1.12,4.60,31.4\nBlackbird Ventures III,2018,284,270,0.35,2.90,24.8',
-      'Blackbird Ventures IV,2020,640,489,0.06,1.85,17.2\nBlackbird Ventures V,2022,1000,410,0.00,1.24,9.6',
+      'segment,accounts,seats,mrr_nzd,net_retention_pct\nAccelerators & Incubators,7,251,6620,104',
+      'Venture Capital,5,119,7850,97\nUniversities & Research,5,228,5660,112',
+      'Industry Bodies,5,225,7390,108\nCorporate Innovation,4,151,7760,84',
     ],
   },
   {
-    path: 'deals/ic-memo-template.md.txt',
-    name: 'IC memo template.txt',
+    path: 'deals/onboarding-checklist.md.txt',
+    name: 'Onboarding checklist.txt',
     kind: 'text',
     mimeType: 'text/plain',
     status: 'ready',
-    resourceName: 'IC memo template',
+    resourceName: 'Onboarding checklist',
     chunks: [
-      'INVESTMENT COMMITTEE MEMO\n\n1. The company in one line\n2. Why now\n3. Market and the wedge\n4. Team',
-      '5. Traction and the numbers that matter\n6. Round, terms, ownership\n7. What would have to be true\n8. Risks and the kill criteria',
+      'ONBOARDING A NEW SPACE\n\n1. Their member list, any format\n2. Who administers it, by name\n3. One question they cannot answer today',
+      '4. Import the list without tidying it\n5. Write one note together, open the graph\n6. Hand over the keyboard\n7. A second admin, always',
     ],
   },
   {
     // A failure, so the "why can't the AI see my file" path has a row.
-    path: 'data/lp-side-letters.docx',
-    name: 'LP side letters.docx',
+    path: 'data/board-side-letters.docx',
+    name: 'Board side letters.docx',
     kind: 'docx',
     mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     status: 'failed',
@@ -797,13 +800,13 @@ async function seedRetrieval() {
 
 async function seedDrive() {
   const roots = [
-    { id: 'rfold_bb_fund', name: 'Fund admin', parentId: null as string | null },
-    { id: 'rfold_bb_deals', name: 'Deal room', parentId: null },
-    { id: 'rfold_bb_lp', name: 'LP reporting', parentId: null },
+    { id: 'rfold_hq_revenue', name: 'Revenue', parentId: null as string | null },
+    { id: 'rfold_hq_deals', name: 'Deal room', parentId: null },
+    { id: 'rfold_hq_board', name: 'Board reporting', parentId: null },
   ];
   const children = [
-    { id: 'rfold_bb_fund_q3', name: 'Q3 2026', parentId: 'rfold_bb_fund' },
-    { id: 'rfold_bb_deals_azonic', name: 'Azonic', parentId: 'rfold_bb_deals' },
+    { id: 'rfold_hq_revenue_q3', name: 'Q3 2026', parentId: 'rfold_hq_revenue' },
+    { id: 'rfold_hq_deals_quarterdeck', name: 'Quarterdeck', parentId: 'rfold_hq_deals' },
   ];
 
   for (const folder of [...roots, ...children]) {
@@ -817,20 +820,20 @@ async function seedDrive() {
 
   // File the seeded files, so the root isn't the only folder state represented.
   const filing: Array<[string, string]> = [
-    ['Fund roll-up (Q3)', 'rfold_bb_fund_q3'],
-    ['Portfolio review template', 'rfold_bb_lp'],
-    ['IC memo template', 'rfold_bb_deals'],
+    ['Revenue roll-up (Q3)', 'rfold_hq_revenue_q3'],
+    ['Segment pricing (working)', 'rfold_hq_board'],
+    ['Onboarding checklist', 'rfold_hq_deals'],
   ];
   for (const [name, folderId] of filing) {
     await prisma.resource.updateMany({ where: { spaceId: SPACE, name }, data: { folderId } });
   }
 
-  const rollUp = await prisma.resource.findFirst({ where: { spaceId: SPACE, name: 'Fund roll-up (Q3)' } });
+  const rollUp = await prisma.resource.findFirst({ where: { spaceId: SPACE, name: 'Revenue roll-up (Q3)' } });
   if (!rollUp) return;
 
   const changes = [
     {
-      id: 'rch_bb_002',
+      id: 'rch_hq_002',
       cellRef: 'G3',
       originalValue: '30.9',
       proposedValue: '31.4',
@@ -842,7 +845,7 @@ async function seedDrive() {
       createdAt: ago(4_200),
     },
     {
-      id: 'rch_bb_003',
+      id: 'rch_hq_003',
       cellRef: 'C6',
       originalValue: '410',
       proposedValue: '480',
@@ -872,18 +875,18 @@ async function seedDrive() {
 async function seedMessaging() {
   const message = async (id: string) => prisma.message.findUnique({ where: { id } });
 
-  const portfolioNews = await message('msg_bb_020');
-  const general = await message('msg_bb_001');
-  const dealflow = await message('msg_bb_013');
+  const portfolioNews = await message('msg_hq_020');
+  const general = await message('msg_hq_001');
+  const dealflow = await message('msg_hq_013');
 
   if (portfolioNews) {
     for (const [position, imageUrl] of [
-      'https://images.placeholders.dev/?width=1200&height=630&text=Halter+Series+D',
-      'https://images.placeholders.dev/?width=1200&height=630&text=ARR+curve',
+      'https://images.placeholders.dev/?width=1200&height=630&text=Cohort+five',
+      'https://images.placeholders.dev/?width=1200&height=630&text=MRR+curve',
     ].entries()) {
       await prisma.messageImage.upsert({
-        where: { id: `mimg_bb_${position + 1}` },
-        create: { id: `mimg_bb_${position + 1}`, messageId: portfolioNews.id, imageUrl, position },
+        where: { id: `mimg_hq_${position + 1}` },
+        create: { id: `mimg_hq_${position + 1}`, messageId: portfolioNews.id, imageUrl, position },
         update: {},
       });
       count('message_images', 1);
@@ -891,14 +894,14 @@ async function seedMessaging() {
   }
 
   // Mentions come in two shapes: a USER and a graph NODE.
-  const halter = await prisma.node.findFirst({ where: { spaceId: SPACE, name: 'Halter' } });
+  const mentionedOrg = await prisma.node.findFirst({ where: { spaceId: SPACE, name: 'Kowhai Labs' } });
   const mentions = [
-    { id: 'ment_bb_002', message: general, mentionedUserId: MEMBER, mentionedNodeId: null, mentionType: 'user' },
+    { id: 'ment_hq_002', message: general, mentionedUserId: MEMBER, mentionedNodeId: null, mentionType: 'user' },
     {
-      id: 'ment_bb_003',
+      id: 'ment_hq_003',
       message: portfolioNews,
       mentionedUserId: null,
-      mentionedNodeId: halter?.id ?? null,
+      mentionedNodeId: mentionedOrg?.id ?? null,
       mentionType: 'node',
     },
   ];
@@ -936,19 +939,19 @@ async function seedMessaging() {
 
   const previews = [
     {
-      url: 'https://www.halterhq.com/news/series-d',
-      title: 'Halter raises Series D',
-      description: 'Virtual fencing for pasture-based farming closes a new round led by existing investors.',
-      imageUrl: 'https://images.placeholders.dev/?width=1200&height=630&text=Halter',
-      siteName: 'Halter',
+      url: 'https://kowhai-labs.example.com/news/cohort-five',
+      title: 'Kowhai Labs opens cohort five',
+      description: 'Twelve teams, twelve weeks, and an alumni network four cohorts deep.',
+      imageUrl: 'https://images.placeholders.dev/?width=1200&height=630&text=Kowhai+Labs',
+      siteName: 'Kowhai Labs',
       message: portfolioNews,
     },
     {
-      url: 'https://www.blackbird.vc/portfolio',
-      title: 'Blackbird — Portfolio',
-      description: 'The companies Blackbird has backed across Australia and New Zealand.',
-      imageUrl: 'https://images.placeholders.dev/?width=1200&height=630&text=Blackbird',
-      siteName: 'Blackbird',
+      url: 'https://docs.visvine.example.com/playbook',
+      title: 'The Space Playbook',
+      description: 'How to run a community space that people actually open twice.',
+      imageUrl: 'https://images.placeholders.dev/?width=1200&height=630&text=Visvine',
+      siteName: 'Visvine',
       message: dealflow,
     },
   ];
@@ -970,8 +973,8 @@ async function seedMessaging() {
 
     if (!preview.message) continue;
     await prisma.messageLinkPreview.upsert({
-      where: { id: `mlp_bb_${index + 1}` },
-      create: { id: `mlp_bb_${index + 1}`, messageId: preview.message.id, linkPreviewId: row.id },
+      where: { id: `mlp_hq_${index + 1}` },
+      create: { id: `mlp_hq_${index + 1}`, messageId: preview.message.id, linkPreviewId: row.id },
       update: {},
     });
     count('message_link_previews', 1);
@@ -987,9 +990,9 @@ async function seedMachinery() {
   // table holds only what is still owed plus one parked, poisoned row.
   const jobs = [
     {
-      id: 'npj_bb_001',
+      id: 'npj_hq_001',
       ownerKey: SHARED,
-      path: 'communities/halter/index.md',
+      path: 'communities/kowhai-labs/index.md',
       kind: 'write',
       fromPath: null as string | null,
       origin: 'edit',
@@ -1005,11 +1008,11 @@ async function seedMachinery() {
       doneAt: null as Date | null,
     },
     {
-      id: 'npj_bb_002',
+      id: 'npj_hq_002',
       ownerKey: SHARED,
-      path: 'deals/azonic.md',
+      path: 'deals/quarterdeck-partners.md',
       kind: 'rename',
-      fromPath: 'deals/azonic-draft.md',
+      fromPath: 'deals/quarterdeck-draft.md',
       origin: 'edit',
       actorId: ADMIN,
       actorName: 'Dev Admin',
@@ -1023,7 +1026,7 @@ async function seedMachinery() {
       doneAt: null,
     },
     {
-      id: 'npj_bb_003',
+      id: 'npj_hq_003',
       ownerKey: ADMIN,
       path: 'journal/2026-06-19.md',
       kind: 'delete',
@@ -1042,9 +1045,9 @@ async function seedMachinery() {
     },
     {
       // Parked rather than retried forever: attempts exhausted, doneAt stamped.
-      id: 'npj_bb_004',
+      id: 'npj_hq_004',
       ownerKey: SHARED,
-      path: 'data/fund-metrics.md',
+      path: 'data/revenue-roll-up.md',
       kind: 'write',
       fromPath: null,
       origin: 'agent',
@@ -1117,7 +1120,7 @@ async function seedMachinery() {
 
   const codes = [
     {
-      id: 'oac_bb_001',
+      id: 'oac_hq_001',
       code: 'ac_live_placeholder_0001',
       clientId: 'mcp_claude_desktop_local',
       userId: ADMIN,
@@ -1128,7 +1131,7 @@ async function seedMachinery() {
       createdAt: ago(1),
     },
     {
-      id: 'oac_bb_003',
+      id: 'oac_hq_003',
       code: 'ac_expired_placeholder_0003',
       clientId: 'mcp_claude_desktop_local',
       userId: MEMBER,
@@ -1174,14 +1177,14 @@ async function seedMachinery() {
 async function seedAudit() {
   // Governance mutations and gated reads — the events the ledger exists for.
   const entries = [
-    { id: 'cae_bb_001', userId: ADMIN, name: 'Dev Admin', action: 'grant.create', path: 'deals', detail: 'alias Partner → edit', at: ago(20_000) },
-    { id: 'cae_bb_002', userId: ADMIN, name: 'Dev Admin', action: 'folder.restrict', path: 'deals', detail: 'restricted: true', at: ago(19_900) },
-    { id: 'cae_bb_003', userId: MEMBER, name: 'Dev Member', action: 'note.read', path: 'data/fund-metrics.md', detail: 'restricted boundary: data', at: ago(5_800) },
-    { id: 'cae_bb_006', userId: ADMIN, name: 'Dev Admin', action: 'connector.run', path: 'connectors/sandbox.md', detail: '200 in 412ms', at: ago(30) },
-    { id: 'cae_bb_007', userId: ADMIN, name: 'Dev Admin', action: 'secret.update', path: 'SANDBOX_KEY', detail: 'rotated', at: ago(9_000) },
-    { id: 'cae_bb_008', userId: ADMIN, name: 'Dev Admin', action: 'agent.deactivate', path: 'agents/lp-report-drafter/index.md', detail: 'brief_changed', at: ago(4_320) },
-    { id: 'cae_bb_009', userId: ADMIN, name: 'Dev Admin', action: 'proposal.approve', path: 'team/partner-notes-june.md', detail: 'publish from Dev Admin', at: ago(8_940) },
-    { id: 'cae_bb_010', userId: ADMIN, name: 'Dev Admin', action: 'publication.unlink', path: 'sectors/climate-energy.md', detail: 'target visvine', at: ago(7_000) },
+    { id: 'cae_hq_001', userId: ADMIN, name: 'Dev Admin', action: 'grant.create', path: 'deals', detail: 'alias Partner → edit', at: ago(20_000) },
+    { id: 'cae_hq_002', userId: ADMIN, name: 'Dev Admin', action: 'folder.restrict', path: 'deals', detail: 'restricted: true', at: ago(19_900) },
+    { id: 'cae_hq_003', userId: MEMBER, name: 'Dev Member', action: 'note.read', path: 'data/revenue-roll-up.md', detail: 'restricted boundary: data', at: ago(5_800) },
+    { id: 'cae_hq_006', userId: ADMIN, name: 'Dev Admin', action: 'connector.run', path: 'connectors/sandbox.md', detail: '200 in 412ms', at: ago(30) },
+    { id: 'cae_hq_007', userId: ADMIN, name: 'Dev Admin', action: 'secret.update', path: 'SANDBOX_KEY', detail: 'rotated', at: ago(9_000) },
+    { id: 'cae_hq_008', userId: ADMIN, name: 'Dev Admin', action: 'agent.deactivate', path: 'agents/investor-update-drafter/index.md', detail: 'brief_changed', at: ago(4_320) },
+    { id: 'cae_hq_009', userId: ADMIN, name: 'Dev Admin', action: 'proposal.approve', path: 'team/onboarding-notes-september.md', detail: 'publish from Dev Admin', at: ago(8_940) },
+    { id: 'cae_hq_010', userId: ADMIN, name: 'Dev Admin', action: 'publication.unlink', path: 'segments/venture-capital.md', detail: 'target visvine', at: ago(7_000) },
   ];
 
   for (const entry of entries) {
@@ -1198,7 +1201,7 @@ async function seedAudit() {
 
 async function main() {
   const space = await prisma.space.findUnique({ where: { id: SPACE } });
-  if (!space) throw new Error(`Space ${SPACE} not found — run \`pnpm db:blackbird:full\` first.`);
+  if (!space) throw new Error(`Space ${SPACE} not found — run \`pnpm db:hq:full\` first.`);
 
   await seedAgents();
   await seedConnectors();

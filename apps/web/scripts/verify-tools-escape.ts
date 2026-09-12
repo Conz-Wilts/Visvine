@@ -67,8 +67,9 @@ import { toolFolderPath, toolIndexPath } from '../lib/tools/config';
 import { listInstalls, uninstall } from '../lib/tools/installs';
 import { reviewVersion, toolKey } from '../lib/tools/registry';
 import { resolveBridgeTarget, type ResolvedTarget } from '../lib/tools/target';
+import { SPACE_ID } from './seed/space'
 
-const SPACE = process.argv[2] ?? 'community:blackbird-ventures';
+const SPACE = process.argv[2] ?? SPACE_ID;
 const TOOL = 'hostile';
 const RAIL_KEY = toolRailKey(TOOL);
 

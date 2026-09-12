@@ -154,9 +154,9 @@ anything under it, and the editor shows a banner naming the sub-space.
 
 ## Seed
 
-Blackbird has two sub-spaces so the rule is on screen from the first seed:
-**Founders Network** (public — its `playbooks/` show in Blackbird's tree
-under `spaces/blackbird-founders-network/`) and **Investment Committee**
+The seeded space has two sub-spaces so the rule is on screen from the first
+seed: **Design Partners** (public — its `playbooks/` show in the parent's tree
+under `spaces/visvine-hq-design-partners/`) and **Leadership**
 (private — nothing of it shows above). Dev Admin administers both; Dev Member
 is in the public one only.
 

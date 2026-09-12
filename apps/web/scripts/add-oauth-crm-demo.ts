@@ -10,7 +10,7 @@
  *   • the CRM_CLIENT_ID / CRM_CLIENT_SECRET secrets, encrypted under SECRETS_KEY.
  *
  * Usage:
- *   pnpm db:connectors:oauth                      # community:blackbird-ventures
+ *   pnpm db:connectors:oauth                      # the demo space (scripts/seed/space.ts)
  *   pnpm db:connectors:oauth <spaceId>
  *   pnpm db:connectors:oauth <spaceId> --remove
  */
@@ -21,14 +21,15 @@ import prisma from '../lib/prisma';
 import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { encryptSecret } from '../lib/crypto/secrets';
 import { syncContextLinksBulk } from '../lib/notes/entityLinks';
+import { SPACE_ID } from './seed/space'
 
 /** Kept in step with the same expressions in the oauth-crm route by hand. */
 const CLIENT_ID = process.env.CONNECTOR_OAUTH_CLIENT_ID || 'crm_client_local_dev';
 const CLIENT_SECRET = process.env.CONNECTOR_OAUTH_CLIENT_SECRET || 'sk_crm_secret_local_dev';
 
 const spaceId = process.argv[2]?.startsWith('--')
-  ? 'community:blackbird-ventures'
-  : (process.argv[2] ?? 'community:blackbird-ventures');
+  ? SPACE_ID
+  : (process.argv[2] ?? SPACE_ID);
 const REMOVE = process.argv.includes('--remove');
 const SHARED = 'shared';
 

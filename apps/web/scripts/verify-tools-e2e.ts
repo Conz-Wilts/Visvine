@@ -60,8 +60,9 @@ import { applyUpgrade, installedToolsForSpaces, listInstalls, uninstall } from '
 import type { BridgeMethod, BridgeResponse } from '../lib/tools/protocol';
 import { reviewVersion, toolKey } from '../lib/tools/registry';
 import { resolveBridgeTarget, type ResolvedTarget } from '../lib/tools/target';
+import { SPACE_ID } from './seed/space'
 
-const SPACE = process.argv[2] ?? 'community:blackbird-ventures';
+const SPACE = process.argv[2] ?? SPACE_ID;
 const TOOL = 'hello';
 const RAIL_KEY = toolRailKey(TOOL);
 

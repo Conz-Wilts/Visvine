@@ -23,7 +23,7 @@ rather than repeating it.
   read-only history. Deploy replays migrations, never diffs. Never
   `prisma db push` against prod.
 - Nothing created by clicking through the UI survives to another machine. If it
-  matters, codify it in `apps/web/prisma/seed.ts` + the `db:blackbird:*` layers.
+  matters, codify it in `apps/web/prisma/seed.ts` + the `db:hq:*` layers.
 - Commit freely; **push only when the user asks**. `main` is the deployed branch.
 
 ## Layout

@@ -14,7 +14,7 @@
  * Then `pnpm connectors:verify:funds` drives a real MCP client against it.
  *
  * Usage:
- *   pnpm db:connectors:funds                      # community:blackbird-ventures
+ *   pnpm db:connectors:funds                      # the demo space (scripts/seed/space.ts)
  *   pnpm db:connectors:funds <spaceId>
  *   pnpm db:connectors:funds <spaceId> --remove
  *
@@ -28,13 +28,14 @@ import prisma from '../lib/prisma';
 import { ADMIN_ALIAS_ID } from '../lib/types/context';
 import { encryptSecret } from '../lib/crypto/secrets';
 import { syncContextLinksBulk } from '../lib/notes/entityLinks';
+import { SPACE_ID } from './seed/space'
 
 /** Kept in step with the same expression in the fund-metrics route by hand. */
 const FUND_KEY = process.env.CONNECTOR_FUND_METRICS_KEY || 'sk_fundmetrics_local_dev';
 
 const spaceId = process.argv[2]?.startsWith('--')
-  ? 'community:blackbird-ventures'
-  : (process.argv[2] ?? 'community:blackbird-ventures');
+  ? SPACE_ID
+  : (process.argv[2] ?? SPACE_ID);
 const REMOVE = process.argv.includes('--remove');
 const SHARED = 'shared';
 
@@ -131,20 +132,20 @@ description: The three active funds, what drives their numbers, and where the nu
 
 # Fund portfolio
 
-Three active vehicles. Live figures are never typed into this note — pull them
+Three active vehicles in the sample fund-admin API this connector fixture points at. Live figures are never typed into this note — pull them
 from the [Fund Metrics API](/connectors/fund-metrics.md) connector, which is the
 system of record.
 
 | Fund | Vintage | Strategy | Commitment |
 | --- | --- | --- | --- |
-| Blackbird Fund III (\`fund_bb3\`) | 2019 | Early-stage venture | $250M |
-| Blackbird Fund IV (\`fund_bb4\`) | 2022 | Early-stage venture | $400M |
-| Blackbird Growth I (\`fund_bbg1\`) | 2023 | Growth | $300M |
+| Kereru Fund III (\`fund_bb3\`) | 2019 | Early-stage venture | $250M |
+| Kereru Fund IV (\`fund_bb4\`) | 2022 | Early-stage venture | $400M |
+| Kereru Growth I (\`fund_bbg1\`) | 2023 | Growth | $300M |
 
 ## What to know before quoting a number
 
 - **Fund III is the mature book.** It carries the marks that move the firm's
-  headline TVPI; Canva alone is the majority of its fair value.
+  headline TVPI; one position alone is the majority of its fair value.
 - **Fund IV and Growth I are early.** DPI is 0.00 by construction — nothing has
   been distributed yet, so judge them on TVPI and pacing, not DPI.
 - **Net IRR is time-weighted against called capital**, so a fund that has called
