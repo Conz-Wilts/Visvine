@@ -110,10 +110,10 @@ interface ChipProps {
   size?: ChipSize;
   /** Renders the chip as a button. */
   onClick?: () => void;
-  /** Adds a trailing ✕. The chip stays a <span> so the two clicks don't nest. */
+  /** Adds a trailing remove button. The chip stays a <span> so the two clicks don't nest. */
   onRemove?: () => void;
   removeLabel?: string;
-  /** Blocks the ✕ alone — an in-flight save mustn't dim the chip it's saving. */
+  /** Blocks the remove button alone — an in-flight save mustn't dim the chip it's saving. */
   removeDisabled?: boolean;
   disabled?: boolean;
   title?: string;

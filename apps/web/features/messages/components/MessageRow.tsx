@@ -10,7 +10,7 @@
  */
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { PencilIcon, ReplyIcon, SmileIcon, StarIcon, Trash2Icon } from '@/features/shared/icons';
+import { CheckIcon, PencilIcon, ReplyIcon, SmileIcon, StarIcon, Trash2Icon } from '@/features/shared/icons';
 import Image from 'next/image';
 import ReactMarkdown, { type Options as ReactMarkdownOptions } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -305,12 +305,13 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
                   message.isFullyReadByRecipients ? 'Read by everyone' : message.readByCount > 0 ? `Read by ${message.readByCount}` : 'Sent'
                 }
               >
-                {message.isFullyReadByRecipients ? (
-                  <span className="text-blue-500">✓✓</span>
-                ) : message.readByCount > 0 ? (
-                  <span className="text-text-muted">✓✓</span>
+                {message.isFullyReadByRecipients || message.readByCount > 0 ? (
+                  <span className={`inline-flex ${message.isFullyReadByRecipients ? 'text-blue-500' : 'text-text-muted'}`}>
+                    <CheckIcon className="h-3 w-3" />
+                    <CheckIcon className="-ml-[5px] h-3 w-3" />
+                  </span>
                 ) : (
-                  <span className="text-text-muted">✓</span>
+                  <CheckIcon className="h-3 w-3 text-text-muted" />
                 )}
               </span>
             )}

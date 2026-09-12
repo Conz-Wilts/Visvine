@@ -30,6 +30,7 @@ import {
   SparklesIcon,
   TableIcon,
   TextQuoteIcon,
+  XIcon,
 } from '@/features/shared/icons';
 import { Hashtag } from '../lib/hashtag'
 import { EntityChip } from '../lib/entityChip'
@@ -721,7 +722,10 @@ export function NoteEditor({
           {error && (
             <div className="mb-3 flex items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
               <span>{error}</span>
-              <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
+              <button onClick={() => setError(null)} aria-label="Dismiss"
+                      className="ml-2 text-red-400 hover:text-red-600">
+                <XIcon className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
           {/* Keyed by mode so each Edit ⇄ Raw swap drops the incoming surface
@@ -760,8 +764,9 @@ export function NoteEditor({
         >
           <div className="pointer-events-auto flex w-full max-w-[760px] items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
             <span>{error}</span>
-            <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">
-              ✕
+            <button onClick={() => setError(null)} aria-label="Dismiss"
+                    className="ml-2 text-red-400 hover:text-red-600">
+              <XIcon className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>

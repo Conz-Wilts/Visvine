@@ -72,8 +72,8 @@ export const ANCHORS: Anchor[] = [
  * into note frontmatter by a seed layer.
  */
 export const NODE_TYPES = [
-  { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
-  { icon: '🏘️', name: 'Space', color: '#78d870', shape: 'square' },
+  { name: 'Person', color: '#2563eb', shape: 'rectangle' },
+  { name: 'Space', color: '#78d870', shape: 'square' },
   // An organisation that runs on Visvine is a RECORD here, not a tenant of
   // this space: it has a directory card and a context note
   // (communities/<slug>/index.md, the org namespace — see lib/notes/entities.ts)
@@ -81,15 +81,15 @@ export const NODE_TYPES = [
   // folds onto `space` in TYPE_SYNONYMS so the entity machinery is unchanged;
   // declaring the type here is what makes this spelling win in
   // findNodeTypeConfig and paints it its own colour.
-  { icon: '🏢', name: 'Company', color: '#0891b2', shape: 'square' },
-  { icon: '📅', name: 'Event', color: '#ef4444', shape: 'rectangle' },
-  { icon: '📚', name: 'Resource', color: '#0d9488', shape: 'circle' },
-  { icon: '📝', name: 'Note', color: '#8b5cf6', shape: 'rectangle' },
+  { name: 'Company', color: '#0891b2', shape: 'square' },
+  { name: 'Event', color: '#ef4444', shape: 'rectangle' },
+  { name: 'Resource', color: '#0d9488', shape: 'circle' },
+  { name: 'Note', color: '#8b5cf6', shape: 'rectangle' },
   // The segment vocabulary — how we cut the customer base. (Blackbird's space
   // called the same shape a Sector.)
-  { icon: '🧭', name: 'Segment', color: '#f97316', shape: 'rectangle' },
-  { icon: '📓', name: 'Journal', color: '#ec4899', shape: 'rectangle' },
-  { icon: '🤝', name: 'Meeting', color: '#14b8a6', shape: 'rectangle' },
+  { name: 'Segment', color: '#f97316', shape: 'rectangle' },
+  { name: 'Journal', color: '#ec4899', shape: 'rectangle' },
+  { name: 'Meeting', color: '#14b8a6', shape: 'rectangle' },
   // Structural/document built-ins the demo layers create nodes for (channels,
   // sections, connectors, agents). Because this list is explicit, omitting one
   // hides it from the console's Types page even though DEFAULT_NODE_TYPES knows
@@ -97,15 +97,15 @@ export const NODE_TYPES = [
   // lib/types/context.ts DEFAULT_NODE_TYPES. `Tool` stays out on purpose: it is
   // a RESERVED machine type (lib/types/nodeTypeRegistry.ts) the console must
   // never offer to a note picker.
-  { icon: '🧩', name: 'Section', color: '#0ea5e9', shape: 'square' },
-  { icon: '💬', name: 'Channel', color: '#e0685f', shape: 'rectangle' },
-  { icon: '🔌', name: 'Connector', color: '#6366f1', shape: 'rectangle' },
-  { icon: '🤖', name: 'Agent', color: '#0d9488', shape: 'rectangle' },
+  { name: 'Section', color: '#0ea5e9', shape: 'square' },
+  { name: 'Channel', color: '#e0685f', shape: 'rectangle' },
+  { name: 'Connector', color: '#6366f1', shape: 'rectangle' },
+  { name: 'Agent', color: '#0d9488', shape: 'rectangle' },
   // Note-only vocabulary: `type: Deal` on a pipeline note, `type: Decision` on
   // a product decision. Scoped to notes, the way the draft-context surface
   // would have created them.
-  { icon: '💼', name: 'Deal', color: '#b45309', shape: 'rectangle', scope: 'note' },
-  { icon: '⚖️', name: 'Decision', color: '#7c3aed', shape: 'rectangle', scope: 'note' },
+  { name: 'Deal', color: '#b45309', shape: 'rectangle', scope: 'note' },
+  { name: 'Decision', color: '#7c3aed', shape: 'rectangle', scope: 'note' },
 ]
 
 // ---- aliases ----------------------------------------------------------------

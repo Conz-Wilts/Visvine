@@ -26,6 +26,7 @@ import { useCopied } from '@/features/shared/hooks/useCopied';
 import { formatDate, timeAgo as relativeTimeAgo } from '@/lib/date';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import Chip from '@/components/ui/Chip';
+import PageError from '@/components/ui/PageError';
 import type { Resource, ResourceComment, ResourceChange } from '@/lib/types';
 import { BookmarkIcon, CheckIcon, ChevronLeftIcon, DownloadIcon, GitPullRequestIcon, InfoIcon, LoaderCircleIcon, MessageSquareIcon, SendIcon, Share2Icon, Trash2Icon, XIcon } from '@/features/shared/icons';
 
@@ -148,12 +149,10 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
   }
   if (notFound || !resource) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 gap-3 text-center">
-        <div className="text-5xl">📄</div>
-        <p className="text-base font-semibold text-text-primary">Resource not found</p>
-        <p className="text-sm text-text-muted">It may have been deleted, or you don&apos;t have access.</p>
-        <Link href="/directory?view=resources" className="mt-2 text-sm font-bold hover:underline text-brand-dark-green">Back to resources</Link>
-      </div>
+      <PageError
+        message="Couldn't load this file."
+        onRetry={() => { setNotFound(false); setLoading(true); void fetchDetail(); }}
+      />
     );
   }
 
@@ -414,11 +413,9 @@ function CommentsTab({ comments, selectedCell, onSelectCell, resourceId, authorN
     <div className="flex flex-col h-full">
       <div className="flex-1 p-4 space-y-3">
         {comments.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <span className="text-3xl">💬</span>
-            <p className="text-sm font-semibold text-text-primary">No comments yet</p>
-            <p className="text-xs text-text-muted">Ask a question or leave a note for the space.</p>
-          </div>
+          <p className="py-10 text-center text-sm text-text-muted">
+            No comments yet — ask a question or leave a note for the space.
+          </p>
         ) : (
           comments.map((c) => (
             <div key={c.id} className="rounded-2xl border border-border-subtle p-3">
@@ -469,11 +466,9 @@ function ChangesTab({ changes, canReview, onReview }: {
 }) {
   if (changes.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 py-10 text-center px-4">
-        <span className="text-3xl">🔀</span>
-        <p className="text-sm font-semibold text-text-primary">No proposed changes</p>
-        <p className="text-xs text-text-muted">Select a cell in the spreadsheet to propose an edit.</p>
-      </div>
+      <p className="px-4 py-10 text-center text-sm text-text-muted">
+        No proposed changes — select a cell in the spreadsheet to propose an edit.
+      </p>
     );
   }
   return (

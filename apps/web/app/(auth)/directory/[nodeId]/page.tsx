@@ -15,7 +15,7 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeftIcon } from '@/features/shared/icons';
+import PageError from '@/components/ui/PageError';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
@@ -168,20 +168,12 @@ function ToolTabBody({ owner, nodeId, node, notePath }: {
   );
 }
 
-function NotFoundState({ title }: { title: string }) {
-  const router = useRouter();
-  return (
-    <div className="flex flex-col items-center justify-center py-24 gap-4">
-      <div className="text-5xl">😕</div>
-      <h2 className="text-xl font-semibold text-text-primary">{title}</h2>
-      <button
-        onClick={() => router.back()}
-        className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border-default rounded-xl hover:bg-surface-2 transition-colors"
-      >
-        <ArrowLeftIcon className="w-4 h-4" /> Go back
-      </button>
-    </div>
-  );
+/**
+ * One line and a Retry. `retry={false}` for the states that aren't failures —
+ * nothing to try again when the answer is simply that there's nothing here.
+ */
+function NotFoundState({ title, retry = true }: { title: string; retry?: boolean }) {
+  return <PageError message={title} onRetry={retry ? () => window.location.reload() : undefined} />;
 }
 
 /** The chrome shared by the routes that load a node before knowing whether it
@@ -243,10 +235,8 @@ const PERSON_TABS: PaneTabItem[] = [
 ];
 
 // Every person node has a Profile tab, connected to a member or not. A node
-// with no member behind it has no profile to show, so the tab becomes the place
-// you connect one (ProfileConnectBar, inside ProfilePageContent) — the link
-// is the most consequential thing about a person context, so it gets the tab
-// rather than a row under the note header.
+// with no member behind it still renders one: the page stands in for the person
+// until a member is behind it, and nothing about the link is offered here.
 //
 // A `person:` id that has no Node row is not necessarily a dead link: it may be
 // a Person-row id (what a session carries as `personId`, and what the avatar
@@ -268,7 +258,7 @@ function PersonRoute({ nodeId }: { nodeId: string }) {
   // The account is still a profile, and it is the one page you must always
   // be able to reach; ProfilePageContent renders it without node data.
   if (session?.user?.nodeId === nodeId) return <PersonProfilePage nodeId={nodeId} />;
-  return <NotFoundState title="Profile not found" />;
+  return <NotFoundState title="Couldn't load this profile." />;
 }
 
 /**
@@ -599,7 +589,7 @@ function ContextOnlyPage({ nodeId, ariaLabel, notFoundTitle }: {
 
   // Notes tool off, or the node belongs to another space's context: there is
   // no note to show and nothing else this page could offer.
-  return <NotFoundState title="No context for this yet" />;
+  return <NotFoundState title="No context for this yet." retry={false} />;
 }
 
 // ── Nodes owning a page elsewhere → Context/Raw here, the page for the rest ──
@@ -757,7 +747,7 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
     return isNoteTab(activeTab) ? null : <ProfileSkeletonLoader mode="fullpage" />;
   }
 
-  if (errorState) return <NotFoundState title="Resource not found" />;
+  if (errorState) return <NotFoundState title="Couldn't load this resource." />;
 
   if (noteSurface) return null;
 
@@ -800,14 +790,14 @@ function ConnectorRoute({ nodeId }: { nodeId: string }) {
       nodeId={nodeId}
       firstTab={CONNECTOR_FIRST_TAB}
       ariaLabel="Connector sections"
-      notFoundTitle="Connector not found"
+      notFoundTitle="Couldn't load this connector."
       renderBody={(id) => <ConnectorPageContent nodeId={id} />}
     />
   ) : (
     <ContextOnlyPage
       nodeId={nodeId}
       ariaLabel="Connector sections"
-      notFoundTitle="Connector not found"
+      notFoundTitle="Couldn't load this connector."
     />
   );
 }
@@ -828,11 +818,11 @@ function ModelRoute({ nodeId }: { nodeId: string }) {
       nodeId={nodeId}
       firstTab={MODEL_FIRST_TAB}
       ariaLabel="Model sections"
-      notFoundTitle="Model not found"
+      notFoundTitle="Couldn't load this model."
       renderBody={(id) => <ModelPageContent nodeId={id} />}
     />
   ) : (
-    <ContextOnlyPage nodeId={nodeId} ariaLabel="Model sections" notFoundTitle="Model not found" />
+    <ContextOnlyPage nodeId={nodeId} ariaLabel="Model sections" notFoundTitle="Couldn't load this model." />
   );
 }
 
@@ -850,7 +840,7 @@ function AgentRoute({ nodeId }: { nodeId: string }) {
       nodeId={nodeId}
       firstTab={AGENT_FIRST_TAB}
       ariaLabel="Agent sections"
-      notFoundTitle="Agent not found"
+      notFoundTitle="Couldn't load this agent."
       renderBody={(id) => <AgentPageContent nodeId={id} />}
     />
   );
@@ -876,7 +866,7 @@ function ToolRoute({ nodeId }: { nodeId: string }) {
       nodeId={nodeId}
       firstTab={TOOL_FIRST_TAB}
       ariaLabel="Tool sections"
-      notFoundTitle="Tool not found"
+      notFoundTitle="Couldn't load this Tool."
       renderBody={(id) => <ToolPageContent nodeId={id} />}
     />
   );
@@ -897,7 +887,7 @@ function EventRoute({ nodeId }: { nodeId: string }) {
       firstTab={EVENT_FIRST_TAB}
       href={href}
       ariaLabel="Event sections"
-      notFoundTitle="Event not found"
+      notFoundTitle="Couldn't load this event."
     />
   ) : (
     <PageRedirect href={href} />
@@ -960,7 +950,7 @@ function SpaceRoute({ nodeId }: { nodeId: string }) {
         nodeId={nodeId}
         firstTab={SPACE_FIRST_TAB}
         ariaLabel="Space sections"
-        notFoundTitle="Space not found"
+        notFoundTitle="Couldn't load this space."
         renderBody={(id) => <SpacePageContent nodeId={id} />}
       />
     );
@@ -973,7 +963,7 @@ function SpaceRoute({ nodeId }: { nodeId: string }) {
         firstTab={SPACE_FIRST_TAB}
         href={href ?? '/communities'}
         ariaLabel="Space sections"
-        notFoundTitle="Space not found"
+        notFoundTitle="Couldn't load this space."
       />
     );
   }
@@ -1029,7 +1019,7 @@ function NodeRoute() {
         nodeId={nodeId}
         firstTab={ORG_FIRST_TAB}
         ariaLabel="Page sections"
-        notFoundTitle="Page not found"
+        notFoundTitle="Couldn't load this page."
         renderBody={(id) => <OrgPageContent nodeId={id} />}
       />
     );
@@ -1040,7 +1030,7 @@ function NodeRoute() {
     <ContextOnlyPage
       nodeId={nodeId}
       ariaLabel="Context sections"
-      notFoundTitle="Page not found"
+      notFoundTitle="Couldn't load this page."
     />
   );
 }

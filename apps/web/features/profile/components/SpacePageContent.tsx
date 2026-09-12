@@ -37,6 +37,7 @@ import { getInitials } from '@/lib/avatarUtils';
 import Chip from '@/components/ui/Chip';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import TypeSilhouette from '@/components/ui/TypeSilhouette';
+import PageError from '@/components/ui/PageError';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
 import { StatItem, SectionCard, RailCard, hostname } from './profileCards';
 
@@ -53,7 +54,7 @@ interface SpacePageContentProps {
 
 export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePageContentProps) {
   const { currentSpace } = useSpace();
-  const { data, loading, error } = useNodeProfile(nodeId);
+  const { data, loading, error, reload } = useNodeProfile(nodeId);
   const [copied, copy] = useCopied();
 
   const node = data?.node ?? null;
@@ -69,13 +70,7 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
 
   if (loading && !data) return <ProfileSkeletonLoader mode="fullpage" />;
   if (error || !node) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
-        <div className="text-5xl">🏘️</div>
-        <p className="text-base font-semibold text-text-primary">Space not found</p>
-        <p className="text-sm text-text-muted">It may have been removed, or the URL is incorrect.</p>
-      </div>
-    );
+    return <PageError message="Couldn't load this space." onRetry={reload} />;
   }
 
   const { connectionCount, connections } = data!;

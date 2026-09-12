@@ -12,6 +12,7 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { EventComposer } from '@/features/events/components/EventComposer';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import type { NBEvent } from '@/lib/types';
+import PageError from '@/components/ui/PageError';
 
 export default function EditEventPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = use(params);
@@ -46,7 +47,7 @@ export default function EditEventPage({ params }: { params: Promise<{ eventId: s
 
   if (!currentSpace) return wrap(<p className="text-center text-brand-grey">Select a space to edit this event.</p>);
   if (loading) return wrap(<p className="text-center text-brand-grey">Loading…</p>);
-  if (!event) return wrap(<p className="text-center text-brand-grey">Event not found.</p>);
+  if (!event) return wrap(<PageError size="inline" message="Couldn't load this event." onRetry={() => window.location.reload()} />);
 
   return wrap(
     <>

@@ -36,8 +36,9 @@ import {
 import { RegistrationField } from '@/features/events/components/RegistrationField';
 import type { SpaceFeatureConfig, NBEvent, RSVPResponse } from '@/lib/types';
 import { useMapLink } from '../hooks/useMapLink';
-import { CalendarPlusIcon, CheckIcon, ClipboardListIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, Trash2Icon, UsersIcon, VideoIcon } from '@/features/shared/icons';
+import { CalendarPlusIcon, CheckIcon, CircleQuestionMarkIcon, ClipboardListIcon, ClockIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
 import Select from '@/components/ui/Select';
+import PageError from '@/components/ui/PageError';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { invalidateEventDetail, loadEventDetail, type EventDetail, type EventStats, type GuestPreview, type ViewerRsvp } from '@/features/events/lib/eventDetail';
 import { AboutText } from '@/features/profile/components/profileCards';
@@ -172,13 +173,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   // context note would otherwise blink it out for the length of the load.
   if (loading) return showContextTabs ? withContextBar(<EventSkeleton />) : <EventSkeleton />;
   if (!event) {
-    return (
-      <div className="flex flex-col items-center justify-center py-32 gap-3 text-center">
-        <p className="text-base font-semibold text-text-primary">Event not found</p>
-        <p className="text-sm text-text-muted">It may have been deleted, or the URL is incorrect.</p>
-        <Link href="/events" className="mt-2 text-sm font-bold hover:underline text-brand-dark-green">Back to events</Link>
-      </div>
-    );
+    return <PageError message="Couldn't load this event." onRetry={() => { setLoading(true); void loadEvent(); }} />;
   }
 
   const liveStatus = getEventStatus(event.startAt, event.endAt);
@@ -583,25 +578,25 @@ function RsvpCard({
   if (viewer && !editing) {
     if (viewer.status === 'waitlisted') {
       return card(
-        <ResponseState icon="⏳" title="You're on the waitlist" sub="We'll let you know if a spot opens up." theme={theme}
+        <ResponseState icon={<ClockIcon className="h-5 w-5" />} title="You're on the waitlist" sub="We'll let you know if a spot opens up." theme={theme}
                        onChange={() => setEditing(true)} />,
       );
     }
     if (viewer.status === 'pending') {
       return card(
-        <ResponseState icon="🕐" title="Registration pending" sub="The host needs to approve your RSVP." theme={theme}
+        <ResponseState icon={<ClockIcon className="h-5 w-5" />} title="Registration pending" sub="The host needs to approve your RSVP." theme={theme}
                        onChange={() => setEditing(true)} />,
       );
     }
     if (viewer.status === 'cancelled' || viewer.response === 'declined') {
       return card(
-        <ResponseState icon="👋" title="You can't make it" sub="Changed your mind?" theme={theme}
+        <ResponseState icon={<XIcon className="h-5 w-5" />} title="You can't make it" sub="Changed your mind?" theme={theme}
                        onChange={() => setEditing(true)} changeLabel="Update response" />,
       );
     }
     if (viewer.response === 'maybe') {
       return card(
-        <ResponseState icon="🤔" title="You said maybe" sub="Lock it in when you know." theme={theme}
+        <ResponseState icon={<CircleQuestionMarkIcon className="h-5 w-5" />} title="You said maybe" sub="Lock it in when you know." theme={theme}
                        onChange={() => setEditing(true)} changeLabel="Update response" />,
       );
     }
@@ -615,7 +610,7 @@ function RsvpCard({
             <div className="text-sm font-bold" style={{ color: theme.dark }}>
               You&apos;re going{viewer.plusOnes > 0 ? ` +${viewer.plusOnes}` : ''}
             </div>
-            <div className="text-xs text-text-muted">See you there 🎉</div>
+            <div className="text-xs text-text-muted">See you there.</div>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -708,11 +703,11 @@ function RsvpCard({
 }
 
 function ResponseState({ icon, title, sub, theme, onChange, changeLabel = 'Change response' }: {
-  icon: string; title: string; sub: string; theme: ThemePalette; onChange: () => void; changeLabel?: string;
+  icon: React.ReactNode; title: string; sub: string; theme: ThemePalette; onChange: () => void; changeLabel?: string;
 }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-2xl flex-none">{icon}</span>
+      <span className="flex-none text-text-muted">{icon}</span>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-bold text-text-primary">{title}</div>
         <div className="text-xs text-text-muted">{sub}</div>

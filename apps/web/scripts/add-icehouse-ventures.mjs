@@ -44,8 +44,8 @@ const TYPE_REMAP = {
 
 // Base node types shown in the Types & Aliases console.
 const NODE_TYPES = [
-  { icon: '🏘️', name: 'Space', color: '#78d870', shape: 'square' },
-  { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
+  { name: 'Space', color: '#78d870', shape: 'square' },
+  { name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 
 // The research data still prefixes organisation ids `org:`, the spelling that

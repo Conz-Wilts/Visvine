@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import { fetchJsonBody } from '@/lib/fetchJson';
+import { XIcon } from '@/features/shared/icons';
 
 export default function ChangeProposalDialog({
   resourceId,
@@ -48,7 +49,9 @@ export default function ChangeProposalDialog({
     >
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Propose Change — {cellRef}</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text-muted">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-text-muted hover:text-text-primary">
+            <XIcon className="h-4 w-4" />
+          </button>
         </div>
         <div className="space-y-3">
           <div>

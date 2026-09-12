@@ -711,7 +711,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
       <div className="w-full max-w-md bg-brand-white rounded-2xl shadow-float p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-xl font-bold text-brand-black">You’re live! 🎉</h2>
+            <h2 className="text-xl font-bold text-brand-black">You’re live</h2>
             <p className="text-sm text-brand-grey mt-1">Share the link and start collecting RSVPs.</p>
           </div>
           <button onClick={onClose} className="p-1.5 text-brand-grey hover:text-brand-black rounded-lg" aria-label="Close">

@@ -12,7 +12,7 @@
 // a transient error can never let the stub clobber an existing note.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { RadioIcon } from '@/features/shared/icons';
+import { RadioIcon, XIcon } from '@/features/shared/icons';
 import { useRouter } from 'next/navigation'
 import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
@@ -748,7 +748,10 @@ export function EntityContextPanel({
       {error && (
         <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
           <span>{error}</span>
-          <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
+          <button onClick={() => setError(null)} aria-label="Dismiss"
+                  className="ml-2 text-red-400 hover:text-red-600">
+            <XIcon className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
       {loadingNote ? (

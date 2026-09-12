@@ -61,14 +61,27 @@ export function SectionCard({ id, title, badge, icon, accent, action, isOwner, o
         </h2>
         {action}
         {isOwner && onEdit && (
-          <button onClick={onEdit}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] font-semibold text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors">
-            {addLabel ? <PlusIcon className="w-3.5 h-3.5" /> : <PencilIcon className="w-3.5 h-3.5" />}{addLabel ? 'Add' : 'Edit'}
-          </button>
+          <EditIconButton onClick={onEdit} add={addLabel} label={`${addLabel ? 'Add' : 'Edit'} ${title.toLowerCase()}`} />
         )}
       </div>
       {children}
     </section>
+  );
+}
+
+/**
+ * The owner's edit affordance: a bare pencil (or plus, when the section is
+ * still empty) in a round hover target, the way LinkedIn marks each section
+ * editable. `label` is the accessible name and the hover tooltip.
+ */
+export function EditIconButton({ onClick, add, label, className }: {
+  onClick: () => void; add?: boolean; label: string; className?: string;
+}) {
+  return (
+    <button type="button" onClick={onClick} aria-label={label} title={label}
+            className={`w-8 h-8 flex-none grid place-items-center rounded-full text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors ${className ?? ''}`}>
+      {add ? <PlusIcon className="w-4 h-4" /> : <PencilIcon className="w-4 h-4" />}
+    </button>
   );
 }
 

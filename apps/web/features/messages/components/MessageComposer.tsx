@@ -289,7 +289,10 @@ export default function MessageComposer({
     }
 
     onSend({
-      text: trimmed || '📷',
+      // The schema requires a body; an image sent without a caption gets the
+      // word, not a camera glyph — it is also what the conversation list shows
+      // as the last message.
+      text: trimmed || 'Photo',
       imageUrls: imageUrls.length ? imageUrls : undefined,
       mentions: mentions.length ? mentions : undefined,
       replyToId: replyTo?.id,

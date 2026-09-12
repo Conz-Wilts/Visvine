@@ -29,6 +29,8 @@ import { notesApi } from '../lib/notesApi'
 import { NoteEditor } from './NoteEditor'
 import type { NoteMode } from './NoteModeToggle'
 import '../notes.css'
+import { XIcon } from '@/features/shared/icons';
+import PageError from '@/components/ui/PageError'
 
 type TrashedNote = { path: string; title: string; content: string; deletedAt: number }
 
@@ -115,14 +117,7 @@ export function TrashPreviewPanel({ id, mode = 'wysiwyg' }: { id: string; mode?:
   }
 
   if (!note) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-14 text-center">
-        <p className="text-base font-semibold text-text-secondary">Note not found in Trash.</p>
-        <p className="text-sm text-text-muted">
-          {error ?? 'It may have been restored or purged, or you may not have access to it.'}
-        </p>
-      </div>
-    )
+    return <PageError size="inline" message="Couldn't load this note." onRetry={() => window.location.reload()} />
   }
 
   const left = daysLeft(note.deletedAt)
@@ -193,8 +188,9 @@ export function TrashPreviewPanel({ id, mode = 'wysiwyg' }: { id: string; mode?:
       {error && (
         <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
           <span>{error}</span>
-          <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">
-            ✕
+          <button onClick={() => setError(null)} aria-label="Dismiss"
+                  className="ml-2 text-red-400 hover:text-red-600">
+            <XIcon className="h-3.5 w-3.5" />
           </button>
         </div>
       )}

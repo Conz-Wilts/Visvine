@@ -22,10 +22,10 @@ const COMM = 'community:nz-ecosystem';
 const COMM_NAME = 'NZ Startup Ecosystem';
 
 const NODE_TYPES = [
-  { icon: '👤', name: 'Person',    color: '#2563eb', shape: 'rectangle' },
-  { icon: '📅', name: 'Event',     color: '#ef4444', shape: 'rectangle' },
-  { icon: '🏘️', name: 'Space', color: '#78d870', shape: 'square'   },
-  { icon: '📦', name: 'Resource',     color: '#f59e0b', shape: 'rectangle' },
+  { name: 'Person',    color: '#2563eb', shape: 'rectangle' },
+  { name: 'Event',     color: '#ef4444', shape: 'rectangle' },
+  { name: 'Space', color: '#78d870', shape: 'square'   },
+  { name: 'Resource',     color: '#f59e0b', shape: 'rectangle' },
 ];
 
 // Organizations — accelerators, VCs, government, coworking, industry bodies.

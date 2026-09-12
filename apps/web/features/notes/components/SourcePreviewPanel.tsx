@@ -13,6 +13,7 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 import { notesApi } from '../lib/notesApi'
 import { formatBytes } from '@/lib/utils'
+import PageError from '@/components/ui/PageError'
 
 const PAGE_CHARS = 20_000
 
@@ -103,14 +104,7 @@ export function SourcePreviewPanel({ path }: { path: string }) {
   }
 
   if (!source) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-14 text-center">
-        <p className="text-base font-semibold text-text-secondary">Source not found.</p>
-        <p className="text-sm text-text-muted">
-          {error ?? 'It may have been deleted, or you may not have access to it.'}
-        </p>
-      </div>
-    )
+    return <PageError size="inline" message="Couldn't load this source." onRetry={() => void load()} />
   }
 
   return (

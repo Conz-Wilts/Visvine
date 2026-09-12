@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { NBNode } from '@/lib/types';
 import { fetchJson } from '@/lib/fetchJson';
 
@@ -89,7 +89,15 @@ export function useNodeProfile(nodeId: string | null) {
     return !(cached && Date.now() - cached.timestamp < CACHE_TTL);
   });
   const [error, setError] = useState<string | null>(null);
+  // Bumped by `reload` to re-run the fetch effect; the cache entry is dropped
+  // first so a retry after a failure actually goes back to the server.
+  const [attempt, setAttempt] = useState(0);
   const nodeIdRef = useRef(nodeId);
+
+  const reload = useCallback(() => {
+    if (nodeId) nodeProfileCache.delete(nodeId);
+    setAttempt((n) => n + 1);
+  }, [nodeId]);
 
   useEffect(() => {
     nodeIdRef.current = nodeId;
@@ -120,7 +128,7 @@ export function useNodeProfile(nodeId: string | null) {
         setError(err.message);
         setLoading(false);
       });
-  }, [nodeId]);
+  }, [nodeId, attempt]);
 
-  return { data, loading, error };
+  return { data, loading, error, reload };
 }

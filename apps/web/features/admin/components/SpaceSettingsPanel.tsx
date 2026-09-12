@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2Icon } from '@/features/shared/icons';
+import { Trash2Icon, XIcon } from '@/features/shared/icons';
 import { Space } from '@/lib/types';
 import type { SpaceVisibility } from '@/lib/spaces/publicName';
 import { COUNTRIES, getCountry } from '@/lib/countries';
@@ -100,7 +100,7 @@ function CountrySelector({ value, onChange }: { value: string; onChange: (code: 
               className="text-text-muted hover:text-text-primary ml-auto cursor-pointer text-xs px-1"
               title="Clear"
             >
-              ✕
+              <XIcon className="h-3 w-3" />
             </span>
           </>
         ) : (

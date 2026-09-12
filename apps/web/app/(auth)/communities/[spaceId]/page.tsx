@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, use } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
+import PageError from '@/components/ui/PageError';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CalendarIcon, CalendarPlusIcon, CheckIcon, ChevronRightIcon, EarthIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon } from '@/features/shared/icons';
@@ -169,12 +170,10 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
   if (loading) return <SpaceSkeleton />;
   if (notFound || !data) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 gap-3 text-center">
-        <div className="text-5xl">🏘️</div>
-        <p className="text-base font-semibold text-text-primary">Space not found</p>
-        <p className="text-sm text-text-muted">It may have been removed, or the URL is incorrect.</p>
-        <Link href="/communities" className="mt-2 text-sm font-bold hover:underline text-brand-dark-green">Back to spaces</Link>
-      </div>
+      <PageError
+        message="Couldn't load this space."
+        onRetry={() => { setNotFound(false); setLoading(true); void fetchOverview(true); }}
+      />
     );
   }
 

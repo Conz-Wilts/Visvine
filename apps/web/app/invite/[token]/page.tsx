@@ -71,8 +71,8 @@ export default async function InvitePage({
                 className="h-16 w-16 rounded-2xl object-cover"
               />
             ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-green/10 text-2xl">
-                🌿
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-green/10 text-xl font-semibold text-brand-dark-green">
+                {space!.name.trim().charAt(0).toUpperCase()}
               </div>
             )}
             <p className="mt-4 text-xs uppercase tracking-wide text-text-muted">You&apos;re invited to join</p>
