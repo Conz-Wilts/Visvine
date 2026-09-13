@@ -194,12 +194,15 @@ export default function Sidebar() {
   // gesture that closes the switcher.
   const held = (createOpen && createFormOpen) || (accountPanel !== null && accountFormOpen);
   const railW = expanded ? EXPANDED_W : COLLAPSED_W;
-  // A rail panel is open only while the pointer is on the row that opened it
-  // or in the panel itself: pointing at any other row of the rail puts both
-  // away — unless a Create form is being filled in, which holds that one the
-  // way leaving the card does.
+  // Create new is open only while the pointer is on its row or in the panel:
+  // pointing at any other row of the rail puts it away — unless its form is
+  // being filled in, which holds it the way leaving the card does. The
+  // switcher is not put away by pointing: it goes when another row is PRESSED
+  // (pressRailRow), or when Create new opens in its place.
   const leaveRailPanels = () => {
     if (createOpen && !createFormOpen) closeCreate();
+  };
+  const pressRailRow = () => {
     if (switcherOpen) setSwitcherOpen(false);
   };
   // Shutting a panel is two moves in order, not one: the panel slides back
@@ -337,9 +340,10 @@ export default function Sidebar() {
           }}
         >
           {/* Discover: the open spaces. It is here even with no space chosen,
-              because it is where someone with none goes to find one. Pointing
-              at it puts the rail's panels away like any tool row. */}
-          <div {...intent(leaveRailPanels)}>
+              because it is where someone with none goes to find one. Like any
+              tool row, pointing at it puts Create new away and pressing it puts
+              the switcher away. */}
+          <div {...intent(leaveRailPanels)} onClickCapture={pressRailRow}>
             <Row
               expanded={expanded}
               reduced={reduced}
@@ -353,6 +357,7 @@ export default function Sidebar() {
           </div>
           {!noSpace && (
             <div
+              onClickCapture={pressRailRow}
               {...intent(() => {
                 // One panel at a time: the panels share the edge of the rail.
                 setSwitcherOpen(false);
@@ -394,6 +399,7 @@ export default function Sidebar() {
       <nav
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden border-t"
         {...intent(leaveRailPanels)}
+        onClickCapture={pressRailRow}
         style={{
           paddingLeft: ROW_INSET,
           paddingRight: ROW_INSET,
@@ -441,6 +447,7 @@ export default function Sidebar() {
         <div
           className="flex shrink-0 flex-col border-t"
           {...intent(leaveRailPanels)}
+          onClickCapture={pressRailRow}
           style={{
             gap: ITEM_GAP,
             marginTop: BAND_TOP,
@@ -477,6 +484,7 @@ export default function Sidebar() {
       <div
         className="flex shrink-0 flex-col border-t"
         {...intent(leaveRailPanels)}
+        onClickCapture={pressRailRow}
         style={{
           marginTop: BAND_TOP,
           paddingTop: ITEM_GAP,

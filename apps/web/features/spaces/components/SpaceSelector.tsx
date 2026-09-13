@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { useHoverIntent } from '@/features/shared/hooks/useHoverIntent';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { SettingsIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
@@ -24,8 +23,9 @@ import { HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/
  *
  * The space's own row IS the switcher: pointing at it slides the search and
  * the list of every space you are in out beside the rail, because going
- * somewhere else is what the head of the rail is most often for. Pointing at
- * any row of the band below puts the list away. The band's rows are the rest.
+ * somewhere else is what the head of the rail is most often for. It stays out
+ * while the pointer wanders the rail; pressing another row, or pointing at
+ * Create new, puts it away. The band's rows are the rest.
  *
  * Discover leads the band: it is a way OUT of this space, not one of the
  * create-panel's kinds. Starting a space is the switcher's own last row —
@@ -43,10 +43,6 @@ export default function SpaceSelector() {
   const canManage = Boolean(currentSpace) && (isAdmin || session?.user?.isSuperAdmin === true);
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
-  // A band row puts the switcher away only once the pointer has rested on it:
-  // the pointer heading right, out of the space's row and into the list, may
-  // cross a row of the band on its way.
-  const intent = useHoverIntent();
   const bandRef = useRef<HTMLDivElement>(null);
   // A pinned band closes on the next click outside it, the way the account
   // band does. Hover-opened bands need nothing: the pointer leaving closes them.
@@ -79,10 +75,9 @@ export default function SpaceSelector() {
     setSwitcherOpen(true);
   };
 
-  // The list is open only while the pointer is on the space (or in the list
-  // itself): pointing at any row of the band puts it away.
-  const shutSwitcher = () => setSwitcherOpen(false);
-  const actions: { key: string; label: string; onClick: () => void; onHover: () => void; icon: React.ReactNode }[] = [
+  // Pointing at a row of the band leaves the list where it is; pressing one
+  // puts it away.
+  const actions: { key: string; label: string; onClick: () => void; icon: React.ReactNode }[] = [
     // The console: THIS space's own settings, hung directly under the
     // space's name, for whoever administers it. (Discover is not here — it is
     // a row of the rail's top group, above Create new.)
@@ -92,7 +87,6 @@ export default function SpaceSelector() {
             key: 'console',
             label: 'Space console',
             onClick: () => router.push('/admin'),
-            onHover: shutSwitcher,
             icon: <SettingsIcon />,
           },
         ]
@@ -231,8 +225,8 @@ export default function SpaceSelector() {
           // then one holding the row off the line.
           style={{ gap: ITEM_GAP, paddingTop: ITEM_GAP * 2, paddingBottom: ITEM_GAP, paddingLeft: ROW_INSET, paddingRight: ROW_INSET }}
         >
-          {actions.map(({ key, label, icon, onClick, onHover }) => (
-            <div key={key} {...intent(onHover)}>
+          {actions.map(({ key, label, icon, onClick }) => (
+            <div key={key}>
               <Row
                 expanded={expanded}
                 reduced={reduced}
@@ -241,6 +235,7 @@ export default function SpaceSelector() {
                 onClick={() => {
                   setPinned(false);
                   setOpen(false);
+                  setSwitcherOpen(false);
                   onClick();
                 }}
               />
