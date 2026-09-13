@@ -43,7 +43,7 @@ export function StatItem({ value, label, onClick, accent }: {
   );
 }
 
-export function SectionCard({ id, title, badge, icon, accent, action, isOwner, onEdit, onAdd, addLabel, scrollMargin, children }: {
+export function SectionCard({ id, title, badge, icon, accent, action, isOwner, onEdit, onAdd, scrollMargin, children }: {
   id: string; title: string; badge?: number;
   /** A glyph before the title, drawn in `accent` (the entity's dark shade). */
   icon?: React.ReactNode; accent?: string;
@@ -52,7 +52,7 @@ export function SectionCard({ id, title, badge, icon, accent, action, isOwner, o
   isOwner?: boolean; onEdit?: () => void;
   /** Beside `onEdit`, a plus that adds to the section — the pair LinkedIn puts on a list section. */
   onAdd?: () => void;
-  addLabel?: boolean; scrollMargin?: string; children: React.ReactNode;
+  scrollMargin?: string; children: React.ReactNode;
 }) {
   return (
     <section id={id} className={`border-t border-border-subtle pt-5 first:border-t-0 first:pt-0 ${scrollMargin ?? ''}`}>
@@ -66,9 +66,7 @@ export function SectionCard({ id, title, badge, icon, accent, action, isOwner, o
         {isOwner && (onAdd || onEdit) && (
           <div className="flex items-center gap-1 -mr-2">
             {onAdd && <EditIconButton onClick={onAdd} add label={`Add to ${title.toLowerCase()}`} />}
-            {onEdit && (
-              <EditIconButton onClick={onEdit} add={addLabel} label={`${addLabel ? 'Add' : 'Edit'} ${title.toLowerCase()}`} />
-            )}
+            {onEdit && <EditIconButton onClick={onEdit} label={`Edit ${title.toLowerCase()}`} />}
           </div>
         )}
       </div>
