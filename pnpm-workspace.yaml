@@ -25,14 +25,14 @@ overrides:
   fast-xml-builder: ^1.1.7
   form-data@^2: ^2.5.6
   lodash: ^4.18.0
-  hono: ^4.12.25
+  hono: ^4.13.5
   '@hono/node-server': ^1.19.10
   effect: ^3.20.0
   shell-quote: ^1.10.0
   tar: ^7.5.22
   app-builder-lib: ^26.15.3
   builder-util-runtime: ^9.7.0
-  js-yaml@^4: ^4.3.1
+  js-yaml@^4: ^4.3.2
   brace-expansion@^1: ^1.1.18
   brace-expansion@^5: ^5.0.9
   postcss: ^8.5.26
@@ -40,6 +40,10 @@ overrides:
   '@tootallnate/once': ^2.0.1
   fast-xml-parser: ^5.7.0
   valibot: ^1.4.2
+  # miniflare pins sharp 0.35.2 exactly; 0.35.4 fixes GHSA-rgj7-g3m4-5g8c (high).
+  sharp@0.35.2: ^0.35.4
+  # `apps/web > knip > smol-toml`: GHSA-7w5x-hrqm-74c2 (high), patched in 1.7.1.
+  smol-toml: ^1.7.1
   # Reached only as `@prisma/client > prisma > mysql2`, and this deployment is
   # Postgres — but an override costs nothing and an ignore has to be re-read
   # every time the advisory list changes. GHSA-3f6p-5ww8-9rcr (auth plugin
