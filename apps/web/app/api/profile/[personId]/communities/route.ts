@@ -2,7 +2,7 @@
  * Profile spaces API — which spaces appear on a person's profile.
  *
  * GET  /api/profile/[personId]/communities
- *   Spaces the person manages (holds an alias that manages it — always listed) plus member
+ *   Top-level spaces the person manages (holds an alias that manages it — always listed) plus member
  *   spaces they've opted into showing (SpaceMember.privateMeta.showOnProfile).
  *   The owner gets ALL their spaces with visibility flags so the panel
  *   can render toggles; other viewers only get the visible ones.
@@ -41,7 +41,9 @@ async function loadRows(userId: string) {
     where: {
       userId,
       status: 'active',
-      space: { personalOwnerId: null }, // personal spaces aren't spaces
+      // Personal spaces aren't spaces, and a sub-space is part of its parent,
+      // not a line of its own on anyone's profile.
+      space: { personalOwnerId: null, parentId: null },
     },
     include: {
       space: {
