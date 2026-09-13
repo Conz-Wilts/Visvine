@@ -783,10 +783,7 @@ is a Tool that never appears rather than an error. `TOOLS_ORIGIN` unset in the
 shell — the common case — is a SKIP, not a failure.
 
 `verify:tools` and `verify:tools:escape` remove every row and note they create,
-leaving the shared dev DB as they found it. The seeded **Portfolio Board**
-(`pnpm --filter @visvine/web db:tool:seed`) is the opposite: it stays in place
-and is idempotent — re-running it is the supported way to get a known-good Tool
-back into a local space.
+leaving the shared dev DB as they found it. The demo seed ships no Tools.
 
 > **Local gotcha.** If this box's `apps/web/.env` still carries a
 > `CLOUD_SQL_CONNECTION_NAME` from a `dev:cloud` session,

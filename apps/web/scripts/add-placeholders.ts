@@ -3,8 +3,7 @@
  * space id to fill another one).
  *
  * `db:hq:full` builds the space people actually look at — notes, nodes,
- * links, members, channels, resources — and `seed-placeholder-tool.ts` drives one
- * Tool through its real lifecycle. What both leave behind is the machinery that
+ * links, members, channels, resources. What it leaves behind is the machinery that
  * only fills up once a space has been LIVED IN: agent runs and their event
  * mailbox, OAuth connections, retrieval vectors, the access/promotion queues,
  * the projection outbox, rate-limit buckets, message decorations.
@@ -1072,25 +1071,6 @@ async function seedMachinery() {
     });
   }
   count('note_projection_jobs', jobs.length);
-
-  // A Tool's iframe runs sandboxed without allow-same-origin, so it has no
-  // localStorage — this table IS its persistence.
-  const install = await prisma.appToolInstall.findFirst({ where: { spaceId: SPACE } });
-  if (install) {
-    const state = [
-      { key: 'board:filter', value: { wave: 5, assignee: null, showDone: false } },
-      { key: 'board:columnOrder', value: { order: ['todo', 'doing', 'review', 'done'] } },
-      { key: 'ui:lastOpenedAt', value: { at: ago(30).toISOString() } },
-    ];
-    for (const row of state) {
-      await prisma.appToolState.upsert({
-        where: { app_tool_state_identity: { installId: install.id, key: row.key } },
-        create: { installId: install.id, key: row.key, value: row.value as never },
-        update: {},
-      });
-    }
-    count('app_tool_state', state.length);
-  }
 
   // The self-hosted MCP OAuth 2.1 server: dynamically-registered public
   // clients, a live authorization code and an expired one. No refresh tokens —

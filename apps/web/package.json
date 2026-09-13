@@ -62,7 +62,6 @@
     "verify:tools": "tsx scripts/verify-tools-e2e.ts",
     "verify:tools:escape": "tsx scripts/verify-tools-escape.ts",
     "db:hq:placeholders": "tsx scripts/add-placeholders.ts",
-    "db:tool:seed": "tsx scripts/seed-placeholder-tool.ts",
     "vm:redteam": "tsx scripts/vm-redteam.ts"
   },
   "dependencies": {
