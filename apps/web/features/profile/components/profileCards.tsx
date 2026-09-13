@@ -43,13 +43,16 @@ export function StatItem({ value, label, onClick, accent }: {
   );
 }
 
-export function SectionCard({ id, title, badge, icon, accent, action, isOwner, onEdit, addLabel, scrollMargin, children }: {
+export function SectionCard({ id, title, badge, icon, accent, action, isOwner, onEdit, onAdd, addLabel, scrollMargin, children }: {
   id: string; title: string; badge?: number;
   /** A glyph before the title, drawn in `accent` (the entity's dark shade). */
   icon?: React.ReactNode; accent?: string;
   /** A control pinned to the right of the heading; `onEdit` renders the standard one. */
   action?: React.ReactNode;
-  isOwner?: boolean; onEdit?: () => void; addLabel?: boolean; scrollMargin?: string; children: React.ReactNode;
+  isOwner?: boolean; onEdit?: () => void;
+  /** Beside `onEdit`, a plus that adds to the section — the pair LinkedIn puts on a list section. */
+  onAdd?: () => void;
+  addLabel?: boolean; scrollMargin?: string; children: React.ReactNode;
 }) {
   return (
     <section id={id} className={`border-t border-border-subtle pt-5 first:border-t-0 first:pt-0 ${scrollMargin ?? ''}`}>
@@ -60,8 +63,13 @@ export function SectionCard({ id, title, badge, icon, accent, action, isOwner, o
           {badge !== undefined && <span className="text-[13px] font-medium text-text-muted">{badge}</span>}
         </h2>
         {action}
-        {isOwner && onEdit && (
-          <EditIconButton onClick={onEdit} add={addLabel} label={`${addLabel ? 'Add' : 'Edit'} ${title.toLowerCase()}`} />
+        {isOwner && (onAdd || onEdit) && (
+          <div className="flex items-center gap-1 -mr-2">
+            {onAdd && <EditIconButton onClick={onAdd} add label={`Add to ${title.toLowerCase()}`} />}
+            {onEdit && (
+              <EditIconButton onClick={onEdit} add={addLabel} label={`${addLabel ? 'Add' : 'Edit'} ${title.toLowerCase()}`} />
+            )}
+          </div>
         )}
       </div>
       {children}
@@ -79,8 +87,8 @@ export function EditIconButton({ onClick, add, label, className }: {
 }) {
   return (
     <button type="button" onClick={onClick} aria-label={label} title={label}
-            className={`w-8 h-8 flex-none grid place-items-center rounded-full text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors ${className ?? ''}`}>
-      {add ? <PlusIcon className="w-4 h-4" /> : <PencilIcon className="w-4 h-4" />}
+            className={`w-9 h-9 flex-none grid place-items-center rounded-full text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors ${className ?? ''}`}>
+      {add ? <PlusIcon className="w-5 h-5" /> : <PencilIcon className="w-[18px] h-[18px]" />}
     </button>
   );
 }
