@@ -25,6 +25,7 @@ import EditAboutModal from './edit/EditAboutModal';
 import EditSkillsModal from './edit/EditSkillsModal';
 import EditContactModal from './edit/EditContactModal';
 import SpacesModal, { type ProfileSpace } from './SpacesModal';
+import ExperienceTimeline from './ExperienceTimeline';
 import ContactInfoModal from './ContactInfoModal';
 
 type ModalState = 'basicInfo' | 'about' | 'skills' | 'contact' | 'contactInfo' | 'communities' | null;
@@ -67,7 +68,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
       await fetchJsonBody(url, 'PATCH', { spaceId, showOnProfile });
     } catch { return; }
     setProfileSpaces((prev) => prev.map((c) =>
-      c.id === spaceId ? { ...c, showOnProfile, visible: c.role === 'admin' || showOnProfile } : c
+      c.id === spaceId ? { ...c, showOnProfile, visible: c.isAdmin || showOnProfile } : c
     ));
   }, [nodeId]);
 
@@ -132,7 +133,6 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   const visibleSpaceCount = profileSpaces.filter((c) => c.visible).length;
   const spaceCount = profileSpaces.length > 0 ? visibleSpaceCount : (nodeData?.spaceCount ?? 1);
   const spacesClickable = profileSpaces.length > 0;
-  const joined = profile.createdAt ? joinedFacts(new Date(profile.createdAt)) : null;
   const hasCountry = !!matchCountryInLocation(profile.location);
   const hasContact = !!(profile.email || profile.phone || profile.website || profile.linkedinUrl || profile.twitterUrl);
 
@@ -245,19 +245,12 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
             : <p className="text-sm text-text-muted">No bio yet.</p>}
         </SectionCard>
 
-        {/* Skills & experience — the time on Visvine opens it as a timeline line */}
+        {/* Skills & experience — the spaces they're in, Visvine last, then the skills */}
         <SectionCard id="skills" title="Skills & experience" scrollMargin={sectionScrollMargin} isOwner={isOwner}
                      onAdd={() => setModal('skills')} onEdit={() => setModal('skills')}>
-          {joined && (
-            <div className="relative pl-6 pb-5">
-              <span aria-hidden className="absolute left-[3px] top-[7px] w-2 h-2 rounded-full bg-text-muted/60" />
-              <span aria-hidden className="absolute left-[6px] top-6 bottom-2 w-0.5 rounded-full bg-border-subtle" />
-              <div className="text-[15px] font-bold font-open-sauce text-text-primary">Joined Visvine</div>
-              <div className="text-sm text-text-muted">{joined.since} – Present · {joined.duration}</div>
-            </div>
-          )}
+          <ExperienceTimeline spaces={profileSpaces.filter((c) => c.visible)} accountCreatedAt={profile.createdAt ?? null} />
           {profile.tags.length > 0 ? (
-            <div className={`flex flex-wrap gap-2 ${joined ? 'pl-6' : ''}`}>
+            <div className="flex flex-wrap gap-2">
               {profile.tags.map((tag, i) => (
                 <Chip key={tag} tone="solid" size="lg" color={theme.base}
                       className="chip-pop transition-transform duration-150 hover:-translate-y-0.5"
@@ -266,7 +259,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                 </Chip>
               ))}
             </div>
-          ) : <p className={`text-sm text-text-muted ${joined ? 'pl-6' : ''}`}>No skills listed.</p>}
+          ) : <p className="text-sm text-text-muted">No skills listed.</p>}
         </SectionCard>
       </div>
 
@@ -289,22 +282,6 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 }
 
 /* ── small presentational helpers ─────────────────────────────────────────── */
-
-/** "Oct 2025" and "1 yr 6 mos" for a join date, the way LinkedIn states a tenure. */
-function joinedFacts(date: Date): { since: string; duration: string } {
-  const now = new Date();
-  const months = Math.max(0, (now.getFullYear() - date.getFullYear()) * 12 + now.getMonth() - date.getMonth()) + 1;
-  const yrs = Math.floor(months / 12);
-  const mos = months % 12;
-  const parts = [
-    yrs > 0 ? `${yrs} yr${yrs === 1 ? '' : 's'}` : '',
-    mos > 0 ? `${mos} mo${mos === 1 ? '' : 's'}` : '',
-  ].filter(Boolean);
-  return {
-    since: date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }),
-    duration: parts.join(' '),
-  };
-}
 
 function BioText({ bio, theme }: { bio: string; theme: ThemePalette }) {
   const [open, setOpen] = useState(false);

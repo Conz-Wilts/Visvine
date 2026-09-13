@@ -32,6 +32,8 @@ export interface ProfileSpace {
   showOnProfile: boolean;
   /** Managed spaces are always visible; the rest only when opted in. */
   visible: boolean;
+  /** When the membership began, ISO. */
+  joinedAt: string;
 }
 
 async function loadRows(userId: string) {
@@ -83,6 +85,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       isAdmin,
       showOnProfile,
       visible: isAdmin || showOnProfile,
+      joinedAt: row.joinedAt.toISOString(),
     };
   });
 

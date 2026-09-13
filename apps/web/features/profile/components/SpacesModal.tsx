@@ -12,9 +12,12 @@ export interface ProfileSpace {
   imageUrl: string | null;
   visibility: string;
   memberCount: number;
-  role: string;
+  /** Whether this person holds an alias that manages the space. */
+  isAdmin: boolean;
   showOnProfile: boolean;
   visible: boolean;
+  /** When the membership began, ISO. */
+  joinedAt: string;
 }
 
 interface Props {
@@ -34,8 +37,8 @@ export default function SpacesModal({ open, onClose, spaces, isOwner, personName
 
   if (!open) return null;
 
-  const managed = spaces.filter((c) => c.role === 'admin');
-  const memberOf = spaces.filter((c) => c.role !== 'admin');
+  const managed = spaces.filter((c) => c.isAdmin);
+  const memberOf = spaces.filter((c) => !c.isAdmin);
 
   const toggle = async (c: ProfileSpace) => {
     if (!onToggle || busy) return;
