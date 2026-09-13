@@ -245,10 +245,10 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
             : <p className="text-sm text-text-muted">No bio yet.</p>}
         </SectionCard>
 
-        {/* Skills & experience — the spaces they're in, Visvine last, then the skills */}
+        {/* Skills & experience — their time on Visvine, then the skills */}
         <SectionCard id="skills" title="Skills & experience" scrollMargin={sectionScrollMargin} isOwner={isOwner}
                      onAdd={() => setModal('skills')} onEdit={() => setModal('skills')}>
-          <ExperienceTimeline spaces={profileSpaces.filter((c) => c.visible)} accountCreatedAt={profile.createdAt ?? null} />
+          <ExperienceTimeline accountCreatedAt={profile.createdAt ?? null} />
           {profile.tags.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {profile.tags.map((tag, i) => (

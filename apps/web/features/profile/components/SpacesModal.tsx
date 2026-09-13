@@ -16,8 +16,6 @@ export interface ProfileSpace {
   isAdmin: boolean;
   showOnProfile: boolean;
   visible: boolean;
-  /** When the membership began, ISO. */
-  joinedAt: string;
 }
 
 interface Props {
