@@ -208,6 +208,8 @@ test('the everyday recipes route to the actions that do the work', () => {
     ['who can see the deals folder', 'manage_access', 'list_context'],
     ['create an event for our launch night in October', 'run_event', 'create_event'],
     ['set up a meetup from the plan in the drive', 'run_event', 'list_drive'],
+    ['create a new space called Test Space, and a sub-space inside it called Test Sub', 'create_space', 'create_space'],
+    ['make a subspace for the leadership team', 'create_space', 'create_space'],
   ]
   for (const [prompt, intent, tool] of cases) {
     const routed = route(prompt).intent
@@ -258,6 +260,7 @@ test('every recipe scores its own trigger phrase above everything else', () => {
     ['create an agent', 'create_agent'],
     ['build a tool', 'build_tool'],
     ['add a person to the directory', 'create_entity'],
+    ['create a space', 'create_space'],
   ]
   for (const [prompt, expected] of anchors) {
     const [top] = scoreCandidates(prompt, allRecipes())
@@ -287,4 +290,18 @@ test('a rendered recipe note carries the steps, the traps and the contract', () 
   assert.match(body, /NEVER write a credential value into the note/)
   assert.match(body, /## The contract/)
   assert.match(body, /connectors\/<name>\.md/)
+})
+
+test('a space and a directory record are never confused', () => {
+  // "space" is both a tenant and an organisation's card. Starting one routes to
+  // create_space; recording a company still routes to add_context, and each
+  // recipe says the other exists.
+  assert.equal(route('record Canva as a company in the directory').intent, 'create_entity')
+  assert.equal(route('set up a workspace for the design partners').intent, 'create_space')
+  assert.ok(recipeById('create_entity')!.mustKnow(ctx(adminSpace())).some((m) => /create_space/.test(m)))
+  assert.match(recipeById('create_space')!.summary, /add_context/)
+  // A non-admin is told up front that a sub-space under this space will be refused.
+  const member = adminSpace({ you_are_admin: false })
+  assert.ok(blockers('create_space', member).some((b) => /not an admin/.test(b)))
+  assert.deepEqual(blockers('create_space', adminSpace()), [])
 })

@@ -1015,7 +1015,7 @@ export const CONTEXT_ACTIONS = [
       name: 'add_context',
       scope: 'context:write',
       summary:
-        'Create a directory entity — a person, space, resource or event — and its canonical note.',
+        'Create a directory entity — a person, organisation record, resource or event — and its canonical note. Not a new space: that is create_space.',
       description:
         'Create a directory entity — a typed node plus its context note, in one step. Call list_context first: ' +
         'its `types` catalog shows which types this space has enabled, their exact field keys, and live ' +
@@ -1024,11 +1024,10 @@ export const CONTEXT_ACTIONS = [
         '  • person   → people/<slug>.md      fields: subtitle (role), email, companyName, linkedinUrl, location, image_url\n' +
         '  • space    → communities/<slug>.md fields: subtitle (tagline), url (website), location, founded, memberCount, image_url\n' +
         '  • resource → resources/<slug>.md   fields: subtitle (description), url\n' +
-        'A "space" here is a group, organisation or space — a company, collective or investor. Every space node ' +
-        'stands for a real space: pass `space_id_ref` to link one that already runs here (list_spaces shows the ' +
-        'ones you can see), otherwise a space is created INSIDE the space you are working in — no members, ' +
-        'managed by its admins, visible to its members — and the card is its record. Search first: recording ' +
-        '"Canva" twice makes two spaces.\n' +
+        'A "space" here is a RECORD of an organisation — a company, collective or investor — kept as a card in ' +
+        'this space\'s directory. It provisions nothing: to start a space or a sub-space people can join, use ' +
+        'create_space. Pass `space_id_ref` when the organisation is a space that already runs here (list_spaces ' +
+        'shows the ones you can see) and the card links to it. Search first: recording "Canva" twice makes two cards.\n' +
         'Use exactly these field keys — email, companyName, linkedinUrl and url/website are what match a person or ' +
         'organisation to their identity across spaces, and an unrecognised key is silently dropped. ' +
         'Only these three types are creatable here; an event is made with create_event (it has dates, RSVPs and a page of its own), and channels/sections are admin-only. ' +
@@ -1064,7 +1063,7 @@ export const CONTEXT_ACTIONS = [
         space_id_ref: z
           .string()
           .optional()
-          .describe('type "space" only: the id of an existing space this record stands for. Omit to create one inside `space_id`.'),
+          .describe('type "space" only: the id of an existing space this record stands for. Omit for a plain record — this never creates a space (create_space does).'),
       },
       run: async (ctx, args) => {
         const context = await requireSpaceContext(ctx, args.space_id)

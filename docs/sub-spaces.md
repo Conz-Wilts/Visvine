@@ -147,6 +147,9 @@ anything under it, and the editor shows a banner naming the sub-space.
 - **`GET /api/communities/<id>/subspaces`**: every sub-space for an admin;
   the public ones and the ones they are in for a member.
 - **`list_spaces`** (MCP): `parent_id` per space.
+- **`create_space`** (MCP, `context:write`): `parent_id` makes a sub-space,
+  under the same parent-admin check as the console, through the same
+  `provisionSpace`.
 - **Delete**: the parent relation is Restrict, so deleting a space with
   sub-spaces is a deliberate children-first delete in
   `DELETE /api/data/communities`, and the console's confirmation says how

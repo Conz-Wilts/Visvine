@@ -463,6 +463,54 @@ const RECIPES: Recipe[] = [
   },
 
   {
+    id: 'create_space',
+    when: 'Start a new space or a sub-space inside one — "create a space", "set up a workspace for X", "make a sub-space".',
+    summary:
+      'A space is a tenant: its own members, admins, context and tools. create_space provisions one and makes you ' +
+      'its admin; with `parent_id` it is a sub-space of a space you administer. This is not add_context with ' +
+      'type "space", which only records an organisation as a card in the directory.',
+    keywords: [
+      ...kw('creat|start|make|set up|spin up', 'a space|new space|sub-space|subspace|sub space|workspace|space called|space named', 10),
+      ...kw('create_space', '', 10),
+      ...kw('sub-space|subspace|sub space', '', 4),
+    ],
+    steps: (ctx) => [
+      {
+        n: 1,
+        tool: 'list_spaces',
+        why: 'For a sub-space: the parent\'s id, and `you_manage_it` — only an admin of the parent may create one inside it. A space that already has a parent cannot hold one.',
+        args: {},
+        optional: true,
+      },
+      {
+        n: 2,
+        tool: 'create_space',
+        why: 'Provisions the space and makes you its admin. Returns `space_id` for every later call.',
+        args: { name: '<name>', visibility: 'private', description: '<one sentence>' },
+      },
+      {
+        n: 3,
+        tool: 'create_space',
+        why: 'A sub-space: the same call with the parent\'s id — the new top-level space_id from step 2, or one from step 1.',
+        args: { name: '<name>', visibility: 'private', parent_id: ctx.space?.id ?? '<space_id of the parent>' },
+        optional: true,
+      },
+    ],
+    mustKnow: () => [
+      'Spaces nest ONE level: a sub-space cannot hold sub-spaces, and personal spaces and the Visvine space cannot hold one. Sibling names must be unique.',
+      "Visibility defaults to private. A public space's name must be unique among public spaces; a public sub-space's context is readable, view-only, from its parent under spaces/<id>/.",
+      "The creator administers a sub-space, not the parent's admins. Membership never crosses the boundary.",
+      'A new space starts with every toggleable tool off. There is no action that deletes a space, so confirm the name before creating.',
+    ],
+    blockers: (ctx) => [
+      ...scopeBlocker(ctx, 'context:write', 'creating a space'),
+      ...(ctx.space && !ctx.space.you_are_admin
+        ? [`You are not an admin of ${ctx.space.name}, so a sub-space inside it will be refused — a top-level space is still yours to create.`]
+        : []),
+    ],
+  },
+
+  {
     id: 'create_entity',
     when: 'Record a person, an organisation/company, or a link/document in the directory.',
     summary:
@@ -491,13 +539,13 @@ const RECIPES: Recipe[] = [
       {
         n: 3,
         tool: 'add_context',
-        why: 'Creates the node and its note together. person → people/<slug>.md, space → communities/<slug>.md, resource → resources/<slug>.md.',
+        why: 'Creates the node and its note together. person → people/<slug>/index.md, space (a record) → communities/<slug>/index.md, resource → resources/<slug>/index.md.',
         args: { space_id: spaceId(ctx), type: 'person', name: '<Display name>', fields: { email: '<…>' }, body: '<markdown>' },
       },
     ],
     mustKnow: () => [
       'Use the exact field keys — email, companyName, linkedinUrl, url — they are what match an entity to its identity across spaces. An unrecognised key is silently dropped.',
-      'A "space" type is a company/collective/investor recorded as a CARD in the directory. It never provisions a new workspace.',
+      'A "space" type is a company/collective/investor recorded as a CARD in the directory. It never provisions a new space — starting a space or a sub-space is create_space (the `create_space` intent).',
       'Links between entities are never authored directly: a markdown link to an entity\'s note inside a SHARED note body is what creates the edge. Always use the leading-slash form — every tool hands back a ready-made `mention` string; paste it verbatim.',
       'Events are not created here — they are records with dates, RSVPs and a page of their own: use create_event (see the `run_event` intent). Channels and sections come from the space\'s admin surfaces.',
     ],

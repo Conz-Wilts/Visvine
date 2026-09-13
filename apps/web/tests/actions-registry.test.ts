@@ -193,6 +193,12 @@ test('the load-bearing scope splits hold across both doors', () => {
   assert.equal(scopeForAction('clean_context'), 'context:write')
   assert.equal(scopeForAction('edit_context'), 'context:write')
   assert.equal(scopeForAction('read_context'), 'context:read')
+
+  // Starting a space writes — never a read-only default token — and a record
+  // of an organisation is a different action from a tenant.
+  assert.equal(scopeForAction('create_space'), 'context:write')
+  assert.notEqual(actionByName('create_space'), actionByName('add_context'))
+  assert.ok('parent_id' in actionByName('create_space')!.input, 'a sub-space is create_space with a parent')
 })
 
 test('one catalogue carries every action, authoring included', () => {

@@ -66,9 +66,9 @@ export interface CreateEntityInput {
   followGlobal?: boolean
   /**
    * For `space` only: the space row this card refers to, set when the user
-   * picked one that already runs here out of the match list. Null means
-   * "make one": a space is provisioned inside `context.spaceId` and the card
-   * points at it. There is no such thing as a `space` card with no space.
+   * picked one that already runs here out of the match list. Null means the
+   * card is a record and refers to nothing — nothing is provisioned here
+   * (lib/spaces/provision.ts is the one place a space is made).
    */
   spaceRef?: string | null
   /** Flat `{ fieldKey: value }`, split into columns + metadata by `applyFields`. */

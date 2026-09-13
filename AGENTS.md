@@ -73,7 +73,8 @@ scripts/               repo-level db/env tooling
 
 Every space is a `Space` row with its own context, members, aliases and tool
 rail. `visibility` is `public | private`. Creation always goes through
-`lib/spaces/provision.ts`. Spaces nest **one level** (`docs/sub-spaces.md`).
+`lib/spaces/provision.ts` — from the switcher, the console, and the
+`create_space` action (`lib/actions/defs/spaces.ts`), never `add_context`. Spaces nest **one level** (`docs/sub-spaces.md`).
 
 - **A record is not a tenant.** An organisation a space tracks is a directory
   record whose note lives in `communities/`; `company` folds onto `space` in
@@ -87,7 +88,8 @@ rail. `visibility` is `public | private`. Creation always goes through
   the seed.
 - **A sub-space's visibility is its own**, and membership never crosses the
   boundary: the creator holds its Admin alias, the parent's admins do not.
-  Created by the parent's admins (`POST /api/communities` with `parentId`); a
+  Created by the parent's admins (`POST /api/communities` with `parentId`, or
+  the `create_space` action with `parent_id`); a
   sub-space cannot hold sub-spaces (`subspaces.ts#parentDenial`); sibling names
   are unique (`spaces_sibling_name_unique`).
 - **A public sub-space's context flows up** as the read-only folder
