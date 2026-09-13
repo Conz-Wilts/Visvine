@@ -2,14 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PlugIcon, SparklesIcon } from "@/features/shared/icons";
 import Image from "next/image";
 import { signOut } from "@/features/auth/lib/auth-client";
 import { useAuth } from "@/features/auth/contexts/AuthContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
-import { CONNECTORS_PARAM, connectorsSegment } from "@/features/settings/components/AccountRailPanel";
-import { useSidebar } from "@/features/shared/contexts/SidebarContext";
-import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
+import { CONNECTORS_PARAM, settingsHrefFor } from "@/features/settings/components/SettingsConnectors";
 import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
 
 /**
@@ -17,7 +14,7 @@ import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRo
  * same column the space sits at the head of.
  *
  * There is no dropdown. Point at the avatar and the band GROWS UPWARD: what
- * hangs off your account — Connectors, Settings, Sign out — unfolds as ordinary
+ * hangs off your account — Settings, Sign out — unfolds as ordinary
  * rail rows, on the rail's own glyph column, with their names arriving on the
  * same fade the tools' names do. So opening the account is the rail widening and
  * the band rising, one gesture, rather than a panel appearing over whatever page
@@ -31,34 +28,30 @@ import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRo
  * be transitioned. Keyboard focus opens it too, so the actions are reachable
  * without a pointer.
  *
- * Connectors and Models are rows rather than settings sections because they
- * are about the space you are in, from where you stand in it: pointing at
- * either slides the rail's panel out beside the rail (AccountRailPanel, hosted
- * by the Sidebar the way the space switcher is), the way pointing at the space
- * or Create new does; pointing at any other row of the band puts it away, and
- * closing it leaves you on the page you were on. The band is shell chrome on every page, so `?connectors=` re-opens it
- * ANYWHERE — which is what the OAuth round trip returns to — on the tab
- * (connected, disconnected, all or models) the sign-in started from.
+ * Connectors and Models are sections of Settings. The band is shell chrome on
+ * every page, so it is what sends a `?connectors=` link — an older sign-in
+ * return, say — on to the Settings section it names.
  */
 export default function UserMenu({ expanded, reduced }: { expanded: boolean; reduced: boolean }) {
   const { session, isLoading: isPending } = useAuth();
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
-  const { setAccountPanel, setSwitcherOpen } = useSidebar();
   const bandRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const intent = useHoverIntent();
 
-  // `?connectors=` opens the panel: the sign-in round trip comes back to the
-  // page it started on, and this is what re-opens what the person was in.
-  // Read off `location` rather than useSearchParams — the account band is shell
-  // chrome on every page, and a hook that forces a Suspense boundary there
-  // would be paid by all of them.
+  // `?connectors=` anywhere but Settings goes on to Settings, keeping whatever
+  // else the URL carried (a sign-in's outcome). Read off `location` rather than
+  // useSearchParams — the account band is shell chrome on every page, and a
+  // hook that forces a Suspense boundary there would be paid by all of them.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const segment = connectorsSegment(new URLSearchParams(window.location.search).get(CONNECTORS_PARAM));
-    if (segment) setAccountPanel(segment === "models" ? "models" : "connectors");
-  }, [setAccountPanel]);
+    if (typeof window === "undefined" || window.location.pathname === "/settings") return;
+    const params = new URLSearchParams(window.location.search);
+    const href = settingsHrefFor(params.get(CONNECTORS_PARAM));
+    if (!href) return;
+    params.delete(CONNECTORS_PARAM);
+    const rest = params.toString();
+    router.replace(rest ? `${href}&${rest}` : href);
+  }, [router]);
 
   // A pinned band closes on the next click outside it, the way the rail's own
   // popups do. Hover-opened bands need nothing: the pointer leaving closes them.
@@ -82,14 +75,6 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
     }
   }, [expanded]);
 
-  // One panel at a time: the two account panels share the rail's edge with
-  // the switcher.
-  const openPanel = (panel: "connectors" | "models") => {
-    setSwitcherOpen(false);
-    setAccountPanel(panel);
-  };
-  const closePanel = () => setAccountPanel(null);
-
   if (isPending) {
     return <div className="h-9 w-9 rounded-[8px] bg-surface-3 animate-pulse" style={{ marginLeft: (ROW_H - 36) / 2 }} />;
   }
@@ -110,33 +95,11 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
     router.refresh();
   }
 
-  // A row that opens a panel opens it on hover (and click, for the keyboard
-  // and for a pointer that did not rest); a row that goes somewhere puts the
-  // panel away on hover and leaves the band on press.
-  const actions: { key: string; label: string; onClick: () => void; onHover: () => void; panel?: boolean; danger?: boolean; icon: React.ReactNode }[] = [
-    {
-      key: "connectors",
-      label: "Connectors",
-      onClick: () => openPanel("connectors"),
-      onHover: () => openPanel("connectors"),
-      panel: true,
-      icon: <PlugIcon />,
-    },
-    {
-      // What the space's agents run on is one decision a space makes once,
-      // so it is its own row rather than a section inside the list of services.
-      key: "models",
-      label: "Models",
-      onClick: () => openPanel("models"),
-      onHover: () => openPanel("models"),
-      panel: true,
-      icon: <SparklesIcon />,
-    },
+  const actions: { key: string; label: string; onClick: () => void; danger?: boolean; icon: React.ReactNode }[] = [
     {
       key: "settings",
       label: "Settings",
       onClick: () => router.push("/settings"),
-      onHover: closePanel,
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -150,7 +113,6 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
       key: "signout",
       label: "Sign out",
       onClick: () => { void handleSignOut(); },
-      onHover: closePanel,
       danger: true,
       icon: (
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,8 +155,8 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
         aria-hidden={!open}
       >
         <div className="flex flex-col" style={{ gap: ITEM_GAP, paddingBottom: ITEM_GAP }}>
-          {actions.map(({ key, label, icon, onClick, onHover, panel, danger }) => (
-            <div key={key} {...intent(onHover)}>
+          {actions.map(({ key, label, icon, onClick, danger }) => (
+            <div key={key}>
               <Row
                 expanded={expanded}
                 reduced={reduced}
@@ -202,12 +164,8 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
                 icon={icon}
                 danger={danger}
                 onClick={() => {
-                  // A panel row keeps the band: the panel is beside it, and
-                  // the pointer is still here.
-                  if (!panel) {
-                    setPinned(false);
-                    setOpen(false);
-                  }
+                  setPinned(false);
+                  setOpen(false);
                   onClick();
                 }}
               />
@@ -220,7 +178,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
           a glyph goes and your name where a tool's name goes — and, like every
           other name in the app, it is a link to the person's page. Pointing at
           the row is what opens the band above it; nothing is drawn to say so. */}
-      <div {...intent(closePanel)}>
+      <div>
         <Row
           expanded={expanded}
           reduced={reduced}

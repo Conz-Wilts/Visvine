@@ -6,6 +6,7 @@ import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/c
 import LoadingText from '@/components/ui/LoadingText';
 import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePanel';
 import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPanel';
+import { ConnectorsSection, ModelsSection } from '@/features/settings/components/SettingsConnectors';
 
 /**
  * Personal settings. Same shell as the Space Console — a pane-top tab bar
@@ -19,12 +20,12 @@ import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPane
 // Only the tabs that do something. Privacy was a coming-soon placeholder and is
 // gone until there's something behind it; Account is here because deleting your
 // account is something.
-// Your own connectors are NOT a section here: they are an entry on the account
-// band that opens a rail panel (AccountRailPanel), because connecting one
-// is a minute's work over whatever page you were on, not a place to navigate
-// to. `?connectors=1` on any page opens it.
+// Connectors and Models are about the space you are in, from where you stand
+// in it (SettingsConnectors).
 const SECTIONS: ConsoleSection[] = [
   { id: 'appearance', label: 'Appearance', width: 'form' },
+  { id: 'connectors', label: 'Connectors', width: 'form' },
+  { id: 'models', label: 'Models', width: 'form' },
   { id: 'mcp', label: 'MCP', width: 'form' },
   { id: 'account', label: 'Account', width: 'form' },
 ];
@@ -87,6 +88,10 @@ function renderSection(id: string) {
   switch (id) {
     case 'appearance':
       return <AppearanceSection />;
+    case 'connectors':
+      return <ConnectorsSection />;
+    case 'models':
+      return <ModelsSection />;
     case 'mcp':
       return <ConnectClaudePanel />;
     case 'account':

@@ -83,12 +83,12 @@ test('a NAMED "New type" row appears only for a legal, unused name', () => {
 })
 
 test('every row resolves to a flow, and the prose kinds go to the draft', () => {
-  const ctx = { pathname: '/directory', folder: 'deals' }
+  const ctx = { folder: 'deals' }
   for (const row of createRows(admin()).rows) assert.ok(flowFor(row, ctx).kind)
   const kind = (k: Parameters<typeof rowForKind>[0]) => flowFor(rowForKind(k, admin())!, ctx)
   assert.deepEqual(kind('event'), { kind: 'route', href: '/events/new' })
   assert.deepEqual(kind('connector'), { kind: 'route', href: '/admin?section=connectors' })
-  assert.deepEqual(kind('model'), { kind: 'route', href: '/directory?connectors=models' })
+  assert.deepEqual(kind('model'), { kind: 'route', href: '/settings?section=models' })
   assert.deepEqual(kind('context'), { kind: 'draft', href: '/directory/new?type=note&folder=deals' })
   assert.equal(kind('agent').kind, 'inline')
   assert.equal(kind('person').kind, 'inline')

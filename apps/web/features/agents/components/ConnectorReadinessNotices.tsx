@@ -62,7 +62,7 @@ export default function ConnectorReadinessNotices({
                   <>
                     {' — or '}
                     <Link
-                      href="/settings?connectors=1"
+                      href="/settings?section=connectors&connectors=disconnected"
                       className="font-semibold text-brand-dark-green hover:underline"
                     >
                       connect it for yourself

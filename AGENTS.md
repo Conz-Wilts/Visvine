@@ -562,10 +562,11 @@ Delete; the row itself goes to the connector's page, because the note IS the
 connector.
 
 - **The space's admins decide what is connected; a member connects themselves.**
-  Members get **Connectors on the account menu** — the console's own panel
-  pinned to a view (`ConnectorsPanel view=`), opened as a rail panel
-  (`AccountRailPanel`), because `?connectors=` on ANY page opens it and that is
-  what the OAuth round trip returns to. **Connected** is what works for you now
+  Members get **Settings → Connectors** (`/settings?section=connectors`) — the
+  console's own panel pinned to a view (`ConnectorsPanel view=`,
+  `SettingsConnectors.tsx`). The OAuth round trip returns there with
+  `?connectors=<tab>`; a `?connectors=` on any other page is sent on to it by
+  the account band (`UserMenu`). **Connected** is what works for you now
   (`worksForCaller`). **Not connected** is the rest, including rows no grant
   reaches (`service.ts#listHiddenConnectors` exposes name, title and recipe —
   never hosts, secrets or body) which offer **Request access**, a
@@ -698,8 +699,8 @@ sweep.
   paid, not the space. `LOCAL_RUNTIMES_OFF=claude,codex` is the kill switch,
   surfaced by `GET …/models`; the vendors changed position on this four times in
   2026, so it stays env rather than a release.
-- **Models is its own row in the account band**, beside Connectors — the same
-  rail panel holding `ModelsPanel` with a `+` offering
+- **Models is its own section of Settings** (`/settings?section=models`),
+  beside Connectors — `ModelsPanel` with a `+` offering
   `lib/models/catalog.ts`'s five providers. Not a section of the connectors list
   and not a console section: what agents run on is one decision a space makes
   once.

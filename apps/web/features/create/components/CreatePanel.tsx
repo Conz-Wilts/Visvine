@@ -128,7 +128,7 @@ export default function CreatePanel() {
 
   const pick = useCallback(
     (row: CreateRow, alias?: SpaceAlias) => {
-      const flow = flowFor(row, { pathname: pathname ?? '/', folder: defaultFolder });
+      const flow = flowFor(row, { folder: defaultFolder });
       if (flow.kind === 'inline') {
         setStep({ kind: 'form', row, alias });
         return;
@@ -136,7 +136,7 @@ export default function CreatePanel() {
       close();
       router.push(flow.href);
     },
-    [pathname, defaultFolder, close, router],
+    [defaultFolder, close, router],
   );
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

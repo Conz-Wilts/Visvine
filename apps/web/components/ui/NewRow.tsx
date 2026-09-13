@@ -5,8 +5,8 @@ import { PlusIcon } from '@/features/shared/icons';
 /**
  * The row that MAKES one more of whatever a list holds — "New space" at the
  * head of the switcher, "New type" at the head of the Create panel, "Add
- * model" and "Add a connector" at the head of the account panels. One shape
- * everywhere: a dashed square with a plus where the list's own marks go, then
+ * model" and "Add a connector" at the head of Settings' Models and Connectors.
+ * One shape everywhere: a dashed square with a plus where the list's own marks go, then
  * the name, drawn as a row of the list it leads rather than as a button
  * beside it. It leads the list because it is the row you are looking for when
  * none of the ones below is the one you want.

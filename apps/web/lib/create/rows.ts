@@ -215,8 +215,6 @@ export function draftHref(type: string | null, folder?: string | null): string {
 }
 
 export interface FlowContext {
-  /** The page the panel is on — a dialog opened by query string needs it. */
-  pathname: string
   /** A folder the caller was standing in, for the kinds that land in one. */
   folder?: string | null
 }
@@ -235,9 +233,9 @@ export function flowFor(row: CreateRow, ctx: FlowContext): CreateFlow {
     // The catalogue is the create UI: one press, a sign-in, or the form.
     case 'connector':
       return { kind: 'route', href: '/admin?section=connectors' }
-    // The Models dialog opens over any page from its query string.
+    // Models is a section of Settings.
     case 'model':
-      return { kind: 'route', href: `${ctx.pathname}?connectors=models` }
+      return { kind: 'route', href: '/settings?section=models' }
     // A note is prose; the draft is where prose is written.
     case 'context':
       return { kind: 'draft', href: draftHref('note', ctx.folder) }

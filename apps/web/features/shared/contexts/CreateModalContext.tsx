@@ -117,7 +117,7 @@ export function useCreateSurface() {
         open(undefined, opts);
         return;
       }
-      const flow = flowFor(row, { pathname: pathname ?? '/', folder: opts?.folder });
+      const flow = flowFor(row, { folder: opts?.folder });
       if (flow.kind === 'inline') open(type, opts);
       else router.push(flow.href);
     },

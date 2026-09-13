@@ -38,7 +38,7 @@ title: Weekly digest
 description: Summarises the week into reports/weekly.md
 # model:                           # OPTIONAL — omit to run on the space's model.
                                    # Pin `<provider>/<model-id>` only for a different one
-                                   # the space also has (Models, in the account menu).
+                                   # the space also has (Settings → Models).
 connectors: [hubspot]              # declared reach
 tools: [web, actions]              # optional: web, directory, actions
 agents: [crm-sync]                 # optional: the agents this one has in mind for run_agent
@@ -71,7 +71,7 @@ Read this week's notes under updates/ and write a digest to reports/weekly.md �
   on every resolve).
 - **Models** — a model is its own kind: `models/<name>.md` with `type: model`,
   `provider: gemini|openai|anthropic|openrouter|custom`, `model: <id>`, plus `base_url:` for
-  `custom` (added from Models in the account menu, `lib/models/catalog.ts`). Its page is the Model
+  `custom` (added from Settings → Models, `lib/models/catalog.ts`). Its page is the Model
   tab beside Context and Raw: the provider and id (editable), the `MODEL_KEY_<PROVIDER>` key
   editor, and who ran on it — the recent runs and their tokens. It is not a
   connector — no perimeter, not in `connectors/`, never named in a brief's `connectors:`, and

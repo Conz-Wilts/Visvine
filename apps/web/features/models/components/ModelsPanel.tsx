@@ -63,11 +63,8 @@ function statusOf(m: ModelRow): { label: string; tone: 'ok' | 'warn' | 'bad' | '
   return null;
 }
 
-export default function ModelsPanel({ space, onLeave, onFormOpen }: {
+export default function ModelsPanel({ space }: {
   space: string;
-  onLeave?: () => void;
-  /** The add form is up — the rail holds the panel open while it is. */
-  onFormOpen?: (open: boolean) => void;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<ModelRow[]>([]);
@@ -77,8 +74,6 @@ export default function ModelsPanel({ space, onLeave, onFormOpen }: {
   const [picker, setPicker] = useState(false);
   const [entry, setEntry] = useState<ModelCatalogEntry | null>(null);
   const [localOn, setLocalOn] = useState<Record<LocalRuntimeId, boolean>>({ claude: true, codex: true });
-
-  useEffect(() => { onFormOpen?.(entry !== null); }, [entry, onFormOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,7 +92,6 @@ export default function ModelsPanel({ space, onLeave, onFormOpen }: {
   }, [space]);
 
   const open = (name: string) => {
-    onLeave?.();
     router.push(`/directory/${encodeURIComponent(`model:${name}`)}`);
   };
 

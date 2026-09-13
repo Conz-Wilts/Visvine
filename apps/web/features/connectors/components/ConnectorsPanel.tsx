@@ -259,10 +259,8 @@ export default function ConnectorsPanel({
   space,
   returnTo = null,
   view,
-  onLeave,
   onAdd,
   onRequestsChanged,
-  onFormOpen,
 }: {
   /** The space to work in; defaults to the one the app is showing. */
   space?: string | null;
@@ -274,8 +272,6 @@ export default function ConnectorsPanel({
   view?: Tab;
   /** Where the OAuth round trip lands — this surface, not the connector page. */
   returnTo?: string | null;
-  /** Called just before the panel sends the browser to another page — a dialog closes on it. */
-  onLeave?: () => void;
   /**
    * Where a pinned list sends "Add a connector": the host owns the tabs, so
    * it is the host that opens the catalogue. Unpinned, the panel opens its
@@ -284,11 +280,6 @@ export default function ConnectorsPanel({
   onAdd?: () => void;
   /** A member's request was answered — the console re-counts its badge. */
   onRequestsChanged?: () => void;
-  /**
-   * A form, a manage view or a confirm is up. The rail's panel closes when the
-   * pointer leaves the card, so it needs to know when it must not.
-   */
-  onFormOpen?: (open: boolean) => void;
 } = {}) {
   const router = useRouter();
   const { currentSpace } = useSpace();
@@ -298,9 +289,8 @@ export default function ConnectorsPanel({
   // What the OAuth round trip said on its way back here. Read once and then
   // wiped from the URL, so a refresh doesn't re-announce a connection made
   // minutes ago (the connector's own page does the same with these params).
-  // Read off `location` rather than useSearchParams: this panel is shell
-  // chrome on every page, and a hook that forces a Suspense boundary there
-  // would be paid by all of them.
+  // Read off `location` rather than useSearchParams, so a host needs no
+  // Suspense boundary for it.
   const pathname = usePathname();
   const [outcome, setOutcome] = useState<{ ok: boolean; message: string } | null>(null);
   useEffect(() => {
@@ -359,10 +349,6 @@ export default function ConnectorsPanel({
   // The connector whose on/off write is in flight, and what went wrong if it did.
   const [toggling, setToggling] = useState<string | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
-
-  // Anything with a half-finished act in it holds the rail's panel open.
-  const formOpen = entry !== null || manage !== null || confirmDelete !== null || fulfilling !== null;
-  useEffect(() => { onFormOpen?.(formOpen); }, [formOpen, onFormOpen]);
 
   // Re-read what's connected on mount, on a space switch, and after a delete.
   const [reloadKey, setReloadKey] = useState(0);
@@ -516,7 +502,6 @@ export default function ConnectorsPanel({
   };
 
   const openConnector = (name: string) => {
-    onLeave?.();
     router.push(`/directory/${encodeURIComponent(`connector:${name}`)}`);
   };
 
@@ -637,8 +622,7 @@ export default function ConnectorsPanel({
           setFulfilling(null);
         }}
         onCreated={(name) => {
-          onLeave?.();
-          router.push(`/directory/${encodeURIComponent(`connector:${name}`)}`);
+                router.push(`/directory/${encodeURIComponent(`connector:${name}`)}`);
         }}
       />
     );
