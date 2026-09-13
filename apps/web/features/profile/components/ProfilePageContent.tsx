@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { evictRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
-import { CameraIcon, ChevronDownIcon, ChevronUpIcon, EarthIcon, LoaderCircleIcon, MapPinIcon } from '@/features/shared/icons';
+import { CameraIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, EarthIcon, LoaderCircleIcon, MapPinIcon, PencilIcon, Share2Icon, ShieldCheckIcon } from '@/features/shared/icons';
 import Image from 'next/image';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import { useMemberConnection } from '@/features/profile/hooks/useMemberConnection';
@@ -18,17 +18,18 @@ import PageError from '@/components/ui/PageError';
 import { matchCountryInLocation } from '@/lib/countries';
 import CountryFlag from './CountryFlag';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
-import { StatItem, SectionCard, EditIconButton, cssVars, hostname } from './profileCards';
+import Button from '@/components/ui/Button';
+import { getInitials } from '@/lib/avatarUtils';
+import { SectionCard, cssVars, hostname } from './profileCards';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
 import EditBasicInfoModal from './edit/EditBasicInfoModal';
 import EditAboutModal from './edit/EditAboutModal';
-import EditSkillsModal from './edit/EditSkillsModal';
 import EditContactModal from './edit/EditContactModal';
 import SpacesModal, { type ProfileSpace } from './SpacesModal';
 import ExperienceTimeline from './ExperienceTimeline';
 import ContactInfoModal from './ContactInfoModal';
 
-type ModalState = 'basicInfo' | 'about' | 'skills' | 'contact' | 'contactInfo' | 'communities' | null;
+type ModalState = 'basicInfo' | 'about' | 'contact' | 'contactInfo' | 'communities' | null;
 /** Your own space: no member list to connect to, so the link isn't offered. */
 const PERSONAL_ID_PREFIX = 'me:';
 
@@ -36,9 +37,11 @@ interface ProfilePageContentProps {
   nodeId: string;
   /** Rendered inside FullProfileOverlay (its own scroll container, no fixed navbar above). */
   overlay?: boolean;
+  /** Opened as yourself from the account row (see lib/selfView): your space alias is not shown. */
+  selfView?: boolean;
 }
 
-export default function ProfilePageContent({ nodeId, overlay = false }: ProfilePageContentProps) {
+export default function ProfilePageContent({ nodeId, overlay = false, selfView = false }: ProfilePageContentProps) {
   const { session } = useAuth();
   const { currentSpace } = useSpace();
   const { profile, loading, error, updateBasicInfo, reload } = useProfile(nodeId);
@@ -47,6 +50,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileSpaces, setProfileSpaces] = useState<ProfileSpace[]>([]);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Spaces shown on the profile: managed (admin) ones always, member ones
   // only when the owner has toggled them visible. Owner receives the full list
@@ -111,7 +115,9 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
   // Aliases ("Founder", "Investor", …) carry a per-space colour; when this
   // node has one, the whole page theme uses it instead of the base type colour.
-  const aliasName = nodeData?.node?.alias;
+  // An alias is a role inside one space, so your own page opened from the
+  // account row shows neither the chip nor its colour.
+  const aliasName = isOwner && selfView ? undefined : nodeData?.node?.alias;
   const aliasColor = aliasName
     ? findAlias(currentSpace?.aliases, aliasName, nodeData?.node?.type ?? 'People')?.color
     : undefined;
@@ -130,24 +136,30 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
   // Prefer the profile-visible space list; fall back to the shared-count
   // for context-only people with no linked user.
-  const visibleSpaceCount = profileSpaces.filter((c) => c.visible).length;
-  const spaceCount = profileSpaces.length > 0 ? visibleSpaceCount : (nodeData?.spaceCount ?? 1);
+  const visibleSpaces = profileSpaces.filter((c) => c.visible);
+  const spaceCount = profileSpaces.length > 0 ? visibleSpaces.length : (nodeData?.spaceCount ?? 1);
   const spacesClickable = profileSpaces.length > 0;
   const hasCountry = !!matchCountryInLocation(profile.location);
   const hasContact = !!(profile.email || profile.phone || profile.website || profile.linkedinUrl || profile.twitterUrl);
 
-  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
   const sectionScrollMargin = overlay ? 'scroll-mt-4' : 'scroll-mt-20';
+
+  // The shared link is the plain profile URL, never your own ?view=me entry.
+  const copyProfileLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/directory/${encodeURIComponent(nodeId)}`);
+    } catch { return; }
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 2000);
+  };
 
   return (
     <div className="profile-content-fade flex flex-col gap-5">
-      {/* ══ IDENTITY HERO — avatar beside the identity block, both on the page ══ */}
-      <div className="flex flex-col sm:flex-row gap-5 items-stretch">
-        {/* avatar card */}
-        <div className="relative w-48 h-48 sm:w-60 sm:h-60 aspect-square flex-none rounded-lg overflow-hidden bg-surface-2">
+      {/* ══ IDENTITY HERO — the avatar beside who they are, their spaces to the right ══ */}
+      <section className="flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">
+        <div className="relative w-32 h-32 sm:w-40 sm:h-40 flex-none rounded-2xl overflow-hidden bg-surface-2">
           {profile.imageUrl ? (
-            <Image src={profile.imageUrl} alt={profile.name} width={240} height={240} className="w-full h-full object-cover" />
+            <Image src={profile.imageUrl} alt={profile.name} width={160} height={160} className="w-full h-full object-cover" />
           ) : (
             <PersonSilhouette color={theme.base} />
           )}
@@ -161,21 +173,26 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
         </div>
         {isOwner && <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={changeAvatar} />}
 
-        {/* identity card */}
-        <section className="flex-1 min-w-0 sm:min-h-60 flex flex-col">
-          {/* my-auto centers the identity block against the tall avatar card,
-              pushing the stat strip to the bottom edge */}
-          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 my-auto py-4">
+        <div className="min-w-0 flex-1 flex flex-col lg:flex-row lg:items-start gap-6 sm:pt-2">
           {/* identity — every fact appears exactly once on this page */}
           <div className="min-w-0 flex-1">
-            <h1 className="text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
-            {aliasName && <div className="mt-2"><Chip tone="solid" color={aliasColor}>{aliasName}</Chip></div>}
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+              <h1 className="text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
+              {/* A profile served from a member's own record, not synthesized from a directory card. */}
+              {profile.userId && (
+                <span title="Verified member" aria-label="Verified member" style={{ color: theme.dark }}>
+                  <ShieldCheckIcon className="w-5 h-5" />
+                </span>
+              )}
+              {profile.pronouns && <span className="text-sm text-text-muted">{profile.pronouns}</span>}
+              {aliasName && <Chip tone="solid" color={aliasColor}>{aliasName}</Chip>}
+            </div>
 
             {profile.subtitle && (
-              <p className="mt-1.5 text-[15px] text-text-secondary max-w-[60ch]">{profile.subtitle}</p>
+              <p className="mt-1.5 text-lg text-text-primary max-w-[60ch]">{profile.subtitle}</p>
             )}
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text-muted">
               {profile.location && (
                 <span className="inline-flex items-center gap-1.5">
                   {hasCountry
@@ -185,41 +202,55 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                 </span>
               )}
               {profile.website && (
-                <a href={profile.website} target="_blank" rel="noopener noreferrer"
-                   className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
-                  <EarthIcon className="w-3.5 h-3.5" />{hostname(profile.website)}
-                </a>
+                <>
+                  {profile.location && <span aria-hidden>·</span>}
+                  <a href={profile.website} target="_blank" rel="noopener noreferrer"
+                     className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
+                    <EarthIcon className="w-3.5 h-3.5" />{hostname(profile.website)}
+                  </a>
+                </>
+              )}
+              {/* Contact info — the details live behind this link, not on the page */}
+              {(hasContact || isOwner) && (
+                <>
+                  {(profile.location || profile.website) && <span aria-hidden>·</span>}
+                  <button type="button" onClick={() => setModal('contactInfo')}
+                          className="font-semibold hover:underline" style={{ color: theme.dark }}>
+                    Contact info
+                  </button>
+                </>
               )}
             </div>
 
-            {/* Contact info — the details live behind this link, not on the page */}
-            {(hasContact || isOwner) && (
-              <button type="button" onClick={() => setModal('contactInfo')}
+            {spacesClickable ? (
+              <button type="button" onClick={() => setModal('communities')}
                       className="mt-2 text-sm font-semibold hover:underline" style={{ color: theme.dark }}>
-                Contact info
+                {spaceCount} {spaceCount === 1 ? 'space' : 'spaces'}
               </button>
+            ) : (
+              <p className="mt-2 text-sm font-semibold text-text-secondary">{spaceCount} {spaceCount === 1 ? 'space' : 'spaces'}</p>
             )}
-          </div>
 
-          {isOwner && (
-            <EditIconButton onClick={() => setModal('basicInfo')} label="Edit intro" className="-mt-1 -mr-2" />
-          )}
-          </div>
-
-          {/* stat strip — pinned to the hero's bottom edge */}
-          <div className="flex flex-wrap items-center gap-x-7 gap-y-2 pt-4 border-t border-border-subtle">
-            <StatItem value={spaceCount} label={spaceCount === 1 ? 'Space' : 'Spaces'}
-                      onClick={spacesClickable ? () => setModal('communities') : undefined} accent={theme.dark} />
-            {profile.tags.length > 0 && (
-              <StatItem value={profile.tags.length} label={profile.tags.length === 1 ? 'Skill' : 'Skills'}
-                        onClick={() => jump('skills')} accent={theme.dark} />
-            )}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {isOwner ? (
+                <Button onClick={() => setModal('basicInfo')} className="inline-flex items-center gap-2">
+                  <PencilIcon className="w-4 h-4" /> Edit profile
+                </Button>
+              ) : hasContact && (
+                <Button onClick={() => setModal('contactInfo')}>Contact info</Button>
+              )}
+              <Button variant="neutral" onClick={() => void copyProfileLink()} className="inline-flex items-center gap-2">
+                {linkCopied
+                  ? <><CheckIcon className="w-4 h-4" /> Link copied</>
+                  : <><Share2Icon className="w-4 h-4" /> Share profile</>}
+              </Button>
+            </div>
 
             {/* The member behind this profile. Only the people who can undo the
                 link see it — for everyone else the connection is just what the
                 page is. */}
             {!isOwner && memberConnection.connection && memberConnection.canManage && !isPersonalSpace && (
-              <div className="ml-auto flex items-center gap-2">
+              <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="text-[13px] text-text-muted">Member</span>
                 <Chip size="lg">{memberConnection.connection.name}</Chip>
                 <button type="button" onClick={() => void memberConnection.disconnect()}
@@ -232,41 +263,53 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
               </div>
             )}
           </div>
-        </section>
-      </div>
+
+          {/* their spaces, logo first — the spot LinkedIn gives the current company */}
+          {visibleSpaces.length > 0 && (
+            <div className="lg:w-72 flex-none flex flex-col gap-3 lg:pt-1">
+              {visibleSpaces.slice(0, 3).map((space) => (
+                <button key={space.id} type="button" onClick={() => setModal('communities')}
+                        className="group flex items-center gap-3 text-left">
+                  {space.imageUrl ? (
+                    <img src={space.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-none" />
+                  ) : (
+                    <span className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-semibold flex-none"
+                          style={{ background: theme.light, color: theme.dark }}>
+                      {getInitials(space.name)}
+                    </span>
+                  )}
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-text-primary truncate group-hover:underline">{space.name}</span>
+                    <span className="block text-[13px] text-text-muted">
+                      {space.isAdmin ? 'Admin' : 'Member'} · {space.memberCount} {space.memberCount === 1 ? 'member' : 'members'}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* ══ BODY — full-width sections stacked on hairlines ══ */}
-      <div className="min-w-0 flex flex-col gap-5">
+      <div className="min-w-0 flex flex-col">
         {/* About */}
-        <SectionCard id="about" title="About"
+        <SectionCard id="about" title="About" size="lg" ruled
                      scrollMargin={sectionScrollMargin} isOwner={isOwner} onEdit={() => setModal('about')}>
           {profile.bio
             ? <BioText bio={profile.bio} theme={theme} />
-            : <p className="text-sm text-text-muted">No bio yet.</p>}
+            : <p className="text-base text-text-muted">No bio yet.</p>}
         </SectionCard>
 
-        {/* Skills & experience — their time on Visvine, then the skills */}
-        <SectionCard id="skills" title="Skills & experience" scrollMargin={sectionScrollMargin} isOwner={isOwner}
-                     onAdd={() => setModal('skills')} onEdit={() => setModal('skills')}>
+        {/* Experience — their time on Visvine */}
+        <SectionCard id="experience" title="Experience" size="lg" ruled scrollMargin={sectionScrollMargin}>
           <ExperienceTimeline accountCreatedAt={profile.createdAt ?? null} />
-          {profile.tags.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {profile.tags.map((tag, i) => (
-                <Chip key={tag} tone="solid" size="lg" color={theme.base}
-                      className="chip-pop transition-transform duration-150 hover:-translate-y-0.5"
-                      style={{ animationDelay: `${Math.min(i, 20) * 35}ms` }}>
-                  {tag}
-                </Chip>
-              ))}
-            </div>
-          ) : <p className="text-sm text-text-muted">No skills listed.</p>}
         </SectionCard>
       </div>
 
       {/* Modals */}
       {modal === 'basicInfo' && <EditBasicInfoModal open onClose={() => setModal(null)} profile={profile} onSave={updateBasicInfo} />}
       {modal === 'about' && <EditAboutModal open onClose={() => setModal(null)} bio={profile.bio} onSave={updateBasicInfo} />}
-      {modal === 'skills' && <EditSkillsModal open onClose={() => setModal(null)} tags={profile.tags} onSave={updateBasicInfo} />}
       {modal === 'contact' && <EditContactModal open onClose={() => setModal(null)} profile={profile} onSave={updateBasicInfo} />}
       {modal === 'contactInfo' && (
         <ContactInfoModal open onClose={() => setModal(null)} profile={profile}
@@ -289,7 +332,7 @@ function BioText({ bio, theme }: { bio: string; theme: ThemePalette }) {
   const text = long && !open ? bio.slice(0, 280).trimEnd() + '…' : bio;
   return (
     <div>
-      <p className="text-[15px] text-text-secondary leading-relaxed whitespace-pre-line max-w-[72ch]">{text}</p>
+      <p className="text-[17px] text-text-secondary leading-relaxed whitespace-pre-line max-w-[72ch]">{text}</p>
       {long && (
         <button onClick={() => setOpen((v) => !v)} className="mt-2 flex items-center gap-1 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
           {open ? <><ChevronUpIcon className="w-3.5 h-3.5" /> Show less</> : <><ChevronDownIcon className="w-3.5 h-3.5" /> Read more</>}

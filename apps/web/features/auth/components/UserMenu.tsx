@@ -6,6 +6,7 @@ import Image from "next/image";
 import { signOut } from "@/features/auth/lib/auth-client";
 import { useAuth } from "@/features/auth/contexts/AuthContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
+import { selfProfileHref } from "@/features/profile/lib/selfView";
 import { CONNECTORS_PARAM, settingsHrefFor } from "@/features/settings/components/SettingsConnectors";
 import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
 
@@ -85,7 +86,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   // Your name is the link to your own page, so there is no Profile row in the
   // band. A session with no person node yet has nowhere to go: the row falls
   // back to opening the band, the way it did when Profile was a row.
-  const profileHref = user.nodeId ? `/directory/${encodeURIComponent(user.nodeId)}` : null;
+  const profileHref = user.nodeId ? selfProfileHref(user.nodeId) : null;
 
   async function handleSignOut() {
     setOpen(false);

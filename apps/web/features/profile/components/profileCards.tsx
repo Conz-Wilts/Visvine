@@ -43,8 +43,13 @@ export function StatItem({ value, label, onClick, accent }: {
   );
 }
 
-export function SectionCard({ id, title, badge, icon, accent, action, isOwner, onEdit, onAdd, scrollMargin, children }: {
-  id: string; title: string; badge?: number;
+export function SectionCard({ id, title, size = 'md', ruled = false, badge, icon, accent, action, isOwner, onEdit, onAdd, scrollMargin, children }: {
+  id: string; title: string;
+  /** `lg` gives the heading a larger size, for a person's primary sections. */
+  size?: 'md' | 'lg';
+  /** Hairlines above and below: ruled siblings stacked with no gap share one line between them. */
+  ruled?: boolean;
+  badge?: number;
   /** A glyph before the title, drawn in `accent` (the entity's dark shade). */
   icon?: React.ReactNode; accent?: string;
   /** A control pinned to the right of the heading; `onEdit` renders the standard one. */
@@ -55,9 +60,9 @@ export function SectionCard({ id, title, badge, icon, accent, action, isOwner, o
   scrollMargin?: string; children: React.ReactNode;
 }) {
   return (
-    <section id={id} className={`border-t border-border-subtle pt-5 first:border-t-0 first:pt-0 ${scrollMargin ?? ''}`}>
+    <section id={id} className={`border-border-subtle ${ruled ? 'border-t last:border-b py-5' : 'border-t pt-5 first:border-t-0 first:pt-0'} ${scrollMargin ?? ''}`}>
       <div className="flex items-center justify-between gap-2 pb-3">
-        <h2 className="flex items-center gap-2 text-[15px] font-bold font-open-sauce text-text-primary">
+        <h2 className={`flex items-center gap-2 ${size === 'lg' ? 'text-xl' : 'text-[15px]'} font-bold font-open-sauce text-text-primary`}>
           {icon && <span style={{ color: accent }}>{icon}</span>}
           {title}
           {badge !== undefined && <span className="text-[13px] font-medium text-text-muted">{badge}</span>}
@@ -80,7 +85,7 @@ export function SectionCard({ id, title, badge, icon, accent, action, isOwner, o
  * still empty) in a round hover target, the way LinkedIn marks each section
  * editable. `label` is the accessible name and the hover tooltip.
  */
-export function EditIconButton({ onClick, add, label, className }: {
+function EditIconButton({ onClick, add, label, className }: {
   onClick: () => void; add?: boolean; label: string; className?: string;
 }) {
   return (

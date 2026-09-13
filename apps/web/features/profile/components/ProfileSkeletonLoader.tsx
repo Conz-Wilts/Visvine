@@ -24,8 +24,8 @@ const ENTRANCE_SHIFT_PX = 24; // profile-enter's translateY(18px), plus slack
 const SKELETON_MAX_H = `calc(100dvh - ${PANE_CHROME_PX + PANEL_PADDING_PX + ENTRANCE_SHIFT_PX}px)`;
 
 /**
- * Loading placeholder mirroring ProfilePageContent's layout: an identity hero
- * (avatar card + identity card) above a two-column body (main section cards +
+ * Loading placeholder mirroring ProfilePageContent's layout: an avatar-and-identity hero
+ * (identity beside the person's spaces) above a two-column body (main section cards +
  * sticky rail). Kept structurally in sync so the page doesn't jump on load.
  */
 export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps) {
@@ -34,39 +34,29 @@ export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps
       className="flex flex-col gap-5 overflow-hidden animate-pulse"
       style={{ maxHeight: SKELETON_MAX_H }}
     >
-      {/* ══ IDENTITY HERO — avatar + identity block ══ */}
-      <div className="flex flex-col sm:flex-row gap-5 items-stretch">
-        {/* avatar card */}
-        <div className="w-48 h-48 sm:w-60 flex-none rounded-lg bg-surface-3" />
-
-        {/* identity card */}
-        <section className="flex-1 min-w-0 py-1 flex flex-col">
-          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 my-auto pb-5">
-            {/* identity */}
-            <div className="min-w-0 flex-1 space-y-3">
-              <div className={`h-8 w-56 ${block}`} />          {/* name */}
-              <div className={`h-4 w-72 max-w-full ${block}`} /> {/* headline */}
-              <div className="flex flex-wrap gap-4 pt-1">
-                <div className={`h-4 w-28 ${block}`} />          {/* location */}
-                <div className={`h-4 w-24 ${block}`} />          {/* website */}
-                <div className={`h-4 w-28 ${block}`} />          {/* joined */}
-              </div>
-            </div>
-            {/* actions */}
-            <div className="flex items-center gap-2 flex-none">
-              <div className="h-10 w-24 rounded-xl bg-surface-3" />
-              <div className="h-10 w-28 rounded-xl bg-surface-3" />
+      {/* ══ IDENTITY HERO — avatar beside identity + spaces ══ */}
+      <section className="flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">
+        <div className="w-32 h-32 sm:w-40 sm:h-40 flex-none rounded-2xl bg-surface-3" />
+        <div className="min-w-0 flex-1 flex flex-col lg:flex-row lg:items-start gap-6 sm:pt-2">
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className={`h-8 w-56 ${block}`} />          {/* name */}
+            <div className={`h-5 w-72 max-w-full ${block}`} /> {/* headline */}
+            <div className={`h-4 w-80 max-w-full ${block}`} /> {/* location · website · contact */}
+            <div className={`h-4 w-16 ${block}`} />          {/* spaces */}
+            <div className="flex items-center gap-2 pt-1">   {/* actions */}
+              <div className="h-10 w-32 rounded-lg bg-surface-3" />
+              <div className="h-10 w-36 rounded-lg bg-surface-3" />
             </div>
           </div>
-
-          {/* stat strip */}
-          <div className="flex flex-wrap gap-x-7 gap-y-2 pt-4 border-t border-border-subtle">
-            <div className={`h-9 w-16 ${block}`} />
-            <div className={`h-9 w-14 ${block}`} />
-            <div className={`h-9 w-14 ${block}`} />
+          <div className="lg:w-72 flex items-center gap-3">  {/* spaces */}
+            <div className="w-10 h-10 rounded-lg bg-surface-3" />
+            <div className="space-y-1.5">
+              <div className={`h-4 w-28 ${block}`} />
+              <div className={`h-3 w-24 ${block}`} />
+            </div>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
       {/* ══ TWO-COLUMN BODY ══ */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px] gap-5 xl:gap-6">
@@ -91,15 +81,6 @@ export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps
                 </div>
               </div>
             ))}
-          </SkeletonCard>
-
-          {/* Skills */}
-          <SkeletonCard>
-            <div className="flex flex-wrap gap-2">
-              {[16, 24, 20, 14, 28, 18].map((w, i) => (
-                <div key={i} className="h-8 rounded-full bg-surface-3" style={{ width: `${w * 4}px` }} />
-              ))}
-            </div>
           </SkeletonCard>
         </div>
 

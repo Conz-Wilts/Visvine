@@ -32,6 +32,7 @@ import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePrefetchEntityContext } from '@/features/notes/lib/contextPrefetch';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import ProfilePageContent from '@/features/profile/components/ProfilePageContent';
+import { isSelfView } from '@/features/profile/lib/selfView';
 import OrgPageContent from '@/features/profile/components/OrgPageContent';
 import SpacePageContent from '@/features/profile/components/SpacePageContent';
 import ResourcePreviewContent from '@/features/profile/components/ResourcePreviewContent';
@@ -309,6 +310,7 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   const { currentSpace, loading: spaceLoading } = useSpace();
   const contextAvailable = useContextTabAvailable(node);
   const [wantedTab, setTabParam] = useProfileTabParam();
+  const selfView = isSelfView(useSearchParams());
   // A Tool tab is local state: it has no ?tab= value (see ProfileTab), and
   // deriving `activeTab` through the owner list rather than an effect means a
   // Tool that goes away drops the page back to the profile with nothing to
@@ -386,7 +388,7 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
           cards on the page background. profile-enter stays on the content only:
           the persistent bar above it must not play an entrance. */}
       <div className="profile-enter mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl">
-        <ProfilePageContent nodeId={nodeId} />
+        <ProfilePageContent nodeId={nodeId} selfView={selfView} />
       </div>
     </div>
   );

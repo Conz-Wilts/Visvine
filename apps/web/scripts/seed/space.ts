@@ -50,6 +50,17 @@ export interface Anchor {
   /** Aliases this anchor holds, by alias name. */
   aliases: string[]
   personNodeId: string
+  /** The profile on their `users` row — what /api/profile serves for them. */
+  profile: {
+    subtitle: string
+    bio: string
+    location: string
+    website: string
+    phone: string
+    pronouns: string
+    /** How long ago they joined, which is what the Experience entry dates from. */
+    joinedDaysAgo: number
+  }
 }
 
 export const ADMIN_USER = 'user_dev_admin'
@@ -58,8 +69,45 @@ export const ADMIN_NODE = 'person:dev_admin'
 export const MEMBER_NODE = 'person:dev_member'
 
 export const ANCHORS: Anchor[] = [
-  { id: ADMIN_USER, name: 'Dev Admin', email: 'admin@local.dev', aliases: [ADMIN_ALIAS_NAME, 'Team'], personNodeId: ADMIN_NODE },
-  { id: MEMBER_USER, name: 'Dev Member', email: 'member@local.dev', aliases: ['Champion'], personNodeId: MEMBER_NODE },
+  {
+    id: ADMIN_USER,
+    name: 'Dev Admin',
+    email: 'admin@local.dev',
+    aliases: [ADMIN_ALIAS_NAME, 'Team'],
+    personNodeId: ADMIN_NODE,
+    profile: {
+      subtitle: 'Head of Community, Visvine',
+      bio:
+        'Runs the Visvine HQ space: onboarding new spaces, keeping the directory honest and turning what customers '
+        + 'tell us into the next thing we build.\n\n'
+        + 'Before Visvine, spent six years running founder programmes and investor networks across Aotearoa, which is '
+        + "mostly where the conviction came from that a community's memory should outlive the people who keep it.",
+      location: 'Auckland, New Zealand',
+      website: 'https://example.com/dev-admin',
+      phone: '+64 21 555 0101',
+      pronouns: 'they/them',
+      joinedDaysAgo: 540,
+    },
+  },
+  {
+    id: MEMBER_USER,
+    name: 'Dev Member',
+    email: 'member@local.dev',
+    aliases: ['Champion'],
+    personNodeId: MEMBER_NODE,
+    profile: {
+      subtitle: 'Programme Manager, Harbourside Innovation Hub',
+      bio:
+        'Looks after a cohort of early-stage founders and the mentors, investors and partners around them. '
+        + 'Uses Visvine to keep track of who knows whom, what each founder needs next and which intros actually landed.\n\n'
+        + 'Happiest when a warm intro turns into a pilot.',
+      location: 'Wellington, New Zealand',
+      website: 'https://example.com/dev-member',
+      phone: '+64 21 555 0102',
+      pronouns: 'she/her',
+      joinedDaysAgo: 150,
+    },
+  },
 ]
 
 // ---- node types -------------------------------------------------------------
