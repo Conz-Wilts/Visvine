@@ -204,9 +204,9 @@ async function makeNotePrivate(
   }
 }
 
-/** The Drive's own gate: a space may switch Resources off, or hold it to admins. */
+/** The Drive's gate is the Directory's: it is a tab of that page, not a tool. */
 async function requireDriveFeature(ctx: ActionCaller, spaceId: string): Promise<void> {
-  if (await featureAccessForbidden(ctx.userId, spaceId, 'resources', ctx.email)) {
+  if (await featureAccessForbidden(ctx.userId, spaceId, 'directory', ctx.email)) {
     throw new ActionError(403, 'The Drive is not available to you in this space')
   }
 }
@@ -1123,7 +1123,7 @@ export const CONTEXT_ACTIONS = [
         // agents/ and tools/. Saying so here is what stops a model from being
         // told to author an agent with this action, being refused, and filing
         // the brief in a folder it invented — where nothing reads it.
-        'It CANNOT write under agents/ or tools/ (frozen against AI writes), nor settings/ (reserved). An agent is ' +
+        'It CANNOT write under agents/ or tools/ (frozen against AI writes). An agent is ' +
         'created with create_agent and a Tool with the tool authoring actions — both write at a human origin. ' +
         'Never work around a refusal here by writing the note somewhere else; a brief outside agents/ is not an agent. ' +
         "Writes go to the space's context, gated on your write access to that folder. A NEW note is PRIVATE by default — only " +

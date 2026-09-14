@@ -459,7 +459,7 @@ const RECIPES: Recipe[] = [
       'In ui.tsx only `react`, `react-dom` and `@visvine/tool-kit` are importable — every other import is refused at compile time.',
       'Do NOT try to write tools/**/*.md with edit_context; it is refused with "Tools are frozen for AI".',
     ],
-    blockers: (ctx) => [...scopeBlocker(ctx, 'tools:author', 'authoring a tool'), ...featureBlocker(ctx, 'tools', 'tools')],
+    blockers: (ctx) => [...scopeBlocker(ctx, 'tools:author', 'authoring a tool'), ...featureBlocker(ctx, 'directory', 'tools')],
   },
 
   {
@@ -627,7 +627,7 @@ const RECIPES: Recipe[] = [
       'The marketing copy is a sub-note of the event folder (events/<slug>/marketing.md). Writing it there is what makes it part of the space\'s context instead of a one-off answer.',
     ],
     blockers: (ctx) => [
-      ...featureBlocker(ctx, 'resources', 'reading the Drive'),
+      ...featureBlocker(ctx, 'directory', 'reading the Drive'),
       ...scopeBlocker(ctx, 'context:write', 'creating the event'),
     ],
   },
@@ -690,7 +690,7 @@ const RECIPES: Recipe[] = [
     ],
     mustKnow: () => [
       'connectors/ and models/ are admin-only to write. agents/ and tools/ are frozen against AI writes entirely.',
-      "settings/ is reserved and refused for everyone: a space's configuration is the space record, changed in the console.",
+      "subspaces/ is reserved and refused for everyone: it is a public sub-space's context, read into this one.",
     ],
     blockers: () => [],
   },
@@ -804,7 +804,7 @@ const ALL_SCOPES: readonly string[] = [
 /** Read the feature flags the recipes reason about off a space's config. */
 export function planFeatures(config: SpaceFeatureConfig | null | undefined): Record<string, boolean> {
   return Object.fromEntries(
-    ['directory', 'connectors', 'tools', 'resources', 'channels'].map((key) => [
+    ['directory', 'connectors', 'channels'].map((key) => [
       key,
       isFeatureEnabled(config, key),
     ]),

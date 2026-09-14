@@ -33,10 +33,11 @@ test('the table names each folder once, and each kind once', () => {
     assert.ok(isEntityNamespaceDir(ns.dir));
   }
 
-  // settings/ and subspaces/ are folders, not kinds: nothing is filed there by
-  // a directory node, so they are not entity namespaces.
-  assert.equal(entityKindOfDir('settings/types.md'), null);
+  // subspaces/ is a folder, not a kind: nothing is filed there by a directory
+  // node, so it is not an entity namespace. settings/ is not a namespace at
+  // all any more — a space's settings live in Settings, not in a folder.
   assert.equal(entityKindOfDir('subspaces/other/index.md'), null);
+  assert.equal(namespaceOf('settings/anything.md'), null);
 });
 
 test('namespaceOf: the folder itself and what is under it, nothing that merely starts with it', () => {
@@ -61,12 +62,36 @@ test('every folder says what it holds, and spaces/ is the directory records', ()
   assert.notEqual(descriptions.spaces, descriptions.subspaces);
 });
 
+test('a folder is there because a tool brings it, and the directory brings the defaults', () => {
+  const owner = Object.fromEntries(RESERVED_NAMESPACES.map((ns) => [ns.dir, ns.feature]));
+
+  // What a new space starts with, it starts with because the DIRECTORY is in
+  // every space. Each of these is a directory surface: people, orgs and events
+  // are its records, the Drive is one of its tabs, an agent and a connector are
+  // nodes you open in it, and a model is what an agent record runs on.
+  for (const dir of ['people', 'spaces', 'events', 'resources', 'agents', 'connectors', 'models', 'tools']) {
+    assert.equal(owner[dir], 'directory', `${dir} belongs to the directory`);
+  }
+
+  // A toggleable tool brings its own folders in and out with it. Switching
+  // Channels on is what gives a space channels/ and sections/.
+  assert.equal(owner.channels, 'channels');
+  assert.equal(owner.sections, 'channels');
+
+  // subspaces/ is the only name belonging to no tool — it is no space's own
+  // folder at all, but another space's context grafted in at read time.
+  assert.deepEqual(
+    RESERVED_NAMESPACES.filter((ns) => ns.feature === null).map((ns) => ns.dir),
+    ['subspaces'],
+  );
+});
+
 test('the tool gate answers for a switched-off tool only', () => {
   const off = { enabled: { channels: false } };
   const on = { enabled: { channels: true } };
 
-  // Channels is the only toggleable key today, so it is the only namespace a
-  // space can be without.
+  // Channels is the only toggleable key today, so channels/ and sections/ are
+  // the only namespaces a space can be without.
   assert.equal(togglableNamespaceFeature('channels/general/index.md', off), 'channels');
   assert.equal(togglableNamespaceFeature('sections/team.md', off), 'channels');
   assert.equal(togglableNamespaceFeature('channels/general/index.md', on), null);
@@ -87,10 +112,53 @@ test('the tool gate answers for a switched-off tool only', () => {
   assert.equal(togglableNamespaceFeature('channels/general/index.md', null), null);
 });
 
-test('standing is a property of the table, not of the caller', () => {
-  const standing = RESERVED_NAMESPACES.filter((ns) => ns.appearance === 'standing').map((ns) => ns.dir);
-  assert.deepEqual(standing.sort(), ['agents', 'connectors']);
-  assert.deepEqual(standingFolders(null, { isAdmin: false }), ['agents']);
+test('a new space has its folders because its tools do, not because a note made them', () => {
+  // Every namespace of a tool the space runs stands. subspaces/ is the only
+  // derived one left, and only because no write of this space's ever makes it:
+  // federation grafts it when there is a public sub-space to graft.
+  assert.deepEqual(
+    RESERVED_NAMESPACES.filter((ns) => ns.appearance === 'derived').map((ns) => ns.dir),
+    ['subspaces'],
+  );
+
+  // A fresh space, as its creator (an admin) sees it: the directory's eight,
+  // and no channels/ or sections/ because Channels is off by default.
+  const fresh = { enabled: { channels: false } };
+  assert.deepEqual(standingFolders(fresh, { isAdmin: true }), [
+    'people',
+    'spaces',
+    'events',
+    'resources',
+    'agents',
+    'connectors',
+    'models',
+    'tools',
+  ]);
+
+  // The same space to a member: the two they cannot write are not there while
+  // empty, and the moment either holds a note the tree route grafts it from
+  // contextFolder like any other folder.
+  assert.deepEqual(standingFolders(fresh, { isAdmin: false }), [
+    'people',
+    'spaces',
+    'events',
+    'resources',
+    'agents',
+    'tools',
+  ]);
+
+  // Switching Channels on is what brings its two folders, and they are
+  // admin-only while empty for the same reason connectors/ is.
+  const withChannels = { enabled: { channels: true } };
+  assert.ok(standingFolders(withChannels, { isAdmin: true }).includes('channels'));
+  assert.ok(standingFolders(withChannels, { isAdmin: true }).includes('sections'));
+  assert.ok(!standingFolders(withChannels, { isAdmin: false }).includes('channels'));
+
+  // Nothing stands that the table does not own — subspaces/ above all, which a
+  // space must never be handed a way to write into.
+  for (const admin of [true, false]) {
+    assert.ok(!standingFolders(null, { isAdmin: admin }).includes('subspaces'));
+  }
 });
 
 test('freeze, do not strand: the refusal is for a namespace holding nothing', () => {

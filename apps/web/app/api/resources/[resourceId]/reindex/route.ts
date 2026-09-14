@@ -26,7 +26,7 @@ export async function POST(_req: NextRequest, context: RouteContext) {
     select: { spaceId: true },
   });
   if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (await featureAccessForbidden(session.userId, resource.spaceId, 'resources', session.email)) {
+  if (await featureAccessForbidden(session.userId, resource.spaceId, 'directory', session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

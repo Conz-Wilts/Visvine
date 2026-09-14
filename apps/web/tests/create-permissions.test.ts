@@ -61,6 +61,9 @@ test('the note-first types stay open to everyone', () => {
     assert.equal(canCreateType(type, MEMBER), true, type)
     assert.equal(canCreateType(type, off('channels', 'notes')), true, type)
   }
+  // A resource is a row in the Directory's own Resources tab — there is no
+  // resources key any more, so a stale `resources: false` names nothing.
+  assert.equal(canCreateType('resource', off('resources')), true)
 })
 
 test('the Tool tile is open to members, and tools cannot be switched off', () => {

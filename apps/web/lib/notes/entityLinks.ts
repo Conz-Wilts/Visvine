@@ -180,14 +180,13 @@ function notePathOfNode(metadata: unknown): string | null {
 // Folders whose notes the platform reads as configuration or as another
 // space's context. A `type: Person` note under one of them is not an invitation
 // to mint a node: connectors/ and models/ are admin-gated perimeters, agents/
-// and tools/ are note-first kinds with their own sync, settings/ is the space's
-// own vocabulary, and subspaces/ is a sub-space's context grafted in read-only.
+// and tools/ are note-first kinds with their own sync, and subspaces/ is a
+// sub-space's context grafted in read-only.
 const UNADOPTABLE_ROOTS = new Set([
   'agents',
   'connectors',
   'models',
   'tools',
-  'settings',
   'subspaces',
 ])
 

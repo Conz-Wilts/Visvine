@@ -9,16 +9,30 @@
 //
 // Two rules fall out of the table, and they are the whole model:
 //
-//   • A folder appears because there is something IN it. The exception is a
-//     namespace a person writes into from the tree itself — `agents/`, and
-//     `connectors/` for the admin who may write it — which stands there empty
-//     so it can be written into. `models/` and `tools/` are NOT exceptions:
-//     they are authored from Settings → Models and the console's Build
-//     section, so an empty one in the tree is a folder nobody goes to.
-//   • A namespace whose TOOL is off is not created at all. Today that is
-//     `channels/` and `sections/`, both owned by the `channels` feature, which
-//     is off in every new space (defaultFeatureConfig). Adding a toggleable
-//     tool later is a row here, not a new special case.
+//   • A namespace stands the moment the tool that owns it does. A folder is
+//     not a consequence of its first note — it is the SHAPE of the tool, and
+//     the tool is there from the first second of the space, so the folder is
+//     too. `people/` is empty in a space with no people the same way a filing
+//     cabinet is empty before anything is filed: still the place things go.
+//     The one thing that governs an empty folder is who may write it — a
+//     member cannot write `connectors/`, `models/`, `channels/` or `sections/`,
+//     so an empty one is noise to them (`standingForAdminOnly`) and it joins
+//     their tree for everyone the moment it holds a note.
+//   • Every namespace belongs to the TOOL that brings it, and a namespace
+//     whose tool is off is not created at all. That is why a new space starts
+//     with the folders it does: `people/`, `spaces/`, `events/`, `resources/`,
+//     `agents/`, `connectors/`, `models/` and `tools/` are all the DIRECTORY's,
+//     and the directory is in every space. `channels/` and `sections/` are the
+//     Channels tool's — off in every new space (defaultFeatureConfig) — so
+//     switching Channels on is what brings those two folders with it. Adding a
+//     tool later is a row here, not a new special case: name its feature key
+//     and its folders arrive and leave with it.
+//
+// NOTHING IS WRITTEN AT CREATION. provisionSpace does not create folder rows
+// and never did — a standing folder is grafted into the tree by
+// `standingFolders()` at read time (app/api/notes/tree/route.ts). That is what
+// makes this table retroactive: every space that already exists gains the
+// folders too, with no migration and no rows to keep in step.
 //
 // This module is a LEAF on purpose: lib/notes/entities.ts imports
 // ./shared/indexNote, and indexNote imports this, so importing either from
@@ -47,11 +61,18 @@ export interface Namespace {
   dir: string
   /** The kind filed here, or null for a folder that is not a kind. */
   kind: NamespaceKind | null
-  /** The feature key that owns it; null when it is the platform's own. */
+  /**
+   * The TOOL that brings this folder — its feature key. Null only for
+   * `subspaces/`, which is no space's own folder at all: federation grafts it
+   * at read time. Everything a space actually starts with reads `directory`,
+   * because that is why it is there.
+   */
   feature: string | null
   /**
-   * `standing` = grafted into the tree while empty, because this is where a
-   * person goes to write one. `derived` = it appears with its first note.
+   * `standing` = grafted into the tree by the tool that owns it, empty or not,
+   * because the folder is the tool's shape rather than a residue of its first
+   * note. `derived` = it appears with its first note; only `subspaces/` is
+   * derived, and only because no write of this space's ever makes it.
    */
   appearance: 'standing' | 'derived'
   /** Who may write in it. `nobody` = the system or federation only. */
@@ -59,10 +80,11 @@ export interface Namespace {
   /** The one line a folder's index carries when it has none of its own. */
   description: string
   /**
-   * Stands only for an admin. A member cannot write `connectors/`, so an empty
-   * one is noise to them — but the moment a connector EXISTS the folder is in
-   * the tree for everyone, because it holds a note. This governs the empty case
-   * and nothing else.
+   * Stands only for an admin — set on every namespace a member cannot write
+   * (`connectors/`, `models/`). An empty folder they have no way to fill is
+   * noise to them, but the moment it EXISTS the folder is in the tree for
+   * everyone, because it holds a note. This governs the empty case and nothing
+   * else.
    */
   standingForAdminOnly?: boolean
 }
@@ -72,7 +94,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     dir: 'people',
     kind: 'person',
     feature: 'directory',
-    appearance: 'derived',
+    appearance: 'standing',
     writes: 'anyone',
     description: 'The people this space keeps context about.',
   },
@@ -80,7 +102,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     dir: 'spaces',
     kind: 'space',
     feature: 'directory',
-    appearance: 'derived',
+    appearance: 'standing',
     writes: 'anyone',
     // The directory's organisation records — a company or group this space
     // tracks. Not this space's sub-spaces: those are grafted into subspaces/.
@@ -90,42 +112,49 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     dir: 'events',
     kind: 'event',
     feature: 'directory',
-    appearance: 'derived',
+    appearance: 'standing',
     writes: 'anyone',
     description: "This space's events.",
   },
   {
     dir: 'resources',
     kind: 'resource',
-    feature: 'resources',
-    appearance: 'derived',
+    // The Drive is a TAB of the directory (Grid, Context, Resources), not a
+    // tool of its own — there is no `resources` key any more.
+    feature: 'directory',
+    appearance: 'standing',
     writes: 'anyone',
     description: 'The files and links this space keeps.',
   },
   {
     dir: 'channels',
     kind: 'channel',
+    // Off in a new space, so unlike the directory's folders these two arrive
+    // the moment Channels is switched on rather than at creation — the same
+    // rule, applied to a tool that is not there yet.
     feature: 'channels',
-    appearance: 'derived',
+    appearance: 'standing',
     writes: 'admin',
+    standingForAdminOnly: true,
     description: "This space's channels.",
   },
   {
     dir: 'sections',
     kind: 'section',
     feature: 'channels',
-    appearance: 'derived',
+    appearance: 'standing',
     writes: 'admin',
+    standingForAdminOnly: true,
     description: 'The sections the channels are grouped into.',
   },
   {
     dir: 'agents',
     kind: 'agent',
-    // No feature owns it: an agent IS a brief in the Context, watched on its
-    // own node page rather than on a surface of its own, and every space has
-    // context. The folder is there before the first brief, and anyone who may
-    // write context may write one.
-    feature: null,
+    // The folder is there before the first brief, and anyone who may write
+    // context may write one.
+    // An agent is a brief in the Context, watched on its node page in the
+    // directory — the same place a person, an org and a connector are opened.
+    feature: 'directory',
     appearance: 'standing',
     writes: 'anyone',
     description: 'The agents this space runs.',
@@ -133,7 +162,8 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
   {
     dir: 'connectors',
     kind: 'connector',
-    feature: 'connectors',
+    // A connector is a record in the directory whose note the console edits.
+    feature: 'directory',
     appearance: 'standing',
     writes: 'admin',
     standingForAdminOnly: true,
@@ -142,37 +172,37 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
   {
     dir: 'models',
     kind: 'model',
-    feature: 'connectors',
-    // Written from Settings → Models, never from the tree.
-    appearance: 'derived',
+    // A model note is directory furniture too — what an agent record runs on.
+    feature: 'directory',
+    // Written from Settings → Models, not from the tree — but the folder is
+    // where a member READS what the agents run on, so it stands for the admin
+    // who can fill it and joins the tree for everyone once it holds one.
+    appearance: 'standing',
     writes: 'admin',
+    standingForAdminOnly: true,
     description: "The models this space's agents run on.",
   },
   {
     dir: 'tools',
     kind: 'tool',
-    feature: 'tools',
-    // Written from the console's Build section, never from the tree.
-    appearance: 'derived',
+    // A Tool is a node you open in the directory like any other, and the
+    // marketplace has no switch — what a space runs is decided by publish +
+    // approve + install. There is no `tools` key.
+    feature: 'directory',
+    // Written from the console's Build section rather than the tree, and still
+    // standing: `writes: 'anyone'` means every member is someone who could put
+    // a Tool there.
+    appearance: 'standing',
     writes: 'anyone',
     description: 'The tools built in this space.',
-  },
-  {
-    dir: 'settings',
-    kind: null,
-    feature: null,
-    appearance: 'derived',
-    // Nothing writes here. A space's configuration is the `spaces` row and
-    // nothing else; the name is held so a note can never sit under it looking
-    // like configuration and being none.
-    writes: 'nobody',
-    description: "Reserved — a space's configuration lives on the space itself.",
   },
   {
     dir: 'subspaces',
     kind: null,
     feature: null,
-    // Never a stored folder: lib/notes/federation.ts grafts it at read time.
+    // Never a stored folder and never grafted here either: it appears only
+    // when lib/notes/federation.ts has a public sub-space to graft in, so it
+    // is the one namespace an empty tree does not show.
     appearance: 'derived',
     writes: 'nobody',
     description: "Context flowing up from this space's public sub-spaces — read-only.",
@@ -274,11 +304,10 @@ export function namespaceFeatureRefusal(
 /**
  * Why nothing of this space's may be written at this path, or null.
  *
- * Two namespaces answer: `settings/`, whose name would promise configuration a
- * note no longer holds, and `subspaces/`, where a public sub-space's context is
- * READ into this one. Both are refused for everyone, ahead of the grant check —
- * a folder grant must not be a way in. (`subspaces/` keeps its own longer
- * sentence at lib/spaces/subspaces.ts, which runs first.)
+ * One namespace answers: `subspaces/`, where a public sub-space's context is
+ * READ into this one. Refused for everyone, ahead of the grant check — a folder
+ * grant must not be a way in. (It keeps its own longer sentence at
+ * lib/spaces/subspaces.ts, which runs first.)
  */
 export function reservedWriteDenial(path: string): string | null {
   const ns = namespaceOf(path)

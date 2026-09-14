@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const spaceId = req.nextUrl.searchParams.get('space_id');
   if (!spaceId) return NextResponse.json({ error: 'space_id required' }, { status: 400 });
-  if (await featureAccessForbidden(session.userId, spaceId, 'resources', session.email)) {
+  if (await featureAccessForbidden(session.userId, spaceId, 'directory', session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   return NextResponse.json(await listFolders(spaceId));
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   const body = await parseBody(req, createSchema);
   if (body instanceof NextResponse) return body;
 
-  if (await featureAccessForbidden(session.userId, body.spaceId, 'resources', session.email)) {
+  if (await featureAccessForbidden(session.userId, body.spaceId, 'directory', session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   try {

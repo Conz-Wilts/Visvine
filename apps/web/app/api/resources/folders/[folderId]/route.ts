@@ -11,7 +11,7 @@ type Params = { params: Promise<{ folderId: string }> };
 async function gate(folderId: string, userId: string, email: string) {
   const folder = await prisma.resourceFolder.findUnique({ where: { id: folderId }, select: { spaceId: true } });
   if (!folder) return NextResponse.json({ error: 'Folder not found' }, { status: 404 });
-  if (await featureAccessForbidden(userId, folder.spaceId, 'resources', email)) {
+  if (await featureAccessForbidden(userId, folder.spaceId, 'directory', email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   return folder;

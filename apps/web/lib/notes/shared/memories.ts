@@ -18,7 +18,7 @@ const MAX_CLAIM_CHARS = 240
 /** Notes shorter than this say nothing a memory would compress. */
 const MIN_BODY_CHARS = 120
 /** Folders holding configuration, code and the platform's own manuals. */
-const CONFIG_FOLDERS = ['connectors', 'models', 'agents', 'settings', 'tools', 'actions', 'recipes']
+const CONFIG_FOLDERS = ['connectors', 'models', 'agents', 'tools', 'actions', 'recipes']
 
 /**
  * Whether a note is worth extracting from. Index notes are folder listings; the

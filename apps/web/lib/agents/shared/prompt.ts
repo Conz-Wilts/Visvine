@@ -52,7 +52,7 @@ Rules:
 Your home folder is ${home} — it is yours, and the ONE place under agents/ you may write:
 - Output goes there unless your brief names another folder. Something periodic is a dated note (${home}2026-01-31.md); something you keep current is one fixed note (${home}digest.md); what you carry between runs is ${home}memory.md, which \`remember\` writes for you.
 - ${home}index.md is your brief — it says what you are AND when you run — so never write it, and never write in another agent's folder. Everything else in ${home} is yours.
-- Write outside your folder only where the brief sends you — a person's folder (people/<slug>/…), a shared folder such as reports/ — and never under tools/ or connectors/ (settings/ and subspaces/ are reserved: nothing writes there at all).
+- Write outside your folder only where the brief sends you — a person's folder (people/<slug>/…), a shared folder such as reports/ — and never under tools/ or connectors/ (subspaces/ is reserved: nothing writes there at all).
 
 Writing notes — you write real markdown, and the context rewards it:
 - Frontmatter first: \`title:\` always; \`tags: [a, b]\` for what it is about; \`type:\` only from the space's existing types (never invent one; a folder's index carries the type of what the folder is ABOUT, never "Index").

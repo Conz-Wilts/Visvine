@@ -226,15 +226,16 @@ export async function resolveBridgeTarget(
 }
 
 /**
- * The refusal every branch shares once membership is settled: `tools` is a
- * real feature key (lib/featureAccess.ts) an admin can switch off for a
- * space, same as `agents` — see lib/tools/bridge.ts#agentsRun. Checked before
- * any perimeter/config work, so a disabled space never sees the shape of a
- * Tool it may not run, install-scoped `enabled` included.
+ * The refusal every branch shares once membership is settled. There is no
+ * `tools` key — a Tool is a node of the DIRECTORY (lib/featureAccess.ts), so
+ * that is the gate, and a space that holds its directory to admins holds its
+ * Tools to admins too. Checked before any perimeter/config work, so such a
+ * space never sees the shape of a Tool it may not run, install-scoped
+ * `enabled` included.
  */
 async function forbiddenForTools(resolved: ResolvedContext, deps: TargetDeps): Promise<BridgeError | null> {
-  if (await deps.featureAccessForbidden(resolved.actor.id, resolved.spaceId, 'tools', resolved.actor.email)) {
-    return fail('forbidden', 'The Tools feature is not available to you in this space.')
+  if (await deps.featureAccessForbidden(resolved.actor.id, resolved.spaceId, 'directory', resolved.actor.email)) {
+    return fail('forbidden', 'Tools are not available to you in this space.')
   }
   return null
 }

@@ -32,6 +32,7 @@ import { nameKey } from "../lib/identity/normalize";
 import { rebuildGlobalRecords } from "../lib/global/record";
 import { syncActionNotes } from "../lib/actions/sync";
 import { createNote, ensureRootIndex, SHARED_OWNER_KEY } from "../lib/notes/store";
+import { defaultFeatureConfig } from "../lib/featureAccess";
 import {
   ALIASES,
   ANCHORS,
@@ -284,8 +285,10 @@ async function createSubspaces() {
         description: sub.description,
         visibility: sub.visibility,
         parentId: SPACE_ID,
-        // Every optional tool off, as a fresh sub-space starts (lib/featureAccess).
-        featureConfig: { enabled: { channels: false } },
+        // Every optional tool off, as a fresh sub-space starts. Taken from the
+        // helper both space-creation paths use, so a key added or removed there
+        // (resources and tools were both dropped) cannot leave the seed behind.
+        featureConfig: defaultFeatureConfig() as object,
       },
     });
     for (const userId of sub.members) {

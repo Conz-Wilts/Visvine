@@ -6,8 +6,9 @@
  * `aliases`, `featureConfig`, `designConfig` — and for a while it was also
  * written out as `settings/types.md`, `settings/features.md` and
  * `settings/design.md`, kept in step by a hook in both directions. That mirror
- * is gone: the columns are the only copy, and `settings/` is reserved
- * (lib/notes/shared/namespaces.ts) so nothing can write there again.
+ * is gone: the columns are the only copy, and `settings/` is not a reserved
+ * name any more — it is an ordinary folder name nobody should be handed a
+ * stale config-looking version of.
  *
  * What is left behind is the reason for this script. Every shared space that
  * ever saved its config holds those three notes plus the `settings/index.md`
@@ -17,7 +18,8 @@
  *
  * Deleted properly, not hidden: the notes are trashed through `deleteFolder`
  * (so links, publications and grants are reconciled like any folder delete) and
- * then purged, because a restore would land in a path writes are refused at.
+ * then purged, because restoring one would put a stale copy of the config back
+ * in the tree looking current.
  * Re-running is a no-op.
  *
  * Usage:

@@ -120,9 +120,10 @@ async function freeSourcePath(context: Context, filename: string): Promise<strin
 /**
  * Keep the Drive's context folder as private as the Drive itself.
  *
- * The two surfaces have different gates — the Resources page is gated by the
- * `resources` feature key, the indexed contents by the context visibility lens —
- * so a space that restricted Resources to admins would otherwise have handed
+ * The two surfaces have different gates — the Resources tab is gated by the
+ * `directory` feature key that owns the page it sits on, the indexed contents
+ * by the context visibility lens —
+ * so a space that restricted its directory to admins would otherwise have handed
  * every member the contents through search. Restricting the folder cuts grant
  * inheritance at its boundary, which is the context layer's own way of saying
  * the same thing. Idempotent, and never un-restricts: widening access is always
@@ -131,7 +132,7 @@ async function freeSourcePath(context: Context, filename: string): Promise<strin
 async function alignFolderPrivacy(spaceId: string): Promise<void> {
   try {
     const config = await readSpaceConfig(spaceId)
-    if (!config || !isFeatureAdminOnly(config.featureConfig, 'resources')) return
+    if (!config || !isFeatureAdminOnly(config.featureConfig, 'directory')) return
     const existing = await prisma.contextFolder.findUnique({
       where: { folder_identity: { spaceId, ownerKey: SHARED_OWNER_KEY, path: DRIVE_FOLDER } },
       select: { restricted: true },

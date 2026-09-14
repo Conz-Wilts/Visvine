@@ -53,17 +53,21 @@ async function treeFor(context: Context, p: ContextPrincipal, gated: boolean): P
     getFeatureConfig(context.spaceId),
   ])
   const root = buildTree(metas)
-  // The namespaces a person writes into FROM here, standing empty so they can
-  // be written into: `agents/` for anyone, `connectors/` for the admin who may
-  // write it (lib/notes/shared/namespaces.ts). They aren't rows in
-  // contextFolder — nothing created them — so they're grafted here alongside
-  // the real empty folders, and the graft is what makes them un-missable:
-  // deleting one is refused (namespaceFolderDenial).
+  // The folders every tool this space runs brings with it, empty or not — the
+  // directory's `people/`, `spaces/`, `events/`, `resources/`, `agents/`,
+  // `tools/` for everyone and `connectors/`, `models/` for an admin, plus
+  // Channels' `channels/` and `sections/` where that tool is on
+  // (lib/notes/shared/namespaces.ts). THIS IS WHY A NEW SPACE HAS FOLDERS:
+  // provisionSpace writes no folder rows, so the shape of a space's context is
+  // decided here, at read time, from the table — which is also how a space
+  // created a year ago has exactly the same shape as one created just now. The
+  // graft is what makes them un-missable: deleting one is refused
+  // (namespaceFolderDenial).
   //
-  // Everything else appears with its first note. `p.spaceAdmin`, not the
-  // caller's standing in the space they asked about: this function is re-entered
-  // for each public sub-space under its own everyone-principal (federateTree
-  // below), and a parent's admin administers nothing there.
+  // `p.spaceAdmin`, not the caller's standing in the space they asked about:
+  // this function is re-entered for each public sub-space under its own
+  // everyone-principal (federateTree below), and a parent's admin administers
+  // nothing there.
   for (const dir of standingFolders(featureConfig, { isAdmin: p.spaceAdmin })) {
     ensureFolderPath(root, dir)
   }

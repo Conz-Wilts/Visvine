@@ -20,33 +20,31 @@ import {
   sortFeatureKeys,
 } from '../lib/featureAccess';
 
-// The `tools` key is the tool vocabulary (the /tools marketplace + the Tool node
-// type); each INSTALLED Tool is a separate, dynamic rail key `tool:<slug>`.
-// Everything that persists or orders feature keys has to carry both.
+// There is no `tools` key: a Tool is a node of the always-on Directory, and the
+// marketplace is gated on `directory` like the rest of it. What a space runs is
+// decided by publish + approve + install. Each INSTALLED Tool is a separate,
+// dynamic rail key `tool:<slug>` — the one that can actually be switched — and
+// everything that persists or orders feature keys has to carry those.
 
-describe('the tools feature key', () => {
-  it('is in the registry, nav-hidden, and not admins-only', () => {
-    assert.ok(ALL_FEATURE_KEYS.includes('tools'));
-    // Reached from the navbar marketplace icon and per-install rail rows — there
-    // is never a "Tools" rail row of its own.
-    assert.ok(NAV_HIDDEN_FEATURE_KEYS.includes('tools'));
-    // Members author tools and browse the marketplace; only installing and
-    // publishing are admin acts (a member's Install becomes a request).
+describe('the tool vocabulary has no feature key of its own', () => {
+  it('is not in the registry, and is not core', () => {
+    assert.equal(ALL_FEATURE_KEYS.includes('tools'), false);
+    assert.equal(CORE_FEATURE_KEYS.includes('tools'), false);
+    assert.equal(NAV_HIDDEN_FEATURE_KEYS.includes('tools'), false);
     assert.equal(ADMIN_ONLY_FEATURE_KEYS.includes('tools'), false);
-    assert.equal(canAccessFeature(null, 'tools', false), true);
   });
 
-  it('is core — always on; the gate is review + install, not a switch', () => {
-    assert.ok(CORE_FEATURE_KEYS.includes('tools'));
-    assert.equal(isFeatureEnabled(null, 'tools'), true);
-    // A stored `tools: false` (written before the key became core) is ignored,
-    // and a fresh sanitize never persists the key again.
-    assert.equal(isFeatureEnabled({ enabled: { tools: false } }, 'tools'), true);
-    assert.equal(canAccessFeature({ enabled: { tools: false } }, 'tools', false), true);
+  it('rides the directory, which is core and open to members', () => {
+    // Members author tools and browse the marketplace; only installing and
+    // publishing are admin acts (a member's Install becomes a request).
+    assert.equal(canAccessFeature(null, 'directory', false), true);
+    assert.equal(isFeatureEnabled({ enabled: { directory: false } }, 'directory'), true);
+    // A stale `tools: false` from before the key was removed names nothing —
+    // and a fresh sanitize never persists it.
     assert.equal('tools' in (sanitizeFeatureConfig({ enabled: { tools: false } }).enabled ?? {}), false);
   });
 
-  it('never gates the Tool node type — core features have no hidden types', () => {
+  it('never gates the Tool node type — nothing can hide it', () => {
     assert.equal(nodeTypeFeatureKey('Tool'), null);
     assert.equal(nodeTypeFeatureKey('tool'), null);
     assert.deepEqual(featureNodeTypeNames('tools'), []);
@@ -71,7 +69,7 @@ describe('toolRailKey / isToolRailKey', () => {
   });
 
   it('rejects anything that is not one', () => {
-    // The registry key is the vocabulary switch, not a rail key.
+    // `tools` is the note folder, never a rail key.
     assert.equal(isToolRailKey('tools'), false);
     assert.equal(isToolRailKey('tool'), false);
     assert.equal(isToolRailKey('tool:'), false);

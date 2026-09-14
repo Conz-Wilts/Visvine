@@ -91,7 +91,7 @@ export async function PATCH(
   const { resourceId } = await params;
   const resource = await prisma.resource.findUnique({ where: { id: resourceId }, select: { spaceId: true } });
   if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (await featureAccessForbidden(session.userId, resource.spaceId, 'resources', session.email)) {
+  if (await featureAccessForbidden(session.userId, resource.spaceId, 'directory', session.email)) {
     return forbiddenResponse();
   }
   const body = await parseBody(req, patchSchema);

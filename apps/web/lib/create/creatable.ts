@@ -48,16 +48,17 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'agent':
       return true
 
-    // A resource node only exists because the Resources tool does — same rule
-    // the console's Types tab and the directory filters follow.
+    // A resource is a row in the Directory's own Resources tab — there is no
+    // Resources tool to gate on, and the directory is in every space.
     case 'resource':
-      return isFeatureEnabled(featureConfig, 'resources')
+      return true
 
     // A Tool's working copy is member-writable (lib/tools/service.ts — no admin
     // clause on tools/); only publishing it is admin-gated, on a different
-    // path. The feature key is re-checked server-side at every Tools door.
+    // path. There is no tools key — a Tool is a directory node, and the
+    // directory is in every space.
     case 'tool':
-      return isFeatureEnabled(featureConfig, 'tools')
+      return true
 
     // The remaining note-first types: person, space, context, index. An
     // index is a folder written as a note, so it follows the note rule. A space

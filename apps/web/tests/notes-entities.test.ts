@@ -515,31 +515,34 @@ test('namespaceFolderDenial pins the built-in folders, not what is inside them',
   assert.equal(namespaceFolderDenial(''), null);
 });
 
-test('standingFolders: only the namespaces a person writes into from the tree', () => {
-  // A folder appears because there is something in it. `agents/` is the
-  // exception for everyone — an agent IS a brief in the Context, so this is
-  // where you go to write one.
-  assert.deepEqual(standingFolders(null, { isAdmin: false }), ['agents']);
-
-  // `connectors/` only for the admin who may write it: a member cannot, so an
-  // empty one is noise to them. Once a connector EXISTS the folder is in the
-  // tree for everyone, because it holds a note — this governs the empty case.
-  assert.deepEqual(standingFolders(null, { isAdmin: true }).sort(), ['agents', 'connectors']);
-
-  // `models/` and `tools/` stand for nobody: they are written from
-  // Settings → Models and the console's Build section, never from the tree.
-  for (const isAdmin of [true, false]) {
-    const dirs = standingFolders(null, { isAdmin });
-    assert.ok(!dirs.includes('models'));
-    assert.ok(!dirs.includes('tools'));
-  }
-
-  // Both are keyed to core features (`notes`, `connectors`), so a stale explicit
-  // false means nothing — the same reading isFeatureEnabled gives everywhere.
+test('standingFolders: the folders a tool brings, whether or not anything is in them', () => {
+  // The table is the authority (tests/notes-namespaces.test.ts checks the full
+  // lists); this is the re-export, and the two rules that bite here.
+  //
+  // A member sees every directory folder they could write into. The directory
+  // is core, so a stale explicit false on it — or on a key that is not a
+  // feature at all — changes nothing, the same reading isFeatureEnabled gives
+  // everywhere.
   assert.deepEqual(
-    standingFolders({ enabled: { notes: false, connectors: false } }, { isAdmin: true }).sort(),
-    ['agents', 'connectors'],
+    standingFolders({ enabled: { directory: false, connectors: false, channels: false } }, { isAdmin: false }),
+    ['people', 'spaces', 'events', 'resources', 'agents', 'tools'],
   );
+
+  // An admin also sees the two only they can fill. A member gets them the
+  // moment one holds a note, because then it is a folder like any other.
+  const adminDirs = standingFolders({ enabled: { channels: false } }, { isAdmin: true });
+  assert.ok(adminDirs.includes('connectors'));
+  assert.ok(adminDirs.includes('models'));
+
+  // A namespace whose tool is off is not there at all, for anybody.
+  for (const isAdmin of [true, false]) {
+    const dirs = standingFolders({ enabled: { channels: false } }, { isAdmin });
+    assert.ok(!dirs.includes('channels'));
+    assert.ok(!dirs.includes('sections'));
+    // subspaces/ is federation's, grafted only when there is a sub-space to
+    // graft — never stood up here.
+    assert.ok(!dirs.includes('subspaces'));
+  }
 });
 
 

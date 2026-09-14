@@ -785,7 +785,7 @@ function targetErrorOf(response: ResolvedTarget | BridgeError): BridgeError {
   return response as BridgeError
 }
 
-test('an install is refused when the tools feature is off for the space', async () => {
+test('an install is refused when the directory is not available to the caller', async () => {
   const error = targetErrorOf(
     await resolveBridgeTarget(
       SESSION,
@@ -798,10 +798,11 @@ test('an install is refused when the tools feature is off for the space', async 
     ),
   )
   assert.equal(error.code, 'forbidden')
-  assert.match(error.message, /Tools feature is not available/)
+  // A Tool is a node of the directory, so that is the gate — there is no tools key.
+  assert.match(error.message, /Tools are not available to you in this space/)
 })
 
-test('a preview is refused when the tools feature is off for the space, before the note is even read', async () => {
+test('a preview is refused when the directory is not available, before the note is even read', async () => {
   const error = targetErrorOf(
     await resolveBridgeTarget(
       SESSION,
@@ -815,7 +816,7 @@ test('a preview is refused when the tools feature is off for the space, before t
   assert.equal(error.code, 'forbidden')
 })
 
-test('an admin of a tools-disabled space is still allowed (featureAccessForbidden exempts admins)', async () => {
+test('an admin of a directory-private space is still allowed (featureAccessForbidden exempts admins)', async () => {
   const resolved = resolvedContext({ isAdmin: true })
   const response = await resolveBridgeTarget(
     SESSION,

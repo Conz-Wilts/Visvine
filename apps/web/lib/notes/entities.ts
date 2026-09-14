@@ -545,12 +545,14 @@ export function namespaceFolderDenial(path: string): string | null {
  * in lib/notes/shared/namespaces.ts decides, and this is the re-export the
  * rest of the app imports.
  *
- * The rule there, in one line: a folder appears because there is something in
- * it, and the only exceptions are the namespaces a person writes into FROM the
- * tree — `agents/` for anyone, `connectors/` for the admin who may write it.
- * `models/` and `tools/` are authored from Settings and the console, so an
- * empty one here is a folder nobody goes to; `people/`, `events/` and the rest
- * are derived from the directory, so an empty one is noise.
+ * The rule there, in one line: a namespace stands as soon as the TOOL that
+ * owns it does, because the folder is that tool's shape and not a residue of
+ * its first note — which is why a space has `people/`, `spaces/`, `events/`,
+ * `resources/`, `agents/` and `tools/` from the second it is created, and gains
+ * `channels/` and `sections/` when Channels is switched on. The only thing an
+ * empty one turns on is who may write it: a member cannot fill `connectors/`,
+ * `models/`, `channels/` or `sections/`, so those stand for an admin and reach
+ * everyone the moment they hold a note.
  */
 export { standingFolders }
 

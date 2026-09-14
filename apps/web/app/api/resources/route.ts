@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   if (!space_id) return NextResponse.json({ error: 'space_id required' }, { status: 400 });
   // A space that has removed Resources, or restricted it to admins, refuses here
   // too — not only in the sidebar that stopped showing the link.
-  if (await featureAccessForbidden(session.userId, space_id, 'resources', session.email)) {
+  if (await featureAccessForbidden(session.userId, space_id, 'directory', session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   return NextResponse.json(await listResources(space_id));
@@ -44,7 +44,7 @@ export async function DELETE(req: NextRequest) {
     select: { spaceId: true },
   });
   if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (await featureAccessForbidden(session.userId, resource.spaceId, 'resources', session.email)) {
+  if (await featureAccessForbidden(session.userId, resource.spaceId, 'directory', session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   // Drops the file's chunks from retrieval, the record, and the object it owns.

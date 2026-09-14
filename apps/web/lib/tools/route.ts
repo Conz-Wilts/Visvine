@@ -24,7 +24,7 @@ export async function requireToolsAccess(spaceId: string): Promise<ToolsRouteCon
   if (session instanceof Response) return session
   const resolved = await resolveContext(session, spaceId)
   if (resolved instanceof Response) return resolved
-  if (await featureAccessForbidden(session.userId, spaceId, 'tools', session.email)) {
+  if (await featureAccessForbidden(session.userId, spaceId, 'directory', session.email)) {
     return NextResponse.json({ error: 'Tools are not available to you in this space.' }, { status: 403 })
   }
   const principal = await principalOf(resolved)

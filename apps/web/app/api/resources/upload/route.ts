@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   }
   // The same gate the listing uses: a space that removed Resources, or restricted
   // it to admins, does not accept uploads into it either.
-  if (await featureAccessForbidden(session.userId, spaceId, 'resources', session.email)) {
+  if (await featureAccessForbidden(session.userId, spaceId, 'directory', session.email)) {
     return forbiddenResponse();
   }
 

@@ -29,9 +29,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ev
     const auth = await requireEventManager(spaceId, event);
     if (auth instanceof Response) return auth;
 
-    // Reading the Drive is the Resources feature's own gate — a space that has
-    // turned it off, or restricted it to admins, refuses here too.
-    if (await featureAccessForbidden(auth.userId, spaceId, 'resources', auth.email)) {
+    // Reading the Drive follows the Directory's gate — the Drive is one of its
+    // tabs — so a space that holds its directory to admins refuses here too.
+    if (await featureAccessForbidden(auth.userId, spaceId, 'directory', auth.email)) {
       return forbiddenResponse();
     }
 

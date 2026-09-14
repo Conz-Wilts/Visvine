@@ -15,21 +15,23 @@ import type { SpaceFeatureConfig } from '@/lib/types';
  * ADMIN_ONLY_FEATURE_KEYS), and a space that never connects anything simply
  * has an empty list.
  *
- * `resources` is core because it is a tab of the Directory — Grid, Context,
- * Resources — not a tool of its own: the directory is always on, so its tabs
- * are, and a space that never uploads anything simply has an empty Drive.
+ * There is no `resources` key. The Drive is a TAB of the Directory — Grid,
+ * Context, Resources — not a tool of its own, so it is gated on `directory`
+ * like the rest of that page, and the folder it fills (`resources/`) is one of
+ * the directory's namespaces (lib/notes/shared/namespaces.ts).
  *
- * `tools` is core because the marketplace needs no switch: what a space runs
- * is already decided by two explicit human acts — a Visvine reviewer approving
- * a version, and a space admin installing it. A third toggle on top of that
- * pipeline gated nothing anyone needed gated.
+ * There is no `tools` key either. A Tool is a node you open in the Directory,
+ * and what a space runs is already decided by two explicit human acts — a
+ * Visvine reviewer approving a version, and a space admin installing it — so
+ * the vocabulary is gated on `directory` and each INSTALLED Tool keeps its own
+ * `tool:<slug>` rail key, which is the one that can actually be switched.
  *
  * There is no `notes` key. Context is not a feature of a space — it is what a
  * space IS, the thing every other surface reads and writes, so a key for it
  * could only ever be on. It had one while it was a rail row; a key that can
  * only answer `true` is a question nobody is asking.
  */
-export const CORE_FEATURE_KEYS: string[] = ['directory', 'resources', 'connectors', 'tools'];
+export const CORE_FEATURE_KEYS: string[] = ['directory', 'connectors'];
 
 /**
  * Every key in the registry, in its default (registry) order. Must stay in sync
@@ -37,11 +39,11 @@ export const CORE_FEATURE_KEYS: string[] = ['directory', 'resources', 'connector
  * reject unknown keys from a client-submitted `order`, alongside the dynamic
  * `tool:<slug>` rail keys below (see isPersistableFeatureKey).
  */
-export const ALL_FEATURE_KEYS: string[] = ['directory', 'channels', 'resources', 'connectors', 'tools'];
+export const ALL_FEATURE_KEYS: string[] = ['directory', 'channels', 'connectors'];
 
 /**
- * The `featureConfig` a freshly created space is stored with: core keys
- * (tools included) are never persisted, every other toggleable feature starts
+ * The `featureConfig` a freshly created space is stored with: core keys are
+ * never persisted, every other toggleable feature starts
  * `false` and is opted in from the console. Both space-creation routes write
  * this, so the two can't drift.
  */
@@ -110,16 +112,15 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
 
 /**
  * Feature keys that carry NO sidebar nav item (and no console toggle):
- * - `resources` is always on (core) and is the Resources tab of the Directory
- *   page (`/directory?view=resources`), beside Grid and Context.
  * - `connectors` is a section of the Space Console (`/admin?section=connectors`),
  *   admins only by nature, so it has neither a rail row nor a toggle.
- * - `tools` is reached from the marketplace icon in the top navbar, and each
- *   INSTALLED Tool gets its own rail row keyed `tool:<slug>` — so the tool
- *   vocabulary itself never wants a "Tools" row. Those per-install keys are not
- *   nav-hidden: they are the rail rows.
+ *
+ * The marketplace is not here because it is not a key at all: it is reached
+ * from the navbar icon, and each INSTALLED Tool gets its own rail row keyed
+ * `tool:<slug>`. Those per-install keys are not nav-hidden — they ARE the rail
+ * rows.
  */
-export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['resources', 'connectors', 'tools'];
+export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['connectors'];
 
 /**
  * Is `key` enabled for a space? Core features are always enabled; any other
@@ -318,21 +319,21 @@ export function moreFeatureKeys(config: SpaceFeatureConfig | null | undefined): 
  * members see installed Tools, but a row an admin locked on Console → Tools is
  * locked whether a Tool or a built-in is behind it.
  *
- * `toolKeys` are dropped wholesale when `tools` itself is off — switched off or
- * locked to admins for a non-admin viewer — the same rule the bridge enforces
- * for a running Tool (lib/tools/target.ts#forbiddenForTools): a disabled space
- * never sees the shape of a Tool it may not run, install-scoped `enabled`
- * included. Without this, an installed Tool's row (and its per-install
- * `adminOnly`/`enabled` state) would keep it visible after the vocabulary was
- * switched off, and clicking through would land on a page whose frame refuses
- * to run.
+ * `toolKeys` are dropped wholesale when the DIRECTORY is off for this viewer —
+ * a Tool is one of its nodes, and the marketplace has no key of its own — the
+ * same rule the bridge enforces for a running Tool
+ * (lib/tools/target.ts#forbiddenForTools): a space never shows the shape of a
+ * Tool it may not run, install-scoped `enabled` included. Without this, an
+ * installed Tool's row (and its per-install `adminOnly`/`enabled` state) would
+ * keep it visible to a member of a directory-private space, and clicking
+ * through would land on a page whose frame refuses to run.
  */
 export function navFeatureKeys(
   config: SpaceFeatureConfig | null | undefined,
   isAdmin: boolean,
   toolKeys: readonly string[] = [],
 ): { rail: string[]; more: string[] } {
-  const toolsOn = canAccessFeature(config, 'tools', isAdmin);
+  const toolsOn = canAccessFeature(config, 'directory', isAdmin);
   const ordered = sortFeatureKeys(
     config,
     [...ALL_FEATURE_KEYS.filter((key) => !NAV_HIDDEN_FEATURE_KEYS.includes(key)), ...(toolsOn ? toolKeys : [])].filter(

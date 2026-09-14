@@ -308,10 +308,9 @@ export function writeDenial(p: ContextPrincipal, context: Context, path: string)
   if ((path === 'models' || path.startsWith('models/')) && !p.system && !principalIsSuperAdmin(p)) {
     return 'Only space admins can create or edit models.'
   }
-  // A namespace nothing may write: `settings/` is the name a space's
-  // configuration used to be mirrored under, and the configuration is the
-  // `spaces` row alone now — so a note there would look like config and be
-  // none. Refused for everyone, ahead of the grant check, the way subspaces/ is.
+  // A namespace nothing may write: `subspaces/` is another space's context,
+  // read into this one. Refused for everyone, ahead of the grant check — a
+  // folder grant must not be a way in.
   const reserved = reservedWriteDenial(path)
   if (reserved) return reserved
   if (principalCanWrite(p, path)) return null

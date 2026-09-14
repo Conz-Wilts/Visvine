@@ -7,9 +7,7 @@ import ToolIcon from '@/features/tools/components/toolIcons';
 import {
   NavDirectoryIcon,
   NavChannelsIcon,
-  NavResourcesIcon,
   NavConnectorsIcon,
-  NavToolsIcon,
 } from '@/features/shared/icons';
 
 // Pure access logic lives in lib/featureAccess.ts (no JSX) so server routes and
@@ -30,9 +28,12 @@ export {
 
 /**
  * Space feature registry — the single source of truth for the optional
- * surfaces a space builder can switch on or off (directory, context,
- * channels, resources). The Sidebar renders its nav items from this list, so
- * the nav and the per-space feature toggles never drift.
+ * surfaces a space builder can switch on or off (directory, channels). The
+ * Sidebar renders its nav items from this list, so the nav and the per-space
+ * feature toggles never drift. Resources and Tools are NOT here: the Drive is
+ * a tab of the Directory and a Tool is one of its nodes — neither is a tool
+ * with a switch. Each INSTALLED Tool contributes its own `tool:<slug>` row
+ * through toolFeatures() below.
  */
 export interface FeatureDef {
   key: string;        // stable id stored in Space.featureConfig.enabled
@@ -62,16 +63,6 @@ export const FEATURES: FeatureDef[] = [
     icon: <NavChannelsIcon className={iconClass} />,
   },
   {
-    key: 'resources',
-    label: 'Resources',
-    href: '/directory?view=resources',
-    description: 'A library of shared documents, links and materials.',
-    // Always on and nav-less: Resources is a tab of the Directory beside Grid
-    // and Context, not a tool with a rail row. See NAV_HIDDEN_FEATURE_KEYS.
-    core: true,
-    icon: <NavResourcesIcon className={iconClass} />,
-  },
-  {
     key: 'connectors',
     label: 'Connectors',
     href: '/admin?section=connectors',
@@ -81,18 +72,6 @@ export const FEATURES: FeatureDef[] = [
     // reorder per space. See NAV_HIDDEN_FEATURE_KEYS.
     core: true,
     icon: <NavConnectorsIcon className={iconClass} />,
-  },
-  {
-    key: 'tools',
-    label: 'Tools',
-    href: '/admin?section=tools',
-    description: 'Tools built in this space and the versions it runs.',
-    // Nav-less AND core: tools are managed in the Space Console, each INSTALLED
-    // Tool gets its own rail row keyed `tool:<slug>`, and there is no on/off
-    // switch — what a space runs is decided by publish + approve + install.
-    // See CORE_FEATURE_KEYS in lib/featureAccess.ts.
-    core: true,
-    icon: <NavToolsIcon className={iconClass} />,
   },
 ];
 

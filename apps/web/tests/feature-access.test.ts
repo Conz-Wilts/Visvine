@@ -43,26 +43,30 @@ describe('isFeatureEnabled', () => {
     assert.equal(isFeatureEnabled({ enabled: { directory: false } }, 'directory'), true);
   });
 
-  it('lists directory, resources, connectors and tools as the core features', () => {
-    // tools is core: the marketplace has no switch — what a space runs is
-    // decided by review + install. See tools-feature-keys.test.ts. connectors is
-    // core for the same reason: its surface is a console section, admins only.
-    // resources is core too: it is a tab of the Directory, not a tool.
-    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'resources', 'connectors', 'tools']);
+  it('lists directory and connectors as the core features', () => {
+    // connectors is core: its surface is a console section, admins only, so
+    // there is no rail row to switch off.
+    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'connectors']);
+    // Neither the Drive nor the marketplace is a key: the Drive is a tab of the
+    // Directory, a Tool is one of its nodes, and `resources/` and `tools/` are
+    // both the directory's namespaces. Each INSTALLED Tool keeps its own
+    // `tool:<slug>` key, which is the one that can actually be switched.
+    for (const gone of ['resources', 'tools']) {
+      assert.equal(ALL_FEATURE_KEYS.includes(gone), false, gone);
+      assert.equal(CORE_FEATURE_KEYS.includes(gone), false, gone);
+    }
   });
 
-  it('hides resources, connectors and tools from the nav rail and console toggles', () => {
-    // All three are core and nav-hidden: connectors is a Space Console section,
-    // resources a Directory tab, tools behind the marketplace icon and
-    // per-install `tool:<slug>` rows.
-    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['resources', 'connectors', 'tools']);
+  it('hides connectors from the nav rail and console toggles', () => {
+    // Core and nav-hidden: connectors is a Space Console section.
+    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['connectors']);
     // Agents is not a feature key at all: an agent is a note under `agents/`,
     // watched on its own node page's Agent tab — there is no agents surface to
     // switch on, off or hide.
     assert.equal(ALL_FEATURE_KEYS.includes('agents'), false);
-    // resources is core: a space that switched the old Resources tool off keeps
-    // its Drive — it is a Directory tab now.
-    assert.equal(isFeatureEnabled({ enabled: { resources: false } }, 'resources'), true);
+    // A stale `enabled.resources: false` / `tools: false` from before those
+    // keys were removed names nothing, so it can switch nothing off.
+    assert.equal(isFeatureEnabled({ enabled: { resources: false, tools: false } }, 'directory'), true);
     // connectors is core: a stale `enabled.connectors: false` from before the
     // move must not switch it off — but it stays admins only.
     assert.equal(isFeatureEnabled({ enabled: { connectors: false } }, 'connectors'), true);

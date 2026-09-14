@@ -145,9 +145,9 @@ and no move, so it cannot free the path either. See
 
 An authoring agent (Claude Code, Cursor, …) works entirely through Visvine's
 **MCP server** — there is no in-app AI Tool builder. The one in-app
-door is the **Create panel's Tool tile** (`features/create`, gated on the
-`tools` feature key through `canCreateType` like every other tile, member-open
-because `tools/` is member-writable): a name, title, description and optional
+door is the **Create panel's Tool tile** (`features/create`, offered through
+`canCreateType` like every other tile — ungated and member-open, because there
+is no `tools` feature key and `tools/` is member-writable): a name, title, description and optional
 sidebar label go to `POST /api/spaces/[spaceId]/tools/authoring`, which
 calls the same `createTool` scaffold `create_tool` uses (a `railLabel` becomes
 `surfaces.rail` with the default icon), and the success screen shows the
@@ -813,7 +813,7 @@ frameDocument,vendorBundle,sdkDocs,screenshot,changes}.ts`, the change bus
 routes under `app/api/tools/{registry,review}/*` and
 `app/api/spaces/[spaceId]/tools/*`, actions in `lib/actions/defs/apps.ts`
 (their scopes declared there and read through `scopeForAction`), entity sync (`lib/notes/entities.ts`,
-`context/entityNodes.ts`), feature key `tools` + rail keys
+`context/entityNodes.ts`), the `directory` gate + per-install rail keys
 (`lib/featureAccess.ts`), UI in `features/tools/*` (host `ToolFrame`, the
 in-frame kit and SDK, marketplace and review surfaces). Tests:
 `tests/tools-*.test.ts`.

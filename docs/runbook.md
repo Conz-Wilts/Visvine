@@ -104,6 +104,31 @@ or changed action into `actions/<name>.md` in the Visvine space. The surface
 answers from the shipped catalogue either way, so this is never a prerequisite —
 it is what makes the manual editable in the app.
 
+The release that dropped the `resources` and `tools` feature keys carries its
+own migration (`20260914120000_drop_resources_and_tools_feature_keys`), so the
+stored `featureConfig` is cleaned on deploy with everything else — nothing to
+run by hand. What that release does NOT clean is `settings/`. That name stopped
+being reserved with it (a space's configuration is the space row, and Settings
+is a page, not a folder), so any legacy config notes a space collected while the
+config was mirrored into context are now ordinary, editable notes that look
+current and are not. Drop them once, after traffic is routed:
+
+```
+pnpm db:proxy:cloud                                             # 127.0.0.1:5433
+CLOUD_SQL_CONNECTION_NAME= DATABASE_URL="postgresql://…@127.0.0.1:5433/visvine" \
+  pnpm --filter @visvine/web db:settings:drop
+```
+
+Clearing `CLOUD_SQL_CONNECTION_NAME` for the command is the guard's override:
+through the proxy the host really is `127.0.0.1`, and that variable is the one
+thing telling `guard-local-db.mjs` the local-looking address is production. Only
+ever unset it for a command you mean to point at prod.
+
+The script takes the folder through `deleteFolder` and then purges, so links,
+grants and publications are reconciled like any folder delete, and it is a no-op
+on a database that has none. Run it on every database that predates the mirror's
+removal, local ones included.
+
 ### Requiring an approval
 
 `deploy.yml` names the `Production` GitHub environment, which gives the deploy a
