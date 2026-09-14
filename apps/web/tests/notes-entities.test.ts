@@ -20,7 +20,7 @@ import {
   entityOwnerPathOf,
   isEntityFolderIndex,
   namespaceFolderDenial,
-  structuralFolders,
+  standingFolders,
   entityKindOfDir,
   entityContextHref,
   hrefForNotePath,
@@ -515,17 +515,30 @@ test('namespaceFolderDenial pins the built-in folders, not what is inside them',
   assert.equal(namespaceFolderDenial(''), null);
 });
 
-test('structuralFolders: the four built-in folders are always there', () => {
-  // Nothing configured: all four are there.
-  assert.deepEqual(structuralFolders(null).sort(), ['agents', 'connectors', 'models', 'tools']);
+test('standingFolders: only the namespaces a person writes into from the tree', () => {
+  // A folder appears because there is something in it. `agents/` is the
+  // exception for everyone — an agent IS a brief in the Context, so this is
+  // where you go to write one.
+  assert.deepEqual(standingFolders(null, { isAdmin: false }), ['agents']);
 
-  // Each folder is keyed to a core feature — agents/ to `notes`, since an agent
-  // is a brief in the Context — so they survive even an explicit false, and a
-  // stale `agents: false` from before the agents surface was removed means
-  // nothing: "they are always there" needs no special case.
+  // `connectors/` only for the admin who may write it: a member cannot, so an
+  // empty one is noise to them. Once a connector EXISTS the folder is in the
+  // tree for everyone, because it holds a note — this governs the empty case.
+  assert.deepEqual(standingFolders(null, { isAdmin: true }).sort(), ['agents', 'connectors']);
+
+  // `models/` and `tools/` stand for nobody: they are written from
+  // Settings → Models and the console's Build section, never from the tree.
+  for (const isAdmin of [true, false]) {
+    const dirs = standingFolders(null, { isAdmin });
+    assert.ok(!dirs.includes('models'));
+    assert.ok(!dirs.includes('tools'));
+  }
+
+  // Both are keyed to core features (`notes`, `connectors`), so a stale explicit
+  // false means nothing — the same reading isFeatureEnabled gives everywhere.
   assert.deepEqual(
-    structuralFolders({ enabled: { agents: false, notes: false, connectors: false, tools: false } }).sort(),
-    ['agents', 'connectors', 'models', 'tools'],
+    standingFolders({ enabled: { notes: false, connectors: false } }, { isAdmin: true }).sort(),
+    ['agents', 'connectors'],
   );
 });
 

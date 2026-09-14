@@ -41,6 +41,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // The tool before the permission: a space with Channels off has no sections
+    // to group, and a section writes sections/<slug>/index.md — a namespace for
+    // a tool the space does not run (lib/notes/shared/namespaces.ts).
+    if (await featureAccessForbidden(user.id, parsed.data.spaceId, 'channels', user.email)) {
+      return forbiddenResponse('Channels is switched off in this space');
+    }
+
     const allowed = await isAdmin(user.id, parsed.data.spaceId, user.email);
     if (!allowed) {
       return forbiddenResponse('Only space admins can create sections');

@@ -15,6 +15,7 @@ import { principalOf, type ResolvedContext } from '@/lib/notes/resolve'
 import { createFolder, createIndexFolder, renameFolder, deleteFolder } from '@/lib/notes/store'
 import { indexPathOf } from '@/lib/notes/shared/indexNote'
 import { principalCanWrite } from '@/lib/notes/shared/permissions'
+import { namespaceFeatureDenial } from '@/lib/notes/contextService'
 import { subspaceWriteDenial } from '@/lib/spaces/subspaces'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 
@@ -48,6 +49,11 @@ export async function POST(req: NextRequest) {
   if (gated(context) && !principalCanWrite(p, path)) {
     return fail(`You need edit access at "${path}" to create a folder there`, 403)
   }
+  // A namespace belongs to a tool, and a tool that is off does not get one —
+  // this is the one path that could conjure the bare folder with no note in it
+  // (lib/notes/shared/namespaces.ts).
+  const namespace = await namespaceFeatureDenial(context, path)
+  if (namespace) return fail(namespace, 403)
   try {
     // A folder IS its index note. With `content` the caller wrote that note (the
     // "Index" create tile) and it becomes the folder's home page; without it the

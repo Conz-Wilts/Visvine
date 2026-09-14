@@ -38,6 +38,8 @@ import { agentOfRevisionStamp, isAgentActivationPath, isAgentBriefPath, isAgentO
 import { isRestrictedPath, isLockedPath } from './shared/authz'
 import { replicaDenial } from './publications'
 import { isGlobalSpace } from '@/lib/spaces/globalSpace'
+import { namespaceFeatureRefusal, togglableNamespaceFeature } from './shared/namespaces'
+import { getFeatureConfig } from '@/lib/auth'
 import { subspaceWriteDenial } from '@/lib/spaces/subspaces'
 import { globalSelfRecordDenial } from '@/lib/global/gate'
 import { appendNoteLogEntry, toDateString } from './shared/noteLog'
@@ -396,9 +398,39 @@ export function lockedDenial(
 }
 
 /**
- * The full async write check: the folder gate plus the replica block — an
- * ACTIVE publication target is read-only in its destination (the next source
- * save would clobber any local edit). Every content write goes through this.
+ * A namespace belongs to a tool, and a tool that is off does not get one.
+ *
+ * `channels/` and `sections/` are the case today — both owned by `channels`,
+ * which is off in every new space — and the table in ./shared/namespaces.ts is
+ * what adds the next one. Without this a member could hand-write the note and
+ * conjure the namespace for a surface the space does not run, which is the same
+ * hole the Channels routes close on their own side.
+ *
+ * FREEZE, DON'T STRAND: the refusal is for a namespace holding NOTHING. Once a
+ * space has channels, switching the tool off leaves every note openable,
+ * editable and renamable — it just gains no new ones. That predicate is also
+ * the only one that survives the three ways "is this path new" is wrong here:
+ * canonicalEntityWritePath rewrites `channels/foo.md` to `channels/foo/index.md`,
+ * a sub-note under an existing channel is a new path, and a rename produces a
+ * new `to` path with nothing at it. Read off the vault index, so no query.
+ */
+export async function namespaceFeatureDenial(
+  context: Context,
+  path: string,
+): Promise<string | null> {
+  if (!isShared(context)) return null
+  const config = await getFeatureConfig(context.spaceId)
+  if (!togglableNamespaceFeature(path, config)) return null
+  const dir = path.split('/')[0]
+  const { metas } = await getVault(context)
+  return namespaceFeatureRefusal(path, config, metas.some((m) => m.path.startsWith(`${dir}/`)))
+}
+
+/**
+ * The full async write check: the folder gate, the switched-off tool, and the
+ * replica block — an ACTIVE publication target is read-only in its destination
+ * (the next source save would clobber any local edit). Every content write goes
+ * through this.
  */
 export async function writeDenialFull(
   p: ContextPrincipal,
@@ -410,6 +442,10 @@ export async function writeDenialFull(
   }
   const denial = writeDenial(p, context, path)
   if (denial) return denial
+  // After writeDenial so the admin-only and subspaces/ sentences keep priority:
+  // they say who you are, this says what the space runs.
+  const namespace = await namespaceFeatureDenial(context, path)
+  if (namespace) return namespace
   if (isShared(context)) return replicaDenial(context.spaceId, path)
   return null
 }
@@ -536,6 +572,10 @@ export async function moveGated(
     const denial = writeDenial(p, context, end) ?? lockedDenial(p, context, end, origin)
     if (denial) return { status: 'denied', reason: denial }
   }
+  // The destination only: a note may always be moved OUT of a namespace whose
+  // tool was switched off, and gating `from` would trap it there.
+  const namespace = await namespaceFeatureDenial(context, to)
+  if (namespace) return { status: 'denied', reason: namespace }
   const moved = await store.renameNote(context, from, to, actorOf(p), { origin, model })
   await rewriteInboundLinks(context, from, moved)
   if (isShared(context)) {

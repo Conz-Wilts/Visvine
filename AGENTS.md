@@ -173,12 +173,29 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   links resolve through (`canonicalEntityPath`). Config kinds (connector,
   section) stay flat until a sub-note converts them. Never add a "general info"
   note beside an index — the index IS that note.
-- **A kind's namespace is named after the kind** (`entities.ts#ENTITY_DIRS`):
-  `people/`, `spaces/`, `events/`, `resources/`, `sections/`, `channels/`,
-  `connectors/`, `agents/`, `tools/`, `models/`. A space RECORD lives in
-  `spaces/`; the sub-space graft is `subspaces/` and belongs to no kind. A note
-  path is link identity, so a namespace is renamed only by moving every note
-  and rewriting every link — `db:rename:spaces` is the one that did it.
+- **A kind's namespace is named after the kind, and one table says so** —
+  `lib/notes/shared/namespaces.ts` (pure, leaf): `people/`, `spaces/`,
+  `events/`, `resources/`, `sections/`, `channels/`, `connectors/`, `agents/`,
+  `tools/`, `models/`, plus `settings/` and `subspaces/`, which belong to no
+  kind. Each row carries the folder, its kind, the feature that owns it, how it
+  appears, who writes it and the line its index says it holds — so `ENTITY_DIRS`,
+  the tree's graft, the reserved descriptions and the tool gate are four reads
+  of one row. A space RECORD lives in `spaces/`; the sub-space graft is
+  `subspaces/`. A note path is link identity, so a namespace is renamed only by
+  moving every note and rewriting every link — `db:rename:spaces` is the one
+  that did it.
+- **A folder appears because there is something in it**, and a new space holds
+  only its root `index.md`. Two exceptions: a namespace a person writes into
+  FROM the tree stands there empty — `agents/` for anyone, `connectors/` for an
+  admin (`standingFolders`, grafted by `GET /api/notes/tree`) — and a namespace
+  whose TOOL is off is not created at all. That second one is
+  `namespaceFeatureRefusal`, enforced in `contextService.writeDenialFull` and at
+  the three create paths that use the sync gate (`POST /api/notes/item`,
+  `POST /api/notes/folders`, `moveGated`'s destination), plus the Channels
+  routes' own `featureAccessForbidden`. It refuses only while the namespace
+  holds NOTHING: switching a tool off freezes its folder, it never strands it.
+  Today that is `channels/` and `sections/`; the next toggleable tool is a row,
+  not a special case.
 - **An index note IS a folder, and folder-ness is the PATH.** Every folder has
   an `index.md` in ONE shape, held by `indexNote.ts#normalizeIndexNote` on every
   write: frontmatter (`type` only when the folder is about something, `title`,

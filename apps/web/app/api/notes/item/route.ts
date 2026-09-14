@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireContext, fail, failFromError } from '@/lib/notes/api'
 import { canRemove, principalOf } from '@/lib/notes/resolve'
-import { writeDenial, writeDenialFull, moveGated } from '@/lib/notes/contextService'
+import { writeDenial, writeDenialFull, moveGated, namespaceFeatureDenial } from '@/lib/notes/contextService'
 import { readFederated } from '@/lib/notes/federation'
 import { isSubspacePath } from '@/lib/spaces/subspaces'
 import {
@@ -65,6 +65,10 @@ export async function POST(req: NextRequest) {
   const p = await principalOf(context)
   const denial = writeDenial(p, context, path)
   if (denial) return fail(denial, 403)
+  // A namespace whose tool the space has switched off is not created by hand
+  // either (lib/notes/shared/namespaces.ts).
+  const namespace = await namespaceFeatureDenial(context, path)
+  if (namespace) return fail(namespace, 403)
   const title = path.replace(/\.md$/i, '').split('/').pop() || 'Untitled'
   const content =
     typeof body.content === 'string' && body.content.length > 0

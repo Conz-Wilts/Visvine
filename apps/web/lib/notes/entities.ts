@@ -6,20 +6,12 @@
 
 import { splitFrontmatter, extractMarkdownLinks, resolveOkfLink } from './shared/markdown'
 import { INDEX_BASENAME, isIndexPath } from './shared/indexNote'
-import { isFeatureEnabled } from '../featureAccess'
-import type { SpaceFeatureConfig } from '../types'
+import { dirOfKind, namespaceOf, standingFolders, type NamespaceKind } from './shared/namespaces'
 
-export type EntityKind =
-  | 'person'
-  | 'resource'
-  | 'event'
-  | 'space'
-  | 'section'
-  | 'channel'
-  | 'connector'
-  | 'agent'
-  | 'tool'
-  | 'model'
+// The kinds and the folders they are filed under are one table now
+// (lib/notes/shared/namespaces.ts); this name stays because it is what the rest
+// of the codebase calls it.
+export type EntityKind = NamespaceKind
 
 // `space` is the org kind (a group, organisation or space recorded in the
 // directory); there is no separate `company`
@@ -71,17 +63,6 @@ export interface EntityNodeLike {
   metadata?: Record<string, unknown> | null
 }
 
-const PEOPLE_DIR = 'people'
-const RESOURCES_DIR = 'resources'
-const EVENTS_DIR = 'events'
-const SPACES_DIR = 'spaces'
-const SECTIONS_DIR = 'sections'
-const CHANNELS_DIR = 'channels'
-const CONNECTORS_DIR = 'connectors'
-const AGENTS_DIR = 'agents'
-const TOOLS_DIR = 'tools'
-const MODELS_DIR = 'models'
-
 // A note path is storage AND link identity (every inbound [[mention]] resolves
 // against it), so a dir is renamed only by moving every note under it and
 // rewriting every link — scripts/rename-community-to-space.ts does both. Org
@@ -89,16 +70,16 @@ const MODELS_DIR = 'models'
 // grafted context is subspaces/ (lib/spaces/subspaces.ts), which is not an
 // entity namespace at all.
 const ENTITY_DIRS: Record<EntityKind, string> = {
-  person: PEOPLE_DIR,
-  resource: RESOURCES_DIR,
-  event: EVENTS_DIR,
-  space: SPACES_DIR,
-  section: SECTIONS_DIR,
-  channel: CHANNELS_DIR,
-  connector: CONNECTORS_DIR,
-  agent: AGENTS_DIR,
-  tool: TOOLS_DIR,
-  model: MODELS_DIR,
+  person: dirOfKind('person'),
+  resource: dirOfKind('resource'),
+  event: dirOfKind('event'),
+  space: dirOfKind('space'),
+  section: dirOfKind('section'),
+  channel: dirOfKind('channel'),
+  connector: dirOfKind('connector'),
+  agent: dirOfKind('agent'),
+  tool: dirOfKind('tool'),
+  model: dirOfKind('model'),
 }
 
 /**
@@ -447,17 +428,10 @@ export function entityKindOfPath(path: string): EntityKind | null {
 // The entity kind of the namespace a path sits under, whatever the path's role
 // in it (entity note, sub-note, or the namespace's own index).
 export function entityKindOfDir(path: string): EntityKind | null {
-  if (path.startsWith(`${PEOPLE_DIR}/`)) return 'person'
-  if (path.startsWith(`${RESOURCES_DIR}/`)) return 'resource'
-  if (path.startsWith(`${EVENTS_DIR}/`)) return 'event'
-  if (path.startsWith(`${SPACES_DIR}/`)) return 'space'
-  if (path.startsWith(`${SECTIONS_DIR}/`)) return 'section'
-  if (path.startsWith(`${CHANNELS_DIR}/`)) return 'channel'
-  if (path.startsWith(`${CONNECTORS_DIR}/`)) return 'connector'
-  if (path.startsWith(`${AGENTS_DIR}/`)) return 'agent'
-  if (path.startsWith(`${TOOLS_DIR}/`)) return 'tool'
-  if (path.startsWith(`${MODELS_DIR}/`)) return 'model'
-  return null
+  const ns = namespaceOf(path)
+  // The namespace's own name is not a path INSIDE it: 'people' is the folder,
+  // 'people/craig/index.md' is a person.
+  return ns?.kind && path.startsWith(`${ns.dir}/`) ? ns.kind : null
 }
 
 // Whether a path is specifically a Tool's own index note, and which Tool a
@@ -567,32 +541,18 @@ export function namespaceFolderDenial(path: string): string | null {
 }
 
 /**
- * The folders a space HAS whether or not anything is in them yet, keyed by the
- * tool that brings each one, the same way an empty Inbox is still a folder.
- * Every key here is a core feature (lib/featureAccess CORE_FEATURE_KEYS) and so
- * is never off — which is exactly the rule we want, with no special case to
- * state. `agents/` is keyed to `notes` because that is what an agent IS: a
- * brief in the Context, watched on its own node page rather than on a surface
- * of its own. The folder is there before the first brief is written.
+ * The folders in the tree whether or not anything is in them yet — the table
+ * in lib/notes/shared/namespaces.ts decides, and this is the re-export the
+ * rest of the app imports.
  *
- * The entity namespaces (`people/`, `events/`, …) are deliberately NOT here:
- * they're derived from the directory rather than switched on, so an empty one
- * is noise. This is about the four folders a person goes LOOKING for —
- * `models/` beside `agents/` for the same reason: what the agents run on is
- * one decision a space makes, and the folder is where it is written.
+ * The rule there, in one line: a folder appears because there is something in
+ * it, and the only exceptions are the namespaces a person writes into FROM the
+ * tree — `agents/` for anyone, `connectors/` for the admin who may write it.
+ * `models/` and `tools/` are authored from Settings and the console, so an
+ * empty one here is a folder nobody goes to; `people/`, `events/` and the rest
+ * are derived from the directory, so an empty one is noise.
  */
-const STRUCTURAL_FOLDER_FEATURES: Record<string, string> = {
-  agents: 'notes',
-  models: 'notes',
-  connectors: 'connectors',
-  tools: 'tools',
-}
-
-export function structuralFolders(config: SpaceFeatureConfig | null | undefined): string[] {
-  return Object.entries(STRUCTURAL_FOLDER_FEATURES)
-    .filter(([, feature]) => isFeatureEnabled(config, feature))
-    .map(([dir]) => dir)
-}
+export { standingFolders }
 
 // Resolve an entity-note path back to its directory node id via the loaded node
 // map. Node ids are NOT reconstructible from paths by string surgery — legacy

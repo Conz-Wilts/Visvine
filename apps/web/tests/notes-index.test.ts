@@ -105,8 +105,10 @@ test('enforceIndexFrontmatter falls back to the folder display name for a missin
 })
 
 test('enforceIndexFrontmatter is a byte no-op on conforming content', () => {
-  const untyped = '---\ntitle: People\n---\n\nbody\n'
-  assert.equal(enforceIndexFrontmatter(untyped, 'people'), untyped)
+  // A folder the space made: title only, and nothing added. (A reserved
+  // namespace does gain the one line saying what it holds — see below.)
+  const untyped = '---\ntitle: Deals\n---\n\nbody\n'
+  assert.equal(enforceIndexFrontmatter(untyped, 'deals'), untyped)
 })
 
 // Nothing acts on the word any more; the guard exists to keep it out of storage.
@@ -370,6 +372,20 @@ test('a reserved folder gets the one line saying what it holds', () => {
   assert.equal(enforceIndexFrontmatter(own, 'tools'), own)
   // Only the reserved names — a folder the space named is the space's to describe.
   assert.equal(parseFrontmatter(enforceIndexFrontmatter('---\ntitle: Funds\ntags: []\n---\n\n', 'funds')).description, undefined)
+
+  // Every namespace says what it holds, the directory's included: the line is
+  // what makes the folder's row in the parent's listing more than a bare name.
+  const people = parseFrontmatter(enforceIndexFrontmatter('---\ntitle: People\n---\n\n', 'people'))
+  assert.equal(people.description, 'The people this space keeps context about.')
+
+  // spaces/ is the directory's organisation records. The sub-space flow-up
+  // sentence belongs to subspaces/, which is a different folder — they carried
+  // the same line while the descriptions lived apart from the namespace table.
+  const spaces = parseFrontmatter(enforceIndexFrontmatter('---\ntitle: Spaces\n---\n\n', 'spaces'))
+  const subspaces = parseFrontmatter(enforceIndexFrontmatter('---\ntitle: Subspaces\n---\n\n', 'subspaces'))
+  assert.match(String(spaces.description), /organisations/i)
+  assert.match(String(subspaces.description), /sub-spaces/i)
+  assert.notEqual(spaces.description, subspaces.description)
 })
 
 test('an entity folder index is a byte no-op on conforming content', () => {

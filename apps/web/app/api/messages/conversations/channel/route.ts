@@ -3,7 +3,7 @@ import { createChannelSchema } from '@/lib/messages/schemas';
 import { getApiMessagingUser, unauthorizedResponse, forbiddenResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
 import { createChannelConversation } from '@/lib/messages';
-import { isAdmin } from '@/lib/auth';
+import { featureAccessForbidden, isAdmin } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,6 +21,14 @@ export async function POST(request: NextRequest) {
         { error: 'Validation error', details: parsed.error.issues },
         { status: 400 },
       );
+    }
+
+    // The tool before the permission. Creating a channel writes
+    // channels/<slug>/index.md, so without this an admin of a space with
+    // Channels off could conjure the namespace for a tool the space does not
+    // run — the sections route already reads this way.
+    if (await featureAccessForbidden(user.id, parsed.data.spaceId, 'channels', user.email)) {
+      return forbiddenResponse('Channels is switched off in this space');
     }
 
     const allowed = await isAdmin(user.id, parsed.data.spaceId, user.email);

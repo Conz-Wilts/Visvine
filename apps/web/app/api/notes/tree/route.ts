@@ -17,7 +17,7 @@ import type { Context } from '@/lib/notes/store'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { visibleVault } from '@/lib/notes/contextService'
 import { listFolders } from '@/lib/notes/store'
-import { structuralFolders } from '@/lib/notes/entities'
+import { standingFolders } from '@/lib/notes/entities'
 import { buildTree, sortTree } from '@/lib/notes/shared/context'
 import { principalSeesFolder } from '@/lib/notes/shared/permissions'
 import type { TreeNode } from '@/lib/notes/shared/types'
@@ -53,14 +53,18 @@ async function treeFor(context: Context, p: ContextPrincipal, gated: boolean): P
     getFeatureConfig(context.spaceId),
   ])
   const root = buildTree(metas)
-  // The folders a space has by virtue of the tools it runs — Agents on means
-  // `agents/` is in the tree from the start, empty, rather than appearing the
-  // first time somebody writes one. They aren't rows in contextFolder (nothing
-  // created them), so they're grafted here alongside the real empty folders,
-  // and the same graft is what makes them un-missable: deleting one is refused
-  // (namespaceFolderDenial), and a space that turns the tool off simply stops
-  // being handed the folder.
-  for (const dir of structuralFolders(featureConfig)) {
+  // The namespaces a person writes into FROM here, standing empty so they can
+  // be written into: `agents/` for anyone, `connectors/` for the admin who may
+  // write it (lib/notes/shared/namespaces.ts). They aren't rows in
+  // contextFolder — nothing created them — so they're grafted here alongside
+  // the real empty folders, and the graft is what makes them un-missable:
+  // deleting one is refused (namespaceFolderDenial).
+  //
+  // Everything else appears with its first note. `p.spaceAdmin`, not the
+  // caller's standing in the space they asked about: this function is re-entered
+  // for each public sub-space under its own everyone-principal (federateTree
+  // below), and a parent's admin administers nothing there.
+  for (const dir of standingFolders(featureConfig, { isAdmin: p.spaceAdmin })) {
     ensureFolderPath(root, dir)
   }
   for (const folder of folders) {

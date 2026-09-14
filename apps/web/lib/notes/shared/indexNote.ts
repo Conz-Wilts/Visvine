@@ -45,6 +45,7 @@
 // lib/notes/store.ts. No fs/DOM access, unit-testable like the rest of
 // lib/notes/shared/*.
 
+import { reservedDescriptions } from './namespaces'
 import {
   joinFrontmatter,
   parseFrontmatter,
@@ -99,15 +100,12 @@ function isShapeType(declared: string): boolean {
  * to describe it — and without a `description:` its row in the parent's listing
  * is a bare name. Filled only when the folder has none; a description somebody
  * wrote is theirs and is never replaced.
+ *
+ * The lines live with the rest of what a namespace is, in ./namespaces.ts —
+ * which is how `spaces/` came to carry the sub-space flow-up sentence that
+ * belongs to `subspaces/`: two half-tables, neither knowing the other.
  */
-const RESERVED_FOLDER_DESCRIPTIONS: Record<string, string> = {
-  agents: 'The agents this space runs.',
-  connectors: 'The services this space is connected to.',
-  models: 'The models this space\'s agents run on.',
-  settings: "This space's own configuration.",
-  spaces: 'Context flowing up from this space\'s public sub-spaces — read-only.',
-  tools: 'The tools built in this space.',
-}
+const RESERVED_FOLDER_DESCRIPTIONS: Record<string, string> = reservedDescriptions()
 
 const LEADING_KEYS = ['type', 'title', 'node', 'description', 'tags'] as const
 
