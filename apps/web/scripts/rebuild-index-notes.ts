@@ -118,9 +118,34 @@ async function main() {
       where: { spaceId: context.spaceId, ownerKey: context.ownerKey },
       select: { path: true },
     });
+    // A ContextFolder row whose path ENDS in index.md names a note, not a
+    // folder — folder-ness is the path, and `index.md` is the leaf of one, never
+    // a directory that can hold another. Feeding such a row through
+    // indexPathOf() invents the folder `…/index.md` and writes
+    // `…/index.md/index.md` inside it, which is how production grew eleven of
+    // them the first time this ran there. The rows are dropped, and so is any
+    // stub a previous run already wrote under one.
+    const misfiled = explicit.filter((f) => isIndexPath(f.path));
+    const realFolders = explicit.filter((f) => !isIndexPath(f.path));
+    if (misfiled.length > 0) {
+      const paths = misfiled.map((f) => f.path);
+      const junk = await prisma.contextNote.deleteMany({
+        where: {
+          spaceId: context.spaceId,
+          ownerKey: context.ownerKey,
+          path: { in: paths.map((f) => indexPathOf(f)) },
+        },
+      });
+      await prisma.contextFolder.deleteMany({
+        where: { spaceId: context.spaceId, ownerKey: context.ownerKey, path: { in: paths } },
+      });
+      for (const path of paths) console.log(`  dropped folder row ${path} (names a note, not a folder)`);
+      if (junk.count > 0) console.log(`  deleted ${junk.count} index.md/index.md stub(s)`);
+    }
+
     const folders = new Set<string>();
     for (const n of notes) for (const f of ancestorFolders(n.path)) folders.add(f);
-    for (const f of explicit) for (const a of ancestorFolders(indexPathOf(f.path))) folders.add(a);
+    for (const f of realFolders) for (const a of ancestorFolders(indexPathOf(f.path))) folders.add(a);
 
     const live = new Set(notes.map((n) => n.path));
     // Deepest first, so a subfolder's index exists (and carries its title) before
