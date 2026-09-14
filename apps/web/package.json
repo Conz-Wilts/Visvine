@@ -37,6 +37,7 @@
     "db:link-reasons": "tsx scripts/backfill-context-links.ts --reasons",
     "db:index-notes:rebuild": "tsx scripts/rebuild-index-notes.ts",
     "db:index-notes:strip-type": "tsx scripts/strip-index-type.ts",
+    "db:settings:drop": "tsx scripts/drop-settings-notes.ts",
     "db:notes:verify": "tsx scripts/verify-notes-rules.ts space:visvine-hq",
     "db:embed": "tsx scripts/embed-context.ts",
     "db:memories": "tsx scripts/derive-memories.ts",

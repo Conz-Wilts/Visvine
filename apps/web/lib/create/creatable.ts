@@ -29,10 +29,10 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'section':
       return isFeatureEnabled(featureConfig, 'channels') && isAdmin
 
-    // An uploaded file lands in the space context, so it follows the notes
-    // ("Context") feature.
+    // An uploaded file lands in the space context, which every space has —
+    // there is no Context switch to follow.
     case 'file':
-      return isFeatureEnabled(featureConfig, 'notes')
+      return true
 
     // Connectors is core (there is no switch — the surface is a console
     // section), and admin-only to write: the real gate is server-side in
@@ -40,12 +40,13 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'connector':
       return isAdmin
 
-    // An agent brief is a note under agents/, so it follows Context, which is
-    // always on. It is member-writable by design (lib/agents), and so is
-    // turning it on: the activation is the same note, written by the same
-    // people. Only `runs_as` and the budget are held back for admins.
+    // An agent brief is a note under agents/, and every space has context, so
+    // there is nothing to gate on. It is member-writable by design
+    // (lib/agents), and so is turning it on: the activation is the same note,
+    // written by the same people. Only `runs_as` and the budget are held back
+    // for admins.
     case 'agent':
-      return isFeatureEnabled(featureConfig, 'notes')
+      return true
 
     // A resource node only exists because the Resources tool does — same rule
     // the console's Types tab and the directory filters follow.

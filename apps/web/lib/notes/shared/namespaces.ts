@@ -121,10 +121,11 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
   {
     dir: 'agents',
     kind: 'agent',
-    // An agent IS a brief in the Context, watched on its own node page rather
-    // than on a surface of its own — so the folder is there before the first
-    // brief, and anyone who may write context may write one.
-    feature: 'notes',
+    // No feature owns it: an agent IS a brief in the Context, watched on its
+    // own node page rather than on a surface of its own, and every space has
+    // context. The folder is there before the first brief, and anyone who may
+    // write context may write one.
+    feature: null,
     appearance: 'standing',
     writes: 'anyone',
     description: 'The agents this space runs.',
@@ -161,8 +162,11 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     kind: null,
     feature: null,
     appearance: 'derived',
-    writes: 'admin',
-    description: "This space's own configuration.",
+    // Nothing writes here. A space's configuration is the `spaces` row and
+    // nothing else; the name is held so a note can never sit under it looking
+    // like configuration and being none.
+    writes: 'nobody',
+    description: "Reserved — a space's configuration lives on the space itself.",
   },
   {
     dir: 'subspaces',
@@ -265,4 +269,19 @@ export function namespaceFeatureRefusal(
   if (!feature || namespaceHasNotes) return null
   const ns = namespaceOf(path)
   return `"${ns?.dir}" belongs to a tool this space has switched off — turn it on in the console first.`
+}
+
+/**
+ * Why nothing of this space's may be written at this path, or null.
+ *
+ * Two namespaces answer: `settings/`, whose name would promise configuration a
+ * note no longer holds, and `subspaces/`, where a public sub-space's context is
+ * READ into this one. Both are refused for everyone, ahead of the grant check —
+ * a folder grant must not be a way in. (`subspaces/` keeps its own longer
+ * sentence at lib/spaces/subspaces.ts, which runs first.)
+ */
+export function reservedWriteDenial(path: string): string | null {
+  const ns = namespaceOf(path)
+  if (!ns || ns.writes !== 'nobody') return null
+  return `"${ns.dir}" is reserved — ${ns.description[0].toLowerCase()}${ns.description.slice(1)}`
 }

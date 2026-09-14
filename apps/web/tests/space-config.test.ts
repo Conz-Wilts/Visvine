@@ -210,10 +210,10 @@ describe('mergeFeatureConfig: enabled merges one tool at a time', () => {
     // Two console panels, or two tabs: one turns channels off, the other turns
     // an installed Tool on. Whole-value replacement made the second save erase the first.
     const merged = mergeFeatureConfig(
-      { enabled: { channels: false, crm: false } },
+      { enabled: { channels: false, 'tool:crm': false } },
       { enabled: { 'tool:kanban': true } },
     )
-    assert.deepEqual(merged.enabled, { channels: false, crm: false, 'tool:kanban': true })
+    assert.deepEqual(merged.enabled, { channels: false, 'tool:crm': false, 'tool:kanban': true })
   })
 
   test('turning a tool off still works', () => {

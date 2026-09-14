@@ -689,8 +689,8 @@ const RECIPES: Recipe[] = [
       { n: 2, tool: 'edit_context', why: 'The `visibility` argument on a write is how a note\'s own visibility is set.', args: { space_id: spaceId(ctx), path: '<path>', content: '<unchanged content>', visibility: 'inherit' }, optional: true },
     ],
     mustKnow: () => [
-      'connectors/ is admin-only to write. agents/, tools/ and settings/ are frozen against AI writes entirely.',
-      'A folder grant on settings/ does not make you an admin — settings are an admin act regardless.',
+      'connectors/ and models/ are admin-only to write. agents/ and tools/ are frozen against AI writes entirely.',
+      "settings/ is reserved and refused for everyone: a space's configuration is the space record, changed in the console.",
     ],
     blockers: () => [],
   },
@@ -707,7 +707,7 @@ const RECIPES: Recipe[] = [
       { n: 1, tool: 'clean_context', why: 'Run the analysis first and read what it proposes.', args: { space_id: spaceId(ctx) } },
       { n: 2, tool: 'clean_context', why: 'Apply the fixes you agree with.', args: { space_id: spaceId(ctx), action: 'apply' }, optional: true },
     ],
-    mustKnow: () => ['Frozen folders (agents/, tools/, settings/, and anything locked with "Freeze for AI") are never auto-fixed.'],
+    mustKnow: () => ['Frozen folders (agents/, tools/, and anything locked with "Freeze for AI") are never auto-fixed.'],
     blockers: (ctx) => scopeBlocker(ctx, 'context:write', 'applying clean fixes'),
   },
 ]
@@ -804,7 +804,7 @@ const ALL_SCOPES: readonly string[] = [
 /** Read the feature flags the recipes reason about off a space's config. */
 export function planFeatures(config: SpaceFeatureConfig | null | undefined): Record<string, boolean> {
   return Object.fromEntries(
-    ['directory', 'notes', 'connectors', 'tools', 'resources', 'channels'].map((key) => [
+    ['directory', 'connectors', 'tools', 'resources', 'channels'].map((key) => [
       key,
       isFeatureEnabled(config, key),
     ]),

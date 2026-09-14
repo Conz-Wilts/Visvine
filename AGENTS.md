@@ -85,7 +85,8 @@ rail. `visibility` is `public | private`. Creation always goes through
   resolves.
 - **A new space starts with every toggleable tool off** —
   `defaultFeatureConfig()`, written by both create routes, `provisionSpace` and
-  the seed.
+  the seed. `channels` is the only toggleable key; there is no `notes` key, because
+  context is not a feature of a space but what a space IS.
 - **A sub-space's visibility is its own**, and membership never crosses the
   boundary: the creator holds its Admin alias, the parent's admins do not.
   Created by the parent's admins (`POST /api/spaces` with `parentId`, or
@@ -177,7 +178,8 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   `lib/notes/shared/namespaces.ts` (pure, leaf): `people/`, `spaces/`,
   `events/`, `resources/`, `sections/`, `channels/`, `connectors/`, `agents/`,
   `tools/`, `models/`, plus `settings/` and `subspaces/`, which belong to no
-  kind. Each row carries the folder, its kind, the feature that owns it, how it
+  kind and which NOTHING may write — a space's configuration is the `spaces`
+  row alone (`db:settings:drop` removed the notes an earlier mirror left). Each row carries the folder, its kind, the feature that owns it, how it
   appears, who writes it and the line its index says it holds — so `ENTITY_DIRS`,
   the tree's graft, the reserved descriptions and the tool gate are four reads
   of one row. A space RECORD lives in `spaces/`; the sub-space graft is
@@ -340,7 +342,7 @@ only).
   (`lib/create/typeFields.ts`), and the space's **tracked fields**.
 - **A tracked field is space config; its values are node data.**
   `NodeTypeConfig.fields[]` (`{ key, label, kind, options? }`) rides the space's
-  type vocabulary, round-tripped by `settings/types.md`. The value is
+  type vocabulary, validated on the way in by `PUT /api/data/spaces`. The value is
   `node.metadata[key]`, written through `PATCH /api/nodes/<id>` and **mirrored
   into the entity note's frontmatter** (`entityNodes.ts#mirroredFields`). Adding
   a field touches no node; removing one leaves values in place, unlisted. Admins

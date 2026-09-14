@@ -299,39 +299,25 @@ own personal note), while audit entries are REDACTED — the actor becomes a
 tombstone and the event survives. If deleting an account erased its audit
 entries, deleting an account would be how you erase your own trail.
 
-**Space config is a declaration with a projection.** `nodeTypes`, `linkTypes`,
-`aliases`, `featureConfig` and `designConfig` now have notes beside them under
-`settings/` (`lib/spaces/configNote.ts`), kept in step in both directions:
-`updateSpaceConfig` writes the notes after it commits, and the store hook
-(`lib/spaces/configHook.ts`) projects a hand-edited note back into the columns.
-Neither direction writes when the other already says the same thing, which is
-what makes the pair terminate.
+**A space's config is the space row, and only the space row.** `nodeTypes`,
+`linkTypes`, `aliases`, `featureConfig` and `designConfig` are JSON columns
+written through one door (`updateSpaceConfig`, an advisory lock per space).
 
-The read path is untouched — every caller still reads `space.featureConfig`
-from a row it already has — so this buys revision history, diffs, per-folder
-grants and agent legibility at no request-time cost.
+For a while they were also mirrored into context as `settings/types.md`,
+`settings/features.md` and `settings/design.md`, kept in step in both
+directions — the columns out, a hand-edited note back in. It bought revision
+history and agent legibility and cost more than it bought: two copies of one
+truth, a write gate that had to validate a note before the columns could trust
+it, an admin-only clause and an AI freeze on a folder, and an edit that silently
+did nothing whenever either half was unavailable. Configuration is changed in
+the console, by a person, under a lock — none of which a note made better.
 
-Three rules hold it together:
-
-- `settings/` is **admin-only** to write. Editing one of those notes changes the
-  space, including the `admin: true` alias flags that decide who administers it,
-  so a folder grant must not be a way around the console's own gate.
-- `settings/` is **frozen for AI**, like `agents/` and `tools/`. An agent may
-  READ a space's settings — that is most of the value of having them as notes —
-  but an autonomous pass that "tidied" them could switch a surface off for
-  everyone. (This narrows something an earlier draft of this document implied:
-  an agent cannot propose a config change by editing the note. A proposal
-  belongs in an ordinary note a person then applies.)
-- A settings note that is not a valid configuration is **refused at the write
-  gate**, before it is saved. The projection hook runs after the write, so the
-  gate is the only place a bad edit can be stopped rather than merely ignored —
-  and being stopped is what keeps the note and the columns from disagreeing.
-
-The one rule that cannot be judged from a note alone is a transition:
-`adminAliasDenial` refuses an edit that removes the LAST `admin: true` alias.
-Having none is fine and common — plenty of spaces are administered by super
-admins — so what is refused is going from some to none, which would leave nobody
-allowed to put it back.
+So `settings/` is now **reserved** (`lib/notes/shared/namespaces.ts`): nothing
+writes there, by anyone, at any origin — the same standing `subspaces/` has, and
+for the same reason, that a note sitting there would look like something it is
+not. `db:settings:drop` removes the notes spaces collected while the mirror
+existed. What a type tracks is still validated before it is stored, now on the
+column's own door (`PUT /api/data/spaces`), which is the only one left.
 
 **The Drive is a tier-3 record now, not a card with a URL.** `Resource` was
 built before any of this and kept its own half of a file system: no foreign key
@@ -378,8 +364,7 @@ writeNote()
  │    syncContextLinks      directory edges from [[mentions]]
  │    agentNoteWritten      AgentState / next_run_at
  │    toolNoteWritten       AppToolBuild (esbuild)
- │    configNoteWritten     space config columns
- │    syncPublicationsOnWrite  replicas in other contexts
+ │     │    syncPublicationsOnWrite  replicas in other contexts
  │    ensureAncestorIndexes + refreshIndexesForNote
  │
  └─ success → DELETE the job    failure → leave it, with the error, for the drain

@@ -19,10 +19,9 @@ import PageError from '@/components/ui/PageError';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
-import { isFeatureEnabled } from '@/lib/featureAccess';
 import { entityFolderPathOf, entityKindOf, entityNotePath } from '@/lib/notes/entities';
 import { isOwnSpaceNode } from '@/lib/types/context';
-import type { SpaceFeatureConfig, NBNode } from '@/lib/types';
+import type { NBNode } from '@/lib/types';
 import type { ToolSubject } from '@/lib/tools/protocol';
 import type { TypePageOwner } from '@/lib/tools/typePages';
 import TypePageTab from '@/features/tools/components/TypePageTab';
@@ -69,10 +68,10 @@ function useEntityNotePath(nodeId: string, node: NBNode | null): string | null {
 // belongs to the current space (its context owns the note).
 function useContextTabAvailable(node: NBNode | null): boolean {
   const { currentSpace } = useSpace();
-  const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null;
+  // Every space has context — there is no switch for it — so the tab is about
+  // the node: an entity of THIS space has one, anything else does not.
   return (
     !!currentSpace &&
-    isFeatureEnabled(featureConfig, 'notes') &&
     !!node &&
     entityKindOf(node.type) !== null &&
     (!node.space_id || node.space_id === currentSpace.id)

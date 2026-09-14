@@ -43,19 +43,19 @@ describe('isFeatureEnabled', () => {
     assert.equal(isFeatureEnabled({ enabled: { directory: false } }, 'directory'), true);
   });
 
-  it('lists directory, notes, resources, connectors and tools as the core features', () => {
+  it('lists directory, resources, connectors and tools as the core features', () => {
     // tools is core: the marketplace has no switch — what a space runs is
     // decided by review + install. See tools-feature-keys.test.ts. connectors is
     // core for the same reason: its surface is a console section, admins only.
     // resources is core too: it is a tab of the Directory, not a tool.
-    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'notes', 'resources', 'connectors', 'tools']);
+    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'resources', 'connectors', 'tools']);
   });
 
-  it('hides notes, resources, connectors and tools from the nav rail and console toggles', () => {
-    // All four are core and nav-hidden: notes is a Directory tab, connectors a
-    // Space Console section, tools behind the marketplace icon and per-install
-    // `tool:<slug>` rows. Events is NOT here: it is a tool with a rail row.
-    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['notes', 'resources', 'connectors', 'tools']);
+  it('hides resources, connectors and tools from the nav rail and console toggles', () => {
+    // All three are core and nav-hidden: connectors is a Space Console section,
+    // resources a Directory tab, tools behind the marketplace icon and
+    // per-install `tool:<slug>` rows.
+    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['resources', 'connectors', 'tools']);
     // Agents is not a feature key at all: an agent is a note under `agents/`,
     // watched on its own node page's Agent tab — there is no agents surface to
     // switch on, off or hide.
@@ -68,11 +68,11 @@ describe('isFeatureEnabled', () => {
     assert.equal(isFeatureEnabled({ enabled: { connectors: false } }, 'connectors'), true);
     assert.equal(canAccessFeature({ enabled: { connectors: false } }, 'connectors', true), true);
     assert.equal(canAccessFeature(null, 'connectors', false), false);
-    // notes ("Context") is core: surfaced as the Context tab under the
-    // Directory, always on, and can never be persisted off.
-    assert.equal(isFeatureEnabled({ enabled: {} }, 'notes'), true);
-    assert.equal(isFeatureEnabled({ enabled: { notes: false } }, 'notes'), true);
-    assert.equal(canAccessFeature({ enabled: { notes: false } }, 'notes', false), true);
+    // There is no `notes` key: context is not a feature of a space, it is what
+    // a space IS, so the key could only ever answer true. A stale
+    // `enabled.notes: false` is dropped on the next save and gates nothing.
+    assert.equal(ALL_FEATURE_KEYS.includes('notes'), false);
+    assert.equal('notes' in (sanitizeFeatureConfig({ enabled: { notes: false } }).enabled ?? {}), false);
     // events is not a tool: it is not in the registry at all, and a stale
     // `enabled.events: false` gates nothing.
     assert.equal(ALL_FEATURE_KEYS.includes('events'), false);
@@ -174,7 +174,10 @@ describe('sortFeatureKeys', () => {
 });
 
 describe('sanitizeFeatureConfig', () => {
-  it('strips core features from enabled so directory can never be persisted off', () => {
+  it('strips core and unknown features from enabled so directory can never be persisted off', () => {
+    // `notes` is the retired Context key: not core any more, not in the
+    // registry either, so a stored answer for it is dropped rather than kept
+    // as an opinion about a feature that no longer exists.
     const out = sanitizeFeatureConfig({ enabled: { directory: false, channels: false, notes: true } });
     assert.deepEqual(out.enabled, { channels: false });
   });

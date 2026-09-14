@@ -16,8 +16,6 @@ import { useRouter } from 'next/navigation'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { usePaneChromeState } from '@/features/shared/contexts/PaneShellContext'
 import { TRAY_ROW_H } from '@/features/shared/components/pane/PaneTabBar'
-import { isFeatureEnabled } from '@/lib/featureAccess'
-import type { SpaceFeatureConfig } from '@/lib/types'
 import { entityContextHref, noteHref, resolveEntityOwner, trashHref } from '@/lib/notes/entities'
 import { prefetchNoteContext } from '../lib/contextPrefetch'
 import { useContextTree } from '../lib/useContextTree'
@@ -76,11 +74,9 @@ export function ContextSidebar({
   // past it to sit flush under the tab row whenever it's open.
   const trayOpen = !!usePaneChromeState().chrome?.attachedOpen
   const spaceId = currentSpace?.id ?? null
-  const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null
-  const notesEnabled = isFeatureEnabled(featureConfig, 'notes')
 
   const { entityByPath } = useDirectoryEntities()
-  const ctx = useContextTree({ spaceId, enabled: notesEnabled, currentPath })
+  const ctx = useContextTree({ spaceId, enabled: !!spaceId, currentPath })
   const { notes, trash, loading, error, shareTarget, setShareTarget } = ctx
 
   const [selectedPath, setSelectedPath] = useState<string | null>(currentPath)
@@ -123,7 +119,7 @@ export function ContextSidebar({
     [entityByPath, router, currentPath, spaceId],
   )
 
-  if (!notesEnabled || !spaceId) return null
+  if (!spaceId) return null
 
   // Starts at the content line — <main>'s content-box top, where the note card
   // and the connections rail start — and runs edge to edge, all the way to the

@@ -19,7 +19,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
-import { isFeatureEnabled } from '@/lib/featureAccess';
 import { GuestManager } from '@/features/events/components/GuestManager';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import PageTabBar, { type PageTab, type TabConfig } from '@/features/shared/components/pane/PageTabBar';
@@ -34,7 +33,7 @@ import {
   missingRequiredAnswers, startsInLabel, RESPONSE_LABELS,
 } from '@/lib/eventUtils';
 import { RegistrationField } from '@/features/events/components/RegistrationField';
-import type { SpaceFeatureConfig, NBEvent, RSVPResponse } from '@/lib/types';
+import type { NBEvent, RSVPResponse } from '@/lib/types';
 import { useMapLink } from '../hooks/useMapLink';
 import { CalendarPlusIcon, CheckIcon, CircleQuestionMarkIcon, ClipboardListIcon, ClockIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
 import Select from '@/components/ui/Select';
@@ -143,11 +142,10 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   }
 
   // The Context/Raw bar only rides the guest-facing view (the manage view has
-  // its own overview/guests/form tabs) and only when the notes tool is on for
-  // this space — the same gate entity profiles use. Known before the event
-  // fetch resolves, so the bar can be up from the first frame.
-  const featureConfig = (currentSpace.featureConfig as SpaceFeatureConfig | undefined) ?? null;
-  const showContextTabs = !manage && isFeatureEnabled(featureConfig, 'notes');
+  // its own overview/guests/form tabs). Every space has context, so there is
+  // nothing else to ask. Known before the event fetch resolves, so the bar can
+  // be up from the first frame.
+  const showContextTabs = !manage;
 
   // The shared Event | Context | Raw wrapper. The provider spans the bar and
   // the panel so the Context editor can portal its toolbar into the bar's

@@ -1120,10 +1120,10 @@ export const CONTEXT_ACTIONS = [
       description:
         'Create or overwrite one context note (full-content write; the previous version is kept in history). ' +
         // This write lands at origin 'agent', which lockedDenial refuses under
-        // agents/, tools/ and settings/. Saying so here is what stops a model
-        // from being told to author an agent with this action, being refused,
-        // and filing the brief in a folder it invented — where nothing reads it.
-        'It CANNOT write under agents/, tools/ or settings/: those are frozen against AI writes. An agent is ' +
+        // agents/ and tools/. Saying so here is what stops a model from being
+        // told to author an agent with this action, being refused, and filing
+        // the brief in a folder it invented — where nothing reads it.
+        'It CANNOT write under agents/ or tools/ (frozen against AI writes), nor settings/ (reserved). An agent is ' +
         'created with create_agent and a Tool with the tool authoring actions — both write at a human origin. ' +
         'Never work around a refusal here by writing the note somewhere else; a brief outside agents/ is not an agent. ' +
         "Writes go to the space's context, gated on your write access to that folder. A NEW note is PRIVATE by default — only " +

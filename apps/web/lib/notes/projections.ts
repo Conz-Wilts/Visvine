@@ -46,7 +46,6 @@ import { logger } from '@/lib/logger'
 import { syncContextLinks, syncContextLinksBulk } from './entityLinks'
 import { agentNoteDeleted, agentNoteRenamed, agentNoteWritten } from '@/lib/agents/hooks'
 import { toolNoteDeleted, toolNoteRenamed, toolNoteWritten } from '@/lib/tools/hooks'
-import { configNoteWritten } from '@/lib/spaces/configHook'
 import { globalNoteWritten } from '@/lib/global/hooks'
 import {
   syncPublicationsOnDelete,
@@ -232,7 +231,6 @@ async function applyProjections(input: ProjectionInput): Promise<void> {
   await syncContextLinks(context, path, content)
   await agentNoteWritten(context, path, actor, { changed, origin, model })
   await toolNoteWritten(context, path)
-  await configNoteWritten(context, path, content)
   // Origin 'publish' IS a replica write; skipping it is what stops replication
   // cascades and publish cycles dead.
   if (origin !== 'publish') await syncPublicationsOnWrite(context, path, content, actor)

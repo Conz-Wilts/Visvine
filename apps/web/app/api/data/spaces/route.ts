@@ -19,6 +19,7 @@ import {
   publicNameTakenMessage,
 } from '@/lib/spaces/publicName';
 import { defaultFeatureConfig } from '@/lib/featureAccess';
+import { coerceTrackedFields } from '@/lib/directory/table';
 import { findSiblingNameConflict, listLockedSubspaces, listSubspaces } from '@/lib/spaces/subspaceAccess';
 import { updateSpaceConfig } from '@/lib/spaces/spaceConfig';
 import { mergeAliasList, mergeLinkTypeList } from '@/lib/spaces/configMerge';
@@ -196,6 +197,22 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json(
           { error: publicNameTakenMessage(clash.name), code: 'name_taken' },
           { status: 409 }
+        );
+      }
+    }
+
+    // A type's tracked fields decide what the Directory's table shows and what
+    // `PATCH /api/nodes/<id>` will accept into a node's metadata, so a malformed
+    // one is refused here rather than stored and skipped later. This was checked
+    // on the way through settings/types.md while the config was mirrored into a
+    // note; the column is the only door now, so the check lives on it.
+    for (const type of (space.nodeTypes ?? []) as NodeTypeConfig[]) {
+      if (type?.fields === undefined) continue;
+      const fields = coerceTrackedFields(type.fields);
+      if ('error' in fields) {
+        return NextResponse.json(
+          { error: `${type.name ?? 'a type'}: ${fields.error}` },
+          { status: 400 },
         );
       }
     }

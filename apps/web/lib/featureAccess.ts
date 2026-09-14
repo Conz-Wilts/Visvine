@@ -23,8 +23,13 @@ import type { SpaceFeatureConfig } from '@/lib/types';
  * is already decided by two explicit human acts — a Visvine reviewer approving
  * a version, and a space admin installing it. A third toggle on top of that
  * pipeline gated nothing anyone needed gated.
+ *
+ * There is no `notes` key. Context is not a feature of a space — it is what a
+ * space IS, the thing every other surface reads and writes, so a key for it
+ * could only ever be on. It had one while it was a rail row; a key that can
+ * only answer `true` is a question nobody is asking.
  */
-export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'resources', 'connectors', 'tools'];
+export const CORE_FEATURE_KEYS: string[] = ['directory', 'resources', 'connectors', 'tools'];
 
 /**
  * Every key in the registry, in its default (registry) order. Must stay in sync
@@ -32,7 +37,7 @@ export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'resources', '
  * reject unknown keys from a client-submitted `order`, alongside the dynamic
  * `tool:<slug>` rail keys below (see isPersistableFeatureKey).
  */
-export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'resources', 'connectors', 'tools'];
+export const ALL_FEATURE_KEYS: string[] = ['directory', 'channels', 'resources', 'connectors', 'tools'];
 
 /**
  * The `featureConfig` a freshly created space is stored with: core keys
@@ -105,8 +110,6 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
 
 /**
  * Feature keys that carry NO sidebar nav item (and no console toggle):
- * - `notes` ("Context") is always on (core) and surfaced as the Context tab under
- *   the Directory page, so it has no rail item and is not a toggleable tool.
  * - `resources` is always on (core) and is the Resources tab of the Directory
  *   page (`/directory?view=resources`), beside Grid and Context.
  * - `connectors` is a section of the Space Console (`/admin?section=connectors`),
@@ -116,7 +119,7 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
  *   vocabulary itself never wants a "Tools" row. Those per-install keys are not
  *   nav-hidden: they are the rail rows.
  */
-export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['notes', 'resources', 'connectors', 'tools'];
+export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['resources', 'connectors', 'tools'];
 
 /**
  * Is `key` enabled for a space? Core features are always enabled; any other
@@ -400,7 +403,12 @@ export function sanitizeFeatureConfig(input: {
   if (input.enabled) {
     const enabled: Record<string, boolean> = {};
     for (const [key, value] of Object.entries(input.enabled)) {
-      if (!CORE_FEATURE_KEYS.includes(key)) enabled[key] = value;
+      // Core keys are never persisted (they can only be on), and a key that is
+      // not in the registry gates nothing — an answer stored for a feature that
+      // no longer exists, like the `notes` key Context used to have. Same
+      // treatment `order` and `more` already give an unknown key.
+      if (CORE_FEATURE_KEYS.includes(key) || !isPersistableFeatureKey(key)) continue;
+      enabled[key] = value;
     }
     out.enabled = enabled;
   }

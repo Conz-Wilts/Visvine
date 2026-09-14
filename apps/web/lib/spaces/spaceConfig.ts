@@ -101,10 +101,6 @@ export interface UpdateSpaceConfigOptions {
   also?: Prisma.SpaceUpdateInput;
   /** Skip the cache bust (callers that revalidate more tags themselves). */
   skipRevalidate?: boolean;
-  /** Skip mirroring into `settings/*.md`. Set by the note→column hook, which is
-   *  already reacting to the note: rewriting it would discard the author's own
-   *  wording and key order for no gain. */
-  skipNoteSync?: boolean;
 }
 
 export interface UpdateSpaceConfigResult {
@@ -153,16 +149,6 @@ export async function updateSpaceConfig(
 
     return { config: { ...stored, ...patch }, space };
   });
-
-  // The note mirror, AFTER the transaction: syncConfigNotes writes through the
-  // note store, which takes its own connections and fires its own hooks, so it
-  // must not run inside the advisory lock this function holds. Imported lazily
-  // because that module imports the store, which imports the config hook, which
-  // imports this file — a static import here would close the cycle.
-  if (!options.skipNoteSync) {
-    const { syncConfigNotes } = await import('./configNoteSync');
-    await syncConfigNotes(result.space, result.config);
-  }
 
   if (!options.skipRevalidate) bustSpaceConfigCache();
   // The auth gates read this row once per request; a handler that changed it

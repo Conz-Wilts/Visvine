@@ -11,8 +11,6 @@ import { SHARED_OWNER_KEY, type Context, type Actor } from './store'
 import * as sourceStore from './sourceStore'
 import { ingestSource, reingestSource, type IngestInput } from './sources/ingest'
 import { logAudit } from './audit'
-import { configNoteKindOf, isSettingsPath, adminAliasDenial, parseConfigNote } from '@/lib/spaces/configNote'
-import { readSpaceConfig } from '@/lib/spaces/spaceConfig'
 import { createVectorStage, type SemanticReport } from './vectorStage'
 import { createSourceStage } from './sourceStage'
 import { createMemoryStage } from './memoryStage'
@@ -38,7 +36,7 @@ import { agentOfRevisionStamp, isAgentActivationPath, isAgentBriefPath, isAgentO
 import { isRestrictedPath, isLockedPath } from './shared/authz'
 import { replicaDenial } from './publications'
 import { isGlobalSpace } from '@/lib/spaces/globalSpace'
-import { namespaceFeatureRefusal, togglableNamespaceFeature } from './shared/namespaces'
+import { namespaceFeatureRefusal, reservedWriteDenial, togglableNamespaceFeature } from './shared/namespaces'
 import { getFeatureConfig } from '@/lib/auth'
 import { subspaceWriteDenial } from '@/lib/spaces/subspaces'
 import { globalSelfRecordDenial } from '@/lib/global/gate'
@@ -310,15 +308,12 @@ export function writeDenial(p: ContextPrincipal, context: Context, path: string)
   if ((path === 'models' || path.startsWith('models/')) && !p.system && !principalIsSuperAdmin(p)) {
     return 'Only space admins can create or edit models.'
   }
-  // settings/ IS the space's configuration (lib/spaces/configNote.ts) — the
-  // feature switches, the type vocabulary, and the alias flags that decide who
-  // administers the space. Editing one of those notes changes the space, so it
-  // is an admin act for the same reason the console is, and a folder grant on
-  // settings/ must not be a way around that. This clause runs before the grant
-  // check for exactly that reason.
-  if (isSettingsPath(path) && !p.system && !principalIsSuperAdmin(p)) {
-    return "Only space admins can change a space's settings."
-  }
+  // A namespace nothing may write: `settings/` is the name a space's
+  // configuration used to be mirrored under, and the configuration is the
+  // `spaces` row alone now — so a note there would look like config and be
+  // none. Refused for everyone, ahead of the grant check, the way subspaces/ is.
+  const reserved = reservedWriteDenial(path)
+  if (reserved) return reserved
   if (principalCanWrite(p, path)) return null
   const level = principalLevelName(p, path)
   const where = folderIdOfPath(path) || 'the context root'
@@ -382,16 +377,6 @@ export function lockedDenial(
   // 'ai-refactor' out of AI_ORIGINS.
   if (path === 'tools' || path.startsWith('tools/')) {
     return 'Tools are frozen for AI — a human must make this change.'
-  }
-  // settings/ is frozen for the same structural reason, and one more: these
-  // notes carry the feature switches and the owner-alias flags, so an
-  // autonomous pass that "tidied" them could turn a surface off for everyone or
-  // rewrite who administers the space. An agent may READ the space's settings —
-  // that is most of the value of having them as notes — but changing them is a
-  // human act. A proposal from an agent belongs in an ordinary note a person
-  // then applies, not in a direct write here.
-  if (isSettingsPath(path)) {
-    return 'Space settings are frozen for AI — a human must make this change.'
   }
   if (!isLockedPath(p.access.locked, path)) return null
   return 'This folder is frozen for AI ("Freeze for AI") — a human must make this change.'
@@ -461,13 +446,6 @@ export async function writeGated(
 ): Promise<WriteResult> {
   const denial = (await writeDenialFull(p, context, path)) ?? lockedDenial(p, context, path, origin, model)
   if (denial) return { status: 'denied', reason: denial }
-  // A config note is refused BEFORE it is saved when it does not describe a
-  // valid configuration. The store hook that projects it into the columns runs
-  // after the write, so this is the only point at which a bad settings edit can
-  // be stopped rather than merely ignored — and being stopped is what keeps the
-  // note and the columns from silently disagreeing.
-  const configDenial = await configNoteDenial(context, path, content)
-  if (configDenial) return { status: 'denied', reason: configDenial }
   const runsAsDenial = activationRunsAsDenial(p, context, path, content)
   if (runsAsDenial) return { status: 'denied', reason: runsAsDenial }
   await store.writeNote(context, path, content, actorOf(p), origin, model)
@@ -490,28 +468,6 @@ function activationRunsAsDenial(p: ContextPrincipal, context: Context, path: str
   return 'Only a space admin can make an agent run as someone else. Leave `runs_as` out, or name yourself.'
 }
 
-/** Why this settings note cannot be saved, or null when it is fine. */
-async function configNoteDenial(
-  context: Context,
-  path: string,
-  content: string,
-): Promise<string | null> {
-  if (!isShared(context)) return null
-  const kind = configNoteKindOf(path)
-  if (!kind) return null
-  const { patch, errors } = parseConfigNote(kind, content)
-  if (errors.length) {
-    return `This settings note is not a valid configuration, so it was not saved: ${errors.join('; ')}`
-  }
-  // Structurally fine, but it may still be an edit the space cannot survive.
-  // Only reachable for the types note, which is the only one carrying aliases.
-  if (patch.aliases) {
-    const stored = await readSpaceConfig(context.spaceId)
-    const denial = stored ? adminAliasDenial(patch, stored) : null
-    if (denial) return denial
-  }
-  return null
-}
 
 /**
  * Gated dated `## Log` append (creating the section when absent). AI/agent
