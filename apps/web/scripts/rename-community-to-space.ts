@@ -9,11 +9,15 @@
  *   1. **Ids.** `spaces.id` and `nodes.id` carried a `community:` prefix
  *      (`community:visvine-hq`, `community:halter`), and so does every value
  *      derived from one — a tool key (`community:acme/deal-pipeline`), a
- *      machine ref, an agent's space column. Every FK to `spaces(id)` and
- *      `nodes(id)` is dropped, the prefix is rewritten across every text and
- *      jsonb column in the schema, and the constraints go back exactly as the
- *      catalog described them. One transaction: either the whole graph moves
- *      or none of it does.
+ *      machine ref, an agent's space column. Every column in the schema is
+ *      SCANNED for one, outside any transaction; only the columns that hold
+ *      one are then rewritten, with every FK to `spaces(id)` and `nodes(id)`
+ *      dropped and restored from the catalog around them. One transaction:
+ *      either the whole graph moves or none of it does — and when the scan
+ *      comes back empty the transaction is never opened at all. Scanning
+ *      first is not an optimisation: the first production run built an UPDATE
+ *      for all 474 columns, and 474 no-op round trips through the Cloud SQL
+ *      proxy expired the transaction before a row had changed.
  *
  *   2. **Note paths**, which are link identity, so a path is only ever renamed
  *      together with the links pointing at it. Sections move OFF `spaces/`
@@ -64,6 +68,10 @@ const OLD_ORG_DIR = 'communities/'
 const NEW_ORG_DIR = 'spaces/'
 const OLD_SECTION_DIR = 'spaces/'
 const NEW_SECTION_DIR = 'sections/'
+
+/** Long enough for a migration holding DDL locks; Prisma's default is 5s. */
+const TX_TIMEOUT_MS = 15 * 60 * 1000
+const TX_MAX_WAIT_MS = 60 * 1000
 
 const TEXT_UDTS = ['text', 'varchar', 'bpchar']
 const TEXT_ARRAY_UDTS = ['_text', '_varchar']
@@ -181,18 +189,82 @@ const q = (ident: string) => `"${ident.replace(/"/g, '""')}"`
 const lit = (value: string) => `'${value.replace(/'/g, "''")}'`
 
 /**
- * The id sweep. Broad on purpose: an id ends up in columns no schema reading
- * would predict — a tool key, a machine ref, an agent's `space` column, a
- * cached href — and the guard (`LIKE 'community:%'`, anchored) matches an id
- * and nothing a person wrote.
+ * Which of these columns actually hold a value starting `community:`?
+ *
+ * Asked BEFORE the transaction and in batches, because the answer is almost
+ * always "none of them" and the alternative is what broke the first production
+ * run: 500-odd no-op UPDATEs, each its own round trip through the Cloud SQL
+ * proxy, blowing the transaction's clock before a single row had changed.
+ * A probe outside the transaction has no clock to blow.
+ */
+async function columnsHoldingIds(
+  text: Column[],
+  arrays: Column[],
+  json: Column[],
+): Promise<{ text: Column[]; arrays: Column[]; json: Column[] }> {
+  const probe = (c: Column, kind: 'text' | 'array' | 'json'): string => {
+    if (kind === 'text') return `EXISTS (SELECT 1 FROM ${q(c.table)} WHERE ${q(c.column)} LIKE ${lit(OLD_ID_PREFIX + '%')})`
+    if (kind === 'array') {
+      return `EXISTS (SELECT 1 FROM ${q(c.table)}, unnest(${q(c.column)}) e WHERE e LIKE ${lit(OLD_ID_PREFIX + '%')})`
+    }
+    return `EXISTS (SELECT 1 FROM ${q(c.table)} WHERE ${q(c.column)}::text LIKE ${lit('%"' + OLD_ID_PREFIX + '%')})`
+  }
+
+  const all: Array<{ column: Column; kind: 'text' | 'array' | 'json' }> = [
+    ...text.map((column) => ({ column, kind: 'text' as const })),
+    ...arrays.map((column) => ({ column, kind: 'array' as const })),
+    ...json.map((column) => ({ column, kind: 'json' as const })),
+  ]
+
+  const hits = new Set<string>()
+  const BATCH = 40
+  for (let i = 0; i < all.length; i += BATCH) {
+    const slice = all.slice(i, i + BATCH)
+    const sql = `SELECT ${slice.map((e, n) => `${probe(e.column, e.kind)} AS "c${n}"`).join(', ')}`
+    const [row] = await prisma.$queryRawUnsafe<Array<Record<string, boolean>>>(sql)
+    slice.forEach((e, n) => {
+      if (row?.[`c${n}`]) hits.add(`${e.column.table}.${e.column.column}`)
+    })
+  }
+  const kept = (list: Column[]) => list.filter((c) => hits.has(`${c.table}.${c.column}`))
+  return { text: kept(text), arrays: kept(arrays), json: kept(json) }
+}
+
+/**
+ * The id sweep. Broad in what it CONSIDERS — an id ends up in columns no schema
+ * reading would predict: a tool key, a machine ref, an agent's space column —
+ * but narrow in what it writes, because `columnsHoldingIds` has already asked
+ * which of them hold one. The guard (`LIKE 'community:%'`, anchored) matches an
+ * id and nothing a person wrote.
+ *
+ * The whole thing is one transaction, and the foreign keys come off inside it
+ * so a renamed parent never fails a child's check mid-flight. Nothing is
+ * dropped when there is nothing to write — a no-op run does not touch the
+ * schema at all.
  */
 async function renameIds(): Promise<void> {
   console.log('\n1. ids — community:<slug> → space:<slug>')
-  const fks = await foreignKeysInto(['spaces', 'nodes'])
-  const text = await columnsOfKind(TEXT_UDTS)
-  const arrays = await columnsOfKind(TEXT_ARRAY_UDTS)
-  const json = await columnsOfKind(JSON_UDTS)
+  const candidates = {
+    text: await columnsOfKind(TEXT_UDTS),
+    arrays: await columnsOfKind(TEXT_ARRAY_UDTS),
+    json: await columnsOfKind(JSON_UDTS),
+  }
+  const { text, arrays, json } = await columnsHoldingIds(
+    candidates.text,
+    candidates.arrays,
+    candidates.json,
+  )
+  const holding = text.length + arrays.length + json.length
+  console.log(
+    `  scanned ${candidates.text.length} text · ${candidates.arrays.length} array · ` +
+      `${candidates.json.length} json columns — ${holding} hold a community: value`,
+  )
+  if (holding === 0) {
+    console.log('  nothing to rewrite; leaving the foreign keys alone')
+    return
+  }
 
+  const fks = await foreignKeysInto(['spaces', 'nodes'])
   const statementsInTx: string[] = []
   for (const fk of fks) {
     statementsInTx.push(`ALTER TABLE ${q(fk.table)} DROP CONSTRAINT ${q(fk.name)}`)
@@ -226,13 +298,20 @@ async function renameIds(): Promise<void> {
     statementsInTx.push(`ALTER TABLE ${q(fk.table)} ADD CONSTRAINT ${q(fk.name)} ${fk.definition}`)
   }
 
-  console.log(`  ${fks.length} foreign keys · ${text.length} text · ${arrays.length} array · ${json.length} json columns`)
+  console.log(`  ${fks.length} foreign keys off and back on, ${holding} columns rewritten`)
   if (dryRun) {
     statements += statementsInTx.length
     console.log(`  [dry] ${statementsInTx.length} statements in one transaction`)
     return
   }
-  await prisma.$transaction(statementsInTx.map((sql) => prisma.$executeRawUnsafe(sql)))
+  // Prisma's default transaction clock is 5s, which is a sensible default for a
+  // request and useless for a migration holding DDL locks over a proxy.
+  await prisma.$transaction(
+    async (tx) => {
+      for (const sql of statementsInTx) await tx.$executeRawUnsafe(sql)
+    },
+    { timeout: TX_TIMEOUT_MS, maxWait: TX_MAX_WAIT_MS },
+  )
   statements += statementsInTx.length
   console.log(`  ${statementsInTx.length} statements applied`)
 }
