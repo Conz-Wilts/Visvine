@@ -4,18 +4,24 @@
 // press a row they cannot open.
 //
 // It says three things and offers one act: this space is private, this many
-// people are in it, and here is how to ask. Nothing about what is inside is
-// here to say — no context, no member list, no tool rail — because none of it
+// people are in it, and here is how in. Nothing about what is inside is here
+// to say — no context, no member list, no tool rail — because none of it
 // crossed the boundary to get here (lib/spaces/subspaceAccess.ts).
 //
-// Asking is not entering. The request lands as a `pending` membership its
-// admins answer on Members → Wants to join, the same queue an invite link's
-// request lands in, so there is one place an admin says yes.
+// Two doors, decided by the sub-space's own admins (its house door):
+//
+// - 'request': asking is not entering. The request lands as a `pending`
+//   membership its admins answer on Members → Wants to join, the same queue
+//   an invite link's request lands in, so there is one place an admin says yes.
+// - 'parent': the room is open to anyone already in the house. The button
+//   reads "Join", the membership lands active, and the dialog walks in.
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Modal, Button } from '@/components/ui';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
+import { invalidateRequestCache } from '@/features/shared/lib/requestCache';
 import type { LockedSubspace } from '@/lib/spaces/subspaceAccess';
 
 export default function RequestSubspaceAccessDialog({
@@ -27,7 +33,10 @@ export default function RequestSubspaceAccessDialog({
   parentName: string;
   onClose: () => void;
 }) {
-  const { requestSubspaceAccess } = useSpace();
+  const router = useRouter();
+  const { requestSubspaceAccess, joinSpace, refreshSpace, setCurrentSpace } = useSpace();
+  const open = space.houseDoor === 'open';
+  const inviteOnly = space.houseDoor === 'invite';
   const [asking, setAsking] = useState(false);
   const [asked, setAsked] = useState(space.requested);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +51,25 @@ export default function RequestSubspaceAccessDialog({
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not send the request');
     } finally {
+      setAsking(false);
+    }
+  };
+
+  // Joining an open room: the row lands active, the space list is re-read so
+  // the room is a space of the viewer's, and they are put inside it.
+  const join = async () => {
+    if (asking) return;
+    setAsking(true);
+    setError(null);
+    try {
+      await joinSpace(space.id);
+      invalidateRequestCache(`spaces:subspaces:${space.parentId}`);
+      await refreshSpace();
+      setCurrentSpace(space.id);
+      onClose();
+      router.push('/directory');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not join');
       setAsking(false);
     }
   };
@@ -63,23 +91,33 @@ export default function RequestSubspaceAccessDialog({
         {space.description && <p className="text-sm text-text-secondary">{space.description}</p>}
 
         <p className="text-sm text-text-muted">
-          {asked
-            ? 'Your request is with this space’s admins. You’ll be able to open it once one of them approves.'
-            : 'You can see that this space exists because you’re in ' +
-              parentName +
-              '. Its context, members and tools stay closed until an admin here lets you in.'}
+          {open
+            ? 'This space is open to everyone in ' + parentName + '. Join it and it becomes one of your spaces.'
+            : inviteOnly
+              ? 'You can see that this space exists because you’re in ' + parentName + '. It is invite only — an admin here has to add you.'
+            : asked
+              ? 'Your request is with this space’s admins. You’ll be able to open it once one of them approves.'
+              : 'You can see that this space exists because you’re in ' +
+                parentName +
+                '. Its context, members and tools stay closed until an admin here lets you in.'}
         </p>
 
         {error && <div className="border-l-2 border-red-500 py-1 pl-3 text-sm text-red-700">{error}</div>}
 
         <div className="flex justify-end gap-2">
           <Button variant="neutral" onClick={onClose}>
-            {asked ? 'Done' : 'Cancel'}
+            {asked && !open ? 'Done' : 'Cancel'}
           </Button>
-          {!asked && (
-            <Button variant="brand" onClick={() => void ask()} disabled={asking}>
-              {asking ? 'Sending…' : 'Request access'}
+          {open ? (
+            <Button variant="brand" onClick={() => void join()} disabled={asking}>
+              {asking ? 'Joining…' : 'Join'}
             </Button>
+          ) : (
+            !asked && !inviteOnly && (
+              <Button variant="brand" onClick={() => void ask()} disabled={asking}>
+                {asking ? 'Sending…' : 'Request access'}
+              </Button>
+            )
           )}
         </div>
       </div>

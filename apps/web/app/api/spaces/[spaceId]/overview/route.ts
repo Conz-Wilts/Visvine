@@ -9,6 +9,8 @@ import prisma from '@/lib/prisma';
 import { isSuperAdmin } from '@/lib/session';
 import { requireApiSession, handleApiError } from '@/lib/api/route';
 import { getEventsData } from '@/lib/eventRepo';
+import { subspaceEventsOf } from '@/lib/events/subspaceRollup';
+import { mergeByStart } from '@/lib/events/rollup';
 import { normalizeStatus, isEventPast } from '@/lib/eventUtils';
 import { personAliases, type SpaceAlias } from '@/lib/types/context';
 
@@ -91,15 +93,21 @@ export async function GET(
     let upcomingCount = 0;
     let totalEvents = 0;
     if (isMember) {
-      const { events: allEvents, attendees } = await getEventsData(spaceId);
-      const published = allEvents.filter((e) => e.status !== 'draft');
+      // The space's own events plus what its public sub-spaces show everyone
+      // (lib/events/rollup.ts) — the hub is where a parent's members see the
+      // rooms' public calendar, badged with the room.
+      const [{ events: allEvents, attendees: ownAttendees }, rolled] = await Promise.all([
+        getEventsData(spaceId),
+        subspaceEventsOf(spaceId),
+      ]);
+      const attendees = [...ownAttendees, ...rolled.attendees];
+      const published = mergeByStart(allEvents.filter((e) => e.status !== 'draft'), rolled.events);
       totalEvents = published.length;
-      const upcoming = published
-        .filter((e) => !isEventPast(e.endAt, e.startAt))
-        .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+      const upcoming = published.filter((e) => !isEventPast(e.endAt, e.startAt));
       upcomingCount = upcoming.length;
       events = upcoming.slice(0, 3).map((e) => ({
         id: e.id,
+        viaSpace: e.viaSpace ?? null,
         title: e.title,
         startAt: e.startAt,
         endAt: e.endAt,

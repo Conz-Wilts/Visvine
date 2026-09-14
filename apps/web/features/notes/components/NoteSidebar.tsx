@@ -38,8 +38,9 @@ import {
   useContextTreeState,
 } from '@/features/notes/hooks/useContextTreeState'
 import { canMoveInto, deleteFolderDenial, moveDenial, parentFolderOf } from '../lib/useContextTree'
-import { isSubspacePath } from '@/lib/spaces/subspaces'
-import { BlocksIcon } from '@/features/shared/icons'
+import { isFederatedPath, subspaceOfPath } from '@/lib/spaces/subspaces'
+import { canPlaceInto, isPeopleFolder, placeableOf, placementDenial, structuralIconOf } from '@/lib/notes/shared/placedFolders'
+import { BlocksIcon, Icon } from '@/features/shared/icons'
 
 // Expansion state (openPaths + reveal overlay + persistence) lives in
 // useContextTreeState, shared with the full-screen Context explorer so both
@@ -67,10 +68,13 @@ interface FolderBadge {
   level?: string
 }
 
-/** A row the tree can move: a note, or a folder (with everything under it). */
+/** A row the tree can move: a note, a folder (with everything under it), or a
+ *  structural folder that is PLACED rather than moved — a built-in folder or
+ *  a sub-space, whose path stays put while the tree draws it elsewhere
+ *  (lib/notes/shared/placedFolders.ts). */
 interface MovableItem {
   path: string
-  kind: 'note' | 'folder'
+  kind: 'note' | 'folder' | 'placed'
   label: string
 }
 
@@ -81,6 +85,10 @@ interface TreeDragValue {
   dragging: MovableItem | null
   /** Folder currently under the pointer ('' = the context root, null = none). */
   dropFolder: string | null
+  /** The tree as drawn — a placement's cycle guard walks it. */
+  tree: TreeNode
+  /** Whether the host surface places structural folders at all. */
+  canPlace: boolean
   begin: (item: MovableItem) => void
   end: () => void
   hover: (folderPath: string | null) => void
@@ -89,12 +97,34 @@ interface TreeDragValue {
   requestMove: (item: MovableItem) => void
 }
 
+/** Whether dropping `dragging` on `dest` would do anything — a placement or a move, by the item's kind. */
+function acceptsDrop(drag: TreeDragValue, dest: string): boolean {
+  if (!drag.dragging) return false
+  return drag.dragging.kind === 'placed'
+    ? canPlaceInto(drag.tree, drag.dragging.path, dest)
+    : canMoveInto(drag.dragging.path, drag.dragging.kind, dest)
+}
+
 const TreeDrag = createContext<TreeDragValue | null>(null)
 
 /** Pressing a locked sub-space's folder. Carried on a context rather than
  *  threaded through every FolderRow: a locked row only ever appears under
- *  `subspaces/`, but the recursion that reaches it is the same one. */
+ *  the context root, but the recursion that reaches it is the same one. */
 const TreeLockedAsk = createContext<((spaceId: string) => void) | null>(null)
+
+/** The sub-spaces the viewer stands in, read off the grafted folders' `writable`
+ *  stamp (lib/spaces/subspaces.ts#graftSubspace). Rows under one of these take
+ *  the same edit affordances as the space's own — the server judges each write
+ *  in the sub-space — and rows under any other federated folder are read-only. */
+const TreeWritableSpaces = createContext<ReadonlySet<string>>(new Set())
+
+/** Whether a row is another space's context the viewer can only read here:
+ *  what the parent shares (`parent/`), or a sub-space they are not in. */
+function readOnlyHere(path: string, writable: ReadonlySet<string>): boolean {
+  if (!isFederatedPath(path)) return false
+  const sub = subspaceOfPath(path)
+  return sub === null || !writable.has(sub)
+}
 
 /** Whether a row can be dragged at all: moving it to the folder it already sits
  *  in is a no-op, so a denial there is purely about the item itself (entity
@@ -126,6 +156,10 @@ interface NoteSidebarProps {
   onMoveNote?: (from: string, destFolder: string) => void
   /** Move a folder and everything under it. */
   onMoveFolder?: (from: string, destFolder: string) => void
+  /** Place a built-in folder or a sub-space under a folder of the space's own
+   *  ('' = the top): the path stays, the tree draws it there
+   *  (lib/notes/shared/placedFolders.ts). Omit and those rows don't drag. */
+  onPlaceFolder?: (path: string, destFolder: string) => void
   /** Render without card chrome (bg/border/shadow) â€” used when the sidebar sits on
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
@@ -178,6 +212,7 @@ export function NoteSidebar({
   onDeleteFolder,
   onMoveNote,
   onMoveFolder,
+  onPlaceFolder,
   trash = null,
   onRestoreTrash,
   onPurgeTrash,
@@ -201,6 +236,12 @@ export function NoteSidebar({
     return map
   }, [notes])
 
+  // A grafted sub-space folder sits at the top level; the stamp is on it alone.
+  const writableSpaces = useMemo(
+    () => new Set((tree.children ?? []).filter((c) => c.space && c.writable).map((c) => c.space!)),
+    [tree],
+  )
+
   // Moving: dragging a row onto a folder, or the same move from the row menu
   // via the "Move to..." dialog. Both go through one `move` so the rules and the
   // handlers stay in one place.
@@ -212,12 +253,15 @@ export function NoteSidebar({
   const drag = useMemo<TreeDragValue | null>(() => {
     if (!movingEnabled) return null
     const move = (item: MovableItem, destFolder: string) => {
-      if (item.kind === 'folder') onMoveFolder!(item.path, destFolder)
+      if (item.kind === 'placed') onPlaceFolder?.(item.path, destFolder)
+      else if (item.kind === 'folder') onMoveFolder!(item.path, destFolder)
       else onMoveNote!(item.path, destFolder)
     }
     return {
       dragging,
       dropFolder,
+      tree,
+      canPlace: !!onPlaceFolder,
       begin: (item) => setDragging(item),
       end: () => {
         setDragging(null)
@@ -227,7 +271,7 @@ export function NoteSidebar({
       move,
       requestMove: setMoveTarget,
     }
-  }, [movingEnabled, dragging, dropFolder, onMoveNote, onMoveFolder])
+  }, [movingEnabled, dragging, dropFolder, tree, onMoveNote, onMoveFolder, onPlaceFolder])
 
   // Which folders are expanded â€” persisted per scope, with the reveal peek
   // layered on top (see useContextTreeState for the full story).
@@ -295,6 +339,7 @@ export function NoteSidebar({
   return (
     <TreeDrag.Provider value={drag}>
     <TreeLockedAsk.Provider value={onOpenLockedSubspace ?? null}>
+    <TreeWritableSpaces.Provider value={writableSpaces}>
     <div
       className={`flex h-full flex-col overflow-hidden ${
         /* bare = docked into the Sidebar column, which draws its own seam;
@@ -390,6 +435,7 @@ export function NoteSidebar({
         }}
       />
     )}
+    </TreeWritableSpaces.Provider>
     </TreeLockedAsk.Provider>
     </TreeDrag.Provider>
   )
@@ -662,8 +708,23 @@ function EmptyBranchRow() {
 function LockedSubspaceFolderRow({ node, guide }: { node: TreeNode; guide: Guide }) {
   const ask = useContext(TreeLockedAsk)
   const spaceId = node.space
+  // A locked room is still a folder of the parent's tree, so it can be placed
+  // like an open one — dragged only; it is never a drop target.
+  const drag = useContext(TreeDrag)
+  const draggable = !!drag?.canPlace
+  const isDragged = drag?.dragging?.path === node.path
   return (
-    <div className="flex items-center">
+    <div
+      className={`flex items-center ${isDragged ? 'opacity-50' : ''}`}
+      draggable={draggable}
+      onDragStart={(e) => {
+        if (!draggable) return
+        e.dataTransfer.setData('text/plain', node.path)
+        e.dataTransfer.effectAllowed = 'move'
+        drag!.begin({ path: node.path, kind: 'placed', label: node.title ?? node.name })
+      }}
+      onDragEnd={() => drag?.end()}
+    >
       <GuideLine guide={guide} />
       <button
         type="button"
@@ -713,9 +774,13 @@ function FolderRow(props: {
   // Share affordance (keyed by the folder's full path).
   const badge = props.folderBadges?.get(props.node.path)
   const openPath = (path: string) => props.onSelect(path)
-  // A sub-space's context is read here, never shared, moved or deleted here
-  // (lib/spaces/subspaces.ts) — those rows carry no menu that would try.
-  const federated = isSubspacePath(props.node.path)
+  // Another space's context — a sub-space's, or what the parent shares — is
+  // never SHARED from here: who sees it is that space's admins' act, made
+  // there. It is moved and deleted here only by someone who stands in the
+  // sub-space (TreeWritableSpaces); every other federated row is read-only
+  // and carries no menu that would try.
+  const federated = isFederatedPath(props.node.path)
+  const readOnly = readOnlyHere(props.node.path, useContext(TreeWritableSpaces))
   const showAccess = !!props.onFolderAccess && !federated
   // Folder-note behaviour: when the folder has an index.md (hidden as a child
   // row by Tree), the folder row IS that note â€” clicking the name opens it and
@@ -744,11 +809,23 @@ function FolderRow(props: {
   // folders, never next to a note. The context root row is the target for "top
   // level"; it is never a source.
   const drag = useContext(TreeDrag)
-  const item: MovableItem = { path: props.node.path, kind: 'folder', label: folderLabel }
-  const draggable = !!drag && !!props.node.path && isMovable(props.node.path, 'folder')
+  // A structural folder is PLACED, not moved: its path stays and the tree draws
+  // it under the drop. The `Sub-spaces` folder and a room's folder are placed
+  // in THIS space's tree (its index notes), so they drag even though their rows
+  // are read here; a built-in folder inside a room is placed in the room, so
+  // only someone who stands in it drags that one.
+  const placeable = placeableOf(props.node.path)
+  const item: MovableItem = { path: props.node.path, kind: placeable ? 'placed' : 'folder', label: folderLabel }
+  const draggable =
+    !!drag &&
+    !!props.node.path &&
+    (placeable
+      ? drag.canPlace && (placeable.space === null || !readOnly)
+      : !readOnly && isMovable(props.node.path, 'folder'))
   const isDragged = drag?.dragging?.path === props.node.path
-  const accepts = !!drag?.dragging && canMoveInto(drag.dragging.path, drag.dragging.kind, props.node.path)
+  const accepts = !!drag && acceptsDrop(drag, props.node.path)
   const isDropTarget = accepts && drag?.dropFolder === props.node.path
+  const structuralIcon = structuralIconOf(props.node.path)
   // Hovering a shut folder mid-drag springs it open, so a note can be dropped
   // into a nested folder without letting go first.
   const springRef = useRef<number | null>(null)
@@ -840,10 +917,19 @@ function FolderRow(props: {
               at the glyph's centre â€” exactly where CHILD_INDENT puts the
               children's guides, so the two read as one line. */}
           {open && <TreeStem active={onSelectedPath(props.node.path, props.selectedPath)} />}
-          {/* A sub-space read into this tree is another space, so its folder
-              carries a space's glyph rather than a folder's: what is under it
-              is that space's own context, read-only here. */}
-          {props.icon ?? (props.node.space ? <BlocksIcon className="h-4 w-4" /> : <FolderIcon open={open} />)}
+          {/* A built-in folder carries its tool's glyph, and a sub-space read
+              into this tree a space's — each the shape of what it is rather
+              than a folder somebody made (lib/notes/shared/namespaces.ts). */}
+          {props.icon ??
+            (isPeopleFolder(props.node.path) ? (
+              <GlyphIcon glyph="person" />
+            ) : structuralIcon ? (
+              <Icon name={structuralIcon} className="h-4 w-4" />
+            ) : props.node.space ? (
+              <BlocksIcon className="h-4 w-4" />
+            ) : (
+              <FolderIcon open={open} />
+            ))}
         </button>
         )}
         <button
@@ -893,13 +979,13 @@ function FolderRow(props: {
               ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => props.onFolderAccess!(props.node.path) }]
               : []),
             ...(draggable
-              ? [{ label: 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
+              ? [{ label: placeable ? 'Place in...' : 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
               : []),
             // No Delete on the root (that row is the context itself), nor on a
             // built-in folder: agents/, connectors/, tools/, people/ and the
             // rest are structure the runtime resolves against, so the row
             // offers no way to remove one (deleteFolderDenial).
-            ...(props.onDeleteFolder && !federated && !deleteFolderDenial(props.node.path)
+            ...(props.onDeleteFolder && !readOnly && !deleteFolderDenial(props.node.path)
               ? [
                   {
                     label: 'Delete',
@@ -1087,8 +1173,11 @@ function NoteRow({
   onShare?: (path: string) => void
 }) {
   const drag = useContext(TreeDrag)
+  // A sub-space's note is moved or deleted here only by someone who stands
+  // in that sub-space; shared from here by nobody (see FolderRow).
+  const readOnly = readOnlyHere(path, useContext(TreeWritableSpaces))
   const item: MovableItem = { path, kind: 'note', label: title }
-  const draggable = !!drag && isMovable(path, 'note')
+  const draggable = !!drag && !readOnly && isMovable(path, 'note')
   const isDragged = drag?.dragging?.path === path
   return (
     <div
@@ -1135,13 +1224,13 @@ function NoteRow({
       <RowMenu
         selected={selected}
         items={[
-          ...(onShare && !isSubspacePath(path)
+          ...(onShare && !isFederatedPath(path)
             ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => onShare(path) }]
             : []),
           ...(draggable
             ? [{ label: 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
             : []),
-          ...(canEdit && !isSubspacePath(path)
+          ...(canEdit && !readOnly
             ? [{ label: 'Delete', icon: <TrashIcon />, danger: true, onClick: () => onDelete(path) }]
             : []),
         ]}
@@ -1197,9 +1286,10 @@ function MoveDialog({
   const shown = q
     ? folders.filter((f) => f.label.toLowerCase().includes(q) || f.path.toLowerCase().includes(q))
     : folders
+  const placing = item.kind === 'placed'
 
   return (
-    <Modal onClose={onClose} size="sm" title={`Move “${item.label}”`}>
+    <Modal onClose={onClose} size="sm" title={`${placing ? 'Place' : 'Move'} “${item.label}”`}>
       <div className="flex flex-col gap-3">
         <input
           autoFocus
@@ -1213,10 +1303,15 @@ function MoveDialog({
             <p className="px-3 py-4 text-sm text-text-muted">No folder matches “{query}”.</p>
           ) : (
             shown.map((folder) => {
-              const allowed = canMoveInto(item.path, item.kind, folder.path)
+              const allowed =
+                item.kind === 'placed'
+                  ? canPlaceInto(tree, item.path, folder.path)
+                  : canMoveInto(item.path, item.kind, folder.path)
               const reason =
-                moveDenial(item.path, item.kind, folder.path) ??
-                (allowed ? undefined : 'It is already here.')
+                (item.kind === 'placed'
+                  ? placementDenial(item.path, folder.path, tree)
+                  : moveDenial(item.path, item.kind, folder.path)) ?? (allowed ? undefined : 'It is already here.')
+              const glyph = structuralIconOf(folder.path)
               return (
                 <button
                   key={folder.path || '<root>'}
@@ -1234,7 +1329,13 @@ function MoveDialog({
                   style={{ paddingLeft: q ? undefined : 12 + folder.depth * 14 }}
                 >
                   <span className="shrink-0 text-text-muted">
-                    <FolderIcon />
+                    {isPeopleFolder(folder.path) ? (
+                      <GlyphIcon glyph="person" />
+                    ) : glyph ? (
+                      <Icon name={glyph} className="h-4 w-4" />
+                    ) : (
+                      <FolderIcon />
+                    )}
                   </span>
                   <span className="truncate">{folder.label}</span>
                   {folder.path && (

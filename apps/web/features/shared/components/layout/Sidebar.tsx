@@ -94,7 +94,7 @@ const LEAVE_SLACK_PX = 40;
 const RAIL_MOTION = `${RAIL_MOTION_MS}ms cubic-bezier(0.25, 0.1, 0.25, 1)`;
 export default function Sidebar() {
   const pathname = usePathname();
-  const { isOpen: createOpen, formOpen: createFormOpen, close: closeCreate } = useCreateModal();
+  const { isOpen: createOpen, close: closeCreate } = useCreateModal();
   const createSurface = useCreateSurface();
   const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
   const { currentSpace, isAdmin, loading: spaceLoading } = useSpace();
@@ -181,18 +181,13 @@ export default function Sidebar() {
   // motion — glides left with it, so the pair settles at a column of glyphs
   // and one list rather than two full columns side by side.
   const railPanelOpen = switcherOpen || createOpen;
-  // A panel with a form in it is held: Create new while its form is open. A
-  // list is not held — the pointer leaving the card puts it away, the same
-  // gesture that closes the switcher.
-  const held = createOpen && createFormOpen;
   const railW = expanded ? EXPANDED_W : COLLAPSED_W;
   // Create new is open only while the pointer is on its row or in the panel:
-  // pointing at any other row of the rail puts it away — unless its form is
-  // being filled in, which holds it the way leaving the card does. The
-  // switcher is not put away by pointing: it goes when another row is PRESSED
-  // (pressRailRow), or when Create new opens in its place.
+  // pointing at any other row of the rail puts it away. The switcher is not
+  // put away by pointing: it goes when another row is PRESSED (pressRailRow),
+  // or when Create new opens in its place.
   const leaveRailPanels = () => {
-    if (createOpen && !createFormOpen) closeCreate();
+    if (createOpen) closeCreate();
   };
   const pressRailRow = () => {
     if (switcherOpen) setSwitcherOpen(false);
@@ -277,9 +272,10 @@ export default function Sidebar() {
     }, RAIL_MOTION_MS + LEAVE_GRACE_MS);
     cleanup.current = () => { document.removeEventListener("mousemove", track); clearTimeout(settle); };
   };
+  // Both rail panels are lists, so leaving the card always puts one away —
+  // there is nothing half-typed in either that leaving could throw away.
   const leaveCard = () => {
     if (!railPanelOpen) return;
-    if (held) return;
     if (phase.current === "slide") return;
     stopTracking();
     shutRailPanels();

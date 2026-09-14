@@ -576,7 +576,9 @@ async function connectorsCall(t: ResolvedTarget, params: unknown, deps: BridgeDe
     // execute under the viewer's principal. No admin widening, no thinner path.
     // `personal: false` — a Tool reaches only what the space that wrote it has.
     // The viewer never chose to run this code, so their own connectors (and
-    // the accounts behind them) are not this page's to spend.
+    // the accounts behind them) are not this page's to spend. What the PARENT
+    // shares with this sub-space is the space's to spend — the parent chose
+    // to lend it — so that lookup stays on (`shared` defaults true).
     const loaded = await deps.loadConnector(t.principal, t.context, name, { personal: false })
     if (!loaded) return err('not_found', `No connector named "${name}" here.`)
     const result = await deps.executeConnectorScript(

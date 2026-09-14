@@ -165,6 +165,11 @@ function InstallRow({
                 Degraded
               </Chip>
             )}
+            {install.sharedFrom && (
+              <Chip tone="muted" size="sm">
+                Shared from {install.sharedFrom.name}
+              </Chip>
+            )}
           </div>
           <p className="truncate font-mono text-[11px] text-text-muted">
             {install.slug} · v{install.version}
@@ -230,7 +235,7 @@ function InstallRow({
         </div>
       )}
 
-      {install.pendingVersion && isAdmin && (
+      {install.pendingVersion && isAdmin && !install.sharedFrom && (
         <UpgradeCard
           spaceId={spaceId}
           install={install}
@@ -288,12 +293,17 @@ function InstallRow({
         </div>
       )}
 
-      {isAdmin && (
+      {isAdmin && !install.sharedFrom && (
         <div className="mt-3 flex justify-end border-t border-border-subtle pt-3">
           <Button variant="danger-text" size="sm" onClick={onRemove} disabled={busy}>
             Uninstall
           </Button>
         </div>
+      )}
+      {isAdmin && install.sharedFrom && (
+        <p className="mt-3 border-t border-border-subtle pt-3 text-xs text-text-muted">
+          Installed here by {install.sharedFrom.name}; it follows the version that space runs. Turn it off here, or stop sharing it there.
+        </p>
       )}
     </section>
   );

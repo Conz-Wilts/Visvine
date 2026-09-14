@@ -31,14 +31,14 @@ export async function GET(req: NextRequest) {
   const session = await requireSession();
   if (session instanceof Response) return session;
 
-  const spaceId = req.nextUrl.searchParams.get('space')?.trim() ?? '';
+  const viaSpaceId = req.nextUrl.searchParams.get('space')?.trim() ?? '';
   const connector = req.nextUrl.searchParams.get('connector')?.trim() ?? '';
-  if (!spaceId || !connector) return fail('Missing space or connector.');
+  if (!viaSpaceId || !connector) return fail('Missing space or connector.');
 
   // resolveContext + describeConnector apply the same visibility lens the run
   // path does, so someone who cannot see the note cannot start a flow for it —
   // and therefore cannot discover which services a space has configured.
-  const resolved = await resolveContext(session, spaceId);
+  const resolved = await resolveContext(session, viaSpaceId);
   if (resolved instanceof Response) return resolved;
   const principal = await principalOf(resolved);
 
@@ -54,6 +54,13 @@ export async function GET(req: NextRequest) {
   if (auth.mode === 'space' && !resolved.isAdmin) {
     return fail('Only a space admin can connect a shared account for this connector.', 403);
   }
+  // The parent's shared connector: a person's OWN account is theirs to link
+  // wherever they stand, and it lands in the parent's space — the rows a run
+  // resolves. A space-wide account is the parent's act, made there.
+  if (detail.shared && auth.mode === 'space') {
+    return fail(`This connector belongs to ${detail.sharedFrom?.name ?? 'the parent space'}; connect its shared account there.`, 403);
+  }
+  const spaceId = detail.ownerSpaceId;
 
   try {
     const endpoints = await resolveEndpoints(auth);
@@ -140,6 +147,7 @@ export async function GET(req: NextRequest) {
     // parameter is only the echo we compare against it.
     response.cookies.set(PENDING_COOKIE, await signPending({
       spaceId,
+      viaSpaceId: spaceId === viaSpaceId ? undefined : viaSpaceId,
       connector,
       provider: auth.provider,
       mode: auth.mode,

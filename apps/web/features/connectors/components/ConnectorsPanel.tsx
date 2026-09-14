@@ -131,6 +131,13 @@ interface ExistingConnector {
    * abandoned dance.
    */
   connection: { actsAs: string | null; broken: boolean } | null;
+  /**
+   * The parent space's connector, shared with this sub-space
+   * (docs/sub-spaces.md). Read here, changed there: no switch, no delete, no
+   * edit — the row says whose it is instead.
+   */
+  shared?: boolean;
+  sharedFrom?: { id: string; name: string } | null;
 }
 
 type Tone = 'ok' | 'warn' | 'bad' | 'muted';
@@ -669,16 +676,25 @@ export default function ConnectorsPanel({
               {siblings.length > 1 && ` · one of ${siblings.length} in this space`}
             </p>
           </div>
-          <Button
-            variant="neutral"
-            size="sm"
-            className={ACTION_SLOT}
-            disabled={toggling === connected.name}
-            onClick={() => setEnabled(connected, !connected.enabled)}
-          >
-            {toggling === connected.name ? 'Saving…' : connected.enabled ? 'Disable' : 'Enable'}
-          </Button>
+          {!connected.shared && (
+            <Button
+              variant="neutral"
+              size="sm"
+              className={ACTION_SLOT}
+              disabled={toggling === connected.name}
+              onClick={() => setEnabled(connected, !connected.enabled)}
+            >
+              {toggling === connected.name ? 'Saving…' : connected.enabled ? 'Disable' : 'Enable'}
+            </Button>
+          )}
         </div>
+
+        {connected.shared && (
+          <p className="text-sm text-text-muted">
+            Shared from <span className="font-medium text-text-secondary">{connected.sharedFrom?.name ?? 'the parent space'}</span> —
+            runs here with that space&apos;s keys and accounts. Its note, switch and secrets are changed there.
+          </p>
+        )}
 
         {(connected.description ?? about) && (
           <p className="text-sm text-text-secondary">{connected.description ?? about}</p>
@@ -737,21 +753,23 @@ export default function ConnectorsPanel({
           <dd className="min-w-0 break-words font-mono text-xs">{connected.path}</dd>
         </dl>
 
-        <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-4">
-          <Button
-            variant="danger"
-            size="sm"
-            className="inline-flex items-center gap-2"
-            onClick={() => { setDeleteError(null); setConfirmDelete(connected); }}
-          >
-            <Trash2Icon className="h-4 w-4" />
-            Delete
-          </Button>
-          {/* The note IS the connector, so Edit is a door to its page. */}
-          <Button variant="neutral" size="sm" onClick={() => { setManage(null); openConnector(connected.name); }}>
-            Edit
-          </Button>
-        </div>
+        {!connected.shared && (
+          <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-4">
+            <Button
+              variant="danger"
+              size="sm"
+              className="inline-flex items-center gap-2"
+              onClick={() => { setDeleteError(null); setConfirmDelete(connected); }}
+            >
+              <Trash2Icon className="h-4 w-4" />
+              Delete
+            </Button>
+            {/* The note IS the connector, so Edit is a door to its page. */}
+            <Button variant="neutral" size="sm" onClick={() => { setManage(null); openConnector(connected.name); }}>
+              Edit
+            </Button>
+          </div>
+        )}
       </div>
     );
   };
@@ -909,6 +927,7 @@ export default function ConnectorsPanel({
                             — the two things that tell one Drive from another. */}
                         <p className="truncate text-xs text-text-muted">
                           {service ? `${service.name} · ${c.name}` : c.name}
+                          {c.shared && ` · shared from ${c.sharedFrom?.name ?? 'the parent space'}`}
                         </p>
                       </div>
                     </button>

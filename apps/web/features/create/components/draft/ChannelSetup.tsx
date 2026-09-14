@@ -4,23 +4,27 @@ import { useCallback, useEffect, useState } from 'react';
 import { ChannelIcon, ChannelIconPicker } from '@/features/messages/components/ChannelIcon';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import type { ChannelSectionEntry, ChannelViewMode } from '@/lib/messages/types';
-import { DOCK_MS } from '@/features/shared/contexts/SidebarContext';
-import { FormFooter, Segmented, fieldClass, useAutoFocus, useCreateSubmit, type InlineFormProps } from './shared';
+import { fieldClass, Segmented, SetupSection, useDraftCommit, type DraftKindProps } from './shared';
 
 const VIEWS = [
   { value: 'CHAT', label: 'Chat' },
   { value: 'FEED', label: 'Feed' },
 ] as const satisfies readonly { value: ChannelViewMode; label: string }[];
 
-/** A channel: its icon and name, how it reads, and the section it files under. */
-export default function ChannelForm({ spaceId, accent, onDone }: InlineFormProps) {
-  const [name, setName] = useState('');
+/**
+ * A channel: the title above names it, the prose below becomes its context
+ * note (channels/<slug>.md — the channel has one either way, this just writes
+ * its first paragraph), and this surface owns the three facts a conversation
+ * needs that a note does not — the icon it wears, whether it reads as chat or
+ * as a feed, and the section it files under.
+ */
+export default function ChannelSetup({ shared, onReadyChange, registerCommit }: DraftKindProps) {
+  const { spaceId, title, accent } = shared;
   const [icon, setIcon] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ChannelViewMode>('CHAT');
   const [sectionId, setSectionId] = useState('');
   const [sections, setSections] = useState<ChannelSectionEntry[]>([]);
   const [pickingIcon, setPickingIcon] = useState(false);
-  const nameRef = useAutoFocus<HTMLInputElement>(DOCK_MS);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,18 +35,27 @@ export default function ChannelForm({ spaceId, accent, onDone }: InlineFormProps
     return () => { cancelled = true; };
   }, [spaceId]);
 
-  const run = useCallback(async () => {
+  const commit = useCallback(async () => {
     const { conversation } = await fetchJsonBody<{ conversation: { id: string } }>(
       '/api/messages/conversations/channel',
       'POST',
-      { spaceId, name: name.trim(), icon: icon ?? undefined, sectionId: sectionId || undefined, viewMode },
+      {
+        spaceId,
+        name: title.trim(),
+        // The channel's context note, which the create call writes for us.
+        context: shared.body().trim().slice(0, 5000) || undefined,
+        icon: icon ?? undefined,
+        sectionId: sectionId || undefined,
+        viewMode,
+      },
     );
     return `/channels/${encodeURIComponent(conversation.id)}`;
-  }, [spaceId, name, icon, sectionId, viewMode]);
-  const { saving, error, submit } = useCreateSubmit(run, onDone);
+  }, [spaceId, title, icon, sectionId, viewMode, shared]);
+
+  useDraftCommit({ onReadyChange, registerCommit }, title.trim().length > 0, commit);
 
   return (
-    <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+    <SetupSection label="How it reads">
       <div className="flex items-center gap-2">
         <div className="relative">
           <button
@@ -63,17 +76,10 @@ export default function ChannelForm({ spaceId, accent, onDone }: InlineFormProps
             </div>
           )}
         </div>
-        <input
-          ref={nameRef}
-          className={fieldClass}
-          placeholder="Channel name"
-          aria-label="Channel name"
-          maxLength={80}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <div className="min-w-0 flex-1">
+          <Segmented value={viewMode} options={VIEWS} onPick={setViewMode} accent={accent} />
+        </div>
       </div>
-      <Segmented value={viewMode} options={VIEWS} onPick={setViewMode} accent={accent} />
       {sections.length > 0 && (
         <select
           className={fieldClass}
@@ -87,7 +93,6 @@ export default function ChannelForm({ spaceId, accent, onDone }: InlineFormProps
           ))}
         </select>
       )}
-      <FormFooter ready={name.trim().length > 0} saving={saving} error={error} />
-    </form>
+    </SetupSection>
   );
 }

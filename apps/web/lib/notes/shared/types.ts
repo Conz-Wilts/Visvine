@@ -51,10 +51,19 @@ export interface TreeNode {
   kind: 'folder' | 'note'
   title?: string // display title for notes
   children?: TreeNode[]
-  // Set on the folder a public sub-space is read through (`subspaces/<id>`):
-  // the id of that space. Everything under it is that space's own context,
-  // rebased into this tree read-only (lib/spaces/subspaces.ts).
+  // Set on the folder a sub-space is read through (`subspaces/<id>`): the id
+  // of that space. Everything under it is that space's own context, rebased
+  // into this tree (lib/spaces/subspaces.ts).
   space?: string
+  // Set with `space` when the viewer stands in that sub-space — a member or
+  // an admin of it — so its rows take the edit affordances the space's own
+  // rows do. Each write is still judged in the sub-space, per path
+  // (lib/notes/federation.ts#writeTarget). Absent: read-only here.
+  writable?: boolean
+  // Set on the `parent` folder: what the space this one sits inside shares
+  // with it (connectors and agents flagged `share: subspaces`), read-only
+  // (lib/spaces/subspaces.ts#graftParent). `space` then names the parent.
+  parent?: boolean
   // Set on a `subspaces/<id>` folder standing for a PRIVATE sub-space: it is
   // named here, and holds nothing. A private sub-space is closed, not secret —
   // the row exists so a member of the parent can see it and ask

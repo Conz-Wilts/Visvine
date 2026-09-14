@@ -120,11 +120,10 @@ pnpm db:logs            # tail Postgres logs
 pnpm db:psql            # open psql in the container
 pnpm db:migrate         # apply pending migrations + hand-written SQL
 pnpm db:migrate:new     # author a migration from a schema.prisma change
-pnpm db:seed            # base seed: the space, aliases + anchor users (WIPES the DB)
-pnpm db:hq:full         # db:seed + directory + context + extras + connectors
+pnpm db:seed            # the whole Visvine HQ demo space, then db:notes:verify (WIPES the DB)
 pnpm db:nz              # load the NZ startup ecosystem demo content
-pnpm db:fresh           # rebuild from migrations + db:hq:full (volume preserved)
-pnpm db:reset           # destroy volume + rebuild + db:hq:full (prompts)
+pnpm db:fresh           # rebuild from migrations + db:seed (volume preserved)
+pnpm db:reset           # destroy volume + rebuild + db:seed (prompts)
 
 pnpm prisma:studio      # open Prisma Studio
 pnpm prisma:generate    # regenerate Prisma client
@@ -137,37 +136,35 @@ pnpm — see `apps/mobile/README.md`.
 
 ## Seed
 
-The seeded space is **Visvine HQ** (`space:visvine-hq`) — Visvine's own
+The seeded space is **Visvine HQ** (`visvine-hq`) — Visvine's own
 space, dogfooding the product: the organisations that run on us, the people who
 run them, and the product's own roadmap and decisions. Everyone in it is
 invented, and every address is under a reserved documentation domain
 (`*.example.com`), because the fixture gets dumped and shared between machines.
 
-Its identity lives in ONE place, `apps/web/scripts/seed/space.ts`, and the
-content it is built from in `apps/web/scripts/seed/dataset.ts`. Add an
-organisation to that array and the directory, its notes, the indexes, the
-segment pages and the roll-ups all follow.
+`pnpm db:seed` wipes the local database and builds the whole space in one pass
+(about 20 seconds), then runs `db:notes:verify`, which fails the seed on a
+structural violation. If `apps/web/.env` keeps `CLOUD_SQL_CONNECTION_NAME` for
+`pnpm dev:cloud`, the local-DB guard refuses — run it as
+`CLOUD_SQL_CONNECTION_NAME= pnpm db:seed`.
 
-Built in layers; `pnpm db:hq:full` runs all of them:
+It is built the way the app builds things, not beside it: spaces are created by
+`provisionSpace`, members join through `ensureMemberNode`, and every note goes
+through the note store — so directory links, folder indexes, entity folders,
+`events/` `channels/` `sections/` notes and agent state are the app's own
+projections, with no backfill or rebuild pass afterwards.
 
-| step | what it adds |
+| where | what |
 |---|---|
-| `db:seed` | the space, its node types and aliases, the four anchor users. **Wipes the whole local DB first.** |
-| `db:hq` | 65 organisations (customers, design partners, pipeline, investors, partners) + the 87 people at them |
-| `db:hq:notes` | the shared context (~190 notes: organisations, people, segments, team, product, deals, data) + the admin's personal context |
-| `db:hq:extras` | 11 events + attendees, the Drive, channel sections + channels + messages |
-| `db:connectors:demo` | two working connectors in the shared context |
-| `db:entities:folders` | moves any entity note still at its flat path (`people/<slug>.md`) into its folder (`people/<slug>/index.md`) — idempotent; the seed writes the folder form already |
-| `db:context-links` | directory links derived from the shared-context entity notes |
-| `db:index-notes:rebuild` | creates any missing folder index and refreshes every index's managed child list |
-| `db:notes:verify` | fails the seed if the context breaks a structural rule |
-| `db:global:rebuild` | rebuilds every Visvine global record from public spaces + profiles (`docs/global-records.md`) |
-| `db:actions:sync` | renders the action and recipe catalogues into the Visvine space — the notes an agent reads to learn what Visvine can do |
+| `apps/web/scripts/seed/space.ts` | the space's identity: id, node types, aliases and their grants, the two rooms, the anchor users |
+| `apps/web/scripts/seed/dataset.ts` | the records: 65 organisations, their people, the team, events, channels, Drive files |
+| `apps/web/scripts/seed/notes.ts` | the shared context (organisations, people, segments, team, product, deals, data) and the admin's personal context |
+| `apps/web/scripts/seed/connectors.ts` | the demo connectors (sandbox, appdb, fund-metrics, OAuth CRM) and their secrets |
+| `apps/web/scripts/seed/run.ts` | the entry point; `steps/` holds the writers: base → directory → notes → events/channels/Drive → connectors → model + agents → global records → lived-in history (runs, queues, OAuth rows, publications, audit) |
 
-`db:hq:placeholders` then fills the last-mile tables — agent runs and their
-mailbox, OAuth connections, the access and promotion queues, the projection
-outbox, message decorations — which is what makes a local database exercise the
-code that reads them rather than just look complete.
+Add an organisation to `ORGS` in `dataset.ts` and the directory, its notes, the
+indexes, the segment pages and the roll-ups all follow. One connector set can be
+re-seeded on its own with `pnpm db:connectors:demo|funds|oauth [spaceId] [--remove]`.
 
 Other demo content (the NZ startup ecosystem) loads separately via `pnpm db:nz`.
 

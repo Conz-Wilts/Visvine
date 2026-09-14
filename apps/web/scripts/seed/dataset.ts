@@ -1338,7 +1338,7 @@ export const EVENTS: SeedEvent[] = [
     capacity: 12,
     views: 64,
     attendees: [
-      { n: 1, person: 'person:dev_admin', email: 'admin@local.dev', status: 'checked_in', response: 'going' },
+      { n: 1, person: 'person:dev-admin', email: 'admin@local.dev', status: 'checked_in', response: 'going' },
       { n: 2, name: 'Felix Amadi', email: 'felix.amadi@tidewater-studio.example.com', company: 'Tidewater Studio', role: 'Studio Partner', status: 'checked_in', response: 'going' },
       { n: 3, name: 'Anton Reyes', email: 'anton.reyes@third-space-co.example.com', company: 'Third Space Co.', role: 'Head of Community', status: 'no_show', response: 'going' },
     ],
@@ -1380,7 +1380,7 @@ export const EVENTS: SeedEvent[] = [
     capacity: 20,
     views: 88,
     attendees: [
-      { n: 1, person: 'person:dev_admin', email: 'admin@local.dev', status: 'checked_in', response: 'going' },
+      { n: 1, person: 'person:dev-admin', email: 'admin@local.dev', status: 'checked_in', response: 'going' },
       { n: 2, name: 'Eleanor Vaughn', email: 'eleanor.vaughn@hillcrest-seed-partners.example.com', company: 'Hillcrest Seed Partners', role: 'Partner', status: 'checked_in', response: 'going' },
       { n: 3, name: 'Raymond Osei', email: 'raymond.osei@longbay-capital.example.com', company: 'Longbay Capital', role: 'Managing Partner', status: 'checked_in', response: 'going' },
       { n: 4, name: 'Callie Brennan', email: 'callie.brennan@foundersline-fund.example.com', company: 'Foundersline Fund', role: 'Principal', status: 'no_show', response: 'going' },
@@ -1422,8 +1422,8 @@ export const EVENTS: SeedEvent[] = [
     capacity: 14,
     views: 41,
     attendees: [
-      { n: 1, person: 'person:dev_admin', email: 'admin@local.dev', status: 'checked_in', response: 'going' },
-      { n: 2, person: 'person:dev_member', email: 'member@local.dev', status: 'checked_in', response: 'going' },
+      { n: 1, person: 'person:dev-admin', email: 'admin@local.dev', status: 'checked_in', response: 'going' },
+      { n: 2, person: 'person:dev-member', email: 'member@local.dev', status: 'checked_in', response: 'going' },
     ],
   },
   {
@@ -1505,7 +1505,7 @@ export const EVENTS: SeedEvent[] = [
     capacity: 25,
     views: 58,
     attendees: [
-      { n: 1, person: 'person:dev_member', email: 'member@local.dev', status: 'going', response: 'going' },
+      { n: 1, person: 'person:dev-member', email: 'member@local.dev', status: 'going', response: 'going' },
       { n: 2, name: 'Cora Bellweather', email: 'cora.bellweather@wharfside-works.example.com', company: 'Wharfside Works', role: 'General Manager', status: 'going', response: 'going' },
     ],
   },
@@ -1554,7 +1554,7 @@ export const EVENTS: SeedEvent[] = [
     attendees: [
       {
         n: 1,
-        person: 'person:dev_member',
+        person: 'person:dev-member',
         email: 'member@local.dev',
         status: 'going',
         response: 'going',

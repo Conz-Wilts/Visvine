@@ -20,7 +20,14 @@ export const PENDING_TTL_SECONDS = 600
 const TYP = 'connector_oauth_pending'
 
 export interface PendingAuthorization {
+  /** The space the connection lands in — the connector note's own. */
   spaceId: string
+  /**
+   * The space the flow was started FROM, when it is not `spaceId`: a sub-space
+   * linking an account behind a connector its parent shares. The callback
+   * re-reads the note through that space, as the run will.
+   */
+  viaSpaceId?: string
   connector: string
   provider: string
   mode: 'user' | 'space'

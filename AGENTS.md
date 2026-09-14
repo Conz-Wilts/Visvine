@@ -23,7 +23,7 @@ rather than repeating it.
   read-only history. Deploy replays migrations, never diffs. Never
   `prisma db push` against prod.
 - Nothing created by clicking through the UI survives to another machine. If it
-  matters, codify it in `apps/web/prisma/seed.ts` + the `db:hq:*` layers.
+  matters, codify it in the seed (`apps/web/scripts/seed/`, run by `pnpm db:seed`).
 - Commit freely; **push only when the user asks**. `main` is the deployed branch.
 
 ## Layout
@@ -93,26 +93,74 @@ rail. `visibility` is `public | private`. Creation always goes through
   the `create_space` action with `parent_id`); a
   sub-space cannot hold sub-spaces (`subspaces.ts#parentDenial`); sibling names
   are unique (`spaces_sibling_name_unique`).
-- **A public sub-space's context flows up** as the read-only folder
-  `subspaces/<id>/`, federated at read time by `lib/notes/federation.ts` (tree,
-  index, single read, search each have a federated form). Read under the
-  sub-space's **everyone-principal** — no admin standing, space-wide grants
-  only, capped to view (`access.ts#spaceWideAccessFor`). A public sub-space is
-  born with a space-wide view grant at its root, and one made public LATER gets
-  the same grant from `ensureFlowUpGrant` — without it the parent grafts a
-  folder it can read nothing through. `subspaces/` is reserved in every space's
-  own context (`subspaceWriteDenial`) — the graft has its own root precisely so
-  that `spaces/` is free to hold the space RECORDS, whose slugs would otherwise
+- **A listed sub-space's context flows up** as the folder `subspaces/<id>/`,
+  federated at read time by `lib/notes/federation.ts` (tree, index, single
+  read, search each have a federated form). **Through it you are who you are
+  in the sub-space** (`subspaceReader`): a member or admin of it reads AND
+  writes under their own standing there — the item, folders and access routes
+  hop a write across with `federation.ts#writeTarget` / `moveTargets` and run
+  the ordinary gates against the sub-space, rebasing response paths back;
+  the tree stamps the grafted folder `writable` so the sidebar offers Move /
+  Delete under it. Anyone else reads under the sub-space's
+  **everyone-principal** — no admin standing, space-wide grants only, capped
+  to view (`access.ts#spaceWideAccessFor`) — and is refused a write with
+  "join it to edit". Never hopped: `parent/`, the `subspaces` folder, a
+  sub-space's root, access management, and an agent's / MCP `write_context`.
+  A public sub-space is born with a space-wide view grant at its root, and
+  one made public LATER gets the same grant from `ensureFlowUpGrant` —
+  without it the parent grafts a folder it can read nothing through.
+  `subspaces/` is reserved in every space's own context
+  (`subspaceWriteDenial`) — the graft has its own root precisely so that
+  `spaces/` is free to hold the space RECORDS, whose slugs would otherwise
   shadow a sub-space id.
 - **A private sub-space is closed, not secret: the parent's members see its
   NAME.** `listLockedSubspaces` returns its own thin shape (never a `Space`,
   which carries aliases and tool config) for private sub-spaces of a space the
   caller actively belongs to. Drawn twice — a locked row on the switcher's
   branch, and a `subspaces/<id>/` folder stamped `locked` holding nothing
-  (`graftLockedSubspace`). Pressing either asks: `POST …/join` writes a
-  **pending** membership when `mayRequestSubspaceAccess` holds, answered on
-  Members → Wants to join beside the invite-link requests. Asking is not
-  entering — a pending join writes no person node, no alias, no cache bust.
+  (`graftLockedSubspace`). A secret room (`listing: 'secret'`) is named
+  nowhere. Pressing either goes through the room's **door**: `POST …/join`
+  writes what `selfJoinOutcome` → `subspaces.ts#joinOutcome` says — the house
+  door for the parent's members, the world door for everyone else, each
+  `invite` | `ask` | `open`, the world door never wider than the house's.
+  `ask` = **pending**, answered on Members → Wants to join beside the
+  invite-link requests. A pending join writes no person node, no alias, no
+  cache bust.
+- **A room answers four dials, each owned by the side that owns the thing;
+  nothing is inherited** (`docs/sub-space-model.md`, code map in
+  `docs/sub-spaces.md`). `listing` (secret/house/world; `visibility` stays
+  the gate column, derived world ⇔ public — `listingOf`), two doors, three
+  upward flows (`flowContext` / `flowEvents` / `flowPeople`; none from a
+  secret room), and `parentAdmins`. Up: context as the `subspaces/<id>/`
+  folder (editable by the room's members, read-only for the rest), **public events** (`viaSpace`; hub card and
+  `GET /api/events?includeSubspaces=1`; detail through
+  `requireSpaceMemberOrParent`), and **people** (`via_space` nodes in the
+  house's directory, read-only). Down, per note and per room: a house's
+  `connectors/`, `agents/` or `tools/` note with `share: all | [rooms]` is
+  read into those rooms as the read-only `parent/` folder (`graftParent`,
+  `federation.ts#parentShare`) — **no principal on that side; the flag is the
+  whole grant.** A shared connector runs with the house's secrets on the
+  house's quota (`readConnectorNote`: own space → parent's shared →
+  personal) and refuses a room admin's writes; a shared agent (`share_as:
+  use`) starts from `run_agent` **in the house, as the house brief's author**
+  (`claimManualRun` `runAs: 'author'`), child → parent only, while
+  `share_as: run-in` fans an `agent_state` row stamped `shared_from` into each
+  governed room so a copy runs over that room's context; a shared Tool is
+  installed in the room; the house's model keys reach the rooms
+  `subspace_config.modelKeys` names. A parent agent watching `subspaces/**`
+  is woken by a save in a flowing room (`fireNoteTriggers`). `parentAdmins`
+  is one step in `isAdmin`, on when a house admin creates the room; off is
+  any room admin's act, back on only a holder of the room's own admin alias.
+  Nothing of a space's own is stored under either reserved address
+  (`federatedWriteDenial`, in `writeDenial`); the routes hop a
+  `subspaces/<id>/` write into the sub-space before that gate is asked.
+  Presets (`PRESETS`) are dial settings, chosen at creation.
+- **The Directory draws no sub-space UI** — sub-spaces are not directory
+  nodes; they are reached from the switcher and the context tree and managed
+  from Console → Sub-spaces (`SubspacesSection` over
+  `GET /api/spaces/<id>/subspaces`, which carries the dials, `viewerStatus`
+  and `upcomingEvents` per row). The old `/directory` band and its
+  `hiddenFromBand` preference are gone (2026-09-15).
 - Deleting a space with sub-spaces is children-first in
   `DELETE /api/data/spaces` (the parent relation is Restrict).
 - Listings are flat lists with "in *Parent*" beside a sub-space only when the
@@ -185,7 +233,12 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   of one row. A space RECORD lives in `spaces/`; the sub-space graft is
   `subspaces/`. A note path is link identity, so a namespace is renamed only by
   moving every note and rewriting every link — `db:rename:spaces` is the one
-  that did it.
+  that did it. A namespace folder is **placed, never moved**
+  (`lib/notes/shared/placedFolders.ts`): the tree draws it under a folder of
+  the space's own when that folder's index note says `holds: [agents]`, the
+  path stays, and the row's `icon` marks it as a tool's shape. Sub-spaces sit
+  in one `Sub-spaces` folder (`subspaces/`) and are placed the same way;
+  `POST /api/notes/folders/place` is the one door.
 - **A folder appears because there is something in it**, and a new space holds
   only its root `index.md`. Two exceptions: a namespace a person writes into
   FROM the tree stands there empty — `agents/` for anyone, `connectors/` for an

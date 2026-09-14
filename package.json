@@ -43,15 +43,11 @@
     "db:seed": "pnpm --filter @visvine/web db:seed",
     "db:embed": "pnpm --filter @visvine/web db:embed",
     "db:nz": "node apps/web/scripts/add-nz-ecosystem.mjs",
-    "db:hq": "pnpm --filter @visvine/web db:hq",
-    "db:hq:notes": "pnpm --filter @visvine/web db:hq:notes",
-    "db:hq:extras": "pnpm --filter @visvine/web db:hq:extras",
-    "db:hq:full": "pnpm db:seed && pnpm --filter @visvine/web db:hq && pnpm --filter @visvine/web db:hq:notes && pnpm --filter @visvine/web db:hq:extras && pnpm --filter @visvine/web db:entities:folders && pnpm --filter @visvine/web db:connectors:demo && pnpm --filter @visvine/web db:connectors:funds && pnpm --filter @visvine/web db:connectors:oauth && pnpm --filter @visvine/web db:context-links && pnpm --filter @visvine/web db:index-notes:rebuild && pnpm --filter @visvine/web db:index-notes:strip-type && pnpm --filter @visvine/web db:hq:placeholders && pnpm --filter @visvine/web db:index-notes:rebuild && pnpm --filter @visvine/web db:actions:sync && pnpm --filter @visvine/web db:notes:verify",
     "db:secrets:rotate": "pnpm --filter @visvine/web db:secrets:rotate",
     "db:connectors:demo": "pnpm --filter @visvine/web db:connectors:demo",
     "db:icehouse": "node apps/web/scripts/add-icehouse-ventures.mjs",
     "db:reset": "node scripts/guard-local-db.mjs && node scripts/db-reset.mjs",
-    "db:fresh": "pnpm --filter @visvine/web db:fresh:schema && pnpm db:hq:full",
+    "db:fresh": "pnpm --filter @visvine/web db:fresh:schema && pnpm db:seed",
     "db:check": "node scripts/db-check.mjs",
     "mcp:dev": "docker compose up -d --wait && node scripts/mcp-dev.mjs",
     "env:pull:prod": "node scripts/env-pull-prod.mjs",
@@ -69,8 +65,7 @@
     "db:publish": "node scripts/db-publish.mjs",
     "db:restore": "node scripts/db-restore.mjs",
     "setup:fixture": "pnpm install && docker compose up -d --wait && pnpm prisma:generate && pnpm db:migrate && pnpm db:restore",
-    "clean": "pnpm --filter @visvine/web clean",
-    "db:hq:placeholders": "pnpm --filter @visvine/web db:hq:placeholders"
+    "clean": "pnpm --filter @visvine/web clean"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

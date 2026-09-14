@@ -62,6 +62,43 @@ test('a bad SECRETS_KEY throws at call time, not import time', () => {
 
 // ── config parsing ──
 
+test('`share:` parses to none by default, `all` (or the older `subspaces`) for every room, a list for named rooms', () => {
+  const base = { type: 'connector', hosts: ['api.example.com'] }
+  const none = parseConnectorPerimeter(base)
+  assert.ok(none.ok)
+  if (!none.ok) return
+  assert.equal(none.perimeter.share, 'none')
+
+  const shared = parseConnectorPerimeter({ ...base, share: 'subspaces' })
+  assert.ok(shared.ok)
+  if (!shared.ok) return
+  assert.equal(shared.perimeter.share, 'all')
+  const all = parseConnectorPerimeter({ ...base, share: 'all' })
+  assert.ok(all.ok && all.perimeter.share === 'all')
+
+  const named = parseConnectorPerimeter({ ...base, share: ['deal-team', 'accelerator'] })
+  assert.ok(named.ok)
+  if (!named.ok) return
+  assert.deepEqual(named.perimeter.share, ['deal-team', 'accelerator'])
+
+  // A shape that is not a share at all is refused, not read as none.
+  const junk = parseConnectorPerimeter({ ...base, share: { rooms: 1 } })
+  assert.ok(!junk.ok)
+  if (junk.ok) return
+  assert.match(junk.error, /share/)
+
+  // A legacy note never shares: the flag is a v2 key.
+  const legacy = parseConnectorPerimeter({
+    type: 'connector',
+    alias: 'http',
+    base_url: 'https://api.example.com',
+    share: 'subspaces',
+  })
+  assert.ok(legacy.ok)
+  if (!legacy.ok) return
+  assert.equal(legacy.perimeter.share, 'none')
+})
+
 test('a valid http connector parses, with clamped defaults', () => {
   const parsed = parseConnectorConfig({
     type: 'connector',

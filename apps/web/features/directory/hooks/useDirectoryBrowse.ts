@@ -29,6 +29,7 @@ function toDirectoryItem(node: NBNode): DirectoryItem {
     phone: node.metadata?.phone as string | undefined,
     pronouns: node.metadata?.pronouns as string | undefined,
     metadata: node.metadata,
+    via_space: node.via_space,
     createdAt: node.createdAt,
   };
 }

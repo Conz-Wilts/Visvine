@@ -38,10 +38,13 @@ export async function GET() {
     // can discover, and the private sub-spaces they can see the door of but not
     // open (lib/spaces/subspaceAccess.ts#listLockedSubspaces). A locked row
     // carries a name and nothing a member of it would recognise as config.
-    const [spaces, lockedSubspaces] = await Promise.all([
+    const [spaces, locked] = await Promise.all([
       listVisibleSpaces(session),
       listLockedSubspaces(session.userId),
     ]);
+    // Not locked to someone who already reaches it (a parent's admin, via
+    // `parentAdmins` — lib/spaces/queries.ts).
+    const lockedSubspaces = locked.filter((l) => !spaces.some((s) => s.id === l.id));
 
     return NextResponse.json(
       { spaces, lockedSubspaces },

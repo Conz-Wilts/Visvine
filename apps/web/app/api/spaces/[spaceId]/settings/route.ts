@@ -10,7 +10,18 @@ import {
   publicNameTakenMessage,
 } from '@/lib/spaces/publicName';
 import { updateSpaceConfig, UnknownSpaceError } from '@/lib/spaces/spaceConfig';
-import { ensureFlowUpGrant, findSiblingNameConflict } from '@/lib/spaces/subspaceAccess';
+import { DIAL_SELECT, ensureFlowUpGrant, findSiblingNameConflict } from '@/lib/spaces/subspaceAccess';
+import { adminSpaceIds } from '@/lib/auth';
+import {
+  DOORS,
+  LISTINGS,
+  flowsContext,
+  listingOf,
+  subspaceConfigOf,
+  visibilityForListing,
+  type Door,
+  type Listing,
+} from '@/lib/spaces/subspaces';
 import { mergeDesignConfig } from '@/lib/spaces/configMerge';
 
 /**
@@ -30,7 +41,10 @@ export async function PUT(
   const body = await req.json();
   // `timezone` is deliberately not read: a scheduled agent names its own zone
   // in its own brief, so there is no space-wide default to set here.
-  const { name, description, country, location, tags, designConfig, featureConfig, visibility } = body as {
+  const {
+    name, description, country, location, tags, designConfig, featureConfig,
+    listing, houseDoor, worldDoor, flowContext, flowEvents, flowPeople, parentAdmins, subspaceConfig,
+  } = body as {
     name?: string;
     description?: string;
     country?: string | null;
@@ -39,7 +53,19 @@ export async function PUT(
     designConfig?: Record<string, unknown>;
     featureConfig?: { enabled?: Record<string, boolean>; directoryPrivate?: boolean; adminOnly?: string[]; order?: string[]; more?: string[] };
     visibility?: string;
+    listing?: string;
+    houseDoor?: string;
+    worldDoor?: string;
+    flowContext?: boolean;
+    flowEvents?: boolean;
+    flowPeople?: boolean;
+    parentAdmins?: boolean;
+    subspaceConfig?: { modelKeys?: unknown };
   };
+  // `visibility` is what a top-level space sets; a room sets `listing`, which
+  // decides its visibility (world ⇔ public). Either spelling is accepted and
+  // both are resolved to one pair below.
+  let visibility = (body as { visibility?: string }).visibility;
 
   if (name !== undefined && !name.trim()) {
     return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
@@ -52,6 +78,51 @@ export async function PUT(
   if (visibility !== undefined && visibility !== 'public' && visibility !== 'private') {
     return NextResponse.json({ error: 'visibility must be public or private' }, { status: 400 });
   }
+  if (listing !== undefined && !LISTINGS.includes(listing as Listing)) {
+    return NextResponse.json({ error: 'listing must be secret, house or world' }, { status: 400 });
+  }
+  for (const [key, value] of [['houseDoor', houseDoor], ['worldDoor', worldDoor]] as const) {
+    if (value !== undefined && !DOORS.includes(value as Door)) {
+      return NextResponse.json({ error: `${key} must be invite, ask or open` }, { status: 400 });
+    }
+  }
+  for (const [key, value] of [['flowContext', flowContext], ['flowEvents', flowEvents], ['flowPeople', flowPeople], ['parentAdmins', parentAdmins]] as const) {
+    if (value !== undefined && typeof value !== 'boolean') {
+      return NextResponse.json({ error: `${key} must be a boolean` }, { status: 400 });
+    }
+  }
+
+  // The room's dials (docs/sub-spaces.md) are about the house it sits in, so
+  // a top-level space has none of them; the house's `subspaceConfig` is the
+  // one thing only a top-level space has.
+  const dialPatch = listing !== undefined || houseDoor !== undefined || worldDoor !== undefined
+    || flowContext !== undefined || flowEvents !== undefined || flowPeople !== undefined || parentAdmins !== undefined;
+  let stored: (Record<string, unknown> & { parentId: string | null; parentAdmins: boolean }) | null = null;
+  if (dialPatch || subspaceConfig !== undefined) {
+    stored = await prisma.space.findUnique({ where: { id: spaceId }, select: DIAL_SELECT });
+    if (!stored) return NextResponse.json({ error: 'Space not found' }, { status: 404 });
+    if (dialPatch && !stored.parentId) {
+      return NextResponse.json({ error: 'Only a sub-space has a listing, doors, flows or parent admins' }, { status: 400 });
+    }
+    if (subspaceConfig !== undefined && stored.parentId) {
+      return NextResponse.json({ error: 'Only a top-level space shares model keys or hides rooms from its band' }, { status: 400 });
+    }
+    // Governance: any admin of the room may hand the keys back (switch it
+    // off); only a holder of the room's OWN admin alias may switch it on. A
+    // house admin whose standing comes through this very switch cannot
+    // reclaim what the room gave back.
+    if (parentAdmins === true && !stored.parentAdmins) {
+      const direct = await adminSpaceIds(session.userId, [spaceId], session.email);
+      if (!direct.has(spaceId)) {
+        return NextResponse.json(
+          { error: 'Only an admin of this space itself can let the parent’s admins manage it again.' },
+          { status: 403 },
+        );
+      }
+    }
+    if (listing !== undefined) visibility = visibilityForListing(listing as Listing);
+  }
+  const subspaceConfigPatch = subspaceConfig !== undefined ? subspaceConfigOf(subspaceConfig) : undefined;
 
   // Public space names must be unique (lib/spaces/publicName.ts). Both the
   // rename and the private→public toggle come through here, and each arrives as
@@ -163,6 +234,14 @@ export async function PUT(
           ...(location !== undefined && { location: location || null }),
           ...(tags !== undefined && { tags }),
           ...(visibility !== undefined && { visibility }),
+          ...(listing !== undefined && { listing }),
+          ...(houseDoor !== undefined && { houseDoor }),
+          ...(worldDoor !== undefined && { worldDoor }),
+          ...(flowContext !== undefined && { flowContext }),
+          ...(flowEvents !== undefined && { flowEvents }),
+          ...(flowPeople !== undefined && { flowPeople }),
+          ...(parentAdmins !== undefined && { parentAdmins }),
+          ...(subspaceConfigPatch !== undefined && { subspaceConfig: subspaceConfigPatch as object }),
         },
         skipRevalidate: true,
       },
@@ -175,11 +254,11 @@ export async function PUT(
     throw err;
   }
 
-  // Turning a sub-space public is what makes its context flow up, and it
-  // flows nothing without the root grant it is read under. Born-public
-  // sub-spaces get this in provisionSpace; one made public later would
-  // otherwise appear in its parent as an empty folder.
-  if (visibility === 'public' && updated.parentId) {
+  // A room whose context flows up flows nothing without the root grant it is
+  // read under. Born flowing, a room gets it in provisionSpace; one that
+  // starts flowing later would otherwise appear in its parent as an empty
+  // folder.
+  if (updated.parentId && flowsContext(updated)) {
     await ensureFlowUpGrant(spaceId, session.userId);
   }
 
@@ -196,6 +275,14 @@ export async function PUT(
       designConfig: updated.designConfig,
       featureConfig: updated.featureConfig,
       visibility: updated.visibility,
+      listing: listingOf(updated),
+      houseDoor: updated.houseDoor,
+      worldDoor: updated.worldDoor,
+      flowContext: updated.flowContext,
+      flowEvents: updated.flowEvents,
+      flowPeople: updated.flowPeople,
+      parentAdmins: updated.parentAdmins,
+      subspaceConfig: subspaceConfigOf(updated.subspaceConfig),
       timezone: updated.timezone,
     },
   });

@@ -1,12 +1,21 @@
 'use client'
 
-// The note-first create surface: an empty context note you fill in. It is
-// where the things that ARE prose are made — a note, a folder (its index
-// note), an agent (its brief) — and where a note wearing one of the space's
-// own types starts. Everything else (a person, an event, a channel, a file…)
-// is made in the Create panel beside the rail or on its own surface
-// (lib/create/rows.ts); this page is reached from that panel with the type
-// already chosen, or bare from a "+" in the context tree.
+// The create surface: an empty context note you fill in. Everything a person
+// can make in a space that does not already own a surface of its own lands
+// here — a note, a folder (its index note), an agent (its brief), a person, a
+// space record, a resource, a channel, a section, a Tool, an upload. The
+// Create panel beside the rail chooses the kind and nothing else
+// (lib/create/rows.ts): a rail-width column is the wrong shape for writing
+// anything, and for most of these the note IS the thing.
+//
+// The shape of this page is the same for every kind. The title names it, the
+// type chip says what it is, the tags label it, the editor below is the prose
+// its note opens with — and under the title sits whatever that particular
+// kind needs beyond prose (features/create/components/draft): a person's
+// email and photo, a channel's icon, the files being uploaded. A kind surface
+// registers the write; this page owns the button, the errors and the landing.
+// The three kinds with nothing to write in front of them (a section, a Tool
+// scaffold, an upload) hide the editor rather than pretend otherwise.
 //
 // Nothing is written until BOTH a type and a usable title exist. That's the
 // whole design: no orphaned "Untitled" rows, and the type stays freely
@@ -24,7 +33,15 @@ import { CheckIcon, ChevronRightIcon, XIcon } from '@/features/shared/icons';
 import { CHIP_ACCENT_HOVER, Chip, chipClass, Modal } from '@/components/ui'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { canCreateType } from '@/lib/create/creatable'
-import type { CreateableType } from '@/features/shared/contexts/CreateModalContext'
+import {
+  draftHasProse,
+  draftTypeOptions,
+  draftUsesTags,
+  isDraftKind,
+  spaceNoteTypes,
+  type DraftKind,
+  type DraftTypeOption,
+} from '@/lib/create/rows'
 import {
   defaultNodeTypeColor,
   findNodeTypeConfig,
@@ -43,6 +60,12 @@ import {
 import { indexPathOf, newIndexContent } from '@/lib/notes/shared/indexNote'
 import { noteHref } from '@/lib/notes/entities'
 import { useContextFolderTree, FolderDropBoard, PathPreview } from '@/features/create/components/ContextDestination'
+import type { DraftShared } from '@/features/create/components/draft/shared'
+import EntitySetup from '@/features/create/components/draft/EntitySetup'
+import ChannelSetup from '@/features/create/components/draft/ChannelSetup'
+import SectionSetup from '@/features/create/components/draft/SectionSetup'
+import ToolSetup from '@/features/create/components/draft/ToolSetup'
+import FileSetup from '@/features/create/components/draft/FileSetup'
 import { agentSlug } from '@/lib/create/noteSlug'
 import { agentBriefPath, newAgentNote } from '@/lib/agents/config'
 import type { BriefSettings } from '@/lib/agents/briefEdit'
@@ -60,42 +83,31 @@ import { TagCombobox } from './TagCombobox'
 import { type NoteMode } from './NoteModeToggle'
 import '../notes.css'
 
-/** The draft's shapes. A note is always available — this surface must always
- *  produce something, even where every other kind is gated. */
-export type DraftType =
-  | 'note'
-  // A folder, written as its index note — an index note IS a folder
-  // (lib/notes/shared/indexNote.ts). The title names the folder everywhere.
-  | 'folder'
-  // A scheduled agent, written as its brief under agents/ (lib/agents/config).
-  // The title names it, the editor body IS the brief.
-  | 'agent'
+/** The shapes this surface commits, named as the flow table names them. */
+export type DraftType = DraftKind
 
-interface DraftTypeOption {
-  id: DraftType
-  label: string
-  /** The `nodeTypes` name this maps to, for colour resolution. Resolved against
-   *  the space's OWN registry, falling back to `color` when it has no entry
-   *  under that name. */
-  configName: string | null
-  /** Fallback colour, for a space whose nodeTypes don't describe this. */
-  color: string
-  /** What `canCreateType` is asked about — the permission gate is shared with
-   *  the Create panel, so this menu can't offer a shape that 403s on commit. */
-  creatable: CreateableType
+/**
+ * The three this page writes itself — a note, the index note that IS a folder,
+ * an agent's brief. Every other kind hands it a write to run instead.
+ */
+const WRITTEN_HERE: ReadonlySet<DraftKind> = new Set<DraftKind>(['note', 'folder', 'agent'])
+
+/** An upload is bytes, and its name is the file's — there is no title to give. */
+const WITHOUT_TITLE: ReadonlySet<DraftKind> = new Set<DraftKind>(['file'])
+
+/** What the title row asks for, for a kind that does not call it a title. */
+const TITLE_PLACEHOLDER: Partial<Record<DraftKind, string>> = {
+  person: 'Full name',
+  space: 'Name',
+  resource: 'Name',
+  channel: 'Channel name',
+  section: 'Section name',
+  tool: 'Tool name',
+  folder: 'Folder name',
+  agent: 'Agent name',
 }
 
 const NOTE_COLOR = '#64748b'
-
-/** Note carries a configName: plenty of spaces DO keep a "Note" entry in their
- *  registry (the seed writes one), and when they do, that colour is the one
- *  every other surface paints notes in — so the menu must obey it rather than
- *  show its own slate. The slate is the fallback for the spaces that don't. */
-const DRAFT_TYPES: DraftTypeOption[] = [
-  { id: 'note', label: 'Note', configName: 'Note', color: NOTE_COLOR, creatable: 'context' },
-  { id: 'folder', label: 'Folder', configName: null, color: NOTE_COLOR, creatable: 'folder' },
-  { id: 'agent', label: 'Agent', configName: 'Agent', color: NOTE_COLOR, creatable: 'agent' },
-]
 
 interface DraftContextPanelProps {
   mode?: NoteMode
@@ -105,6 +117,10 @@ interface DraftContextPanelProps {
   initialType?: DraftType | null
   /** One of the space's own note types to pre-select, by its registered name. */
   initialCustomType?: string | null
+  /** That type does not exist yet: register it on the space on the way in. */
+  initialTypeIsNew?: boolean
+  /** An alias picked off the kind's tree in the Create panel. */
+  initialAlias?: string | null
   /** A starter brief (lib/agents/templates.ts) to seed an agent draft with. */
   initialAgentTemplate?: string | null
 }
@@ -137,7 +153,7 @@ interface Extras {
 
 const EMPTY_EXTRAS: Extras = {
   // No model: a new agent runs on the space's (lib/agents/spaceModels.ts).
-  agent: { model: '', description: '', connectors: [], tools: [], dryRun: false, maxTurns: null, tags: [] },
+  agent: { model: '', description: '', connectors: [], tools: [], dryRun: false, maxTurns: null, tags: [], share: 'none', shareAs: 'use' },
   agentTemplate: null,
 }
 
@@ -145,14 +161,19 @@ const EMPTY_EXTRAS: Extras = {
  * The draft stashed by an earlier visit — unless this visit asked for a type
  * explicitly. "New agent" must open an agent, not whatever was abandoned last
  * week; a stash of the SAME type is still recovered, so a reload mid-brief
- * costs nothing.
+ * costs nothing. A visit that names a type nobody has used yet is as explicit
+ * an ask as it gets, so it keeps nothing.
  */
-function readStash(initialType: DraftType | null): Partial<Stash> {
+function readStash(initialType: DraftType | null, typeIsNew: boolean): Partial<Stash> {
   if (typeof sessionStorage === 'undefined') return {}
   try {
     const stash = JSON.parse(sessionStorage.getItem(STASH_KEY) ?? '{}') as Partial<Stash>
-    // A stash from before the surface shrank may name a shape it no longer has.
-    if (stash.type && !DRAFT_TYPES.some((o) => o.id === stash.type)) {
+    // A stash from before the surface changed shape may name one it no longer has.
+    if (stash.type && !isDraftKind(stash.type)) {
+      sessionStorage.removeItem(STASH_KEY)
+      return {}
+    }
+    if (typeIsNew && stash.type) {
       sessionStorage.removeItem(STASH_KEY)
       return {}
     }
@@ -171,6 +192,8 @@ export function DraftContextPanel({
   initialFolder = '',
   initialType: initialBuiltIn = null,
   initialCustomType = null,
+  initialTypeIsNew = false,
+  initialAlias = null,
   initialAgentTemplate = null,
 }: DraftContextPanelProps) {
   // A custom type is a narrowing of 'note' (see customType below), so asking
@@ -181,7 +204,7 @@ export function DraftContextPanel({
   const spaceId = currentSpace?.id ?? null
   const { entities, entityByPath, allTags } = useDirectoryEntities()
 
-  const stash = useRef<Partial<Stash>>(readStash(initialType)).current
+  const stash = useRef<Partial<Stash>>(readStash(initialType, initialTypeIsNew)).current
 
   const [title, setTitle] = useState(stash.title ?? '')
   const [type, setType] = useState<DraftType | null>(stash.type ?? initialType)
@@ -205,9 +228,27 @@ export function DraftContextPanel({
   // A type created in this session, held locally until refreshSpace lands —
   // the same bargain createTag makes, so the menu doesn't blink the type away
   // the moment you pick it.
-  const [addedTypes, setAddedTypes] = useState<NodeTypeConfig[]>([])
+  //
+  // The Create panel's "New type" row arrives as `?type=<name>&new=1`, and its
+  // type is seeded here on the FIRST render rather than registered from an
+  // effect: `customType` is already set to that name, and the guard below that
+  // drops a custom type the space does not know would otherwise clear it
+  // before any effect could put it back.
+  const [addedTypes, setAddedTypes] = useState<NodeTypeConfig[]>(() => {
+    if (!initialTypeIsNew || !initialCustomType) return []
+    const merged = mergeNodeType(null, { name: initialCustomType })
+    return merged.ok && merged.created ? [merged.type] : []
+  })
   const [committing, setCommitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Whether the kind's own fields are filled in, and the write they hand back.
+  // The write lives in a ref rather than in state: it is re-registered on every
+  // keystroke of the kind's surface, and nothing here renders from it.
+  const [kindReady, setKindReady] = useState(false)
+  const kindCommit = useRef<(() => Promise<string>) | null>(null)
+  const registerCommit = useCallback((fn: () => Promise<string>) => { kindCommit.current = fn }, [])
+  const onKindReady = useCallback((ready: boolean) => setKindReady(ready), [])
 
   // The editor body lives in a ref, not state: it changes on every keystroke and
   // nothing above it renders from it, so state here would re-render the whole
@@ -217,8 +258,9 @@ export function DraftContextPanel({
   const committedRef = useRef(false)
   const titleRef = useRef<HTMLInputElement>(null)
 
-  // A note and a folder are filed; an agent's folder is its namespace.
-  const contextFolderTree = useContextFolderTree(spaceId, type !== null && type !== 'agent')
+  // Only a note and a folder are filed by hand here. An agent's folder is its
+  // namespace, an upload picks its own, and the rest do not land in the tree.
+  const contextFolderTree = useContextFolderTree(spaceId, type === 'note' || type === 'folder')
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -239,18 +281,30 @@ export function DraftContextPanel({
 
   // An agent is named by a slug rather than a file name, so its has to survive
   // slugging too.
-  const ready = type === null ? false : type === 'agent' ? titleUsable && !!agentSlug(title) : titleUsable
+  const nameReady =
+    type === null
+      ? false
+      : WITHOUT_TITLE.has(type)
+        ? true
+        : type === 'agent'
+          ? titleUsable && !!agentSlug(title)
+          : // A kind whose fields are its own asks only that it be named; the
+            // slug rules above are about landing a note at a path.
+            WRITTEN_HERE.has(type)
+            ? titleUsable
+            : title.trim().length > 0
+  const ready = type !== null && nameReady && (WRITTEN_HERE.has(type) ? true : kindReady)
 
   // The types this space invented — anything in its nodeTypes that isn't a
   // built-in (or a synonym of one), plus whatever was created in this session.
   // These are the note vocabulary: they label a context note and nothing more,
   // so they're offered as narrowings of Note rather than as shapes of their own.
   const customTypes = useMemo(() => {
-    const stored = (currentSpace?.nodeTypes as NodeTypeConfig[] | undefined) ?? []
+    const stored = spaceNoteTypes(currentSpace?.nodeTypes as NodeTypeConfig[] | undefined)
     const byLower = new Map<string, NodeTypeConfig>()
     for (const t of [...stored, ...addedTypes]) {
       const name = t.name?.trim()
-      // A reserved name can be STORED (prisma/seed.ts seeds Note and Index), but
+      // A reserved name can be STORED (the seed's node types include Note), but
       // it must never reach a picker that writes it into frontmatter: `Index`
       // would relocate the note into a folder of its own.
       if (!name || isReservedTypeName(name)) continue
@@ -271,22 +325,20 @@ export function DraftContextPanel({
     setCustomType(null)
   }, [customType, customConfig, currentSpace])
 
-  const typeOption = type ? DRAFT_TYPES.find((t) => t.id === type) ?? null : null
-  const baseColor = customType
-    ? customConfig?.color ?? defaultNodeTypeColor(customType)
-    : !typeOption
-      ? NOTE_COLOR
-      : (typeOption.configName
-          ? findNodeTypeConfig(typeOption.configName, currentSpace?.nodeTypes as NodeTypeConfig[] | undefined)?.color
-          : null) ?? typeOption.color
-  const theme = hexToPalette(baseColor)
-
-  // Only the shapes this person may make here (lib/create/creatable.ts).
+  // Only the shapes this person may make here — the same table and the same
+  // permission filter the Create panel's list runs (lib/create/rows.ts), so
+  // the panel can never offer a kind this menu withholds, or the reverse.
   const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null
   const availableTypes = useMemo(
-    () => DRAFT_TYPES.filter((o) => canCreateType(o.creatable, { featureConfig, isAdmin })),
-    [featureConfig, isAdmin],
+    () => draftTypeOptions({ featureConfig, isAdmin, spaceNodeTypes: currentSpace?.nodeTypes as NodeTypeConfig[] | undefined }),
+    [featureConfig, isAdmin, currentSpace?.nodeTypes],
   )
+
+  const typeOption = type ? availableTypes.find((t) => t.id === type) ?? null : null
+  const baseColor = customType
+    ? customConfig?.color ?? defaultNodeTypeColor(customType)
+    : typeOption?.color ?? NOTE_COLOR
+  const theme = hexToPalette(baseColor)
 
   // Existing folder paths, for the folder destination's collision suffixing.
   const folderPaths = useMemo(
@@ -413,6 +465,16 @@ export function DraftContextPanel({
     router.replace(`/directory/${encodeURIComponent(`agent:${name}`)}`)
   }, [spaceId, title, extras.agent, router])
 
+  // Everything this page does not write itself: the kind's own surface handed
+  // back the write when its fields filled in, and it reports where to land.
+  const commitKind = useCallback(async () => {
+    const run = kindCommit.current
+    if (!run) throw new Error('Nothing to create yet')
+    const href = await run()
+    sessionStorage.removeItem(STASH_KEY)
+    router.replace(href)
+  }, [router])
+
   // `dest` is the folder the draft was dropped on, for the two shapes that ask.
   // Defaults to the standing `folder` (the one "+" was pressed in).
   const commit = useCallback(async (dest?: string) => {
@@ -425,7 +487,7 @@ export function DraftContextPanel({
       if (type === 'note') await commitNote(where)
       else if (type === 'folder') await commitFolder(where)
       else if (type === 'agent') await commitAgent()
-      else throw new Error(`Cannot create a ${type}`)
+      else await commitKind()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create')
       // Failed commits must be retryable — nothing was created, and the draft is
@@ -434,7 +496,7 @@ export function DraftContextPanel({
     } finally {
       setCommitting(false)
     }
-  }, [ready, committing, spaceId, type, folder, commitNote, commitFolder, commitAgent])
+  }, [ready, committing, spaceId, type, folder, commitNote, commitFolder, commitAgent, commitKind])
 
   // A starter brief fills the draft in one go — title (if none yet), the body,
   // the tools and the roster line — and the editor is remounted to show it.
@@ -462,8 +524,9 @@ export function DraftContextPanel({
 
   // Pressing Create on a note or a folder asks WHERE first, in a popup over the
   // draft: a filing decision belongs at the moment of creating, not in front of
-  // a note nobody has written yet. An agent's folder is its namespace, so it
-  // commits straight away.
+  // a note nobody has written yet. Everything else commits straight away —
+  // an agent's folder is its namespace, an upload picked its own, and the rest
+  // do not land in the tree at all.
   const asksWhere = type === 'note' || type === 'folder'
   const requestCommit = useCallback(() => {
     if (!ready || committing) return
@@ -473,13 +536,19 @@ export function DraftContextPanel({
 
   // The one place type and customType are set — together, so the "a custom
   // type only ever rides a note or a folder" invariant can't drift apart.
-  // Shape (note vs folder vs agent) and subject (the type) are separate facts
-  // about what is being created, exactly as they are on the stored note.
+  // Shape (note vs person vs channel…) and subject (the type) are separate
+  // facts about what is being created, exactly as they are on the stored note.
   const pickType = useCallback((next: DraftType, nextCustom: string | null = null) => {
+    // A different kind means a different set of fields, and the write the last
+    // one registered is no longer the one to run.
+    if (next !== type) {
+      kindCommit.current = null
+      setKindReady(false)
+    }
     setType(next)
-    setCustomType(next === 'agent' ? null : nextCustom)
+    setCustomType(next === 'note' || next === 'folder' ? nextCustom : null)
     setTypeMenuOpen(false)
-  }, [])
+  }, [type])
 
   // A type nobody has named here before. It registers on the space straight
   // away — it is space-level vocabulary, not draft state — but the draft
@@ -492,9 +561,10 @@ export function DraftContextPanel({
       return
     }
     // The name turned out to be a built-in, or a synonym of one ("Company" is
-    // Space). That isn't note vocabulary; the Create panel makes those.
+    // Space). That isn't note vocabulary; it is a shape of its own, and the
+    // menu above already lists it.
     if (findNodeTypeConfig(merged.type.name)) {
-      setError(`${merged.type.name} is made from Create new`)
+      setError(`${merged.type.name} is a type of its own — pick it above`)
       return
     }
     if (merged.created) setAddedTypes((prev) => [...prev, merged.type])
@@ -509,6 +579,22 @@ export function DraftContextPanel({
     }).catch(() => {})
   }, [spaceId, currentSpace?.nodeTypes, addedTypes, pickType, type])
 
+  // …and registered on the space once, the way `createType` registers one
+  // named in the menu. The name was legal and unused when the row offered it,
+  // so this is the same act one step earlier; a failed write costs a grey chip
+  // rather than the note.
+  const registeredNewType = useRef(false)
+  useEffect(() => {
+    const seeded = addedTypes[0]
+    if (registeredNewType.current || !initialTypeIsNew || !seeded || !spaceId) return
+    registeredNewType.current = true
+    void fetch(`/api/spaces/${encodeURIComponent(spaceId)}/node-types`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: seeded.name, color: seeded.color }),
+    }).catch(() => {})
+  }, [initialTypeIsNew, spaceId, addedTypes])
+
   const typeRow = (
     <TypeMenu
       open={typeMenuOpen}
@@ -520,7 +606,6 @@ export function DraftContextPanel({
       theme={theme}
       onPick={pickType}
       onCreate={canCreateType('context', { featureConfig, isAdmin }) ? createType : null}
-      spaceNodeTypes={currentSpace?.nodeTypes as NodeTypeConfig[] | undefined}
     />
   )
 
@@ -532,7 +617,7 @@ export function DraftContextPanel({
       type="button"
       disabled={!ready || committing}
       onClick={requestCommit}
-      title={ready ? 'Create' : type === null ? 'Pick a type first' : 'Give it a name first'}
+      title={ready ? 'Create' : type === null ? 'Pick a type first' : nameReady ? 'Fill in the rest first' : 'Give it a name first'}
       className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
       style={{ background: theme.base }}
     >
@@ -581,34 +666,69 @@ export function DraftContextPanel({
     </div>
   )
 
+  // What this page hands the kind being drafted: the parts every kind shares,
+  // and nothing of its own state. A kind surface reads the title rather than
+  // owning a name field, so there is one name on the page.
+  const shared: DraftShared = useMemo(
+    () => ({
+      spaceId: spaceId ?? '',
+      contextName: currentSpace?.name ?? 'Context',
+      title,
+      setTitle,
+      tags,
+      setTags,
+      body: () => bodyRef.current,
+      folder,
+      accent: theme.base,
+    }),
+    [spaceId, currentSpace?.name, title, tags, folder, theme.base],
+  )
+
+  const kindProps = { shared, onReadyChange: onKindReady, registerCommit }
+  // Keyed on the kind so switching type starts its fields empty rather than
+  // carrying the last kind's half-filled state into them.
+  const kindSetup = !spaceId || !type || WRITTEN_HERE.has(type) ? null
+    : type === 'person' || type === 'space' || type === 'resource'
+      ? <EntitySetup key={type} type={type} initialAlias={initialAlias} {...kindProps} />
+      : type === 'channel' ? <ChannelSetup key={type} {...kindProps} />
+      : type === 'section' ? <SectionSetup key={type} {...kindProps} />
+      : type === 'tool' ? <ToolSetup key={type} {...kindProps} />
+      : type === 'file' ? <FileSetup key={type} {...kindProps} />
+      : null
+
+  const hidesTitle = type !== null && WITHOUT_TITLE.has(type)
+  const hidesProse = type !== null && !draftHasProse(type)
+
   const headerSlot = (
     <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">
-      <input
-        ref={titleRef}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          // Enter and the Create button are the ONLY commit boundaries. Blur is
-          // deliberately not one.
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            requestCommit()
-          }
-        }}
-        placeholder="Untitled"
-        aria-label="Title"
-        className="w-full bg-transparent font-open-sauce text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary placeholder:text-text-muted/50 focus:outline-none"
-      />
+      {!hidesTitle && (
+        <input
+          ref={titleRef}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter and the Create button are the ONLY commit boundaries. Blur is
+            // deliberately not one.
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              requestCommit()
+            }
+          }}
+          placeholder={(type && TITLE_PLACEHOLDER[type]) ?? 'Untitled'}
+          aria-label="Title"
+          className="w-full bg-transparent font-open-sauce text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary placeholder:text-text-muted/50 focus:outline-none"
+        />
+      )}
 
       {/* Type and Tags ONLY. `type={null}` withholds the per-type field rows:
-          this surface makes notes, and a note's properties are its frontmatter. */}
+          the rows a kind needs are its own surface's, below. */}
       <PropertyRows
         type={null}
         values={{}}
         editable
         accent={theme.dark}
         typeRow={typeRow}
-        tagsRow={tagsRow}
+        tagsRow={draftUsesTags(type) ? tagsRow : null}
       />
 
       {type === 'agent' && (
@@ -627,6 +747,8 @@ export function DraftContextPanel({
         </>
       )}
 
+      {kindSetup}
+
       {error && (
         <div className="mt-4 flex items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
           <span>{error}</span>
@@ -642,26 +764,36 @@ export function DraftContextPanel({
 
   return (
     <div className="pb-10">
-      <NoteEditor
-        key={editorKey}
-        variant="embedded"
-        headerSlot={headerSlot}
-        toolbarTrailSlot={createButton}
-        path=""
-        meta={null}
-        notes={[]}
-        initialContent={bodyRef.current}
-        canEdit
-        aiConfigured={false}
-        mode={mode}
-        references={null}
-        entities={entities}
-        entityByPath={entityByPath}
-        // Local buffer ONLY. A network write here would create the orphan the
-        // whole no-persist-until-ready design exists to prevent.
-        onSave={(_, content) => { bodyRef.current = content }}
-        onOpenNote={(p) => router.push(noteHref(p))}
-      />
+      {hidesProse ? (
+        // Nothing to write in front of this one. The editor would be an empty
+        // invitation to write a note that is never created, so the page is its
+        // header and its own fields, with Create under them.
+        <>
+          {headerSlot}
+          <div className="mx-auto w-full max-w-[760px] px-7 pt-6">{createButton}</div>
+        </>
+      ) : (
+        <NoteEditor
+          key={editorKey}
+          variant="embedded"
+          headerSlot={headerSlot}
+          toolbarTrailSlot={createButton}
+          path=""
+          meta={null}
+          notes={[]}
+          initialContent={bodyRef.current}
+          canEdit
+          aiConfigured={false}
+          mode={mode}
+          references={null}
+          entities={entities}
+          entityByPath={entityByPath}
+          // Local buffer ONLY. A network write here would create the orphan the
+          // whole no-persist-until-ready design exists to prevent.
+          onSave={(_, content) => { bodyRef.current = content }}
+          onOpenNote={(p) => router.push(noteHref(p))}
+        />
+      )}
 
       {/* Where it goes — asked at the moment of creating, not while the note
           is still being written. The gesture IS the filing: drag the draft onto
@@ -730,7 +862,6 @@ function TypeMenu({
   theme,
   onPick,
   onCreate,
-  spaceNodeTypes,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -743,7 +874,6 @@ function TypeMenu({
   onPick: (type: DraftType, customType?: string | null) => void
   /** Null when this person may not write notes here, which is the same gate. */
   onCreate: ((name: string, color: string) => void) | null
-  spaceNodeTypes: NodeTypeConfig[] | undefined
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -770,11 +900,9 @@ function TypeMenu({
   const query = trimmed.toLowerCase()
 
   const rows = useMemo<TypeRow[]>(() => {
-    // findNodeTypeConfig, not getTypeColor: a name the registry doesn't know
-    // (Note in a space that never wrote one) must fall back to the option's
-    // own colour, where getTypeColor would answer with its unknown-type grey.
-    const colorOf = (o: DraftTypeOption) =>
-      (o.configName ? findNodeTypeConfig(o.configName, spaceNodeTypes)?.color : null) ?? o.color
+    // The colour is the one the flow table resolved against this space's own
+    // registry, so a kind looks the same here as it does in the Create panel.
+    const colorOf = (o: DraftTypeOption) => o.color
 
     // Unfiltered: the shapes, then the space's own note vocabulary.
     if (!query) {
@@ -798,13 +926,14 @@ function TypeMenu({
 
     // Nothing already means this, and it's a name a space may have: offer
     // to make it. Only notes can wear a type nobody wrote code for, so this is
-    // gated on the note permission and commits down the note path.
+    // gated on the note permission and narrows a note rather than being a
+    // shape of its own.
     const exact = out.some((row) => rowLabel(row).toLowerCase() === query)
     if (onCreate && !exact && !isReservedTypeName(trimmed)) {
       out.push({ kind: 'create', key: `create:${trimmed}`, name: trimmed })
     }
     return out
-  }, [query, trimmed, typeOptions, customTypes, spaceNodeTypes, onCreate])
+  }, [query, trimmed, typeOptions, customTypes, onCreate])
 
   const active = Math.min(highlight, rows.length - 1)
   const createRow = rows.find((r) => r.kind === 'create')

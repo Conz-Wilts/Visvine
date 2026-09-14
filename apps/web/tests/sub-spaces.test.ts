@@ -3,8 +3,34 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  PARENT_FOLDER,
   SUBSPACE_FOLDER,
+  SUBSPACES_TITLE,
+  ensureSubspacesFolder,
+  pruneEmptySubspacesFolder,
+  federatedWriteDenial,
   flowsUp,
+  graftParent,
+  isFederatedPath,
+  isParentPath,
+  isSharedDown,
+  parentAdministers,
+  parentWriteDenial,
+  parseParentPath,
+  rebaseParentMeta,
+  rebaseParentNoteLinks,
+  rebaseParentPath,
+  doorsOf,
+  flowsContext,
+  flowsEvents,
+  flowsPeople,
+  joinOutcome,
+  listingOf,
+  presetByKey,
+  shareTargets,
+  subspaceConfigOf,
+  subspaceOfPath,
+  visibilityForListing,
   graftLockedSubspace,
   graftSubspace,
   isSubspacePath,
@@ -36,11 +62,13 @@ describe('parentDenial — one level deep', () => {
   })
 })
 
-describe('flowsUp — visibility is the sub-space’s own', () => {
-  it('only a public sub-space is read into its parent', () => {
-    assert.equal(flowsUp({ visibility: 'public' }), true)
-    assert.equal(flowsUp({ visibility: 'private' }), false)
-    assert.equal(flowsUp({ visibility: null }), false)
+describe('flowsUp — the room’s own switch, never from a secret room', () => {
+  it('a listed room flows context unless it switched it off; a top-level space never flows', () => {
+    assert.equal(flowsUp({ visibility: 'public', parentId: 'hq' }), true)
+    assert.equal(flowsUp({ visibility: 'private', parentId: 'hq' }), true)
+    assert.equal(flowsUp({ visibility: 'private', parentId: 'hq', flowContext: false }), false)
+    assert.equal(flowsUp({ visibility: 'private', parentId: 'hq', listing: 'secret' }), false)
+    assert.equal(flowsUp({ visibility: 'public', parentId: null }), false)
   })
 })
 
@@ -68,14 +96,22 @@ describe('paths under subspaces/', () => {
   })
 })
 
-describe('subspaceWriteDenial — spaces/ is read-only in the parent', () => {
-  it('refuses the folder and anything under it', () => {
-    assert.match(subspaceWriteDenial('subspaces') ?? '', /read-only/)
-    assert.match(subspaceWriteDenial('subspaces/founders/notes.md') ?? '', /founders/)
+describe('subspaceWriteDenial — nothing of the parent’s is stored under subspaces/', () => {
+  it('refuses the folder, a sub-space’s root, and anything under it — each with its own reason', () => {
+    assert.match(subspaceWriteDenial('subspaces') ?? '', /nothing is written there/)
+    assert.match(subspaceWriteDenial('subspaces/founders') ?? '', /the sub-space itself/)
+    assert.match(subspaceWriteDenial('subspaces/founders/notes.md') ?? '', /written in that space/)
   })
   it('leaves every other path alone', () => {
     assert.equal(subspaceWriteDenial('people/craig/index.md'), null)
     assert.equal(subspaceWriteDenial(''), null)
+  })
+  it('names the sub-space a parent-side path belongs to', () => {
+    assert.equal(subspaceOfPath('subspaces/founders/notes.md'), 'founders')
+    assert.equal(subspaceOfPath('subspaces/founders'), 'founders')
+    assert.equal(subspaceOfPath('subspaces'), null)
+    assert.equal(subspaceOfPath('parent/connectors/x.md'), null)
+    assert.equal(subspaceOfPath('people/craig.md'), null)
   })
 })
 
@@ -95,12 +131,14 @@ describe('graftSubspace', () => {
     ],
   })
 
-  it('puts the sub-space under subspaces/<id> with its root index as the folder index', () => {
+  it('puts the sub-space in one Sub-spaces folder, addressed under subspaces/<id>, with its root index as the folder index', () => {
     const root: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
     const folder = graftSubspace(root, { id: 'founders', name: 'Founders Network' }, subRoot())
-    const holder = root.children!.find((c) => c.path === 'subspaces')!
-    assert.equal(holder.kind, 'folder')
-    assert.equal(holder.children![0], folder)
+    const wrapper = root.children!.find((c) => c.path === SUBSPACE_FOLDER)!
+    assert.equal(root.children!.length, 1)
+    assert.equal(wrapper.title, SUBSPACES_TITLE)
+    assert.equal(wrapper.space, undefined)
+    assert.equal(wrapper.children![0], folder)
     assert.equal(folder.path, 'subspaces/founders')
     assert.equal(folder.title, 'Founders Network')
     assert.equal(folder.space, 'founders')
@@ -110,16 +148,40 @@ describe('graftSubspace', () => {
     assert.equal(playbooks.children![0].path, 'subspaces/founders/playbooks/a.md')
   })
 
-  it('a second sub-space joins the same subspaces/ folder', () => {
+  it('stamps the folder writable only for a viewer who stands in the sub-space', () => {
+    const root: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
+    const theirs = graftSubspace(root, { id: 'a', name: 'A' }, subRoot())
+    const mine = graftSubspace(root, { id: 'b', name: 'B' }, subRoot(), true)
+    assert.equal('writable' in theirs, false)
+    assert.equal(mine.writable, true)
+    // Only the folder carries it: the rows under it read the stamp off their space.
+    assert.equal(mine.children!.every((c) => !('writable' in c)), true)
+  })
+
+  it('every sub-space sits in the one Sub-spaces folder, side by side', () => {
     const root: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
     graftSubspace(root, { id: 'a', name: 'A' }, subRoot())
     graftSubspace(root, { id: 'b', name: 'B' }, subRoot())
-    const holders = root.children!.filter((c) => c.path === 'subspaces')
-    assert.equal(holders.length, 1)
+    assert.deepEqual(root.children!.map((c) => c.path), [SUBSPACE_FOLDER])
     assert.deepEqual(
-      holders[0].children!.map((c) => c.path),
+      root.children![0].children!.map((c) => c.path),
       ['subspaces/a', 'subspaces/b'],
     )
+  })
+
+  it('the Sub-spaces folder goes when nothing is drawn in it, wherever it is drawn', () => {
+    const root: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
+    ensureSubspacesFolder(root)
+    const ops: TreeNode = { name: 'ops', path: 'ops', kind: 'folder', children: [] }
+    ensureSubspacesFolder(ops)
+    root.children!.push(ops)
+    pruneEmptySubspacesFolder(root)
+    assert.deepEqual(root.children!.map((c) => c.path), ['ops'])
+    assert.deepEqual(ops.children, [])
+    // With a room in it, it stays.
+    graftSubspace(root, { id: 'a', name: 'A' }, subRoot())
+    pruneEmptySubspacesFolder(root)
+    assert.equal(root.children!.some((c) => c.path === SUBSPACE_FOLDER), true)
   })
 
   it('does not mutate the sub-space’s own tree', () => {
@@ -209,23 +271,22 @@ describe('graftLockedSubspace — named, not opened', () => {
   it('a private sub-space is a folder with a name, a lock and nothing inside', () => {
     const tree = root()
     graftLockedSubspace(tree, { id: 'ops', name: 'Operations' })
-    const holder = tree.children?.find((c) => c.path === SUBSPACE_FOLDER)
-    assert.ok(holder)
-    const folder = holder.children?.[0]
+    assert.equal(tree.children?.[0].path, SUBSPACE_FOLDER)
+    const folder = tree.children?.[0].children?.[0]
     assert.equal(folder?.path, subspaceFolderPath('ops'))
     assert.equal(folder?.title, 'Operations')
     assert.equal(folder?.locked, true)
     assert.equal(folder?.children, undefined)
   })
 
-  it('locked and flowing sub-spaces share one Spaces folder', () => {
+  it('locked and flowing sub-spaces sit in the same Sub-spaces folder, side by side', () => {
     const tree = root()
     graftSubspace(tree, { id: 'open', name: 'Open' }, { name: '', path: '', kind: 'folder', children: [] })
     graftLockedSubspace(tree, { id: 'shut', name: 'Shut' })
-    const holders = (tree.children ?? []).filter((c) => c.path === SUBSPACE_FOLDER)
-    assert.equal(holders.length, 1)
-    assert.deepEqual(holders[0].children?.map((c) => c.name), ['open', 'shut'])
-    assert.equal(holders[0].children?.[0].locked, undefined)
+    const rooms = tree.children?.[0].children
+    assert.deepEqual(rooms?.map((c) => c.name), ['open', 'shut'])
+    assert.equal(rooms?.[0].locked, undefined)
+    assert.equal(rooms?.[1].locked, true)
   })
 })
 
@@ -252,5 +313,168 @@ describe('sibling names — the key the index and the routes share', () => {
     const msg = siblingNameTakenMessage('Finance Team', 'Test')
     assert.match(msg, /Test/)
     assert.match(msg, /Finance Team/)
+  })
+})
+
+// ─── What flows down, and who walks in ───────────────────────────────────────
+
+describe('paths under parent/ — the mirror of subspaces/', () => {
+  it('names the folder and parses it back', () => {
+    assert.equal(PARENT_FOLDER, 'parent')
+    assert.equal(parseParentPath('parent'), '')
+    assert.equal(parseParentPath('parent/connectors/hubspot.md'), 'connectors/hubspot.md')
+    assert.equal(parseParentPath('people/x.md'), null)
+    assert.equal(parseParentPath('parents/x.md'), null)
+  })
+  it('rebases a parent path onto the sub-space', () => {
+    assert.equal(rebaseParentPath(''), 'parent')
+    assert.equal(rebaseParentPath('agents/digest/index.md'), 'parent/agents/digest/index.md')
+  })
+  it('recognises the folder, and either federated address', () => {
+    assert.equal(isParentPath('parent'), true)
+    assert.equal(isParentPath('parent/agents'), true)
+    assert.equal(isParentPath('parentage.md'), false)
+    assert.equal(isFederatedPath('parent/x.md'), true)
+    assert.equal(isFederatedPath('subspaces/a/x.md'), true)
+    assert.equal(isFederatedPath('people/x.md'), false)
+  })
+})
+
+describe('isSharedDown — the flag on the note is the whole grant', () => {
+  it('only a connector or agent note flagged share: subspaces', () => {
+    assert.equal(isSharedDown('connectors/hubspot.md', { share: 'subspaces' }), true)
+    assert.equal(isSharedDown('agents/digest/index.md', { share: 'subspaces' }), true)
+    assert.equal(isSharedDown('connectors/hubspot.md', { share: 'other-room' }, 'a'), false)
+    assert.equal(isSharedDown('connectors/hubspot.md', {}), false)
+    assert.equal(isSharedDown('connectors/hubspot.md', null), false)
+  })
+  it('never anything else, whatever it says', () => {
+    assert.equal(isSharedDown('people/craig.md', { share: 'subspaces' }), false)
+    assert.equal(isSharedDown('playbooks/x.md', { share: 'subspaces' }), false)
+  })
+})
+
+describe('parentWriteDenial / federatedWriteDenial — read-only both ways', () => {
+  it('refuses parent/ and everything under it, and still refuses subspaces/', () => {
+    assert.match(parentWriteDenial('parent') ?? '', /read-only/)
+    assert.match(parentWriteDenial('parent/connectors/x.md') ?? '', /read-only/)
+    assert.equal(parentWriteDenial('connectors/x.md'), null)
+    assert.match(federatedWriteDenial('subspaces/a/x.md') ?? '', /written in that space/)
+    assert.match(federatedWriteDenial('parent/x.md') ?? '', /read-only/)
+    assert.equal(federatedWriteDenial('people/x.md'), null)
+  })
+})
+
+describe('graftParent — one folder, the parent’s name, only what was flagged', () => {
+  const shared: TreeNode = {
+    name: '', path: '', kind: 'folder',
+    children: [
+      { name: 'connectors', path: 'connectors', kind: 'folder', children: [
+        { name: 'hubspot.md', path: 'connectors/hubspot.md', kind: 'note', title: 'HubSpot' },
+      ] },
+    ],
+  }
+  it('lands at the top level, addressed under parent/, stamped with the parent', () => {
+    const root: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
+    const folder = graftParent(root, { id: 'hq', name: 'Visvine HQ' }, shared)
+    assert.equal(root.children?.[0], folder)
+    assert.equal(folder.path, 'parent')
+    assert.equal(folder.title, 'Visvine HQ')
+    assert.equal(folder.space, 'hq')
+    assert.equal(folder.parent, true)
+    assert.equal(folder.children?.[0].path, 'parent/connectors')
+    assert.equal(folder.children?.[0].children?.[0].path, 'parent/connectors/hubspot.md')
+  })
+  it('does not mutate the shared tree', () => {
+    const root: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
+    graftParent(root, { id: 'hq', name: 'HQ' }, shared)
+    assert.equal(shared.children?.[0].path, 'connectors')
+  })
+})
+
+describe('rebaseParentMeta / rebaseParentNoteLinks', () => {
+  it('moves the path, the folder and the link targets under parent/', () => {
+    const meta = rebaseParentMeta({ path: 'connectors/hubspot.md', folder: 'connectors', linkTargets: ['models/gpt.md'] })
+    assert.deepEqual(meta, { path: 'parent/connectors/hubspot.md', folder: 'parent/connectors', linkTargets: ['parent/models/gpt.md'] })
+    assert.equal(rebaseParentMeta({ path: 'x.md', folder: '', linkTargets: [] }).folder, 'parent')
+  })
+  it('rewrites body links, leaves the frontmatter', () => {
+    const out = rebaseParentNoteLinks('---\nshare: subspaces\n---\n\nSee [gpt](/models/gpt.md).', 'connectors/hubspot.md')
+    assert.match(out, /^---\nshare: subspaces\n---/)
+    assert.match(out, /parent\/models\/gpt\.md/)
+  })
+})
+
+describe('listingOf / doorsOf / joinOutcome — the dials', () => {
+  const room = { visibility: 'private', parentId: 'hq', personalOwnerId: null, listing: 'house', houseDoor: 'ask', worldDoor: 'open' }
+  it('visibility is authoritative: public is world, private is house or secret, a top-level private space is secret', () => {
+    assert.equal(listingOf({ ...room, visibility: 'public', listing: 'secret' }), 'world')
+    assert.equal(listingOf(room), 'house')
+    assert.equal(listingOf({ ...room, listing: 'secret' }), 'secret')
+    assert.equal(listingOf({ ...room, parentId: null }), 'secret')
+    assert.equal(visibilityForListing('world'), 'public')
+    assert.equal(visibilityForListing('house'), 'private')
+  })
+  it('the world door is clamped to the house door, and only a world room has one', () => {
+    assert.deepEqual(doorsOf({ ...room, visibility: 'public', houseDoor: 'ask', worldDoor: 'open' }), { house: 'ask', world: 'ask' })
+    assert.deepEqual(doorsOf({ ...room, visibility: 'public', houseDoor: 'open', worldDoor: 'ask' }), { house: 'open', world: 'ask' })
+    assert.deepEqual(doorsOf(room), { house: 'ask', world: 'invite' })
+    assert.deepEqual(doorsOf({ ...room, listing: 'secret', houseDoor: 'open' }), { house: 'invite', world: 'invite' })
+    // a top-level public space has only a world door, unclamped
+    assert.deepEqual(doorsOf({ ...room, parentId: null, visibility: 'public', houseDoor: 'invite', worldDoor: 'open' }), { house: 'invite', world: 'open' })
+  })
+  it('a member of the house goes through the house door, everyone else through the world door', () => {
+    assert.equal(joinOutcome(room, 'active'), 'pending')
+    assert.equal(joinOutcome({ ...room, houseDoor: 'open' }, 'active'), 'active')
+    assert.equal(joinOutcome({ ...room, houseDoor: 'invite' }, 'active'), 'deny')
+    assert.equal(joinOutcome(room, null), 'deny')
+    assert.equal(joinOutcome({ ...room, visibility: 'public', houseDoor: 'open', worldDoor: 'ask' }, null), 'pending')
+    assert.equal(joinOutcome({ ...room, visibility: 'public', houseDoor: 'open', worldDoor: 'ask' }, 'active'), 'active')
+    assert.equal(joinOutcome({ ...room, visibility: 'public', houseDoor: 'open', worldDoor: 'ask' }, 'pending'), 'pending')
+  })
+  it('a secret room, a private top-level space and a personal space take nobody', () => {
+    assert.equal(joinOutcome({ ...room, listing: 'secret', houseDoor: 'open' }, 'active'), 'deny')
+    assert.equal(joinOutcome({ ...room, parentId: null }, 'active'), 'deny')
+    assert.equal(joinOutcome({ ...room, personalOwnerId: 'u1', houseDoor: 'open' }, 'active'), 'deny')
+    // a public top-level space: the world door, open by default
+    assert.equal(joinOutcome({ ...room, parentId: null, visibility: 'public' }, null), 'active')
+    assert.equal(joinOutcome({ ...room, parentId: null, visibility: 'public', worldDoor: 'ask' }, null), 'pending')
+  })
+  it('flows are the room’s switches, and nothing flows from a secret room', () => {
+    assert.equal(flowsContext({ ...room, flowContext: true }), true)
+    assert.equal(flowsContext({ ...room, flowContext: false }), false)
+    assert.equal(flowsContext({ ...room, listing: 'secret', flowContext: true }), false)
+    assert.equal(flowsEvents({ ...room, flowEvents: true }), true)
+    assert.equal(flowsPeople({ ...room }), false)
+    assert.equal(flowsPeople({ ...room, flowPeople: true }), true)
+    assert.equal(flowsUp({ ...room, visibility: 'public' }), true)
+  })
+  it('share targets: all, a list, or nobody — and only connectors, agents and tools', () => {
+    assert.equal(shareTargets({ share: 'all' }), 'all')
+    assert.equal(shareTargets({ share: 'subspaces' }), 'all')
+    assert.deepEqual(shareTargets({ share: ['a', 'b'] }), ['a', 'b'])
+    assert.deepEqual(shareTargets({ share: 'a, b' }), ['a', 'b'])
+    assert.equal(shareTargets({}), 'none')
+    assert.equal(isSharedDown('connectors/x.md', { share: ['a'] }, 'a'), true)
+    assert.equal(isSharedDown('connectors/x.md', { share: ['a'] }, 'b'), false)
+    assert.equal(isSharedDown('tools/x/index.md', { share: 'all' }, 'b'), true)
+    assert.equal(isSharedDown('people/x.md', { share: 'all' }, 'b'), false)
+  })
+  it('presets are dial settings', () => {
+    assert.equal(presetByKey('department')?.houseDoor, 'open')
+    assert.equal(presetByKey('committee')?.listing, 'secret')
+    assert.equal(presetByKey('tenant')?.parentAdmins, false)
+    assert.equal(presetByKey('nope'), null)
+    assert.deepEqual(subspaceConfigOf({ modelKeys: ['a'], hiddenFromBand: ['b'], junk: 1 }), { modelKeys: ['a'] })
+    assert.deepEqual(subspaceConfigOf(null), { modelKeys: [] })
+  })
+})
+
+describe('parentAdministers — the room hands out its own keys', () => {
+  it('only a sub-space that turned it on', () => {
+    assert.equal(parentAdministers({ parentId: 'hq', parentAdmins: true }), true)
+    assert.equal(parentAdministers({ parentId: 'hq', parentAdmins: false }), false)
+    assert.equal(parentAdministers({ parentId: 'hq' }), false)
+    assert.equal(parentAdministers({ parentId: null, parentAdmins: true }), false)
   })
 })

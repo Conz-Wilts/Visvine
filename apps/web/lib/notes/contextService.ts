@@ -38,7 +38,7 @@ import { replicaDenial } from './publications'
 import { isGlobalSpace } from '@/lib/spaces/globalSpace'
 import { namespaceFeatureRefusal, reservedWriteDenial, togglableNamespaceFeature } from './shared/namespaces'
 import { getFeatureConfig } from '@/lib/auth'
-import { subspaceWriteDenial } from '@/lib/spaces/subspaces'
+import { federatedWriteDenial } from '@/lib/spaces/subspaces'
 import { globalSelfRecordDenial } from '@/lib/global/gate'
 import { appendNoteLogEntry, toDateString } from './shared/noteLog'
 import type { ContextPrincipal, WriteResult } from './shared/contextTypes'
@@ -287,12 +287,15 @@ export function writeDenial(p: ContextPrincipal, context: Context, path: string)
   if (isGlobalSpace(context.spaceId) && !p.system && !principalIsSuperAdmin(p)) {
     return 'The Visvine record is maintained by the platform. Edit your own profile to change yours.'
   }
-  // subspaces/ is where a public sub-space's context is READ into this one
-  // (lib/notes/federation.ts) — nothing of this space's may be written there,
-  // by anyone: a note under it would look like the sub-space's and be
-  // governed by neither space.
-  const subspace = subspaceWriteDenial(path)
-  if (subspace) return subspace
+  // subspaces/ is where a sub-space's context is READ into this one, and
+  // parent/ where the parent's shared notes are (lib/notes/federation.ts) —
+  // nothing of THIS space's is ever stored under either: a note there would
+  // look like another space's and be governed by neither. A write meant for
+  // the sub-space is hopped across before it gets here (federation.ts#
+  // writeTarget) and judged under the caller's standing there; a caller that
+  // did not hop is told where it is written.
+  const federated = federatedWriteDenial(path)
+  if (federated) return federated
   // connectors/ holds machine config that executes against external systems
   // (lib/connectors) — folder grants don't apply; only space admins write it.
   if (

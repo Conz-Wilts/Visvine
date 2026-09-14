@@ -34,6 +34,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
       ref: m.ref,
       enabled: m.enabled,
       keyStored: m.keyStored,
+      keyFrom: m.keyFrom ?? null,
+      sharedFrom: m.sharedFrom ?? null,
       problem: m.problem,
       legacy: !m.path.startsWith('models/'),
     })),

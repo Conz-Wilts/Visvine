@@ -18,7 +18,14 @@ import {
   noteHref,
 } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
-import { isSubspacePath, subspaceWriteDenial } from '@/lib/spaces/subspaces'
+import { drawnParentOf, placementDenial } from '@/lib/notes/shared/placedFolders'
+import {
+  SUBSPACE_FOLDER,
+  isParentPath,
+  parentWriteDenial,
+  parseSubspacePath,
+  subspaceWriteDenial,
+} from '@/lib/spaces/subspaces'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { notesApi, type AccessOverviewResponse } from './notesApi'
 import { contextKeys, invalidateContextCache, swrFetch, watchContextCache } from './contextPrefetch'
@@ -51,12 +58,23 @@ export function parentFolderOf(path: string): string {
  * can't know each viewer's level per folder, so a rejected move surfaces the
  * server's message instead of being predicted here.
  */
-export function moveDenial(from: string, kind: 'note' | 'folder', destFolder: string): string | null {
-  // subspaces/ is another space's context shown here read-only
-  // (lib/spaces/subspaces.ts): nothing moves in, nothing moves out.
-  if (isSubspacePath(from)) return 'This is a sub-space’s context, shown here read-only. Move it in that space.'
-  const readOnly = destFolder ? subspaceWriteDenial(destFolder) : null
-  if (readOnly) return readOnly
+export function moveDenial(rawFrom: string, kind: 'note' | 'folder', rawDest: string): string | null {
+  // parent/ is what the parent shares here, read-only: nothing moves in or
+  // out. A sub-space's context (subspaces/<id>/…) moves WITHIN that sub-space
+  // — the server hops the move across (lib/notes/federation.ts#moveTargets)
+  // — and never over the wall; its root folder is the sub-space itself. The
+  // structural rules below are then judged on the paths as the sub-space
+  // sees them, so its own people/ is as managed as this space's.
+  if (isParentPath(rawFrom) || isParentPath(rawDest)) return parentWriteDenial(rawFrom) ?? parentWriteDenial(rawDest)
+  if (rawFrom === SUBSPACE_FOLDER || rawDest === SUBSPACE_FOLDER) return subspaceWriteDenial(SUBSPACE_FOLDER)
+  const fromSub = parseSubspacePath(rawFrom)
+  const destSub = parseSubspacePath(rawDest)
+  if (fromSub && !fromSub.path) return subspaceWriteDenial(rawFrom)
+  if ((fromSub?.spaceId ?? null) !== (destSub?.spaceId ?? null)) {
+    return 'A note moves within its own space — a sub-space’s context stays in that sub-space.'
+  }
+  const from = fromSub ? fromSub.path : rawFrom
+  const destFolder = destSub ? destSub.path : rawDest
   // Into an entity's OWN folder (people/<slug>) is fine — that files the note
   // under the entity (and converts its note to the folder if needed). Into the
   // namespace root, or beside it as a would-be entity, is not.
@@ -99,7 +117,14 @@ export function moveDenial(from: string, kind: 'note' | 'folder', destFolder: st
  */
 export function deleteFolderDenial(path: string): string | null {
   if (!path) return 'The context root can’t be deleted.'
-  return subspaceWriteDenial(path) ?? namespaceFolderDenial(path)
+  // parent/ is read-only; a sub-space's root is the sub-space; a folder
+  // inside a sub-space is judged as that sub-space's own (its built-in
+  // folders are as fixed as this space's).
+  if (isParentPath(path)) return parentWriteDenial(path)
+  if (path === SUBSPACE_FOLDER) return subspaceWriteDenial(path)
+  const sub = parseSubspacePath(path)
+  if (sub && !sub.path) return subspaceWriteDenial(path)
+  return namespaceFolderDenial(sub ? sub.path : path)
 }
 
 /** Whether a drop on `destFolder` would do anything (legal AND a real change). */
@@ -418,6 +443,28 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     [spaceId, currentPath, router],
   )
 
+  // Placing a built-in folder or a sub-space under a folder of the space's
+  // own: nothing moves — the container's index note records it and the tree
+  // draws it there (lib/notes/shared/placedFolders.ts). No open note changes path.
+  const handlePlaceFolder = useCallback(
+    (path: string, destFolder: string) => {
+      if (!spaceId) return
+      const denial = placementDenial(path, destFolder, tree)
+      if (denial) return window.alert(denial)
+      if (drawnParentOf(tree, path) === destFolder) return
+      notesApi
+        .placeFolder(spaceId, path, destFolder)
+        .then(() => {
+          invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
+          setTreeVersion((v) => v + 1)
+        })
+        .catch((e: unknown) => {
+          window.alert(e instanceof Error ? e.message : 'Failed to place the folder')
+        })
+    },
+    [spaceId, tree],
+  )
+
   // Restoring puts the note back at its original path (suffixed if something
   // else took it while it sat in the trash) — bumping treeVersion reloads the
   // tree, the note list and the trash together.
@@ -518,6 +565,7 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     handleDeleteFolder,
     handleMoveNote,
     handleMoveFolder,
+    handlePlaceFolder,
     handleRestoreTrash,
     handlePurgeTrash,
     handleEmptyTrash,

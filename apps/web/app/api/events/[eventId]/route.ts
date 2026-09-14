@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eventUpdateInputSchema } from '@/lib/schemas/eventSchemas';
 import { getEvent, getAttendees, deleteEvent } from '@/lib/eventRepo';
 import { updateEventRecord } from '@/lib/events/write';
-import { requireEventManager, requireSpaceMember } from '@/lib/eventAuth';
+import { requireEventManager, requireSpaceMemberOrParent } from '@/lib/eventAuth';
 import { findMemberNode } from '@/lib/identity/connection';
 import { normalizeStatus, occupiedSpots } from '@/lib/eventUtils';
 import prisma from '@/lib/prisma';
@@ -35,13 +35,17 @@ export async function GET(
       );
     }
 
-    // Events are space-scoped: only members/admins may read event details.
-    const member = await requireSpaceMember(spaceId);
-    if (member instanceof Response) return member;
+    // Events are space-scoped: members/admins read event details — and, for a
+    // PUBLIC sub-space, so does a member of its parent, for the sub-space's
+    // PUBLIC events only (lib/events/rollup.ts). Absent and not-public are one
+    // answer through that door, on purpose.
+    const opened = await requireSpaceMemberOrParent(spaceId);
+    if (opened instanceof Response) return opened;
+    const member = opened.session;
 
     const event = await getEvent(spaceId, eventId);
 
-    if (!event) {
+    if (!event || (opened.via === 'subspace' && (event.visibility !== 'public' || event.status === 'draft'))) {
       return NextResponse.json(
         { error: 'Event not found' },
         { status: 404 }

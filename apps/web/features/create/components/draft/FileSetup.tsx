@@ -7,11 +7,11 @@ import { sourceHref } from '@/lib/notes/entities';
 import { MAX_SOURCE_BYTES, SOURCE_ACCEPT, SOURCE_EXTENSIONS_LABEL, sourceKindOf } from '@/lib/notes/shared/sourceTypes';
 import { formatBytes } from '@/lib/utils';
 import { FolderPicker, useContextFolderTree } from '../ContextDestination';
-import { FormFooter, useCreateSubmit, type InlineFormProps } from './shared';
+import { SetupSection, useDraftCommit, type DraftKindProps } from './shared';
 
 type FileUploadStatus = 'queued' | 'uploading' | 'done' | 'failed';
 
-export interface FileEntry {
+interface FileEntry {
   file: File;
   status: FileUploadStatus;
   /** Context path the source landed at, once uploaded. */
@@ -34,114 +34,37 @@ const STATUS_STYLE: Record<FileUploadStatus, { label: string; className: string 
 };
 
 /**
- * The drop zone, the queue and the folder — the pieces every surface that
- * takes files into the context shares. Controlled, so a host can drive the
- * upload itself.
+ * Files into the context: the drop zone, the queue and the folder they land
+ * in. A file is bytes rather than prose — there is nothing to write in front
+ * of it — so the draft hides its title and its editor and shows only this.
+ *
+ * Uploaded one at a time, because each request runs the whole extract → chunk
+ * → embed pipeline, so a parallel burst would just contend. A file that fails
+ * leaves the others alone.
  */
-function FileDropList({
-  files,
-  onChange,
-  folder,
-  onFolder,
-  folders,
-  contextName,
-}: {
-  files: FileEntry[];
-  onChange: (files: FileEntry[]) => void;
-  folder: string;
-  onFolder: (folder: string) => void;
-  folders: { path: string; label: string }[];
-  contextName: string;
-}) {
+export default function FileSetup({ shared, onReadyChange, registerCommit }: DraftKindProps) {
+  const { spaceId, contextName } = shared;
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [folder, setFolder] = useState(shared.folder);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const tree = useContextFolderTree(spaceId, true);
 
   const addFiles = (incoming: FileList | null) => {
     if (!incoming?.length) return;
-    const existing = new Set(files.map((f) => `${f.file.name}:${f.file.size}`));
-    const next: FileEntry[] = [];
-    for (const file of Array.from(incoming)) {
-      if (existing.has(`${file.name}:${file.size}`)) continue;
-      const reason = rejectionReason(file);
-      next.push(reason ? { file, status: 'failed', error: reason } : { file, status: 'queued' });
-    }
-    if (next.length) onChange([...files, ...next]);
+    setFiles((existing) => {
+      const seen = new Set(existing.map((f) => `${f.file.name}:${f.file.size}`));
+      const next: FileEntry[] = [];
+      for (const file of Array.from(incoming)) {
+        if (seen.has(`${file.name}:${file.size}`)) continue;
+        const reason = rejectionReason(file);
+        next.push(reason ? { file, status: 'failed', error: reason } : { file, status: 'queued' });
+      }
+      return next.length ? [...existing, ...next] : existing;
+    });
   };
 
-  return (
-    <>
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
-        onClick={() => inputRef.current?.click()}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed px-4 py-7 text-center transition-colors ${
-          dragging ? 'border-brand-green bg-brand-green/10' : 'border-border-subtle hover:border-border-default'
-        }`}
-      >
-        <span className="text-sm text-text-primary">
-          Drop files or <span className="text-brand-green">browse</span>
-        </span>
-        <span className="text-[11px] text-text-muted">
-          {SOURCE_EXTENSIONS_LABEL} · {Math.round(MAX_SOURCE_BYTES / (1024 * 1024))} MB
-        </span>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={SOURCE_ACCEPT}
-          className="sr-only"
-          onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }}
-        />
-      </div>
-
-      {files.length > 0 && (
-        <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto">
-          {files.map((entry, i) => {
-            const status = STATUS_STYLE[entry.status];
-            return (
-              <li key={`${entry.file.name}-${i}`} className="flex items-center gap-3 rounded-lg bg-surface-2 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-text-primary">{entry.file.name}</p>
-                  <p className="truncate text-[11px] text-text-muted" title={entry.error ?? undefined}>
-                    {formatBytes(entry.file.size)}
-                    <span className={`ml-2 ${status.className}`}>{entry.error ?? status.label}</span>
-                  </p>
-                </div>
-                {entry.status !== 'uploading' && (
-                  <button
-                    type="button"
-                    onClick={() => onChange(files.filter((_, j) => j !== i))}
-                    aria-label={`Remove ${entry.file.name}`}
-                    className="shrink-0 text-text-muted transition-colors hover:text-red-500"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <FolderPicker folders={folders} value={folder} onChange={onFolder} contextName={contextName} />
-    </>
-  );
-}
-
-/**
- * Files into the context: uploaded one at a time, because each request runs
- * the whole extract → chunk → embed pipeline, so a parallel burst would just
- * contend. A file that fails leaves the others alone.
- */
-export default function FileForm({ spaceId, contextName, folder: initialFolder, onDone }: InlineFormProps) {
-  const [files, setFiles] = useState<FileEntry[]>([]);
-  const [folder, setFolder] = useState(initialFolder ?? '');
-  const tree = useContextFolderTree(spaceId, true);
-
-  const run = useCallback(async () => {
+  const commit = useCallback(async () => {
     const queue = files.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.status === 'queued');
     const patch = (index: number, next: Partial<FileEntry>) =>
       setFiles((all) => all.map((f, i) => (i === index ? { ...f, ...next } : f)));
@@ -163,19 +86,68 @@ export default function FileForm({ spaceId, contextName, folder: initialFolder, 
     invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId));
     return uploaded === 1 && lastPath ? sourceHref(lastPath) : '/directory/note/index.md';
   }, [spaceId, files, folder]);
-  const { saving, error, submit } = useCreateSubmit(run, onDone);
+
+  useDraftCommit({ onReadyChange, registerCommit }, files.some((f) => f.status === 'queued'), commit);
 
   return (
-    <form className="flex flex-col gap-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-      <FileDropList
-        files={files}
-        onChange={setFiles}
-        folder={folder}
-        onFolder={setFolder}
-        folders={tree.folders}
-        contextName={contextName}
-      />
-      <FormFooter ready={files.some((f) => f.status === 'queued')} saving={saving} error={error} label="Upload" />
-    </form>
+    <SetupSection label="What to upload">
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}
+        onClick={() => inputRef.current?.click()}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed px-4 py-10 text-center transition-colors ${
+          dragging ? 'border-brand-green bg-brand-green/10' : 'border-border-subtle hover:border-border-default'
+        }`}
+      >
+        <span className="text-sm text-text-primary">
+          Drop files or <span className="text-brand-green">browse</span>
+        </span>
+        <span className="text-[11px] text-text-muted">
+          {SOURCE_EXTENSIONS_LABEL} · {Math.round(MAX_SOURCE_BYTES / (1024 * 1024))} MB
+        </span>
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept={SOURCE_ACCEPT}
+          className="sr-only"
+          onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }}
+        />
+      </div>
+
+      {files.length > 0 && (
+        <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
+          {files.map((entry, i) => {
+            const status = STATUS_STYLE[entry.status];
+            return (
+              <li key={`${entry.file.name}-${i}`} className="flex items-center gap-3 rounded-lg bg-surface-2 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-text-primary">{entry.file.name}</p>
+                  <p className="truncate text-[11px] text-text-muted" title={entry.error ?? undefined}>
+                    {formatBytes(entry.file.size)}
+                    <span className={`ml-2 ${status.className}`}>{entry.error ?? status.label}</span>
+                  </p>
+                </div>
+                {entry.status !== 'uploading' && (
+                  <button
+                    type="button"
+                    onClick={() => setFiles((all) => all.filter((_, j) => j !== i))}
+                    aria-label={`Remove ${entry.file.name}`}
+                    className="shrink-0 text-text-muted transition-colors hover:text-red-500"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <FolderPicker folders={tree.folders} value={folder} onChange={setFolder} contextName={contextName} />
+    </SetupSection>
   );
 }

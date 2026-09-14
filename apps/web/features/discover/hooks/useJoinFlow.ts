@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { selfJoinAliases, type Space } from '@/lib/types';
+import { viewerDoorFor, type ViewerDoor } from '@/features/spaces/lib/viewerDoor';
 
 /**
  * Joining from Discover: one press when the space offers no role to pick, a
@@ -14,14 +15,22 @@ export function useJoinFlow() {
   const { joinSpace, joinedSpaces } = useSpace();
   const [pending, setPending] = useState<Space | null>(null);
   const [joining, setJoining] = useState(false);
+  // Spaces whose door was "ask" and has been pressed: the word goes quiet
+  // ("Asked") until an admin there answers.
+  const [asked, setAsked] = useState<Set<string>>(() => new Set());
 
-  const isJoined = useCallback((id: string) => joinedSpaces.some((s) => s.id === id), [joinedSpaces]);
+  const joinedIds = useMemo(() => new Set(joinedSpaces.map((s) => s.id)), [joinedSpaces]);
+  const isJoined = useCallback((id: string) => joinedIds.has(id), [joinedIds]);
+  const isAsked = useCallback((id: string) => asked.has(id), [asked]);
+  /** The door this viewer meets on a space (lib/spaces/subspaces.ts#joinOutcome). */
+  const doorFor = useCallback((space: Space): ViewerDoor => viewerDoorFor(space, joinedIds), [joinedIds]);
 
   const confirm = useCallback(
     async (spaceId: string, alias?: string) => {
       setJoining(true);
       try {
-        await joinSpace(spaceId, alias);
+        const status = await joinSpace(spaceId, alias);
+        if (status === 'pending') setAsked((prev) => new Set(prev).add(spaceId));
       } finally {
         setJoining(false);
         setPending(null);
@@ -40,5 +49,5 @@ export function useJoinFlow() {
 
   const cancel = useCallback(() => setPending(null), []);
 
-  return { join, confirm, cancel, pending, joining, isJoined };
+  return { join, confirm, cancel, pending, joining, isJoined, isAsked, doorFor };
 }

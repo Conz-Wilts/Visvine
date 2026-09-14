@@ -82,7 +82,7 @@ test('a folder is there because a tool brings it, and the directory brings the d
   // folder at all, but another space's context grafted in at read time.
   assert.deepEqual(
     RESERVED_NAMESPACES.filter((ns) => ns.feature === null).map((ns) => ns.dir),
-    ['subspaces'],
+    ['subspaces', 'parent'],
   );
 });
 
@@ -118,7 +118,7 @@ test('a new space has its folders because its tools do, not because a note made 
   // federation grafts it when there is a public sub-space to graft.
   assert.deepEqual(
     RESERVED_NAMESPACES.filter((ns) => ns.appearance === 'derived').map((ns) => ns.dir),
-    ['subspaces'],
+    ['subspaces', 'parent'],
   );
 
   // A fresh space, as its creator (an admin) sees it: the directory's eight,

@@ -258,6 +258,13 @@ export async function claimManualRun(
      * chaining could never start (the parent is always running).
      */
     chain?: { parent: string; depth: number }
+    /**
+     * Run as the brief's OWN author (the state row's runAsUserId) rather than
+     * as `startedBy`. Set when a sub-space's agent starts a shared agent of
+     * the parent: the caller may hold nothing in the parent, so the run
+     * cannot be theirs — it is the parent brief's, as its author.
+     */
+    runAs?: 'author'
   } = {},
 ): Promise<RunNowResult & { dispatch?: Promise<DispatchResult> }> {
   const row = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } } })
@@ -280,7 +287,9 @@ export async function claimManualRun(
   // gate (canTriggerRun) already limits that to people who can edit the brief,
   // and it means a `mode: user` connector spends the presser's own linked
   // account rather than borrowing the author's.
-  const run = await createRun({ id: runId, stateId: row.id, spaceId, name, trigger: 'manual', startedBy, runAsUserId: startedBy, eventCount: events.length, input })
+  // ...unless the caller asked for the author (a shared agent started from a
+  // sub-space): null here means the runner falls through to the state row.
+  const run = await createRun({ id: runId, stateId: row.id, spaceId, name, trigger: 'manual', startedBy, runAsUserId: opts.runAs === 'author' ? null : startedBy, eventCount: events.length, input })
   const dispatch = dispatchRun(run.id)
   return { ok: true, runId: run.id, dispatch }
 }

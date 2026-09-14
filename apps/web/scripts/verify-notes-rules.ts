@@ -212,6 +212,14 @@ async function main() {
         violations.push(`${label} ${idx}: body repeats the title as a heading (run db:index-notes:rebuild)`);
       }
     }
+    // 4 for the root, which is no note's ancestor folder: nothing creates its
+    // index but a seed, and a root with no block has opted out of the listing
+    // (store.refreshFolderIndex leaves it alone) — but one that has a block
+    // must keep it current like any other folder.
+    const root = notes.find((n) => n.path === indexPathOf(''));
+    if (root && hasChildrenBlock(root.content) && applyChildrenBlock(root.content, directChildrenOf(notes, ''), '') !== root.content) {
+      violations.push(`${label} index.md: the root's child block is stale (run db:index-notes:rebuild)`);
+    }
 
     // 6: a folder-only entity's note is its folder — the flat path may hold
     // nothing (any context, the alias never lives anywhere).

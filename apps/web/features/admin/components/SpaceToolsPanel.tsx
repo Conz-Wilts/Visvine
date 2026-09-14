@@ -524,7 +524,9 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
     // (and deletes an authored working copy) via removeInstalledTool; only a
     // `tool:` key with no install row behind it has nothing to act on.
     const install = isToolRailKey(feature.key) ? installOf(feature.key) : null;
-    const isFixed = feature.core === true || (isToolRailKey(feature.key) && !install);
+    // A Tool shared down from the parent space is not this space's to remove
+    // either — it goes when the parent stops sharing it (lib/tools/share.ts).
+    const isFixed = feature.core === true || (isToolRailKey(feature.key) && (!install || !!install.sharedFrom));
     // Position across both lists — arrow keys walk the whole sequence, crossing
     // into and out of More on the way.
     const position = sequence.indexOf(feature.key) + 1;

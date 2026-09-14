@@ -25,12 +25,14 @@
  * one Tool and six boxes would imply six subjects.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from 'next/link';
 import { CheckIcon, CopyIcon, ExternalLinkIcon, TriangleAlertIcon, UploadIcon } from '@/features/shared/icons';
 import { Button, Modal, Skeleton, Textarea } from '@/components/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
+import ShareWithRooms, { type ShareValue } from '@/features/shared/components/ShareWithRooms';
+import { setAuthoredToolShare } from '@/features/tools/lib/client';
 import { FetchJsonError } from '@/lib/fetchJson';
 import { timeAgo } from '@/lib/date';
 import { entityContextHref } from '@/lib/notes/entities';
@@ -303,8 +305,25 @@ function statusOf(view: AuthoredToolView): { label: string; tone: Tone; hint: st
 
 export default function ToolPageContent({ nodeId }: { nodeId: string }) {
   const name = nodeId.startsWith('tool:') ? nodeId.slice('tool:'.length) : nodeId;
-  const { currentSpace, loading: spaceLoading, isAdmin } = useSpace();
+  const { currentSpace, loading: spaceLoading, isAdmin, spaces } = useSpace();
   const spaceId = currentSpace?.id;
+  // A house with rooms may install this Tool into them (lib/tools/share.ts).
+  const hasSubspaces = !!spaceId && spaces.some((s) => s.parentId === spaceId);
+  const [sharing, setSharing] = useState(false);
+  const saveShare = useCallback(async (next: ShareValue) => {
+    if (!spaceId) return false;
+    setSharing(true);
+    try {
+      await setAuthoredToolShare(spaceId, name, next);
+      await reloadRef.current?.();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setSharing(false);
+    }
+  }, [spaceId, name]);
+  const reloadRef = useRef<(() => Promise<void>) | null>(null);
 
   const [view, setView] = useState<AuthoredToolView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -328,6 +347,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
       setLoading(false);
     }
   }, [spaceId, name]);
+  reloadRef.current = reload;
 
   useEffect(() => {
     if (spaceLoading) return;
@@ -455,6 +475,22 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
       >
         <BuildReport build={tool.build} />
       </Section>
+
+      {/* ══ SHARE — install this Tool into the sub-spaces ══ */}
+      {isAdmin && hasSubspaces && !tool.invalid && spaceId && (
+        <div className="mb-5">
+          <ShareWithRooms
+            spaceId={spaceId}
+            value={tool.share ?? 'none'}
+            saving={sharing}
+            onSave={saveShare}
+            what="tool"
+          />
+          <p className="mt-1 text-xs text-text-muted">
+            A room it reaches runs the version this space runs, over the room&apos;s own notes; the room can turn it off but not remove it.
+          </p>
+        </div>
+      )}
 
       {/* ══ CONFIG — the frontmatter, read back ══ */}
       <Section title="Configuration" meta={`v${tool.version}`}>

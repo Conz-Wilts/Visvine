@@ -4,8 +4,8 @@
 // imported the notes live in the DB (the source-of-truth markdown is `content`).
 //
 // Usage (local only — guarded):
-//   node scripts/import-notes-vault.mjs --space space:visvine-hq --vault <dir> [--scope shared|personal] [--owner <userId>] [--created-by <userId>]
-//   pnpm db:notes-vault -- --space space:visvine-hq --vault ../vault
+//   node scripts/import-notes-vault.mjs --space visvine-hq --vault <dir> [--scope shared|personal] [--owner <userId>] [--created-by <userId>]
+//   pnpm db:notes-vault -- --space visvine-hq --vault ../vault
 //
 // Defaults: --scope shared, --vault $NOTES_VAULT_DIR. For --scope personal you
 // must pass --owner <userId> (the context owner). created_by is resolved to a

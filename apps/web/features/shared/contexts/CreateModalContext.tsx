@@ -46,17 +46,15 @@ export interface CreateOpenOptions {
 interface CreateModalContextValue {
   /** The Create panel is out beside the rail. */
   isOpen: boolean;
-  /** A kind to open straight onto, skipping the list. */
-  defaultType: CreateKind | null;
   defaultFolder: string | null;
+  /**
+   * Opens the panel. A `type` is what the caller WANTED to make; the panel
+   * itself only lists, so this is carried no further than `useCreateSurface`,
+   * which routes to the type's surface when the space offers it and falls
+   * back to opening the list when it doesn't.
+   */
   open: (type?: CreateKind, opts?: CreateOpenOptions) => void;
   close: () => void;
-  /** A form is being filled in. The panel opens under the pointer and shuts
-   *  when the pointer leaves the rail's card (Sidebar); while someone is
-   *  typing into a form, leaving must not throw that away, so the card holds
-   *  the panel until the form is done or Escape steps back to the list. */
-  formOpen: boolean;
-  setFormOpen: (v: boolean) => void;
 }
 
 const [CreateModalContext, useCreateModal] = createSafeContext<CreateModalContextValue>('CreateModal');
@@ -64,25 +62,20 @@ export { useCreateModal };
 
 export function CreateModalProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [defaultType, setDefaultType] = useState<CreateKind | null>(null);
   const [defaultFolder, setDefaultFolder] = useState<string | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
 
-  const open = useCallback((type?: CreateKind, opts?: CreateOpenOptions) => {
-    setDefaultType(type ?? null);
+  const open = useCallback((_type?: CreateKind, opts?: CreateOpenOptions) => {
     setDefaultFolder(opts?.folder ?? null);
     setIsOpen(true);
   }, []);
 
   const close = useCallback(() => {
     setIsOpen(false);
-    setDefaultType(null);
     setDefaultFolder(null);
-    setFormOpen(false);
   }, []);
 
   return (
-    <CreateModalContext.Provider value={{ isOpen, defaultType, defaultFolder, open, close, formOpen, setFormOpen }}>
+    <CreateModalContext.Provider value={{ isOpen, defaultFolder, open, close }}>
       {children}
     </CreateModalContext.Provider>
   );
@@ -90,9 +83,9 @@ export function CreateModalProvider({ children }: { children: React.ReactNode })
 
 /**
  * The one entry point call sites should use: say what you want to create and
- * the flow table (lib/create/rows.ts) decides whether that is a form in the
- * panel, the kind's own surface, or the context-note draft. With no type the
- * panel opens on its list.
+ * the flow table (lib/create/rows.ts) decides whether that is the kind's own
+ * surface or the draft. Either way it is a navigation — nothing is filled in
+ * beside the rail. With no type the panel opens on its list.
  */
 export function useCreateSurface() {
   const router = useRouter();
@@ -117,9 +110,7 @@ export function useCreateSurface() {
         open(undefined, opts);
         return;
       }
-      const flow = flowFor(row, { folder: opts?.folder });
-      if (flow.kind === 'inline') open(type, opts);
-      else router.push(flow.href);
+      router.push(flowFor(row, { folder: opts?.folder }).href);
     },
     [open, router, pathname, currentSpace, isAdmin],
   );

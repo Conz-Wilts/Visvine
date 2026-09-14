@@ -71,6 +71,20 @@ export interface Space {
   // The space this one is a sub-space of (docs/sub-spaces.md): listed under
   // it, and — when public — read into its context. Null for a top-level space.
   parentId?: string | null;
+  // A room's four dials (docs/sub-spaces.md, lib/spaces/subspaces.ts).
+  // Listing: who can see it exists — derived from visibility for a top-level space.
+  listing?: 'secret' | 'house' | 'world';
+  // Doors: who may enter without an invite — the parent's members, everyone else.
+  houseDoor?: 'invite' | 'ask' | 'open';
+  worldDoor?: 'invite' | 'ask' | 'open';
+  // What flows up into the parent (nothing from a secret room).
+  flowContext?: boolean;
+  flowEvents?: boolean;
+  flowPeople?: boolean;
+  // Whether the parent's admins administer this sub-space too (lib/auth.ts).
+  parentAdmins?: boolean;
+  // The house's side: which rooms its model keys reach.
+  subspaceConfig?: { modelKeys: 'all' | string[] };
   timezone?: string | null; // IANA zone the space's scheduled agents run in (null = UTC)
   // The Tools this space runs, enabled ones only. Rides the space DTO because
   // the sidebar rail, the `/t/<slug>` page and the type-page dispatch all need

@@ -6,6 +6,7 @@ import { spaceMark } from '@/lib/spaces/subspaces';
 import { tagPalette } from '@/lib/tagColors';
 import { filterSpaces, sectorOptions } from '@/lib/discover/filters';
 import type { Space } from '@/lib/types';
+import type { ViewerDoor } from '@/features/spaces/lib/viewerDoor';
 import SpaceTile from './SpaceTile';
 
 const SPACE_GRID_STYLE: React.CSSProperties = {
@@ -26,6 +27,8 @@ export default function SpacesView({
   sectors,
   onSectors,
   isJoined,
+  isAsked,
+  doorFor,
   onJoin,
 }: {
   spaces: Space[];
@@ -34,6 +37,8 @@ export default function SpacesView({
   sectors: Set<string>;
   onSectors: (next: Set<string>) => void;
   isJoined: (id: string) => boolean;
+  isAsked?: (id: string) => boolean;
+  doorFor?: (space: Space) => ViewerDoor;
   onJoin: (space: Space) => void;
 }) {
   const sectorOpts = useMemo(() => sectorOptions(spaces), [spaces]);
@@ -84,6 +89,8 @@ export default function SpacesView({
               mark={spaceMark(space, spaces)}
               parentName={nameOf(space.parentId)}
               joined={isJoined(space.id)}
+              door={doorFor ? doorFor(space) : 'active'}
+              asked={isAsked ? isAsked(space.id) : false}
               onJoin={onJoin}
             />
           ))}

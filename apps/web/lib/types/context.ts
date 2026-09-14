@@ -61,6 +61,9 @@ export interface NBNode {
   /** The member this node is connected to (Node.identityId → Identity.userId).
    *  Absent = a plain context: no Profile tab, freely renameable. */
   connected_user_id?: string | null;
+  /** Set when this node is a sub-space's, read through its parent's directory
+   *  (lib/directory/peopleFlow.ts): which room. Its presence means read-only here. */
+  via_space?: { id: string; name: string };
   createdAt?: string;
   // Force context will add these during simulation
   x?: number;

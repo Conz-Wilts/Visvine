@@ -10,6 +10,7 @@ import { tagPalette } from '@/lib/tagColors';
 import { spaceCountryCode } from '@/lib/discover/filters';
 import type { Space } from '@/lib/types';
 import JoinWord from './JoinWord';
+import type { ViewerDoor } from '@/features/spaces/lib/viewerDoor';
 
 function formatMemberCount(count: number): string {
   if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
@@ -31,6 +32,8 @@ export default function SpaceTile({
   mark,
   parentName,
   joined,
+  door = 'active',
+  asked = false,
   onJoin,
   compact = false,
 }: {
@@ -39,6 +42,9 @@ export default function SpaceTile({
   mark: { name: string; imageUrl?: string };
   parentName: string | null;
   joined: boolean;
+  /** The door this viewer meets (lib/spaces/subspaces.ts); defaults to open. */
+  door?: ViewerDoor;
+  asked?: boolean;
   onJoin: (space: Space) => void;
   /** A branch tile: shorter media, one line of facts, no sectors. */
   compact?: boolean;
@@ -98,7 +104,7 @@ export default function SpaceTile({
         <p className="mt-1.5 flex items-center gap-1.5 text-[13px] leading-[1.35] text-text-secondary">
           {country && <CountryFlagIcon code={country} className="h-[11px] w-[15px]" />}
           <span className="min-w-0 flex-1 truncate">{facts}</span>
-          {compact && <JoinWord joined={joined} onJoin={() => onJoin(space)} />}
+          {compact && <JoinWord joined={joined} door={door} asked={asked} onJoin={() => onJoin(space)} />}
         </p>
 
         {!compact && (
@@ -112,7 +118,7 @@ export default function SpaceTile({
                   <Chip key={tag} color={tagPalette(tag, space.designConfig?.tagColors).base} size="xs">{tag}</Chip>
                 ))}
               </div>
-              <JoinWord joined={joined} onJoin={() => onJoin(space)} />
+              <JoinWord joined={joined} door={door} asked={asked} onJoin={() => onJoin(space)} />
             </div>
           </>
         )}

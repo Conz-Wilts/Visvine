@@ -5,8 +5,11 @@
 // folders are grafted only when the caller may see them (a grant reaches the
 // folder or starts inside it — restricted subtrees stay fully hidden).
 //
-// A public sub-space's own tree is grafted in under `subspaces/<id>/`
-// (lib/notes/federation.ts), read under the sub-space's everyone-principal.
+// A flowing sub-space's own tree is grafted in under `subspaces/<id>/`, inside
+// one `Sub-spaces` folder (lib/notes/federation.ts), read under the principal
+// the caller reads it through. Built-in folders and the rooms are then DRAWN
+// where the space's index notes place them (lib/notes/shared/placedFolders.ts) —
+// the paths do not change, only the shape the sidebar shows.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getFeatureConfig } from '@/lib/auth'
@@ -20,6 +23,8 @@ import { listFolders } from '@/lib/notes/store'
 import { standingFolders } from '@/lib/notes/entities'
 import { buildTree, sortTree } from '@/lib/notes/shared/context'
 import { principalSeesFolder } from '@/lib/notes/shared/permissions'
+import { applyPlacements, placementsFrom } from '@/lib/notes/shared/placedFolders'
+import { pruneEmptySubspacesFolder } from '@/lib/spaces/subspaces'
 import type { TreeNode } from '@/lib/notes/shared/types'
 
 // Graft an explicitly-created empty folder onto the note-derived tree. A folder
@@ -46,6 +51,19 @@ function ensureFolderPath(root: TreeNode, folderPath: string): void {
  *  `gated` = the folder-visibility lens applies (a shared context that is not
  *  a personal space). */
 async function treeFor(context: Context, p: ContextPrincipal, gated: boolean): Promise<TreeNode> {
+  const { root, placements } = await ownTree(context, p, gated)
+  // Where this context's own index notes put its built-in folders — applied
+  // here, before a sub-space's tree is rebased into its parent's, so a room's
+  // layout travels with it (lib/notes/shared/placedFolders.ts).
+  applyPlacements(root, placements)
+  return root
+}
+
+async function ownTree(
+  context: Context,
+  p: ContextPrincipal,
+  gated: boolean,
+): Promise<{ root: TreeNode; placements: Map<string, string> }> {
   const [{ metas }, folders, featureConfig] = await Promise.all([
     visibleVault(p, context),
     listFolders(context),
@@ -65,9 +83,10 @@ async function treeFor(context: Context, p: ContextPrincipal, gated: boolean): P
   // (namespaceFolderDenial).
   //
   // `p.spaceAdmin`, not the caller's standing in the space they asked about:
-  // this function is re-entered for each public sub-space under its own
-  // everyone-principal (federateTree below), and a parent's admin administers
-  // nothing there.
+  // this function is re-entered for each flowing sub-space under the
+  // principal the caller reads it through (federateTree below) — their own
+  // standing when they are in it, the everyone-principal otherwise — and a
+  // parent's admin administers nothing there unless the sub-space says so.
   for (const dir of standingFolders(featureConfig, { isAdmin: p.spaceAdmin })) {
     ensureFolderPath(root, dir)
   }
@@ -77,7 +96,7 @@ async function treeFor(context: Context, p: ContextPrincipal, gated: boolean): P
     if (gated && !principalSeesFolder(p, folder)) continue
     ensureFolderPath(root, folder)
   }
-  return root
+  return { root, placements: placementsFrom(metas) }
 }
 
 export async function GET(req: NextRequest) {
@@ -89,8 +108,14 @@ export async function GET(req: NextRequest) {
 
   const p = await principalOf(context)
   const gated = context.scope === 'shared' && !context.isPersonalSpace
-  const root = await treeFor(context, p, gated)
+  const { root, placements } = await ownTree(context, p, gated)
+  applyPlacements(root, placements)
   await federateTree(p, context, root, (ctx, principal) => treeFor(ctx, principal, true))
+  // Once more, now that the sub-spaces are grafted: the entries naming a room
+  // (`subspaces/<id>`) or the `Sub-spaces` folder had nothing to move before.
+  // Idempotent for the rest. Then the `Sub-spaces` folder goes if it is empty.
+  applyPlacements(root, placements)
+  pruneEmptySubspacesFolder(root)
   sortTree(root)
   return NextResponse.json({ tree: root })
 }

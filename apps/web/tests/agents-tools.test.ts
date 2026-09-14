@@ -32,6 +32,8 @@ function brief(over: Partial<AgentBrief> = {}): AgentBrief {
     connectors: [],
     tools: [],
     agents: [],
+    share: 'none',
+    shareAs: 'use',
     dryRun: false,
     maxTurns: 8,
     body: 'do the thing',
@@ -70,10 +72,13 @@ function fakes(): Fakes {
         f.appends.push({ path, text })
         return { status: 'applied', path }
       }) as AgentToolDeps['appendLogGated'],
-      claimManualRun: async (_space, name, startedBy, opts) => {
-        f.claims.push({ name, startedBy, chain: opts.chain })
+      claimManualRun: async (space, name, startedBy, opts) => {
+        f.claims.push({ name, startedBy, chain: opts.chain, ...(space !== SPACE ? { space } : {}), ...(opts.runAs ? { runAs: opts.runAs } : {}) })
         return { ok: true, runId: `run-${name}`, dispatch: Promise.resolve() }
       },
+      // Every name is an agent of the space unless a test says otherwise.
+      findAgentState: async () => true,
+      sharedParentAgent: async () => null,
       createEntity: (async (_ctx: unknown, input: { type: string; name: string; stamp?: { origin?: string; model?: string } }) => {
         f.created.push({ type: input.type, name: input.name, stamp: input.stamp })
         return { ok: true, node: { id: `${input.type}:${input.name}` }, notePath: `people/${input.name}.md`, resolution: null, noteError: null }
@@ -173,6 +178,40 @@ test('sign_in: only a declared connector, and the answer never carries a passwor
   assert.deepEqual(f.signIns.map((s) => s.connector), ['crm-login', 'hubspot'])
   const dry = tool(agentTools(ctx(f, { brief: brief({ connectors: ['crm-login'], dryRun: true }) })), 'sign_in')
   assert.equal(await dry.run({ connector: 'crm-login' }), 'DRY RUN — would sign in with crm-login')
+})
+
+test('run_agent: a name of the parent space, when shared — in the parent, as its author; never sideways or down', async () => {
+  const f = fakes()
+  // The space has `digest`; the parent shares `house-report`; nothing has `ghost`.
+  f.deps.findAgentState = async (space, name) => space === SPACE && name === 'digest'
+  f.deps.sharedParentAgent = async (space, name) =>
+    space === SPACE && name === 'house-report' ? { id: 'parent-1', name: 'Visvine HQ' } : null
+  const run = tool(agentTools(ctx(f)), 'run_agent')
+  assert.equal(await run.run({ name: 'digest' }), 'started agent digest — run run-digest')
+  assert.deepEqual(f.claims[0], { name: 'digest', startedBy: 'author-1', chain: { parent: 'run-root', depth: 1 } })
+  assert.match(await run.run({ name: 'house-report' }), /^started agent house-report in Visvine HQ .* as its own author — run run-house-report/)
+  assert.deepEqual(f.claims[1], {
+    name: 'house-report',
+    startedBy: 'author-1',
+    chain: { parent: 'run-root', depth: 1 },
+    space: 'parent-1',
+    runAs: 'author',
+  })
+  assert.match(await run.run({ name: 'ghost' }), /^error: no agent named ghost here/)
+  assert.equal(f.claims.length, 2)
+  // Only one step up: the lookup is asked about THIS space, never another.
+  const asked: string[] = []
+  f.deps.sharedParentAgent = async (space) => {
+    asked.push(space)
+    return null
+  }
+  await tool(agentTools(ctx(f)), 'run_agent').run({ name: 'ghost' })
+  assert.deepEqual(asked, [SPACE])
+  // Dry run says where it would have gone, and claims nothing.
+  f.deps.sharedParentAgent = async () => ({ id: 'parent-1', name: 'Visvine HQ' })
+  const dry = tool(agentTools(ctx(f, { brief: brief({ dryRun: true }) })), 'run_agent')
+  assert.equal(await dry.run({ name: 'house-report' }), 'DRY RUN — would start agent house-report in Visvine HQ')
+  assert.equal(f.claims.length, 2)
 })
 
 test('run_agent: any agent of the space, never itself, and refused past the depth limit', async () => {

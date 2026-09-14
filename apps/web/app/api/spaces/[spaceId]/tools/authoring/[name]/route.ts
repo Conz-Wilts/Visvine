@@ -4,6 +4,10 @@ import { parseBody } from '@/lib/api/route'
 import { deleteTool, describeAuthoredTool, toolRequirementsInSpace } from '@/lib/tools/service'
 import { publishTool, toolKey, versionHistory } from '@/lib/tools/registry'
 import { bad, requireToolsAccess } from '@/lib/tools/route'
+import { readVisible, writeGated } from '@/lib/notes/contextService'
+import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
+import { toolIndexPath } from '@/lib/tools/config'
+import prisma from '@/lib/prisma'
 import type {
   AuthoredToolDetail,
   AuthoredToolView,
@@ -100,6 +104,51 @@ export async function POST(
 
   const answer: PublishResponse = { version: result.version, warning: result.warning }
   return NextResponse.json(answer, { status: 201 })
+}
+
+const shareSchema = z.object({
+  /** `'none'`, `'all'` (every sub-space) or a list of sub-space ids. */
+  share: z.union([z.literal('none'), z.literal('all'), z.array(z.string().min(1)).max(200)]),
+})
+
+/**
+ * Share the Tool with the space's sub-spaces — an admin's act, written as
+ * `share:` on the index note so the projection installs it there
+ * (lib/tools/share.ts). Through the gated write, so it is a note edit like any
+ * other: audited, projected, and refused where the caller may not write.
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ spaceId: string; name: string }> },
+) {
+  const { spaceId, name: raw } = await params
+  const name = decodeURIComponent(raw)
+  const ctx = await requireToolsAccess(spaceId)
+  if (ctx instanceof Response) return ctx
+  if (!ctx.resolved.isAdmin) return bad('Only space admins can share a tool with sub-spaces.', 403)
+
+  const body = await parseBody(req, shareSchema)
+  if (body instanceof NextResponse) return body
+
+  const path = toolIndexPath(name)
+  const content = await readVisible(ctx.principal, ctx.resolved, path)
+  if (content === null) return bad('Tool not found', 404)
+
+  const fm = parseFrontmatter(content)
+  if (body.share === 'none') delete fm.share
+  else if (body.share === 'all') fm.share = 'all'
+  else {
+    const ids = [...new Set(body.share.map((id) => id.trim()).filter(Boolean))]
+    const rooms = await prisma.space.findMany({ where: { parentId: ctx.resolved.spaceId, id: { in: ids } }, select: { id: true } })
+    if (rooms.length !== ids.length) return bad('Share names a sub-space this space does not have')
+    if (ids.length === 0) delete fm.share
+    else fm.share = ids
+  }
+  const written = await writeGated(ctx.principal, ctx.resolved, path, joinFrontmatter(fm, splitFrontmatter(content).body))
+  if (written.status === 'denied') return bad(written.reason, 403)
+
+  const tool = await describeAuthoredTool(ctx.principal, ctx.resolved, name)
+  return NextResponse.json({ tool })
 }
 
 /**

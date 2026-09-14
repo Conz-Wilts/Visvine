@@ -3,12 +3,16 @@
 // The panel beside the rail shows every kind of thing a person can make in
 // the space they are in — the built-in types the space's tools own, the
 // types the space invented for its notes, and a "New type" row while the
-// search names something that is neither. Picking a row does one of three
-// things (`flowFor`): a short form in the same panel, the type's own surface
-// (an event's composer, the connector catalogue), or the context-note draft
-// for the things that ARE prose. The table is here rather than in the panel
-// so the rail's entry point, the tree's "+" and the channel list's buttons
-// cannot disagree about where a type is made.
+// search names something that is neither. The panel is a PICKER and nothing
+// else: picking a row does one of two things (`flowFor`), and both of them
+// happen on the page rather than in the rail. Either the kind has a surface
+// of its own that already is its create UI (an event's composer, the
+// connector catalogue, the models section), or it goes to the draft — the
+// note-first create surface at /directory/new, where the thing's own context
+// note is what you fill in and the kind's extra fields sit under the title.
+// The table is here rather than in the panel so the rail's entry point, the
+// tree's "+" and the channel list's buttons cannot disagree about where a
+// type is made.
 
 import type { CreateableType } from '@/features/shared/contexts/CreateModalContext'
 import { canCreateType, type CreatePermissions } from '@/lib/create/creatable'
@@ -34,12 +38,49 @@ export type CreateRow =
   | { kind: 'new-type'; name: string }
 
 export type CreateFlow =
-  /** A short form in the panel itself. */
-  | { kind: 'inline' }
   /** The kind's own surface; the panel closes. */
   | { kind: 'route'; href: string }
-  /** The context-note draft, with the type preset. */
+  /** The draft surface, with the type preset. */
   | { kind: 'draft'; href: string }
+
+/**
+ * The kinds the draft surface commits. Every one of them is a row of this
+ * table whose flow is a draft, spelled the way `?type=` spells it — which is
+ * the row's id except for a note, whose create-type id is `context` and whose
+ * draft spelling is `note`.
+ */
+export type DraftKind =
+  | 'note'
+  | 'folder'
+  | 'agent'
+  | 'person'
+  | 'space'
+  | 'resource'
+  | 'channel'
+  | 'section'
+  | 'tool'
+  | 'file'
+
+/** The draft spelling of every built-in kind the draft makes. */
+const DRAFT_KIND_OF: Partial<Record<CreateKind, DraftKind>> = {
+  context: 'note',
+  folder: 'folder',
+  agent: 'agent',
+  person: 'person',
+  space: 'space',
+  resource: 'resource',
+  channel: 'channel',
+  section: 'section',
+  tool: 'tool',
+  file: 'file',
+}
+
+const DRAFT_KIND_NAMES: ReadonlySet<string> = new Set(Object.values(DRAFT_KIND_OF))
+
+/** Whether `?type=` names a built-in shape rather than one of the space's own. */
+export function isDraftKind(value: string | null | undefined): value is DraftKind {
+  return !!value && DRAFT_KIND_NAMES.has(value)
+}
 
 /** The colour the draft surface paints a plain note. */
 const NOTE_COLOR = '#64748b'
@@ -102,20 +143,27 @@ function builtInRows(input: CreateRowsInput): CreateRow[] {
 }
 
 /**
- * The space's own note types, alphabetical: anything stored with
- * `scope: 'note'` that is neither reserved nor a spelling of a built-in.
+ * The space's own note vocabulary, alphabetical: anything stored with
+ * `scope: 'note'` that is neither reserved nor a spelling of a built-in. The
+ * Create panel lists these as rows; the draft surface's type menu lists the
+ * configs themselves.
  */
-function customRows(spaceNodeTypes: NodeTypeConfig[] | null | undefined): CreateRow[] {
+export function spaceNoteTypes(spaceNodeTypes: NodeTypeConfig[] | null | undefined): NodeTypeConfig[] {
   const seen = new Set<string>()
-  const out: CreateRow[] = []
+  const out: NodeTypeConfig[] = []
   for (const t of spaceNodeTypes ?? []) {
     if (t.scope !== 'note') continue
     const key = t.name.trim().toLowerCase()
     if (!key || seen.has(key) || isReservedTypeName(key) || findNodeTypeConfig(key)) continue
     seen.add(key)
-    out.push({ kind: 'custom', name: t.name, color: t.color })
+    out.push(t)
   }
-  return out.sort((a, b) => rowLabel(a).localeCompare(rowLabel(b)))
+  return out.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** Those types as rows of the Create panel's list. */
+function customRows(spaceNodeTypes: NodeTypeConfig[] | null | undefined): CreateRow[] {
+  return spaceNoteTypes(spaceNodeTypes).map((t) => ({ kind: 'custom', name: t.name, color: t.color }))
 }
 
 export function rowLabel(row: CreateRow): string {
@@ -205,27 +253,53 @@ export function firstPickIndex(list: CreateRowList): number {
   return i === -1 ? 0 : i
 }
 
+/** What a draft link may carry beyond the type and the folder. */
+export interface DraftHrefOptions {
+  /** An alias picked off the kind's tree, worn by the thing being made. */
+  alias?: string | null
+  /** A starter brief, for an agent. */
+  template?: string | null
+  /**
+   * The type named by `type=` does not exist yet — the draft registers it on
+   * the space before it commits. Only the "New type" row sets this.
+   */
+  newType?: boolean
+}
+
 /** The draft surface with a type preset, and a folder when one was in hand. */
-export function draftHref(type: string | null, folder?: string | null): string {
+export function draftHref(type: string | null, folder?: string | null, opts: DraftHrefOptions = {}): string {
   const params = new URLSearchParams()
   if (type) params.set('type', type)
   if (folder) params.set('folder', folder)
+  if (opts.alias) params.set('alias', opts.alias)
+  if (opts.template) params.set('template', opts.template)
+  if (opts.newType) params.set('new', '1')
   const query = params.toString()
   return `/directory/new${query ? `?${query}` : ''}`
 }
 
-export interface FlowContext {
+export interface FlowContext extends DraftHrefOptions {
   /** A folder the caller was standing in, for the kinds that land in one. */
   folder?: string | null
 }
 
 /**
- * What picking a row does. An agent is `inline` although its brief is prose:
- * the panel's step is the starter list, and picking one goes to the draft.
+ * What picking a row does. Everything a person can make either has a surface
+ * of its own — the event composer, the connector catalogue, the models
+ * section, each of which already IS a create UI — or it goes to the draft.
+ * Nothing is filled in beside the rail: the Create panel picks the kind and
+ * the page makes the thing.
  */
 export function flowFor(row: CreateRow, ctx: FlowContext): CreateFlow {
-  if (row.kind === 'custom') return { kind: 'draft', href: draftHref(row.name, ctx.folder) }
-  if (row.kind === 'new-type') return { kind: 'inline' }
+  if (row.kind === 'custom') return { kind: 'draft', href: draftHref(row.name, ctx.folder, ctx) }
+  // A type nobody has used yet. Named, it goes to the draft wearing that name
+  // and the draft registers it; unnamed (the standing row at the top of the
+  // list), it goes to a bare draft, where the type menu is where you name one.
+  if (row.kind === 'new-type') {
+    return row.name
+      ? { kind: 'draft', href: draftHref(row.name, ctx.folder, { ...ctx, newType: true }) }
+      : { kind: 'draft', href: draftHref(null, ctx.folder) }
+  }
   switch (row.id) {
     // The composer is the create UI: poster, date, place, RSVP.
     case 'event':
@@ -236,15 +310,61 @@ export function flowFor(row: CreateRow, ctx: FlowContext): CreateFlow {
     // Models is a section of Settings.
     case 'model':
       return { kind: 'route', href: '/settings?section=models' }
-    // A note is prose; the draft is where prose is written.
-    case 'context':
-      return { kind: 'draft', href: draftHref('note', ctx.folder) }
-    default:
-      return { kind: 'inline' }
+    default: {
+      const kind = DRAFT_KIND_OF[row.id]
+      // Every remaining row is a draft kind; the fallback keeps a kind added
+      // to BUILT_INS without a draft spelling from landing nowhere.
+      return { kind: 'draft', href: draftHref(kind ?? null, ctx.folder, ctx) }
+    }
   }
 }
 
 /** The row for a built-in kind, when this person may make it here. */
 export function rowForKind(kind: CreateKind, input: Omit<CreateRowsInput, 'query'>): CreateRow | null {
   return builtInRows({ ...input, query: '' }).find((r) => r.kind === 'type' && r.id === kind) ?? null
+}
+
+// ── The draft surface's own view of this table ───────────────────────────────
+
+/**
+ * Whether a kind has prose in front of it — a note to write while you are
+ * making it. The three that do not (a group of channels, a Tool's scaffold, an
+ * upload) get no editor on the draft and no Raw tab over it.
+ */
+export function draftHasProse(kind: DraftKind | null): boolean {
+  return kind !== 'section' && kind !== 'tool' && kind !== 'file'
+}
+
+/**
+ * Whether a kind carries tags. Tags label a note, so the kinds that write one
+ * take them; a channel, a section, a Tool scaffold and an upload do not, and
+ * the draft withholds the row rather than offering one that goes nowhere.
+ */
+export function draftUsesTags(kind: DraftKind | null): boolean {
+  return kind === null || (kind !== 'channel' && kind !== 'section' && kind !== 'tool' && kind !== 'file')
+}
+
+/** One shape the draft surface offers in its type menu. */
+export interface DraftTypeOption {
+  id: DraftKind
+  label: string
+  /** The colour the space paints the kind, resolved the same way a row is. */
+  color: string
+}
+
+/**
+ * The shapes the draft may commit here, in the same order the Create panel
+ * lists them. Derived from the one table above rather than restated, so the
+ * panel and the surface it hands off to can never offer different kinds — or
+ * gate them differently, since this runs the same permission filter.
+ */
+export function draftTypeOptions(input: Omit<CreateRowsInput, 'query' | 'pathname'>): DraftTypeOption[] {
+  const out: DraftTypeOption[] = []
+  for (const row of builtInRows({ ...input, pathname: null, query: '' })) {
+    if (row.kind !== 'type') continue
+    const id = DRAFT_KIND_OF[row.id]
+    if (!id) continue
+    out.push({ id, label: row.label, color: row.color })
+  }
+  return out
 }

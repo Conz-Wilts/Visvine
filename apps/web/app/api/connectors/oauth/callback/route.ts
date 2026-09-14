@@ -87,16 +87,16 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const resolved = await resolveContext(session, pending.spaceId);
+    const resolved = await resolveContext(session, pending.viaSpaceId ?? pending.spaceId);
     if (resolved instanceof Response) return page('Space not found.', 404);
     const principal = await principalOf(resolved);
 
     // Re-read the note rather than trusting the cookie's copy: the connector may
-    // have been edited, or the caller's access revoked, while the browser was
-    // away at the provider.
+    // have been edited, or the caller's access revoked — or the parent may
+    // have stopped sharing it — while the browser was away at the provider.
     const detail = await describeConnector(principal, resolved, pending.connector);
     const auth = detail?.perimeter?.auth;
-    if (!auth || auth.provider !== pending.provider || auth.mode !== pending.mode) {
+    if (!auth || auth.provider !== pending.provider || auth.mode !== pending.mode || detail.ownerSpaceId !== pending.spaceId) {
       return page('That connector changed while you were connecting. Start again.', 409);
     }
 

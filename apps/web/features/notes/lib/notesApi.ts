@@ -44,8 +44,13 @@ export interface PathAccessResponse {
     aliases: Array<{ id: string; name: string; color: string; admin: boolean; system: boolean; holderCount: number }>
   } | null
   /** Set when `path` is a sub-space's note read through this space
-   *  (`subspaces/<id>/…`): which sub-space. Read-only here by construction. */
-  subspace?: { id: string; name: string } | null
+   *  (`subspaces/<id>/…`): which sub-space, and whether the caller stands in
+   *  it — `canWrite` is then their own standing there; without it the note is
+   *  read-only here and joining the sub-space is the way to edit. */
+  subspace?: { id: string; name: string; member: boolean } | null
+  /** Set when `path` is a note the parent space shares with this sub-space
+   *  (`parent/…`): which space. Read-only here by construction. */
+  parent?: { id: string; name: string } | null
 }
 
 /** GET /api/notes/access (no path) — the context-wide overview for tree badges
@@ -164,6 +169,10 @@ export const notesApi = {
     }),
   renameFolder: (c: string, from: string, to: string) =>
     sendJson<{ path: string }>('/api/notes/folders', 'PATCH', { spaceId: c, from, to }),
+  /** Place a built-in folder or a sub-space under a folder of the space's own
+   *  (`container: ''` = the top). The path stays; only the tree changes. */
+  placeFolder: (c: string, path: string, container: string) =>
+    sendJson<{ ok: true }>('/api/notes/folders/place', 'POST', { spaceId: c, path, container }),
   deleteFolder: async (c: string, path: string) => {
     return fetchJson<{ ok: true }>(`/api/notes/folders?${qs(c, { path })}`, { method: 'DELETE' })
   },

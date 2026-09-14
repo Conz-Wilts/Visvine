@@ -19,6 +19,8 @@ import { isConnectorEnabled, parseConnectorPerimeter } from '@/lib/connectors/co
 import { logger } from '@/lib/logger'
 import { canonical, compile, type InjectRule, type VmPolicy } from '@visvine/vm-policy'
 import { machineHostPatterns } from './shared/hosts'
+import { parentOfSubspace } from '@/lib/spaces/subspaceAccess'
+import { reachesRoom } from '@/lib/spaces/subspaces'
 
 const SHARED_OWNER_KEY = 'shared'
 
@@ -53,8 +55,8 @@ interface EgressHosts {
  * list is: grant-free, `type: connector`, switched on, perimeter parseable.
  * `names` undefined means every connector the space has.
  */
-async function egressHosts(spaceId: string, names?: readonly string[]): Promise<EgressHosts> {
-  const rows = await prisma.contextNote.findMany({
+async function connectorRows(spaceId: string, names?: readonly string[]) {
+  return prisma.contextNote.findMany({
     where: {
       spaceId,
       ownerKey: SHARED_OWNER_KEY,
@@ -64,25 +66,43 @@ async function egressHosts(spaceId: string, names?: readonly string[]): Promise<
     select: { path: true, content: true },
     orderBy: { path: 'asc' },
   })
+}
+
+async function egressHosts(spaceId: string, names?: readonly string[]): Promise<EgressHosts> {
+  const own = await connectorRows(spaceId, names)
+
+  // What the parent shares reaches its rooms' machines too: a sub-space's
+  // agent naming the parent's `hubspot` resolves the parent's note
+  // (lib/connectors/service.ts#readConnectorNote), so its machine is held to
+  // the same hosts. Only the parent's notes whose `share:` reaches THIS room
+  // (`all`, or a list naming it), and only for names this space has no note
+  // of its own for — the same order the run resolves them in.
+  const ownNames = new Set(own.map((row) => row.path))
+  const wanted = names?.filter((name) => !ownNames.has(`connectors/${name}.md`))
+  const parent = wanted?.length === 0 ? null : await parentOfSubspace(spaceId)
+  const theirs = parent ? await connectorRows(parent.id, wanted) : []
 
   const hosts = new Set<string>()
   const unreadable: string[] = []
   const rejected: string[] = []
-  for (const row of rows) {
+  const read = (row: { path: string; content: string }, sharedOnly: boolean) => {
     const fm = parseFrontmatter(row.content)
-    if (fm.type !== 'connector') continue
+    if (fm.type !== 'connector') return
     // A connector switched off is not reach the space has. Same reading as
     // loadConnector's, so "turn off" means one thing everywhere.
-    if (!isConnectorEnabled(fm)) continue
+    if (!isConnectorEnabled(fm)) return
     const parsed = parseConnectorPerimeter(fm)
     if (!parsed.ok) {
       unreadable.push(row.path)
-      continue
+      return
     }
+    if (sharedOnly && !reachesRoom(parsed.perimeter.share, spaceId)) return
     const found = machineHostPatterns(parsed.perimeter.hosts)
     for (const host of found.patterns) hosts.add(host)
     for (const host of found.rejected) rejected.push(`${row.path}: ${host}`)
   }
+  for (const row of own) read(row, false)
+  for (const row of theirs) if (!ownNames.has(row.path)) read(row, true)
   return { hosts: [...hosts].sort(), unreadable, rejected }
 }
 

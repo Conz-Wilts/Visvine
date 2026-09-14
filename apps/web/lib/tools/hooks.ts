@@ -65,6 +65,16 @@ async function rebuild(spaceId: string, name: string): Promise<void> {
   }
 }
 
+/** The rooms' shared installs follow the index note's `share:` (lib/tools/share.ts). */
+async function syncShare(spaceId: string, name: string): Promise<void> {
+  try {
+    const share = await import('./share')
+    await share.syncSharedToolInstalls(spaceId, name)
+  } catch (err) {
+    logger.error('tools.share.sync_failed', { err, spaceId, name })
+  }
+}
+
 async function dropBuild(spaceId: string, name: string): Promise<void> {
   try {
     const builds = await import('./builds')
@@ -102,6 +112,7 @@ export async function toolNoteWritten(context: Context, path: string): Promise<v
   const name = toolOf(context, path)
   if (!name) return
   await rebuild(context.spaceId, name)
+  if (toolFileKindOfPath(path) === 'index') await syncShare(context.spaceId, name)
 }
 
 /**
@@ -116,6 +127,8 @@ export async function toolNoteRenamed(context: Context, from: string, to: string
   const toName = isToolPath(to) ? toolNameOfPath(to) : null
   if (fromName && fromName !== toName) await settleRenamedFrom(context.spaceId, fromName)
   if (toName) await rebuild(context.spaceId, toName)
+  if (fromName && fromName !== toName) await syncShare(context.spaceId, fromName)
+  if (toName && toolFileKindOfPath(to) === 'index') await syncShare(context.spaceId, toName)
 }
 
 /**
@@ -158,6 +171,7 @@ export async function toolNoteDeleted(context: Context, path: string): Promise<v
   if (!name) return
   if (toolFileKindOfPath(path) === 'index') {
     await teardownTool(context, name)
+    await syncShare(context.spaceId, name)
     await dropBuild(context.spaceId, name)
     return
   }

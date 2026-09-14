@@ -75,7 +75,7 @@ export default function DiscoverPage() {
   });
 
   const { spaces, loading: spacesLoading } = useSpace();
-  const { join, confirm, cancel, pending, joining, isJoined } = useJoinFlow();
+  const { join, confirm, cancel, pending, joining, isJoined, isAsked, doorFor } = useJoinFlow();
   const { events, loading: eventsLoading, error } = useDiscoverEvents();
 
   const [search, setSearch] = useState('');
@@ -178,6 +178,8 @@ export default function DiscoverPage() {
               sectors={sectors}
               onSectors={setSectors}
               isJoined={isJoined}
+              isAsked={isAsked}
+              doorFor={doorFor}
               onJoin={join}
             />
           )}

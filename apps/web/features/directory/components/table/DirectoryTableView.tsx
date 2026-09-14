@@ -150,7 +150,8 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   const saveCell = useCallback(
     async (item: DirectoryItem, column: TableColumn, value: unknown) => {
       const patch = cellPatch(column, value);
-      if (!patch || !spaceId) return;
+      // Another space's row read here (people flow) is not this space's to edit.
+      if (!patch || !spaceId || item.via_space) return;
       setSaveError(null);
       try {
         await fetchJsonBody(`/api/nodes/${encodeURIComponent(item.id)}`, 'PATCH', { spaceId, ...patch });

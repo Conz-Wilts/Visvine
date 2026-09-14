@@ -20,6 +20,8 @@ import { isLegacyModelConnector } from '@/lib/models/config'
 import { isAgentBriefPath, agentNameOfPath } from '@/lib/notes/entities'
 import { AGENT_TOOL_OPTIONS } from './config'
 import { defaultModelOf, noModelReason, spaceModels } from './spaceModels'
+import { parentOfSubspace } from '@/lib/spaces/subspaceAccess'
+import { isSharedDown } from '@/lib/spaces/subspaces'
 import type { ModelPricing } from './registry'
 
 const SHARED_OWNER_KEY = 'shared'
@@ -50,11 +52,18 @@ export interface AgentOptions {
   noModels: string | null
   connectors: Array<{ name: string; enabled: boolean }>
   agents: string[]
+  /**
+   * The parent space's agents shared with this sub-space (`share:
+   * subspaces`), which a brief here may name in `agents:` and start with
+   * run_agent — listed after the space's own, each saying where it is from.
+   * Empty for a top-level space.
+   */
+  sharedAgents: Array<{ name: string; from: string; mode: 'use' | 'run-in' }>
   tools: typeof AGENT_TOOL_OPTIONS
 }
 
 export async function agentOptions(spaceId: string): Promise<AgentOptions> {
-  const [models, notes] = await Promise.all([
+  const [models, notes, sharedAgents] = await Promise.all([
     spaceModels(spaceId),
     prisma.contextNote.findMany({
       where: {
@@ -66,6 +75,7 @@ export async function agentOptions(spaceId: string): Promise<AgentOptions> {
       select: { path: true, content: true },
       orderBy: { path: 'asc' },
     }),
+    sharedParentAgents(spaceId),
   ])
 
   const connectors: AgentOptions['connectors'] = []
@@ -102,6 +112,27 @@ export async function agentOptions(spaceId: string): Promise<AgentOptions> {
     noModels: noModelReason(models),
     connectors,
     agents: agents.sort(),
+    sharedAgents,
     tools: AGENT_TOOL_OPTIONS,
   }
+}
+
+async function sharedParentAgents(spaceId: string): Promise<AgentOptions['sharedAgents']> {
+  const parent = await parentOfSubspace(spaceId)
+  if (!parent) return []
+  const rows = await prisma.contextNote.findMany({
+    where: { spaceId: parent.id, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { startsWith: 'agents/', endsWith: '.md' } },
+    select: { path: true, content: true },
+    orderBy: { path: 'asc' },
+  })
+  const out: AgentOptions['sharedAgents'] = []
+  for (const row of rows) {
+    const fm = parseFrontmatter(row.content)
+    // Per room: a brief shared with other rooms is not offered here.
+    if (!isAgentBriefPath(row.path) || !isSharedDown(row.path, fm, spaceId)) continue
+    const name = agentNameOfPath(row.path)
+    const mode = typeof fm.share_as === 'string' && /^run[-_]?in$/i.test(fm.share_as.trim()) ? 'run-in' : 'use'
+    if (name && !out.some((a) => a.name === name)) out.push({ name, from: parent.name, mode })
+  }
+  return out
 }

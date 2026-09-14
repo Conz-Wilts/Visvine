@@ -30,10 +30,12 @@ async function load(spaceId: string, name: string, session: { userId: string; em
   const principal = await principalOf(resolved);
   const detail = await describeConnector(principal, resolved, name);
   const auth = detail?.perimeter?.auth ?? null;
-  if (!auth) {
+  if (!detail || !auth) {
     return { error: NextResponse.json({ error: 'No such OAuth connector' }, { status: 404 }) };
   }
-  return { auth };
+  // A shared connector's connections live in the PARENT's space — the rows a
+  // run here would resolve (lib/connectors/service.ts#readConnectorNote).
+  return { auth, ownerSpaceId: detail.ownerSpaceId, shared: detail.shared === true };
 }
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -44,8 +46,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const loaded = await load(spaceId, name, session);
   if ('error' in loaded) return loaded.error;
 
-  const admin = await isAdmin(session.userId, spaceId, session.email);
-  const all = await listConnections(spaceId, loaded.auth.provider);
+  // Admin standing in THIS space says nothing about the parent's rows: through
+  // a shared connector a caller sees the parent's shared connection and their
+  // own, as any member would.
+  const admin = !loaded.shared && (await isAdmin(session.userId, spaceId, session.email));
+  const all = await listConnections(loaded.ownerSpaceId, loaded.auth.provider);
 
   // A member has no business knowing which of their colleagues connected an
   // account; they only need to know about the shared one and their own.
@@ -86,10 +91,10 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   // Anyone may revoke their own. Removing the shared connection, or somebody
   // else's, breaks other people's runs and every agent pointed at it — so that
   // is an admin act.
-  if (target !== session.userId && !(await isAdmin(session.userId, spaceId, session.email))) {
+  if (target !== session.userId && (loaded.shared || !(await isAdmin(session.userId, spaceId, session.email)))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  await deleteConnection(spaceId, loaded.auth.provider, target);
+  await deleteConnection(loaded.ownerSpaceId, loaded.auth.provider, target);
   return NextResponse.json({ ok: true });
 }

@@ -203,6 +203,9 @@ export function ContextSidebar({
               // there; the same move is in each row's menu as "Move to...".
               onMoveNote={ctx.handleMoveNote}
               onMoveFolder={ctx.handleMoveFolder}
+              // A built-in folder or a sub-space dropped on a folder is PLACED
+              // there — drawn under it, its path unchanged.
+              onPlaceFolder={ctx.handlePlaceFolder}
               trash={trash}
               // A trashed note reads in the main content area, like any other
               // note — its own route, not a dialog over the tree.

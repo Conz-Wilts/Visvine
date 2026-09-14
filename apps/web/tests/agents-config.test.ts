@@ -25,6 +25,8 @@ import {
   scheduleHash,
   wallClockAt,
   zonedWallToInstant,
+  copyRooms,
+  ungovernedCopyRooms,
 } from '@/lib/agents/config'
 import { parseModelRef } from '@/lib/agents/registry'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
@@ -133,6 +135,47 @@ test('parseAgentBrief reads agents:, dry_run and the new tool extras', () => {
   }
   const plain = parseAgentBrief({ type: 'agent', model: 'gemini/x' }, 'body')
   assert.ok(plain.ok && plain.brief.agents.length === 0 && plain.brief.dryRun === false)
+})
+
+test('parseAgentBrief reads share: all | [rooms] and share_as, and refuses what is not one', () => {
+  const plain = parseAgentBrief({ type: 'agent' }, 'body')
+  assert.ok(plain.ok && plain.brief.share === 'none' && plain.brief.shareAs === 'use')
+  const all = parseAgentBrief({ type: 'agent', share: 'all' }, 'body')
+  assert.ok(all.ok && all.brief.share === 'all')
+  // The older spelling still means every room.
+  const legacy = parseAgentBrief({ type: 'agent', share: 'subspaces' }, 'body')
+  assert.ok(legacy.ok && legacy.brief.share === 'all')
+  const some = parseAgentBrief({ type: 'agent', share: ['deal-team', 'community:hq-accel'] }, 'body')
+  assert.ok(some.ok && Array.isArray(some.brief.share) && some.brief.share.length === 2)
+  const csv = parseAgentBrief({ type: 'agent', share: 'a, b' }, 'body')
+  assert.ok(csv.ok && Array.isArray(csv.brief.share) && csv.brief.share.join() === 'a,b')
+  const none = parseAgentBrief({ type: 'agent', share: 'none' }, 'body')
+  assert.ok(none.ok && none.brief.share === 'none')
+  const bad = parseAgentBrief({ type: 'agent', share: 42 }, 'body')
+  assert.ok(!bad.ok && /share/.test(bad.error))
+  const badId = parseAgentBrief({ type: 'agent', share: ['not a space id!'] }, 'body')
+  assert.ok(!badId.ok && /space id/.test(badId.error))
+  const runIn = parseAgentBrief({ type: 'agent', share: 'all', share_as: 'run-in' }, 'body')
+  assert.ok(runIn.ok && runIn.brief.shareAs === 'run-in')
+  const badMode = parseAgentBrief({ type: 'agent', share: 'all', share_as: 'copy' }, 'body')
+  assert.ok(!badMode.ok && /share_as/.test(badMode.error))
+  const orphanMode = parseAgentBrief({ type: 'agent', share_as: 'run-in' }, 'body')
+  assert.ok(!orphanMode.ok && /share_as/.test(orphanMode.error))
+})
+
+test('copyRooms: a run-in copy lands only where the share reaches and the house governs', () => {
+  const rooms = [
+    { id: 'eng', parentId: 'hq', parentAdmins: true },
+    { id: 'accel', parentId: 'hq', parentAdmins: false },
+    { id: 'deal', parentId: 'hq', parentAdmins: true },
+  ]
+  const ids = (xs: { id: string }[]) => xs.map((r) => r.id)
+  assert.deepEqual(ids(copyRooms({ share: 'all', shareAs: 'run-in' }, rooms)), ['eng', 'deal'])
+  assert.deepEqual(ids(copyRooms({ share: ['accel', 'deal'], shareAs: 'run-in' }, rooms)), ['deal'])
+  assert.deepEqual(ids(copyRooms({ share: 'all', shareAs: 'use' }, rooms)), [])
+  assert.deepEqual(ids(copyRooms({ share: 'none', shareAs: 'run-in' }, rooms)), [])
+  assert.deepEqual(ids(ungovernedCopyRooms({ share: 'all', shareAs: 'run-in' }, rooms)), ['accel'])
+  assert.deepEqual(ids(ungovernedCopyRooms({ share: ['eng'], shareAs: 'run-in' }, rooms)), [])
 })
 
 test('agentPageHref / agentNameOfHref round-trip', () => {
@@ -318,6 +361,11 @@ test('globToRegExp / matchesAnyGlob / globProblem', () => {
   assert.ok(!matchesAnyGlob('agents/x.md', ['*/*']), 'agents/ never matches even when a glob would')
   assert.equal(globProblem('people/**'), null)
   assert.match(globProblem('*/**') ?? '', /agents/)
+  // A parent may watch its public sub-spaces' notes, but never their briefs.
+  assert.equal(globProblem('subspaces/**'), null)
+  assert.ok(matchesAnyGlob('subspaces/founders/people/alice.md', ['subspaces/**']))
+  assert.ok(!matchesAnyGlob('subspaces/founders/agents/x/index.md', ['subspaces/**']), "a sub-space's briefs never match")
+  assert.ok(!matchesAnyGlob('subspaces/founders/agents', ['subspaces/**']))
   assert.match(globProblem('') ?? '', /empty/)
   assert.match(globProblem('a/../b') ?? '', /\.\./)
 })

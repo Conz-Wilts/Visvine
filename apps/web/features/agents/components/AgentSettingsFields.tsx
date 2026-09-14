@@ -1,10 +1,13 @@
 'use client';
 
 import { LOCAL_RUNTIMES, localModelRef, localRuntimeOf } from '@/lib/agents/local';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
+import type { SubspaceDto } from '@/features/spaces/components/SubspacesSection';
 import { Chip, Field, Input } from '@/components/ui';
 import Select from '@/components/ui/Select';
 import Toggle from '@/components/ui/Toggle';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import type { AgentOptions } from '@/lib/agents/options';
 import type { BriefSettings } from '@/lib/agents/briefEdit';
 import type { AgentToolExtra } from '@/lib/agents/config';
@@ -39,6 +42,26 @@ export default function AgentSettingsFields({
   // The comma-separated text as typed: parsing on every keystroke would eat
   // the comma the person just pressed.
   const [tagsText, setTagsText] = useState(value.tags.join(', '));
+  // Sharing is offered only where there is somebody to share with: a space
+  // that holds sub-spaces (docs/sub-spaces.md). A sub-space holds none.
+  const { currentSpace, spaces } = useSpace();
+  const hasSubspaces = !!currentSpace && spaces.some((s) => s.parentId === currentSpace.id);
+  // The rooms, with whether the house governs each: a run-in copy only lands
+  // in a governed room (docs/sub-spaces.md), and the form says so per room.
+  const [rooms, setRooms] = useState<SubspaceDto[]>([]);
+  useEffect(() => {
+    if (!hasSubspaces || !currentSpace) return;
+    let live = true;
+    fetchJson<{ subspaces: SubspaceDto[] }>(`/api/spaces/${currentSpace.id}/subspaces`)
+      .then((d) => { if (live) setRooms(d.subspaces ?? []); })
+      .catch(() => { if (live) setRooms([]); });
+    return () => { live = false; };
+  }, [hasSubspaces, currentSpace]);
+  const shareKind: 'none' | 'all' | 'some' = value.share === 'none' ? 'none' : value.share === 'all' ? 'all' : 'some';
+  const selected = Array.isArray(value.share) ? value.share : [];
+  const toggleRoom = (id: string, on: boolean) =>
+    onChange({ ...value, share: on ? [...new Set([...selected, id])] : selected.filter((r) => r !== id) });
+  const ungoverned = rooms.filter((r) => !r.parentAdmins && (value.share === 'all' || selected.includes(r.id)));
 
   const toggleTool = (id: AgentToolExtra, on: boolean) =>
     onChange({ ...value, tools: on ? [...new Set([...value.tools, id])] : value.tools.filter((t) => t !== id) });
@@ -171,6 +194,76 @@ export default function AgentSettingsFields({
           className="text-sm"
         />
       </Field>
+
+      {hasSubspaces && (
+        <Field label="Share with sub-spaces">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                ['none', 'Not shared'],
+                ['all', 'All sub-spaces'],
+                ['some', 'Selected sub-spaces'],
+              ] as const).map(([kind, label]) => (
+                <Chip
+                  key={kind}
+                  size="lg"
+                  color={shareKind === kind ? ON : undefined}
+                  onClick={() => onChange({ ...value, share: kind === 'none' ? 'none' : kind === 'all' ? 'all' : selected })}
+                >
+                  {label}
+                </Chip>
+              ))}
+            </div>
+            {shareKind === 'some' && (
+              <div className="flex flex-col gap-1.5">
+                {rooms.length === 0 && <p className="text-[13px] text-text-muted">Loading sub-spaces…</p>}
+                {rooms.map((r) => {
+                  const on = selected.includes(r.id);
+                  const blocked = value.shareAs === 'run-in' && !r.parentAdmins;
+                  return (
+                    <label key={r.id} className={`flex items-start gap-2 text-[13px] ${blocked ? 'text-text-muted' : 'text-text-primary'}`}>
+                      <input
+                        id={`share-room-${r.id}`}
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={on}
+                        disabled={blocked}
+                        onChange={(e) => toggleRoom(r.id, e.target.checked)}
+                      />
+                      <span>
+                        {r.name}
+                        {blocked && <span className="ml-1 text-text-muted">— not governed by this space; no copy can run there</span>}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            {shareKind !== 'none' && (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
+                  <Chip size="lg" color={value.shareAs === 'use' ? ON : undefined} onClick={() => onChange({ ...value, shareAs: 'use' })}>
+                    Use
+                  </Chip>
+                  <Chip size="lg" color={value.shareAs === 'run-in' ? ON : undefined} onClick={() => onChange({ ...value, shareAs: 'run-in' })}>
+                    Run in each sub-space
+                  </Chip>
+                </div>
+                <p className="text-[13px] text-text-secondary">
+                  {value.shareAs === 'use'
+                    ? 'Their agents may read this brief and start it; it runs here, as you.'
+                    : 'A copy runs inside each shared sub-space, over that sub-space’s notes, as you — only where this space’s admins manage it.'}
+                </p>
+                {value.shareAs === 'run-in' && ungoverned.length > 0 && (
+                  <p className="text-[13px] text-amber-700">
+                    Not governed by this space, so no copy runs there: {ungoverned.map((r) => r.name).join(', ')}.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </Field>
+      )}
 
       {advanced ? (
         <div className="flex flex-col gap-4 border-t border-border-subtle pt-4">

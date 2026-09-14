@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eventCreateInputSchema } from '@/lib/schemas/eventSchemas';
 import { normalizeStatus } from '@/lib/eventUtils';
 import { getEventsData } from '@/lib/eventRepo';
+import { subspaceEventsOf } from '@/lib/events/subspaceRollup';
+import { mergeByStart } from '@/lib/events/rollup';
 import { createEventRecord, eventAuthorFor } from '@/lib/events/write';
 import { requireSpaceMember } from '@/lib/eventAuth';
 import { handleApiError } from '@/lib/api/route';
@@ -43,6 +45,10 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/events?spaceId=... - List events for a space
+ *
+ * `includeSubspaces=1` also folds in the public events of the space's public
+ * sub-spaces, each stamped `viaSpace` (lib/events/rollup.ts). Opt-in so the
+ * mobile contract is unchanged.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -60,10 +66,19 @@ export async function GET(request: NextRequest) {
     const auth = await requireSpaceMember(spaceId);
     if (auth instanceof Response) return auth;
 
-    const eventsData = await getEventsData(spaceId);
+    const includeSubspaces = searchParams.get('includeSubspaces') === '1';
+    const [own, rolled] = await Promise.all([
+      getEventsData(spaceId),
+      includeSubspaces ? subspaceEventsOf(spaceId) : Promise.resolve({ events: [], attendees: [] }),
+    ]);
+    const eventsData = { events: own.events, attendees: [...own.attendees, ...rolled.attendees] };
 
     // Drafts are only visible inside the composer, never in the public list.
-    const visibleEvents = eventsData.events.filter((e) => e.status !== 'draft');
+    // A sub-space's rolled-up events arrive already filtered to public ones.
+    const visibleEvents = mergeByStart(
+      own.events.filter((e) => e.status !== 'draft'),
+      rolled.events,
+    );
 
     // Resolve host node ids (e.g. "person:dev_admin") to display names so
     // clients never have to render raw ids. Matched by id alone (ids are

@@ -49,6 +49,10 @@ interface ModelRow {
   ref: string | null;
   enabled: boolean;
   keyStored: boolean;
+  /** The parent space whose key this model runs on, when the key is lent down. */
+  keyFrom: { id: string; name: string } | null;
+  /** The parent space whose model note this is — a space with no models of its own runs on the house's. */
+  sharedFrom: { id: string; name: string } | null;
   problem: string | null;
   /** Still at connectors/<name>.md — db:models:migrate has not run here. */
   legacy: boolean;
@@ -60,6 +64,8 @@ function statusOf(m: ModelRow): { label: string; tone: 'ok' | 'warn' | 'bad' | '
   if (!m.enabled) return { label: 'Off', tone: 'muted' };
   if (!m.modelId) return { label: 'No model', tone: 'warn' };
   if (!m.keyStored) return { label: 'No key', tone: 'warn' };
+  if (m.sharedFrom) return { label: `${m.sharedFrom.name}'s model`, tone: 'ok' };
+  if (m.keyFrom) return { label: `Using ${m.keyFrom.name}'s key`, tone: 'ok' };
   return null;
 }
 

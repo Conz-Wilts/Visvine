@@ -43,7 +43,11 @@ import type { ResolvedContext } from '@/lib/notes/resolve'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ToolHandler } from '@/lib/notes/toolLoop'
-import { agentFolderPath, type AgentBrief } from './config'
+import { agentFolderPath, parseAgentBrief, type AgentBrief } from './config'
+import { findAgentBrief } from './briefs'
+import { parentOfSubspace } from '@/lib/spaces/subspaceAccess'
+import { isSharedDown } from '@/lib/spaces/subspaces'
+import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { memoryPath, memorySectionOf, REMEMBER_SECTIONS, rememberInto } from './shared/memory'
 import { edgeConfigured, EdgeUnavailableError } from '@/lib/vm/edge'
 import { browseOnMachine, QuotaExceededError, runOnMachine } from '@/lib/vm/lease'
@@ -65,8 +69,17 @@ export interface AgentToolDeps {
     spaceId: string,
     name: string,
     startedBy: string,
-    opts: { chain: { parent: string; depth: number } },
+    opts: { chain: { parent: string; depth: number }; runAs?: 'author' },
   ) => Promise<RunNowResult & { dispatch?: Promise<unknown> }>
+  /** Whether `name` is an agent of the space (has a state row). */
+  findAgentState: (spaceId: string, name: string) => Promise<boolean>
+  /**
+   * The PARENT space's id when `spaceId` is a sub-space and the parent has an
+   * agent `name` whose brief is shared with THIS room as `use` — else null.
+   * One step up, never sideways or down (docs/sub-spaces.md). A `run-in`
+   * copy is a state row of this room already, found by findAgentState.
+   */
+  sharedParentAgent: (spaceId: string, name: string) => Promise<{ id: string; name: string } | null>
   createEntity: (context: ResolvedContext, input: CreateEntityInput) => Promise<CreateEntityResult>
   /** Both ids must be nodes of the space; returns an error string or null. */
   linkNodes: (input: { spaceId: string; from: string; to: string; relationship: string; note: string | null; createdBy: string }) => Promise<string | null>
@@ -85,6 +98,18 @@ function defaultDeps(): AgentToolDeps {
     appendLogGated,
     // Dynamic: schedule → dispatch → runner → tools would otherwise be an eval-time cycle.
     claimManualRun: async (spaceId, name, startedBy, opts) => (await import('./schedule')).claimManualRun(spaceId, name, startedBy, new Date(), opts),
+    findAgentState: async (spaceId, name) =>
+      !!(await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } }, select: { id: true } })),
+    sharedParentAgent: async (spaceId, name) => {
+      const parent = await parentOfSubspace(spaceId)
+      if (!parent) return null
+      const row = await findAgentBrief(parent.id, name)
+      if (!row) return null
+      const fm = parseFrontmatter(row.content)
+      if (!isSharedDown(row.path, fm, spaceId)) return null
+      const parsed = parseAgentBrief(fm, splitFrontmatter(row.content).body)
+      return parsed.ok && parsed.brief.shareAs === 'use' ? parent : null
+    },
     createEntity,
     machineAvailable: edgeConfigured,
     runOnMachine,
@@ -563,15 +588,17 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
     // `agents:` in the brief is a HINT, not a fence: naming some lists them in
     // the description, naming none leaves the whole space's roster reachable.
     // The fence is elsewhere and unchanged — the target has to be active and
-    // idle, it runs as ITS OWN author with that person's access, and the chain
-    // stops at MAX_CHAIN_DEPTH.
+    // idle, and the chain stops at MAX_CHAIN_DEPTH. A name this space has no
+    // agent for is looked up ONE step up: an agent of the parent space whose
+    // brief is shared with this room as `use` (docs/sub-spaces.md). That one runs in
+    // the parent, as its own author — the caller may hold nothing there.
     const named = brief.agents
     const depth = ctx.chainDepth ?? 0
     tools.push({
       spec: {
         name: 'run_agent',
         description:
-          `Start another agent of this space now${named.length ? ` (your brief names: ${named.join(', ')})` : ''}. It runs on its own — this call returns its run id at once and does not wait. Chains are at most ${MAX_CHAIN_DEPTH} deep; the target must be active and idle. Use list_context on agents/ to see who is there.`,
+          `Start another agent of this space now${named.length ? ` (your brief names: ${named.join(', ')})` : ''}. It runs on its own — this call returns its run id at once and does not wait. Chains are at most ${MAX_CHAIN_DEPTH} deep; the target must be active and idle. Use list_context on agents/ to see who is there. A name not found here is looked up among the agents the space this one sits inside shares (see parent/agents/); such an agent runs in that space as its own author.`,
         parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
       },
       describe: (a) => str(a.name),
@@ -580,13 +607,19 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
         if (!name) return 'error: name is required'
         if (name === ctx.agentName) return 'error: an agent cannot start itself'
         if (depth >= MAX_CHAIN_DEPTH) return `error: chain depth limit (${MAX_CHAIN_DEPTH}) reached — this run was itself started by run_agent`
-        if (dry) return `DRY RUN — would start agent ${name}`
-        const res = await deps.claimManualRun(spaceId, name, principal.userId, {
-          chain: { parent: ctx.runId ?? 'unknown', depth: depth + 1 },
-        })
+        const local = await deps.findAgentState(spaceId, name)
+        const parent = local ? null : await deps.sharedParentAgent(spaceId, name)
+        if (!local && !parent) return `error: no agent named ${name} here, and the space this one sits inside shares none by that name`
+        if (dry) return `DRY RUN — would start agent ${name}${parent ? ` in ${parent.name}` : ''}`
+        const chain = { parent: ctx.runId ?? 'unknown', depth: depth + 1 }
+        const res = parent
+          ? await deps.claimManualRun(parent.id, name, principal.userId, { chain, runAs: 'author' })
+          : await deps.claimManualRun(spaceId, name, principal.userId, { chain })
         if (!res.ok) return `error (${res.code}): ${res.message}`
         res.dispatch?.catch(() => {})
-        return `started agent ${name} — run ${res.runId}`
+        return parent
+          ? `started agent ${name} in ${parent.name} (the space this one sits inside), as its own author — run ${res.runId}`
+          : `started agent ${name} — run ${res.runId}`
       },
     })
   }

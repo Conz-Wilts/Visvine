@@ -6,6 +6,7 @@ import { canAccessFeature } from '@/lib/featureAccess';
 import { personAliases, type SpaceAlias } from '@/lib/types/context';
 import type { SpaceFeatureConfig } from '@/lib/types';
 import { requestMemo } from '@/lib/requestMemo';
+import { parentAdministers } from '@/lib/spaces/subspaces';
 
 /**
  * The gate inputs, read once per request. Every gate below used to issue its
@@ -18,7 +19,7 @@ import { requestMemo } from '@/lib/requestMemo';
 export const loadSpaceGate = requestMemo('spaceGate', async (spaceId: string) =>
   prisma.space.findUnique({
     where: { id: spaceId },
-    select: { id: true, personalOwnerId: true, featureConfig: true, aliases: true },
+    select: { id: true, personalOwnerId: true, featureConfig: true, aliases: true, parentId: true, parentAdmins: true },
   }),
 );
 
@@ -72,22 +73,40 @@ async function adminAliasIds(spaceIds: string[]): Promise<Map<string, Set<string
  * `adminSpaceIds` for spaces whose alias lists the caller already holds — the
  * layout and the space-list endpoints load `aliases` for every row anyway, so
  * asking the database for them again was a third copy of the same JSON.
+ *
+ * A sub-space with `parentAdmins` on is administered by whoever administers
+ * its parent; that step is taken here when the rows carry `parentId` and
+ * `parentAdmins`, and the parent is in the same list. The parent's aliases
+ * are loaded when it is not — a sub-space the caller is in whose parent they
+ * are not — so the answer is the same one `isAdmin` gives.
  */
 export async function adminSpaceIdsFrom(
   userId: string,
-  spaces: { id: string; aliases: unknown }[],
+  spaces: { id: string; aliases: unknown; parentId?: string | null; parentAdmins?: boolean }[],
   email?: string | null,
 ): Promise<Set<string>> {
   if (isSuperAdmin(email)) return new Set(spaces.map((s) => s.id));
   if (spaces.length === 0) return new Set();
+  const listed = new Set(spaces.map((s) => s.id));
+  const parentsToLoad = spaces
+    .filter((s) => parentAdministers(s) && !listed.has(s.parentId!))
+    .map((s) => s.parentId!);
+  const parents = parentsToLoad.length
+    ? await prisma.space.findMany({ where: { id: { in: parentsToLoad } }, select: { id: true, aliases: true } })
+    : [];
+  const all = [...spaces, ...parents];
   const held = await prisma.userAlias.findMany({
-    where: { userId, spaceId: { in: spaces.map((s) => s.id) } },
+    where: { userId, spaceId: { in: all.map((s) => s.id) } },
     select: { spaceId: true, aliasId: true },
   });
-  const owning = new Map(spaces.map((s) => [s.id, owningAliasIds(s.aliases)]));
-  const out = new Set<string>();
+  const owning = new Map(all.map((s) => [s.id, owningAliasIds(s.aliases)]));
+  const direct = new Set<string>();
   for (const h of held) {
-    if (owning.get(h.spaceId)?.has(h.aliasId)) out.add(h.spaceId);
+    if (owning.get(h.spaceId)?.has(h.aliasId)) direct.add(h.spaceId);
+  }
+  const out = new Set<string>();
+  for (const s of spaces) {
+    if (direct.has(s.id) || (parentAdministers(s) && direct.has(s.parentId!))) out.add(s.id);
   }
   return out;
 }
@@ -97,6 +116,11 @@ export async function adminSpaceIdsFrom(
  * aliases marked `admin` (always including the built-in Admin alias). That is
  * the only definition of admin in the app — there is no role column.
  * Super-admins (env `SUPER_ADMIN_EMAILS`) bypass the DB lookup.
+ *
+ * One step up, never more: a sub-space whose admins turned on `parentAdmins`
+ * is also managed by whoever holds an admin alias in its PARENT
+ * (docs/sub-spaces.md). Written as a single step rather than a recursion so
+ * the one-level rule is structural here too — a parent has no parent.
  */
 export async function isAdmin(
   userId: string,
@@ -106,8 +130,12 @@ export async function isAdmin(
   if (isSuperAdmin(email)) return true;
   const [space, held] = await Promise.all([loadSpaceGate(spaceId), heldAliasIds(userId, spaceId)]);
   if (!space) return false;
-  const owning = owningAliasIds(space.aliases);
-  return held.some((id) => owning.has(id));
+  if (held.some((id) => owningAliasIds(space.aliases).has(id))) return true;
+  if (!parentAdministers(space)) return false;
+  const [parent, heldAbove] = await Promise.all([loadSpaceGate(space.parentId!), heldAliasIds(userId, space.parentId!)]);
+  if (!parent) return false;
+  const owningAbove = owningAliasIds(parent.aliases);
+  return heldAbove.some((id) => owningAbove.has(id));
 }
 
 /**

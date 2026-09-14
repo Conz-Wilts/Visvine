@@ -62,8 +62,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const principal = await principalOf(resolved);
   try {
     // Space-only: this is the page for ONE note, and it must describe that
-    // connector rather than a same-named one of the admin's own.
-    const loaded = await loadConnector(principal, resolved, name, { personal: false });
+    // connector rather than a same-named one of the admin's own — or the
+    // parent's shared one, whose tool policy is the parent's to set.
+    const loaded = await loadConnector(principal, resolved, name, { personal: false, shared: false });
     if (!loaded) return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
     return NextResponse.json(await listConnectorTools(loaded));
   } catch (e) {

@@ -36,12 +36,13 @@ const ALIAS_ROW_H = 44;
  * Founder and Investor, say) carries a chevron at the row's far left, and
  * pressing it hangs a row per alias under the kind on the tree spine
  * (TreeSpine, the drawing the space switcher and the Context tree use);
- * picking one starts the form with that alias already on. **New alias** is the
- * first of those rows for someone who may add one, so a kind with none still
- * opens — making an alias is offered exactly where the aliases are read, the
- * way "New type" is offered at the top of the list itself. Arrow keys move
- * over the kinds, Enter picks — the search box above owns the keyboard, so
- * this takes the active index from it.
+ * picking one opens the draft with that alias already on. **New alias** is
+ * the first of those rows for someone who may add one, so a kind with none
+ * still opens — it is offered exactly where the aliases are read, and leads to
+ * the console section that owns them, because an alias is space vocabulary
+ * rather than a thing you are making. Arrow keys move over the kinds, Enter
+ * picks — the search box above owns the keyboard, so this takes the active
+ * index from it.
  */
 export default function TypeList({
   list,
@@ -61,6 +62,7 @@ export default function TypeList({
   canAddAlias: (row: CreateRow) => boolean;
   onHover: (index: number) => void;
   onPick: (row: CreateRow, alias?: SpaceAlias) => void;
+  /** Leads to where aliases are minted; the row it was pressed on is passed. */
   onNewAlias: (row: CreateRow) => void;
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -200,7 +202,7 @@ function AliasRow({ last, swatch, label, onClick }: {
 }
 
 /** The kind's colour as a square; a dashed one for a type that does not exist yet. */
-export function Mark({ row, size = 10 }: { row: CreateRow; size?: number }) {
+function Mark({ row, size = 10 }: { row: CreateRow; size?: number }) {
   if (row.kind === 'new-type') {
     return (
       <span

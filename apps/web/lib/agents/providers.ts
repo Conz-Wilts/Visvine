@@ -115,8 +115,13 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
   // degraded cap and not an absent one.
   const pricing = await resolveModelPricing(models, ref)
 
+  // The room's own key, else the house's where the house lends it
+  // (lib/agents/spaceModels.ts#modelKeyOwner) — the note that matched says
+  // which store to open. The key still never leaves this process.
+  const matched = models.find((m) => m.provider.id === ref.provider.id && m.keyStored)
+  const keySpaceId = matched?.keyFrom?.id ?? spaceId
   const row = await prisma.connectorSecret.findUnique({
-    where: { secret_identity: { spaceId, name: ref.provider.keySecret } },
+    where: { secret_identity: { spaceId: keySpaceId, name: ref.provider.keySecret } },
     select: { ciphertext: true },
   })
   if (!row) {

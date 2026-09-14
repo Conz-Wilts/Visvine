@@ -29,7 +29,7 @@ import { costMicros, perTurnStop, preRunStop, type BudgetState } from './budget'
 import { parseAgentBrief, type AgentBrief } from './config'
 import { findAgentBrief } from './briefs'
 import { eventsForRun, rearmIfPending, type ClaimedEvent } from './events'
-import { deactivateAgent, effectiveTimezone, type DeactivationReason } from './hooks'
+import { deactivateAgent, effectiveTimezone, type DeactivationReason, copyStillAllowed } from './hooks'
 import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS } from './limits'
 import { releaseMachineAfterRun } from '@/lib/vm/lease'
 import { principalForUser } from './principal'
@@ -184,6 +184,16 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
   }
 
   try {
+    // 0. A run-in copy (docs/sub-spaces.md) runs the HOUSE's brief in this
+    // room, and only while the house still shares it here and governs the
+    // room. Checked at run time: a share or governance change between syncs
+    // must not let a copy run on.
+    const briefSpaceId = state.sharedFrom ?? spaceId
+    if (state.sharedFrom && !(await copyStillAllowed(spaceId, name, state.sharedFrom))) {
+      return fail('config', 'This copy is no longer shared with this space, or the space is no longer governed by the one that shares it.', {
+        deactivate: { reason: 'config', detail: 'copy no longer allowed here' },
+      })
+    }
     // 1. The brief — read raw (not through a principal yet; the author may be gone).
     const briefRow = await findAgentBrief(spaceId, name)
     if (!briefRow) return fail('config', 'The agent brief no longer exists.', { deactivate: { reason: 'deleted', detail: 'brief missing at run time' } })
@@ -200,7 +210,11 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     const runAsUserId = run.runAsUserId ?? state.runAsUserId
     if (!runAsUserId) return fail('author_gone', 'The agent has no author on record.', { deactivate: { reason: 'author_gone', detail: null } })
     const principal = await principalForUser(spaceId, runAsUserId)
-    if (!principal || (await readVisible(principal, context, briefRow.path)) === null) {
+    // The brief is read where it lives — for a copy, in the house — while the
+    // run itself stands in this space.
+    const briefPrincipal = briefSpaceId === spaceId ? principal : await principalForUser(briefSpaceId, runAsUserId)
+    const briefContext: Context = briefSpaceId === spaceId ? context : { spaceId: briefSpaceId, ownerKey: SHARED_OWNER_KEY }
+    if (!principal || !briefPrincipal || (await readVisible(briefPrincipal, briefContext, briefRow.path)) === null) {
       if (run.runAsUserId && run.runAsUserId !== state.runAsUserId) {
         await prisma.agentSubscription
           .deleteMany({ where: { spaceId, name, userId: run.runAsUserId } })

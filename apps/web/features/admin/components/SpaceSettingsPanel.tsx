@@ -14,6 +14,7 @@ import { FetchJsonError, fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import SpaceImageUpload from '@/features/spaces/components/SpaceImageUpload';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import SubspacesSection from '@/features/spaces/components/SubspacesSection';
+import RoomDials from '@/features/spaces/components/RoomDials';
 
 interface Props {
   space: Space;
@@ -177,7 +178,6 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
   const [visibility, setVisibility] = useState<SpaceVisibility>(
     space.visibility === 'private' ? 'private' : 'public'
   );
-
   const [confirmPublic, setConfirmPublic] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -287,27 +287,28 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
                 size="xl"
               />
             )}
-            <div className="flex flex-col items-end text-right">
-              <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
-                <span className={isPrivate ? 'text-brand-dark-green' : 'text-text-muted'}>
-                  {isPrivate ? <LockIcon /> : <GlobeIcon />}
-                </span>
-                {isPrivate ? 'Private' : 'Public'}
+            {/* A room's listing replaces the Private/Public toggle: who can
+                see it is one of three answers, set with the rest of its dials
+                below (RoomDials). A top-level space keeps the toggle. */}
+            {!isSubspace && (
+              <div className="flex flex-col items-end text-right">
+                <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                  <span className={isPrivate ? 'text-brand-dark-green' : 'text-text-muted'}>
+                    {isPrivate ? <LockIcon /> : <GlobeIcon />}
+                  </span>
+                  {isPrivate ? 'Private' : 'Public'}
+                </div>
+                <p className="mt-0.5 text-xs text-text-muted">
+                  {isPrivate ? 'Invite or admin only' : 'Anyone can find and join'}
+                </p>
+                <Toggle
+                  className="mt-3"
+                  checked={isPrivate}
+                  onChange={handleVisibilityToggle}
+                  aria-label="Private space"
+                />
               </div>
-              <p className="mt-0.5 text-xs text-text-muted">
-                {isPrivate
-                  ? 'Invite or admin only'
-                  : isSubspace
-                    ? `Anyone can find and join · context shows in ${parent?.name ?? 'the parent space'}`
-                    : 'Anyone can find and join'}
-              </p>
-              <Toggle
-                className="mt-3"
-                checked={isPrivate}
-                onChange={handleVisibilityToggle}
-                aria-label="Private space"
-              />
-            </div>
+            )}
           </div>
           {/* A refused publish (name already taken by another public space)
               leaves the toggle back where it was — this says why, and the fix
@@ -316,7 +317,7 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
           {isSubspace && (
             <p className="text-sm text-text-muted">
               A sub-space of <span className="font-medium text-text-secondary">{parent?.name ?? space.parentId}</span> —
-              its own members, admins and tools. {isPrivate ? 'While private, nothing of it shows there.' : 'While public, its context is read there under subspaces/.'}
+              its own members, admins and tools. What it shows the house, who may walk in and who holds its keys are its own to set, below.
             </p>
           )}
           <div className="space-y-5">
@@ -368,6 +369,14 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
           </div>
         </div>
       </section>
+
+      {isSubspace && (
+        <RoomDials
+          space={space}
+          parentName={parent?.name ?? 'the parent space'}
+          save={(patch) => runAction(() => saveSettings(patch))}
+        />
+      )}
 
       {!isSubspace && <SubspacesSection spaceId={space.id} spaceName={space.name} />}
 

@@ -13,6 +13,7 @@
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { AGENT_TOOL_EXTRAS, type AgentToolExtra } from './config'
+import { shareTargets } from '@/lib/spaces/subspaces'
 
 export interface BriefSettings {
   model: string
@@ -23,6 +24,10 @@ export interface BriefSettings {
   maxTurns: number | null
   /** The brief's `tags:` — the roster's groups. */
   tags: string[]
+  /** `share:` — which sub-spaces this brief is offered to: none, all, or named rooms (docs/sub-spaces.md). */
+  share: 'none' | 'all' | string[]
+  /** `share_as:` — `use` (rooms may start it; runs here) or `run-in` (a copy runs in each governed room). */
+  shareAs: 'use' | 'run-in'
 }
 
 export type BriefSettingsPatch = Partial<BriefSettings>
@@ -48,6 +53,8 @@ export function readBriefSettings(content: string): BriefSettings {
     dryRun: fm.dry_run === true || (typeof fm.dry_run === 'string' && fm.dry_run.trim().toLowerCase() === 'true'),
     maxTurns: Number.isInteger(maxTurns) && maxTurns > 0 ? maxTurns : null,
     tags: [...new Set(list(fm.tags))],
+    share: typeof fm.share === 'string' && fm.share.trim().toLowerCase() === 'none' ? 'none' : shareTargets(fm),
+    shareAs: typeof fm.share_as === 'string' && /^run[-_]?in$/i.test(fm.share_as.trim()) ? 'run-in' : 'use',
   }
 }
 
@@ -78,6 +85,21 @@ export function updateBriefSettings(content: string, patch: BriefSettingsPatch):
     const tags = [...new Set(patch.tags.map((t) => t.trim()).filter(Boolean))]
     if (tags.length) fm.tags = tags
     else delete fm.tags
+  }
+  if (patch.share !== undefined) {
+    if (patch.share === 'none') delete fm.share
+    else if (patch.share === 'all') fm.share = 'all'
+    else {
+      const rooms = [...new Set(patch.share.map((r) => r.trim()).filter(Boolean))]
+      if (rooms.length) fm.share = rooms
+      else delete fm.share
+    }
+  }
+  if (patch.shareAs !== undefined || patch.share !== undefined) {
+    const mode = patch.shareAs ?? (typeof fm.share_as === 'string' && /^run[-_]?in$/i.test(fm.share_as) ? 'run-in' : 'use')
+    // `use` is the default and `share_as` means nothing without a share.
+    if (mode === 'run-in' && fm.share !== undefined) fm.share_as = 'run-in'
+    else delete fm.share_as
   }
   return joinFrontmatter(fm, body)
 }

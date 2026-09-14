@@ -62,7 +62,7 @@ test('updateBriefSettings rewrites settings and keeps the prose and hand-written
   ].join('\n')
 
   const before = readBriefSettings(original)
-  assert.deepEqual(before, { model: 'gemini/gemma-4-31b-it', description: '', connectors: ['hubspot'], tools: [], dryRun: false, maxTurns: 16, tags: [] })
+  assert.deepEqual(before, { model: 'gemini/gemma-4-31b-it', description: '', connectors: ['hubspot'], tools: [], dryRun: false, maxTurns: 16, tags: [], share: 'none', shareAs: 'use' })
 
   const next = updateBriefSettings(original, {
     model: 'openai/gpt-4.1-mini',

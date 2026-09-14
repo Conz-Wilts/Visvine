@@ -42,6 +42,28 @@ model Space {
   parentId        String?                @map("parent_id")
   parent          Space?                 @relation("SpaceChildren", fields: [parentId], references: [id], onDelete: Restrict)
   children        Space[]                @relation("SpaceChildren")
+  // Rooms in a house (docs/sub-spaces.md). Four dials a sub-space sets for
+  // itself; `visibility` above stays what every gate reads.
+  // Listing — who can see the room exists: 'secret' | 'house' | 'world'.
+  // Only meaningful with `visibility` (world ⇔ public); see subspaces.ts#listingOf.
+  listing         String                 @default("house")
+  // Doors — who may enter without an invite, 'invite' | 'ask' | 'open': one
+  // for the parent's members, one for everyone else (never wider).
+  houseDoor       String                 @default("ask") @map("house_door")
+  worldDoor       String                 @default("open") @map("world_door")
+  // What flows up into the parent, each the room's own switch; none for a
+  // secret room, whatever these say.
+  flowContext     Boolean                @default(true) @map("flow_context")
+  flowEvents      Boolean                @default(true) @map("flow_events")
+  flowPeople      Boolean                @default(false) @map("flow_people")
+  // Whether the parent's admins administer this sub-space too (lib/auth.ts
+  // #isAdmin). On when a parent's admin creates the room; switching it off is
+  // the room's own act and only a holder of the room's own admin alias can
+  // switch it back on.
+  parentAdmins    Boolean                @default(false) @map("parent_admins")
+  // The house's side of the wall: { modelKeys, hiddenFromBand }
+  // (lib/spaces/subspaces.ts#subspaceConfigOf).
+  subspaceConfig  Json                   @default("{}") @map("subspace_config")
   // Reusable, revocable invite token. Regenerating overwrites it, invalidating the
   // previously shared link. Null until first generated.
   inviteToken     String?                @unique @map("invite_token")
@@ -85,6 +107,7 @@ model Space {
 
   appToolBuilds   AppToolBuild[]
   appToolInstalls AppToolInstall[]
+  sharedToolInstalls AppToolInstall[] @relation("SharedToolInstalls")
   resources       Resource[]
   resourceFolders ResourceFolder[]
   projectionJobs  NoteProjectionJob[]
@@ -390,6 +413,7 @@ model AgentState {
   deactivatedDetail   String?   @map("deactivated_detail") // e.g. who edited the brief
   consecutiveFailures Int       @default(0) @map("consecutive_failures")
   triggersJson        Json?     @map("triggers_json") // the live note's parsed `on:` map — { context: [globs], webhook: name }
+  sharedFrom          String?   @map("shared_from") // a run-in copy: the HOUSE whose brief this row runs, in this room (lib/agents/hooks.ts#syncSharedCopies)
   debounceMs          Int       @default(60000) @map("debounce_ms") // how far forward an event pulls next_run_at
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
@@ -398,6 +422,7 @@ model AgentState {
 
   @@unique([spaceId, name], name: "agent_identity")
   @@index([active, nextRunAt])
+  @@index([sharedFrom])
   @@map("agent_state")
 }
 
@@ -773,14 +798,19 @@ model AppToolInstall {
   requirements     Json     @default("{}") // { connectors: string[]; types: string[]; agents: string[] } — MISSING items at last check
   typeClaims       Json     @default("{}") @map("type_claims") // { [typeName]: 'page' | 'tab' }
   pendingVersionId String?  @map("pending_version_id")
+  /// Set when this install is the HOUSE's Tool shared down into this room
+  /// (lib/tools/share.ts): the room runs it, the house owns it.
+  sharedFromSpaceId String? @map("shared_from_space_id")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
   space            Space          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  sharedFromSpace  Space?         @relation("SharedToolInstalls", fields: [sharedFromSpaceId], references: [id], onDelete: Cascade)
   version          AppToolVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
   state            AppToolState[]
 
   @@unique([spaceId, key], name: "app_tool_install_identity")
   @@unique([spaceId, slug], name: "app_tool_install_slug")
+  @@index([sharedFromSpaceId])
   @@map("app_tool_installs")
 }
 

@@ -1,49 +1,38 @@
 /**
- * Seeds the Visvine HQ contexts with the notes the space actually runs on.
+ * The notes Visvine HQ runs on — content only; scripts/seed/run.ts writes them.
  *
- * Builds two contexts in the context_notes table:
- *   • the SHARED space context (owner_key = 'shared') — the working knowledge
- *     base generated from ./seed/dataset.ts: one entity note per organisation
- *     and per person, segment pages, the team, the product's roadmap and
- *     decisions, the pipeline and the revenue data.
- *   • a PERSONAL context (owner_key = <space admin userId>) — a small
- *     self-contained set of working notes (journal, meetings, discovery calls,
- *     prospects, todos) cross-linked to each other and to nothing shared.
+ * Two contexts:
+ *   • the SHARED space context — the working knowledge base generated from
+ *     ./dataset.ts: one entity note per organisation and per person, segment
+ *     pages, the team, the product's roadmap and decisions, the pipeline and
+ *     the revenue data.
+ *   • a PERSONAL context (the space admin's) — a small self-contained set of
+ *     working notes (journal, meetings, discovery calls, prospects, todos)
+ *     cross-linked to each other and to nothing shared.
  *
  * Every internal reference is an absolute `/path.md` link, which is what makes
  * the graph light up: a `[[Mention]]` is ordinary markdown link sugar, and an
  * ENTITY note's links to other entity notes become directory edges
- * (relationship 'mentioned', origin 'context') when
- * scripts/backfill-context-links.ts runs. A plain note's links draw no edges —
- * only a note that IS a node can own them (lib/notes/entityLinks.ts).
+ * (relationship 'mentioned', origin 'context') the moment the note is written
+ * through the store. A plain note's links draw no edges — only a note that IS a
+ * node can own them (lib/notes/entityLinks.ts).
  *
- *   pnpm db:hq:notes              (after pnpm db:hq)
- *   pnpm db:hq:notes -- --reset   (clean rebuild of the live seeded notes)
- *
- * Deliberately writes no `type: Index` on an index note: the shape is the path,
- * and declaring it is a violation the verifier catches (pnpm db:notes:verify).
- * The managed child block in each index is written afterwards by
- * scripts/rebuild-index-notes.ts.
- *
- * Local-only, guarded like every destructive db:* script.
+ * Deliberately writes no `type: Index` on an index note (the shape is the
+ * path) and no listing of a folder's own children in its body: the app owns
+ * that block (`<!-- index:children -->`) and fills it as children land. The
+ * one-liner that would have gone in a parent's list goes in each child's
+ * `description:` instead.
  */
 
-import '../../../scripts/guard-local-db.mjs'
-import 'dotenv/config'
-import { ADMIN_ALIAS_ID } from '../lib/types/context'
-import prisma from '../lib/prisma'
-import { buildModel, type ResolvedOrg, type ResolvedPerson } from './seed/model'
-import { SEGMENT_BLURB, SPACE_ID, SPACE_NAME, slugify, type Segment } from './seed/space'
-import type { SeedOrg } from './seed/dataset'
-
-const SHARED = 'shared'
-const RESET = process.argv.includes('--reset')
+import { buildModel, type ResolvedOrg, type ResolvedPerson } from './model'
+import { SEGMENT_BLURB, SPACE_NAME, slugify, type Segment } from './space'
+import type { SeedOrg } from './dataset'
 
 const model = buildModel()
 
 // ---- markdown emitters -------------------------------------------------------
 
-interface Note {
+export interface Note {
   path: string
   content: string
 }
@@ -146,7 +135,7 @@ const STAGE_ORDER = ['Contract', 'Proposal', 'Trial', 'Discovery'] as const
 
 // ---- shared context ----------------------------------------------------------
 
-const shared: Note[] = []
+export const shared: Note[] = []
 
 note(shared, 'index.md', { title: SPACE_NAME, tags: ['home', 'company'] }, `
 Visvine building Visvine. Every space that runs on us is a record in here, the
@@ -880,7 +869,7 @@ ${link('revenue roll-up', '/data/revenue-roll-up.md')}:
 
 // ---- personal context --------------------------------------------------------
 
-const personal: Note[] = []
+export const personal: Note[] = []
 
 note(personal, 'index.md', { title: 'My Context', tags: ['home'] }, `
 My own notes — nothing here is shared with the space, and nothing here is
@@ -1022,77 +1011,3 @@ note(personal, 'todos.md', { type: 'Note', title: 'Todos', description: 'open ac
 - [x] Write up the ${link('Create panel session', '/discovery/create-panel.md')}
 - [x] File this week's ${link('journal', '/journal/2026-09-11.md')}
 `)
-
-// ---- write -------------------------------------------------------------------
-
-async function main() {
-  const space = await prisma.space.findUnique({ where: { id: SPACE_ID }, select: { id: true } })
-  if (!space) throw new Error(`space "${SPACE_ID}" not found — run \`pnpm db:hq\` first`)
-
-  // Whoever administers the space gets the personal context. There is no role
-  // column — an admin is someone holding a Person alias flagged admin/system
-  // (lib/auth.ts#isAdmin) — so ask the holder rows directly and fall back to
-  // the earliest member.
-  const holder = await prisma.userAlias.findFirst({
-    where: { spaceId: SPACE_ID, aliasId: ADMIN_ALIAS_ID },
-    orderBy: { createdAt: 'asc' },
-    select: { userId: true },
-  })
-  const member = holder
-    ? null
-    : await prisma.spaceMember.findFirst({
-        where: { spaceId: SPACE_ID },
-        orderBy: { joinedAt: 'asc' },
-        select: { userId: true },
-      })
-  const adminId = holder?.userId ?? member?.userId
-  if (!adminId) throw new Error(`no members found for ${SPACE_ID}; run \`pnpm db:seed\` first`)
-  const who = await prisma.user.findUnique({ where: { id: adminId }, select: { name: true } })
-  console.log(`add-visvine-hq-notes: admin = ${adminId} (${who?.name ?? 'unknown'})`)
-
-  if (RESET) {
-    const del = await prisma.contextNote.deleteMany({
-      where: { spaceId: SPACE_ID, ownerKey: { in: [SHARED, adminId] }, deletedAt: null },
-    })
-    console.log(`add-visvine-hq-notes: --reset removed ${del.count} live note(s) (trash preserved)`)
-  }
-
-  const contexts: Array<{ ownerKey: string; notes: Note[] }> = [
-    { ownerKey: SHARED, notes: shared },
-    { ownerKey: adminId, notes: personal },
-  ]
-
-  for (const { ownerKey, notes } of contexts) {
-    for (const n of notes) {
-      await prisma.contextNote.upsert({
-        where: { note_identity: { spaceId: SPACE_ID, ownerKey, path: n.path } },
-        create: { spaceId: SPACE_ID, ownerKey, path: n.path, content: n.content, createdBy: adminId },
-        update: { content: n.content, deletedAt: null, deletedPath: null },
-      })
-    }
-  }
-
-  console.log('\n=== Committed ===')
-  console.log(`  shared context:   ${shared.length} notes (owner_key=shared)`)
-  console.log(`  personal context: ${personal.length} notes (owner_key=${adminId})`)
-
-  const tally = (notes: Note[]) => {
-    const byFolder: Record<string, number> = {}
-    for (const n of notes) {
-      const top = n.path.includes('/') ? `${n.path.split('/')[0]}/` : '(root)'
-      byFolder[top] = (byFolder[top] ?? 0) + 1
-    }
-    return Object.entries(byFolder).map(([folder, count]) => ({ folder, count }))
-  }
-  console.log('\n--- Shared context by folder ---')
-  console.table(tally(shared))
-  console.log('--- Personal context by folder ---')
-  console.table(tally(personal))
-}
-
-main()
-  .catch((err) => {
-    console.error(err)
-    process.exit(1)
-  })
-  .finally(() => prisma.$disconnect())

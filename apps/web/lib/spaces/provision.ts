@@ -14,7 +14,7 @@ import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store'
 import { logger } from '@/lib/logger'
 import { findPublicNameConflict, publicNameTakenMessage, type SpaceVisibility } from './publicName'
 import { findSiblingNameConflict, subspaceParentDenial } from './subspaceAccess'
-import { flowsUp } from './subspaces'
+import { flowsContext, presetByKey, visibilityForListing, type Door, type Listing } from './subspaces'
 import { LEVEL_VIEW } from '@/lib/notes/shared/authz'
 
 export interface ProvisionInput {
@@ -32,6 +32,20 @@ export interface ProvisionInput {
    * decides who may create one (the parent's admins, at the route).
    */
   parentId?: string | null
+  /**
+   * A room's four dials (docs/sub-spaces.md), or a preset that fills them.
+   * `listing` decides `visibility` for a room (world ⇔ public). Governance
+   * defaults ON: the creator is an admin of the house, so the house's admins
+   * hold the room's keys until the room says otherwise.
+   */
+  preset?: string | null
+  listing?: Listing
+  houseDoor?: Door
+  worldDoor?: Door
+  flowContext?: boolean
+  flowEvents?: boolean
+  flowPeople?: boolean
+  parentAdmins?: boolean
 }
 
 export type ProvisionResult =
@@ -54,7 +68,22 @@ async function freeSpaceId(name: string): Promise<string> {
 export async function provisionSpace(input: ProvisionInput): Promise<ProvisionResult> {
   const name = input.name.trim()
   if (!name) return { ok: false, status: 400, error: 'Space name is required' }
-  const visibility = input.visibility ?? 'private'
+  const preset = input.parentId ? presetByKey(input.preset) : null
+  const listing: Listing | undefined = input.parentId
+    ? input.listing ?? preset?.listing ?? (input.visibility === 'public' ? 'world' : 'house')
+    : undefined
+  const visibility = listing ? visibilityForListing(listing) : input.visibility ?? 'private'
+  const dials = input.parentId
+    ? {
+        listing,
+        houseDoor: input.houseDoor ?? preset?.houseDoor ?? (listing === 'world' ? 'open' : 'ask'),
+        worldDoor: input.worldDoor ?? preset?.worldDoor ?? 'open',
+        flowContext: input.flowContext ?? preset?.flowContext ?? listing !== 'secret',
+        flowEvents: input.flowEvents ?? preset?.flowEvents ?? listing !== 'secret',
+        flowPeople: input.flowPeople ?? preset?.flowPeople ?? false,
+        parentAdmins: input.parentAdmins ?? preset?.parentAdmins ?? true,
+      }
+    : {}
 
   // Only public names have to be unique platform-wide — a private space can be
   // called anything (lib/spaces/publicName.ts).
@@ -83,6 +112,7 @@ export async function provisionSpace(input: ProvisionInput): Promise<ProvisionRe
         location: input.location?.trim() || null,
         visibility,
         parentId,
+        ...dials,
         inviteToken: randomUUID(),
         // Most toggleable tools start off, opted in from the console. Core
         // keys — directory, notes, events — are always on and never persisted.
@@ -98,11 +128,11 @@ export async function provisionSpace(input: ProvisionInput): Promise<ProvisionRe
         data: { spaceId: id, userId: input.creator.id, aliasId: ADMIN_ALIAS_ID, addedBy: input.creator.id },
       })
     }
-    // A public sub-space's context flows up into its parent, read under the
-    // sub-space's space-wide grants (lib/notes/federation.ts). Born with none
-    // it would flow nothing, so it starts with everyone in it able to view
-    // from the root — the one grant its admins can revoke or narrow later.
-    if (parentId && flowsUp({ visibility })) {
+    // A room whose context flows up is read under its space-wide grants
+    // (lib/notes/federation.ts). Born with none it would flow nothing, so it
+    // starts with everyone in it able to view from the root — the one grant
+    // its admins can revoke or narrow later.
+    if (parentId && flowsContext({ visibility, parentId, ...dials })) {
       await tx.contextGrant.create({
         data: {
           spaceId: id,
@@ -133,6 +163,17 @@ export async function provisionSpace(input: ProvisionInput): Promise<ProvisionRe
     await ensureRootIndex({ spaceId: id, ownerKey: SHARED_OWNER_KEY }, name, actor)
   } catch (err) {
     logger.warn('spaces.root_index_failed', { spaceId: id, err })
+  }
+
+  // What the house shares with every room reaches this one from birth
+  // (lib/tools/share.ts). Dynamic: tools import the store, which imports here.
+  if (parentId) {
+    try {
+      const share = await import('@/lib/tools/share')
+      await share.syncSharedToolsIntoRoom(id)
+    } catch (err) {
+      logger.warn('spaces.shared_tools_failed', { spaceId: id, err })
+    }
   }
 
   return {

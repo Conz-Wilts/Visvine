@@ -18,7 +18,7 @@
 import { isDevAuthEnabled, devAuthDisabledResponse } from '@/lib/dev-auth'
 
 /**
- * Must match what `scripts/add-connector-demo.ts` stores as the SANDBOX_KEY
+ * Must match what `scripts/seed/connectors.ts` stores as the SANDBOX_KEY
  * secret. Not exported: a route module may only export Next's own fields.
  */
 const SANDBOX_KEY = process.env.CONNECTOR_SANDBOX_KEY || 'sk_sandbox_local_dev'

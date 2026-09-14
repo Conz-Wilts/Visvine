@@ -1,17 +1,37 @@
 'use client';
 
-/** Join is a word in the accent, never a bar. Once in, it goes quiet. */
-export default function JoinWord({ joined, onJoin, className = '' }: { joined: boolean; onJoin: () => void; className?: string }) {
+import { doorLabel, type ViewerDoor } from '@/features/spaces/lib/viewerDoor';
+
+/**
+ * Join is a word in the accent, never a bar. Once in, it goes quiet. The word
+ * is the door's (lib/spaces/subspaces.ts): "Join" walks in, "Ask to join"
+ * lands a request an admin answers ("Asked" once pressed), and an
+ * invite-only door offers nothing to press.
+ */
+export default function JoinWord({
+  joined,
+  door = 'active',
+  asked = false,
+  onJoin,
+  className = '',
+}: {
+  joined: boolean;
+  door?: ViewerDoor;
+  asked?: boolean;
+  onJoin: () => void;
+  className?: string;
+}) {
+  const quiet = joined || asked || door === 'deny';
   return (
     <button
       type="button"
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!joined) onJoin(); }}
-      disabled={joined}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!quiet) onJoin(); }}
+      disabled={quiet}
       className={`shrink-0 text-[13px] font-semibold transition-colors ${
-        joined ? 'cursor-default text-text-muted' : 'text-brand-dark-green hover:underline'
+        quiet ? 'cursor-default text-text-muted' : 'text-brand-dark-green hover:underline'
       } ${className}`}
     >
-      {joined ? 'Joined' : 'Join'}
+      {joined ? 'Joined' : doorLabel(door, asked)}
     </button>
   );
 }

@@ -376,7 +376,7 @@ export default function CleanPanel({ spaceId }: { spaceId: string }) {
               </p>
               <p>
                 {reach.subspaces > 0
-                  ? `The ${reach.subspaces} public sub-space${reach.subspaces === 1 ? '' : 's'} read into subspaces/ are never cleaned from here — each is cleaned in the space that owns its notes.`
+                  ? `The ${reach.subspaces} public sub-space${reach.subspaces === 1 ? '' : 's'} read into this space are never cleaned from here — each is cleaned in the space that owns its notes.`
                   : 'Cleaning stays in this space. A sub-space is cleaned in the space that owns its notes.'}
               </p>
             </>

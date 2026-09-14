@@ -10,6 +10,7 @@ import {
 } from '@/lib/notes/shared/markdown';
 import { parseConnectorPerimeter, SANDBOX_LIMITS } from '@/lib/connectors/config';
 import { describeConnector, listConnectorCalls } from '@/lib/connectors/service';
+import { sharedConnectorRefusal } from '@/lib/connectors/sharedRefusal';
 
 /**
  * One connector, for its page in the directory. The list route's row plus the
@@ -59,9 +60,11 @@ export async function GET(
     return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
   }
 
-  if (!resolved.isAdmin) {
+  if (!resolved.isAdmin || connector.shared) {
     // A member sees the shape (hosts, rules, auth mode) — enough for the
-    // Connections card — and nothing an admin would call configuration.
+    // Connections card — and nothing an admin would call configuration. The
+    // parent's shared connector reads the same way to everyone here: its
+    // env, secrets and call log are the parent's.
     return NextResponse.json({
       connector: {
         ...connector,
@@ -104,6 +107,11 @@ interface PatchBody {
   allow?: unknown;
   env?: unknown;
   timeoutMs?: unknown;
+  /**
+   * Who else resolves this connector: `'none'`, `'all'` (every sub-space) or a
+   * list of sub-space ids. `true`/`false` are accepted as all/none.
+   */
+  share?: unknown;
 }
 
 const bad = (error: string) => NextResponse.json({ error }, { status: 400 });
@@ -127,9 +135,34 @@ export async function PATCH(
   const principal = await principalOf(resolved);
   const path = `connectors/${name}.md`;
   const content = await readVisible(principal, resolved, path);
-  if (content === null) return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
+  if (content === null) {
+    // The name may resolve to the parent's shared connector — which is not
+    // this space's to edit, and says so rather than 404ing.
+    const refusal = await sharedConnectorRefusal(principal, resolved, name);
+    if (refusal) return NextResponse.json({ error: refusal }, { status: 403 });
+    return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
+  }
 
   const fm = parseFrontmatter(content);
+
+  // `share` lends this connector down (lib/connectors/config.ts#ConnectorShare):
+  // `all` to every sub-space, a list to the named ones, `none` takes it back.
+  // The key is deleted rather than written as `none`, so an unshared note
+  // reads as it always did. A named room must be one of this space's own.
+  if (body.share !== undefined) {
+    const share = body.share === true ? 'all' : body.share === false ? 'none' : body.share;
+    if (share === 'none') delete fm.share;
+    else if (share === 'all') fm.share = 'all';
+    else if (Array.isArray(share) && share.every((id) => typeof id === 'string' && id.trim())) {
+      const ids = [...new Set((share as string[]).map((id) => id.trim()))];
+      const rooms = await prisma.space.findMany({ where: { parentId: resolved.spaceId, id: { in: ids } }, select: { id: true } });
+      if (rooms.length !== ids.length) return bad('Share names a sub-space this space does not have');
+      if (ids.length === 0) delete fm.share;
+      else fm.share = ids;
+    } else {
+      return bad('Share must be "none", "all" or a list of sub-space ids');
+    }
+  }
 
   // Absent means on, so `true` deletes the key rather than writing the
   // default back into the note.

@@ -34,12 +34,20 @@
 // makes this table retroactive: every space that already exists gains the
 // folders too, with no migration and no rows to keep in step.
 //
+// A namespace folder is PLACED, never moved (lib/notes/shared/placedFolders.ts):
+// its path is the address the runtime resolves against, so the tree may draw
+// it under a folder of the space's own for organisation, but `agents/` is
+// `agents/` wherever it is drawn. The row's `icon` is what tells it apart from
+// an ordinary folder in the tree.
+//
 // This module is a LEAF on purpose: lib/notes/entities.ts imports
 // ./shared/indexNote, and indexNote imports this, so importing either from
-// here would close a cycle. It imports the feature helpers and nothing else,
-// which also keeps it runnable under node:test and the tsx scripts.
+// here would close a cycle. It imports the feature helpers, the React-free
+// icon names and nothing else, which also keeps it runnable under node:test
+// and the tsx scripts.
 
 import { isFeatureEnabled } from '../../featureAccess'
+import type { IconName } from '../../icons/names'
 import type { SpaceFeatureConfig } from '../../types'
 
 /** The kinds that have a namespace of their own. Re-exported by entities.ts as `EntityKind`. */
@@ -80,6 +88,13 @@ export interface Namespace {
   /** The one line a folder's index carries when it has none of its own. */
   description: string
   /**
+   * The glyph the tree draws the folder with — the tool's own, so a built-in
+   * folder reads as the shape of a tool rather than as a folder somebody made
+   * (features/notes/components/NoteSidebar.tsx). A name, not a component: this
+   * module is React-free.
+   */
+  icon: IconName
+  /**
    * Stands only for an admin — set on every namespace a member cannot write
    * (`connectors/`, `models/`). An empty folder they have no way to fill is
    * noise to them, but the moment it EXISTS the folder is in the tree for
@@ -97,6 +112,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     appearance: 'standing',
     writes: 'anyone',
     description: 'The people this space keeps context about.',
+    icon: 'nav-directory',
   },
   {
     dir: 'spaces',
@@ -107,6 +123,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     // The directory's organisation records — a company or group this space
     // tracks. Not this space's sub-spaces: those are grafted into subspaces/.
     description: 'The organisations this space keeps context about.',
+    icon: 'blocks',
   },
   {
     dir: 'events',
@@ -115,6 +132,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     appearance: 'standing',
     writes: 'anyone',
     description: "This space's events.",
+    icon: 'nav-events',
   },
   {
     dir: 'resources',
@@ -125,6 +143,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     appearance: 'standing',
     writes: 'anyone',
     description: 'The files and links this space keeps.',
+    icon: 'nav-resources',
   },
   {
     dir: 'channels',
@@ -137,6 +156,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     writes: 'admin',
     standingForAdminOnly: true,
     description: "This space's channels.",
+    icon: 'nav-channels',
   },
   {
     dir: 'sections',
@@ -146,6 +166,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     writes: 'admin',
     standingForAdminOnly: true,
     description: 'The sections the channels are grouped into.',
+    icon: 'hash',
   },
   {
     dir: 'agents',
@@ -158,6 +179,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     appearance: 'standing',
     writes: 'anyone',
     description: 'The agents this space runs.',
+    icon: 'nav-agents',
   },
   {
     dir: 'connectors',
@@ -168,6 +190,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     writes: 'admin',
     standingForAdminOnly: true,
     description: 'The services this space is connected to.',
+    icon: 'nav-connectors',
   },
   {
     dir: 'models',
@@ -181,6 +204,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     writes: 'admin',
     standingForAdminOnly: true,
     description: "The models this space's agents run on.",
+    icon: 'brain',
   },
   {
     dir: 'tools',
@@ -195,17 +219,34 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     appearance: 'standing',
     writes: 'anyone',
     description: 'The tools built in this space.',
+    icon: 'nav-tools',
   },
   {
     dir: 'subspaces',
     kind: null,
     feature: null,
-    // Never a stored folder and never grafted here either: it appears only
-    // when lib/notes/federation.ts has a public sub-space to graft in, so it
-    // is the one namespace an empty tree does not show.
+    // Never a stored folder: it is the reserved address a sub-space is read
+    // under, and federation draws it — one `Sub-spaces` folder holding a
+    // folder per room (lib/spaces/subspaces.ts#ensureSubspacesFolder) — only
+    // when there is a room to draw. Derived, because no write of this
+    // space's ever makes it.
     appearance: 'derived',
     writes: 'nobody',
-    description: "Context flowing up from this space's public sub-spaces — read-only.",
+    description: "This space's sub-spaces, each read as of now — written in the sub-space itself.",
+    icon: 'blocks',
+  },
+  {
+    dir: 'parent',
+    kind: null,
+    feature: null,
+    // The mirror: what the space this one sits inside shares with it — its
+    // connector and agent notes flagged `share: subspaces` — grafted as one
+    // folder named after the parent, only when there is something in it
+    // (lib/notes/federation.ts#federateParent). Never a stored folder.
+    appearance: 'derived',
+    writes: 'nobody',
+    description: 'What the space this one sits inside shares with it — read-only.',
+    icon: 'blocks',
   },
 ]
 

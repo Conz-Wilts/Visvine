@@ -235,8 +235,12 @@ async function applyProjections(input: ProjectionInput): Promise<void> {
   // cascades and publish cycles dead.
   if (origin !== 'publish') await syncPublicationsOnWrite(context, path, content, actor)
   await globalNoteWritten(context, path, origin)
-  await store.ensureAncestorIndexes(context, path, actor)
+  const created = await store.ensureAncestorIndexes(context, path, actor)
   await store.refreshIndexesForNote(context, path)
+  // A freshly made index is a new child of the folder above it — the first note
+  // in `models/` puts a Models row in the root's block — and nothing else here
+  // refreshes that parent.
+  for (const index of created) await store.refreshIndexesForNote(context, index)
 }
 
 /**

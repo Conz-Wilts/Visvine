@@ -30,6 +30,7 @@ import prisma from '@/lib/prisma'
 import { readVisible, visibleVault, writeDenialFull, writeGated } from '@/lib/notes/contextService'
 import { removeEntityNode, spaceNodeId, syncEntityNode } from '@/lib/notes/context/entityNodes'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { shareTargets } from '@/lib/spaces/subspaces'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { canRemove, type ResolvedContext } from '@/lib/notes/resolve'
 import * as store from '@/lib/notes/store'
@@ -89,6 +90,8 @@ export interface AuthoredToolSummary {
    * rejected and withdrawn included. Null when it has never been published.
    */
   publication: ToolPublicationSummary | null
+  /** Which sub-spaces this Tool is installed into by `share:` (lib/tools/share.ts). */
+  share?: 'none' | 'all' | string[]
 }
 
 export interface AuthoredToolDetail extends AuthoredToolSummary {
@@ -179,6 +182,7 @@ function summarise(
     createdBy,
     build,
     publication,
+    share: shareTargets(fm),
   }
 }
 

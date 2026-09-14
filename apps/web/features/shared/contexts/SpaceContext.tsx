@@ -14,7 +14,9 @@ interface SpaceContextValue {
    *  locked rows the switcher and the context tree draw. */
   lockedSubspaces: LockedSubspace[];
   setCurrentSpace: (spaceId: string) => void;
-  joinSpace: (spaceId: string, alias?: string) => Promise<void>;
+  /** Press Join. Resolves 'active' when the door was open, 'pending' when it
+   *  was ask — the membership then waits on an admin of that space. */
+  joinSpace: (spaceId: string, alias?: string) => Promise<'active' | 'pending'>;
   leaveSpace: (spaceId: string) => Promise<void>;
   refreshSpace: () => Promise<void>;
   /** Ask to join a locked sub-space. Writes a pending membership its admins
@@ -26,6 +28,8 @@ interface SpaceContextValue {
   /** Whether the user manages a given space — the standing behind every
    *  admin-only offer made about a space other than the current one. */
   manages: (spaceId: string) => boolean;
+  /** Whether the user holds a space's OWN admin alias (not standing through its parent). */
+  administersDirectly: (spaceId: string) => boolean;
 }
 
 const [SpaceContext, useSpace] = createSafeContext<SpaceContextValue>('Space');
@@ -46,6 +50,8 @@ const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : us
 export interface InitialMembership {
   id: string;
   isAdmin: boolean;
+  /** Holds the space's own admin alias (not standing gained through its parent). */
+  directAdmin?: boolean;
 }
 
 interface SpaceProviderProps {
@@ -72,8 +78,8 @@ export function SpaceProvider({
   const [lockedSubspaces, setLockedSubspaces] = useState<LockedSubspace[]>(initialLockedSubspaces ?? []);
   // spaceId → whether the user manages it (holds an alias marked `admin`
   // there). Membership is the key's presence; standing is the value.
-  const [memberships, setMemberships] = useState<Map<string, boolean>>(
-    () => new Map((initialMemberships ?? []).map(m => [m.id, m.isAdmin]))
+  const [memberships, setMemberships] = useState<Map<string, { isAdmin: boolean; directAdmin: boolean }>>(
+    () => new Map((initialMemberships ?? []).map(m => [m.id, { isAdmin: m.isAdmin, directAdmin: m.directAdmin ?? m.isAdmin }]))
   );
   const [currentSpaceId, setCurrentSpaceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(!hasInitialData);
@@ -98,15 +104,15 @@ export function SpaceProvider({
   }, []);
 
   const loadUserSpaces = useCallback(async () => {
-    let data: { spaces?: Array<{ id: string; isAdmin?: boolean }> };
+    let data: { spaces?: Array<{ id: string; isAdmin?: boolean; directAdmin?: boolean }> };
     try {
       data = await fetchJson('/api/user/spaces');
     } catch {
       return; // failed — leave memberships as they are (401 already kicked to /signin)
     }
-    const next = new Map<string, boolean>();
+    const next = new Map<string, { isAdmin: boolean; directAdmin: boolean }>();
     for (const c of (data.spaces || [])) {
-      next.set(c.id, c.isAdmin === true);
+      next.set(c.id, { isAdmin: c.isAdmin === true, directAdmin: c.directAdmin ?? c.isAdmin === true });
     }
     setMemberships(next);
   }, []);
@@ -134,8 +140,12 @@ export function SpaceProvider({
   }, []);
 
   const joinSpace = useCallback(async (spaceId: string, alias?: string) => {
-    await fetchJsonBody(`/api/spaces/${spaceId}/join`, 'POST', { alias });
-    setMemberships(prev => new Map(prev).set(spaceId, false));
+    const data = await fetchJsonBody<{ membership?: { status?: string } }>(`/api/spaces/${spaceId}/join`, 'POST', { alias });
+    const status = data?.membership?.status === 'pending' ? 'pending' : 'active';
+    // Only an open door makes a member; an ask leaves the row pending and the
+    // space outside the viewer's list until an admin there says yes.
+    if (status === 'active') setMemberships(prev => new Map(prev).set(spaceId, { isAdmin: false, directAdmin: false }));
+    return status;
   }, []);
 
   // Asking is its own act: the membership lands `pending`, so the row stays
@@ -199,8 +209,11 @@ export function SpaceProvider({
   // Derive isAdmin from the resolved current space. Managing a space
   // means holding one of its aliases marked `admin` — resolved server-side, so
   // super-admins are already folded in here.
-  const isAdmin = currentSpace ? memberships.get(currentSpace.id) === true : false;
-  const manages = useCallback((spaceId: string) => memberships.get(spaceId) === true, [memberships]);
+  const isAdmin = currentSpace ? memberships.get(currentSpace.id)?.isAdmin === true : false;
+  const manages = useCallback((spaceId: string) => memberships.get(spaceId)?.isAdmin === true, [memberships]);
+  // The standing that can hand a room's governance back on: its own admin
+  // alias, not the parent's (docs/sub-spaces.md).
+  const administersDirectly = useCallback((spaceId: string) => memberships.get(spaceId)?.directAdmin === true, [memberships]);
 
   const value = useMemo<SpaceContextValue>(
     () => ({
@@ -217,6 +230,7 @@ export function SpaceProvider({
       error,
       isAdmin,
       manages,
+      administersDirectly,
     }),
     [
       spaces,
@@ -232,6 +246,7 @@ export function SpaceProvider({
       error,
       isAdmin,
       manages,
+      administersDirectly,
     ]
   );
 

@@ -17,7 +17,7 @@
  */
 import { isDevAuthEnabled, devAuthDisabledResponse } from '@/lib/dev-auth'
 
-/** Must match what `scripts/add-fund-metrics-demo.ts` stores as FUND_METRICS_KEY. */
+/** Must match what `scripts/seed/connectors.ts` stores as FUND_METRICS_KEY. */
 const FUND_KEY = process.env.CONNECTOR_FUND_METRICS_KEY || 'sk_fundmetrics_local_dev'
 
 const KEY_HEADER = 'x-fund-key'

@@ -6,7 +6,19 @@ import prisma from '@/lib/prisma'
 import { LEVEL_VIEW } from '@/lib/notes/shared/authz'
 import { isGlobalSpace } from './globalSpace'
 import { normalizePublicName } from './publicName'
-import { flowsUp, parentDenial, siblingNameTakenMessage } from './subspaces'
+import {
+  asDoor,
+  flowsContext,
+  flowsEvents,
+  flowsPeople,
+  joinOutcome,
+  listingOf,
+  parentDenial,
+  siblingNameTakenMessage,
+  type Door,
+  type Listing,
+  type SubspaceJoinOutcome,
+} from './subspaces'
 
 export interface SubspaceRow {
   id: string
@@ -14,16 +26,37 @@ export interface SubspaceRow {
   description: string | null
   imageUrl: string | null
   visibility: string
+  parentId: string | null
+  listing: Listing
+  houseDoor: Door
+  worldDoor: Door
+  flowContext: boolean
+  flowEvents: boolean
+  flowPeople: boolean
+  parentAdmins: boolean
   memberCount: number
   createdAt: Date
 }
+
+/** The dial columns, selected wherever a rule about a room is decided. */
+export const DIAL_SELECT = {
+  visibility: true,
+  parentId: true,
+  listing: true,
+  houseDoor: true,
+  worldDoor: true,
+  flowContext: true,
+  flowEvents: true,
+  flowPeople: true,
+  parentAdmins: true,
+} as const
 
 const SUBSPACE_SELECT = {
   id: true,
   name: true,
   description: true,
   imageUrl: true,
-  visibility: true,
+  ...DIAL_SELECT,
   createdAt: true,
   _count: { select: { members: { where: { status: 'active' as const } } } },
 } as const
@@ -34,6 +67,14 @@ function toRow(s: {
   description: string | null
   imageUrl: string | null
   visibility: string
+  parentId: string | null
+  listing: string
+  houseDoor: string
+  worldDoor: string
+  flowContext: boolean
+  flowEvents: boolean
+  flowPeople: boolean
+  parentAdmins: boolean
   createdAt: Date
   _count: { members: number }
 }): SubspaceRow {
@@ -43,6 +84,14 @@ function toRow(s: {
     description: s.description,
     imageUrl: s.imageUrl,
     visibility: s.visibility,
+    parentId: s.parentId,
+    listing: listingOf(s),
+    houseDoor: asDoor(s.houseDoor, 'ask'),
+    worldDoor: asDoor(s.worldDoor, 'open'),
+    flowContext: s.flowContext,
+    flowEvents: s.flowEvents,
+    flowPeople: s.flowPeople,
+    parentAdmins: s.parentAdmins,
     memberCount: s._count.members,
     createdAt: s.createdAt,
   }
@@ -103,12 +152,44 @@ export async function listSubspaces(parentId: string): Promise<SubspaceRow[]> {
  * second: nesting is one level, so nothing can be under it.
  */
 export async function flowingSubspacesOf(parentId: string): Promise<Array<{ id: string; name: string }>> {
+  return subspacesWhere(parentId, flowsContext)
+}
+
+/** The sub-spaces whose public EVENTS flow up (the room's `flowEvents`). */
+export async function eventFlowingSubspacesOf(parentId: string): Promise<Array<{ id: string; name: string }>> {
+  return subspacesWhere(parentId, flowsEvents)
+}
+
+/** The sub-spaces whose directory flows up (the room's `flowPeople`). */
+export async function peopleFlowingSubspacesOf(parentId: string): Promise<Array<{ id: string; name: string }>> {
+  return subspacesWhere(parentId, flowsPeople)
+}
+
+async function subspacesWhere(
+  parentId: string,
+  rule: (row: { visibility: string; parentId: string | null; listing: string; flowContext: boolean; flowEvents: boolean; flowPeople: boolean }) => boolean,
+): Promise<Array<{ id: string; name: string }>> {
   const rows = await prisma.space.findMany({
-    where: { parentId, visibility: 'public' },
-    select: { id: true, name: true, visibility: true },
+    where: { parentId },
+    select: { id: true, name: true, ...DIAL_SELECT },
     orderBy: { name: 'asc' },
   })
-  return rows.filter(flowsUp).map(({ id, name }) => ({ id, name }))
+  return rows.filter(rule).map(({ id, name }) => ({ id, name }))
+}
+
+/**
+ * The space `childId` sits inside, or null for a top-level space. The read
+ * every downward flow starts from (lib/notes/federation.ts#parentReader):
+ * no visibility predicate, because the sub-space's members are inside the
+ * house already — what crosses is decided by the flag on each shared note,
+ * not by the parent's door.
+ */
+export async function parentOfSubspace(childId: string): Promise<{ id: string; name: string } | null> {
+  const row = await prisma.space.findUnique({
+    where: { id: childId },
+    select: { parent: { select: { id: true, name: true } } },
+  })
+  return row?.parent ?? null
 }
 
 /**
@@ -119,9 +200,9 @@ export async function flowingSubspacesOf(parentId: string): Promise<Array<{ id: 
 export async function flowingSubspace(parentId: string, childId: string): Promise<{ id: string; name: string } | null> {
   const row = await prisma.space.findUnique({
     where: { id: childId },
-    select: { id: true, name: true, parentId: true, visibility: true },
+    select: { id: true, name: true, ...DIAL_SELECT },
   })
-  if (!row || row.parentId !== parentId || !flowsUp(row)) return null
+  if (!row || row.parentId !== parentId || !flowsContext(row)) return null
   return { id: row.id, name: row.name }
 }
 
@@ -143,6 +224,9 @@ export interface LockedSubspace {
   parentId: string
   memberCount: number
   requested: boolean
+  /** 'parent' = a member of the parent walks straight in; the door reads "Join". */
+  /** The door for the parent's members — 'open' is the row that says Join instead of Ask. */
+  houseDoor: Door
 }
 
 const LOCKED_SELECT = {
@@ -151,6 +235,7 @@ const LOCKED_SELECT = {
   description: true,
   imageUrl: true,
   parentId: true,
+  houseDoor: true,
   _count: { select: { members: { where: { status: 'active' as const } } } },
 } as const
 
@@ -174,6 +259,8 @@ export async function listLockedSubspaces(
   const rows = await prisma.space.findMany({
     where: {
       visibility: 'private',
+      // A secret room is not a door: nothing names it (lib/spaces/subspaces.ts#listingOf).
+      listing: { not: 'secret' },
       parentId: parentId ?? { not: null },
       personalOwnerId: null,
       // Standing in the parent...
@@ -198,6 +285,7 @@ export async function listLockedSubspaces(
     parentId: s.parentId ?? '',
     memberCount: s._count.members,
     requested: s.members.length > 0,
+    houseDoor: asDoor(s.houseDoor, 'ask'),
   }))
 }
 
@@ -207,22 +295,24 @@ export async function lockedSubspacesOf(parentId: string, userId: string): Promi
 }
 
 /**
- * Whether `userId` may ask to join `spaceId` — true only for a private
- * sub-space of a space they actively belong to. The join route's one check
- * before it writes a pending membership, so the request door is exactly as
- * wide as the listing above.
+ * What pressing Join on `spaceId` writes for `userId` — deny, a pending
+ * request, or an active membership — per lib/spaces/subspaces.ts#joinOutcome:
+ * the house door for an active member of the parent, the world door for
+ * everyone else. One read, so the door is exactly as wide as the listing.
  */
-export async function mayRequestSubspaceAccess(spaceId: string, userId: string): Promise<boolean> {
+export async function selfJoinOutcome(spaceId: string, userId: string): Promise<SubspaceJoinOutcome> {
   const row = await prisma.space.findUnique({
     where: { id: spaceId },
-    select: { visibility: true, parentId: true, personalOwnerId: true },
+    select: { ...DIAL_SELECT, personalOwnerId: true },
   })
-  if (!row || row.personalOwnerId || row.visibility !== 'private' || !row.parentId) return false
-  const standing = await prisma.spaceMember.findUnique({
-    where: { userId_spaceId: { userId, spaceId: row.parentId } },
-    select: { status: true },
-  })
-  return standing?.status === 'active'
+  if (!row) return 'deny'
+  const standing = row.parentId
+    ? await prisma.spaceMember.findUnique({
+        where: { userId_spaceId: { userId, spaceId: row.parentId } },
+        select: { status: true },
+      })
+    : null
+  return joinOutcome(row, standing?.status ?? null)
 }
 
 /**

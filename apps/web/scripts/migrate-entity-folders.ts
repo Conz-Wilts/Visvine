@@ -16,7 +16,7 @@
  *   pnpm --filter @visvine/web db:entities:folders <spaceId>  # one space
  *   pnpm --filter @visvine/web db:entities:folders --dry-run
  *
- * Runs in db:hq:full after the extras layer; against production it is
+ * The seed writes the folder form directly and does not need it; against production it is
  * run once, straight after the deploy that made entities folders, through the
  * proxy with the guard's override (docs/runbook.md).
  */

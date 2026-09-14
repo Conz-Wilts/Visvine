@@ -31,6 +31,7 @@ import {
   perimeterSecretRefs,
   type ConnectorAction,
   type ConnectorPerimeter,
+  type ConnectorShare,
 } from './config'
 import { connectorCryptoCapabilities } from './hostCrypto'
 import { connectorStateCapabilities } from './hostState'
@@ -46,6 +47,8 @@ import { toolGroup, toolPermission, type ToolGroup, type ToolPermission } from '
 import { isLegacyModelConnector } from '@/lib/models/config'
 import { catalogEntryFor } from './catalog'
 import { declaredReachHosts } from '@/lib/vm/policy'
+import { parentShare, readSharedFromParent } from '@/lib/notes/federation'
+import { rebaseParentPath } from '@/lib/spaces/subspaces'
 
 const CONNECTORS_DIR = 'connectors/'
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
@@ -55,16 +58,22 @@ const DOCS_CAP_CHARS = 4_000
  * Where a connector name resolved to — and therefore whose secrets, whose
  * linked account, whose run budget and whose audit trail the run uses.
  *
- * Two places are searched, in this order: the space the caller is in, then the
- * caller's OWN personal space. That second look is what makes a connector you
- * connected once in Settings work everywhere you go — you sign in to Google
- * once, and any space you are a member of can spend it, because it is still
- * only ever YOUR account being spent (`principal` is you, in your own space).
+ * Three places are searched, in this order: the space the caller is in, then
+ * — for a sub-space — what its PARENT shares with it (`share: subspaces` on
+ * the parent's note, docs/sub-spaces.md), then the caller's OWN personal
+ * space. The parent's note runs with the parent's secrets and accounts, under
+ * the parent's quota and on the parent's audit trail, exactly as a personal
+ * one runs with the person's: `spaceId` says whose it is, and every executor
+ * reads that rather than the caller's space. The third look is what makes a
+ * connector you connected once in Settings work everywhere you go — you sign
+ * in to Google once, and any space you are a member of can spend it, because
+ * it is still only ever YOUR account being spent (`principal` is you, in
+ * your own space).
  *
  * The order matters and is not a preference. A space that has written its own
  * `google-drive` note has made a decision about what its agents reach and
- * whose credentials they use; a personal note must never quietly displace it.
- * So a personal connector fills a gap and never overrides one.
+ * whose credentials they use; neither a parent's note nor a personal one may
+ * quietly displace it. So each later look fills a gap and never overrides.
  *
  * Only a person has a personal space, so a system/maintenance pass never
  * falls back — and neither does a Tool (lib/tools/bridge.ts), which is code a
@@ -80,10 +89,21 @@ interface ConnectorSource {
   principal: ContextPrincipal
   /** True when the note came from the caller's personal space. */
   personal: boolean
+  /** True when the note is the parent space's, shared with this sub-space. */
+  shared: boolean
+  /** Which space shared it, when `shared`. */
+  sharedFrom: { id: string; name: string } | null
 }
 
 /** How wide a connector lookup reaches. */
 export interface ConnectorLookup {
+  /**
+   * Consult what the parent space shares with this sub-space when this one
+   * has no such connector. Default true. Pass false where the question is
+   * about THIS space's own note — the console's edit and test surfaces,
+   * a machine sign-in — rather than about what a run here can reach.
+   */
+  shared?: boolean
   /**
    * Consult the caller's own personal space when this one has no such
    * connector. Default true. Pass false where the question is about a
@@ -130,7 +150,27 @@ async function readConnectorNote(
   if (!NAME_RE.test(name)) return null
   const path = `${CONNECTORS_DIR}${name}.md`
   const here = await readVisible(p, context, path)
-  if (here !== null) return { content: here, path, spaceId: context.spaceId, principal: p, personal: false }
+  if (here !== null) {
+    return { content: here, path, spaceId: context.spaceId, principal: p, personal: false, shared: false, sharedFrom: null }
+  }
+  if (opts.shared !== false) {
+    // The parent's flag is the whole grant (lib/notes/federation.ts): no
+    // standing in the parent is asked for, and none is given — the principal
+    // is the same person, in the parent's space, an admin of nothing there.
+    const fromParent = await readSharedFromParent(context, path)
+    if (fromParent) {
+      const owner = fromParent.share.space
+      return {
+        content: fromParent.content,
+        path,
+        spaceId: owner.id,
+        principal: { ...p, spaceId: owner.id, spaceAdmin: false },
+        personal: false,
+        shared: true,
+        sharedFrom: owner,
+      }
+    }
+  }
   if (opts.personal === false || p.system) return null
   const lens = personalLens(opts.personalFor ?? p.userId, context)
   if (!lens) return null
@@ -140,7 +180,7 @@ async function readConnectorNote(
   // the audit line and any identity assertion still say who ran it.
   const principal =
     lens.principal.userId === p.userId ? { ...lens.principal, email: p.email, name: p.name } : lens.principal
-  return { content: mine, path, spaceId: lens.context.spaceId, principal, personal: true }
+  return { content: mine, path, spaceId: lens.context.spaceId, principal, personal: true, shared: false, sharedFrom: null }
 }
 
 export interface ConnectorSummary {
@@ -186,6 +226,15 @@ export interface ConnectorSummary {
    * belonging to this space. Only ever true where the lookup asked for them.
    */
   personal?: boolean
+  /** Who else resolves this connector — `share:` in the note. */
+  share: ConnectorShare
+  /**
+   * The parent space's connector, shared with this sub-space. Its `path` is
+   * where this space reads it (`parent/connectors/<name>.md`); nothing here
+   * may change it — its secrets, its switch and its note are the parent's.
+   */
+  shared?: boolean
+  sharedFrom?: { id: string; name: string } | null
 }
 
 /** One action as list_connectors reports it — everything but the code. */
@@ -270,7 +319,26 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
     actions: parsed.ok ? summariseActions(parsed.perimeter.actions) : [],
     mcp: parsed.ok ? mcpEndpoint(base.name, base.recipe, parsed.perimeter.mcp) : null,
     login: parsed.ok ? parsed.perimeter.login : null,
+    share: parsed.ok ? parsed.perimeter.share : 'none',
   }
+}
+
+/**
+ * The parent's shared connectors as this sub-space lists them: read-only
+ * rows, addressed under `parent/`, that a same-named note of this space's
+ * wins over — the order a run resolves them in. Empty for a top-level space.
+ */
+async function listSharedFromParent(context: Context): Promise<ConnectorSummary[]> {
+  const share = await parentShare(context)
+  if (!share) return []
+  const out: ConnectorSummary[] = []
+  for (const raw of share.notes) {
+    if (!raw.path.startsWith(CONNECTORS_DIR) || !raw.path.endsWith('.md')) continue
+    const summary = summariseNote(raw.path, raw.content)
+    if (!summary) continue
+    out.push({ ...summary, path: rebaseParentPath(raw.path), shared: true, sharedFrom: share.space })
+  }
+  return out
 }
 
 /** Every valid-or-broken connector note in one context. */
@@ -332,9 +400,19 @@ export async function listConnectors(
   opts: ConnectorLookup = {},
 ): Promise<ConnectorSummary[]> {
   const own = await listConnectorsIn(p, context)
+  const taken = new Set(own.map((c) => c.name))
+  // What the parent shares is listed by default: it is what a run here
+  // resolves, and the row says whose it is so no surface offers to change it.
+  if (opts.shared !== false) {
+    for (const theirs of await listSharedFromParent(context)) {
+      if (!taken.has(theirs.name)) {
+        own.push(theirs)
+        taken.add(theirs.name)
+      }
+    }
+  }
   const lens = opts.personal === true && !p.system ? personalLens(p.userId, context) : null
   if (lens) {
-    const taken = new Set(own.map((c) => c.name))
     for (const mine of await listConnectorsIn(lens.principal, lens.context)) {
       if (!taken.has(mine.name)) own.push({ ...mine, personal: true })
     }
@@ -354,21 +432,48 @@ export async function listConnectors(
  */
 export interface ConnectorDetail extends ConnectorSummary {
   perimeter: ConnectorPerimeter | null
+  /**
+   * The space whose connector this is — whose secrets, linked accounts and
+   * audit trail. The space asked about, unless the note is the parent's,
+   * shared with this sub-space (`shared`), in which case the parent's.
+   */
+  ownerSpaceId: string
 }
 
+/**
+ * One connector by name, in the detail the console renders. This space's
+ * note, else — for a sub-space — the parent's shared one (`opts.shared`
+ * false asks only about this space's own).
+ */
 export async function describeConnector(
   p: ContextPrincipal,
   context: Context,
   name: string,
+  opts: Pick<ConnectorLookup, 'shared'> = {},
 ): Promise<ConnectorDetail | null> {
   if (!NAME_RE.test(name)) return null
   const path = `${CONNECTORS_DIR}${name}.md`
   const content = await readVisible(p, context, path)
-  if (content === null) return null
-  const summary = summariseNote(path, content)
+  if (content !== null) {
+    const summary = summariseNote(path, content)
+    if (!summary) return null
+    const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+    return { ...summary, perimeter: parsed.ok ? parsed.perimeter : null, ownerSpaceId: context.spaceId }
+  }
+  if (opts.shared === false) return null
+  const fromParent = await readSharedFromParent(context, path)
+  if (!fromParent) return null
+  const summary = summariseNote(path, fromParent.content)
   if (!summary) return null
-  const parsed = parseConnectorPerimeter(parseFrontmatter(content))
-  return { ...summary, perimeter: parsed.ok ? parsed.perimeter : null }
+  const parsed = parseConnectorPerimeter(parseFrontmatter(fromParent.content))
+  return {
+    ...summary,
+    path: rebaseParentPath(path),
+    shared: true,
+    sharedFrom: fromParent.share.space,
+    perimeter: parsed.ok ? parsed.perimeter : null,
+    ownerSpaceId: fromParent.share.space.id,
+  }
 }
 
 /** One past run of a connector, as the audit trail recorded it. */
@@ -427,6 +532,9 @@ export interface LoadedConnector {
   principal: ContextPrincipal
   /** True when this is the caller's own connector, reached from another space. */
   personal: boolean
+  /** True when this is the parent space's connector, shared with this sub-space. */
+  shared: boolean
+  sharedFrom: { id: string; name: string } | null
 }
 
 /**
@@ -470,6 +578,8 @@ export async function loadConnector(
     spaceId: source.spaceId,
     principal: source.principal,
     personal: source.personal,
+    shared: source.shared,
+    sharedFrom: source.sharedFrom,
   }
 }
 
@@ -486,6 +596,8 @@ export interface ConnectorReadiness {
   detail: string | null
   /** This is the person's own connector, brought from Settings — not the space's. */
   personal: boolean
+  /** This is the parent space's connector, shared with this sub-space. */
+  shared: boolean
 }
 
 /**
@@ -504,20 +616,20 @@ export async function connectorReadiness(
 ): Promise<ConnectorReadiness[]> {
   return Promise.all(
     names.map(async (name): Promise<ConnectorReadiness> => {
-      const none = { auth: null, connectUrl: null, detail: null, personal: false }
+      const none = { auth: null, connectUrl: null, detail: null, personal: false, shared: false }
       if (!NAME_RE.test(name)) return { connector: name, status: 'invalid', ...none, detail: 'not a connector name' }
       // Judged for ONE person, so their own connectors count: what a run would
       // actually resolve is what readiness must ask about.
       const source = await readConnectorNote(p, context, name, { personalFor: forUserId })
       if (source === null) return { connector: name, status: 'missing', ...none }
-      const { content, spaceId: ownerSpaceId, personal } = source
+      const { content, spaceId: ownerSpaceId, personal, shared } = source
       const fm = parseFrontmatter(content)
       if (!isConnectorNote(fm)) return { connector: name, status: 'invalid', ...none, detail: 'the note is not a connector' }
-      if (!isConnectorEnabled(fm)) return { connector: name, status: 'disabled', ...none, personal }
+      if (!isConnectorEnabled(fm)) return { connector: name, status: 'disabled', ...none, personal, shared }
       const parsed = parseConnectorPerimeter(fm)
-      if (!parsed.ok) return { connector: name, status: 'invalid', ...none, personal, detail: parsed.error }
+      if (!parsed.ok) return { connector: name, status: 'invalid', ...none, personal, shared, detail: parsed.error }
       const auth = parsed.perimeter.auth
-      if (!auth) return { connector: name, status: 'ok', ...none, personal }
+      if (!auth) return { connector: name, status: 'ok', ...none, personal, shared }
       const connectUrl = connectorConnectUrl(ownerSpaceId, name)
       const row = await prisma.connectorConnection.findUnique({
         where: {
@@ -527,12 +639,12 @@ export async function connectorReadiness(
       })
       const authInfo = { provider: auth.provider, mode: auth.mode, accountLabel: row?.accountLabel ?? null }
       if (!row || row.mode !== auth.mode) {
-        return { connector: name, status: 'needs_connection', auth: authInfo, connectUrl, detail: null, personal }
+        return { connector: name, status: 'needs_connection', auth: authInfo, connectUrl, detail: null, personal, shared }
       }
       if (row.brokenAt) {
-        return { connector: name, status: 'broken', auth: authInfo, connectUrl, detail: row.brokenReason, personal }
+        return { connector: name, status: 'broken', auth: authInfo, connectUrl, detail: row.brokenReason, personal, shared }
       }
-      return { connector: name, status: 'ok', auth: authInfo, connectUrl: null, detail: null, personal }
+      return { connector: name, status: 'ok', auth: authInfo, connectUrl: null, detail: null, personal, shared }
     }),
   )
 }

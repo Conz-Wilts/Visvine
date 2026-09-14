@@ -32,6 +32,7 @@ import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from 'next/link';
 import { CheckIcon, CopyIcon, KeyRoundIcon, PencilIcon, PlayIcon, PlusIcon, RefreshCwIcon, Trash2Icon, TriangleAlertIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
+import ShareWithRooms from '@/features/shared/components/ShareWithRooms';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 import ConnectorLogo from '@/features/connectors/components/ConnectorLogo';
@@ -55,6 +56,11 @@ interface ConnectorDetail {
   warnings: string[];
   secrets: SecretStatus[];
   perimeter: ConnectorPerimeter | null;
+  /** `share:` in the note — which of this space's sub-spaces resolve it too. */
+  share: 'none' | 'all' | string[];
+  /** The parent space's connector, shared with this sub-space: read here, changed there. */
+  shared?: boolean;
+  sharedFrom?: { id: string; name: string } | null;
 }
 
 /** One past run, as the audit trail recorded it (server: listConnectorCalls). */
@@ -989,8 +995,11 @@ function statusOf(connector: ConnectorDetail): { label: string; tone: 'ok' | 'wa
 
 export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
   const name = nodeId.startsWith('connector:') ? nodeId.slice('connector:'.length) : nodeId;
-  const { currentSpace, loading: spaceLoading, isAdmin } = useSpace();
+  const { currentSpace, loading: spaceLoading, isAdmin: adminHere, spaces } = useSpace();
   const spaceId = currentSpace?.id;
+  // Whether this space has sub-spaces to lend a connector to — the only case
+  // the Share toggle means anything (docs/sub-spaces.md).
+  const hasSubspaces = !!spaceId && spaces.some((s) => s.parentId === spaceId);
 
   const [connector, setConnector] = useState<ConnectorDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1104,6 +1113,9 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
 
   const status = statusOf(connector);
   const missingSecrets = connector.secrets.filter((s) => !s.set);
+  // The parent's shared connector is nobody's to change from here, admin or
+  // not: every editing surface below keys off this rather than the standing.
+  const isAdmin = adminHere && !connector.shared;
   const runnable = connector.enabled && !connector.invalid && missingSecrets.length === 0;
   const env = connector.perimeter?.env ?? {};
   const pickedSecretStatus = connector.secrets.find((s) => s.name === pickedSecret) ?? null;
@@ -1139,6 +1151,37 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
           </button>
         )}
       </div>
+
+      {/* ══ SHARED — the parent's connector, read here ══ */}
+      {connector.shared && (
+        <p className="mb-5 flex items-start gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
+          <span className="min-w-0">
+            Shared from <span className="font-medium">{connector.sharedFrom?.name ?? 'the parent space'}</span> —
+            agents here run it with that space&apos;s keys and accounts. Its note, switch and secrets are changed there.
+          </span>
+        </p>
+      )}
+
+      {/* ══ SHARE — lend this connector to the sub-spaces ══ */}
+      {isAdmin && hasSubspaces && !connector.invalid && spaceId && (
+        <div className="mb-5">
+          <ShareWithRooms
+            spaceId={spaceId}
+            value={connector.share}
+            saving={saving}
+            onSave={(next) => save({ share: next })}
+            what="connector"
+            // A space-level account is the whole space acting as one login.
+            // Lending it into a room strangers can walk into or ask into lends
+            // that login to strangers — allowed, but said out loud first.
+            warnFor={(room) =>
+              connector.perimeter?.auth?.mode === 'space' && room.listing === 'world' && room.worldDoor !== 'invite'
+                ? `this lends ${currentSpace?.name ?? 'this space'}'s connected account to a room strangers can join.`
+                : null
+            }
+          />
+        </div>
+      )}
 
       {/* The status hint, or the last Test verdict — one line, never both. */}
       {test ? (

@@ -62,8 +62,9 @@ export async function POST(
   let loaded;
   try {
     // Space-only: this is the page for one note, and running it must test
-    // THAT connector rather than a same-named one of the admin's own.
-    loaded = await loadConnector(principal, resolved, decodeURIComponent(name), { personal: false });
+    // THAT connector rather than a same-named one of the admin's own — or the
+    // parent's shared one, which is tested where it lives.
+    loaded = await loadConnector(principal, resolved, decodeURIComponent(name), { personal: false, shared: false });
   } catch (e) {
     // A note that exists but doesn't parse — the page already shows the error;
     // running against it is a 400, not a crash.

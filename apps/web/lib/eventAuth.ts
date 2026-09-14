@@ -14,6 +14,7 @@ import { findMemberNode } from '@/lib/identity/connection';
 import type { SessionPayload } from '@/lib/session';
 import prisma from '@/lib/prisma';
 import type { NBEvent } from '@/lib/types';
+import { flowsEvents } from '@/lib/spaces/subspaces';
 
 function deny(status: number, error: string): Response {
   return new Response(JSON.stringify({ error }), {
@@ -36,6 +37,35 @@ export async function requireSpaceMember(
   });
   if (!membership) return deny(403, 'You are not a member of this space');
   return session;
+}
+
+/**
+ * Session + membership of the space, OR standing in its PARENT when the space
+ * is a public sub-space (lib/spaces/subspaces.ts#flowsUp): a member of the
+ * parent may READ what a public sub-space shows everyone — its public events
+ * (lib/events/rollup.ts). `via` says which door opened, so the caller can keep
+ * the flow-up reader to public events only. Never a manage gate: writes go
+ * through `requireEventManager`, which has no such fallback.
+ */
+export async function requireSpaceMemberOrParent(
+  spaceId: string,
+): Promise<{ session: SessionPayload; via: 'member' | 'subspace' } | Response> {
+  const member = await requireSpaceMember(spaceId);
+  if (!(member instanceof Response)) return { session: member, via: 'member' };
+  if (member.status !== 403) return member;
+  const session = await getSession();
+  if (!session) return deny(401, 'Unauthorized');
+  const space = await prisma.space.findUnique({
+    where: { id: spaceId },
+    select: { parentId: true, visibility: true, listing: true, flowEvents: true, personalOwnerId: true },
+  });
+  if (!space?.parentId || space.personalOwnerId || !flowsEvents(space)) return member;
+  const standing = await prisma.spaceMember.findUnique({
+    where: { userId_spaceId: { userId: session.userId, spaceId: space.parentId } },
+    select: { status: true },
+  });
+  if (standing?.status !== 'active') return member;
+  return { session, via: 'subspace' };
 }
 
 /**

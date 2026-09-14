@@ -20,6 +20,10 @@ export interface FormField {
 export interface NBEvent {
   id: `event:${string}`;
   spaceId: string;
+  /** Set only when this is a PUBLIC sub-space's event read through its parent
+   *  (lib/events/rollup.ts): which sub-space. `spaceId` stays the owner; the
+   *  field's presence is the read-only signal. */
+  viaSpace?: { id: string; name: string };
   title: string;
   description?: string;
   startAt: string;

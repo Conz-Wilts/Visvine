@@ -86,6 +86,8 @@ export interface InstallSummary {
   types: ToolTypeSurface[]
   /** An approved newer version waiting for an admin, and what it changes. */
   pendingVersion: { id: string; version: number; perimeterDiff: PerimeterDiff } | null
+  /** The house this install came down from, when it is a shared Tool (lib/tools/share.ts). */
+  sharedFrom?: { id: string; name: string } | null
 }
 
 /**
@@ -112,6 +114,8 @@ export interface InstalledToolDto {
   enabled: boolean
   degraded: boolean
   types: TypeClaims
+  /** The house this install came down from, when it is a shared Tool (lib/tools/share.ts). */
+  sharedFrom?: { id: string; name: string } | null
 }
 
 export type InstallResult =
@@ -307,7 +311,7 @@ async function spaceFactsForActor(spaceId: string, userId: string): Promise<Spac
  * the space. Installing a Tool must not move the front door, so an absent order
  * is materialised as the registry order first, with the Tool after it.
  */
-function orderWithRail(config: SpaceFeatureConfig, key: string): string[] {
+export function orderWithRail(config: SpaceFeatureConfig, key: string): string[] {
   const current = config.order ?? []
   const base =
     current.length > 0
@@ -317,7 +321,7 @@ function orderWithRail(config: SpaceFeatureConfig, key: string): string[] {
 }
 
 /** The same three lists with a Tool's rail key taken out of all of them. */
-function featureConfigWithoutRail(config: SpaceFeatureConfig, key: string): SpaceFeatureConfig {
+export function featureConfigWithoutRail(config: SpaceFeatureConfig, key: string): SpaceFeatureConfig {
   const without = (list: string[] | undefined) =>
     list ? list.filter((entry) => entry !== key) : undefined
   return mergeFeatureConfig(config, {
@@ -339,6 +343,8 @@ const INSTALL_SELECT = {
   requirements: true,
   typeClaims: true,
   pendingVersionId: true,
+  sharedFromSpaceId: true,
+  sharedFromSpace: { select: { id: true, name: true } },
   version: {
     select: {
       id: true,
@@ -361,6 +367,8 @@ interface InstallRow {
   requirements: unknown
   typeClaims: unknown
   pendingVersionId: string | null
+  sharedFromSpaceId: string | null
+  sharedFromSpace: { id: string; name: string } | null
   version: {
     id: string
     name: string
@@ -393,6 +401,7 @@ function toSummary(row: InstallRow, pending: PendingLookup): InstallSummary {
     typeClaims: parseTypeClaims(row.typeClaims),
     rail: config.surfaces.rail,
     types: config.surfaces.types,
+    sharedFrom: row.sharedFromSpace,
     pendingVersion: upgrade
       ? {
           id: upgrade.id,
@@ -463,6 +472,7 @@ function toClientDto(row: InstallRow): InstalledToolDto {
     enabled: row.enabled,
     degraded: isDegraded(requirements),
     types: parseTypeClaims(row.typeClaims),
+    sharedFrom: row.sharedFromSpace,
   }
 }
 
@@ -634,6 +644,11 @@ export async function installVersion(
     detail: `installed ${version.key} as ${out.created.slug}`,
   })
 
+  // A house installing its OWN Tool sets the version its rooms run
+  // (lib/tools/share.ts) — re-derived here so a room never runs a version the
+  // house has moved off.
+  if (version.sourceSpaceId === spaceId) void followInRooms(spaceId, version.name)
+
   const [summary] = await summarise([out.created])
   return {
     ok: true,
@@ -641,6 +656,12 @@ export async function installVersion(
     downgraded: out.resolution.downgraded,
     conflicts: out.resolution.conflicts,
   }
+}
+
+/** The rooms' shared copies follow the house's version — dynamic, share.ts imports this module. */
+async function followInRooms(houseId: string, name: string): Promise<void> {
+  const share = await import('./share')
+  await share.syncSharedToolInstallsQuietly(houseId, name)
 }
 
 /** The modes to resolve: what the Tool declared, overridden by the admin's pick. */
@@ -691,6 +712,13 @@ export async function uninstall(
   if (refusal) return refusal
   const install = await loadInstall(spaceId, installId)
   if (!install) return { ok: false, status: 404, error: 'No such install.' }
+  if (install.sharedFromSpace) {
+    return {
+      ok: false,
+      status: 403,
+      error: `This tool is shared from ${install.sharedFromSpace.name}. Stop sharing it there, or turn it off here.`,
+    }
+  }
 
   try {
     await updateSpaceConfig(spaceId, async (stored, tx) => {
@@ -864,6 +892,13 @@ export async function applyUpgrade(
   if (refusal) return refusal
   const install = await loadInstall(spaceId, installId)
   if (!install) return { ok: false, status: 404, error: 'No such install.' }
+  if (install.sharedFromSpace) {
+    return {
+      ok: false,
+      status: 403,
+      error: `This tool is shared from ${install.sharedFromSpace.name} and follows the version it runs there.`,
+    }
+  }
   if (!install.pendingVersionId) {
     return { ok: false, status: 409, error: 'There is no upgrade waiting for this tool.' }
   }
@@ -954,6 +989,7 @@ export async function applyUpgrade(
     detail: `upgraded to v${next.version}`,
   })
   const [summary] = await summarise([out.updated])
+  if (next.sourceSpaceId === spaceId) void followInRooms(spaceId, next.name)
   return { ok: true, install: summary }
 }
 

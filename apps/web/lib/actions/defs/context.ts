@@ -1486,6 +1486,8 @@ export const CONTEXT_ACTIONS = [
             model: m.ref,
             enabled: m.enabled,
             key_stored: m.keyStored,
+            key_from: m.keyFrom?.id ?? null,
+            shared_from: m.sharedFrom?.id ?? null,
             problem: m.problem,
           })),
           space_model: fallback?.ref ?? null,
@@ -1603,6 +1605,15 @@ export const CONTEXT_ACTIONS = [
         }
         const connector = await describeConnector(principal, context, args.connector)
         if (!connector) throw new ActionError(404, `No connector named '${args.connector}' in this space`)
+        // The parent's shared connector runs with the PARENT's secrets, so a
+        // value stored here would never be read — refused rather than left as
+        // a secret that looks set and a run that says it is missing.
+        if (connector.shared) {
+          throw new ActionError(
+            403,
+            `This connector belongs to ${connector.sharedFrom?.name ?? 'the parent space'}; change it there.`,
+          )
+        }
         if (connector.invalid) {
           throw new ActionError(
             400,

@@ -8,6 +8,8 @@ import {
   customEndpointOf,
   declaredPricingFor,
   defaultModelOf,
+  modelKeyOwner,
+  modelKeysLent,
   noModelReason,
   runnableModels,
   type SpaceModel,
@@ -118,4 +120,26 @@ test('a bad model id is refused at parse', () => {
   const gateway = ['---', 'type: model', 'provider: openrouter', 'model: anthropic/claude-sonnet-5', '---', ''].join('\n')
   const parsed = parseModel(parseFrontmatter(gateway))
   assert.ok(parsed.ok && parsed.config.modelId === 'anthropic/claude-sonnet-5')
+})
+
+test('a model key is the room\'s own, else the house\'s where the house lends it, else nobody\'s', () => {
+  assert.deepEqual(modelKeyOwner({ roomId: 'r', roomHasKey: true, house: null }), { spaceId: 'r', via: 'own' })
+  assert.deepEqual(
+    modelKeyOwner({ roomId: 'r', roomHasKey: false, house: { id: 'h', modelKeys: 'all', hasKey: true } }),
+    { spaceId: 'h', via: 'house' },
+  )
+  assert.deepEqual(
+    modelKeyOwner({ roomId: 'r', roomHasKey: false, house: { id: 'h', modelKeys: ['r', 'x'], hasKey: true } }),
+    { spaceId: 'h', via: 'house' },
+  )
+  // Named rooms only — another room gets nothing.
+  assert.equal(modelKeyOwner({ roomId: 'r', roomHasKey: false, house: { id: 'h', modelKeys: ['x'], hasKey: true } }), null)
+  // A house that lends but holds no key lends nothing.
+  assert.equal(modelKeyOwner({ roomId: 'r', roomHasKey: false, house: { id: 'h', modelKeys: 'all', hasKey: false } }), null)
+  // The room's own key wins even when the house would lend.
+  assert.deepEqual(
+    modelKeyOwner({ roomId: 'r', roomHasKey: true, house: { id: 'h', modelKeys: 'all', hasKey: true } }),
+    { spaceId: 'r', via: 'own' },
+  )
+  assert.equal(modelKeysLent([], 'r'), false)
 })

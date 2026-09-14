@@ -27,6 +27,7 @@ import prisma from '@/lib/prisma'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { isConnectorEnabled } from '@/lib/connectors/config'
 import { isLegacyModelConnector, isModelNote, MODELS_DIR, modelNameOfPath, parseModel } from '@/lib/models/config'
+import { reachesRoom, subspaceConfigOf } from '@/lib/spaces/subspaces'
 import type { ModelPricing, ProviderEntry } from './registry'
 
 const SHARED_OWNER_KEY = 'shared'
@@ -47,8 +48,16 @@ export interface SpaceModel {
   /** `<provider>/<modelId>` — what a brief's `model:` would say. Null with no id. */
   ref: string | null
   baseURL: string
-  /** MODEL_KEY_<PROVIDER> exists for this space. */
+  /** MODEL_KEY_<PROVIDER> exists for this space — or for the house that lends it (`keyFrom`). */
   keyStored: boolean
+  /**
+   * Set when the key this model spends is the PARENT space's, lent down
+   * (docs/sub-spaces.md, `subspaceConfig.modelKeys`). The key never leaves
+   * that space's store; the room only learns that it may run on it.
+   */
+  keyFrom?: { id: string; name: string } | null
+  /** Set when the note itself is the parent's — a room with no models of its own runs on the house's. */
+  sharedFrom?: { id: string; name: string } | null
   /** `enabled: false` in the note — configuration held in reserve. */
   enabled: boolean
   /** Prices the note declares, per model id. */
@@ -74,6 +83,63 @@ function problemWith(m: Omit<SpaceModel, 'problem'>): string | null {
  * admin wondering where the model they just added went.
  */
 export async function spaceModels(spaceId: string): Promise<SpaceModel[]> {
+  const [own, house] = await Promise.all([modelsOf(spaceId, null), lendingHouseOf(spaceId)])
+  if (!house) return own
+  // The house's keys fill the gaps in the room's own models…
+  const lent = own.map((m) => (m.keyStored || !house.keys.has(m.provider.keySecret) ? m : withHouseKey(m, house)))
+  if (lent.length > 0) return lent
+  // …and a room with no models at all runs on the house's, key and note both.
+  const theirs = await modelsOf(house.id, house.name)
+  return theirs.map((m) => ({ ...m, sharedFrom: { id: house.id, name: house.name }, keyFrom: m.keyStored ? { id: house.id, name: house.name } : null }))
+}
+
+function withHouseKey(m: SpaceModel, house: { id: string; name: string }): SpaceModel {
+  const base = { ...m, keyStored: true, keyFrom: { id: house.id, name: house.name } }
+  return { ...base, problem: problemWith(base) }
+}
+
+/**
+ * The parent space that lends this one its model keys, with the key names it
+ * holds — or null when there is no parent, or the parent's `subspaceConfig`
+ * does not reach this room (lib/spaces/subspaces.ts#subspaceConfigOf).
+ */
+async function lendingHouseOf(spaceId: string): Promise<{ id: string; name: string; keys: Set<string> } | null> {
+  const row = await prisma.space.findUnique({
+    where: { id: spaceId },
+    select: { parent: { select: { id: true, name: true, subspaceConfig: true } } },
+  })
+  const parent = row?.parent
+  if (!parent) return null
+  if (!modelKeysLent(subspaceConfigOf(parent.subspaceConfig).modelKeys, spaceId)) return null
+  const secrets = await prisma.connectorSecret.findMany({ where: { spaceId: parent.id }, select: { name: true } })
+  return { id: parent.id, name: parent.name, keys: new Set(secrets.map((s) => s.name)) }
+}
+
+/** Pure: whether a house's `modelKeys` setting reaches `roomId`. */
+export function modelKeysLent(modelKeys: 'all' | string[], roomId: string): boolean {
+  return reachesRoom(modelKeys, roomId)
+}
+
+/**
+ * Which space's store holds the key a room's model spends: the room's own
+ * when it has one, the house's when the house lends it and has it, else
+ * nobody's. Pure — the decision the resolver and the readiness surfaces share.
+ */
+export function modelKeyOwner(input: {
+  roomId: string
+  roomHasKey: boolean
+  house: { id: string; modelKeys: 'all' | string[]; hasKey: boolean } | null
+}): { spaceId: string; via: 'own' } | { spaceId: string; via: 'house' } | null {
+  if (input.roomHasKey) return { spaceId: input.roomId, via: 'own' }
+  if (input.house && input.house.hasKey && modelKeysLent(input.house.modelKeys, input.roomId)) {
+    return { spaceId: input.house.id, via: 'house' }
+  }
+  return null
+}
+
+/** One space's own model notes, with whether each key is in ITS store. */
+async function modelsOf(spaceId: string, houseName: string | null): Promise<SpaceModel[]> {
+  void houseName
   const [rows, secrets] = await Promise.all([
     prisma.contextNote.findMany({
       where: {

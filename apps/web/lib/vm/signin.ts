@@ -85,6 +85,11 @@ export async function signInOnMachine(input: {
   if (loaded.personal) {
     return { ok: false, reason: 'no_login', message: `${input.connectorName} is a connector in your own space; the machine only reaches this space's connectors, so the login has to live here.` }
   }
+  // Likewise the parent's: a website password is typed on THIS space's
+  // machine, and a shared connector's credentials never leave the parent.
+  if (loaded.shared) {
+    return { ok: false, reason: 'no_login', message: `${input.connectorName} is shared from ${loaded.sharedFrom?.name ?? 'the parent space'}; a login it holds is typed on that space's machines, not this one's.` }
+  }
   const login = await loginCredentialsOf(loaded)
   if (!login) return { ok: false, reason: 'no_login', message: `${input.connectorName} holds no website login — it is not a Website login connector.` }
   if (!login.user || !login.password) return { ok: false, reason: 'no_login', message: `${input.connectorName} has no account set.` }

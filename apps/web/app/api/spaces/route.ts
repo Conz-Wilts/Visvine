@@ -4,6 +4,7 @@ import { handleApiError } from '@/lib/api/route';
 import { provisionSpace } from '@/lib/spaces/provision';
 import { isSpaceVisibility } from '@/lib/spaces/publicName';
 import { isAdmin } from '@/lib/auth';
+import { DOORS, LISTINGS, type Door, type Listing } from '@/lib/spaces/subspaces';
 
 /**
  * POST /api/spaces — user-facing space creation.
@@ -28,6 +29,13 @@ export async function POST(request: NextRequest) {
     // shouldn't be discoverable before its creator has put anything in it.
     const visibility = isSpaceVisibility(body.visibility) ? body.visibility : undefined;
     const parentId = typeof body.parentId === 'string' && body.parentId.trim() ? body.parentId.trim() : null;
+    // A room's dials (docs/sub-spaces.md): a preset fills them, explicit
+    // values win, and provisionSpace defaults the rest. Only read for a room.
+    const preset = typeof body.preset === 'string' ? body.preset : null;
+    const listing = LISTINGS.includes(body.listing) ? (body.listing as Listing) : undefined;
+    const houseDoor = DOORS.includes(body.houseDoor) ? (body.houseDoor as Door) : undefined;
+    const worldDoor = DOORS.includes(body.worldDoor) ? (body.worldDoor as Door) : undefined;
+    const bool = (v: unknown) => (typeof v === 'boolean' ? v : undefined);
 
     if (!name) {
       return NextResponse.json({ error: 'Space name is required' }, { status: 400 });
@@ -42,6 +50,18 @@ export async function POST(request: NextRequest) {
       location,
       visibility,
       parentId,
+      ...(parentId
+        ? {
+            preset,
+            listing,
+            houseDoor,
+            worldDoor,
+            flowContext: bool(body.flowContext),
+            flowEvents: bool(body.flowEvents),
+            flowPeople: bool(body.flowPeople),
+            parentAdmins: bool(body.parentAdmins),
+          }
+        : {}),
       creator: { id: session.userId, name: session.name, email: session.email },
     });
     if (!result.ok) {

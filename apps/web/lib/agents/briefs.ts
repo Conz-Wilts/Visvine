@@ -28,8 +28,8 @@ export interface AgentBriefRow {
   createdBy: string | null
 }
 
-/** The brief for `name`, or null when the agent does not exist. */
-export async function findAgentBrief(spaceId: string, name: string): Promise<AgentBriefRow | null> {
+/** The brief note at `name` in `spaceId` itself, or null. */
+export async function findOwnAgentBrief(spaceId: string, name: string): Promise<AgentBriefRow | null> {
   const index = agentBriefPath(name)
   const rows = await prisma.contextNote.findMany({
     where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { in: [index, agentBriefAliasPath(name)] } },
@@ -37,6 +37,20 @@ export async function findAgentBrief(spaceId: string, name: string): Promise<Age
   })
   // The folder form wins when both exist — the alias is only ever a leftover.
   return rows.find((r) => r.path === index) ?? rows[0] ?? null
+}
+
+/**
+ * The brief for `name`, or null when the agent does not exist. A space's own
+ * note first; failing that, a run-in COPY — a state row of this space naming
+ * the house whose brief it runs (docs/sub-spaces.md) — reads the house's.
+ * One step, never a chain: a house has no house.
+ */
+export async function findAgentBrief(spaceId: string, name: string): Promise<AgentBriefRow | null> {
+  const own = await findOwnAgentBrief(spaceId, name)
+  if (own) return own
+  const copy = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } }, select: { sharedFrom: true } })
+  if (!copy?.sharedFrom) return null
+  return findOwnAgentBrief(copy.sharedFrom, name)
 }
 
 export interface AgentActivationSource {

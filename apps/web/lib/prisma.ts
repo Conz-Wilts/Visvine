@@ -37,7 +37,12 @@ const adapter = new PrismaPg(pool);
 const prismaClientSingleton = () => {
   return new PrismaClient({
     adapter,
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    // PRISMA_QUERY_LOG=off quiets the per-query log for bulk CLI work (the seed
+    // writes thousands of rows, and logging each one is most of its runtime).
+    log:
+      process.env.NODE_ENV === 'development' && process.env.PRISMA_QUERY_LOG !== 'off'
+        ? ['query', 'error', 'warn']
+        : ['error'],
   });
 };
 

@@ -25,11 +25,15 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
     return <AuthLayoutClient initialSession={null}>{children}</AuthLayoutClient>;
   }
 
-  const [spaces, memberships, lockedSubspaces] = await Promise.all([
+  const [spaces, memberships, locked] = await Promise.all([
     listVisibleSpaces(session),
     listUserSpaceIds(session),
     listLockedSubspaces(session.userId),
   ]);
+  // A parent's admin who reaches a private sub-space through `parentAdmins`
+  // has it in `spaces` already; the locked row would be a door beside an
+  // open one.
+  const lockedSubspaces = locked.filter((l) => !spaces.some((s) => s.id === l.id));
 
   const initialSession: Session = {
     user: {

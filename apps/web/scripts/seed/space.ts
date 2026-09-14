@@ -1,8 +1,7 @@
 /**
  * The local-dev demo space, in one place.
  *
- * Every seed layer — `prisma/seed.ts`, the directory, the notes, the extras,
- * the placeholder machinery — reads the space's identity from here, so the
+ * Every seed step (scripts/seed/steps) reads the space's identity from here, so the
  * demo space is named ONCE. The layers used to spell
  * `space:blackbird-ventures` into six files, which is why swapping the
  * demo content meant editing all six.
@@ -15,8 +14,9 @@
  * Note the id: the bare `visvine` id is RESERVED for the platform's global
  * public-record space (lib/spaces/globalSpace.ts), which is a different thing
  * with different access rules. This is a normal tenant that happens to be us,
- * so it takes a normal `space:` id and a name that cannot be mistaken for
- * the global one in Discover.
+ * so it is created the way every tenant is (lib/spaces/provision.ts), which
+ * derives its id from its name — `visvine-hq` — and the seed asserts the two
+ * agree rather than inventing an id no real space could have.
  *
  * Everyone in this space is INVENTED. The fixture gets dumped and passed
  * between machines (`pnpm db:publish` / `pnpm db:restore`), so it must not
@@ -27,7 +27,7 @@
 
 import { ADMIN_ALIAS, ADMIN_ALIAS_ID, ADMIN_ALIAS_NAME } from '../../lib/types/context'
 
-export const SPACE_ID = 'space:visvine-hq'
+export const SPACE_ID = 'visvine-hq'
 export const SPACE_NAME = 'Visvine HQ'
 export const SPACE_DESCRIPTION =
   'Visvine building Visvine. The spaces that run on us, the people who run them, ' +
@@ -65,8 +65,10 @@ export interface Anchor {
 
 export const ADMIN_USER = 'user_dev_admin'
 export const MEMBER_USER = 'user_dev_member'
-export const ADMIN_NODE = 'person:dev_admin'
-export const MEMBER_NODE = 'person:dev_member'
+// The member nodes a join mints (lib/spaces/memberNode.ts): `person:` + the
+// slug of the member's name. Named here because events host and invite them.
+export const ADMIN_NODE = 'person:dev-admin'
+export const MEMBER_NODE = 'person:dev-member'
 
 export const ANCHORS: Anchor[] = [
   {
@@ -250,18 +252,21 @@ export const SPACE_GRANTS: Array<[string, number]> = [['segments', VIEW]]
 
 /**
  * Two sub-spaces (docs/sub-spaces.md), one of each kind, so the flow-up rule is
- * on screen from the first seed: Design Partners is PUBLIC — its context
- * appears in the parent's tree under spaces/, read-only — and Leadership is
- * PRIVATE, its own tenant with nothing showing above. Dev Admin administers
- * both (they created them); Dev Member is in the public one only, so signing in
- * as them shows exactly what a parent's member sees.
+ * on screen from the first seed: Design Partners is a Programme whose context
+ * flows up — it appears in the parent's tree under Sub-spaces, read-only — and
+ * Leadership is a Council that keeps its notes to itself. Both are provisioned
+ * the way the New sub-space dialog does it, so `id` is what provisionSpace
+ * derives from the name (the seed asserts it). Dev Admin administers both (they
+ * created them); Dev Member is in the Programme only, so signing in as them
+ * shows exactly what a parent's member sees.
  */
 export const SUBSPACES = [
   {
-    id: 'visvine-hq-design-partners',
+    id: 'design-partners',
     name: 'Design Partners',
     description: 'The spaces shaping the product with us: office hours, feedback and what shipped because of it.',
-    visibility: 'public',
+    // A Programme: listed to everyone, the house's members walk in, strangers ask.
+    preset: 'programme',
     members: [ADMIN_USER, MEMBER_USER],
     notes: [
       {
@@ -277,10 +282,13 @@ export const SUBSPACES = [
     ],
   },
   {
-    id: 'visvine-hq-leadership',
+    id: 'leadership',
     name: 'Leadership',
     description: 'Board packs, hiring plans and the numbers behind them. Private to the leadership group.',
-    visibility: 'private',
+    // A Council with its notes kept to itself: the house's members see the
+    // door and ask; nothing of its context flows up, its events do.
+    preset: 'council',
+    flowContext: false,
     members: [ADMIN_USER],
     notes: [
       {

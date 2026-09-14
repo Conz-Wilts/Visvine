@@ -46,6 +46,7 @@ import PersonSilhouette from '@/components/ui/PersonSilhouette'
 import TypeSilhouette from '@/components/ui/TypeSilhouette'
 import { useProfileCache } from '@/features/shared/contexts/ProfileContext'
 import { useCardTilt } from '../hooks/useCardTilt'
+import { BlocksIcon } from '@/features/shared/icons'
 
 interface DirectoryCardProps {
   item: DirectoryItem
@@ -140,6 +141,17 @@ function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
         <Chip color={typeColor} size="sm" className="mt-3.5">
           {nodeTypeLabel(item.type, item.alias, aliases, nodeTypes)}
         </Chip>
+        {/* A row read through the people flow wears the room it belongs to:
+            it is that space's record, shown here read-only. */}
+        {item.via_space && (
+          <span
+            className="mt-2 inline-flex max-w-full items-center gap-1 text-[11px] text-text-muted"
+            title={`From ${item.via_space.name}, a sub-space of this one — read-only here`}
+          >
+            <BlocksIcon className="h-3 w-3 shrink-0" />
+            <span className="truncate">{item.via_space.name}</span>
+          </span>
+        )}
       </div>
     </div>
   )

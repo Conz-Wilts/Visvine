@@ -43,8 +43,8 @@ import {
   type GrantSubjectType,
 } from '@/lib/notes/shared/authz'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
-import { readerForPath } from '@/lib/notes/federation'
-import { isSubspacePath } from '@/lib/spaces/subspaces'
+import { readSharedFromParent, readerForPath } from '@/lib/notes/federation'
+import { isParentPath, isSubspacePath, parseParentPath } from '@/lib/spaces/subspaces'
 
 /** Restricted folders that cover or sit inside the caller's view of a path. */
 function visibleRestricted(p: ContextPrincipal, path: string): string[] {
@@ -105,13 +105,13 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  // A path under subspaces/<id>/ is a sub-space's note shown here read-only
-  // (lib/notes/federation.ts): readable exactly when its reader may read it,
-  // never writable or manageable from this space, and never a gate — the
-  // editor must not offer "request access" to a space this one only reads.
-  if (isSubspacePath(path)) {
-    const hit = await readerForPath(p, context, path)
-    const canRead = !!hit && !!hit.path && principalCanRead(hit.reader.principal, hit.path)
+  // A path under parent/ is a note the parent shares with this sub-space
+  // (lib/notes/federation.ts#parentShare): readable exactly when it is on the
+  // parent's share list, never writable or manageable here, never a gate.
+  if (isParentPath(path)) {
+    const inner = parseParentPath(path)
+    const hit = inner ? await readSharedFromParent(context, inner) : null
+    const canRead = !!hit
     return NextResponse.json({
       path,
       me: { userId: p.userId, spaceAdmin: p.spaceAdmin },
@@ -124,7 +124,34 @@ export async function GET(req: NextRequest) {
       locked: [],
       entries: null,
       subjects: null,
-      subspace: hit ? hit.reader.space : null,
+      parent: hit ? hit.share.space : null,
+    })
+  }
+
+  // A path under subspaces/<id>/ is a sub-space's note read through this
+  // space (lib/notes/federation.ts): readable and writable exactly as the
+  // caller's standing IN the sub-space says — their own for a member of it,
+  // the everyone-view for anyone else — never manageable from here (who sees
+  // what in a sub-space is its admins' act, made there), and never a gate:
+  // the editor must not offer "request access" to a space this one reads.
+  if (isSubspacePath(path)) {
+    const hit = await readerForPath(p, context, path)
+    const inner = hit?.path ?? ''
+    const canRead = !!hit && !!inner && principalCanRead(hit.reader.principal, inner)
+    const canWrite = !!hit && !!inner && hit.reader.own && principalCanWrite(hit.reader.principal, inner)
+    return NextResponse.json({
+      path,
+      me: { userId: p.userId, spaceAdmin: p.spaceAdmin },
+      gated: false,
+      canRead,
+      canWrite,
+      canManage: false,
+      myLevel: hit && inner && hit.reader.own ? principalLevelName(hit.reader.principal, inner) : canRead ? 'view' : null,
+      restricted: [],
+      locked: [],
+      entries: null,
+      subjects: null,
+      subspace: hit ? { ...hit.reader.space, member: hit.reader.own } : null,
     })
   }
 

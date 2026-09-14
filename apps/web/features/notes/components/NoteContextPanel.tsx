@@ -401,12 +401,11 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         aliases={currentSpace?.aliases as SpaceAlias[] | undefined}
         tagColors={currentSpace?.designConfig?.tagColors ?? null}
       />
-      {access?.subspace && (
+      {access?.parent && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
           <BlocksIcon className="h-4 w-4 shrink-0 text-brand-green" />
           <span>
-            From <span className="font-medium">{access.subspace.name}</span>, a sub-space of this one —
-            its own context, read here as it is now. To edit it, open that space.
+            Shared from <span className="font-medium">{access.parent.name}</span>, the space this one sits inside — read-only here.
           </span>
         </div>
       )}

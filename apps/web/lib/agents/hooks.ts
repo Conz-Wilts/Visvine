@@ -33,7 +33,7 @@ import {
   isAgentActivationPath,
   isAgentBriefPath,
 } from '@/lib/notes/entities'
-import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { Actor, Context } from '@/lib/notes/store'
 
 // Redeclared (as entityLinks.ts does) rather than imported: the store imports
@@ -47,8 +47,12 @@ import {
   withActiveFalse,
   type AgentActivation,
   DEFAULT_DEBOUNCE_MS,
+  copyRooms,
+  parseAgentBrief,
+  type AgentBrief,
 } from './config'
-import { findAgentActivation, findAgentBrief } from './briefs'
+import { findAgentActivation, findAgentBrief, findOwnAgentBrief } from './briefs'
+
 import { fireNoteTriggers, hasPendingEvents } from './events'
 
 /** The actor for machine writes into the activation boundary. */
@@ -123,6 +127,14 @@ export async function syncAgentState(
   const now = opts.now ?? new Date()
   let activation = opts.activation ?? null
   let invalid: string | null = null
+  const existing = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } } })
+  // A run-in copy that the house no longer shares here, or a room the house
+  // no longer governs, is retired rather than re-derived: the row exists only
+  // while both hold (docs/sub-spaces.md).
+  if (existing?.sharedFrom && !(await copyStillAllowed(spaceId, name, existing.sharedFrom))) {
+    await retireCopy(existing.id, spaceId, name)
+    return { active: false, nextRunAt: null, invalid: 'no longer shared with this room' }
+  }
   const briefRead = findAgentBrief(spaceId, name)
   if (activation === undefined || activation === null) {
     const found = await findAgentActivation(spaceId, name)
@@ -152,7 +164,6 @@ export async function syncAgentState(
   const triggersJson = activation?.on ? { context: activation.on.context, webhook: activation.on.webhook } : Prisma.DbNull
   const debounceMs = activation?.debounceMs ?? DEFAULT_DEBOUNCE_MS
 
-  const existing = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } } })
   const reborn = !!(brief && existing?.briefNoteId && existing.briefNoteId !== brief.id)
   if (reborn && existing) await retirePreviousIncarnation(spaceId, name, existing.id)
   const becameActive = active && !existing?.active
@@ -187,7 +198,60 @@ export async function syncAgentState(
         : {}),
     },
   })
+  // A house brief fans out to its run-in copies; a copy fans out to nothing
+  // (a room holds no rooms, so this finds none and costs one query).
+  if (!existing?.sharedFrom) {
+    const parsed = brief ? parseAgentBrief(parseFrontmatter(brief.content), splitFrontmatter(brief.content).body) : null
+    await syncSharedCopies(spaceId, name, parsed?.ok ? parsed.brief : null)
+  }
   return { active, nextRunAt, invalid }
+}
+
+/**
+ * Whether a run-in copy of `houseId`'s `name` may still stand in `roomId`:
+ * the house brief exists, is shared with the room as `run-in`, and the house
+ * governs the room. Read by the runner before a copy's run and by the sync
+ * before re-deriving one.
+ */
+export async function copyStillAllowed(roomId: string, name: string, houseId: string): Promise<boolean> {
+  const [room, brief] = await Promise.all([
+    prisma.space.findUnique({ where: { id: roomId }, select: { id: true, parentId: true, parentAdmins: true } }),
+    findOwnAgentBrief(houseId, name),
+  ])
+  if (!room || room.parentId !== houseId || !brief) return false
+  const parsed = parseAgentBrief(parseFrontmatter(brief.content), splitFrontmatter(brief.content).body)
+  if (!parsed.ok) return false
+  return copyRooms(parsed.brief, [room]).length === 1
+}
+
+async function retireCopy(stateId: string, roomId: string, name: string): Promise<void> {
+  await retirePreviousIncarnation(roomId, name, stateId)
+  await prisma.agentState.delete({ where: { id: stateId } }).catch(() => undefined)
+}
+
+/**
+ * The run-in copies of a house brief, made to match what the brief says now:
+ * one state row per room the share reaches and the house governs
+ * (config.ts#copyRooms), naming the house in `sharedFrom`; rows in rooms the
+ * brief no longer reaches — or a deleted brief's — are retired. A room's own
+ * agent at the same name wins: no copy lands beside it.
+ */
+async function syncSharedCopies(houseId: string, name: string, brief: AgentBrief | null): Promise<void> {
+  const rooms = await prisma.space.findMany({ where: { parentId: houseId }, select: { id: true, parentId: true, parentAdmins: true } })
+  const wanted = new Set(brief ? copyRooms(brief, rooms).map((r) => r.id) : [])
+  const copies = await prisma.agentState.findMany({ where: { name, sharedFrom: houseId }, select: { id: true, spaceId: true } })
+  for (const copy of copies) {
+    if (!wanted.has(copy.spaceId)) await retireCopy(copy.id, copy.spaceId, name)
+  }
+  for (const roomId of wanted) {
+    if (await findOwnAgentBrief(roomId, name)) continue
+    await prisma.agentState.upsert({
+      where: { agent_identity: { spaceId: roomId, name } },
+      create: { spaceId: roomId, name, sharedFrom: houseId, active: false },
+      update: { sharedFrom: houseId },
+    })
+    await syncAgentState(roomId, name)
+  }
 }
 
 /**
@@ -204,9 +268,12 @@ export async function deactivateAgent(
   by: { userId: string; name: string } = { userId: 'system', name: 'Visvine' },
 ): Promise<void> {
   const source = await findAgentActivation(spaceId, name)
+  // A run-in copy has no note of its own here: only its row is switched off,
+  // never the house's brief (which keeps its other copies running).
+  const copy = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } }, select: { sharedFrom: true } })
   // Into whichever note carries the activation — the brief, or a pre-merge
   // activation.md an agent still has. Only ever `active: false`.
-  if (source.path && source.content && parseFrontmatter(source.content).active !== false) {
+  if (!copy?.sharedFrom && source.path && source.content && parseFrontmatter(source.content).active !== false) {
     const store = await import('@/lib/notes/store')
     // origin 'maintenance' stamps the revision as a machine act; the store
     // is ungated (the gate lives in contextService), so no principal needed.
@@ -293,8 +360,11 @@ export async function agentNoteRenamed(
 
   if (fromName && isAgentBriefPath(from)) {
     if (toName === fromName) return
-    // Deactivate under the old name, then carry the row to the new one.
+    // Deactivate under the old name, then carry the row to the new one. The
+    // copies under the old name are retired; the sync under the new name
+    // makes new ones.
     await deactivateAgent(spaceId, fromName, 'renamed', toName ? `now ${to}` : `moved to ${to}`)
+    await syncSharedCopies(spaceId, fromName, null)
     if (toName && isAgentBriefPath(to)) {
       await prisma.agentState.deleteMany({ where: { spaceId, name: toName } })
       await prisma.agentState.updateMany({ where: { spaceId, name: fromName }, data: { name: toName } })
@@ -329,6 +399,8 @@ export async function agentNoteDeleted(context: Context, path: string): Promise<
   const spaceId = context.spaceId
   if (isAgentBriefPath(path)) {
     await deactivateAgent(spaceId, name, 'deleted', 'brief deleted')
+    // Its run-in copies go with it.
+    await syncSharedCopies(spaceId, name, null)
     // The folder delete that removed the brief removes the activation with it;
     // a brief deleted on its own leaves one behind, and it is retired here.
     const live = agentActivationPath(name)

@@ -8,7 +8,7 @@ import { removeMemberAccess } from '@/lib/notes/access';
 import { findAliasByRef, selfJoinAliases, type SpaceAlias } from '@/lib/types';
 import { ensureMemberNode } from '@/lib/spaces/memberNode';
 import { isGlobalSpace } from '@/lib/spaces/globalSpace';
-import { mayRequestSubspaceAccess } from '@/lib/spaces/subspaceAccess';
+import { selfJoinOutcome } from '@/lib/spaces/subspaceAccess';
 
 /**
  * POST: Current user joins a space (self-service)
@@ -43,27 +43,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
       return NextResponse.json({ error: 'Visvine is open to everyone; there is nothing to join' }, { status: 400 });
     }
 
-    // Private spaces are not self-joinable — entry is via an invite link
-    // (which creates a pending request), an admin adding the user directly,
-    // or, for a private SUB-space, the request this route writes: a member of
-    // the parent can see the locked row and ask through it
-    // (lib/spaces/subspaceAccess.ts#mayRequestSubspaceAccess). Asking is not
-    // entering — the row lands `pending` and an admin of the sub-space answers
-    // it on Members → Wants to join.
+    // The door decides (lib/spaces/subspaces.ts#joinOutcome): the house door
+    // for an active member of the parent, the world door for anyone else.
+    // `invite` = nothing to press; `ask` = a `pending` request an admin of
+    // the space answers on Members → Wants to join; `open` = in. A pending
+    // row from an earlier ask is honoured when the door has since opened.
     let requesting = false;
-    if (space.visibility === 'private') {
+    let admitting = false;
+    {
       const existing = await prisma.spaceMember.findUnique({
         where: { userId_spaceId: { userId: session.userId, spaceId } },
-        select: { id: true },
+        select: { id: true, status: true },
       });
-      if (!existing) {
-        requesting = await mayRequestSubspaceAccess(spaceId, session.userId);
-        if (!requesting) {
+      if (!existing || existing.status === 'pending') {
+        const outcome = await selfJoinOutcome(spaceId, session.userId);
+        if (outcome === 'deny') {
+          if (existing) {
+            return NextResponse.json({ membership: { id: existing.id, status: existing.status } }, { status: 200 });
+          }
           return NextResponse.json(
-            { error: 'This space is private. Ask an admin for an invite link.' },
+            { error: 'This space is invite only. Ask an admin for an invite link.' },
             { status: 403 }
           );
         }
+        requesting = outcome === 'pending';
+        admitting = outcome === 'active' && existing?.status === 'pending';
       }
     }
 
@@ -80,7 +84,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
     const membership = await prisma.spaceMember.upsert({
       where: { userId_spaceId: { userId: session.userId, spaceId } },
       create: { userId: session.userId, spaceId, status: requesting ? 'pending' : 'active' },
-      update: {},
+      update: admitting ? { status: 'active' } : {},
       select: { id: true, status: true },
     });
 

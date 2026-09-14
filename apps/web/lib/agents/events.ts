@@ -24,6 +24,7 @@ import { logAudit } from '@/lib/notes/audit'
 import { logger } from '@/lib/logger'
 import { agentBriefPath, matchesAnyGlob, type AgentTriggers } from './config'
 import { findAgentBrief } from './briefs'
+import { flowsContext, rebasePath } from '@/lib/spaces/subspaces'
 
 type AgentEventKind = 'note_written' | 'webhook' | 'reply'
 
@@ -280,8 +281,6 @@ export async function fireNoteTriggers(
   opts: { exceptAgent?: string | null; action?: 'saved' | 'created' | 'renamed' } = {},
 ): Promise<string[]> {
   try {
-    const names = (await matchNoteTriggers(spaceId, path)).filter((n) => n !== opts.exceptAgent)
-    if (names.length === 0) return []
     // An agent's write is one hop deeper than what woke its run; anything else
     // is a human (webhooks / replies enqueue at depth 0 from their own routes).
     const via = opts.exceptAgent ?? null
@@ -293,6 +292,10 @@ export async function fireNoteTriggers(
     const action = opts.action ?? 'saved'
     const at = new Date()
     const time = at.toISOString().slice(11, 16)
+    const summary = `${action} by ${actor.name || 'someone'}${origin && origin !== 'edit' ? ` (${origin})` : ''} at ${time} UTC`
+    const base = { action, actor: { id: actor.id, name: actor.name }, origin, at: at.toISOString() }
+
+    const names = (await matchNoteTriggers(spaceId, path)).filter((n) => n !== opts.exceptAgent)
     const results = await Promise.all(
       names.map((name) =>
         enqueueAgentEvent({
@@ -300,18 +303,65 @@ export async function fireNoteTriggers(
           agentName: name,
           kind: 'note_written',
           source: path,
-          summary: `${action} by ${actor.name || 'someone'}${origin && origin !== 'edit' ? ` (${origin})` : ''} at ${time} UTC`,
-          payload: { path, action, actor: { id: actor.id, name: actor.name }, origin, at: at.toISOString() },
+          summary,
+          payload: { path, ...base },
           dedupeKey: `note_written:${path}`,
           chain,
         }),
       ),
     )
-    return names.filter((_, i) => results[i].ok)
+    const woken = names.filter((_, i) => results[i].ok)
+
+    // The same save, seen from the PARENT: a public sub-space's note is read
+    // there under `subspaces/<id>/…` (lib/notes/federation.ts), so an agent
+    // of the parent watching that address is woken too, with the parent-side
+    // path as its source — the one it can read_context. `exceptAgent` is not
+    // forwarded: names are per space, and a like-named agent above is a
+    // different agent. The chain is, so depth still holds across the boundary.
+    // Nothing under the child's agents/ crosses (matchNoteTriggers' own guard
+    // would not catch the rebased path).
+    const parentWoken = await fireParentTriggers(spaceId, path, summary, base, chain)
+    return [...woken, ...parentWoken]
   } catch (err) {
     logger.warn('agents.triggers.failed', { spaceId, path, err })
     return []
   }
+}
+
+async function fireParentTriggers(
+  childSpaceId: string,
+  path: string,
+  summary: string,
+  base: Record<string, unknown>,
+  chain: EventChain,
+): Promise<string[]> {
+  if (path === 'agents' || path.startsWith('agents/')) return []
+  const child = await prisma.space.findUnique({
+    where: { id: childSpaceId },
+    select: { parentId: true, visibility: true, listing: true, flowContext: true },
+  })
+  // Read-time, like every other flow-up: a room that stops flowing context
+  // stops waking the parent on the next save.
+  if (!child?.parentId || !flowsContext(child)) return []
+  const parentId = child.parentId
+  const parentPath = rebasePath(childSpaceId, path)
+  const names = await matchNoteTriggers(parentId, parentPath)
+  if (names.length === 0) return []
+  const results = await Promise.all(
+    names.map((name) =>
+      enqueueAgentEvent({
+        spaceId: parentId,
+        agentName: name,
+        kind: 'note_written',
+        source: parentPath,
+        summary,
+        payload: { path: parentPath, subspace: childSpaceId, childPath: path, ...base },
+        dedupeKey: `note_written:${parentPath}`,
+        chain,
+      }),
+    ),
+  )
+  return names.filter((_, i) => results[i].ok).map((n) => `${parentId}/${n}`)
 }
 
 /** Retention: every row (consumed or not) older than EVENT_RETENTION_DAYS. Called from pruneRuns. */

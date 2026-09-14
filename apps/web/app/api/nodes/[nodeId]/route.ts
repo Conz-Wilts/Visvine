@@ -12,6 +12,7 @@ import { isGlobalSpace } from '@/lib/spaces/globalSpace';
 import { GLOBAL_MODE_KEY, syncGlobalRecordSafe } from '@/lib/global/record';
 import { requireApiSession } from '@/lib/api/route';
 import { syncEntityNoteFrontmatter } from '@/lib/notes/context/entityNodes';
+import { peopleFlowReadThrough } from '@/lib/directory/peopleFlowAccess';
 
 const MAX_NAME_LEN = 120;
 
@@ -68,8 +69,15 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   // personal space is likewise private to its owner. Anyone else gets a 404 so
   // the endpoint reveals nothing — not even that the node exists. The gate
   // runs before the graph is read, so a refused caller costs one row.
+  // ...or a member of the space this node's space sits inside, when that
+  // room lends its directory upward (lib/directory/peopleFlowAccess.ts) —
+  // the same read the house's directory grid already made. A read only: the
+  // PATCH below keeps the own-space gate, and the page shows the row as the
+  // room's, not the house's.
+  let viaSpace: { id: string; name: string } | null = null;
   if (node.spaceId && (await spaceMemberForbidden(session.userId, node.spaceId, session.email))) {
-    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+    viaSpace = await peopleFlowReadThrough(node.spaceId, session.userId);
+    if (!viaSpace) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
 
   // Links + connected node data in one shot, bounded: a hub's page shows its
@@ -154,6 +162,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         alias: node.alias ?? undefined,
         space_id: node.spaceId ?? undefined,
         connected_user_id: connectedUserId ?? undefined,
+        ...(viaSpace ? { via_space: viaSpace } : {}),
         createdAt: node.createdAt.toISOString(),
       },
       connectionCount,

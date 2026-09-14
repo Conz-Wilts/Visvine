@@ -151,7 +151,8 @@ export function SubspaceRow({
  * member who cannot see the room has no way to ask for it, and the ask is the
  * point. Pressing it does not switch space (there is nothing to switch to);
  * it opens the door: who is in there, and a button that puts the request in
- * front of that sub-space's admins.
+ * front of that sub-space's admins — or, for a room open to the parent's
+ * members (house door `open`), the "Join" that walks straight in.
  */
 export function LockedSubspaceRow({
   space,
@@ -169,13 +170,17 @@ export function LockedSubspaceRow({
       type="button"
       onClick={onSelect}
       tabIndex={tabbable ? 0 : -1}
-      aria-label={`${space.name} — private${space.requested ? ', access requested' : ', request access'}`}
+      aria-label={`${space.name} — private${space.houseDoor === 'open' ? ', open to members here' : space.requested ? ', access requested' : ', request access'}`}
       className={`${ROW_CLASS} !z-0 !w-[calc(100%+999px)] ${TREE_ROW_BLEED} min-w-0 gap-3 pr-4 text-left font-normal`}
       style={{ height: SUBSPACE_ROW_H, color: 'var(--shell-fg-muted, #111827)' }}
     >
       <TreeSpineJoin kind={nested} />
       <span className={`${ROW_TEXT} min-w-0 flex-1 truncate opacity-70`}>{space.name}</span>
-      {space.requested && <span className="shrink-0 text-[11px] text-text-muted">Asked</span>}
+      {space.houseDoor === 'open' ? (
+        <span className="shrink-0 text-[11px] text-text-muted">Join</span>
+      ) : (
+        space.requested && <span className="shrink-0 text-[11px] text-text-muted">Asked</span>
+      )}
       <LockIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />
     </button>
   );

@@ -16,7 +16,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { GuestManager } from '@/features/events/components/GuestManager';
@@ -35,7 +35,7 @@ import {
 import { RegistrationField } from '@/features/events/components/RegistrationField';
 import type { NBEvent, RSVPResponse } from '@/lib/types';
 import { useMapLink } from '../hooks/useMapLink';
-import { CalendarPlusIcon, CheckIcon, CircleQuestionMarkIcon, ClipboardListIcon, ClockIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
+import { BlocksIcon, CalendarPlusIcon, CheckIcon, CircleQuestionMarkIcon, ClipboardListIcon, ClockIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
 import Select from '@/components/ui/Select';
 import PageError from '@/components/ui/PageError';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
@@ -63,7 +63,8 @@ const isNoteTab = (tab: PageTab) => tab === 'context' || tab === 'raw';
 
 export default function EventDetailClient({ eventId, manage = false }: { eventId: string; manage?: boolean }) {
   const router = useRouter();
-  const { currentSpace } = useSpace();
+  const searchParams = useSearchParams();
+  const { currentSpace, joinedSpaces, spaces } = useSpace();
   const { session } = useAuth();
   const { theme: userTheme } = useTheme();
 
@@ -84,7 +85,16 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   // retract window right after arriving from a /directory context note.
   const barEdgeClass = useDockEdgeClass();
 
-  const spaceId = currentSpace?.id ?? null;
+  // `?space=<id>` names the space that owns the event when it is not the
+  // current one — a public sub-space's event opened from its parent's hub
+  // (lib/events/rollup.ts). The detail is read there; the parent's member
+  // sees it read-only, and the manage and RSVP surfaces stay in the space
+  // that owns it.
+  const linkedSpaceId = searchParams.get('space');
+  const spaceId = linkedSpaceId ?? currentSpace?.id ?? null;
+  const readOnly = !!spaceId && spaceId !== currentSpace?.id && !joinedSpaces.some((s) => s.id === spaceId);
+  const ownerSpace = readOnly ? spaces.find((s) => s.id === spaceId) ?? null : null;
+  const ownerParent = ownerSpace?.parentId ? spaces.find((s) => s.id === ownerSpace.parentId) ?? null : null;
   const applyDetail = useCallback((data: EventDetail) => {
     setEvent(data.event ?? null);
     setStats(data.stats ?? null);
@@ -236,9 +246,26 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
               )}
             </div>
 
+            {/* Read through the parent: say whose it is, and offer no controls
+                — the manage APIs refuse a non-member anyway, so nothing here
+                should look like it might work. */}
+            {readOnly && (
+              <InfoCard>
+                <p className="flex items-start gap-2 text-sm text-text-secondary">
+                  <BlocksIcon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: theme.dark }} />
+                  <span>
+                    From <span className="font-medium text-text-primary">{ownerSpace?.name ?? 'a sub-space'}</span>
+                    {ownerParent ? <>, a sub-space of <span className="font-medium text-text-primary">{ownerParent.name}</span></> : null}
+                    {' '}— shown here as it is now. To RSVP or take part, join that space
+                    {event.visibility === 'public' ? <> or use the <a href={publicUrl} className="font-semibold hover:underline" style={{ color: theme.dark }}>public page</a></> : null}.
+                  </span>
+                </p>
+              </InfoCard>
+            )}
+
             {/* host actions (manage view) / edit entry point (public view) — a
                 plain column of text buttons under the poster */}
-            <div className="flex flex-col gap-0.5 -mx-3">
+            {!readOnly && <div className="flex flex-col gap-0.5 -mx-3">
               <ToolbarBtn icon={<PencilIcon className="w-4 h-4" />} label="Edit event"
                           onClick={() => router.push(`/events/${encodeURIComponent(eventId)}/${manage ? 'edit' : 'manage'}`)} />
               {manage && (
@@ -250,7 +277,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                               onClick={() => setShowDeleteModal(true)} />
                 </>
               )}
-            </div>
+            </div>}
 
             {/* GUESTS — attendee list lives in the poster column, under the edit box */}
             {event.guestListVisible !== false && goingCount > 0 && (
@@ -394,12 +421,13 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
               )}
             </InfoCard>
 
-            {/* RSVP */}
-            <div id="rsvp-card">
+            {/* RSVP — in the space that owns the event; read through the
+                parent there is no card, the notice above says where to go. */}
+            {!readOnly && <div id="rsvp-card">
               <RsvpCard
                 event={event}
                 eventId={eventId}
-                spaceId={currentSpace.id}
+                spaceId={spaceId ?? currentSpace.id}
                 theme={theme}
                 viewer={viewer}
                 occupied={occupied}
@@ -410,7 +438,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                 sessionEmail={session?.user?.email}
                 onChanged={loadEvent}
               />
-            </div>
+            </div>}
 
             {/* ABOUT */}
             {event.description && (
@@ -434,7 +462,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
       )}
 
       {/* sticky mobile RSVP bar */}
-      {activeTab === 'overview' && !isPast && !isDraft && !viewerGoing && (
+      {activeTab === 'overview' && !readOnly && !isPast && !isDraft && !viewerGoing && (
         <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-3 px-4 py-3 bg-surface-1/90 backdrop-blur border-t border-border-subtle">
           <div className="min-w-0">
             <div className="text-[13px] font-bold text-text-primary truncate">{event.title}</div>

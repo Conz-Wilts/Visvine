@@ -56,6 +56,7 @@
  * the SAME frontmatter now: `parseAgentBrief` ignores the activation keys and
  * `parseAgentActivation` ignores the brief's.
  */
+import { parentAdministers, reachesRoom, shareTargets } from '@/lib/spaces/subspaces'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { parseModelRef, type ModelRef } from './registry'
@@ -158,6 +159,19 @@ export interface AgentBrief {
   tools: AgentToolExtra[]
   /** Agents (by name) this one may start with run_agent — empty means the tool is not offered. */
   agents: string[]
+  /**
+   * `share: all` or `share: [room ids]` — which sub-spaces of this space this
+   * brief is read into (as `parent/agents/<name>/index.md`, read-only), per
+   * docs/sub-spaces.md. 'none' is the ordinary brief.
+   */
+  share: 'none' | 'all' | string[]
+  /**
+   * `share_as: use` (default) — a room's agent may start it with run_agent
+   * and it runs HERE, as its own author. `share_as: run-in` — a copy runs
+   * inside each shared room the house governs, over that room's notes
+   * (lib/agents/hooks.ts#syncSharedCopies).
+   */
+  shareAs: 'use' | 'run-in'
   /** `dry_run: true` — writes are recorded in the transcript instead of applied. */
   dryRun: boolean
   maxTurns: number
@@ -172,6 +186,31 @@ export interface AgentBrief {
 }
 
 export type ParseBriefResult = { ok: true; brief: AgentBrief } | { ok: false; error: string }
+
+const SPACE_ID_RE = /^[a-z0-9][a-z0-9:._-]{0,80}$/i
+
+/**
+ * Which rooms get a run-in copy of a house brief: the rooms the share
+ * reaches AND the house governs — a copy runs as the house brief's author,
+ * whose standing in the room comes from governance and nowhere else
+ * (docs/sub-spaces.md). Pure: the fan-out and the settings form both read it.
+ */
+export function copyRooms<T extends { id: string; parentId?: string | null; parentAdmins?: boolean | null }>(
+  brief: Pick<AgentBrief, 'share' | 'shareAs'>,
+  rooms: readonly T[],
+): T[] {
+  if (brief.shareAs !== 'run-in' || brief.share === 'none') return []
+  return rooms.filter((r) => reachesRoom(brief.share, r.id) && parentAdministers(r))
+}
+
+/** The rooms a run-in share names that the house does NOT govern — no copy runs there, and the form says so. */
+export function ungovernedCopyRooms<T extends { id: string; parentId?: string | null; parentAdmins?: boolean | null }>(
+  brief: Pick<AgentBrief, 'share' | 'shareAs'>,
+  rooms: readonly T[],
+): T[] {
+  if (brief.shareAs !== 'run-in' || brief.share === 'none') return []
+  return rooms.filter((r) => reachesRoom(brief.share, r.id) && !parentAdministers(r))
+}
 
 const CONNECTOR_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
 
@@ -225,6 +264,31 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
   const tags = stringList(fm.tags, 'tags')
   if (!tags.ok) return tags
 
+  let share: AgentBrief['share'] = 'none'
+  if (fm.share !== undefined && fm.share !== null && fm.share !== '' && fm.share !== false) {
+    const raw = typeof fm.share === 'string' ? fm.share.trim().toLowerCase() : fm.share
+    if (raw !== 'none') {
+      if (typeof raw !== 'string' && !Array.isArray(raw) && raw !== true) {
+        return { ok: false, error: '`share` must be `all`, a list of sub-space ids, or absent' }
+      }
+      const targets = shareTargets({ share: raw })
+      if (targets === 'none') return { ok: false, error: '`share` must be `all`, a list of sub-space ids, or absent' }
+      if (Array.isArray(targets)) {
+        for (const id of targets) {
+          if (!SPACE_ID_RE.test(id)) return { ok: false, error: `"${id}" in \`share\` is not a space id` }
+        }
+      }
+      share = targets
+    }
+  }
+  let shareAs: AgentBrief['shareAs'] = 'use'
+  if (fm.share_as !== undefined && fm.share_as !== null && fm.share_as !== '') {
+    const raw = typeof fm.share_as === 'string' ? fm.share_as.trim().toLowerCase() : fm.share_as
+    if (raw === 'run-in' || raw === 'run_in' || raw === 'runin') shareAs = 'run-in'
+    else if (raw !== 'use') return { ok: false, error: '`share_as` must be `use` or `run-in`' }
+    if (share === 'none') return { ok: false, error: '`share_as` needs a `share` to apply to' }
+  }
+
   let dryRun = false
   if (fm.dry_run !== undefined && fm.dry_run !== null && fm.dry_run !== '') {
     const raw = typeof fm.dry_run === 'string' ? fm.dry_run.trim().toLowerCase() : fm.dry_run
@@ -254,6 +318,8 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
       connectors: connectors.list,
       tools: extras,
       agents: agents.list,
+      share,
+      shareAs,
       dryRun,
       maxTurns,
       tags: [...new Set(tags.list.map((t) => t.trim()).filter(Boolean))],
@@ -576,15 +642,23 @@ export function globProblem(glob: string): string | null {
   const re = globToRegExp(g)
   // A trigger may never fire on the agents' own notes: an agent that reacts to
   // a brief, an activation or a note another run wrote is a loop waiting to happen.
+  // (A sub-space's briefs, read through `subspaces/<id>/agents/`, are kept
+  // out at match time instead — `matchesAnyGlob` — so `subspaces/**` stays a
+  // legal way for a parent's agent to watch its public sub-spaces.)
   for (const probe of ['agents/probe/index.md', 'agents/probe/activation.md', 'agents/probe/report.md', 'agents/probe.md']) {
     if (re.test(probe)) return 'could match under agents/ — name a folder such as people/** instead'
   }
   return null
 }
 
-/** Does `path` match any of the globs? Paths under agents/ never match. */
+/**
+ * Does `path` match any of the globs? Paths under agents/ never match — nor
+ * a sub-space's agents/ read through `subspaces/<id>/` (lib/spaces/subspaces.ts):
+ * another space's briefs are no more a trigger than this one's.
+ */
 export function matchesAnyGlob(path: string, globs: string[]): boolean {
   if (path === 'agents' || path.startsWith('agents/')) return false
+  if (/^subspaces\/[^/]+\/agents(\/|$)/.test(path)) return false
   return globs.some((g) => globRegExp(g).test(path))
 }
 

@@ -91,6 +91,19 @@ export function fetchAuthoredTool(
   )
 }
 
+/** Share the Tool with the space's sub-spaces (`share:` on its index note) — admin only. */
+export function setAuthoredToolShare(
+  spaceId: string,
+  name: string,
+  share: 'none' | 'all' | string[],
+): Promise<{ tool: AuthoredToolView['tool'] }> {
+  return fetchJsonBody(
+    `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
+    'PATCH',
+    { share },
+  )
+}
+
 /**
  * Scaffold a new Tool in a space — the Create panel's Tool tile. Any member with
  * write grants under `tools/`; the server refuses a taken or malformed name.

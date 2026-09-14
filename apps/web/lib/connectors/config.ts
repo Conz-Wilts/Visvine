@@ -19,6 +19,7 @@
  *     past the egress gate — and empty `hosts` means no network at all.
  */
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
+import { shareTargets } from '@/lib/spaces/subspaces'
 import {
   identitySecretName,
   parseConnectorIdentity,
@@ -616,6 +617,31 @@ export interface ConnectorPerimeter {
    * nothing, so a connection made before the block existed keeps working.
    */
   tools: ToolPolicy
+  /**
+   * Who else may run this connector (`share:` in the frontmatter). `'none'`
+   * — the space's own. `'all'` — every sub-space of this space; a list — the
+   * named sub-spaces only. A room it reaches resolves it by name, with THIS
+   * space's secrets, linked accounts, quota and audit trail
+   * (lib/connectors/service.ts#readConnectorNote), read into its context as
+   * `parent/connectors/<name>.md` (docs/sub-spaces.md). The flag is the whole
+   * grant: nothing in the sub-space widens or narrows it.
+   */
+  share: ConnectorShare
+}
+
+/** `'all'`, the room ids named, or `'none'` (lib/spaces/subspaces.ts#shareTargets). */
+export type ConnectorShare = 'none' | 'all' | string[]
+
+/**
+ * `share:` → who else resolves this connector. Absent is the space's own;
+ * `all` (or the older `subspaces`) is every room; a list names rooms. A room
+ * id that names no room shares with nobody, harmlessly.
+ */
+function parseConnectorShare(raw: unknown): { ok: true; share: ConnectorShare } | { ok: false; error: string } {
+  if (raw !== undefined && raw !== null && raw !== 'none' && typeof raw !== 'string' && typeof raw !== 'boolean' && !Array.isArray(raw)) {
+    return { ok: false, error: '`share:` must be `all`, a list of sub-space ids, or absent' }
+  }
+  return { ok: true, share: shareTargets({ share: raw }) }
 }
 
 
@@ -789,12 +815,12 @@ export function perimeterFromLegacy(config: ConnectorConfig): {
       // paths, so a base_url with a path prefix must be folded into each rule.
       const prefix = new URL(config.baseUrl).pathname.replace(/\/$/, '')
       const allow = config.allow.map((rule) => ({ ...rule, path: prefix + rule.path }))
-      return { perimeter: { hosts, allow, env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, login: null, tools: OPEN_TOOL_POLICY }, warnings: [] }
+      return { perimeter: { hosts, allow, env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, login: null, tools: OPEN_TOOL_POLICY, share: 'none' }, warnings: [] }
     }
     case 'postgres':
     case 'mysql':
       return {
-        perimeter: { hosts: [], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, login: null, tools: OPEN_TOOL_POLICY },
+        perimeter: { hosts: [], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, login: null, tools: OPEN_TOOL_POLICY, share: 'none' },
         warnings: [
           `This legacy ${config.alias} note keeps its database host inside the DSN secret, so the ` +
             'perimeter cannot allow it — add `hosts:` (e.g. "db.example.com:5432") or run the v2 migration',
@@ -807,7 +833,7 @@ export function perimeterFromLegacy(config: ConnectorConfig): {
               'Legacy per-tool allow rules cannot be tunnel-enforced under v2 — they become guidance in the note body after migration',
             ]
           : []
-      return { perimeter: { hosts: [hostOf(config.url)], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, login: null, tools: OPEN_TOOL_POLICY }, warnings }
+      return { perimeter: { hosts: [hostOf(config.url)], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null, mcp: null, login: null, tools: OPEN_TOOL_POLICY, share: 'none' }, warnings }
     }
   }
 }
@@ -922,6 +948,9 @@ export function parseConnectorPerimeter(fm: NoteFrontmatter): ParsePerimeterResu
 
   const login = parseConnectorLogin((fm as Record<string, unknown>).login, hosts.hosts)
   if (!login.ok) return { ok: false, error: login.error }
+
+  const share = parseConnectorShare((fm as Record<string, unknown>).share)
+  if (!share.ok) return { ok: false, error: share.error }
   if (login.login && (!env.env.LOGIN_USER || !env.env.LOGIN_PASSWORD)) {
     return { ok: false, error: '`login:` needs `env.LOGIN_USER` and `env.LOGIN_PASSWORD` (a {{secret:…}} ref)' }
   }
@@ -941,6 +970,7 @@ export function parseConnectorPerimeter(fm: NoteFrontmatter): ParsePerimeterResu
       mcp: mcp.mcp,
       login: login.login,
       tools: tools.policy,
+      share: share.share,
     },
     legacy: null,
     warnings: [],

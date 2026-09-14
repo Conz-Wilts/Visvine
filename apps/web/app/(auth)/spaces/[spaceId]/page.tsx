@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CalendarIcon, CalendarPlusIcon, CheckIcon, ChevronRightIcon, EarthIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
+import { viewerDoorFor } from '@/features/spaces/lib/viewerDoor';
 import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import { hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, type NodeTypeConfig } from '@/lib/types';
@@ -41,6 +42,8 @@ interface OverviewMember {
 
 interface OverviewEvent {
   id: string;
+  /** A public sub-space's event, read through this space (lib/events/rollup.ts). */
+  viaSpace?: { id: string; name: string } | null;
   title: string;
   startAt: string;
   endAt?: string;
@@ -91,7 +94,14 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
   const { spaceId: rawSpaceId } = use(params);
   const spaceId = decodeURIComponent(rawSpaceId);
   const router = useRouter();
-  const { joinSpace, leaveSpace, setCurrentSpace, refreshSpace } = useSpace();
+  const { joinSpace, leaveSpace, setCurrentSpace, refreshSpace, spaces, joinedSpaces } = useSpace();
+  // The door this viewer meets, from the client's copy of the dials; a space
+  // not in the list (a secret room reached by link) gets the invite-only word.
+  const viewerDoor = useMemo(() => {
+    const listed = spaces.find((s) => s.id === spaceId);
+    return listed ? viewerDoorFor(listed, new Set(joinedSpaces.map((s) => s.id))) : 'deny';
+  }, [spaces, joinedSpaces, spaceId]);
+  const [asked, setAsked] = useState(false);
 
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -147,7 +157,8 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
   const handleJoin = async () => {
     setJoining(true);
     try {
-      await joinSpace(spaceId);
+      const status = await joinSpace(spaceId);
+      if (status === 'pending') setAsked(true);
       await Promise.all([fetchOverview(true), refreshSpace()]);
     } catch {
       // join API errors (e.g. invite-only) just leave the button enabled
@@ -254,11 +265,12 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                   </button>
                 </>
               ) : (
-                <button onClick={handleJoin} disabled={joining}
+                <button onClick={handleJoin} disabled={joining || asked || viewerDoor === 'deny'}
+                  title={viewerDoor === 'deny' ? 'This space is invite only' : undefined}
                   className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold whitespace-nowrap text-white transition hover:opacity-95 active:scale-[0.99] disabled:opacity-60"
                   style={{ background: theme.base }}>
                   {joining ? <LoaderCircleIcon className="w-4 h-4 animate-spin" /> : <PlusIcon className="w-4 h-4" />}
-                  Join space
+                  {viewerDoor === 'active' ? 'Join space' : viewerDoor === 'pending' ? (asked ? 'Asked to join' : 'Ask to join') : 'Invite only'}
                 </button>
               )}
             </div>
@@ -410,15 +422,23 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 function EventRow({ event, theme }: { event: OverviewEvent; theme: ThemePalette }) {
   const { month, day } = formatEventDateShort(event.startAt);
   const accent = event.themeColor || theme.base;
+  // A sub-space's event opens in the space that owns it: the link names that
+  // space so the detail page reads it there rather than in this one.
+  const href = event.viaSpace
+    ? `/events/${encodeURIComponent(event.id)}?space=${encodeURIComponent(event.viaSpace.id)}`
+    : `/events/${encodeURIComponent(event.id)}`;
   return (
-    <Link href={`/events/${encodeURIComponent(event.id)}`}
+    <Link href={href}
           className="-mx-2 flex items-center gap-4 rounded-lg px-2 py-3 transition-colors hover:bg-surface-2">
       <span className="flex flex-col items-center w-11 flex-none leading-none">
         <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: accent }}>{month}</span>
         <span className="mt-0.5 text-xl font-bold font-open-sauce text-text-primary tabular-nums">{day}</span>
       </span>
       <span className="min-w-0 flex-1">
-        <b className="block text-[14px] font-semibold text-text-primary truncate">{event.title}</b>
+        <span className="flex items-center gap-2 min-w-0">
+          <b className="block text-[14px] font-semibold text-text-primary truncate">{event.title}</b>
+          {event.viaSpace && <Chip tone="muted">{event.viaSpace.name}</Chip>}
+        </span>
         <span className="block mt-0.5 text-[13px] text-text-muted truncate">
           {formatEventTime(event.startAt)}
           {event.locationLabel ? ` · ${event.locationLabel}` : event.eventType === 'virtual' ? ' · Virtual' : ''}
