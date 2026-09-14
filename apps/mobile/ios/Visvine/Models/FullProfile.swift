@@ -3,7 +3,7 @@ import Foundation
 /// Rich profile — mirrors src/types/index.ts `FullProfile`.
 struct FullProfile: Codable, Identifiable {
     let id: String
-    var communityId: String?
+    var spaceId: String?
     var name: String
     var subtitle: String?
     var bio: String?

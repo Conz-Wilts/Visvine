@@ -20,13 +20,13 @@ test('an install token round-trips', async () => {
   const token = await mintFrameToken({
     kind: 'install',
     installId: 'inst_1',
-    spaceId: 'community:acme',
+    spaceId: 'space:acme',
     viewerId: 'user_1',
   })
   assert.deepEqual(await verifyFrameToken(token), {
     kind: 'install',
     installId: 'inst_1',
-    spaceId: 'community:acme',
+    spaceId: 'space:acme',
     viewerId: 'user_1',
   })
 })
@@ -35,20 +35,20 @@ test('a preview token round-trips', async () => {
   const token = await mintFrameToken({
     kind: 'preview',
     name: 'deal-pipeline',
-    spaceId: 'community:acme',
+    spaceId: 'space:acme',
     viewerId: 'user_1',
   })
   assert.deepEqual(await verifyFrameToken(token), {
     kind: 'preview',
     name: 'deal-pipeline',
-    spaceId: 'community:acme',
+    spaceId: 'space:acme',
     viewerId: 'user_1',
   })
 })
 
 test('an expired token is refused', async () => {
   const token = await mintFrameToken(
-    { kind: 'install', installId: 'inst_1', spaceId: 'community:acme', viewerId: 'user_1' },
+    { kind: 'install', installId: 'inst_1', spaceId: 'space:acme', viewerId: 'user_1' },
     -10,
   )
   assert.equal(await verifyFrameToken(token), null)
@@ -60,7 +60,7 @@ test('a token for another audience is refused', async () => {
   const sessionish = await new SignJWT({
     kind: 'install',
     installId: 'inst_1',
-    spaceId: 'community:acme',
+    spaceId: 'space:acme',
     viewerId: 'user_1',
   })
     .setProtectedHeader({ alg: 'HS256' })
@@ -72,7 +72,7 @@ test('a token for another audience is refused', async () => {
   const wrongAud = await new SignJWT({
     kind: 'install',
     installId: 'inst_1',
-    spaceId: 'community:acme',
+    spaceId: 'space:acme',
     viewerId: 'user_1',
   })
     .setProtectedHeader({ alg: 'HS256' })
@@ -88,7 +88,7 @@ test('a bad signature or a malformed payload is refused', async () => {
   const foreign = await new SignJWT({
     kind: 'install',
     installId: 'inst_1',
-    spaceId: 'community:acme',
+    spaceId: 'space:acme',
     viewerId: 'user_1',
   })
     .setProtectedHeader({ alg: 'HS256' })
@@ -103,12 +103,12 @@ test('a bad signature or a malformed payload is refused', async () => {
   // runtime could load — a missing field must be a rejection, not a route
   // handler holding a half-filled object.
   for (const payload of [
-    { kind: 'install', spaceId: 'community:acme', viewerId: 'user_1' }, // no installId
-    { kind: 'preview', spaceId: 'community:acme', viewerId: 'user_1' }, // no name
+    { kind: 'install', spaceId: 'space:acme', viewerId: 'user_1' }, // no installId
+    { kind: 'preview', spaceId: 'space:acme', viewerId: 'user_1' }, // no name
     { kind: 'install', installId: 'inst_1', viewerId: 'user_1' }, // no spaceId
-    { kind: 'install', installId: 'inst_1', spaceId: 'community:acme' }, // no viewerId
-    { kind: 'admin', installId: 'inst_1', spaceId: 'community:acme', viewerId: 'user_1' },
-    { installId: 'inst_1', spaceId: 'community:acme', viewerId: 'user_1' }, // no kind
+    { kind: 'install', installId: 'inst_1', spaceId: 'space:acme' }, // no viewerId
+    { kind: 'admin', installId: 'inst_1', spaceId: 'space:acme', viewerId: 'user_1' },
+    { installId: 'inst_1', spaceId: 'space:acme', viewerId: 'user_1' }, // no kind
   ]) {
     const token = await new SignJWT(payload)
       .setProtectedHeader({ alg: 'HS256' })

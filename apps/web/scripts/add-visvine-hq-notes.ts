@@ -108,7 +108,7 @@ const segmentPath = (label: Segment) => `/segments/${slugify(label)}.md`
 /** Only emits a link when the segment page exists — rule 5 of the verifier. */
 const segmentLink = (label: Segment) =>
   model.orgsBySegment.has(label) ? link(label, segmentPath(label)) : label
-const orgPath = (org: ResolvedOrg) => `/communities/${org.slug}/index.md`
+const orgPath = (org: ResolvedOrg) => `/spaces/${org.slug}/index.md`
 const orgLink = (org: ResolvedOrg) => link(org.org.name, orgPath(org))
 const personPath = (person: ResolvedPerson) => `/people/${person.slug}/index.md`
 const personLink = (person: ResolvedPerson) => link(person.name, personPath(person))
@@ -198,7 +198,7 @@ competitors. If a buyer does not have members, we are the wrong tool.
 
 note(
   shared,
-  'communities/index.md',
+  'spaces/index.md',
   {
     title: 'Organisations',
     description: `all ${model.orgs.length} of them: customers, design partners, pipeline, investors and partners`,
@@ -209,8 +209,8 @@ ${model.orgs.length} organisations: ${customers.length} paying customers, ${desi
 ${prospects.length} in the pipeline, ${investors.length} investors and ${partners.length} delivery partners. Every one of
 them is a folder here, and the folder's index is the record.
 
-Cut a different way: ${link('Customers', '/communities/customers.md')} by revenue,
-${link('Investors', '/communities/investors.md')} by cheque, ${link('Partners', '/communities/partners.md')} by what they
+Cut a different way: ${link('Customers', '/spaces/customers.md')} by revenue,
+${link('Investors', '/spaces/investors.md')} by cheque, ${link('Partners', '/spaces/partners.md')} by what they
 do for us, or ${link('Segments', '/segments/index.md')} for the same list grouped by the kind of
 space it is.
 `,
@@ -272,17 +272,17 @@ for (const resolved of model.orgs) {
   const links = [ext('Website', `https://${resolved.slug}.example.com`)].filter(Boolean)
   if (links.length) sections.push('', '## Links', `- ${links.join('   ·   ')}`)
 
-  const footer: string[] = [`Part of ${link('Organisations', '/communities/index.md')}`, segmentLink(org.segment)]
-  if (org.relationship === 'customer') footer.push(link('Customers', '/communities/customers.md'))
+  const footer: string[] = [`Part of ${link('Organisations', '/spaces/index.md')}`, segmentLink(org.segment)]
+  if (org.relationship === 'customer') footer.push(link('Customers', '/spaces/customers.md'))
   if (org.relationship === 'prospect') footer.push(link('Pipeline', '/deals/pipeline.md'))
-  if (org.relationship === 'investor') footer.push(link('Investors', '/communities/investors.md'))
-  if (org.relationship === 'partner') footer.push(link('Partners', '/communities/partners.md'))
+  if (org.relationship === 'investor') footer.push(link('Investors', '/spaces/investors.md'))
+  if (org.relationship === 'partner') footer.push(link('Partners', '/spaces/partners.md'))
   sections.push('', '---', footer.join(' · '))
 
   // An organisation is a folder: its record is the folder's index.
   note(
     shared,
-    `communities/${resolved.slug}/index.md`,
+    `spaces/${resolved.slug}/index.md`,
     {
       type: 'Company',
       title: org.name,
@@ -294,7 +294,7 @@ for (const resolved of model.orgs) {
   )
 }
 
-note(shared, 'communities/customers.md', { type: 'Note', title: 'Customers', description: 'who pays us, what they pay, and who is wobbling', tags: ['customers', 'revenue'] }, `
+note(shared, 'spaces/customers.md', { type: 'Note', title: 'Customers', description: 'who pays us, what they pay, and who is wobbling', tags: ['customers', 'revenue'] }, `
 ${customers.length} paying spaces, ${perMonth(totalMrr)} of recurring revenue, ${totalSeats} seats
 across them and the design partners.
 
@@ -322,7 +322,7 @@ ${atRisk.length ? atRisk.map((o) => `- ${orgLink(o)} — ${HEALTH_LABEL[o.org.he
 The numbers behind this are in ${link('Revenue roll-up', '/data/revenue-roll-up.md')} and ${link('Retention', '/data/retention.md')}.
 `)
 
-note(shared, 'communities/investors.md', { type: 'Note', title: 'Investors', description: 'the cap table, and the one note they reach', tags: ['investors', 'company'] }, `
+note(shared, 'spaces/investors.md', { type: 'Note', title: 'Investors', description: 'the cap table, and the one note they reach', tags: ['investors', 'company'] }, `
 ${money(raised)} raised across ${investors.length} investors. The monthly update goes to all of
 them on the 5th; the quarterly call is a calendar item, not a deck.
 
@@ -335,10 +335,10 @@ The one board seat sits with ${orgByName('Hillcrest Seed Partners')}. What they 
 that the wider team does not is the ${link('revenue roll-up', '/data/revenue-roll-up.md')} — the single
 note the Board alias grants, and the tightest grant in this space.
 
-Back to ${link('Organisations', '/communities/index.md')}.
+Back to ${link('Organisations', '/spaces/index.md')}.
 `)
 
-note(shared, 'communities/partners.md', { type: 'Note', title: 'Partners', description: 'who does the work we are bad at', tags: ['partners'] }, `
+note(shared, 'spaces/partners.md', { type: 'Note', title: 'Partners', description: 'who does the work we are bad at', tags: ['partners'] }, `
 The people who do the work we are bad at: migrations, change management inside
 agencies, and bespoke Tools.
 
@@ -347,7 +347,7 @@ ${[...partners].sort((a, b) => a.org.name.localeCompare(b.org.name)).map((o) => 
 Partner-sourced customers are worth tracking separately: they onboard faster and
 churn less, because somebody else did the hard part properly.
 
-Back to ${link('Organisations', '/communities/index.md')}.
+Back to ${link('Organisations', '/spaces/index.md')}.
 `)
 
 // ---- people ------------------------------------------------------------------
@@ -364,7 +364,7 @@ Each one is a folder, so what you learn about somebody has a place to live besid
 their record rather than in a note nobody finds again.
 
 Just our side is in ${link('Team', '/team/index.md')}. Everybody else reaches us through
-whichever organisation they belong to, over in ${link('Organisations', '/communities/index.md')}.
+whichever organisation they belong to, over in ${link('Organisations', '/spaces/index.md')}.
 `,
 )
 
@@ -458,7 +458,7 @@ ${paying.length} paying, ${perMonth(mrr)}, ${list.length} organisations tracked 
 
 ${list.map((o) => `- ${orgLink(o)} — ${joinDot([RELATIONSHIP_LABEL[o.org.relationship], o.org.plan, o.org.stage])}`).join('\n')}
 
-Part of ${link('Segments', '/segments/index.md')} · ${link('Organisations', '/communities/index.md')}
+Part of ${link('Segments', '/segments/index.md')} · ${link('Organisations', '/spaces/index.md')}
 `,
   )
 }
@@ -494,7 +494,7 @@ note(shared, 'team/rituals.md', { type: 'Note', title: 'Rituals', description: '
 - **Monday pipeline, 9am.** Fifteen minutes on the ${link('pipeline', '/deals/pipeline.md')}. Stage changes
   only; discussion goes to the channel.
 - **Design partner office hours, Thursday.** 45 minutes, no slides. The list is in
-  ${link('Customers', '/communities/customers.md')}.
+  ${link('Customers', '/spaces/customers.md')}.
 - **Support triage, Friday.** Every ticket becomes a fix, a doc, or a note saying
   why not.
 - **Monthly investor update, the 5th.** Numbers from the
@@ -761,7 +761,7 @@ ${STAGE_ORDER.map((stage) => {
 - **Migrations** — ${orgByName('Southern Manufacturers Federation')} will not trial until their old
   database can come across, which is ${orgByName('Northlight Consulting')}'s work, not ours.
 
-Won deals turn into rows in ${link('Customers', '/communities/customers.md')}.
+Won deals turn into rows in ${link('Customers', '/spaces/customers.md')}.
 `)
 
 for (const o of prospects.filter((p) => p.org.stage === 'Contract' || p.org.stage === 'Proposal')) {

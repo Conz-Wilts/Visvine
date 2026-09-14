@@ -301,7 +301,7 @@ export const TOOL_CUSTOM_RAIL_ICON = 'custom'
  * product — a Tool replacing one could hide a member's profile or a space's
  * home. Those types accept `mode: tab` only. The list carries the entity kinds
  * plus `tool` and `index`, and entityKindOf covers the synonyms data still
- * holds ('community', 'org', 'people'), so `type: community` can't sneak a page
+ * holds ('space', 'org', 'people'), so `type: space` can't sneak a page
  * past under an old spelling.
  */
 const BUILT_IN_TYPES = new Set([

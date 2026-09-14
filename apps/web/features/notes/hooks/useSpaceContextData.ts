@@ -18,7 +18,7 @@ export function clearContextCache(spaceId?: string) {
 export function useSpaceContextData() {
   const { data, loading, error, space, refresh } = useCachedSpaceResource<ContextData>({
     resourceKey: RESOURCE_KEY,
-    path: id => `/api/communities/${id}/context`,
+    path: id => `/api/spaces/${id}/context`,
     // Fetch from API which merges base context + events
     parse: json => {
       const raw = json as ContextData;

@@ -22,7 +22,7 @@ const DOMAIN = 'visvine.com'
 function message(over: Partial<InboundMessage> = {}): InboundMessage {
   return {
     channel: 'email' as ChannelKind,
-    spaceId: 'community:blackbird-ventures',
+    spaceId: 'space:blackbird-ventures',
     agentName: 'weekly-digest',
     from: { email: 'someone@example.com', display: 'Someone' },
     subject: 'the March expenses',

@@ -40,7 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
-import com.visvine.mobile.ui.viewmodel.CommunityViewModel
+import com.visvine.mobile.ui.viewmodel.SpaceViewModel
 import com.visvine.mobile.ui.viewmodel.ProfileViewModel
 
 
@@ -51,13 +51,13 @@ fun ProfileScreen(
     onEditProfile: () -> Unit,
     onSettings: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel(),
-    communityViewModel: CommunityViewModel = hiltViewModel(),
+    spaceViewModel: SpaceViewModel = hiltViewModel(),
 ) {
     val colors = VisvineTheme.colors
     val state by viewModel.state.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
-    val communities by communityViewModel.communities.collectAsStateWithLifecycle()
-    val current by communityViewModel.current.collectAsStateWithLifecycle()
+    val spaces by spaceViewModel.spaces.collectAsStateWithLifecycle()
+    val current by spaceViewModel.current.collectAsStateWithLifecycle()
     var showSignOut by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
@@ -107,18 +107,18 @@ fun ProfileScreen(
                 }
             }
 
-            // Communities
+            // Spaces
             Section {
                 SectionTitle("Spaces")
-                communities.forEach { community ->
-                    val active = current?.id == community.id
+                spaces.forEach { space ->
+                    val active = current?.id == space.id
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Box(Modifier.size(8.dp).clip(CircleShape).background(colors.accent))
-                        Text(community.name, color = if (active) colors.accent else colors.textSecondary, fontSize = 16.sp, fontWeight = if (active) FontWeight.Medium else FontWeight.Normal, modifier = Modifier.weight(1f))
+                        Text(space.name, color = if (active) colors.accent else colors.textSecondary, fontSize = 16.sp, fontWeight = if (active) FontWeight.Medium else FontWeight.Normal, modifier = Modifier.weight(1f))
                         if (active) Icon(AppIcons.CircleCheck, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
                     }
                 }

@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  // A path under spaces/<id>/ is a sub-space's note shown here read-only
+  // A path under subspaces/<id>/ is a sub-space's note shown here read-only
   // (lib/notes/federation.ts): readable exactly when its reader may read it,
   // never writable or manageable from this space, and never a gate — the
   // editor must not offer "request access" to a space this one only reads.

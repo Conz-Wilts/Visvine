@@ -104,7 +104,7 @@ async function auditResources(cutoff: number, report: AuditReport): Promise<void
 
 /**
  * The media bucket. Objects are `<prefix>/<entityId>/<variant>.webp`, so the
- * test is whether that entity is still live — a Space for `communities/`, a Node
+ * test is whether that entity is still live — a Space for `spaces/`, a Node
  * for the other three.
  *
  * Deliberately does NOT check `imageUrl`: clearing the URL without deleting the

@@ -124,7 +124,7 @@ export default function MachinePane({
 
   const reload = useCallback(async () => {
     try {
-      const next = await fetchJson<TimelineResponse>(`/api/communities/${spaceId}/vm/timeline?agent=${encodeURIComponent(agentName)}&limit=60`);
+      const next = await fetchJson<TimelineResponse>(`/api/spaces/${spaceId}/vm/timeline?agent=${encodeURIComponent(agentName)}&limit=60`);
       setData(next);
       setError(null);
     } catch (e) {
@@ -166,7 +166,7 @@ export default function MachinePane({
     setError(null);
     setConnecting(true);
     try {
-      const { url } = await fetchJson<{ url: string }>(`/api/communities/${spaceId}/vm/watch?agent=${encodeURIComponent(agentName)}`, {
+      const { url } = await fetchJson<{ url: string }>(`/api/spaces/${spaceId}/vm/watch?agent=${encodeURIComponent(agentName)}`, {
         method: 'POST',
       });
       const socket = new WebSocket(url);

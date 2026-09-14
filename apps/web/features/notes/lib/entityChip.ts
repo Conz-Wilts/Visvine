@@ -1,5 +1,5 @@
 // Tiptap extension that renders directory-entity links (people/<slug>.md,
-// communities/<slug>.md) as an inline mention — `⬛ Name`, where the avatar square
+// spaces/<slug>.md) as an inline mention — `⬛ Name`, where the avatar square
 // only appears when the entity has a real photo. Like the Hashtag extension it
 // is decoration-only: the stored markdown stays a plain OKF link
 // `[Name](/people/<slug>.md)`, and we only layer a ProseMirror decoration

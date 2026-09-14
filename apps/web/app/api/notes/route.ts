@@ -3,7 +3,7 @@
 // broken links). Reads only — see /item for mutations.
 // Shared-context reads go through the visibility lens, so private folders the
 // caller doesn't belong to never appear (personal contexts pass through unfiltered).
-// A public sub-space's index rides along under `spaces/<id>/` (lib/notes/federation.ts).
+// A public sub-space's index rides along under `subspaces/<id>/` (lib/notes/federation.ts).
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireContext } from '@/lib/notes/api'

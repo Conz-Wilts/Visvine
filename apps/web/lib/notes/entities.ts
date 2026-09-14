@@ -1,4 +1,4 @@
-// Pure helpers mapping directory entities (person/community Nodes) to their
+// Pure helpers mapping directory entities (person/space Nodes) to their
 // canonical per-entity note path, and back. A `[[Craig Piggott]]` mention is
 // stored as an ordinary OKF link to this path, so the note that records context
 // about the entity is a real note — context, backlinks, and search all work with
@@ -21,9 +21,9 @@ export type EntityKind =
   | 'tool'
   | 'model'
 
-// `space` is the org kind (a group, organisation or community recorded in the
+// `space` is the org kind (a group, organisation or space recorded in the
 // directory); there is no separate `company`
-// kind, so a company, group or org note lives in communities/ beside the note
+// kind, so a company, group or org note lives in spaces/ beside the note
 // for the space it sits in. Only section/channel are pure structure, hidden by
 // default in the context view and the directory grid (see
 // STRUCTURAL_NODE_TYPES in lib/types/context.ts).
@@ -74,25 +74,26 @@ export interface EntityNodeLike {
 const PEOPLE_DIR = 'people'
 const RESOURCES_DIR = 'resources'
 const EVENTS_DIR = 'events'
-const COMMUNITIES_DIR = 'communities'
 const SPACES_DIR = 'spaces'
+const SECTIONS_DIR = 'sections'
 const CHANNELS_DIR = 'channels'
 const CONNECTORS_DIR = 'connectors'
 const AGENTS_DIR = 'agents'
 const TOOLS_DIR = 'tools'
 const MODELS_DIR = 'models'
 
-// The dirs kept their pre-rename names on purpose: a note path is storage AND
-// link identity (every inbound [[mention]] resolves against it), so renaming
-// the folders would mean bulk-moving every entity note and rewriting every
-// link. The kind→dir map absorbs the vocabulary rename instead — org spaces
-// live in communities/, channel sections in spaces/.
+// A note path is storage AND link identity (every inbound [[mention]] resolves
+// against it), so a dir is renamed only by moving every note under it and
+// rewriting every link — scripts/rename-community-to-space.ts does both. Org
+// spaces live in spaces/, channel sections in sections/, and a sub-space's
+// grafted context is subspaces/ (lib/spaces/subspaces.ts), which is not an
+// entity namespace at all.
 const ENTITY_DIRS: Record<EntityKind, string> = {
   person: PEOPLE_DIR,
   resource: RESOURCES_DIR,
   event: EVENTS_DIR,
-  space: COMMUNITIES_DIR,
-  section: SPACES_DIR,
+  space: SPACES_DIR,
+  section: SECTIONS_DIR,
   channel: CHANNELS_DIR,
   connector: CONNECTORS_DIR,
   agent: AGENTS_DIR,
@@ -150,10 +151,12 @@ export function isFolderOnlyEntityKind(kind: EntityKind | null | undefined): boo
 // Map a node `type` to an entity kind (null for non-entity types). Liberal so it
 // copes with 'person'/'people' and with every spelling organisations have worn:
 // 'organization'/'org'/'group'/'company'/'community' all mean 'space' now, and
-// all land in communities/. Mirrors TYPE_SYNONYMS in lib/types/context.ts.
+// all land in spaces/. Mirrors TYPE_SYNONYMS in lib/types/context.ts.
 // NOTE: the string 'space' resolves to the ORG kind — structural rows that
 // carried type 'space' pre-rename are migrated to 'section' by
 // scripts/rename-community-to-space.ts, so no ambiguity remains in data.
+// 'community'/'communities' stay accepted for the same reason TYPE_SYNONYMS
+// keeps them: a row written before the rename still renders as what it is.
 export function entityKindOf(type: string | null | undefined): EntityKind | null {
   const t = (type ?? '').trim().toLowerCase()
   if (t === 'person' || t === 'people') return 'person'
@@ -255,7 +258,7 @@ export function adoptedNotePath(node: EntityNodeLike): string | null {
   return parseEntityHref(raw) ? null : raw
 }
 
-// The flat form: person → people/<slug>.md, space → communities/<slug>.md,
+// The flat form: person → people/<slug>.md, space → spaces/<slug>.md,
 // resource → resources/<slug>.md. Null if the node isn't an entity kind.
 //
 // For a FOLDER-ONLY kind this path is the derivation base the folder and index
@@ -346,7 +349,7 @@ export function canonicalEntityPath(path: string): string {
 // Namespaces where EITHER form names the entity — '<ns>/<slug>/index.md', the
 // folder, or '<ns>/<slug>.md': the flat alias of a folder-only kind, or a lazy
 // kind's note before it converts (see FOLDER_ONLY_ENTITY_KINDS).
-const FLAT_ENTITY_NS_RE = 'people|resources|events|communities|spaces|channels|connectors|agents|models'
+const FLAT_ENTITY_NS_RE = 'people|resources|events|spaces|sections|channels|connectors|agents|models'
 // Namespaces where only '<ns>/<slug>/index.md' names the entity: a tool's flat
 // path is an ordinary note.
 const FOLDER_ENTITY_NS_RE = 'tools'
@@ -447,8 +450,8 @@ export function entityKindOfDir(path: string): EntityKind | null {
   if (path.startsWith(`${PEOPLE_DIR}/`)) return 'person'
   if (path.startsWith(`${RESOURCES_DIR}/`)) return 'resource'
   if (path.startsWith(`${EVENTS_DIR}/`)) return 'event'
-  if (path.startsWith(`${COMMUNITIES_DIR}/`)) return 'space'
-  if (path.startsWith(`${SPACES_DIR}/`)) return 'section'
+  if (path.startsWith(`${SPACES_DIR}/`)) return 'space'
+  if (path.startsWith(`${SECTIONS_DIR}/`)) return 'section'
   if (path.startsWith(`${CHANNELS_DIR}/`)) return 'channel'
   if (path.startsWith(`${CONNECTORS_DIR}/`)) return 'connector'
   if (path.startsWith(`${AGENTS_DIR}/`)) return 'agent'
@@ -529,7 +532,7 @@ export function agentOfRevisionStamp(origin: string | undefined, model: string |
 }
 
 // True when `path` IS one of the entity namespaces itself ('people',
-// 'communities', …). Those folders are identity rather than organisation: every
+// 'spaces', …). Those folders are identity rather than organisation: every
 // entity note's path is derived from its node (entityNotePath) and every
 // inbound [[mention]] resolves against it, so the namespace can't be moved or
 // nested, and the only folders it holds are entity folders (an entity's own
@@ -594,10 +597,10 @@ export function structuralFolders(config: SpaceFeatureConfig | null | undefined)
 // Resolve an entity-note path back to its directory node id via the loaded node
 // map. Node ids are NOT reconstructible from paths by string surgery — legacy
 // data still carries retired prefixes ('org:halter', 'group:halter') alongside
-// today's 'community:halter' and idSlug is lossy — so the map, built by
+// today's 'space:halter' and idSlug is lossy — so the map, built by
 // entityNotePath over real
 // nodes, is the only sound reverse direction. Null for non-entity paths and for
-// entity paths whose node isn't in the map (deleted node, other community,
+// entity paths whose node isn't in the map (deleted node, other space,
 // directory still loading) — callers fall back to opening the note in place.
 export function resolveEntityNode(
   path: string,
@@ -678,7 +681,7 @@ export function linkedNotePaths(notePath: string, content: string): string[] {
   return [...out]
 }
 
-// The entity-note paths a note's body links to (people/… & communities/…),
+// The entity-note paths a note's body links to (people/… & spaces/…),
 // excluding the note itself. Frontmatter is ignored; each `[[Mention]]` is an
 // ordinary OKF markdown link, so this is just link extraction + the entity
 // namespace filter. Pure — feeds the context-link sync (lib/notes/entityLinks.ts).

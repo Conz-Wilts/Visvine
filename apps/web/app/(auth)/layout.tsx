@@ -14,8 +14,8 @@ import type { Session } from '@/features/auth/lib/auth-client';
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
   // Resolve the session and space data server-side so the client shell
   // hydrates with data instead of waterfalling paint → JS → API round-trips.
-  // Shapes match what /api/auth/session, /api/data/communities and
-  // /api/user/communities return, so provider state is identical either way.
+  // Shapes match what /api/auth/session, /api/data/spaces and
+  // /api/user/spaces return, so provider state is identical either way.
   const session = await getSession();
 
   if (!session) {

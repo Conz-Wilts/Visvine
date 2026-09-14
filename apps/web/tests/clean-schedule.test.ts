@@ -30,8 +30,8 @@ test('a sub-space and a personal space hold no schedule', () => {
 test('a sub-space folder is never in a clean scope, even targeted by hand', () => {
   const scope = buildCleanScope({ role: 'admin', canWrite: () => true })
   assert.equal(scope.inScope('people/craig/index.md'), true)
-  assert.equal(scope.inScope('spaces/team-x/notes/a.md'), false)
-  assert.equal(normalizeCleanTarget('spaces/team-x'), null)
+  assert.equal(scope.inScope('subspaces/team-x/notes/a.md'), false)
+  assert.equal(normalizeCleanTarget('subspaces/team-x'), null)
   assert.equal(normalizeCleanTarget('/deals/'), 'deals')
 })
 

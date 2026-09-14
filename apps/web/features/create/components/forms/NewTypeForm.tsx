@@ -43,7 +43,7 @@ export default function NewTypeForm({ spaceId, name: initialName, folder, onDone
   const swatch = touchedColor ? color : defaultNodeTypeColor(name || 'type');
 
   const run = useCallback(async () => {
-    await fetchJsonBody(`/api/communities/${encodeURIComponent(spaceId)}/node-types`, 'PATCH', {
+    await fetchJsonBody(`/api/spaces/${encodeURIComponent(spaceId)}/node-types`, 'PATCH', {
       name: name.trim(),
       color: swatch,
     });

@@ -11,18 +11,18 @@ final class EventsListModel {
 
     private let repo = EventsRepository()
 
-    func load(communityId: String?) async {
-        guard let communityId else { events = []; loading = false; return }
+    func load(spaceId: String?) async {
+        guard let spaceId else { events = []; loading = false; return }
         loading = true
-        await fetch(communityId)
+        await fetch(spaceId)
         loading = false
     }
-    func refresh(communityId: String?) async {
-        guard let communityId else { return }
-        await fetch(communityId)
+    func refresh(spaceId: String?) async {
+        guard let spaceId else { return }
+        await fetch(spaceId)
     }
-    private func fetch(_ communityId: String) async {
-        switch await repo.getEvents(communityId: communityId) {
+    private func fetch(_ spaceId: String) async {
+        switch await repo.getEvents(spaceId: spaceId) {
         case .success(let list): events = list; error = nil
         case .failure(let m): error = m
         }
@@ -76,7 +76,7 @@ private func sections(for events: [Event]) -> [EventSection] {
 /// a section heading, each one a title over a single line of facts.
 struct EventsListView: View {
     @Environment(ThemeStore.self) private var theme
-    @Environment(CommunityStore.self) private var community
+    @Environment(SpaceStore.self) private var space
     @Environment(SearchStore.self) private var search
     @State private var model = EventsListModel()
 
@@ -85,10 +85,10 @@ struct EventsListView: View {
     var body: some View {
         let c = theme.colors
         VStack(spacing: 0) {
-            ScreenHeader(showCommunitySelector: true, onProfile: onProfile)
+            ScreenHeader(showSpaceSelector: true, onProfile: onProfile)
             if model.loading {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if community.current == nil {
+            } else if space.current == nil {
                 EmptyStateView(text: "Select a space to view events", icon: .calendar)
                     .frame(maxHeight: .infinity)
             } else {
@@ -112,11 +112,11 @@ struct EventsListView: View {
                         .padding(.bottom, 120)
                     }
                 }
-                .refreshable { await model.refresh(communityId: community.current?.id) }
+                .refreshable { await model.refresh(spaceId: space.current?.id) }
             }
         }
         .background(c.bgPrimary)
-        .task(id: community.current?.id) { await model.load(communityId: community.current?.id) }
+        .task(id: space.current?.id) { await model.load(spaceId: space.current?.id) }
         .onAppear { search.placeholder = "Search events" }
     }
 

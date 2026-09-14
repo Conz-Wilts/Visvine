@@ -57,7 +57,7 @@ import com.visvine.mobile.ui.viewmodel.SortOrder
 
 private val TYPE_COLORS = mapOf(
     "person" to Color(0xFF2563EB),
-    "community" to Color(0xFF78D870),
+    "space" to Color(0xFF78D870),
     "resource" to Color(0xFFF59E0B),
     "event" to Color(0xFF9333EA),
 )

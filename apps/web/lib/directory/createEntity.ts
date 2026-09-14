@@ -43,7 +43,7 @@ import { findAliasByRef, type SpaceAlias } from '@/lib/types/context'
  * those under "Date to be set").
  *
  * A `space` here is a group or organisation the space keeps a record of, in
- * `communities/` with the rest of the directory. When the name resolved to a
+ * `spaces/` with the rest of the directory. When the name resolved to a
  * space that already runs on Visvine, `spaceRef` links the card to it;
  * otherwise the card is a record and nothing else.
  */
@@ -196,7 +196,7 @@ export async function createEntity(
 
   // Collision check against the NOTE, not just the node id. `entityNotePath` is
   // lossy in the organisation namespace — legacy `org:halter`, `group:halter`,
-  // `community:halter` and a new `space:halter` all land on communities/halter.md — so an id
+  // `space:halter` and a new `space:halter` all land on spaces/halter.md — so an id
   // that looks free can still point at an occupied path. Hand back the existing node so the
   // caller can offer "already exists — open it" instead of silently creating a
   // second Halter that shadows the first one's note.

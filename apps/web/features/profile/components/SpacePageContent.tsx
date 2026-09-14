@@ -7,14 +7,14 @@
  *
  * Every Space node reads as a space page; only the data source differs.
  * A node standing for a space that actually runs here (its own root node, or
- * a record carrying `metadata.spaceRef`) is sent to /communities/<id> by
+ * a record carrying `metadata.spaceRef`) is sent to /spaces/<id> by
  * SpaceRoute and renders from the overview API. Everything else lands here
  * and renders from the node — same visual language as that page (avatar beside
  * the identity block, Space badge, stat strip, About, Details rail) so the two are
  * recognisably the same kind of page rather than a space page and an
  * "Overview" that happens to describe an organisation.
  *
- * The differences from /communities/<id> are all absences, not substitutions:
+ * The differences from /spaces/<id> are all absences, not substitutions:
  * there is no membership here, so no join/leave, no member rail, no events or
  * resources strip. What a record does have — the people linked to it in this
  * graph, its tags, its type fields — takes those slots.
@@ -96,7 +96,7 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
   return (
     <div className="profile-content-fade flex flex-col gap-5">
       {/* ══ IDENTITY HERO — avatar beside the identity block, same shape as
-          the profile page and /communities/<id> ══ */}
+          the profile page and /spaces/<id> ══ */}
       <div className="flex flex-col sm:flex-row gap-5 items-stretch">
         {/* Contained, not cropped: a logo with whitespace must not be zoomed
             to fill, so the object-fit differs from the member-space page

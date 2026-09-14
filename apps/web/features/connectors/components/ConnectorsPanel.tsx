@@ -211,7 +211,7 @@ function ManageConnections({ spaceId, name, returnTo }: { spaceId: string; name:
   useEffect(() => {
     let cancelled = false;
     void fetchJson<{ mode: 'user' | 'space'; connections: ManageConnectionRow[] }>(
-      `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}/connections`,
+      `/api/spaces/${spaceId}/connectors/${encodeURIComponent(name)}/connections`,
     )
       .then((data) => { if (!cancelled) setState({ mode: data.mode, rows: data.connections }); })
       .catch(() => { if (!cancelled) setState(null); });
@@ -365,7 +365,7 @@ export default function ConnectorsPanel({
       requested?: string[];
       platformClients?: string[];
       canManage?: boolean;
-    }>(`/api/communities/${encodeURIComponent(spaceId)}/connectors`, { signal: controller.signal })
+    }>(`/api/spaces/${encodeURIComponent(spaceId)}/connectors`, { signal: controller.signal })
       .then((data) => {
         if (cancelled()) return;
         setExisting(data.connectors);
@@ -399,7 +399,7 @@ export default function ConnectorsPanel({
     if (!spaceId || canManage !== true) { setRequests([]); return; }
     const controller = new AbortController();
     void fetchJson<{ requests: ConnectorRequest[] }>(
-      `/api/communities/${encodeURIComponent(spaceId)}/connector-requests`,
+      `/api/spaces/${encodeURIComponent(spaceId)}/connector-requests`,
       { signal: controller.signal },
     )
       .then((data) => { if (!controller.signal.aborted) setRequests(data.requests.filter((r) => r.status === 'pending')); })
@@ -485,7 +485,7 @@ export default function ConnectorsPanel({
     setToggleError(null);
     try {
       await fetchJson(
-        `/api/communities/${encodeURIComponent(spaceId)}/connectors/${encodeURIComponent(connector.name)}`,
+        `/api/spaces/${encodeURIComponent(spaceId)}/connectors/${encodeURIComponent(connector.name)}`,
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -536,7 +536,7 @@ export default function ConnectorsPanel({
     setAsking(entry.id);
     setError(null);
     try {
-      await fetchJson(`/api/communities/${encodeURIComponent(spaceId)}/connector-requests`, {
+      await fetchJson(`/api/spaces/${encodeURIComponent(spaceId)}/connector-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recipe: entry.id }),
@@ -553,7 +553,7 @@ export default function ConnectorsPanel({
   const resolveRequest = async (request: ConnectorRequest, outcome: 'added' | 'dismissed', connectorName?: string) => {
     if (!spaceId) return;
     try {
-      await fetchJson(`/api/communities/${encodeURIComponent(spaceId)}/connector-requests`, {
+      await fetchJson(`/api/spaces/${encodeURIComponent(spaceId)}/connector-requests`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ requestId: request.id, outcome, connectorName }),
@@ -1177,7 +1177,7 @@ function EntryForm({
       const path = `connectors/${name}.md`;
       await notesApi.create(spaceId, path, content);
       for (const secret of secrets) {
-        await fetchJson(`/api/communities/${encodeURIComponent(spaceId)}/secrets`, {
+        await fetchJson(`/api/spaces/${encodeURIComponent(spaceId)}/secrets`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(secret),

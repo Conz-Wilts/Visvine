@@ -1,9 +1,9 @@
 package com.visvine.mobile.ui.state
 
 import com.visvine.mobile.auth.AuthManager
-import com.visvine.mobile.data.model.Community
+import com.visvine.mobile.data.model.Space
 import com.visvine.mobile.data.remote.ApiResult
-import com.visvine.mobile.data.repository.CommunityRepository
+import com.visvine.mobile.data.repository.SpaceRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,22 +16,22 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * App-scoped community selection — the native equivalent of CommunityProvider.
+ * App-scoped space selection — the native equivalent of SpaceProvider.
  * Refreshes when the user becomes authenticated and clears on sign-out; the
- * first community is selected by default.
+ * first space is selected by default.
  */
 @Singleton
-class CommunityManager @Inject constructor(
+class SpaceManager @Inject constructor(
     authManager: AuthManager,
-    private val communityRepo: CommunityRepository,
+    private val spaceRepo: SpaceRepository,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    private val _communities = MutableStateFlow<List<Community>>(emptyList())
-    val communities: StateFlow<List<Community>> = _communities.asStateFlow()
+    private val _spaces = MutableStateFlow<List<Space>>(emptyList())
+    val spaces: StateFlow<List<Space>> = _spaces.asStateFlow()
 
-    private val _current = MutableStateFlow<Community?>(null)
-    val current: StateFlow<Community?> = _current.asStateFlow()
+    private val _current = MutableStateFlow<Space?>(null)
+    val current: StateFlow<Space?> = _current.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -43,22 +43,22 @@ class CommunityManager @Inject constructor(
                 .collect { state ->
                     if (state.isAuthenticated) refresh()
                     else {
-                        _communities.value = emptyList()
+                        _spaces.value = emptyList()
                         _current.value = null
                     }
                 }
         }
     }
 
-    fun setCurrent(community: Community?) {
-        _current.value = community
+    fun setCurrent(space: Space?) {
+        _current.value = space
     }
 
     suspend fun refresh() {
         _isLoading.value = true
-        when (val res = communityRepo.getCommunities()) {
+        when (val res = spaceRepo.getSpaces()) {
             is ApiResult.Success -> {
-                _communities.value = res.data
+                _spaces.value = res.data
                 if (_current.value == null && res.data.isNotEmpty()) {
                     _current.value = res.data.first()
                 }

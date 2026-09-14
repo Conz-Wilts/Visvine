@@ -52,12 +52,12 @@ Visvine/
 ├── Networking/      APIClient (URLSession), MediaURL, APIResult
 ├── Storage/         KeychainTokenStore, PreferencesStore (UserDefaults)
 ├── Realtime/        MessageStream (URLSession.bytes SSE → /api/messages/stream)
-├── Repositories/    Auth/Community/Directory/Events/Messages/Profile
+├── Repositories/    Auth/Space/Directory/Events/Messages/Profile
 ├── Auth/            AuthManager (session+deep link), OAuthService (ASWebAuth…)
-├── State/           CommunityStore, ThemeStore, SearchStore (@Observable)
+├── State/           SpaceStore, ThemeStore, SearchStore (@Observable)
 ├── Theme/           8 hues (buildColors), DynamicColors
 ├── Util/            search heuristic, date formatting
-├── Components/      ScreenHeader, SearchOverlay, CommunityAvatar, glass
+├── Components/      ScreenHeader, SearchOverlay, SpaceAvatar, glass
 ├── Navigation/      RootView, MainTabView, glass tab bar, route enums
 └── Views/           login, dev-login, directory, full-profile, events,
                      messaging, profile, edit-profile, settings

@@ -51,11 +51,11 @@ export interface TreeNode {
   kind: 'folder' | 'note'
   title?: string // display title for notes
   children?: TreeNode[]
-  // Set on the folder a public sub-space is read through (`spaces/<id>`):
+  // Set on the folder a public sub-space is read through (`subspaces/<id>`):
   // the id of that space. Everything under it is that space's own context,
   // rebased into this tree read-only (lib/spaces/subspaces.ts).
   space?: string
-  // Set on a `spaces/<id>` folder standing for a PRIVATE sub-space: it is
+  // Set on a `subspaces/<id>` folder standing for a PRIVATE sub-space: it is
   // named here, and holds nothing. A private sub-space is closed, not secret —
   // the row exists so a member of the parent can see it and ask
   // (lib/spaces/subspaceAccess.ts#listLockedSubspaces).

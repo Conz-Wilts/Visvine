@@ -1,9 +1,9 @@
 import Foundation
 
-/// Community event — mirrors src/types/index.ts `Event`.
+/// Space event — mirrors src/types/index.ts `Event`.
 struct Event: Codable, Identifiable {
     let id: String
-    var communityId: String?
+    var spaceId: String?
     let title: String
     var description: String?
     let startAt: String

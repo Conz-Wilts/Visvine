@@ -46,7 +46,7 @@ export default function SpaceTile({
   const router = useRouter();
   const tiltRef = useCardTilt();
   const country = spaceCountryCode(space);
-  const href = `/communities/${encodeURIComponent(space.id)}`;
+  const href = `/spaces/${encodeURIComponent(space.id)}`;
   const facts = [
     parentName ? `in ${parentName}` : null,
     `${formatMemberCount(space.memberCount)} ${space.memberCount === 1 ? 'member' : 'members'}`,

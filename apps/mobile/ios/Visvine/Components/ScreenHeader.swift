@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// The header every main screen carries: community switcher, then profile avatar.
+/// The header every main screen carries: space switcher, then profile avatar.
 struct ScreenHeader: View {
     @Environment(ThemeStore.self) private var theme
-    @Environment(CommunityStore.self) private var community
+    @Environment(SpaceStore.self) private var space
     @Environment(AuthManager.self) private var auth
 
-    var showCommunitySelector: Bool = true
+    var showSpaceSelector: Bool = true
     var onProfile: () -> Void
 
     @State private var pickerVisible = false
@@ -14,9 +14,9 @@ struct ScreenHeader: View {
     var body: some View {
         let c = theme.colors
         HStack {
-            if showCommunitySelector {
+            if showSpaceSelector {
                 Button { pickerVisible = true } label: {
-                    CommunityAvatar(name: community.current?.name ?? "", imageUrl: community.current?.image, size: 36)
+                    SpaceAvatar(name: space.current?.name ?? "", imageUrl: space.current?.image, size: 36)
                 }
             } else {
                 HStack(spacing: 8) {
@@ -32,7 +32,7 @@ struct ScreenHeader: View {
         .frame(height: 56)
         .background(c.bgPrimary)
         .sheet(isPresented: $pickerVisible) {
-            communityPicker.environment(theme).environment(community)
+            spacePicker.environment(theme).environment(space)
         }
     }
 
@@ -60,17 +60,17 @@ struct ScreenHeader: View {
         .frame(width: 40, height: 40)
     }
 
-    private var communityPicker: some View {
+    private var spacePicker: some View {
         let c = theme.colors
         return NavigationStack {
-            List(community.communities) { item in
-                let active = community.current?.id == item.id
+            List(space.spaces) { item in
+                let active = space.current?.id == item.id
                 Button {
-                    community.setCurrent(item)
+                    space.setCurrent(item)
                     pickerVisible = false
                 } label: {
                     HStack(spacing: 12) {
-                        CommunityAvatar(name: item.name, imageUrl: item.image, size: 28)
+                        SpaceAvatar(name: item.name, imageUrl: item.image, size: 28)
                         Text(item.name).foregroundStyle(active ? c.accentDark : c.textSecondary)
                         Spacer()
                         if active { VisvineIcon(.check).foregroundStyle(c.accent) }

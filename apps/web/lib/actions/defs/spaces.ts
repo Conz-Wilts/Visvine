@@ -2,14 +2,14 @@
  * Spaces as tenants: starting one, or a sub-space inside one.
  *
  * This is the same act as the switcher's "New space" and the console's "New
- * sub-space" (`POST /api/communities`), and it goes through the same
+ * sub-space" (`POST /api/spaces`), and it goes through the same
  * `provisionSpace` — the one routine that makes a space. The only authority
  * decided here is the route's: anyone signed in may start a space, and only an
  * admin of the parent may put a sub-space under it. Everything else (one level
  * deep, sibling names, public names, the flow-up grant) is provisionSpace's.
  *
  * A space is not a directory record. `add_context` with `type: space` writes a
- * card about an organisation in `communities/` and provisions nothing; the two
+ * card about an organisation in `spaces/` and provisions nothing; the two
  * manuals say so to each other, because the words are the same.
  */
 import { z } from 'zod'
@@ -34,7 +34,7 @@ export const SPACE_ACTIONS = [
       "parent's admins — administers it. Spaces nest one level: a sub-space cannot hold sub-spaces, and neither a " +
       'personal space nor the Visvine space can hold one. Names must be unique among siblings.\n\n' +
       'VISIBILITY defaults to private. A public space\'s name must be unique among public spaces. A public ' +
-      "sub-space's context flows up: its parent reads it, view-only, as the folder `spaces/<id>/`. A private " +
+      "sub-space's context flows up: its parent reads it, view-only, as the folder `subspaces/<id>/`. A private " +
       "sub-space shows its parent's members only its name.\n\n" +
       'The id is derived from the name (with -2, -3 if taken) and returned as `space_id` — use it as `space_id` ' +
       'in every other action. A new space starts with every toggleable tool OFF; its admins turn them on in the ' +
@@ -81,11 +81,11 @@ export const SPACE_ACTIONS = [
         parent_id: s.parentId,
         ...(parentName ? { parent_name: parentName } : {}),
         you_manage_it: true,
-        url: `/communities/${encodeURIComponent(s.id)}`,
+        url: `/spaces/${encodeURIComponent(s.id)}`,
         next:
           'Pass this space_id to any other action. Its tools start off — an admin turns them on in the Space Console.' +
           (s.parentId && s.visibility === 'public'
-            ? ` Its context is readable from ${parentName} under spaces/${s.id}/.`
+            ? ` Its context is readable from ${parentName} under subspaces/${s.id}/.`
             : ''),
       }
     },

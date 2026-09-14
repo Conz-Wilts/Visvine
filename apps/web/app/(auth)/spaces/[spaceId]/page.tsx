@@ -110,7 +110,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     try {
       await swrFetch(
         overviewKey,
-        () => fetchJson<Overview>(`/api/communities/${encodeURIComponent(spaceId)}/overview`),
+        () => fetchJson<Overview>(`/api/spaces/${encodeURIComponent(spaceId)}/overview`),
         (overview) => {
           setData(overview);
           setLoading(false);

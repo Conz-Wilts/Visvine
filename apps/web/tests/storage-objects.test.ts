@@ -30,7 +30,7 @@ import {
 const root = join(__dirname, '..')
 
 test('every resources-bucket path begins with its space prefix', () => {
-  const spaceId = 'community:acme'
+  const spaceId = 'space:acme'
   assert.ok(resourceObjectPath(spaceId, 'uuid-1', 'deck.pdf').startsWith(spaceResourcesPrefix(spaceId)))
   assert.ok(
     contextSourceObjectPath(spaceId, 'shared', 'src-1', 'pricing.csv').startsWith(
@@ -40,7 +40,7 @@ test('every resources-bucket path begins with its space prefix', () => {
 })
 
 test('a context prefix sits inside its space prefix', () => {
-  const spaceId = 'community:acme'
+  const spaceId = 'space:acme'
   assert.ok(contextSourcesPrefix(spaceId, 'user_7').startsWith(spaceContextSourcesPrefix(spaceId)))
   // …and a person's personal-context prefix contains their own originals only,
   // which is what makes account deletion expressible as one prefix per space.
@@ -99,7 +99,7 @@ test('both bulk delete paths purge bytes', () => {
   // The two places that remove many byte-owning rows at once. Each used
   // deleteMany, which never reaches the service that owns the objects, so each
   // one leaked every file of every space or account it removed.
-  const spaceRoute = readFileSync(join(root, 'app/api/data/communities/route.ts'), 'utf8')
+  const spaceRoute = readFileSync(join(root, 'app/api/data/spaces/route.ts'), 'utf8')
   const account = readFileSync(join(root, 'lib/account/deleteAccount.ts'), 'utf8')
   assert.match(spaceRoute, /purgeSpaceObjects\(/)
   assert.match(account, /purgeSpaceObjects\(/)

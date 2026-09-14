@@ -133,15 +133,15 @@
   --color-text-muted: var(--text-muted, #4b5563);
 }
 
-/* Explicit font-family utility classes — use CSS vars so CommunityDesignContext
+/* Explicit font-family utility classes — use CSS vars so SpaceDesignContext
    can override. Two families, and the split is a rule not a preference:
 
    .font-brand  — ABC Ginto Rounded, the Visvine wordmark face. Marketing pages
                   and marketing only. It is never correct inside the product,
                   where a heading in the house font reads as an ad.
    .font-title  — headings inside the product. Defaults to the same face as body
-                  text; a community that uploads its own title font (see
-                  CommunityDesignContext) repaints these and nothing else. */
+                  text; a space that uploads its own title font (see
+                  SpaceDesignContext) repaints these and nothing else. */
 .font-brand {
   font-family: var(--font-brand) !important;
 }

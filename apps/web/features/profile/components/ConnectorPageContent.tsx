@@ -93,7 +93,7 @@ function useConnectorSave(spaceId: string, name: string, reload: () => Promise<v
       setError(null);
       try {
         await fetchJsonBody(
-          `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}`,
+          `/api/spaces/${spaceId}/connectors/${encodeURIComponent(name)}`,
           'PATCH',
           patch,
         );
@@ -398,7 +398,7 @@ function ConnectionsSection({
   const load = useCallback(async () => {
     try {
       const data = await fetchJson<{ connections: ConnectionRow[] }>(
-        `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}/connections`,
+        `/api/spaces/${spaceId}/connectors/${encodeURIComponent(name)}/connections`,
       );
       setRows(data.connections);
       setError(null);
@@ -424,7 +424,7 @@ function ConnectionsSection({
     try {
       const qs = target === 'me' ? '' : `?user=${encodeURIComponent(target)}`;
       await fetchJson(
-        `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}/connections${qs}`,
+        `/api/spaces/${spaceId}/connectors/${encodeURIComponent(name)}/connections${qs}`,
         { method: 'DELETE' },
       );
       setConfirming(null);
@@ -605,7 +605,7 @@ function WebhookSection({ spaceId, name }: { spaceId: string; name: string }) {
   const [confirming, setConfirming] = useState(false);
   const [rotating, setRotating] = useState(false);
 
-  const base = `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}/webhook`;
+  const base = `/api/spaces/${spaceId}/connectors/${encodeURIComponent(name)}/webhook`;
 
   const load = useCallback(async () => {
     try {
@@ -790,7 +790,7 @@ function ConnectorConsole({
     setRunning(true);
     try {
       const res = await fetchJsonBody<{ result: RunResult }>(
-        `/api/communities/${spaceId}/connectors/${encodeURIComponent(connector.name)}/test`,
+        `/api/spaces/${spaceId}/connectors/${encodeURIComponent(connector.name)}/test`,
         'POST',
         { code: source },
       );
@@ -1011,7 +1011,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
     if (!spaceId) return;
     try {
       const data = await fetchJson<{ connector: ConnectorDetail; calls: ConnectorCall[] }>(
-        `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}`,
+        `/api/spaces/${spaceId}/connectors/${encodeURIComponent(name)}`,
       );
       setConnector(data.connector);
       setCalls(data.calls);
@@ -1060,7 +1060,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
     setTest(null);
     try {
       const res = await fetchJsonBody<{ result: RunResult }>(
-        `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}/test`,
+        `/api/spaces/${spaceId}/connectors/${encodeURIComponent(name)}/test`,
         'POST',
         { code: "return 'connector ok'" },
       );

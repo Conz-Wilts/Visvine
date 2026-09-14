@@ -52,7 +52,7 @@ export default function LocalRunPane({
     const record = async (rt: LocalRuntimeId, result: Extract<DesktopRunEvent, { type: 'result' }>, wasCancelled: boolean) => {
       setPhase('recording');
       try {
-        const res = await fetchJson<{ runId: string }>(`/api/communities/${spaceId}/agents/${encodeURIComponent(agentName)}/local-runs`, {
+        const res = await fetchJson<{ runId: string }>(`/api/spaces/${spaceId}/agents/${encodeURIComponent(agentName)}/local-runs`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
@@ -75,7 +75,7 @@ export default function LocalRunPane({
 
     (async () => {
       try {
-        const prepared = await fetchJson<Prepared>(`/api/communities/${spaceId}/agents/${encodeURIComponent(agentName)}/local-runs`);
+        const prepared = await fetchJson<Prepared>(`/api/spaces/${spaceId}/agents/${encodeURIComponent(agentName)}/local-runs`);
         if (cancelled) return;
         setRuntime(prepared.runtime);
         unsubscribe = bridge.onEvent(({ runId, event }) => {

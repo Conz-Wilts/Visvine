@@ -77,41 +77,43 @@ rail. `visibility` is `public | private`. Creation always goes through
 `create_space` action (`lib/actions/defs/spaces.ts`), never `add_context`. Spaces nest **one level** (`docs/sub-spaces.md`).
 
 - **A record is not a tenant.** An organisation a space tracks is a directory
-  record whose note lives in `communities/`; `company` folds onto `space` in
+  record whose note lives in `spaces/`; `company` folds onto `space` in
   `TYPE_SYNONYMS`. Creating one provisions nothing.
 - **A `space` node MAY name a space that runs here** via `metadata.spaceRef`
   (and `space: <id>` in frontmatter), which routes its page to
-  `/communities/<id>`. `db:notes:verify` only checks that a ref that IS set
+  `/spaces/<id>`. `db:notes:verify` only checks that a ref that IS set
   resolves.
 - **A new space starts with every toggleable tool off** —
   `defaultFeatureConfig()`, written by both create routes, `provisionSpace` and
   the seed.
 - **A sub-space's visibility is its own**, and membership never crosses the
   boundary: the creator holds its Admin alias, the parent's admins do not.
-  Created by the parent's admins (`POST /api/communities` with `parentId`, or
+  Created by the parent's admins (`POST /api/spaces` with `parentId`, or
   the `create_space` action with `parent_id`); a
   sub-space cannot hold sub-spaces (`subspaces.ts#parentDenial`); sibling names
   are unique (`spaces_sibling_name_unique`).
 - **A public sub-space's context flows up** as the read-only folder
-  `spaces/<id>/`, federated at read time by `lib/notes/federation.ts` (tree,
+  `subspaces/<id>/`, federated at read time by `lib/notes/federation.ts` (tree,
   index, single read, search each have a federated form). Read under the
   sub-space's **everyone-principal** — no admin standing, space-wide grants
   only, capped to view (`access.ts#spaceWideAccessFor`). A public sub-space is
   born with a space-wide view grant at its root, and one made public LATER gets
   the same grant from `ensureFlowUpGrant` — without it the parent grafts a
-  folder it can read nothing through. `spaces/` is reserved in every space's own
-  context (`subspaceWriteDenial`).
+  folder it can read nothing through. `subspaces/` is reserved in every space's
+  own context (`subspaceWriteDenial`) — the graft has its own root precisely so
+  that `spaces/` is free to hold the space RECORDS, whose slugs would otherwise
+  shadow a sub-space id.
 - **A private sub-space is closed, not secret: the parent's members see its
   NAME.** `listLockedSubspaces` returns its own thin shape (never a `Space`,
   which carries aliases and tool config) for private sub-spaces of a space the
   caller actively belongs to. Drawn twice — a locked row on the switcher's
-  branch, and a `spaces/<id>/` folder stamped `locked` holding nothing
+  branch, and a `subspaces/<id>/` folder stamped `locked` holding nothing
   (`graftLockedSubspace`). Pressing either asks: `POST …/join` writes a
   **pending** membership when `mayRequestSubspaceAccess` holds, answered on
   Members → Wants to join beside the invite-link requests. Asking is not
   entering — a pending join writes no person node, no alias, no cache bust.
 - Deleting a space with sub-spaces is children-first in
-  `DELETE /api/data/communities` (the parent relation is Restrict).
+  `DELETE /api/data/spaces` (the parent relation is Restrict).
 - Listings are flat lists with "in *Parent*" beside a sub-space only when the
   parent is also visible to you; the switcher opens a parent's sub-spaces on its
   chevron (`subspaces.ts#spaceBranches`, `SpaceListRow`, `TreeSpine`).
@@ -171,6 +173,12 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   links resolve through (`canonicalEntityPath`). Config kinds (connector,
   section) stay flat until a sub-note converts them. Never add a "general info"
   note beside an index — the index IS that note.
+- **A kind's namespace is named after the kind** (`entities.ts#ENTITY_DIRS`):
+  `people/`, `spaces/`, `events/`, `resources/`, `sections/`, `channels/`,
+  `connectors/`, `agents/`, `tools/`, `models/`. A space RECORD lives in
+  `spaces/`; the sub-space graft is `subspaces/` and belongs to no kind. A note
+  path is link identity, so a namespace is renamed only by moving every note
+  and rewriting every link — `db:rename:spaces` is the one that did it.
 - **An index note IS a folder, and folder-ness is the PATH.** Every folder has
   an `index.md` in ONE shape, held by `indexNote.ts#normalizeIndexNote` on every
   write: frontmatter (`type` only when the folder is about something, `title`,
@@ -323,7 +331,7 @@ only).
   collide with a platform key.
 - **A member-made type can be deleted; a built-in cannot.** The whole-record PUT
   merges type lists additively (`mergeNodeTypeList`), so shortening needs
-  `DELETE /api/communities/<id>/node-types` — admin-only, and `removeNodeType`
+  `DELETE /api/spaces/<id>/node-types` — admin-only, and `removeNodeType`
   refuses anything not `scope: 'note'`. Notes keep their `type:`, they just stop
   being coloured.
 - **A viewer's arrangement is theirs**: column order, hidden columns, widths and
@@ -559,7 +567,7 @@ not a rail row — the key is core and nav-hidden (`lib/featureAccess.ts`). Two
 tabs listing different things: **In this space** is one row per CONNECTOR;
 **Add a connector** is the catalog (`lib/connectors/catalog.ts`), one row per
 SERVICE, each a recipe. Saving writes `connectors/<name>.md` and PUTs each
-secret to `/api/communities/<space>/secrets`. Manage offers Disable, Edit,
+secret to `/api/spaces/<space>/secrets`. Manage offers Disable, Edit,
 Delete; the row itself goes to the connector's page, because the note IS the
 connector.
 
@@ -679,7 +687,7 @@ sweep.
   only — provider and id (editable), the key (write-only), and **who ran on
   it** (the recent runs and their tokens, folded per person). A note stands for
   its PROVIDER, so a sibling model on the same key appears here too.
-  `GET/PATCH /api/communities/<id>/models/<name>` + `lib/models/service.ts`;
+  `GET/PATCH /api/spaces/<id>/models/<name>` + `lib/models/service.ts`;
   `list_models` is the action.
 - **Nothing reports what was spent.** There is no bill on a model's page, no
   cost on a run, no Usage section: what a provider key was billed is that

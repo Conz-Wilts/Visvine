@@ -544,7 +544,7 @@ export default function TypesPanel() {
   const saveTypes = (nextTypes: NodeTypeConfig[]) => {
     if (!currentSpace) return;
     const space: Space = { ...currentSpace, nodeTypes: nextTypes };
-    return save(() => fetchJsonBody('/api/data/communities', 'PUT', { space }));
+    return save(() => fetchJsonBody('/api/data/spaces', 'PUT', { space }));
   };
 
   // Aliases do NOT ride on that save. Creating one needs an id, removing one has
@@ -573,7 +573,7 @@ export default function TypesPanel() {
   const handleDeleteType = (type: NodeTypeConfig) =>
     save(async () => {
       await fetchJsonBody(
-        `/api/communities/${currentSpace?.id}/node-types`,
+        `/api/spaces/${currentSpace?.id}/node-types`,
         'DELETE',
         { name: type.name },
       );

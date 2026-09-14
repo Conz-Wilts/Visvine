@@ -94,13 +94,13 @@ test('nextVersionNumber ignores anything that is not a version', () => {
 })
 
 test('toolKey is the space and the name, which is what an install pins', () => {
-  assert.equal(toolKey('community:acme', 'deal-pipeline'), 'community:acme/deal-pipeline')
+  assert.equal(toolKey('space:acme', 'deal-pipeline'), 'space:acme/deal-pipeline')
 })
 
 // ── who may install what (the two verdicts) ──
 
-const OWN = 'community:acme'
-const STRANGER = 'community:other'
+const OWN = 'space:acme'
+const STRANGER = 'space:other'
 
 test('a version its own space approved installs in that space', () => {
   assert.deepEqual(
@@ -402,7 +402,7 @@ test('the published shapes are what the routes and the space DTO carry', () => {
   const status: ToolVersionStatus = 'approved'
   const summary: ToolVersionSummary = {
     id: 'v1',
-    key: 'community:acme/deal-pipeline',
+    key: 'space:acme/deal-pipeline',
     name: 'deal-pipeline',
     version: 3,
     title: 'Deal Pipeline',
@@ -416,7 +416,7 @@ test('the published shapes are what the routes and the space DTO carry', () => {
     marketplaceReviewedAt: null,
     marketplaceReviewNote: null,
     sizeBytes: 2048,
-    sourceSpaceId: 'community:acme',
+    sourceSpaceId: 'space:acme',
     author: { userId: 'u1', name: 'Ana' },
     perimeter: EMPTY_PERIMETER,
     surfaces: { rail: { label: 'Deals', icon: 'kanban' }, types: [] },
@@ -448,7 +448,7 @@ test('the install shapes carry what the rail, the page and the banner need', () 
   const resolution: TypeClaimResolution = { claims, downgraded: [], conflicts: [conflict] }
   const install: InstallSummary = {
     id: 'i1',
-    key: 'community:acme/deal-pipeline',
+    key: 'space:acme/deal-pipeline',
     slug: 'deal-pipeline',
     title: 'Deal Pipeline',
     description: null,

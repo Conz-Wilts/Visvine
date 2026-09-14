@@ -44,34 +44,34 @@ describe('flowsUp — visibility is the sub-space’s own', () => {
   })
 })
 
-describe('paths under spaces/', () => {
+describe('paths under subspaces/', () => {
   it('names the folder and parses it back', () => {
-    assert.equal(subspaceFolderPath('founders'), 'spaces/founders')
-    assert.deepEqual(parseSubspacePath('spaces/founders'), { spaceId: 'founders', path: '' })
-    assert.deepEqual(parseSubspacePath('spaces/founders/people/craig/index.md'), {
+    assert.equal(subspaceFolderPath('founders'), 'subspaces/founders')
+    assert.deepEqual(parseSubspacePath('subspaces/founders'), { spaceId: 'founders', path: '' })
+    assert.deepEqual(parseSubspacePath('subspaces/founders/people/craig/index.md'), {
       spaceId: 'founders',
       path: 'people/craig/index.md',
     })
-    assert.equal(parseSubspacePath('spaces/'), null)
+    assert.equal(parseSubspacePath('subspaces/'), null)
     assert.equal(parseSubspacePath('people/craig/index.md'), null)
-    assert.equal(parseSubspacePath('spacesx/founders'), null)
+    assert.equal(parseSubspacePath('subspacesx/founders'), null)
   })
   it('rebases a sub-space path onto the parent', () => {
-    assert.equal(rebasePath('founders', ''), 'spaces/founders')
-    assert.equal(rebasePath('founders', 'playbooks/a.md'), 'spaces/founders/playbooks/a.md')
+    assert.equal(rebasePath('founders', ''), 'subspaces/founders')
+    assert.equal(rebasePath('founders', 'playbooks/a.md'), 'subspaces/founders/playbooks/a.md')
   })
   it('recognises the folder and everything under it, nothing beside it', () => {
     assert.equal(isSubspacePath(SUBSPACE_FOLDER), true)
-    assert.equal(isSubspacePath('spaces/x/y.md'), true)
-    assert.equal(isSubspacePath('spaces-old/x.md'), false)
+    assert.equal(isSubspacePath('subspaces/x/y.md'), true)
+    assert.equal(isSubspacePath('subspaces-old/x.md'), false)
     assert.equal(isSubspacePath('people/x.md'), false)
   })
 })
 
 describe('subspaceWriteDenial — spaces/ is read-only in the parent', () => {
   it('refuses the folder and anything under it', () => {
-    assert.match(subspaceWriteDenial('spaces') ?? '', /read-only/)
-    assert.match(subspaceWriteDenial('spaces/founders/notes.md') ?? '', /founders/)
+    assert.match(subspaceWriteDenial('subspaces') ?? '', /read-only/)
+    assert.match(subspaceWriteDenial('subspaces/founders/notes.md') ?? '', /founders/)
   })
   it('leaves every other path alone', () => {
     assert.equal(subspaceWriteDenial('people/craig/index.md'), null)
@@ -95,30 +95,30 @@ describe('graftSubspace', () => {
     ],
   })
 
-  it('puts the sub-space under spaces/<id> with its root index as the folder index', () => {
+  it('puts the sub-space under subspaces/<id> with its root index as the folder index', () => {
     const root: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
     const folder = graftSubspace(root, { id: 'founders', name: 'Founders Network' }, subRoot())
-    const holder = root.children!.find((c) => c.path === 'spaces')!
+    const holder = root.children!.find((c) => c.path === 'subspaces')!
     assert.equal(holder.kind, 'folder')
     assert.equal(holder.children![0], folder)
-    assert.equal(folder.path, 'spaces/founders')
+    assert.equal(folder.path, 'subspaces/founders')
     assert.equal(folder.title, 'Founders Network')
     assert.equal(folder.space, 'founders')
     const paths = folder.children!.map((c) => c.path).sort()
-    assert.deepEqual(paths, ['spaces/founders/index.md', 'spaces/founders/playbooks'])
-    const playbooks = folder.children!.find((c) => c.path === 'spaces/founders/playbooks')!
-    assert.equal(playbooks.children![0].path, 'spaces/founders/playbooks/a.md')
+    assert.deepEqual(paths, ['subspaces/founders/index.md', 'subspaces/founders/playbooks'])
+    const playbooks = folder.children!.find((c) => c.path === 'subspaces/founders/playbooks')!
+    assert.equal(playbooks.children![0].path, 'subspaces/founders/playbooks/a.md')
   })
 
-  it('a second sub-space joins the same spaces/ folder', () => {
+  it('a second sub-space joins the same subspaces/ folder', () => {
     const root: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
     graftSubspace(root, { id: 'a', name: 'A' }, subRoot())
     graftSubspace(root, { id: 'b', name: 'B' }, subRoot())
-    const holders = root.children!.filter((c) => c.path === 'spaces')
+    const holders = root.children!.filter((c) => c.path === 'subspaces')
     assert.equal(holders.length, 1)
     assert.deepEqual(
       holders[0].children!.map((c) => c.path),
-      ['spaces/a', 'spaces/b'],
+      ['subspaces/a', 'subspaces/b'],
     )
   })
 
@@ -135,13 +135,13 @@ describe('rebaseMeta', () => {
       { path: 'playbooks/a.md', folder: 'playbooks', linkTargets: ['index.md', 'playbooks/b.md'], title: 'A' },
       'founders',
     )
-    assert.equal(meta.path, 'spaces/founders/playbooks/a.md')
-    assert.equal(meta.folder, 'spaces/founders/playbooks')
-    assert.deepEqual(meta.linkTargets, ['spaces/founders/index.md', 'spaces/founders/playbooks/b.md'])
+    assert.equal(meta.path, 'subspaces/founders/playbooks/a.md')
+    assert.equal(meta.folder, 'subspaces/founders/playbooks')
+    assert.deepEqual(meta.linkTargets, ['subspaces/founders/index.md', 'subspaces/founders/playbooks/b.md'])
     assert.equal(meta.title, 'A')
   })
   it('a root-level note lands in the sub-space folder itself', () => {
-    assert.equal(rebaseMeta({ path: 'index.md', folder: '', linkTargets: [] }, 'founders').folder, 'spaces/founders')
+    assert.equal(rebaseMeta({ path: 'index.md', folder: '', linkTargets: [] }, 'founders').folder, 'subspaces/founders')
   })
 })
 
@@ -152,12 +152,12 @@ describe('rebaseNoteLinks', () => {
       'See [office hours](office-hours.md), the [index](/index.md) and [the web](https://example.com).'
     const out = rebaseNoteLinks(content, 'founders', 'playbooks/first-hire.md')
     assert.match(out, /^---\ntitle: The first hire\ntags: \[a\]\n---\n/)
-    assert.match(out, /\[office hours\]\(\/spaces\/founders\/playbooks\/office-hours\.md\)/)
-    assert.match(out, /\[index\]\(\/spaces\/founders\/index\.md\)/)
+    assert.match(out, /\[office hours\]\(\/subspaces\/founders\/playbooks\/office-hours\.md\)/)
+    assert.match(out, /\[index\]\(\/subspaces\/founders\/index\.md\)/)
     assert.match(out, /\[the web\]\(https:\/\/example\.com\)/)
   })
   it('a note with no frontmatter comes back as a body', () => {
-    assert.equal(rebaseNoteLinks('See [x](x.md).', 'f', 'a.md'), 'See [x](/spaces/f/x.md).')
+    assert.equal(rebaseNoteLinks('See [x](x.md).', 'f', 'a.md'), 'See [x](/subspaces/f/x.md).')
   })
 })
 

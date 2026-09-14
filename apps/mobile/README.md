@@ -24,7 +24,7 @@ them:
 
 - **Casing is inconsistent per route.** Some endpoints answer `snake_case`,
   others `camelCase`. Check the handler, not the neighbouring endpoint.
-- **Responses are named-key envelopes**, not bare arrays: `{ communities: [...] }`,
+- **Responses are named-key envelopes**, not bare arrays: `{ spaces: [...] }`,
   `{ nodes: [...] }`.
 
 Media is served public, so image loads need no auth header — but URLs come back

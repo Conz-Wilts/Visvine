@@ -367,7 +367,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   };
 
   const { queue } = useConsoleAutosave(async (patch) => {
-    const data = await fetchJsonBody<{ space: Partial<Space> }>(`/api/communities/${space.id}/settings`, 'PUT', patch);
+    const data = await fetchJsonBody<{ space: Partial<Space> }>(`/api/spaces/${space.id}/settings`, 'PUT', patch);
     onSaved(data.space);
   });
 

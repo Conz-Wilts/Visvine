@@ -63,13 +63,13 @@ test('entityKindOf classifies the container kinds', () => {
   assert.equal(entityKindOf('file'), null);
 });
 
-test('container kinds get their own note namespaces (dirs kept their old names)', () => {
+test('container kinds get their own note namespaces', () => {
   // An organisation and a channel are folder-only; a section is config and stays flat.
-  assert.equal(entityNotePath({ id: 'community:blackbird', type: 'space' }), 'communities/blackbird/index.md');
-  assert.equal(entityNotePath({ id: 'space:engineering', type: 'section' }), 'spaces/engineering.md');
+  assert.equal(entityNotePath({ id: 'space:blackbird', type: 'space' }), 'spaces/blackbird/index.md');
+  assert.equal(entityNotePath({ id: 'space:engineering', type: 'section' }), 'sections/engineering.md');
   assert.equal(entityNotePath({ id: 'channel:general', type: 'channel' }), 'channels/general/index.md');
-  assert.equal(entityKindOfPath('communities/blackbird.md'), 'space');
-  assert.equal(entityKindOfPath('spaces/engineering.md'), 'section');
+  assert.equal(entityKindOfPath('spaces/blackbird.md'), 'space');
+  assert.equal(entityKindOfPath('sections/engineering.md'), 'section');
   assert.equal(entityKindOfPath('channels/general.md'), 'channel');
   assert.equal(parseEntityHref('/channels/general.md'), 'channels/general.md');
   assert.equal(parseEntityHref('/spaces/index.md'), null); // folder index, not an entity
@@ -185,12 +185,12 @@ test('entityDraftContent labels and tags the container kinds', () => {
   assert.ok(md.includes('Where announcements land.'));
 });
 
-test('entityNotePath derives people/ and communities/ folders from the node id', () => {
+test('entityNotePath derives people/ and spaces/ folders from the node id', () => {
   assert.equal(entityNotePath({ id: 'person:craig-piggott', type: 'person' }), 'people/craig-piggott/index.md');
-  assert.equal(entityNotePath({ id: 'community:halter', type: 'space' }), 'communities/halter/index.md');
+  assert.equal(entityNotePath({ id: 'space:halter', type: 'space' }), 'spaces/halter/index.md');
   // …and every retired organisation spelling lands in the same namespace.
-  assert.equal(entityNotePath({ id: 'org:halter', type: 'organization' }), 'communities/halter/index.md');
-  assert.equal(entityNotePath({ id: 'group:halter', type: 'Group' }), 'communities/halter/index.md');
+  assert.equal(entityNotePath({ id: 'org:halter', type: 'organization' }), 'spaces/halter/index.md');
+  assert.equal(entityNotePath({ id: 'group:halter', type: 'Group' }), 'spaces/halter/index.md');
   assert.equal(entityNotePath({ id: 'resource:founder-playbook', type: 'resource' }), 'resources/founder-playbook/index.md');
   assert.equal(entityNotePath({ id: 'event:summit', type: 'event' }), 'events/summit/index.md');
   // slug comes from the id, not the name (collision-proof)
@@ -201,7 +201,7 @@ test('entityNotePath derives people/ and communities/ folders from the node id',
 
 test('parseEntityHref normalizes only valid entity hrefs', () => {
   assert.equal(parseEntityHref('/people/craig-piggott.md'), 'people/craig-piggott.md');
-  assert.equal(parseEntityHref('communities/halter.md'), 'communities/halter.md');
+  assert.equal(parseEntityHref('spaces/halter.md'), 'spaces/halter.md');
   assert.equal(parseEntityHref('resources/founder-playbook.md'), 'resources/founder-playbook.md');
   assert.equal(parseEntityHref('/notes/welcome.md'), null);
   assert.equal(parseEntityHref('/people/craig'), null); // missing .md
@@ -211,7 +211,7 @@ test('parseEntityHref normalizes only valid entity hrefs', () => {
 
 test('parseEntityHref excludes the namespace root indexes', () => {
   assert.equal(parseEntityHref('/people/index.md'), null);
-  assert.equal(parseEntityHref('communities/index.md'), null);
+  assert.equal(parseEntityHref('spaces/index.md'), null);
   assert.equal(parseEntityHref('resources/index.md'), null);
   // Only the exact index.md basename is excluded — slugs merely containing it stay entities.
   assert.equal(parseEntityHref('people/index-fund.md'), 'people/index-fund.md');
@@ -220,7 +220,7 @@ test('parseEntityHref excludes the namespace root indexes', () => {
 test('parseEntityHref accepts the entity-folder form and rejects sub-notes', () => {
   // people/connor/index.md IS the person's note once it has become a folder.
   assert.equal(parseEntityHref('/people/connor/index.md'), 'people/connor/index.md');
-  assert.equal(parseEntityHref('communities/halter/index.md'), 'communities/halter/index.md');
+  assert.equal(parseEntityHref('spaces/halter/index.md'), 'spaces/halter/index.md');
   // Notes inside the folder belong to the entity but are not entity notes.
   assert.equal(parseEntityHref('people/connor/sams-comms.md'), null);
   assert.equal(parseEntityHref('people/connor/2026/q1.md'), null);
@@ -237,7 +237,7 @@ test('parseEntityHref accepts the entity-folder form and rejects sub-notes', () 
 test('entityOwnerPathOf names the entity folder a sub-note sits in', () => {
   assert.equal(entityOwnerPathOf('people/connor/sams-comms.md'), 'people/connor');
   assert.equal(entityOwnerPathOf('/people/connor/2026/q1.md'), 'people/connor');
-  assert.equal(entityOwnerPathOf('communities/halter/board.md'), 'communities/halter');
+  assert.equal(entityOwnerPathOf('spaces/halter/board.md'), 'spaces/halter');
   assert.equal(entityOwnerPathOf('people/connor/index.md'), null); // the entity note itself
   assert.equal(entityOwnerPathOf('people/connor.md'), null);
   assert.equal(entityOwnerPathOf('people/index.md'), null);
@@ -259,7 +259,7 @@ test('a person is a folder from the first write, and the flat path is its alias'
     ['event:launch', 'event', 'events/launch/index.md'],
     ['resource:deck', 'resource', 'resources/deck/index.md'],
     ['channel:general', 'channel', 'channels/general/index.md'],
-    ['company:halter', 'company', 'communities/halter/index.md'],
+    ['company:halter', 'company', 'spaces/halter/index.md'],
   ] as const) {
     assert.equal(entityNotePath({ id, type }), index);
     assert.equal(isFolderOnlyEntityKind(entityKindOf(type)), true);
@@ -307,7 +307,7 @@ test('canonicalEntityPath sends a folder-only alias to the index and leaves ever
   assert.equal(canonicalEntityPath('deals/halter.md'), 'deals/halter.md');
   // A lazy kind's flat path is where its note may really be — the store decides.
   assert.equal(canonicalEntityPath('connectors/sandbox.md'), 'connectors/sandbox.md');
-  assert.equal(canonicalEntityPath('spaces/engineering.md'), 'spaces/engineering.md');
+  assert.equal(canonicalEntityPath('sections/engineering.md'), 'sections/engineering.md');
   // A tool has no alias: tools/<name>.md is an ordinary note.
   assert.equal(canonicalEntityPath('tools/deal-pipeline.md'), 'tools/deal-pipeline.md');
 });
@@ -364,7 +364,7 @@ test('hrefForNotePath routes entity notes and sub-notes to the profile, everythi
 
 test('entityMentionPaths ignores links to folder indexes', () => {
   const md = 'Back to [Founders](/people/index.md) and [Craig](/people/craig-piggott.md).';
-  assert.deepEqual(entityMentionPaths('communities/halter.md', md), ['people/craig-piggott.md']);
+  assert.deepEqual(entityMentionPaths('spaces/halter.md', md), ['people/craig-piggott.md']);
 });
 
 test('path <-> node id round trips', () => {
@@ -372,33 +372,33 @@ test('path <-> node id round trips', () => {
   const path = entityNotePath(node)!;
   assert.equal(parseEntityHref(`/${path}`), path);
   assert.equal(entityKindOfPath(path), 'person');
-  assert.equal(entityKindOfPath('communities/halter.md'), 'space');
+  assert.equal(entityKindOfPath('spaces/halter.md'), 'space');
   assert.equal(entityKindOfPath('resources/founder-playbook.md'), 'resource');
   assert.equal(entityKindOfPath('notes/welcome.md'), null);
 });
 
 test('entityMentionPaths extracts entity-note links from the body only', () => {
   const md =
-    '---\ntitle: Halter\nnode: "community:halter"\ntags: [space]\n---\n\n' +
+    '---\ntitle: Halter\nnode: "space:halter"\ntags: [space]\n---\n\n' +
     'Founded by [Craig Piggott](/people/craig-piggott.md). Backed by ' +
     '[Blackbird](https://blackbird.vc) — see [thesis](/notes/thesis.md) and ' +
     '[Craig Piggott](/people/craig-piggott.md) again.\n';
   // External links and non-entity notes are ignored; duplicates collapse.
-  assert.deepEqual(entityMentionPaths('communities/halter.md', md), ['people/craig-piggott.md']);
+  assert.deepEqual(entityMentionPaths('spaces/halter.md', md), ['people/craig-piggott.md']);
 });
 
 test('entityMentionPaths resolves relative links and excludes self-links', () => {
   const md =
-    'Peer: [Aquila](aquila.md). Self: [Halter](/communities/halter.md). ' +
+    'Peer: [Aquila](aquila.md). Self: [Halter](/spaces/halter.md). ' +
     'Person: [Craig](../people/craig-piggott.md).\n';
-  assert.deepEqual(entityMentionPaths('communities/halter.md', md), [
-    'communities/aquila.md',
+  assert.deepEqual(entityMentionPaths('spaces/halter.md', md), [
+    'spaces/aquila.md',
     'people/craig-piggott.md',
   ]);
 });
 
 test('entityMentionPaths returns [] for notes with no entity mentions', () => {
-  assert.deepEqual(entityMentionPaths('communities/halter.md', 'Just prose, no links.'), []);
+  assert.deepEqual(entityMentionPaths('spaces/halter.md', 'Just prose, no links.'), []);
   assert.deepEqual(entityMentionPaths('notes/welcome.md', '[Craig](/people/craig-piggott.md)'), [
     'people/craig-piggott.md',
   ]); // non-entity notes still extract — the sync layer decides whether to act
@@ -426,7 +426,7 @@ test('entityStub covers resource nodes', () => {
 
 test('entityStub escapes tricky names so frontmatter still parses', () => {
   // A legacy 'space'-typed node stubs with the NEW label and tag.
-  const md = entityStub({ id: 'community:eucalyptus', type: 'space', name: 'Eucalyptus: telehealth & "more"' });
+  const md = entityStub({ id: 'space:eucalyptus', type: 'space', name: 'Eucalyptus: telehealth & "more"' });
   const fm = parseFrontmatter(md);
   assert.equal(fm.type, 'Space');
   assert.equal(fm.title, 'Eucalyptus: telehealth & "more"');
@@ -461,17 +461,17 @@ test('entityDraftContent with no body or tags is exactly the stub', () => {
 
 test('resolveEntityNode resolves through the node map, never by string surgery', () => {
   // Organisation ids are NOT uniform (legacy 'org:halter' in old seeds, today's
-  // 'community:halter'), so the same communities/ path can back either id shape
+  // 'space:halter'), so the same spaces/ path can back either id shape
   // — only the map (built by entityNotePath over real nodes) can invert it.
   const legacyOrg = { id: 'org:halter', type: 'organization' };
-  const currentOrg = { id: 'community:halter', type: 'Space' };
-  assert.equal(entityNotePath(legacyOrg), 'communities/halter/index.md');
-  assert.equal(entityNotePath(currentOrg), 'communities/halter/index.md');
+  const currentOrg = { id: 'space:halter', type: 'Space' };
+  assert.equal(entityNotePath(legacyOrg), 'spaces/halter/index.md');
+  assert.equal(entityNotePath(currentOrg), 'spaces/halter/index.md');
 
   const viaLegacy = new Map([[entityNotePath(legacyOrg)!, { id: legacyOrg.id }]]);
   const viaCurrent = new Map([[entityNotePath(currentOrg)!, { id: currentOrg.id }]]);
-  assert.equal(resolveEntityNode('communities/halter/index.md', viaLegacy), 'org:halter');
-  assert.equal(resolveEntityNode('communities/halter/index.md', viaCurrent), 'community:halter');
+  assert.equal(resolveEntityNode('spaces/halter/index.md', viaLegacy), 'org:halter');
+  assert.equal(resolveEntityNode('spaces/halter/index.md', viaCurrent), 'space:halter');
 
   const people = new Map([['people/craig-piggott.md', { id: 'person:craig-piggott' }]]);
   assert.equal(resolveEntityNode('people/craig-piggott.md', people), 'person:craig-piggott');
@@ -497,7 +497,7 @@ test('namespaceFolderDenial pins the built-in folders, not what is inside them',
   }
   // ...and the entity namespaces, which are the same bargain: every note's
   // path is its identity, so removing the folder would trash all of them.
-  for (const dir of ['people', 'communities', 'events', 'resources', 'channels', 'spaces']) {
+  for (const dir of ['people', 'spaces', 'events', 'resources', 'channels', 'sections']) {
     assert.ok(namespaceFolderDenial(dir), `${dir} should be undeletable`);
   }
 

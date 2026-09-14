@@ -88,7 +88,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const reload = useCallback(async () => {
     if (!spaceId) return;
     try {
-      const next = await fetchJson<DetailResponse>(`/api/communities/${spaceId}/agents/${encodeURIComponent(name)}`);
+      const next = await fetchJson<DetailResponse>(`/api/spaces/${spaceId}/agents/${encodeURIComponent(name)}`);
       setData(next);
       setError(null);
     } catch (e) {
@@ -143,7 +143,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     if (!spaceId) return;
     setBusy(true);
     try {
-      await fetchJson(`/api/communities/${spaceId}/agents/${encodeURIComponent(name)}`, {
+      await fetchJson(`/api/spaces/${spaceId}/agents/${encodeURIComponent(name)}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ active }),
@@ -161,7 +161,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     setBusy(true);
     setNotice(null);
     try {
-      await fetchJson(`/api/communities/${spaceId}/agents/${encodeURIComponent(name)}/subscribers`, {
+      await fetchJson(`/api/spaces/${spaceId}/agents/${encodeURIComponent(name)}/subscribers`, {
         method: subscribed ? 'POST' : 'DELETE',
         ...(userId ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userId }) } : {}),
       });
@@ -195,7 +195,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         outcome: { status: string; reason: string } | null;
         error: string | null;
       }>(
-        `/api/communities/${spaceId}/agents/${encodeURIComponent(name)}/run`,
+        `/api/spaces/${spaceId}/agents/${encodeURIComponent(name)}/run`,
         { method: 'POST' },
       );
       selectRun(res.runId);

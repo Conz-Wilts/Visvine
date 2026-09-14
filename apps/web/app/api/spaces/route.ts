@@ -6,13 +6,13 @@ import { isSpaceVisibility } from '@/lib/spaces/publicName';
 import { isAdmin } from '@/lib/auth';
 
 /**
- * POST /api/communities — user-facing space creation.
+ * POST /api/spaces — user-facing space creation.
  *
  * Any signed-in user may create a space and becomes its admin. With `parentId`
  * the space is a SUB-SPACE of that one (docs/sub-spaces.md) — an act of the
  * parent's admins, since it puts a space under theirs; the creator is the
  * sub-space's admin from then on, whoever they are to the parent. (POST
- * /api/data/communities is the super-admin-only bulk path that trusts a
+ * /api/data/spaces is the super-admin-only bulk path that trusts a
  * client-supplied id.)
  */
 export async function POST(request: NextRequest) {

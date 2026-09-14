@@ -46,7 +46,7 @@ import ToolPageContent from '@/features/profile/components/ToolPageContent';
  *  installed Tool's extra tab (see the Tool tabs section below); it is local
  *  state rather than a ?tab= value, so a Tool can never own a built-in page by
  *  way of a link. */
-type ProfileTab = 'about' | 'context' | 'raw' | 'preview' | 'connections' | 'communities' | `tool:${string}`;
+type ProfileTab = 'about' | 'context' | 'raw' | 'preview' | 'connections' | 'spaces' | `tool:${string}`;
 
 /** The note the Context tab shows — what the tree highlights: the entity's own
  *  note (flat, or its folder index once converted), or, when the URL carries
@@ -403,7 +403,7 @@ const ORG_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Overview' };
 // Which ids OrgPageContent is for. Node ids are `<type>:<slug>` (createEntity,
 // syncEntityNode), so the prefix is the type — and organisations have worn four
 // retired spellings before settling on `space:`, all of which now land on
-// communities/<slug>.md. Current data never reaches this list: a `space:`
+// spaces/<slug>.md. Current data never reaches this list: a `space:`
 // id goes to SpaceRoute, which gives it a Space page either way. An id
 // with no prefix at all is a legacy directory row: those predate the structural
 // types entirely, so an organisation is the right guess for them too.
@@ -464,7 +464,7 @@ function NodePage({ nodeId, firstTab, ariaLabel, notFoundTitle, renderBody }: {
   // and ?tab=spaces are retired links, and context resolves late (tool off
   // / non-entity node), so it can only be judged once the node has loaded.
   useEffect(() => {
-    const retired = activeTab === 'connections' || activeTab === 'communities';
+    const retired = activeTab === 'connections' || activeTab === 'spaces';
     const staleContext = isNoteTab(activeTab) && !loading && data && !contextAvailable;
     // A Tool tab whose install has gone (uninstalled, switched off, claim
     // withdrawn) is as retired as the two above.
@@ -596,7 +596,7 @@ function ContextOnlyPage({ nodeId, ariaLabel, notFoundTitle }: {
 
 // ── Nodes owning a page elsewhere → Context/Raw here, the page for the rest ──
 
-// Events and spaces have dedicated pages (/events/<id>, /communities/<id>)
+// Events and spaces have dedicated pages (/events/<id>, /spaces/<id>)
 // rather than anything profile-shaped, but their context note is a first-class
 // note like any entity's — the tree, backlinks and [[mentions]] all deep-link to
 // /directory/<id>?tab=context. So note tabs render here, and the first tab jumps
@@ -904,9 +904,9 @@ function EventRoute({ nodeId }: { nodeId: string }) {
  *   * The node standing for the space you are IN. `isOwnSpaceNode` spots
  *     it, and the space id comes off the NODE rather than the id string.
  *     `spaceNodeId` only prefixes an id that lacks one, so a space
- *     already called `community:blackbird-ventures` has a node id identical to
+ *     already called `space:blackbird-ventures` has a node id identical to
  *     its space id — stripping `space:` there would 404 — while a
- *     space called `blackbird` gets the node id `community:blackbird` and
+ *     space called `blackbird` gets the node id `space:blackbird` and
  *     does need the prefix gone. The node's own `space_id` is right in both.
  *   * A record carrying `metadata.spaceRef` — the field the create flow
  *     writes (createEntity, /api/nodes/search) when the thing you are recording
@@ -930,7 +930,7 @@ function liveSpaceId(node: NBNode | null, nodeId: string): string | null {
 //
 //  * A live space (its own node, or a record pointing at one via
 //    `spaceRef`) has a workspace, members and events, so it redirects to
-//    /communities/<id> and that page renders from the overview API.
+//    /spaces/<id> and that page renders from the overview API.
 //  * A record has none of those, so it renders here from the node itself —
 //    SpacePageContent, same visual language, minus the parts that need a
 //    membership. Redirecting it would throw the reader out of the space
@@ -942,7 +942,7 @@ function SpaceRoute({ nodeId }: { nodeId: string }) {
   const { data, error } = useNodeProfile(nodeId);
   const node = data?.node ?? null;
   const liveId = liveSpaceId(node, nodeId);
-  const href = liveId ? `/communities/${encodeURIComponent(liveId)}` : null;
+  const href = liveId ? `/spaces/${encodeURIComponent(liveId)}` : null;
 
   // Null while the node is still loading: hold the redirect branch's skeleton
   // rather than flashing a page shell we may not want.
@@ -963,7 +963,7 @@ function SpaceRoute({ nodeId }: { nodeId: string }) {
       <NoteOnlyPage
         nodeId={nodeId}
         firstTab={SPACE_FIRST_TAB}
-        href={href ?? '/communities'}
+        href={href ?? '/spaces'}
         ariaLabel="Space sections"
         notFoundTitle="Couldn't load this space."
       />
@@ -971,7 +971,7 @@ function SpaceRoute({ nodeId }: { nodeId: string }) {
   }
   // A node that can't be read has no space to send us to; the index lists
   // every space the viewer can reach, which beats a dead end.
-  return <PageRedirect href={error ? '/communities' : href} />;
+  return <PageRedirect href={error ? '/spaces' : href} />;
 }
 
 // A dedicated page lives outside the pane shell. Register empty chrome while the

@@ -41,7 +41,7 @@ export default function SubspacesSection({ spaceId, spaceName }: { spaceId: stri
     try {
       await swrFetch(
         key,
-        () => fetchJson<{ subspaces: SubspaceDto[] }>(`/api/communities/${encodeURIComponent(spaceId)}/subspaces`),
+        () => fetchJson<{ subspaces: SubspaceDto[] }>(`/api/spaces/${encodeURIComponent(spaceId)}/subspaces`),
         (data) => setRows(data.subspaces),
       );
     } catch {
@@ -140,7 +140,7 @@ function NewSubspaceDialog({
     setSaving(true);
     setError(null);
     try {
-      const { space } = await fetchJsonBody<{ space: { id: string; name: string } }>('/api/communities', 'POST', {
+      const { space } = await fetchJsonBody<{ space: { id: string; name: string } }>('/api/spaces', 'POST', {
         name: name.trim(),
         parentId,
         visibility: isPublic ? 'public' : 'private',

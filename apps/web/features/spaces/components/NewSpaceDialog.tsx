@@ -47,11 +47,11 @@ export default function NewSpaceDialog({ parent, onClose }: {
     setError(null);
     try {
       // Any signed-in user may do this; the server derives a unique id from the
-      // name and makes the creator an admin. (POST /api/data/communities is the
+      // name and makes the creator an admin. (POST /api/data/spaces is the
       // separate super-admin bulk path.)
       // Name only — the server defaults the description to '', location to
       // null, visibility to private and the tools to Directory only.
-      const { space } = await fetchJsonBody<CreateResponse>('/api/communities', 'POST', {
+      const { space } = await fetchJsonBody<CreateResponse>('/api/spaces', 'POST', {
         name: name.trim(),
         ...(parent ? { parentId: parent.id } : {}),
       });

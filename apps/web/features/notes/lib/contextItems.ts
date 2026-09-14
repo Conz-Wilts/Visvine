@@ -55,7 +55,7 @@ export function toContextItems(notes: NoteMeta[]): ContextItem[] {
  *
  * Index notes are folded into their folder everywhere else, so they're looked
  * up in `titleByPath` — every note the context holds, including the indexes. That
- * title IS the folder's name, so a link to `communities/index.md` reads
+ * title IS the folder's name, so a link to `spaces/index.md` reads
  * "Companies", the same as its tree row.
  */
 export function titleOfPath(path: string, items: ContextItem[], titleByPath: Map<string, string>): string {

@@ -28,9 +28,10 @@ const ALLOWED_TYPES = [
 
 const MAX_SIZE = 10 * 1024 * 1024;
 
-// GCS object prefixes. Two of them predate their type's rename ('persons',
-// 'communities') and stay as they are: the prefix is part of the stored object
-// path, so changing it would orphan every image already uploaded.
+// GCS object prefixes. 'persons' predates its type's rename and stays as it is:
+// the prefix is part of the stored object path, so changing it orphans every
+// image already uploaded. The space prefix WAS renamed ('communities' → 'spaces')
+// by scripts/rename-community-to-space.ts, which moves the objects with it.
 // The prefix table moved to lib/storage/objectPaths.ts — the one module that
 // mints object paths, so a tenant purge and a reconciliation sweep can both
 // reason about the layout instead of re-deriving it. `mediaPrefixBare` is the

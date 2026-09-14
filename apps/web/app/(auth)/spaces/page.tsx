@@ -56,7 +56,7 @@ export default function SpacesPage() {
 
               return (
                 <li key={space.id} className="flex items-center gap-4 py-4">
-                  <Link href={`/communities/${encodeURIComponent(space.id)}`} className="h-14 w-14 shrink-0 overflow-hidden rounded-lg">
+                  <Link href={`/spaces/${encodeURIComponent(space.id)}`} className="h-14 w-14 shrink-0 overflow-hidden rounded-lg">
                     {/* A sub-space wears its parent's mark; its name is what tells them apart. */}
                     <SpaceAvatar {...spaceMark(space, spaces)} className="h-full w-full" />
                   </Link>
@@ -64,7 +64,7 @@ export default function SpacesPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-2">
                       <Link
-                        href={`/communities/${encodeURIComponent(space.id)}`}
+                        href={`/spaces/${encodeURIComponent(space.id)}`}
                         className="truncate text-[15px] font-semibold text-text-primary hover:underline"
                       >
                         {space.name}

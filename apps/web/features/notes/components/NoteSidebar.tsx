@@ -93,7 +93,7 @@ const TreeDrag = createContext<TreeDragValue | null>(null)
 
 /** Pressing a locked sub-space's folder. Carried on a context rather than
  *  threaded through every FolderRow: a locked row only ever appears under
- *  `spaces/`, but the recursion that reaches it is the same one. */
+ *  `subspaces/`, but the recursion that reaches it is the same one. */
 const TreeLockedAsk = createContext<((spaceId: string) => void) | null>(null)
 
 /** Whether a row can be dragged at all: moving it to the folder it already sits
@@ -153,7 +153,7 @@ interface NoteSidebarProps {
    *  changes the saved expansion â€” clearing it collapses the peek back to
    *  whatever the user had open. */
   revealPath?: string | null
-  /** Pressing a `spaces/<id>` folder that stands for a PRIVATE sub-space —
+  /** Pressing a `subspaces/<id>` folder that stands for a PRIVATE sub-space —
    *  the one the caller can see named but not open. Omit and the row still
    *  draws, inert. */
   onOpenLockedSubspace?: (spaceId: string) => void

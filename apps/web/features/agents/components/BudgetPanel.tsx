@@ -27,7 +27,7 @@ export default function BudgetPanel({ spaceId }: { spaceId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    void fetchJson<{ budgetMonthlyCents: number | null }>(`/api/communities/${spaceId}/usage`)
+    void fetchJson<{ budgetMonthlyCents: number | null }>(`/api/spaces/${spaceId}/usage`)
       .then((data) => {
         if (cancelled) return;
         setCapCents(data.budgetMonthlyCents);
@@ -48,7 +48,7 @@ export default function BudgetPanel({ spaceId }: { spaceId: string }) {
     setNotice(null);
     try {
       const cents = dollars === null ? null : Math.round(dollars * 100);
-      await fetchJson(`/api/communities/${spaceId}/usage`, {
+      await fetchJson(`/api/spaces/${spaceId}/usage`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ budgetMonthlyCents: cents }),

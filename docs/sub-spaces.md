@@ -39,10 +39,10 @@ Discover and the space list show "in *Parent*" beside a sub-space only when
 the parent is in the viewer's own list, so a private parent's name never
 leaks through its public child.
 
-## Context flows up — the folder `spaces/<id>/`
+## Context flows up — the folder `subspaces/<id>/`
 
 **A public sub-space's context appears in the parent's context tree as the
-read-only folder `spaces/<id>/`.** Nothing is copied: the tree, the note
+read-only folder `subspaces/<id>/`.** Nothing is copied: the tree, the note
 index, a single-note read and search each have a *federated* form
 (`lib/notes/federation.ts`) that answers over the parent's own context plus
 every public sub-space's, rebased under that folder, as of now. A change in
@@ -55,9 +55,9 @@ Which surfaces federate:
 
 | surface | route / action | what changes |
 |---|---|---|
-| tree | `GET /api/notes/tree` | `spaces/<id>/` grafted in, its root index as the folder's index, the folder stamped `space: <id>` |
+| tree | `GET /api/notes/tree` | `subspaces/<id>/` grafted in, its root index as the folder's index, the folder stamped `space: <id>` |
 | note index | `GET /api/notes`, `list_context`, an agent's `list_context` | the sub-space's `NoteMeta[]` with `path`, `folder` and `linkTargets` rebased |
-| one note | `GET /api/notes/item`, `read_context`, an agent's `read_context` | read through the sub-space's reader; body links rewritten to `/spaces/<id>/…` |
+| one note | `GET /api/notes/item`, `read_context`, an agent's `read_context` | read through the sub-space's reader; body links rewritten to `/subspaces/<id>/…` |
 | search | `POST /api/notes/search`, `search_context`, an agent's `search_context` | the sub-space searched with the same plan (no second rewrite call), hits fused by score |
 | access | `GET /api/notes/access?path=spaces/…` | `canRead` per the reader, `canWrite: false`, never `gated`, plus `subspace: {id, name}` for the editor's banner |
 
@@ -82,11 +82,11 @@ is exactly what the parent sees.
 
 A sub-space is usually born *private* and made public later, so the same grant
 is written by the visibility patch — `subspaceAccess.ts#ensureFlowUpGrant`,
-called from `PATCH /api/communities/<id>/settings` when `visibility` becomes
+called from `PATCH /api/spaces/<id>/settings` when `visibility` becomes
 `public` on a space with a parent. It is idempotent and never widens a grant
 that is already there, so a later toggle cannot undo a narrowing its admins
 chose. Without it a sub-space made public after creation grafted an empty
-`spaces/<id>/` at the parent with nothing to explain it.
+`subspaces/<id>/` at the parent with nothing to explain it.
 
 ## A private sub-space is closed, not secret
 
@@ -108,7 +108,7 @@ Two surfaces draw it, both from `SpaceContext.lockedSubspaces`:
 | surface | row |
 |---|---|
 | the space switcher | `LockedSubspaceRow` on the parent's branch, after the sub-spaces you are in — the name dimmed, a lock, "Asked" once you have |
-| the parent's context tree | `spaces/<id>/`, stamped `locked`, holding nothing — no chevron, no drag, no share (`graftLockedSubspace`, `NoteSidebar#LockedSubspaceFolderRow`) |
+| the parent's context tree | `subspaces/<id>/`, stamped `locked`, holding nothing — no chevron, no drag, no share (`graftLockedSubspace`, `NoteSidebar#LockedSubspaceFolderRow`) |
 
 Pressing either opens `RequestSubspaceAccessDialog`: what the space is, how
 many people are in it, and one button.
@@ -116,7 +116,7 @@ many people are in it, and one button.
 **Asking is not entering.** The request is a `pending` row in `space_members`
 — the same status an invite link's request lands in, so admins of the
 sub-space answer both in one place (Members → *Wants to join*). It is written
-by `POST /api/communities/<id>/join`, which allows a private space only when
+by `POST /api/spaces/<id>/join`, which allows a private space only when
 `mayRequestSubspaceAccess` says the caller is an active member of its parent;
 a pending join creates no person node, no alias and no cache bust, because
 nothing about the space has opened.
@@ -134,7 +134,7 @@ anything under it, and the editor shows a banner naming the sub-space.
 
 - **Console → Settings → Sub-spaces** (`SubspacesSection`): the sub-spaces of
   this space and **New sub-space** — name plus a public/private toggle.
-  Creating one is an act of the parent's admins (`POST /api/communities` with
+  Creating one is an act of the parent's admins (`POST /api/spaces` with
   `parentId`, refused otherwise); the creator becomes the sub-space's admin.
   A sub-space's own Settings names its parent and says what its visibility
   means there.
@@ -143,8 +143,8 @@ anything under it, and the editor shows a banner naming the sub-space.
   chevron, and pressing it opens them under the row on the tree spine
   (`SubspaceRow`, `TreeSpine`). The branch you are in starts open. A search
   flattens.
-- **Discover / `/communities`**: "in *Parent*" when the parent is visible.
-- **`GET /api/communities/<id>/subspaces`**: every sub-space for an admin;
+- **Discover / `/spaces`**: "in *Parent*" when the parent is visible.
+- **`GET /api/spaces/<id>/subspaces`**: every sub-space for an admin;
   the public ones and the ones they are in for a member.
 - **`list_spaces`** (MCP): `parent_id` per space.
 - **`create_space`** (MCP, `context:write`): `parent_id` makes a sub-space,
@@ -152,7 +152,7 @@ anything under it, and the editor shows a banner naming the sub-space.
   `provisionSpace`.
 - **Delete**: the parent relation is Restrict, so deleting a space with
   sub-spaces is a deliberate children-first delete in
-  `DELETE /api/data/communities`, and the console's confirmation says how
+  `DELETE /api/data/spaces`, and the console's confirmation says how
   many go with it.
 
 ## Seed

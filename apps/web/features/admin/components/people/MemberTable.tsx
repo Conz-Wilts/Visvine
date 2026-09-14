@@ -90,7 +90,7 @@ export default function MemberTable() {
   }, [rows, heldByMember, grants, restricted]);
 
   const remove = (userId: string) =>
-    run(() => fetchJson(`/api/communities/${spaceId}/members/${userId}`, { method: 'DELETE' }));
+    run(() => fetchJson(`/api/spaces/${spaceId}/members/${userId}`, { method: 'DELETE' }));
 
   if (!data) return null;
 

@@ -148,14 +148,14 @@ An authoring agent (Claude Code, Cursor, …) works entirely through Visvine's
 door is the **Create panel's Tool tile** (`features/create`, gated on the
 `tools` feature key through `canCreateType` like every other tile, member-open
 because `tools/` is member-writable): a name, title, description and optional
-sidebar label go to `POST /api/communities/[spaceId]/tools/authoring`, which
+sidebar label go to `POST /api/spaces/[spaceId]/tools/authoring`, which
 calls the same `createTool` scaffold `create_tool` uses (a `railLabel` becomes
 `surfaces.rail` with the default icon), and the success screen shows the
 preview link plus the MCP address from `mcpResourceUrl()` — "finish it with
 your coding agent (Settings → MCP)".
 
 The console's **Build** section can also delete a working copy:
-`DELETE /api/communities/[spaceId]/tools/authoring/[name]` →
+`DELETE /api/spaces/[spaceId]/tools/authoring/[name]` →
 `lib/tools/service.ts#deleteTool` trashes the Tool's notes, removes its folder,
 `tool:<name>` node and build, and (admin) uninstalls it from the space. Held to
 the note store's removal bar — admin, the author, or a full-access member.
@@ -811,7 +811,7 @@ frameDocument,vendorBundle,sdkDocs,screenshot,changes}.ts`, the change bus
 `lib/notes/changes.ts`, runtime routes under `app/api/tools/runtime/*` and
 `app/api/tools/{bridge,frame-token,changes}/route.ts`, REST
 routes under `app/api/tools/{registry,review}/*` and
-`app/api/communities/[spaceId]/tools/*`, actions in `lib/actions/defs/apps.ts`
+`app/api/spaces/[spaceId]/tools/*`, actions in `lib/actions/defs/apps.ts`
 (their scopes declared there and read through `scopeForAction`), entity sync (`lib/notes/entities.ts`,
 `context/entityNodes.ts`), feature key `tools` + rail keys
 (`lib/featureAccess.ts`), UI in `features/tools/*` (host `ToolFrame`, the

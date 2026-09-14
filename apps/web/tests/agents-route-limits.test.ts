@@ -13,7 +13,7 @@ import { MAX_RUN_MS } from '@/lib/agents/limits'
 const ROUTES = [
   'app/api/internal/agents/tick/route.ts',
   'app/api/internal/agents/run/route.ts',
-  'app/api/communities/[spaceId]/agents/[name]/run/route.ts',
+  'app/api/spaces/[spaceId]/agents/[name]/run/route.ts',
 ]
 
 for (const route of ROUTES) {

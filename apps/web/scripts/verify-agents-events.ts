@@ -328,7 +328,7 @@ async function main(): Promise<void> {
     step('b3. the admin Webhook GET reports the same address and the listener');
     const cookie = await devLoginCookie(ADMIN_ID);
     check('POST /api/dev/login-as sets the session cookie', cookie !== null, cookie ? `${cookie.slice(0, 40)}…` : 'no auth_session cookie');
-    const described = await http(`${APP}/api/communities/${encodeURIComponent(SPACE)}/connectors/${CONNECTOR}/webhook`, {
+    const described = await http(`${APP}/api/spaces/${encodeURIComponent(SPACE)}/connectors/${CONNECTOR}/webhook`, {
       headers: { cookie: cookie ?? '' },
     });
     let describedJson: { url?: string; signature?: string; header?: string; hasSignatureSecret?: boolean; recipients?: string[] } = {};

@@ -4,7 +4,7 @@ import Observation
 private func typeColor(_ type: String) -> Color {
     switch type.lowercased() {
     case "person": return Color(hex: 0x2563EB)
-    case "community": return Color(hex: 0x78D870)
+    case "space": return Color(hex: 0x78D870)
     case "resource": return Color(hex: 0xF59E0B)
     case "event": return Color(hex: 0x9333EA)
     default: return Color(hex: 0x6B7280)
@@ -33,20 +33,20 @@ final class DirectoryModel {
     var presentTags: [String] { Set(members.flatMap { $0.tags ?? [] }).sorted() }
     var hasFilters: Bool { !selectedTypes.isEmpty || !selectedTags.isEmpty || !sortAscending }
 
-    func load(communityId: String?) async {
-        guard let communityId else { members = []; loading = false; return }
+    func load(spaceId: String?) async {
+        guard let spaceId else { members = []; loading = false; return }
         loading = true
-        await fetch(communityId)
+        await fetch(spaceId)
         loading = false
     }
 
-    func refresh(communityId: String?) async {
-        guard let communityId else { return }
-        await fetch(communityId)
+    func refresh(spaceId: String?) async {
+        guard let spaceId else { return }
+        await fetch(spaceId)
     }
 
-    private func fetch(_ communityId: String) async {
-        switch await repo.getMembers(communityId: communityId) {
+    private func fetch(_ spaceId: String) async {
+        switch await repo.getMembers(spaceId: spaceId) {
         case .success(let list): members = list; error = nil
         case .failure(let message): error = message
         }
@@ -82,7 +82,7 @@ private enum DirectorySheet: Identifiable { case type, tag; var id: Int { hashVa
 /// Everyone and everything in the space, as a grid of cards.
 struct DirectoryView: View {
     @Environment(ThemeStore.self) private var theme
-    @Environment(CommunityStore.self) private var community
+    @Environment(SpaceStore.self) private var space
     @Environment(SearchStore.self) private var search
     @State private var model = DirectoryModel()
     @State private var sheet: DirectorySheet?
@@ -94,7 +94,7 @@ struct DirectoryView: View {
     var body: some View {
         let c = theme.colors
         VStack(spacing: 0) {
-            ScreenHeader(showCommunitySelector: true, onProfile: onProfile)
+            ScreenHeader(showSpaceSelector: true, onProfile: onProfile)
             if model.loading {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -116,11 +116,11 @@ struct DirectoryView: View {
                         .padding(.bottom, 120)
                     }
                 }
-                .refreshable { await model.refresh(communityId: community.current?.id) }
+                .refreshable { await model.refresh(spaceId: space.current?.id) }
             }
         }
         .background(c.bgPrimary)
-        .task(id: community.current?.id) { await model.load(communityId: community.current?.id) }
+        .task(id: space.current?.id) { await model.load(spaceId: space.current?.id) }
         .onAppear { search.placeholder = "Search directory" }
         .sheet(item: $sheet) { which in filterSheet(which).environment(theme) }
     }

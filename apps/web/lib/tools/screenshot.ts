@@ -63,7 +63,7 @@ const MAX_CONSOLE_ERRORS = 50
 const MAX_CONSOLE_LINE = 500
 
 /** The localStorage key the space switcher reads (features/shared/contexts/SpaceContext.tsx). */
-const CURRENT_SPACE_KEY = 'nb_current_community'
+const CURRENT_SPACE_KEY = 'nb_current_space'
 
 interface ScreenshotViewer {
   userId: string

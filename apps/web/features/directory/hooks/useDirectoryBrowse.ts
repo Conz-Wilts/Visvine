@@ -50,7 +50,7 @@ export function useDirectoryBrowse() {
 
   // The space you are IN is never a card in its own directory — it's the
   // container, not an entry. New spaces no longer mint that node at all
-  // (app/api/communities/route.ts), but every space made before that still has
+  // (app/api/spaces/route.ts), but every space made before that still has
   // one, so it is filtered here rather than only at the source. Dropped up front
   // so it also stays out of the type filters, the search and the count.
   const nodes = useMemo(

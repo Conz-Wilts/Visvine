@@ -1,6 +1,6 @@
 /**
  * The wire shapes of the Tools REST routes — what `app/api/tools/*` and
- * `app/api/communities/[spaceId]/tools/*` answer with, in one place.
+ * `app/api/spaces/[spaceId]/tools/*` answer with, in one place.
  *
  * The routes annotate their bodies with these, and the client code (the
  * marketplace, the review panel, the author page) types its fetches with the

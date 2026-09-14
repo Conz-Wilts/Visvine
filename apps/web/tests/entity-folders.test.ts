@@ -156,10 +156,10 @@ test('an ordinary note in an entity namespace stays where it was written', async
   try {
     const s = store!
     // No organisation called "exits" — this is a page about exits, not a record.
-    const note = await s.createNote(shared, 'communities/exits.md', '---\ntitle: Exits\n---\n\nThe realised ones.\n', actor)
-    assert.equal(note.path, 'communities/exits.md')
-    assert.equal(await s.canonicalEntityWritePath(shared, 'communities/exits.md'), 'communities/exits.md')
-    assert.ok(!(await livePaths()).includes('communities/exits/index.md'))
+    const note = await s.createNote(shared, 'spaces/exits.md', '---\ntitle: Exits\n---\n\nThe realised ones.\n', actor)
+    assert.equal(note.path, 'spaces/exits.md')
+    assert.equal(await s.canonicalEntityWritePath(shared, 'spaces/exits.md'), 'spaces/exits.md')
+    assert.ok(!(await livePaths()).includes('spaces/exits/index.md'))
   } finally {
     await teardown()
   }

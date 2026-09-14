@@ -23,9 +23,9 @@ import kotlin.math.roundToInt
 private fun initialsOf(name: String): String =
     name.trim().split(Regex("\\s+")).take(2).mapNotNull { it.firstOrNull()?.uppercase() }.joinToString("")
 
-/** A community's avatar: its image, or its initials when there is none. */
+/** A space's avatar: its image, or its initials when there is none. */
 @Composable
-fun CommunityAvatar(
+fun SpaceAvatar(
     name: String,
     imageUrl: String?,
     size: Dp = 28.dp,

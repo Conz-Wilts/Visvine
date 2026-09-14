@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 /**
  * Directory member — a Node row from /api/data/nodes, also reused for
  * /api/profile/[id]. Mirrors src/types/index.ts `DirectoryMember`. Note the
- * snake_case wire fields (`image_url`, `community_id`).
+ * snake_case wire fields (`image_url`, `space_id`).
  */
 @Serializable
 data class DirectoryMember(
@@ -17,7 +17,7 @@ data class DirectoryMember(
     @SerialName("image_url") val imageUrl: String? = null,
     val location: String? = null,
     val tags: List<String>? = null,
-    @SerialName("community_id") val communityId: String? = null,
+    @SerialName("space_id") val spaceId: String? = null,
     val title: String? = null,
     val company: String? = null,
     val email: String? = null,

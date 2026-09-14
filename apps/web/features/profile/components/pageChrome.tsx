@@ -77,7 +77,7 @@ export function SecretEditor({
     setBusy(true);
     setError(null);
     try {
-      await fetchJsonBody(`/api/communities/${spaceId}/secrets`, 'PUT', {
+      await fetchJsonBody(`/api/spaces/${spaceId}/secrets`, 'PUT', {
         name: secret.name,
         value,
       });
@@ -95,7 +95,7 @@ export function SecretEditor({
     setBusy(true);
     setError(null);
     try {
-      await fetchJsonBody(`/api/communities/${spaceId}/secrets`, 'DELETE', { name: secret.name });
+      await fetchJsonBody(`/api/spaces/${spaceId}/secrets`, 'DELETE', { name: secret.name });
       onChanged();
       onClose();
     } catch (e) {

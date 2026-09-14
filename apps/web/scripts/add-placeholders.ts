@@ -113,7 +113,7 @@ async function seedAgents() {
       scheduleHash: createHash('sha256').update('0 9 * * 1-5|Pacific/Auckland').digest('hex').slice(0, 32),
       budgetMonthlyCents: 2500,
       consecutiveFailures: 0,
-      triggersJson: { context: ['deals/**/*.md', 'communities/**/*.md'], webhook: 'dealflow-inbound' },
+      triggersJson: { context: ['deals/**/*.md', 'spaces/**/*.md'], webhook: 'dealflow-inbound' },
       debounceMs: 120_000,
     },
     update: {},
@@ -350,10 +350,10 @@ async function seedAgents() {
       id: 'agev_hq_003',
       agentName: 'dealflow-digest',
       kind: 'note_written',
-      source: 'communities/kowhai-labs/index.md',
+      source: 'spaces/kowhai-labs/index.md',
       summary: 'Series D close added to the company note',
-      payload: { path: 'communities/kowhai-labs/index.md', actor: 'Dev Admin', changed: true },
-      dedupeKey: 'note_written:communities/kowhai-labs/index.md',
+      payload: { path: 'spaces/kowhai-labs/index.md', actor: 'Dev Admin', changed: true },
+      dedupeKey: 'note_written:spaces/kowhai-labs/index.md',
       createdAt: ago(9),
       consumedBy: null,
     },
@@ -483,7 +483,7 @@ async function seedGovernance() {
     { ownerKey: SHARED, path: 'deals', restricted: true, locked: false },
     { ownerKey: SHARED, path: 'data', restricted: false, locked: true },
     { ownerKey: SHARED, path: 'team', restricted: true, locked: false },
-    { ownerKey: SHARED, path: 'communities', restricted: false, locked: false },
+    { ownerKey: SHARED, path: 'spaces', restricted: false, locked: false },
     { ownerKey: SHARED, path: 'segments', restricted: false, locked: false },
     { ownerKey: ADMIN, path: 'discovery', restricted: false, locked: false },
     { ownerKey: ADMIN, path: 'journal', restricted: false, locked: true },
@@ -600,8 +600,8 @@ async function seedGovernance() {
   // A publication is a live link plus a REAL replica note in the target space.
   // Seeding the link without the replica would describe a sync that never ran.
   const publications = [
-    { sourcePath: 'communities/kowhai-labs/index.md', targetPath: 'spaces/visvine-hq/kowhai-labs.md', active: true },
-    { sourcePath: 'communities/harbourline-capital/index.md', targetPath: 'spaces/visvine-hq/harbourline-capital.md', active: true },
+    { sourcePath: 'spaces/kowhai-labs/index.md', targetPath: 'spaces/visvine-hq/kowhai-labs.md', active: true },
+    { sourcePath: 'spaces/harbourline-capital/index.md', targetPath: 'spaces/visvine-hq/harbourline-capital.md', active: true },
     // Unlinked: the replica stays behind as a plain editable copy.
     { sourcePath: 'segments/venture-capital.md', targetPath: 'spaces/visvine-hq/venture-capital.md', active: false },
   ];
@@ -991,7 +991,7 @@ async function seedMachinery() {
     {
       id: 'npj_hq_001',
       ownerKey: SHARED,
-      path: 'communities/kowhai-labs/index.md',
+      path: 'spaces/kowhai-labs/index.md',
       kind: 'write',
       fromPath: null as string | null,
       origin: 'edit',

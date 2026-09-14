@@ -52,7 +52,7 @@ export function parentFolderOf(path: string): string {
  * server's message instead of being predicted here.
  */
 export function moveDenial(from: string, kind: 'note' | 'folder', destFolder: string): string | null {
-  // spaces/ is another space's context shown here read-only
+  // subspaces/ is another space's context shown here read-only
   // (lib/spaces/subspaces.ts): nothing moves in, nothing moves out.
   if (isSubspacePath(from)) return 'This is a sub-space’s context, shown here read-only. Move it in that space.'
   const readOnly = destFolder ? subspaceWriteDenial(destFolder) : null

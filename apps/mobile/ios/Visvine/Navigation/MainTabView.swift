@@ -6,7 +6,7 @@ import SwiftUI
 struct MainTabView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(AuthManager.self) private var auth
-    @Environment(CommunityStore.self) private var community
+    @Environment(SpaceStore.self) private var space
     @Environment(SearchStore.self) private var search
 
     @State private var selected: MainTab = .directory
@@ -18,7 +18,7 @@ struct MainTabView: View {
             GlassTabBar(selected: $selected, onSearch: { search.open() })
             SearchOverlay()
         }
-        .task(id: auth.user?.id) { await community.refresh() }
+        .task(id: auth.user?.id) { await space.refresh() }
         .onAppear { applyPendingRoute() }
         .onChange(of: auth.pendingRoute) { _, _ in applyPendingRoute() }
         .fullScreenCover(isPresented: $profilePresented) {
@@ -26,7 +26,7 @@ struct MainTabView: View {
             ProfileFlow()
                 .environment(theme)
                 .environment(auth)
-                .environment(community)
+                .environment(space)
         }
     }
 

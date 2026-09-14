@@ -1,7 +1,7 @@
-// GET /api/communities/<id>/subspaces — the sub-spaces of a space
+// GET /api/spaces/<id>/subspaces — the sub-spaces of a space
 // (docs/sub-spaces.md). An admin of the space sees every one; a member sees
 // the public ones and the private ones they are in. Creating one is
-// POST /api/communities with `parentId`.
+// POST /api/spaces with `parentId`.
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiSession, handleApiError } from '@/lib/api/route';
 import { isAdmin, spaceMemberForbidden } from '@/lib/auth';

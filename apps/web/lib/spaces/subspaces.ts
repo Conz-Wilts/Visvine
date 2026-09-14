@@ -14,7 +14,7 @@
 //     private space is discoverable and joinable, and a private sub-space
 //     inside a public one is not;
 //   - when it is PUBLIC, its context flows up: it appears in the parent's
-//     context tree as the read-only folder `spaces/<id>/`, and whatever it
+//     context tree as the read-only folder `subspaces/<id>/`, and whatever it
 //     holds is read, listed and searched from there as of now. A private
 //     sub-space shows nothing at the parent, not even its name.
 
@@ -27,7 +27,7 @@ import { splitFrontmatter } from '@/lib/notes/shared/markdown'
  * in a space's own context may be written under it (`subspaceWriteDenial`),
  * because what appears there is another space's context, rebased in.
  */
-export const SUBSPACE_FOLDER = 'spaces'
+export const SUBSPACE_FOLDER = 'subspaces'
 
 /**
  * Why a sub-space cannot be created inside `parent`, or null when it can. One
@@ -59,15 +59,15 @@ export function subspaceFolderPath(subspaceId: string): string {
   return `${SUBSPACE_FOLDER}/${subspaceId}`
 }
 
-/** Whether a path is the `spaces/` folder or anything under it. */
+/** Whether a path is the `subspaces/` folder or anything under it. */
 export function isSubspacePath(path: string): boolean {
   return path === SUBSPACE_FOLDER || path.startsWith(`${SUBSPACE_FOLDER}/`)
 }
 
 /**
  * Split a parent-side path into the sub-space it reads and the path inside
- * that sub-space's own context. `spaces/<id>` (the folder itself) maps to the
- * sub-space's root, ''. Null for anything not under `spaces/<id>`.
+ * that sub-space's own context. `subspaces/<id>` (the folder itself) maps to the
+ * sub-space's root, ''. Null for anything not under `subspaces/<id>`.
  */
 export function parseSubspacePath(path: string): { spaceId: string; path: string } | null {
   if (!path.startsWith(`${SUBSPACE_FOLDER}/`)) return null
@@ -85,7 +85,7 @@ export function rebasePath(subspaceId: string, path: string): string {
 
 /**
  * Why nothing may be written at `path` in a space's own context, or null.
- * `spaces/` is where sub-spaces' context is READ; writing there would put a
+ * `subspaces/` is where sub-spaces' context is READ; writing there would put a
  * note in the parent that looked like it belonged to a sub-space and was
  * governed by neither.
  */
@@ -107,15 +107,15 @@ function rebaseNode(node: TreeNode, subspaceId: string): TreeNode {
 
 /**
  * Graft a sub-space's own tree into the parent's, in place, as the folder
- * `spaces/<id>/`. The sub-space's root index becomes the folder's index —
- * `spaces/<id>/index.md` — so the folder row opens the sub-space's own home
+ * `subspaces/<id>/`. The sub-space's root index becomes the folder's index —
+ * `subspaces/<id>/index.md` — so the folder row opens the sub-space's own home
  * note and carries its name; nothing of the parent's is under the folder
  * (`subspaceWriteDenial`), so nothing can collide. The folder is stamped
  * `space` so the sidebar can draw it as what it is.
  */
 /**
  * Name a PRIVATE sub-space in the parent's tree without opening it: the same
- * `spaces/<id>` folder, stamped `locked`, holding nothing.
+ * `subspaces/<id>` folder, stamped `locked`, holding nothing.
  *
  * It is here for the reason the switcher's locked row is: a member of the
  * parent who cannot see the room has no way to ask for it. Nothing of the
@@ -137,12 +137,12 @@ export function graftLockedSubspace(root: TreeNode, sub: { id: string; name: str
   return folder
 }
 
-/** The `spaces/` folder in `root`, made if it is not there yet. */
+/** The `subspaces/` folder in `root`, made if it is not there yet. */
 function subspaceHolder(root: TreeNode): TreeNode {
   root.children ??= []
   let holder = root.children.find((c) => c.kind === 'folder' && c.path === SUBSPACE_FOLDER)
   if (!holder) {
-    holder = { name: SUBSPACE_FOLDER, path: SUBSPACE_FOLDER, kind: 'folder', title: 'Spaces', children: [] }
+    holder = { name: SUBSPACE_FOLDER, path: SUBSPACE_FOLDER, kind: 'folder', title: 'Sub-spaces', children: [] }
     root.children.push(holder)
   }
   return holder

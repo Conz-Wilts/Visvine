@@ -5,7 +5,7 @@
 // `run_as_user_id` and acts as THEM — their visibility lens, their write gate,
 // their audit trail, origin 'maintenance'. So a restricted folder they cannot
 // read is not analysed, a folder frozen for AI is not written, and a note in a
-// public sub-space's federated `spaces/` folder is neither, because it belongs
+// public sub-space's federated `subspaces/` folder is neither, because it belongs
 // to another tenant (shared/clean.ts#buildCleanScope).
 //
 // WHO FIRES IT: the agent tick, once a minute, claiming rows whose `next_run_at`

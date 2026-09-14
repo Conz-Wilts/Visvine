@@ -72,7 +72,7 @@ export default function ActivateAgentDialog({
   useEffect(() => {
     // Model connectors can't receive webhooks. A member who cannot list connectors gets no webhook picker.
 
-    fetchJson<{ connectors: { name: string; kind: string }[] }>(`/api/communities/${spaceId}/connectors`)
+    fetchJson<{ connectors: { name: string; kind: string }[] }>(`/api/spaces/${spaceId}/connectors`)
       .then((r) => setConnectors(r.connectors.filter((c) => c.kind !== 'model').map((c) => c.name)))
       .catch(() => setConnectors([]));
   }, [spaceId]);
@@ -100,7 +100,7 @@ export default function ActivateAgentDialog({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetchJson<{ ok: true; warning: string | null }>(`/api/communities/${spaceId}/agents/${encodeURIComponent(agent.name)}`, {
+      const res = await fetchJson<{ ok: true; warning: string | null }>(`/api/spaces/${spaceId}/agents/${encodeURIComponent(agent.name)}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({

@@ -203,7 +203,7 @@ export async function PUT(request: NextRequest) {
     // Every vocabulary column here is additive, and all three are merged under
     // the space lock. This is a whole-record save from a client snapshot that
     // can be minutes old: a member may have added a node type
-    // (api/communities/[spaceId]/node-types), an admin may have created an alias
+    // (api/spaces/[spaceId]/node-types), an admin may have created an alias
     // on Members, MCP may have added one through manage_alias. Writing the
     // snapshot verbatim is how any of those silently disappear — and for
     // aliases, disappearing used to take their holders and grants with them.

@@ -75,7 +75,7 @@ const FOLDERS =
   'and the entity note moves to people/<slug>/index.md by itself, keeping its entity type and `node:`. ' +
   'Both paths keep resolving to the entity; read_context reports the current one as `note_path` and lists ' +
   "the folder's other notes as `sub_notes`. A sub-note's mentions count as the entity's mentions. " +
-  'Never file a note under an entity namespace (people/, communities/, resources/, events/) unless it is ' +
+  'Never file a note under an entity namespace (people/, spaces/, resources/, events/) unless it is ' +
   'about that entity — the write is refused when no entity of that slug exists.'
 
 const WRITING_NOTES: Guide = {

@@ -5,7 +5,7 @@
 // folders are grafted only when the caller may see them (a grant reaches the
 // folder or starts inside it — restricted subtrees stay fully hidden).
 //
-// A public sub-space's own tree is grafted in under `spaces/<id>/`
+// A public sub-space's own tree is grafted in under `subspaces/<id>/`
 // (lib/notes/federation.ts), read under the sub-space's everyone-principal.
 
 import { NextRequest, NextResponse } from 'next/server'

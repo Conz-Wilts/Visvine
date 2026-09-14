@@ -45,7 +45,7 @@ const ALL_SCOPES = [
 
 function adminSpace(over: Partial<PlanSpaceFacts> = {}): PlanSpaceFacts {
   return {
-    id: 'community:blackbird-ventures',
+    id: 'space:blackbird-ventures',
     name: 'Blackbird Ventures',
     you_are_admin: true,
     features: planFeatures(null),

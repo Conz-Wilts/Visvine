@@ -13,7 +13,7 @@
  * than a buried "Details" row.
  *
  * Person nodes go to ProfilePageContent and events to their own page. `space:`
- * nodes get a space page (/communities/<id> when the space runs here,
+ * nodes get a space page (/spaces/<id> when the space runs here,
  * SpacePageContent when it is only a record); this page serves the older
  * organisation id spellings.
  */

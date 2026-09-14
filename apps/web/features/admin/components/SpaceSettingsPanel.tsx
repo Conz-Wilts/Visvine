@@ -186,7 +186,7 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
   const runAction = useConsoleAction();
 
   const saveSettings = async (patch: Record<string, unknown>) => {
-    const data = await fetchJsonBody<{ space: Partial<Space> }>(`/api/communities/${space.id}/settings`, 'PUT', patch);
+    const data = await fetchJsonBody<{ space: Partial<Space> }>(`/api/spaces/${space.id}/settings`, 'PUT', patch);
     onSaved(data.space);
   };
 
@@ -218,7 +218,7 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
   const handleDelete = async () => {
     setDeleteError('');
     try {
-      await fetchJson(`/api/data/communities?id=${space.id}`, { method: 'DELETE' });
+      await fetchJson(`/api/data/spaces?id=${space.id}`, { method: 'DELETE' });
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete space');
       setConfirmDelete(false);
@@ -316,7 +316,7 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
           {isSubspace && (
             <p className="text-sm text-text-muted">
               A sub-space of <span className="font-medium text-text-secondary">{parent?.name ?? space.parentId}</span> —
-              its own members, admins and tools. {isPrivate ? 'While private, nothing of it shows there.' : 'While public, its context is read there under spaces/.'}
+              its own members, admins and tools. {isPrivate ? 'While private, nothing of it shows there.' : 'While public, its context is read there under subspaces/.'}
             </p>
           )}
           <div className="space-y-5">

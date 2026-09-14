@@ -62,13 +62,13 @@ app/src/main/java/com/visvine/mobile/
 │   ├── remote/      Retrofit VisvineApi, AuthInterceptor, MediaUrl, ApiResult
 │   ├── local/       TokenStore (Keystore), PreferencesStore (DataStore)
 │   ├── realtime/    MessageStream (OkHttp SSE → /api/messages/stream)
-│   └── repository/  Auth/Community/Directory/Events/Messages/Profile repos
+│   └── repository/  Auth/Space/Directory/Events/Messages/Profile repos
 ├── di/              Hilt NetworkModule
 └── ui/
     ├── theme/       8 hues (buildColors), Compose theme
-    ├── state/       CommunityManager, SearchController (app-scoped stores)
+    ├── state/       SpaceManager, SearchController (app-scoped stores)
     ├── viewmodel/   one ViewModel per screen + shared (Auth/Theme/...)
-    ├── components/   ScreenHeader, SearchOverlay, CommunityAvatar, Loading
+    ├── components/   ScreenHeader, SearchOverlay, SpaceAvatar, Loading
     ├── navigation/  Routes, nav graphs, glass tab bar
     └── screens/     auth, directory, events, messaging, profile, settings
 ```

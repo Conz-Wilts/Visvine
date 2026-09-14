@@ -81,7 +81,7 @@ const APP = (process.env.BASE_URL || 'http://localhost:3000').replace(/\/$/, '')
  * to that module — a script setting it is doing what a click on the space
  * selector does.
  */
-const CURRENT_SPACE_KEY = 'nb_current_community';
+const CURRENT_SPACE_KEY = 'nb_current_space';
 
 /** Outside the fixture's `read: ["hostile/**"]`. Every refusal names this note. */
 const UNDECLARED_NOTE = 'people/index.md';

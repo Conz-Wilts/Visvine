@@ -47,7 +47,7 @@ export default function SkillsPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const base = `/api/communities/${spaceId}/agents/${encodeURIComponent(agentName)}/skills`;
+  const base = `/api/spaces/${spaceId}/agents/${encodeURIComponent(agentName)}/skills`;
 
   const reload = useCallback(async () => {
     try {
@@ -68,7 +68,7 @@ export default function SkillsPanel({
     setNotice(null);
     setError(null);
     try {
-      const result = await fetchJson<{ title: string }>(`/api/communities/${spaceId}/vm/teach`, {
+      const result = await fetchJson<{ title: string }>(`/api/spaces/${spaceId}/vm/teach`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ agent: agentName }),

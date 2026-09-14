@@ -80,7 +80,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   }, [presentTypes, nodes, roster.data]);
 
   // The `?type=` is usually a type's own name, but crossing from a context note
-  // it is the namespace's entity KIND (`communities/` → space), and a space may
+  // it is the namespace's entity KIND (`spaces/` → space), and a space may
   // record that kind under a name of its own — Company folds onto space. So an
   // id that names no table falls back to the first type of the same kind before
   // giving up and taking the first table there is.

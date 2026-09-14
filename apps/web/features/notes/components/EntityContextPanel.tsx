@@ -501,7 +501,7 @@ export function EntityContextPanel({
     const tag = raw.trim()
     if (!tag || !spaceId) return
     setTagColorOverride((m) => ({ ...m, [tagKey(tag)]: color }))
-    void fetch(`/api/communities/${encodeURIComponent(spaceId)}/tag-colors`, {
+    void fetch(`/api/spaces/${encodeURIComponent(spaceId)}/tag-colors`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tag, color }),

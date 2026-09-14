@@ -48,7 +48,7 @@ export function useTrackedFields() {
           ...currentSpace,
           nodeTypes: mergeNodeTypeList(seedNodeTypes(currentSpace.nodeTypes), [next]),
         };
-        await fetchJsonBody('/api/data/communities', 'PUT', { space });
+        await fetchJsonBody('/api/data/spaces', 'PUT', { space });
         await refreshSpace();
         return true;
       } catch (e) {

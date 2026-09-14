@@ -1,13 +1,13 @@
 /**
  * Profile spaces API — which spaces appear on a person's profile.
  *
- * GET  /api/profile/[personId]/communities
+ * GET  /api/profile/[personId]/spaces
  *   Top-level spaces the person manages (holds an alias that manages it — always listed) plus member
  *   spaces they've opted into showing (SpaceMember.privateMeta.showOnProfile).
  *   The owner gets ALL their spaces with visibility flags so the panel
  *   can render toggles; other viewers only get the visible ones.
  *
- * PATCH /api/profile/[personId]/communities  (owner only)
+ * PATCH /api/profile/[personId]/spaces  (owner only)
  *   { spaceId, showOnProfile } — toggle a member space's visibility.
  */
 

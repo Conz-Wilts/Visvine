@@ -65,7 +65,7 @@ export default function AgentSettingsDialog({
     setBusy(true);
     setError(null);
     try {
-      await fetchJson(`/api/communities/${spaceId}/agents/${encodeURIComponent(agent.name)}/budget`, {
+      await fetchJson(`/api/spaces/${spaceId}/agents/${encodeURIComponent(agent.name)}/budget`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ budgetMonthlyCents: dollars === null ? null : Math.round(dollars * 100) }),

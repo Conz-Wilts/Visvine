@@ -2,11 +2,11 @@ package com.visvine.mobile.data.model
 
 import kotlinx.serialization.Serializable
 
-/** Community event — mirrors src/types/index.ts `Event`. */
+/** Space event — mirrors src/types/index.ts `Event`. */
 @Serializable
 data class Event(
     val id: String,
-    val communityId: String = "",
+    val spaceId: String = "",
     val title: String,
     val description: String? = null,
     val startAt: String,
@@ -15,7 +15,7 @@ data class Event(
     val location: EventLocation? = null,
     val hosts: List<String> = emptyList(),
     val capacity: Int? = null,
-    val visibility: String = "community",
+    val visibility: String = "space",
     val analytics: EventAnalytics = EventAnalytics(),
 )
 

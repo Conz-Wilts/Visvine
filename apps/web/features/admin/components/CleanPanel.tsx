@@ -173,13 +173,13 @@ export default function CleanPanel({ spaceId }: { spaceId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const payload = await fetchJson<Payload>(`/api/communities/${spaceId}/clean`);
+    const payload = await fetchJson<Payload>(`/api/spaces/${spaceId}/clean`);
     setData(payload);
   }, [spaceId]);
 
   useEffect(() => {
     let cancelled = false;
-    void fetchJson<Payload>(`/api/communities/${spaceId}/clean`)
+    void fetchJson<Payload>(`/api/spaces/${spaceId}/clean`)
       .then((payload) => { if (!cancelled) setData(payload); })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : 'Could not load the clean.'); });
     return () => { cancelled = true; };
@@ -188,7 +188,7 @@ export default function CleanPanel({ spaceId }: { spaceId: string }) {
   // The whole section saves as one settings record — the schedule is a single
   // decision, and half of it applied would run at a time nobody chose.
   const { queue, flush } = useConsoleAutosave(async (patch) => {
-    const payload = await fetchJsonBody<Payload>(`/api/communities/${spaceId}/clean`, 'PUT', patch);
+    const payload = await fetchJsonBody<Payload>(`/api/spaces/${spaceId}/clean`, 'PUT', patch);
     setData((prev) => (prev ? { ...prev, schedule: payload.schedule, reach: payload.reach } : prev));
   });
 
@@ -202,7 +202,7 @@ export default function CleanPanel({ spaceId }: { spaceId: string }) {
     setNotice(null);
     try {
       const res = await fetchJsonBody<{ outcome: { status: string; reason: string | null } }>(
-        `/api/communities/${spaceId}/clean`,
+        `/api/spaces/${spaceId}/clean`,
         'POST',
         {},
       );
@@ -376,7 +376,7 @@ export default function CleanPanel({ spaceId }: { spaceId: string }) {
               </p>
               <p>
                 {reach.subspaces > 0
-                  ? `The ${reach.subspaces} public sub-space${reach.subspaces === 1 ? '' : 's'} read into spaces/ are never cleaned from here — each is cleaned in the space that owns its notes.`
+                  ? `The ${reach.subspaces} public sub-space${reach.subspaces === 1 ? '' : 's'} read into subspaces/ are never cleaned from here — each is cleaned in the space that owns its notes.`
                   : 'Cleaning stays in this space. A sub-space is cleaned in the space that owns its notes.'}
               </p>
             </>

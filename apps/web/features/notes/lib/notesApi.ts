@@ -44,7 +44,7 @@ export interface PathAccessResponse {
     aliases: Array<{ id: string; name: string; color: string; admin: boolean; system: boolean; holderCount: number }>
   } | null
   /** Set when `path` is a sub-space's note read through this space
-   *  (`spaces/<id>/…`): which sub-space. Read-only here by construction. */
+   *  (`subspaces/<id>/…`): which sub-space. Read-only here by construction. */
   subspace?: { id: string; name: string } | null
 }
 

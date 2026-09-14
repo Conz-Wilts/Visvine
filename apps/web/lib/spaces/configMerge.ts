@@ -40,7 +40,7 @@ function defaultSystemFlag(name: string): boolean {
 /**
  * Fold an edited link-type list back onto what is stored, additively.
  *
- * Until now `/api/data/communities` wrote this column verbatim from the client
+ * Until now `/api/data/spaces` wrote this column verbatim from the client
  * snapshot, with no merge and no read-back at all — the only reason it never
  * caused an incident is that the Types page is its sole writer. That is a
  * property of today's UI, not of the data, so it gets the same treatment as

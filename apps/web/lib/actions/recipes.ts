@@ -498,7 +498,7 @@ const RECIPES: Recipe[] = [
     ],
     mustKnow: () => [
       'Spaces nest ONE level: a sub-space cannot hold sub-spaces, and personal spaces and the Visvine space cannot hold one. Sibling names must be unique.',
-      "Visibility defaults to private. A public space's name must be unique among public spaces; a public sub-space's context is readable, view-only, from its parent under spaces/<id>/.",
+      "Visibility defaults to private. A public space's name must be unique among public spaces; a public sub-space's context is readable, view-only, from its parent under subspaces/<id>/.",
       "The creator administers a sub-space, not the parent's admins. Membership never crosses the boundary.",
       'A new space starts with every toggleable tool off. There is no action that deletes a space, so confirm the name before creating.',
     ],
@@ -539,7 +539,7 @@ const RECIPES: Recipe[] = [
       {
         n: 3,
         tool: 'add_context',
-        why: 'Creates the node and its note together. person → people/<slug>/index.md, space (a record) → communities/<slug>/index.md, resource → resources/<slug>/index.md.',
+        why: 'Creates the node and its note together. person → people/<slug>/index.md, space (a record) → spaces/<slug>/index.md, resource → resources/<slug>/index.md.',
         args: { space_id: spaceId(ctx), type: 'person', name: '<Display name>', fields: { email: '<…>' }, body: '<markdown>' },
       },
     ],

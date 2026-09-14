@@ -21,7 +21,7 @@ export function useAgentOptions(spaceId: string | null): { options: AgentOptions
     }
     let cancelled = false;
     setLoading(true);
-    fetchJson<AgentOptions>(`/api/communities/${encodeURIComponent(spaceId)}/agents/options`)
+    fetchJson<AgentOptions>(`/api/spaces/${encodeURIComponent(spaceId)}/agents/options`)
       .then((next) => {
         if (cancelled) return;
         setOptions(next);

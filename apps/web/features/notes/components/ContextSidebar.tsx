@@ -3,7 +3,7 @@
 // The context tree beside a note, a source or a profile's Context tab: a
 // sticky column inside the pane, part of the content surface rather than a
 // panel docked into the Sidebar. It shows the space context's full organised
-// tree — index files, the people/ and communities/ namespaces, and every
+// tree — index files, the people/ and spaces/ namespaces, and every
 // entity note. Clicking a note that maps to a directory entity opens that
 // entity's profile Context tab; index/organisational notes just highlight.
 // `currentPath` (the profile view) pre-highlights the open entity's note.
@@ -87,7 +87,7 @@ export function ContextSidebar({
   // The Directory's search, on the Context tab: the tree is this tab's browse
   // surface the way the cards are the Grid's, so the box filters it.
   const [query, setQuery] = useState('')
-  // A locked `spaces/<id>` row was pressed: the door, not a note.
+  // A locked `subspaces/<id>` row was pressed: the door, not a note.
   const [askingSubspace, setAskingSubspace] = useState<string | null>(null)
 
   // Keep the highlight on the open entity's note as the profile view navigates

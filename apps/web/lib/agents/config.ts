@@ -464,7 +464,7 @@ function cronMinGapMinutes(minutes: number[]): number {
  * schedule of null rather than an error — `activateAgent` is what insists on
  * at least one of schedule/interval/trigger, in one place.
  *
- * Shared by `PATCH /api/communities/<id>/agents/<name>` and the
+ * Shared by `PATCH /api/spaces/<id>/agents/<name>` and the
  * `activate_agent` action so the two cannot drift: turning an agent on means
  * the same thing whichever door it came through.
  */

@@ -70,7 +70,7 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
   const reload = useCallback(async () => {
     if (!spaceId) return;
     try {
-      const next = await fetchJson<DetailResponse>(`/api/communities/${spaceId}/models/${encodeURIComponent(name)}`);
+      const next = await fetchJson<DetailResponse>(`/api/spaces/${spaceId}/models/${encodeURIComponent(name)}`);
       setData(next);
       setError(null);
     } catch (e) {
@@ -92,7 +92,7 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
     setSaving(true);
     setSaveError(null);
     try {
-      await fetchJsonBody(`/api/communities/${spaceId}/models/${encodeURIComponent(name)}`, 'PATCH', patch);
+      await fetchJsonBody(`/api/spaces/${spaceId}/models/${encodeURIComponent(name)}`, 'PATCH', patch);
       await reload();
       return true;
     } catch (e) {

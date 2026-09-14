@@ -20,7 +20,7 @@ test('excerptsForTargets maps each linked target to its containing block', () =>
     '',
     'Met [Craig](/people/craig.md) at the summit and we discussed connectors.',
     '',
-    '- [Halter](/communities/halter.md) is hiring engineers',
+    '- [Halter](/spaces/halter.md) is hiring engineers',
     '- another bullet',
   ].join('\n')
   const out = excerptsForTargets('people/ana.md', body)
@@ -29,7 +29,7 @@ test('excerptsForTargets maps each linked target to its containing block', () =>
     'Met Craig at the summit and we discussed connectors.',
   )
   // A list item keeps only its own line, and link syntax is stripped.
-  assert.equal(out.get('communities/halter.md'), 'Halter is hiring engineers')
+  assert.equal(out.get('spaces/halter.md'), 'Halter is hiring engineers')
 })
 
 test('excerptsForTargets keeps the first mention, resolves relative hrefs, caps length', () => {

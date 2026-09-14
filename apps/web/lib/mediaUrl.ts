@@ -60,20 +60,20 @@ export function getMediaProxyUrl(objectPath: string): string {
  * current layout:
  *   cards/{nodeId}/…       (all node types including person:, org:, etc.)
  *   persons/{personId}/…   (person records in the persons table)
- *   communities/{id}/…
+ *   spaces/{id}/…
  *
  * The upload route uses ENTITY_PREFIXES { card → 'cards', person → 'persons',
- * space → 'communities' }. Node images (table view) always go to 'cards/'
+ * space → 'spaces' }. Node images (table view) always go to 'cards/'
  * regardless of node type.
  */
 function normalizeObjectPath(objectPath: string): string {
   // media/person:foo/… → cards/person:foo/…   (node images live under cards/)
-  // media/community:foo/… → communities/community:foo/…
+  // media/space:foo/… → spaces/space:foo/…
   // media/anything-else/… → cards/anything-else/…
   if (objectPath.startsWith('media/')) {
     const rest = objectPath.slice('media/'.length);
     if (rest.startsWith('space:')) {
-      return `communities/${rest}`;
+      return `spaces/${rest}`;
     }
     return `cards/${rest}`;
   }

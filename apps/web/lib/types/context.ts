@@ -58,8 +58,6 @@ export interface NBNode {
   metadata?: Record<string, unknown>;
   alias?: string | null;
   space_id?: string | null;
-  /** Pre-rename alias of `space_id`, emitted only for shipped mobile builds. */
-  community_id?: string | null;
   /** The member this node is connected to (Node.identityId → Identity.userId).
    *  Absent = a plain context: no Profile tab, freely renameable. */
   connected_user_id?: string | null;
@@ -281,7 +279,7 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
  * carries the organisations that used to be the Group type, which are
  * directory records people expect to see; the cost is that a space's own root
  * node shows up in its grid too, which reads as a "this space" card and links
- * to /communities/<id>.
+ * to /spaces/<id>.
  *
  * `note`, `file` and `index` are still listed so any row left over from when
  * those types existed stays filtered out of the grid and the graph rather than
@@ -302,32 +300,32 @@ export const STRUCTURAL_NODE_TYPES: readonly string[] = [
 /**
  * The graph node standing for a space itself.
  *
- * Space ids are usually already `space:`-prefixed (`community:blackbird`
+ * Space ids are usually already `space:`-prefixed (`space:blackbird`
  * from the slugified name), so prefixing blindly would produce
- * `community:community:blackbird` — and, worse, a note path with a colon in it,
+ * `space:space:blackbird` — and, worse, a note path with a colon in it,
  * because entityNotePath slugs everything after the FIRST colon. Normalising
- * here keeps the id and the note path (`communities/blackbird.md`) clean whether
+ * here keeps the id and the note path (`spaces/blackbird.md`) clean whether
  * or not the caller's id carries the prefix.
  *
  * Lives here rather than in lib/notes/context/entityNodes.ts (which re-exports it)
  * because client components need it and that module imports prisma.
  */
 export function spaceNodeId(spaceId: string): string {
-  return `community:${spaceId.replace(/^space:/, '')}`;
+  return `space:${spaceId.replace(/^space:/, '')}`;
 }
 
 /**
  * Does this `space`-typed node stand for the space it lives in, or for a
  * group/organisation recorded inside it?
  *
- * Both wear `type: 'space'` and (for legacy rows) a `community:<slug>` id —
+ * Both wear `type: 'space'` and (for legacy rows) a `space:<slug>` id —
  * ids are opaque and keep whatever prefix they were minted with across the
  * type's renames (Group → Community → Space). The space's own root node is
  * the one whose id derives from its own `spaceId`; anything else is a
  * card pointing at some other space (see `metadata.spaceRef`).
  *
  * This is the discriminator every consumer needs: the root node redirects to
- * /communities/<id>, a record renders its profile in place, and only records
+ * /spaces/<id>, a record renders its profile in place, and only records
  * resolve to a cross-space organisation Identity.
  */
 export function isOwnSpaceNode(node: { id: string; spaceId?: string | null }): boolean {

@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   if (!address) return NextResponse.json({ ok: false, reason: 'unroutable_address' });
 
   // The address carries a space SLUG; spaces are addressed by id everywhere
-  // else (`community:blackbird-ventures`), so this is the one translation — the
+  // else (`space:blackbird-ventures`), so this is the one translation — the
   // slug is the id's last segment. Two spaces whose ids end the same way is
   // ambiguity, and ambiguity is refused rather than guessed: delivering
   // somebody's message to the wrong tenant is the worst outcome available here.

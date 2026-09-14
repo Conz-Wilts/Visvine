@@ -47,10 +47,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    // `communityId` is the pre-rename spelling. Shipped mobile builds still send
-    // it, so it stays accepted here until they roll over; nothing else in the
-    // codebase uses the word.
-    const spaceId = searchParams.get('spaceId') ?? searchParams.get('communityId');
+    const spaceId = searchParams.get('spaceId');
 
     if (!spaceId) {
       return NextResponse.json(
@@ -98,8 +95,6 @@ export async function GET(request: NextRequest) {
 
       return {
         ...event,
-        // Pre-rename spelling, still decoded by shipped mobile builds.
-        communityId: event.spaceId,
         hostNames: (event.hosts || [])
           .map((id) => hostNameById.get(id))
           .filter((name): name is string => !!name),

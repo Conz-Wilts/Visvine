@@ -1,6 +1,6 @@
 package com.visvine.mobile.data.repository
 
-import com.visvine.mobile.data.model.Community
+import com.visvine.mobile.data.model.Space
 import com.visvine.mobile.data.remote.ApiResult
 import com.visvine.mobile.data.remote.MediaUrl
 import com.visvine.mobile.data.remote.VisvineApi
@@ -10,23 +10,23 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class CommunityRepository @Inject constructor(
+class SpaceRepository @Inject constructor(
     private val api: VisvineApi,
     private val json: Json,
 ) {
-    suspend fun getCommunities(): ApiResult<List<Community>> =
-        when (val res = safeApiCall(json) { api.getCommunities() }) {
-            is ApiResult.Success -> ApiResult.Success(res.data.communities.map(::resolve))
+    suspend fun getSpaces(): ApiResult<List<Space>> =
+        when (val res = safeApiCall(json) { api.getSpaces() }) {
+            is ApiResult.Success -> ApiResult.Success(res.data.spaces.map(::resolve))
             is ApiResult.Failure -> res
         }
 
-    suspend fun getCommunity(id: String): ApiResult<Community> =
-        when (val res = safeApiCall(json) { api.getCommunity(id) }) {
+    suspend fun getSpace(id: String): ApiResult<Space> =
+        when (val res = safeApiCall(json) { api.getSpace(id) }) {
             is ApiResult.Success -> ApiResult.Success(resolve(res.data))
             is ApiResult.Failure -> res
         }
 
-    // Mirrors resolveCommunity: image = resolveMediaUrl(imageUrl ?? image)
-    private fun resolve(c: Community): Community =
+    // Mirrors resolveSpace: image = resolveMediaUrl(imageUrl ?? image)
+    private fun resolve(c: Space): Space =
         c.copy(image = MediaUrl.resolve(c.imageUrl ?: c.image))
 }

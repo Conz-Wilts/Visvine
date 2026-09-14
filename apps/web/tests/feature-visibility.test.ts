@@ -12,7 +12,7 @@ const link = (source: string, target: string): NBLink =>
 const ALL: NBNode[] = [
   node('person:a', 'person'),
   // Legacy id prefixes survive the renames — only the type column migrates.
-  node('community:b', 'Space'),
+  node('space:b', 'Space'),
   node('event:c', 'event'),
   // Resource belongs to the Directory's Resources tab — always on, never hidden.
   node('resource:d', 'resource'),
@@ -36,7 +36,7 @@ describe('visibleNodes', () => {
     const config: SpaceFeatureConfig = { enabled: { channels: false } };
     assert.deepEqual(
       names(visibleNodes(ALL, config)),
-      ['agent:h', 'community:b', 'connector:e', 'event:c', 'person:a', 'resource:d'],
+      ['agent:h', 'connector:e', 'event:c', 'person:a', 'resource:d', 'space:b'],
     );
   });
 
@@ -57,7 +57,7 @@ describe('visibleNodes', () => {
     };
     assert.deepEqual(
       names(visibleNodes(ALL, config)),
-      ['agent:h', 'community:b', 'connector:e', 'event:c', 'person:a', 'resource:d'],
+      ['agent:h', 'connector:e', 'event:c', 'person:a', 'resource:d', 'space:b'],
     );
   });
 
@@ -72,7 +72,7 @@ describe('visibleGraph', () => {
   it('drops links whose far end was hidden, and keeps the rest', () => {
     const config: SpaceFeatureConfig = { enabled: { channels: false } };
     const links = [
-      link('person:a', 'community:b'), // both survive
+      link('person:a', 'space:b'), // both survive
       link('person:a', 'channel:f'), // target hidden
       link('channel:f', 'person:a'), // source hidden
     ];

@@ -29,7 +29,7 @@ const { space, nodes, links } = data;
 if (!space?.id || !Array.isArray(nodes) || !Array.isArray(links)) {
   throw new Error('add-icehouse-ventures: data file must have { space, nodes[], links[] }');
 }
-const COMM = space.id;
+const SPACE_ID = space.id;
 
 // The research data models portfolio companies / the VC firm as custom node
 // types ("Startup"/"Investor"). The app's alias model wants a canonical base
@@ -84,7 +84,7 @@ try {
       space.country ?? 'NZ',
     ]
   );
-  console.log(`  ✓ ${COMM}`);
+  console.log(`  ✓ ${SPACE_ID}`);
 
   // 2. Nodes
   console.log(`\n--- Upserting ${nodes.length} nodes ---`);
@@ -98,7 +98,7 @@ try {
          space_id = EXCLUDED.space_id, alias = EXCLUDED.alias, updated_at = NOW()`,
       [
         nodeId(n.id), m.type, n.name, n.subtitle ?? null, n.location ?? null, n.url ?? null,
-        n.tags ?? [], JSON.stringify(n.metadata ?? {}), COMM, n.alias ?? m.alias,
+        n.tags ?? [], JSON.stringify(n.metadata ?? {}), SPACE_ID, n.alias ?? m.alias,
       ]
     );
   }
@@ -123,7 +123,7 @@ try {
     await client.query(
       `INSERT INTO links (source_id, target_id, relationship, space_id, metadata, created_at)
        VALUES ($1, $2, $3, $4, '{}'::jsonb, NOW())`,
-      [l.sourceId, l.targetId, l.relationship, COMM]
+      [l.sourceId, l.targetId, l.relationship, SPACE_ID]
     );
     added++;
   }
@@ -135,13 +135,13 @@ try {
   console.log('\n--- Node type breakdown ---');
   const breakdown = await client.query(
     "SELECT type, COUNT(*)::int AS count FROM nodes WHERE space_id = $1 GROUP BY type ORDER BY count DESC, type",
-    [COMM]
+    [SPACE_ID]
   );
   console.table(breakdown.rows);
 
   const linkCount = await client.query(
     'SELECT relationship, COUNT(*)::int AS count FROM links WHERE space_id = $1 GROUP BY relationship ORDER BY count DESC',
-    [COMM]
+    [SPACE_ID]
   );
   console.table(linkCount.rows);
 } catch (e) {

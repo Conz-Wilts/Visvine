@@ -83,7 +83,7 @@ export function buildNoteIndex(notes: RawNote[]): NoteMeta[] {
  * A folder's display name: the title its index note declares.
  *
  * A folder IS its index note everywhere else — the folder row opens it, starring
- * the folder stars it — so the name follows the same rule, and `communities/`
+ * the folder stars it — so the name follows the same rule, and `spaces/`
  * titled "Companies" reads as Companies wherever it is shown. The path never
  * moves, so links, URLs and grants are unaffected.
  *

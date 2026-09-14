@@ -79,7 +79,7 @@ test('a policy that promises a credential to a host it does not allow will not c
 test('a message telling the agent to exfiltrate arrives as data, fenced and labelled', () => {
   const poisoned = messageForRun({
     channel: 'email',
-    spaceId: 'community:blackbird-ventures',
+    spaceId: 'space:blackbird-ventures',
     agentName: 'digest',
     from: { email: 'attacker@example.com', display: 'IT Support' },
     subject: 'urgent',

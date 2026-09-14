@@ -110,7 +110,7 @@ export async function listMySpaces(ctx: ActionCaller) {
     is_personal_space: r.space.personalOwnerId !== null,
     // The space this one is a sub-space of, if any (docs/sub-spaces.md). A
     // public sub-space's context is also readable from the parent, under
-    // spaces/<id>/.
+    // subspaces/<id>/.
     parent_id: r.space.parentId,
   }))
 }

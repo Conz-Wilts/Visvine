@@ -1,33 +1,33 @@
 import Foundation
 import Observation
 
-/// App-scoped community selection — the native equivalent of CommunityProvider.
+/// App-scoped space selection — the native equivalent of SpaceProvider.
 /// Driven by the view layer on auth change (see MainTabView.task), it refreshes
-/// the list and selects the first community by default.
+/// the list and selects the first space by default.
 @MainActor
 @Observable
-final class CommunityStore {
-    var communities: [Community] = []
-    var current: Community?
+final class SpaceStore {
+    var spaces: [Space] = []
+    var current: Space?
     var isLoading = false
 
-    private let repo = CommunityRepository()
+    private let repo = SpaceRepository()
     private let auth: AuthManager
 
     init(auth: AuthManager) {
         self.auth = auth
     }
 
-    func setCurrent(_ community: Community?) { current = community }
+    func setCurrent(_ space: Space?) { current = space }
 
     func refresh() async {
         guard auth.isAuthenticated else {
-            communities = []; current = nil; return
+            spaces = []; current = nil; return
         }
         isLoading = true
-        switch await repo.getCommunities() {
+        switch await repo.getSpaces() {
         case .success(let list):
-            communities = list
+            spaces = list
             if current == nil || !list.contains(where: { $0.id == current?.id }) {
                 current = list.first
             }

@@ -14,8 +14,8 @@ class DirectoryRepository @Inject constructor(
     private val api: VisvineApi,
     private val json: Json,
 ) {
-    suspend fun getMembers(communityId: String): ApiResult<List<DirectoryMember>> =
-        when (val res = safeApiCall(json) { api.getNodes(communityId) }) {
+    suspend fun getMembers(spaceId: String): ApiResult<List<DirectoryMember>> =
+        when (val res = safeApiCall(json) { api.getNodes(spaceId) }) {
             is ApiResult.Success -> ApiResult.Success(
                 res.data.nodes.map { it.copy(imageUrl = MediaUrl.resolve(it.imageUrl)) }
             )

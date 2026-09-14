@@ -35,7 +35,7 @@ export function useAgentsRoster(spaceId: string | null, live: boolean): { data: 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const key = `agents:roster:${spaceId}`;
-    const read = () => fetchJson<RosterResponse>(`/api/communities/${spaceId}/agents`);
+    const read = () => fetchJson<RosterResponse>(`/api/spaces/${spaceId}/agents`);
     const load = async () => {
       try {
         // Followed: every poll is a real read. Listed: the cached roster

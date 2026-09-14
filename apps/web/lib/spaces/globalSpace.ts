@@ -27,7 +27,7 @@ export function isGlobalSpace(spaceId: string | null | undefined): boolean {
   return spaceId === GLOBAL_SPACE_ID
 }
 
-/** Space ids nobody may create a space under — see app/api/communities/route.ts. */
+/** Space ids nobody may create a space under — see app/api/spaces/route.ts. */
 export function isReservedSpaceId(id: string): boolean {
   return isGlobalSpace(id) || id.startsWith('me:')
 }

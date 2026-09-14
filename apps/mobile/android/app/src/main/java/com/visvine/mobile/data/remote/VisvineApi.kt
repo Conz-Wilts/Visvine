@@ -1,7 +1,7 @@
 package com.visvine.mobile.data.remote
 
-import com.visvine.mobile.data.model.CommunitiesResponse
-import com.visvine.mobile.data.model.Community
+import com.visvine.mobile.data.model.SpacesResponse
+import com.visvine.mobile.data.model.Space
 import com.visvine.mobile.data.model.ConversationsResponse
 import com.visvine.mobile.data.model.DevUsersResponse
 import com.visvine.mobile.data.model.DirectoryMember
@@ -37,16 +37,16 @@ interface VisvineApi {
     @POST("api/auth/signout")
     suspend fun signOut(): retrofit2.Response<Unit>
 
-    // Communities
-    @GET("api/data/communities")
-    suspend fun getCommunities(): CommunitiesResponse
+    // Spaces
+    @GET("api/data/spaces")
+    suspend fun getSpaces(): SpacesResponse
 
-    @GET("api/data/communities")
-    suspend fun getCommunity(@Query("id") id: String): Community
+    @GET("api/data/spaces")
+    suspend fun getSpace(@Query("id") id: String): Space
 
     // Events
     @GET("api/events")
-    suspend fun getEvents(@Query("communityId") communityId: String): EventsResponse
+    suspend fun getEvents(@Query("spaceId") spaceId: String): EventsResponse
 
     @GET("api/events/{id}")
     suspend fun getEvent(@Path("id") eventId: String): Event
@@ -69,7 +69,7 @@ interface VisvineApi {
 
     // Directory
     @GET("api/data/nodes")
-    suspend fun getNodes(@Query("community_id") communityId: String): NodesResponse
+    suspend fun getNodes(@Query("space_id") spaceId: String): NodesResponse
 
     // Profile — same route, two shapes (member vs. full profile)
     @GET("api/profile/{id}")

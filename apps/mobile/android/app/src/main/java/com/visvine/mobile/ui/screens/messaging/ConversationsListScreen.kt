@@ -54,7 +54,7 @@ fun ConversationsListScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
-        ScreenHeader(onProfileClick = onProfileClick, showCommunitySelector = false)
+        ScreenHeader(onProfileClick = onProfileClick, showSpaceSelector = false)
 
         state.error?.let {
             Text(it, color = colors.error, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp))

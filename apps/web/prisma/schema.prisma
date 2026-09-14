@@ -1312,7 +1312,7 @@ model SpaceMember {
 
 /// Canonical, cross-space identity for a real person or organization.
 /// Each space keeps its own private `Node` row; all nodes that represent the
-/// same real person/org point to ONE Identity (Node.identityId). Communities never
+/// same real person/org point to ONE Identity (Node.identityId). Spaces never
 /// share their per-node data — only identity-level facts live here (canonical name,
 /// photo, strong identifiers). Resolution (lib/identity/resolve.ts) decides whether
 /// a new node attaches to an existing identity or mints a new one. `userId` links the

@@ -9,6 +9,7 @@
 
 import { nextOccurrence } from '@/lib/agents/config'
 import type { AutoFix } from './review'
+import { SUBSPACE_FOLDER } from '@/lib/spaces/subspaces'
 
 export type CleanFixKind = AutoFix['kind']
 
@@ -120,7 +121,7 @@ export const WORKLIST_ITEMS_KEPT = 25
  * the notes, at the top level:
  *
  * - A sub-space's context is not the parent's to clean — it is read into the
- *   parent as the read-only `spaces/<id>/` folder (lib/notes/federation.ts) and
+ *   parent as the read-only `subspaces/<id>/` folder (lib/notes/federation.ts) and
  *   every write there is already refused (subspaceWriteDenial). Giving a
  *   sub-space its own nightly pass would make the parent's admins responsible
  *   for a tenant whose members they are not, so it holds none either.
@@ -151,9 +152,9 @@ export function normalizeCleanTarget(input: unknown): string | null {
   if (typeof input !== 'string') return null
   const path = input.trim().replace(/^\/+|\/+$/g, '')
   if (!path) return null
-  // `spaces/` is the federated read of this space's public sub-spaces. Even
+  // `subspaces/` is the federated read of this space's public sub-spaces. Even
   // targeted by hand it is never cleaned from here.
-  if (path === 'spaces' || path.startsWith('spaces/')) return null
+  if (path === SUBSPACE_FOLDER || path.startsWith(`${SUBSPACE_FOLDER}/`)) return null
   return path
 }
 

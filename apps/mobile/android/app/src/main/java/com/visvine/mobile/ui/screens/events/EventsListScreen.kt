@@ -34,7 +34,7 @@ import com.visvine.mobile.ui.components.ScreenHeader
 import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
-import com.visvine.mobile.ui.viewmodel.CommunityViewModel
+import com.visvine.mobile.ui.viewmodel.SpaceViewModel
 import com.visvine.mobile.ui.viewmodel.EventsListViewModel
 import com.visvine.mobile.ui.viewmodel.SearchViewModel
 
@@ -77,13 +77,13 @@ fun EventsListScreen(
     onProfileClick: () -> Unit,
     onOpenEvent: (eventId: String, title: String?) -> Unit,
     viewModel: EventsListViewModel = hiltViewModel(),
-    communityViewModel: CommunityViewModel = hiltViewModel(),
+    spaceViewModel: SpaceViewModel = hiltViewModel(),
     searchViewModel: SearchViewModel = hiltViewModel(),
 ) {
     val colors = VisvineTheme.colors
     val state by viewModel.state.collectAsStateWithLifecycle()
     val events by viewModel.filtered.collectAsStateWithLifecycle()
-    val current by communityViewModel.current.collectAsStateWithLifecycle()
+    val current by spaceViewModel.current.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { searchViewModel.setPlaceholder("Search events") }
 

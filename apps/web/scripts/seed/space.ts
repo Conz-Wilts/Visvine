@@ -4,7 +4,7 @@
  * Every seed layer — `prisma/seed.ts`, the directory, the notes, the extras,
  * the placeholder machinery — reads the space's identity from here, so the
  * demo space is named ONCE. The layers used to spell
- * `community:blackbird-ventures` into six files, which is why swapping the
+ * `space:blackbird-ventures` into six files, which is why swapping the
  * demo content meant editing all six.
  *
  * The space is **Visvine HQ**: Visvine's own working space, dogfooding the
@@ -15,7 +15,7 @@
  * Note the id: the bare `visvine` id is RESERVED for the platform's global
  * public-record space (lib/spaces/globalSpace.ts), which is a different thing
  * with different access rules. This is a normal tenant that happens to be us,
- * so it takes a normal `community:` id and a name that cannot be mistaken for
+ * so it takes a normal `space:` id and a name that cannot be mistaken for
  * the global one in Discover.
  *
  * Everyone in this space is INVENTED. The fixture gets dumped and passed
@@ -27,7 +27,7 @@
 
 import { ADMIN_ALIAS, ADMIN_ALIAS_ID, ADMIN_ALIAS_NAME } from '../../lib/types/context'
 
-export const SPACE_ID = 'community:visvine-hq'
+export const SPACE_ID = 'space:visvine-hq'
 export const SPACE_NAME = 'Visvine HQ'
 export const SPACE_DESCRIPTION =
   'Visvine building Visvine. The spaces that run on us, the people who run them, ' +
@@ -124,7 +124,7 @@ export const NODE_TYPES = [
   { name: 'Space', color: '#78d870', shape: 'square' },
   // An organisation that runs on Visvine is a RECORD here, not a tenant of
   // this space: it has a directory card and a context note
-  // (communities/<slug>/index.md, the org namespace — see lib/notes/entities.ts)
+  // (spaces/<slug>/index.md, the org namespace — see lib/notes/entities.ts)
   // but its own Visvine space, if it has one, is its own tenant. `company`
   // folds onto `space` in TYPE_SYNONYMS so the entity machinery is unchanged;
   // declaring the type here is what makes this spelling win in
@@ -188,9 +188,9 @@ export interface SeedAlias {
  * Spread across the permission model so every shape of grant is represented:
  *
  *   Admin      system, is admin of the space — built in, cannot be changed
- *   Team       edit on the working set — communities/, deals/, data/, product/
- *   Champion   view on communities/ and product/ — a customer's own operator
- *   Advisor    view on communities/ and segments/
+ *   Team       edit on the working set — spaces/, deals/, data/, product/
+ *   Champion   view on spaces/ and product/ — a customer's own operator
+ *   Advisor    view on spaces/ and segments/
  *   Board      view on ONE note — the tightest grant there is
  *   Everyone   view on segments/ (the space-wide grant)
  */
@@ -210,7 +210,7 @@ export const ALIASES: SeedAlias[] = [
     nodeType: 'Person',
     admin: false,
     system: false,
-    grants: [['communities', EDIT], ['deals', EDIT], ['data', EDIT], ['product', EDIT]],
+    grants: [['spaces', EDIT], ['deals', EDIT], ['data', EDIT], ['product', EDIT]],
   },
   {
     name: 'Champion',
@@ -218,7 +218,7 @@ export const ALIASES: SeedAlias[] = [
     nodeType: 'Person',
     admin: false,
     system: false,
-    grants: [['communities', VIEW], ['product', VIEW]],
+    grants: [['spaces', VIEW], ['product', VIEW]],
   },
   {
     name: 'Advisor',
@@ -226,7 +226,7 @@ export const ALIASES: SeedAlias[] = [
     nodeType: 'Person',
     admin: false,
     system: false,
-    grants: [['communities', VIEW], ['segments', VIEW]],
+    grants: [['spaces', VIEW], ['segments', VIEW]],
   },
   {
     name: 'Board',
@@ -333,7 +333,7 @@ export function slugify(value: string): string {
     .toLowerCase()
 }
 
-/** An organisation's node id. Its entity note is communities/<slug>/index.md. */
+/** An organisation's node id. Its entity note is spaces/<slug>/index.md. */
 export const orgNodeId = (slug: string) => `company:${slug}`
 /** A person's node id. Their entity note is people/<slug>/index.md. */
 export const personNodeId = (slug: string) => `person:${slug}`

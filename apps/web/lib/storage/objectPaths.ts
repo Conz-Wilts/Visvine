@@ -74,7 +74,7 @@ export function contextSourceObjectPath(
  * bucket these are keyed by ENTITY id, not by space — a card's images sit under
  * its node id with nothing in the path saying which space that node belongs to.
  * So a space delete cannot express "my images" as one prefix for cards, persons
- * and events; only its own `communities/<id>/` prefix is tenant-derivable.
+ * and events; only its own `spaces/<id>/` prefix is tenant-derivable.
  *
  * That is why the reconciliation sweep exists rather than being a nicety: for
  * this bucket, walking live entity ids is the only complete answer, and it is
@@ -84,7 +84,7 @@ export function contextSourceObjectPath(
 export const MEDIA_PREFIXES = {
   card: 'cards',
   person: 'persons',
-  space: 'communities',
+  space: 'spaces',
   event: 'events',
 } as const;
 

@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class FullProfile(
     val id: String,
-    val communityId: String? = null,
+    val spaceId: String? = null,
     val name: String = "",
     val subtitle: String? = null,
     val bio: String? = null,

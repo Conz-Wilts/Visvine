@@ -58,7 +58,7 @@ struct ConversationsListView: View {
     var body: some View {
         let c = theme.colors
         VStack(spacing: 0) {
-            ScreenHeader(showCommunitySelector: false, onProfile: onProfile)
+            ScreenHeader(showSpaceSelector: false, onProfile: onProfile)
             if let error = model.error {
                 Text(error).foregroundStyle(c.error).font(.system(size: 14))
                     .frame(maxWidth: .infinity, alignment: .leading)

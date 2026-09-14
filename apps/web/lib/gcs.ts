@@ -184,6 +184,21 @@ export async function listObjects(bucketName: string, prefix?: string): Promise<
   }));
 }
 
+/**
+ * Copy one object to a new path within the same bucket, keeping its content
+ * type. The write lands before anything deletes the source, so a prefix move
+ * that dies half-way leaves both copies rather than neither.
+ */
+export async function copyObject(bucketName: string, from: string, to: string): Promise<void> {
+  if (storageDriver() === 'local') {
+    const held = await localRead(bucketName, from);
+    if (!held) return;
+    await localSave(bucketName, to, held.bytes, held.contentType);
+    return;
+  }
+  await getStorage().bucket(bucketName).file(from).copy(getStorage().bucket(bucketName).file(to));
+}
+
 /** Delete one object, ignoring a miss. */
 export async function deleteObject(bucketName: string, objectPath: string): Promise<void> {
   if (storageDriver() === 'local') return localDelete(bucketName, objectPath);

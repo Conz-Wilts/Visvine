@@ -7,8 +7,8 @@ func avatarInitials(_ name: String) -> String {
         .joined()
 }
 
-/// A community's avatar: its image, or its initials when there is none.
-struct CommunityAvatar: View {
+/// A space's avatar: its image, or its initials when there is none.
+struct SpaceAvatar: View {
     @Environment(ThemeStore.self) private var theme
     let name: String
     let imageUrl: String?

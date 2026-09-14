@@ -141,7 +141,7 @@ export default function ConnectorToolPermissions({
   const [saving, setSaving] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
-  const base = `/api/communities/${encodeURIComponent(spaceId)}/connectors/${encodeURIComponent(name)}/tools`;
+  const base = `/api/spaces/${encodeURIComponent(spaceId)}/connectors/${encodeURIComponent(name)}/tools`;
 
   useEffect(() => {
     let cancelled = false;

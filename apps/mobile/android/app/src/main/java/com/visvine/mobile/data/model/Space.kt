@@ -2,9 +2,9 @@ package com.visvine.mobile.data.model
 
 import kotlinx.serialization.Serializable
 
-/** Tenant community — mirrors the web API's `Community` DTO (server truth). */
+/** Tenant space — mirrors the web API's `Space` DTO (server truth). */
 @Serializable
-data class Community(
+data class Space(
     val id: String,
     val name: String,
     val description: String? = null,
@@ -13,6 +13,6 @@ data class Community(
 )
 
 @Serializable
-data class CommunitiesResponse(
-    val communities: List<Community> = emptyList(),
+data class SpacesResponse(
+    val spaces: List<Space> = emptyList(),
 )

@@ -52,7 +52,7 @@ export function useRun(
     const load = async () => {
       try {
         const data = await fetchJson<{ run: RunDetail }>(
-          `/api/communities/${spaceId}/agents/${encodeURIComponent(agentName)}/runs/${runId}`,
+          `/api/spaces/${spaceId}/agents/${encodeURIComponent(agentName)}/runs/${runId}`,
         );
         if (cancelled) return;
         setRun(data.run);

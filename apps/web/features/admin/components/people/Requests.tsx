@@ -23,10 +23,10 @@ export default function Requests() {
   const pendingAccess = (data?.requests ?? []).filter((r) => r.status === 'pending');
 
   const approve = (userId: string) =>
-    run(() => fetchJsonBody(`/api/communities/${spaceId}/members/${userId}`, 'PUT', { status: 'active' }));
+    run(() => fetchJsonBody(`/api/spaces/${spaceId}/members/${userId}`, 'PUT', { status: 'active' }));
 
   const removePending = (userId: string) =>
-    run(() => fetchJson(`/api/communities/${spaceId}/members/${userId}`, { method: 'DELETE' }));
+    run(() => fetchJson(`/api/spaces/${spaceId}/members/${userId}`, { method: 'DELETE' }));
 
   if (pending.length === 0 && pendingAccess.length === 0) return null;
 

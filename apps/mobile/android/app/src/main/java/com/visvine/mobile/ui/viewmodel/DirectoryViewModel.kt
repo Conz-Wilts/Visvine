@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.visvine.mobile.data.model.DirectoryMember
 import com.visvine.mobile.data.remote.ApiResult
 import com.visvine.mobile.data.repository.DirectoryRepository
-import com.visvine.mobile.ui.state.CommunityManager
+import com.visvine.mobile.ui.state.SpaceManager
 import com.visvine.mobile.ui.state.SearchController
 import com.visvine.mobile.ui.util.searchScore
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,7 +24,7 @@ enum class SortOrder { AZ, ZA }
 @HiltViewModel
 class DirectoryViewModel @Inject constructor(
     private val directoryRepo: DirectoryRepository,
-    private val communityManager: CommunityManager,
+    private val spaceManager: SpaceManager,
     private val search: SearchController,
 ) : ViewModel() {
 
@@ -93,29 +93,29 @@ class DirectoryViewModel @Inject constructor(
         viewModelScope.launch {
             // StateFlow already conflates equal values; an explicit
             // distinctUntilChanged() is a no-op the compiler rejects.
-            communityManager.current.collect { load() }
+            spaceManager.current.collect { load() }
         }
     }
 
     fun load() {
-        val community = communityManager.current.value
-        if (community == null) {
+        val space = spaceManager.current.value
+        if (space == null) {
             _members.value = emptyList()
             _state.value = _state.value.copy(loading = false)
             return
         }
         _state.value = _state.value.copy(loading = true)
         viewModelScope.launch {
-            applyResult(directoryRepo.getMembers(community.id))
+            applyResult(directoryRepo.getMembers(space.id))
             _state.value = _state.value.copy(loading = false)
         }
     }
 
     fun refresh() {
-        val community = communityManager.current.value ?: return
+        val space = spaceManager.current.value ?: return
         _state.value = _state.value.copy(refreshing = true)
         viewModelScope.launch {
-            applyResult(directoryRepo.getMembers(community.id))
+            applyResult(directoryRepo.getMembers(space.id))
             _state.value = _state.value.copy(refreshing = false)
         }
     }

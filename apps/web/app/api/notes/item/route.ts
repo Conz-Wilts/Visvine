@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   // index (people/x.md → people/x/index.md): a client holding the old path (a
   // stale profile cache, an old link) reads the live note, and `path` says
   // where it really is. Writes redirect the same way (store.writeNote).
-  // A path under spaces/<id>/ is a sub-space's note read through this one
+  // A path under subspaces/<id>/ is a sub-space's note read through this one
   // (lib/notes/federation.ts) — its own, already-canonical path, never this
   // context's entity map.
   const canonical = isSubspacePath(path) ? path : await canonicalEntityWritePath(context, path)

@@ -2,7 +2,7 @@
 //
 // The parent's tree, note index, single-note read and search each have a
 // federated form here that answers over the parent's own context PLUS every
-// public sub-space's, rebased under `spaces/<id>/`. Nothing is copied: each
+// public sub-space's, rebased under `subspaces/<id>/`. Nothing is copied: each
 // read opens the sub-space's context as of now, so a change there is a change
 // here, and a sub-space turned private disappears from the parent on the next
 // read.
@@ -84,7 +84,7 @@ async function subspaceReaders(p: ContextPrincipal, context: Context): Promise<S
 
 /**
  * The reader for the sub-space a parent-side path names, or null when the
- * path is not under `spaces/<id>` or names a sub-space that does not flow
+ * path is not under `subspaces/<id>` or names a sub-space that does not flow
  * into this space (private, someone else's, or not a space at all —
  * indistinguishable on purpose).
  */
@@ -139,7 +139,7 @@ export async function federatedMetas(p: ContextPrincipal, context: Context): Pro
 }
 
 /**
- * Read one note by path: the context's own note, or — under `spaces/<id>/` —
+ * Read one note by path: the context's own note, or — under `subspaces/<id>/` —
  * the sub-space's, through its reader, with links rebased. Null when absent
  * or hidden, indistinguishably.
  */

@@ -395,7 +395,7 @@ export const CONTEXT_ACTIONS = [
         const limit = args.limit ?? 100
 
         // Notes (visibility lens applied inside visibleVault; a public
-        // sub-space's index rides along under spaces/<id>/).
+        // sub-space's index rides along under subspaces/<id>/).
         const metas = await federatedMetas(principal, context)
         let notes = [...metas].sort((a, b) => a.path.localeCompare(b.path))
         if (args.path_prefix) notes = notes.filter((m) => m.path.startsWith(args.path_prefix!))
@@ -1022,7 +1022,7 @@ export const CONTEXT_ACTIONS = [
         'usage — pick the best EXISTING type. You cannot create new types; if none fits, use the closest and ' +
         'suggest a new type in prose. The TYPE decides which fields apply and where the note lives:\n' +
         '  • person   → people/<slug>.md      fields: subtitle (role), email, companyName, linkedinUrl, location, image_url\n' +
-        '  • space    → communities/<slug>.md fields: subtitle (tagline), url (website), location, founded, memberCount, image_url\n' +
+        '  • space    → spaces/<slug>.md fields: subtitle (tagline), url (website), location, founded, memberCount, image_url\n' +
         '  • resource → resources/<slug>.md   fields: subtitle (description), url\n' +
         'A "space" here is a RECORD of an organisation — a company, collective or investor — kept as a card in ' +
         'this space\'s directory. It provisions nothing: to start a space or a sub-space people can join, use ' +

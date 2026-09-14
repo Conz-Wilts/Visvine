@@ -2,7 +2,7 @@
 
 /**
  * A person's time on Visvine, drawn the way LinkedIn draws a position: the
- * logo beside the community, the role, the dates and tenure, and — while it
+ * logo beside the space, the role, the dates and tenure, and — while it
  * is still current — a description under them.
  */
 
@@ -17,7 +17,7 @@ export default function ExperienceTimeline({ accountCreatedAt }: { accountCreate
   return (
     <ExperienceEntry
       logo={<Image src="/images/brand-icon.png" alt="" width={48} height={48} className="w-12 h-12 rounded-lg object-cover" />}
-      community="Visvine"
+      space="Visvine"
       role="Member"
       since={new Date(accountCreatedAt)}
       until={null}
@@ -26,8 +26,8 @@ export default function ExperienceTimeline({ accountCreatedAt }: { accountCreate
   );
 }
 
-function ExperienceEntry({ logo, community, role, since, until, description }: {
-  logo: React.ReactNode; community: string; role: string;
+function ExperienceEntry({ logo, space, role, since, until, description }: {
+  logo: React.ReactNode; space: string; role: string;
   since: Date; until: Date | null; description?: string;
 }) {
   const range = `${monthYear(since)} – ${until ? monthYear(until) : 'Present'} · ${tenure(since, until ?? new Date())}`;
@@ -37,7 +37,7 @@ function ExperienceEntry({ logo, community, role, since, until, description }: {
     <div className="flex gap-3 pb-5">
       <div className="flex-none">{logo}</div>
       <div className="min-w-0 flex-1 pt-0.5">
-        <div className="text-[15px] font-bold font-open-sauce text-text-primary">{community}</div>
+        <div className="text-[15px] font-bold font-open-sauce text-text-primary">{space}</div>
         <div className="text-sm text-text-secondary">{role}</div>
         <div className="text-sm text-text-muted">{range}</div>
         {showDescription && (

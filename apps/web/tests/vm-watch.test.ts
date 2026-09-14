@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { machineRef, mintWatchTicket, TICKET_TTL_SECONDS, verifyWatchTicket, watchUrl } from '@/lib/vm/watch'
 
 const SECRET = 'edge-service-token-for-tests-0000000000'
-const SPACE = 'community:blackbird-ventures'
+const SPACE = 'space:blackbird-ventures'
 const AGENT = 'weekly-digest'
 const ENV = 'dev'
 const MACHINE = machineRef(ENV, SPACE, AGENT)
@@ -29,7 +29,7 @@ test('a ticket is good for exactly one machine', () => {
   // The interesting refusal: a real ticket, from a real admin, pointed at
   // somebody else's machine.
   assert.match(verifyWatchTicket(ticket, machineRef(ENV, SPACE, 'other-agent'), SECRET) ?? '', /different machine/)
-  assert.match(verifyWatchTicket(ticket, machineRef(ENV, 'community:someone-else', AGENT), SECRET) ?? '', /different machine/)
+  assert.match(verifyWatchTicket(ticket, machineRef(ENV, 'space:someone-else', AGENT), SECRET) ?? '', /different machine/)
 })
 
 test('a ticket expires', () => {

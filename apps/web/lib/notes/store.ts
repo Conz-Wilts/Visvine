@@ -1267,7 +1267,7 @@ export async function canonicalEntityWritePath(context: Context, path: string): 
   if (!parseEntityHref(p) || isIndexPath(p)) return p
   // A folder-only kind's flat path is an alias: the index is the note, live or
   // not yet written — a create addressed at people/x.md builds the folder. Only
-  // when a node stands behind it, though: `communities/exits.md` with no
+  // when a node stands behind it, though: `spaces/exits.md` with no
   // organisation called "exits" is an ordinary note that happens to live in an
   // entity namespace, and it stays where it was written.
   const canonical = canonicalEntityPath(p)

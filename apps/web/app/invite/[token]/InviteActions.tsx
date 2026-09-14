@@ -6,7 +6,7 @@ import { fetchJsonBody } from '@/lib/fetchJson';
 
 /**
  * Join button for the invite landing page. Posts the token to
- * /api/communities/join-via-invite, which records a pending membership. Already-
+ * /api/spaces/join-via-invite, which records a pending membership. Already-
  * active members are sent straight into the space.
  */
 export default function InviteActions({
@@ -45,7 +45,7 @@ export default function InviteActions({
     setLoading(true);
     setError(null);
     try {
-      const body = await fetchJsonBody<{ status?: string } | null>('/api/communities/join-via-invite', 'POST', { token });
+      const body = await fetchJsonBody<{ status?: string } | null>('/api/spaces/join-via-invite', 'POST', { token });
       setStatus(body?.status === 'active' ? 'active' : 'pending');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not join');

@@ -53,7 +53,7 @@ export default function MessageAgent({
     // waits so the line comes up live.
     const t = setInterval(onSettled, 1500);
     try {
-      const res = await fetchJson<SendResponse>(`/api/communities/${spaceId}/agents/${encodeURIComponent(agentName)}/message`, {
+      const res = await fetchJson<SendResponse>(`/api/spaces/${spaceId}/agents/${encodeURIComponent(agentName)}/message`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ text: message }),

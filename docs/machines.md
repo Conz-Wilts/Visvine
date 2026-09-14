@@ -198,7 +198,7 @@ policy for anything that judges an agent's reach outside a run. A connector
 host the grammar cannot enforce — an IP, `localhost` — is dropped from the
 machine's reach (the isolate still reaches it); a connector note that does not
 parse grants nothing. The sha256 of the canonical policy rides the lease row as
-`policyHash`. `GET /api/communities/<id>/vm/policy` shows an admin the compiled
+`policyHash`. `GET /api/spaces/<id>/vm/policy` shows an admin the compiled
 list, the digest, and what was rejected or unreadable.
 
 A running machine can be narrowed (`/policy` on the edge → `setPolicy`), which
@@ -290,7 +290,7 @@ watching gets it live over a socket; the control plane gets it in batches
 (`POST /api/internal/vm/events`) and keeps it in `agent_vm_events`
 (`AgentVmEvent`) whether or not anyone was attached — the screen is ephemeral,
 the record is not, and a run nobody watched must still be reviewable.
-`GET /api/communities/<id>/vm/timeline` reads it, newest first.
+`GET /api/spaces/<id>/vm/timeline` reads it, newest first.
 
 Event kinds: `boot`, `wake`, `exec`, `output`, `exit`, `sleep`, `error`,
 `egress_denied`, `takeover`, `release`. `seq` is assigned on the edge so order
@@ -325,7 +325,7 @@ the largest cost in the system and the most sensitive thing in it.
 
 The browser is never given `EDGE_SERVICE_TOKEN` — that is a key to every
 machine on the platform, and a key that reaches a browser is a key in devtools.
-`GET /api/communities/<id>/vm/watch` authorizes the person (session, space,
+`GET /api/spaces/<id>/vm/watch` authorizes the person (session, space,
 admin), mints an HMAC ticket bound to one `machineRef` for sixty seconds
 (`lib/vm/watch.ts`), and returns the socket URL. The Worker verifies signature,
 machine and expiry (`apps/agent-edge/src/ticket.ts` mirrors the signing; the
@@ -355,7 +355,7 @@ the space can read.
 ## Teaching
 
 Take control, do the task once, give control back: the `release` event carries
-the trace. `POST /api/communities/<id>/vm/teach` (`lib/agents/teach.ts`) hands
+the trace. `POST /api/spaces/<id>/vm/teach` (`lib/agents/teach.ts`) hands
 that trace to the agent's own model, which writes the skill in its own words —
 intent, not coordinates, because a replay of coordinates breaks the first time a
 button moves — as two notes under `agents/<name>/skills/<slug>/{index.md,steps.md}`.
@@ -445,7 +445,7 @@ machines already running.
 Removing the refusal does not remove the accounting, and it must not. The tick
 still meters every awake machine a minute at a time into `agent_vm_usage`
 (`AgentVmUsage`, one row per space per month) — the platform's timer is what
-bills, so it is what counts — and `GET /api/communities/<id>/vm/usage` is those
+bills, so it is what counts — and `GET /api/spaces/<id>/vm/usage` is those
 numbers in hours and dollars. What a runaway trips now is **`SPEND_ALERT_HOURS`**:
 past it the meter writes `vm.spend.alert` once, on the tick that crosses it,
 because an alert repeated every minute is an alert nobody reads. It warns and
@@ -534,7 +534,7 @@ forgery, and either way it is not evidence.
 `lib/agents/{skills,teach}.ts` + `lib/agents/shared/skills.ts`;
 `apps/agent-edge/src/{index,machine,egress,outbound,events,ticket,redact}.ts`,
 `apps/agent-edge/container/{Dockerfile,entrypoint.sh,screen.mjs,browse.mjs}`;
-`packages/vm-policy`. Routes: `/api/communities/<id>/vm/{policy,usage,watch,
+`packages/vm-policy`. Routes: `/api/spaces/<id>/vm/{policy,usage,watch,
 timeline,teach}`, `/api/internal/vm/{events,egress}`. Tests:
 `tests/vm-{policy,limits,watch,redteam}.test.ts`,
 `tests/agents-{skills,teach}.test.ts`; live: `pnpm --filter @visvine/web vm:redteam`.

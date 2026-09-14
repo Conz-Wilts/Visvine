@@ -31,9 +31,6 @@ function nodeRowToNBNode(row: {
     tags: row.tags,
     metadata: (row.metadata as Record<string, unknown>) ?? {},
     space_id: row.spaceId ?? null,
-    // Pre-rename spelling, still decoded by shipped mobile builds. Emitted
-    // alongside space_id rather than instead of it; drop once they roll over.
-    community_id: row.spaceId ?? null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -44,8 +41,7 @@ function nodeRowToNBNode(row: {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    // `community_id` is the pre-rename spelling shipped mobile builds send.
-    const spaceId = searchParams.get('space_id') ?? searchParams.get('community_id');
+    const spaceId = searchParams.get('space_id');
 
     if (!spaceId) {
       return NextResponse.json({ error: 'space_id is required' }, { status: 400 });

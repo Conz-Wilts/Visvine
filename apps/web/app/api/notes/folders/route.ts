@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   if (context instanceof Response) return context
   const path = typeof body.path === 'string' ? body.path : null
   if (!path) return fail('path is required')
-  // spaces/ is read-only: it is where sub-spaces' context appears
+  // subspaces/ is read-only: it is where sub-spaces' context appears
   // (lib/spaces/subspaces.ts), never a folder of this space's own.
   const reserved = subspaceWriteDenial(path)
   if (reserved) return fail(reserved, 403)

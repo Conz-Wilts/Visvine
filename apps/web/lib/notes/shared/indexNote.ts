@@ -164,7 +164,7 @@ export function humanizeFolderName(segment: string): string {
  * What a folder's index note should be titled after its path is renamed.
  *
  * The index title is the folder's display name, so the two can disagree on
- * purpose: `communities/` titled "Companies" is a folder somebody named. A path
+ * purpose: `spaces/` titled "Companies" is a folder somebody named. A path
  * rename must not silently overwrite that. So the title only follows the rename
  * while nobody has touched it — while it is still exactly what the folder name
  * would have produced (or the bare segment, as some seeded indexes carry).

@@ -88,7 +88,7 @@ export default function PeopleDataProvider({
         peopleKey(spaceId),
         async () => {
           const [membersRes, aliasesRes, overview, treeRes, settingsRes, requestsRes] = await Promise.all([
-            fetchJson<{ members: SpaceMember[] }>(`/api/communities/${spaceId}/members`),
+            fetchJson<{ members: SpaceMember[] }>(`/api/spaces/${spaceId}/members`),
             notesApi.listAliases(spaceId),
             notesApi.getAccessOverview(spaceId).catch(() => null),
             cachedFetch(contextKeys.tree(spaceId), () => notesApi.tree(spaceId)).catch(() => null),

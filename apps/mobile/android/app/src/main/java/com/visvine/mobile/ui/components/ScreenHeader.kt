@@ -36,24 +36,24 @@ import coil.compose.AsyncImage
 import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.AuthViewModel
-import com.visvine.mobile.ui.viewmodel.CommunityViewModel
+import com.visvine.mobile.ui.viewmodel.SpaceViewModel
 
 
 private fun initials(name: String?): String =
     name?.split(" ")?.mapNotNull { it.firstOrNull() }?.joinToString("")?.take(2)?.uppercase() ?: "?"
 
-/** The header every main screen carries: community switcher, then profile avatar. */
+/** The header every main screen carries: space switcher, then profile avatar. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScreenHeader(
     onProfileClick: () -> Unit,
-    showCommunitySelector: Boolean = true,
-    communityViewModel: CommunityViewModel = hiltViewModel(),
+    showSpaceSelector: Boolean = true,
+    spaceViewModel: SpaceViewModel = hiltViewModel(),
     authViewModel: AuthViewModel = hiltViewModel(),
 ) {
     val colors = VisvineTheme.colors
-    val communities by communityViewModel.communities.collectAsStateWithLifecycle()
-    val current by communityViewModel.current.collectAsStateWithLifecycle()
+    val spaces by spaceViewModel.spaces.collectAsStateWithLifecycle()
+    val current by spaceViewModel.current.collectAsStateWithLifecycle()
     val auth by authViewModel.state.collectAsStateWithLifecycle()
 
     var pickerVisible by remember { mutableStateOf(false) }
@@ -72,9 +72,9 @@ fun ScreenHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            if (showCommunitySelector) {
+            if (showSpaceSelector) {
                 Box(modifier = Modifier.clickable { pickerVisible = true }) {
-                    CommunityAvatar(name = current?.name ?: "", imageUrl = current?.image, size = 36.dp)
+                    SpaceAvatar(name = current?.name ?: "", imageUrl = current?.image, size = 36.dp)
                 }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -109,23 +109,23 @@ fun ScreenHeader(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             )
             LazyColumn {
-                items(communities, key = { it.id }) { community ->
-                    val active = current?.id == community.id
+                items(spaces, key = { it.id }) { space ->
+                    val active = current?.id == space.id
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(if (active) colors.accentLight else Color.Transparent)
                             .clickable {
-                                communityViewModel.setCurrent(community)
+                                spaceViewModel.setCurrent(space)
                                 pickerVisible = false
                             }
                             .padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        CommunityAvatar(name = community.name, imageUrl = community.image, size = 28.dp)
+                        SpaceAvatar(name = space.name, imageUrl = space.image, size = 28.dp)
                         Text(
-                            community.name,
+                            space.name,
                             color = if (active) colors.accentDark else colors.textSecondary,
                             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                             fontSize = 16.sp,

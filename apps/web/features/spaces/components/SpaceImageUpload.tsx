@@ -63,7 +63,7 @@ export default function SpaceImageUpload({
       const url = await uploadImage('space', space.id, pendingFile);
 
       // Persist imageUrl to the space record
-      await fetchJsonBody('/api/data/communities', 'PUT', { space: { ...space, imageUrl: url } });
+      await fetchJsonBody('/api/data/spaces', 'PUT', { space: { ...space, imageUrl: url } });
 
       if (preview) URL.revokeObjectURL(preview);
       setPreview(null);

@@ -37,7 +37,7 @@ export function fetchVersion(versionId: string, signal?: AbortSignal): Promise<V
 // ── installs ─────────────────────────────────────────────────────────────────
 
 export function fetchInstalls(spaceId: string, signal?: AbortSignal): Promise<InstallsResponse> {
-  return fetchJson<InstallsResponse>(`/api/communities/${encodeURIComponent(spaceId)}/tools`, { signal })
+  return fetchJson<InstallsResponse>(`/api/spaces/${encodeURIComponent(spaceId)}/tools`, { signal })
 }
 
 /**
@@ -57,7 +57,7 @@ export function patchInstall(
   patch: InstallPatch,
 ): Promise<InstallUpdatedResponse> {
   return fetchJsonBody<InstallUpdatedResponse>(
-    `/api/communities/${encodeURIComponent(spaceId)}/tools/${encodeURIComponent(installId)}`,
+    `/api/spaces/${encodeURIComponent(spaceId)}/tools/${encodeURIComponent(installId)}`,
     'PATCH',
     patch,
   )
@@ -65,7 +65,7 @@ export function patchInstall(
 
 export function uninstallTool(spaceId: string, installId: string): Promise<{ ok: true }> {
   return fetchJson<{ ok: true }>(
-    `/api/communities/${encodeURIComponent(spaceId)}/tools/${encodeURIComponent(installId)}`,
+    `/api/spaces/${encodeURIComponent(spaceId)}/tools/${encodeURIComponent(installId)}`,
     { method: 'DELETE' },
   )
 }
@@ -74,7 +74,7 @@ export function uninstallTool(spaceId: string, installId: string): Promise<{ ok:
 
 export function fetchAuthoredTools(spaceId: string, signal?: AbortSignal): Promise<AuthoredToolsResponse> {
   return fetchJson<AuthoredToolsResponse>(
-    `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring`,
+    `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring`,
     { signal },
   )
 }
@@ -86,7 +86,7 @@ export function fetchAuthoredTool(
   signal?: AbortSignal,
 ): Promise<AuthoredToolView> {
   return fetchJson<AuthoredToolView>(
-    `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
+    `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
     { signal },
   )
 }
@@ -97,7 +97,7 @@ export function fetchAuthoredTool(
  */
 export function createTool(spaceId: string, input: CreateToolRequest): Promise<CreateToolResponse> {
   return fetchJsonBody<CreateToolResponse>(
-    `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring`,
+    `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring`,
     'POST',
     input,
   )
@@ -111,7 +111,7 @@ export function createTool(spaceId: string, input: CreateToolRequest): Promise<C
  */
 export function deleteAuthoredTool(spaceId: string, name: string): Promise<{ ok: true }> {
   return fetchJson<{ ok: true }>(
-    `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
+    `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
     { method: 'DELETE' },
   )
 }
@@ -131,7 +131,7 @@ export function publishTool(
   releaseNotes?: string,
 ): Promise<PublishResponse> {
   return fetchJsonBody<PublishResponse>(
-    `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
+    `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
     'POST',
     { action: 'publish', ...(note ? { note } : {}), ...(releaseNotes ? { releaseNotes } : {}) },
   )
@@ -179,7 +179,7 @@ export function unlistFromMarketplace(spaceId: string, versionId: string): Promi
 }
 
 function versionsUrl(spaceId: string, versionId?: string): string {
-  const base = `/api/communities/${encodeURIComponent(spaceId)}/tools/versions`
+  const base = `/api/spaces/${encodeURIComponent(spaceId)}/tools/versions`
   return versionId ? `${base}/${encodeURIComponent(versionId)}` : base
 }
 
@@ -200,5 +200,5 @@ export function clearToolIcon(spaceId: string, name: string): Promise<ToolIconRe
 }
 
 function iconUrl(spaceId: string, name: string): string {
-  return `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}/icon`;
+  return `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}/icon`;
 }

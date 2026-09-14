@@ -78,7 +78,7 @@ export default function ModelsPanel({ space }: {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetchJson<{ canManage: boolean; models: ModelRow[]; localRuntimes?: Record<LocalRuntimeId, boolean> }>(`/api/communities/${encodeURIComponent(space)}/models`)
+    fetchJson<{ canManage: boolean; models: ModelRow[]; localRuntimes?: Record<LocalRuntimeId, boolean> }>(`/api/spaces/${encodeURIComponent(space)}/models`)
       .then((data) => {
         if (cancelled) return;
         setRows(data.models);
@@ -304,7 +304,7 @@ function AddModelForm({
       const path = modelPath(name);
       await notesApi.create(space, path, content);
       for (const secret of secrets) {
-        await fetchJson(`/api/communities/${encodeURIComponent(space)}/secrets`, {
+        await fetchJson(`/api/spaces/${encodeURIComponent(space)}/secrets`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(secret),

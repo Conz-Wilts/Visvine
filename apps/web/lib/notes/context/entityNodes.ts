@@ -12,7 +12,7 @@
  *
  *  * **Records and containers** (person, resource, event, space, channel)
  *    get BOTH a node and a canonical note under their fixed
- *    namespace — `spaces/general.md`, `channels/announcements.md`, and so on.
+ *    namespace — `sections/general.md`, `channels/announcements.md`, and so on.
  *  * **Documents** (a note, an uploaded file) get ONLY a node: the artifact IS
  *    its own context, and writing a second `.md` about a `.md` is noise.
  *
@@ -94,7 +94,7 @@ export interface SyncEntityNodeInput {
   /**
    * Pin the node id instead of deriving it. Only for things whose id is already
    * a stable global slug — a space, whose own id IS the slug, so the node
-   * for `blackbird` is always `community:blackbird` and callers can name it
+   * for `blackbird` is always `space:blackbird` and callers can name it
    * without a lookup (see {@link spaceNodeId}).
    */
   nodeId?: string | null
@@ -124,7 +124,7 @@ export interface SyncEntityNodeInput {
   skipNote?: boolean
   /** Who to attribute the note to. Defaults to {@link SYSTEM_ACTOR}. */
   actor?: Actor | null
-  /** Parent to draw a `contains` edge from (usually `community:<id>`). */
+  /** Parent to draw a `contains` edge from (usually `space:<id>`). */
   parentNodeId?: string | null
   /** Set false to batch cache busts across a loop (the backfill does). */
   revalidate?: boolean
@@ -487,7 +487,7 @@ export async function reparentEntityNode(
     where: { spaceId, origin: 'structure', originRef: nodeId },
   })
   // Same foreign-key guard syncEntityNode applies: unfiling points a channel at
-  // `community:<id>`, and a space created after we stopped making a node for
+  // `space:<id>`, and a space created after we stopped making a node for
   // itself simply has no such row. Dropping the old edge and leaving the channel
   // top-level is the right outcome there — a throw would fail the space delete.
   if ((await prisma.node.count({ where: { id: parentNodeId } })) === 0) {

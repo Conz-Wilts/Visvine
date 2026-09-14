@@ -89,7 +89,7 @@ struct EventDetailView: View {
                     }
                 }
 
-                if (event.visibility ?? "community") != "public" {
+                if (event.visibility ?? "space") != "public" {
                     HStack(spacing: 8) {
                         VisvineIcon(event.visibility == "private" ? .lock : .people, size: 14)
                         Text(event.visibility == "private" ? "Private event" : "Space members only").font(.system(size: 14))

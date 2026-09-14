@@ -181,14 +181,14 @@ function notePathOfNode(metadata: unknown): string | null {
 // space's context. A `type: Person` note under one of them is not an invitation
 // to mint a node: connectors/ and models/ are admin-gated perimeters, agents/
 // and tools/ are note-first kinds with their own sync, settings/ is the space's
-// own vocabulary, and spaces/ is a sub-space's context grafted in read-only.
+// own vocabulary, and subspaces/ is a sub-space's context grafted in read-only.
 const UNADOPTABLE_ROOTS = new Set([
   'agents',
   'connectors',
   'models',
   'tools',
   'settings',
-  'spaces',
+  'subspaces',
 ])
 
 /** How many `-2`, `-3`… suffixes to try before giving up on a free node id. */

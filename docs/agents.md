@@ -280,7 +280,7 @@ needs:
   boot and enforces the policy it is handed.
 - **What it may reach** is compiled from the space's own connector `hosts:`
   (`lib/vm/policy.ts`), handed down on every lease, and enforced by our Worker on
-  the egress path. `GET /api/communities/<id>/vm/policy` shows an admin the
+  the egress path. `GET /api/spaces/<id>/vm/policy` shows an admin the
   compiled list. A host the grammar cannot enforce — an IP, `localhost` — is
   dropped from the machine's reach with a warn; the isolate still reaches it.
 - **The disk does not survive a sleep.** `/workspace` is archived to R2 before
@@ -330,7 +330,7 @@ needs:
   given one as `vmMonthlyHours` in its feature config, and that cap is refused
   at the lease with running machines stopped. Every awake minute is metered
   either way, shown in hours and dollars at
-  `GET /api/communities/<id>/vm/usage`; past `SPEND_ALERT_HOURS` the meter warns
+  `GET /api/spaces/<id>/vm/usage`; past `SPEND_ALERT_HOURS` the meter warns
   once rather than refusing, because a loop should reach a person, not a 3am
   refusal of real work.
 - **Watching the boundary.** The tick sweeps the last hour of `agent_egress_log`
@@ -414,7 +414,7 @@ deadline, UTC) was already correct and was left untouched.
   briefs (`lib/agents/templates.ts` — each fills the title, body, tools and roster line, and must
   round-trip through `parseAgentBrief`), then the settings the frontmatter will carry — provider and
   model (the picker shows which providers hold a key), tool extras, connectors, the roster line.
-  Those come from `GET /api/communities/[spaceId]/agents/options` (`lib/agents/options.ts`:
+  Those come from `GET /api/spaces/[spaceId]/agents/options` (`lib/agents/options.ts`:
   providers + `keyStored`, connectors, sibling agents, `defaultModel` = the first provider with a
   key). The body is the brief; Create writes `agents/<name>/index.md` through `newAgentNote` (which
   stamps `active: false` — a new agent is off until someone turns it on) and lands on the agent's page. An explicit `?type=` always wins over a draft stashed by an earlier visit.
@@ -432,7 +432,7 @@ deadline, UTC) was already correct and was left untouched.
 - Console → Agents: **gone.** Everything it held now lives on the agent: the run timezone is part of
   the brief (required to turn a scheduled agent on), models and keys are connectors, and
   activation was always per agent, on the agent's page.
-- API: `GET/PATCH /api/communities/[spaceId]/agents/[name]`, `POST …/[name]/run`,
+- API: `GET/PATCH /api/spaces/[spaceId]/agents/[name]`, `POST …/[name]/run`,
   `POST …/[name]/message` (`{ text, run? }` — a run starts now unless `run: false`),
   `GET …/[name]/runs/[runId]`, `GET/PUT …/[name]/budget`; `GET …/agents` is the roster (plus the
   clean schedule for the clock).

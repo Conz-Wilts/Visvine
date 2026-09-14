@@ -7,7 +7,7 @@ import type { Space, SpaceAlias } from '@/lib/types';
 
 /**
  * All spaces visible to the given session, serialized to the exact shape
- * `GET /api/data/communities` returns (dates as ISO strings). Shared between
+ * `GET /api/data/spaces` returns (dates as ISO strings). Shared between
  * that route handler and the (auth) layout's server-side hydration so the
  * client provider state shape is identical either way.
  */
@@ -141,7 +141,7 @@ const MEMBERSHIP_SPACE_SELECT = {
 
 /**
  * The current user's space memberships, serialized to the exact shape
- * `GET /api/user/communities` returns. `isAdmin` is read off the alias lists
+ * `GET /api/user/spaces` returns. `isAdmin` is read off the alias lists
  * this query already loaded, in one `user_aliases` query across every
  * membership (lib/auth.ts#adminSpaceIdsFrom); super-admins are admins
  * everywhere.

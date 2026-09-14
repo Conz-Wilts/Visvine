@@ -18,7 +18,7 @@ const deleteSchema = z.object({
  * DELETE /api/account — permanent deletion of the caller's own account.
  * Only ever acts on the session's own user; there is no target parameter and no
  * admin variant (an admin removes someone from a space, which is a different
- * thing — see /api/communities/[spaceId]/members/[userId]).
+ * thing — see /api/spaces/[spaceId]/members/[userId]).
  */
 export async function DELETE(request: Request) {
   const session = await requireApiSession()

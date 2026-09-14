@@ -4,7 +4,7 @@ import { requireSession } from '@/lib/session';
 import { handleApiError } from '@/lib/api/route';
 
 /**
- * POST /api/communities/join-via-invite — accept a space invite link.
+ * POST /api/spaces/join-via-invite — accept a space invite link.
  *
  * Resolves the space by its invite token and records a *pending* membership
  * for the signed-in user (invite-link joins require admin approval in the

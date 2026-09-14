@@ -43,7 +43,7 @@ export function buildCleanScope(opts: {
     owns,
     inTarget,
     writable,
-    // `spaces/` is this space's read of its public sub-spaces' context
+    // `subspaces/` is this space's read of its public sub-spaces' context
     // (lib/notes/federation.ts) — another tenant's notes, read-only here. No
     // clean, scheduled or pressed, is ever in scope there: cleaning happens in
     // the space that owns the notes. `writable` already refuses it; saying it
@@ -59,7 +59,7 @@ export function scopeIssues(issues: Issue[], scope: CleanScope): Issue[] {
 
 /**
  * Fixes the CLEAN pass refuses even though the review surface would apply them:
- * `setStale` on entity notes (people/, communities/, …) and index notes.
+ * `setStale` on entity notes (people/, spaces/, …) and index notes.
  * Entity cards are long-lived reference notes — a context full of people would
  * otherwise get blanket-staled on its first deep clean; an index note IS a
  * folder and never goes stale. The web review route keeps its own behaviour.

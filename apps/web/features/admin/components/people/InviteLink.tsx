@@ -30,7 +30,7 @@ export default function InviteLink({ spaceId }: { spaceId: string }) {
     let alive = true;
     // Cached: the link only changes when an admin regenerates it, and that
     // path writes the new one straight into state.
-    swrFetch(`spaces:invite:${spaceId}`, () => fetchJson<{ url?: string }>(`/api/communities/${spaceId}/invite`), (d) => {
+    swrFetch(`spaces:invite:${spaceId}`, () => fetchJson<{ url?: string }>(`/api/spaces/${spaceId}/invite`), (d) => {
       if (alive) setUrl(d.url ?? '');
     })
       .catch((e: unknown) => {
@@ -47,7 +47,7 @@ export default function InviteLink({ spaceId }: { spaceId: string }) {
     setConfirmRegenerate(false);
     try {
       await runAction(async () => {
-        const data = await fetchJson<{ url?: string }>(`/api/communities/${spaceId}/invite`, { method: 'POST' });
+        const data = await fetchJson<{ url?: string }>(`/api/spaces/${spaceId}/invite`, { method: 'POST' });
         primeRequestCache(`spaces:invite:${spaceId}`, data);
         setUrl(data.url ?? '');
         setLoadError(null);

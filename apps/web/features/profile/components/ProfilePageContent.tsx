@@ -29,7 +29,7 @@ import SpacesModal, { type ProfileSpace } from './SpacesModal';
 import ExperienceTimeline from './ExperienceTimeline';
 import ContactInfoModal from './ContactInfoModal';
 
-type ModalState = 'basicInfo' | 'about' | 'contact' | 'contactInfo' | 'communities' | null;
+type ModalState = 'basicInfo' | 'about' | 'contact' | 'contactInfo' | 'spaces' | null;
 /** Your own space: no member list to connect to, so the link isn't offered. */
 const PERSONAL_ID_PREFIX = 'me:';
 
@@ -58,7 +58,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
   useEffect(() => {
     let cancelled = false;
     setProfileSpaces([]);
-    const url = `/api/profile/${encodeURIComponent(nodeId)}/communities`;
+    const url = `/api/profile/${encodeURIComponent(nodeId)}/spaces`;
     swrFetch(url, () => fetchJson<{ spaces?: ProfileSpace[] }>(url), (data) => {
       if (!cancelled) setProfileSpaces(data.spaces ?? []);
     }).catch(() => {});
@@ -67,7 +67,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
 
   const toggleSpaceVisibility = useCallback(async (spaceId: string, showOnProfile: boolean) => {
     try {
-      const url = `/api/profile/${encodeURIComponent(nodeId)}/communities`;
+      const url = `/api/profile/${encodeURIComponent(nodeId)}/spaces`;
       evictRequestCache(url);
       await fetchJsonBody(url, 'PATCH', { spaceId, showOnProfile });
     } catch { return; }
@@ -223,7 +223,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
             </div>
 
             {spacesClickable ? (
-              <button type="button" onClick={() => setModal('communities')}
+              <button type="button" onClick={() => setModal('spaces')}
                       className="mt-2 text-sm font-semibold hover:underline" style={{ color: theme.dark }}>
                 {spaceCount} {spaceCount === 1 ? 'space' : 'spaces'}
               </button>
@@ -268,7 +268,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
           {visibleSpaces.length > 0 && (
             <div className="lg:w-72 flex-none flex flex-col gap-3 lg:pt-1">
               {visibleSpaces.slice(0, 3).map((space) => (
-                <button key={space.id} type="button" onClick={() => setModal('communities')}
+                <button key={space.id} type="button" onClick={() => setModal('spaces')}
                         className="group flex items-center gap-3 text-left">
                   {space.imageUrl ? (
                     <img src={space.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-none" />
@@ -315,7 +315,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
         <ContactInfoModal open onClose={() => setModal(null)} profile={profile}
                           isOwner={isOwner} onEdit={() => setModal('contact')} />
       )}
-      {modal === 'communities' && (
+      {modal === 'spaces' && (
         <SpacesModal open onClose={() => setModal(null)} spaces={profileSpaces}
                           isOwner={isOwner} personName={profile.name} theme={theme}
                           onToggle={isOwner ? toggleSpaceVisibility : undefined} />

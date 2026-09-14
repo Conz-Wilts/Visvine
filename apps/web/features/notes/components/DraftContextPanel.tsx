@@ -321,7 +321,7 @@ export function DraftContextPanel({
     const tag = raw.trim()
     if (!tag || !spaceId) return
     setTagColorOverride((m) => ({ ...m, [tagKey(tag)]: color }))
-    void fetch(`/api/communities/${encodeURIComponent(spaceId)}/tag-colors`, {
+    void fetch(`/api/spaces/${encodeURIComponent(spaceId)}/tag-colors`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tag, color }),
@@ -502,7 +502,7 @@ export function DraftContextPanel({
     // a folder being drafted stays a folder and carries the type on its index.
     pickType(type === 'folder' ? 'folder' : 'note', merged.type.name)
     if (!spaceId || !merged.created) return
-    void fetch(`/api/communities/${encodeURIComponent(spaceId)}/node-types`, {
+    void fetch(`/api/spaces/${encodeURIComponent(spaceId)}/node-types`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: merged.type.name, color: merged.type.color }),

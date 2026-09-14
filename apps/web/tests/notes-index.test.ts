@@ -84,7 +84,7 @@ test('buildIndexStub for an empty folder has an empty managed block', () => {
 test('enforceIndexFrontmatter keeps a declared type — that is the subject', () => {
   const written =
     '---\ntype: Playbook\ntitle: Blackbird Portfolio Companies\ndescription: Master index\n---\n\n# Portfolio\n\nprose\n'
-  assert.equal(enforceIndexFrontmatter(written, 'communities'), written)
+  assert.equal(enforceIndexFrontmatter(written, 'spaces'), written)
 })
 
 test('enforceIndexFrontmatter strips type: Index — a folder is a path, not a type', () => {
@@ -315,8 +315,8 @@ test('nextIndexTitle follows a rename only while the title is untouched', () => 
 })
 
 test('nextIndexTitle keeps a curated folder name across a rename', () => {
-  // communities/ named "Companies" stays Companies when the path moves.
-  assert.equal(nextIndexTitle('communities', 'portfolio', 'Companies'), null)
+  // spaces/ named "Companies" stays Companies when the path moves.
+  assert.equal(nextIndexTitle('spaces', 'portfolio', 'Companies'), null)
 })
 
 test('INDEX_BASENAME is the canonical filename', () => {
@@ -350,13 +350,13 @@ test('an entity folder index keeps a spelling its entity accepts, and rewrites o
   }
   // A Company record is an organisation — the word the space chose survives.
   const company = '---\ntype: Company\ntitle: Halter\nnode: company:halter\n---\n\nbody\n'
-  assert.equal(enforceIndexFrontmatter(company, 'communities/halter', halter), company)
+  assert.equal(enforceIndexFrontmatter(company, 'spaces/halter', halter), company)
   // A type naming something else is put back to the entity label.
-  const fm = parseFrontmatter(enforceIndexFrontmatter(company.replace('Company', 'Deal'), 'communities/halter', halter))
+  const fm = parseFrontmatter(enforceIndexFrontmatter(company.replace('Company', 'Deal'), 'spaces/halter', halter))
   assert.equal(fm.type, 'Space')
   // Index never qualifies, whatever acceptsType would say.
   const shape = parseFrontmatter(
-    enforceIndexFrontmatter(company.replace('Company', 'Index'), 'communities/halter', { ...halter, acceptsType: () => true }),
+    enforceIndexFrontmatter(company.replace('Company', 'Index'), 'spaces/halter', { ...halter, acceptsType: () => true }),
   )
   assert.equal(shape.type, 'Space')
 })
@@ -420,7 +420,7 @@ test('stripDuplicateTitleHeading only takes a heading that repeats the title', (
 test('foldCuratedChildren removes bare child bullets and hands back their descriptions', () => {
   const home =
     '---\ntitle: Home\ntags: [home]\n---\n\nThe firm\'s working context.\n\n## Start here\n\n' +
-    '- [Portfolio](/communities/index.md) — all 182 companies\n' +
+    '- [Portfolio](/spaces/index.md) — all 182 companies\n' +
     '- [Sectors](/sectors/index.md) (23) — where we invest\n' +
     '- [Thesis](/thesis.md)\n' +
     '- [Elsewhere](/other/thing.md) — not a child, stays\n' +
@@ -428,7 +428,7 @@ test('foldCuratedChildren removes bare child bullets and hands back their descri
     '> Every note is plain Markdown.\n\n' +
     `${CHILDREN_OPEN}\n${CHILDREN_CLOSE}\n`
   const children = [
-    { path: 'communities/index.md', title: 'Portfolio', folder: true },
+    { path: 'spaces/index.md', title: 'Portfolio', folder: true },
     { path: 'sectors/index.md', title: 'Sectors', folder: true },
     { path: 'thesis.md', title: 'Thesis' },
     { path: 'team/index.md', title: 'Team', folder: true },
@@ -437,7 +437,7 @@ test('foldCuratedChildren removes bare child bullets and hands back their descri
   assert.deepEqual(
     [...descriptions],
     [
-      ['communities/index.md', 'all 182 companies'],
+      ['spaces/index.md', 'all 182 companies'],
       ['sectors/index.md', 'where we invest'],
     ],
   )

@@ -33,7 +33,7 @@ export { useSpace };
 
 // Storage key kept at its pre-rename spelling on purpose: changing it would
 // drop every signed-in browser back to no space selected.
-const CURRENT_SPACE_KEY = 'nb_current_community';
+const CURRENT_SPACE_KEY = 'nb_current_space';
 
 // The stored selection is read in a layout effect, not during render: the
 // server has no localStorage, so a synchronous read would make the first client
@@ -51,8 +51,8 @@ export interface InitialMembership {
 interface SpaceProviderProps {
   children: ReactNode;
   /**
-   * Server-fetched hydration data (same shapes the /api/data/communities and
-   * /api/user/communities routes return). When BOTH are provided the mount
+   * Server-fetched hydration data (same shapes the /api/data/spaces and
+   * /api/user/spaces routes return). When BOTH are provided the mount
    * fetch is skipped entirely; revalidation paths (refreshSpace, etc.)
    * still fetch as before. Omit both for the standalone client-only behavior.
    */
@@ -91,7 +91,7 @@ export function SpaceProvider({
     // fetchJson sends the whole page to /signin on a 401, so a signed-out
     // session can't keep rendering a stale space list.
     const data = await fetchJson<{ spaces?: Space[]; lockedSubspaces?: LockedSubspace[] }>(
-      '/api/data/communities',
+      '/api/data/spaces',
     );
     setSpaces(data.spaces || []);
     setLockedSubspaces(data.lockedSubspaces || []);
@@ -100,7 +100,7 @@ export function SpaceProvider({
   const loadUserSpaces = useCallback(async () => {
     let data: { spaces?: Array<{ id: string; isAdmin?: boolean }> };
     try {
-      data = await fetchJson('/api/user/communities');
+      data = await fetchJson('/api/user/spaces');
     } catch {
       return; // failed — leave memberships as they are (401 already kicked to /signin)
     }
@@ -134,7 +134,7 @@ export function SpaceProvider({
   }, []);
 
   const joinSpace = useCallback(async (spaceId: string, alias?: string) => {
-    await fetchJsonBody(`/api/communities/${spaceId}/join`, 'POST', { alias });
+    await fetchJsonBody(`/api/spaces/${spaceId}/join`, 'POST', { alias });
     setMemberships(prev => new Map(prev).set(spaceId, false));
   }, []);
 
@@ -142,12 +142,12 @@ export function SpaceProvider({
   // locked and only changes its label. Marking it here rather than refetching
   // keeps the button from offering itself a second time while an admin decides.
   const requestSubspaceAccess = useCallback(async (spaceId: string) => {
-    await fetchJsonBody(`/api/communities/${spaceId}/join`, 'POST', {});
+    await fetchJsonBody(`/api/spaces/${spaceId}/join`, 'POST', {});
     setLockedSubspaces(prev => prev.map(s => (s.id === spaceId ? { ...s, requested: true } : s)));
   }, []);
 
   const leaveSpace = useCallback(async (spaceId: string) => {
-    await fetchJson(`/api/communities/${spaceId}/join`, { method: 'DELETE' });
+    await fetchJson(`/api/spaces/${spaceId}/join`, { method: 'DELETE' });
     setMemberships(prev => {
       const next = new Map(prev);
       next.delete(spaceId);

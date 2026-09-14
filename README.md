@@ -137,7 +137,7 @@ pnpm — see `apps/mobile/README.md`.
 
 ## Seed
 
-The seeded space is **Visvine HQ** (`community:visvine-hq`) — Visvine's own
+The seeded space is **Visvine HQ** (`space:visvine-hq`) — Visvine's own
 space, dogfooding the product: the organisations that run on us, the people who
 run them, and the product's own roadmap and decisions. Everyone in it is
 invented, and every address is under a reserved documentation domain

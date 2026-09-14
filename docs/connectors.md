@@ -275,8 +275,8 @@ dies overnight leaves an explanation.
 ### Managing connections
 
 ```
-GET    /api/communities/<spaceId>/connectors/<name>/connections
-DELETE /api/communities/<spaceId>/connectors/<name>/connections?user=<id>
+GET    /api/spaces/<spaceId>/connectors/<name>/connections
+DELETE /api/spaces/<spaceId>/connectors/<name>/connections?user=<id>
 ```
 
 Admins see every connection; a member sees the shared one and their own. Anyone may disconnect

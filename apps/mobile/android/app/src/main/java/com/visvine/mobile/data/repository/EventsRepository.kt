@@ -13,8 +13,8 @@ class EventsRepository @Inject constructor(
     private val api: VisvineApi,
     private val json: Json,
 ) {
-    suspend fun getEvents(communityId: String): ApiResult<List<Event>> =
-        when (val res = safeApiCall(json) { api.getEvents(communityId) }) {
+    suspend fun getEvents(spaceId: String): ApiResult<List<Event>> =
+        when (val res = safeApiCall(json) { api.getEvents(spaceId) }) {
             is ApiResult.Success -> ApiResult.Success(res.data.events)
             is ApiResult.Failure -> res
         }

@@ -4,7 +4,7 @@
 // chunks → link context, weighted RRF) over
 // everything the caller can read in the context; the visibility lens and the
 // private-folder read audit are applied inside contextService.searchContext;
-// a public sub-space's notes rank alongside, under `spaces/<id>/`
+// a public sub-space's notes rank alongside, under `subspaces/<id>/`
 // (lib/notes/federation.ts).
 
 import { NextRequest, NextResponse } from 'next/server'

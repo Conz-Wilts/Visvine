@@ -10,7 +10,7 @@ struct DirectoryMember: Codable, Identifiable {
     var imageUrl: String?
     var location: String?
     var tags: [String]?
-    var communityId: String?
+    var spaceId: String?
     var title: String?
     var company: String?
     var email: String?
@@ -18,7 +18,7 @@ struct DirectoryMember: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id, name, type, subtitle, location, tags, title, company, email
         case imageUrl = "image_url"
-        case communityId = "community_id"
+        case spaceId = "space_id"
     }
 }
 

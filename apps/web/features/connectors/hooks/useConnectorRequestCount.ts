@@ -21,7 +21,7 @@ export function useConnectorRequestCount(): { count: number; refresh: () => void
       setCount(0);
       return;
     }
-    fetchJson<{ pending: number }>(`/api/communities/${encodeURIComponent(spaceId)}/connector-requests`)
+    fetchJson<{ pending: number }>(`/api/spaces/${encodeURIComponent(spaceId)}/connector-requests`)
       .then((body) => { if (live) setCount(body.pending); })
       // A count is decoration; a member opening the console sees no badge.
       .catch(() => { if (live) setCount(0); });

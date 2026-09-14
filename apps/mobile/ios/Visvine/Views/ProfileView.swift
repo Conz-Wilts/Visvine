@@ -24,7 +24,7 @@ final class ProfileModel {
 struct ProfileView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(AuthManager.self) private var auth
-    @Environment(CommunityStore.self) private var community
+    @Environment(SpaceStore.self) private var space
     @Environment(\.dismiss) private var dismiss
     @State private var model = ProfileModel()
     @State private var confirmSignOut = false
@@ -92,8 +92,8 @@ struct ProfileView: View {
                 // Spaces
                 section {
                     sectionTitle("Spaces")
-                    ForEach(community.communities) { item in
-                        let active = community.current?.id == item.id
+                    ForEach(space.spaces) { item in
+                        let active = space.current?.id == item.id
                         HStack(spacing: 12) {
                             Circle().fill(c.accent).frame(width: 8, height: 8)
                             Text(item.name).font(.system(size: 16)).foregroundStyle(active ? c.accent : c.textSecondary)
