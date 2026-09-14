@@ -448,17 +448,21 @@ async function main(): Promise<void> {
   console.log(dryRun ? 'rename-community-to-space (dry run)\n' : 'rename-community-to-space\n')
   const found = await pending()
   if (found.length === 0 && !force) {
-    console.log('Nothing to rename: no community ids, types or note paths are stored.')
-    console.log('This database is already on the new vocabulary. Re-running would move')
-    console.log('the org namespace it created in spaces/ on into sections/, so it stops')
-    console.log('here. Pass --force only to resume a run that died part-way.')
-    return
+    console.log('Nothing to rename in the database: no community ids, types or note')
+    console.log('paths are stored. Re-running the phases below would move the org')
+    console.log('namespace they created in spaces/ on into sections/, so they are')
+    console.log('skipped. Pass --force only to resume a run that died part-way.')
+  } else {
+    console.log(`  still stored: ${found.length > 0 ? found.join(', ') : 'nothing (forced)'}`)
+    await renameIds()
+    await renamePaths()
+    await renameBodies()
+    await renameNodeTypes()
   }
-  console.log(`  still stored: ${found.length > 0 ? found.join(', ') : 'nothing (forced)'}`)
-  await renameIds()
-  await renamePaths()
-  await renameBodies()
-  await renameNodeTypes()
+  // Outside that guard on purpose. The object move is idempotent on its own
+  // terms — it lists what is left under the old prefix and moves that — so it
+  // must stay reachable after the database half has already been done, which
+  // is exactly the state a run that died at this phase leaves behind.
   await moveObjects()
   console.log(
     `\n${dryRun ? 'would run' : 'ran'} ${statements} statements` +

@@ -25,6 +25,11 @@ env:
   IMAGE: australia-southeast1-docker.pkg.dev/visvine-platform/visvine/web
   SERVICE: visvine-web
   SQL_INSTANCE: visvine-platform:australia-southeast1:visvine-pgdata
+  # Not a secret, and not read from Secret Manager: the deploying service
+  # account holds secretAccessor on DATABASE_URL only — GCS_MEDIA_BUCKET is
+  # resolved by the Cloud Run RUNTIME account through --set-secrets, which is a
+  # different grant. The name is already public in GCS_CDN_BASE_URL below.
+  MEDIA_BUCKET: visvine-media
 
 jobs:
   deploy:
@@ -276,7 +281,7 @@ jobs:
           # local-DB guard also requires, so it stays unset.
           DATABASE_URL="$DB_URL" \
           STORAGE_DRIVER=gcs \
-          GCS_MEDIA_BUCKET=$(gcloud secrets versions access latest --secret=GCS_MEDIA_BUCKET --project=${{ env.PROJECT }}) \
+          GCS_MEDIA_BUCKET=${{ env.MEDIA_BUCKET }} \
             pnpm --filter @visvine/web db:rename:spaces --storage
           # A folder's child list is relative hrefs the rename does not parse.
           DATABASE_URL="$DB_URL" pnpm --filter @visvine/web db:index-notes:rebuild
