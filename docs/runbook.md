@@ -42,6 +42,33 @@ run **after** traffic is routed, through the proxy, with the local-DB guard's
 override — the way `db:entities:folders` was run. The app reads the old shape in
 between, so the order is deploy first, then backfill.
 
+The `community` → `space` rename is the exception to "one-off, run by hand":
+it is a step of the deploy, immediately after the traffic switch, because no
+alias stands in front of the old shape. Every space id, node id and entity note
+path moved (`community:` → `space:`, `communities/` → `spaces/`), Section notes
+moved to `sections/` and the sub-space graft to `subspaces/`, so old code cannot
+read the new rows or new code the old ones. The script refuses to run twice —
+it looks for stored `community:` ids, types and paths and stops when there are
+none — so the step is a no-op on every later deploy and self-arming for a space
+restored from a pre-rename dump.
+
+If that step is the one that fails, the deploy does NOT roll back: traffic is
+already on the new code and the data is the half that is behind, so pinning
+back to the old revision would be strictly worse. Finish it by hand instead —
+the id phase is one transaction, so what is left is paths and bodies:
+
+```
+pnpm db:proxy:cloud                                             # 127.0.0.1:5433
+DATABASE_URL="postgresql://…@127.0.0.1:5433/visvine" STORAGE_DRIVER=gcs \
+  GCS_MEDIA_BUCKET=visvine-media \
+  pnpm --filter @visvine/web db:rename:spaces --force --storage
+DATABASE_URL="…" pnpm --filter @visvine/web db:index-notes:rebuild
+```
+
+`--force` is what resumes a part-applied run; never pass it to a database that
+is already fully renamed, because step 2 shuffles two namespaces through one
+name and a second pass would drag the org notes into `sections/`.
+
 Entity notes became folders (`people/<slug>/index.md`, not `people/<slug>.md`).
 That backfill has been run against production; the commands are kept because it
 is idempotent and a space restored from an old dump needs it again:
