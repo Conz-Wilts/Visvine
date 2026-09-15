@@ -4,7 +4,7 @@
 // request; within FRESH_MS every caller shares the same promise (two panels
 // mounting in one tick make one network call), and a resolved value is kept for
 // KEEP_MS so a re-opened surface paints from the stale value while it
-// revalidates. Rejected promises evict themselves — an error never sticks —
+// revalidates. Rejected promises are discarded, retaining any usable stale value,
 // and a mutation invalidates its read keys so a save cannot resurrect stale
 // content on the next mount.
 
@@ -14,6 +14,7 @@ const KEEP_MS = 10 * 60_000 // stale values still paint instantly, then revalida
 interface Entry {
   promise: Promise<unknown>
   ts: number
+  pending?: boolean
   /** Set once the promise resolves — what swrFetch serves synchronously. */
   value?: unknown
   hasValue?: boolean
@@ -22,26 +23,37 @@ interface Entry {
 const cache = new Map<string, Entry>()
 
 function startFetch<T>(key: string, fn: () => Promise<T>): Entry {
+  const previous = cache.get(key)
   const promise = fn()
-  const entry: Entry = { promise, ts: Date.now() }
+  const entry: Entry = { promise, ts: Date.now(), pending: true }
+  if (previous?.hasValue && Date.now() - previous.ts < KEEP_MS) {
+    entry.value = previous.value
+    entry.hasValue = true
+    entry.ts = previous.ts
+  }
   cache.set(key, entry)
   promise.then(
     (value) => {
       if (cache.get(key) === entry) {
         entry.value = value
         entry.hasValue = true
+        entry.pending = false
+        entry.ts = Date.now()
       }
     },
     () => {
-      if (cache.get(key) === entry) cache.delete(key)
+      if (cache.get(key) !== entry) return
+      if (entry.hasValue && Date.now() - entry.ts < KEEP_MS) {
+        entry.pending = false
+        entry.promise = Promise.resolve(entry.value)
+      } else {
+        cache.delete(key)
+      }
     },
   )
   return entry
 }
 
-/** Run `fn` once per `key` per fresh window; concurrent/later callers within
- *  the window get the same promise. Rejections evict immediately so a transient
- *  failure during prefetch never poisons the panel's own attempt. */
 const inFlight = new Map<string, Promise<unknown>>()
 
 /**
@@ -60,9 +72,10 @@ export function inflightFetch<T>(key: string, fn: () => Promise<T>): Promise<T> 
   return promise
 }
 
+/** Share pending reads regardless of duration; resolved reads stay fresh for a minute. */
 export function cachedFetch<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const hit = cache.get(key)
-  if (hit && Date.now() - hit.ts < FRESH_MS) return hit.promise as Promise<T>
+  if (hit && (hit.pending || Date.now() - hit.ts < FRESH_MS)) return hit.promise as Promise<T>
   return startFetch(key, fn).promise as Promise<T>
 }
 
@@ -83,7 +96,7 @@ export function swrFetch<T>(key: string, fn: () => Promise<T>, onData: (data: T)
     onData(hit.value as T)
     if (age < FRESH_MS) return hit.promise as Promise<T>
     // Stale: revalidate in the background; deliver again when it lands.
-    const next = startFetch(key, fn).promise as Promise<T>
+    const next = cachedFetch(key, fn)
     return next.then(
       (value) => {
         onData(value)
@@ -115,6 +128,7 @@ export function peekRequestCache<T>(key: string): T | undefined {
  *  error-shaped value the caller does not want memoized. */
 export function evictRequestCache(key: string): void {
   cache.delete(key)
+  inFlight.delete(key)
 }
 
 // Subscribers per key. Invalidation is a mutation signal, not just an eviction:
@@ -143,7 +157,7 @@ export function watchRequestCache(keys: string[], onInvalidate: () => void): () 
 export function invalidateRequestCache(...keys: string[]) {
   const notify = new Set<() => void>()
   for (const key of keys) {
-    cache.delete(key)
+    evictRequestCache(key)
     const set = watchers.get(key)
     if (set) for (const fn of set) notify.add(fn)
   }
@@ -155,9 +169,10 @@ export function invalidateRequestCache(...keys: string[]) {
 /** Invalidate every key under a prefix — a space's whole Drive after an
  *  upload, say — without the caller enumerating them. */
 export function invalidateRequestCachePrefix(prefix: string) {
-  const keys: string[] = []
-  for (const key of cache.keys()) if (key.startsWith(prefix)) keys.push(key)
-  for (const key of watchers.keys()) if (key.startsWith(prefix) && !keys.includes(key)) keys.push(key)
+  const keys = new Set<string>()
+  for (const source of [cache, inFlight, watchers]) {
+    for (const key of source.keys()) if (key.startsWith(prefix)) keys.add(key)
+  }
   invalidateRequestCache(...keys)
 }
 

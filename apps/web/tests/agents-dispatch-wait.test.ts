@@ -22,7 +22,7 @@ test('a run still going hands back null, and keeps going', async () => {
     setTimeout(() => {
       settled = true
       resolve(done)
-    }, 60).unref?.()
+    }, 60)
   })
 
   assert.equal(await dispatchWithin(slow, 10), null, 'the caller is let go')

@@ -24,9 +24,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const ROUTES_DIR = new URL('../app/api/notes', import.meta.url).pathname
+const ROUTES_DIR = fileURLToPath(new URL('../app/api/notes', import.meta.url))
 
 /** Store functions that read or write note content with no principal. */
 const RAW_STORE = [
@@ -91,7 +92,7 @@ test('there are notes routes to check (the walker did not silently find nothing)
 })
 
 for (const file of files) {
-  const rel = file.slice(file.indexOf('app/api/notes'))
+  const rel = `app/api/notes/${relative(ROUTES_DIR, file).replaceAll('\\', '/')}`
   const src = readFileSync(file, 'utf8')
   const raw = RAW_STORE.filter((fn) => new RegExp(`\\b${fn}\\b`).test(src))
   if (raw.length === 0) continue

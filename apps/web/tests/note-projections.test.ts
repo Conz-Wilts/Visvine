@@ -237,7 +237,7 @@ test('backoff grows exponentially and is capped', () => {
 import { readFileSync as _readFileSync } from 'node:fs'
 import { join as _join } from 'node:path'
 
-const storeSrc = _readFileSync(_join(__dirname, '..', 'lib/notes/store.ts'), 'utf8')
+const storeSrc = _readFileSync(_join(__dirname, '..', 'lib/notes/store.ts'), 'utf8').replace(/\r\n/g, '\n')
 const projectionsSrc = _readFileSync(_join(__dirname, '..', 'lib/notes/projections.ts'), 'utf8')
 
 /** One top-level function's source, from its signature to its closing brace. */
