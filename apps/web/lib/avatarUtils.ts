@@ -58,7 +58,18 @@ const CONNECTOR_SILHOUETTE_PATH =
 const AGENT_SILHOUETTE_PATH =
   'M20 9V7c0-1.1-.9-2-2-2h-3c0-1.66-1.34-3-3-3S9 3.34 9 5H6c-1.1 0-2 .9-2 2v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v4c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-4c1.66 0 3-1.34 3-3s-1.34-3-3-3zM7.5 11.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S9.83 13 9 13s-1.5-.67-1.5-1.5zM16 17H8v-2h8v2zm-1-4c-.83 0-1.5-.67-1.5-1.5S14.17 10 15 10s1.5.67 1.5 1.5S15.83 13 15 13z';
 
-/** Node-type glyph → its 24×24 silhouette path (the getNodeGlyph value space). */
+/** Tool avatar: a wrench, matching the build/manage surface rather than a file. */
+const TOOL_SILHOUETTE_PATH =
+  'M22.7 19.3 13.4 10a6 6 0 0 0-7.7-7.7l3.1 3.1-2.8 2.8-3.1-3.1a6 6 0 0 0 7.7 7.7l9.3 9.3a2 2 0 0 0 2.8-2.8z';
+
+/** Model avatar: a compact chip, used when its provider logo is absent. */
+const MODEL_SILHOUETTE_PATH =
+  'M9 2h6v2h2a2 2 0 0 1 2 2v2h2v6h-2v2a2 2 0 0 1-2 2h-2v2H9v-2H7a2 2 0 0 1-2-2v-2H3V8h2V6a2 2 0 0 1 2-2h2V2zm-2 6v8h10V8H7zm2 2h6v4H9v-4z';
+
+/** Custom-type avatar: a neutral tag mark so cards never degrade to initials. */
+const CUSTOM_SILHOUETTE_PATH =
+  'M20 12 12 20 3 11V3h8l9 9zm-13-7v5.2l5 5 5.2-5L10.2 5H7zm2 1.5A1.5 1.5 0 1 1 9 9.5 1.5 1.5 0 0 1 9 6.5z';
+
 export const NODE_GLYPH_PATHS = {
   person: PERSON_SILHOUETTE_PATH,
   group: GROUP_SILHOUETTE_PATH,
@@ -66,6 +77,9 @@ export const NODE_GLYPH_PATHS = {
   resource: RESOURCE_SILHOUETTE_PATH,
   connector: CONNECTOR_SILHOUETTE_PATH,
   agent: AGENT_SILHOUETTE_PATH,
+  tool: TOOL_SILHOUETTE_PATH,
+  model: MODEL_SILHOUETTE_PATH,
+  custom: CUSTOM_SILHOUETTE_PATH,
 } as const;
 
 export type NodeGlyph = keyof typeof NODE_GLYPH_PATHS;

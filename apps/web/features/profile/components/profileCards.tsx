@@ -6,9 +6,10 @@
  * person profile (ProfilePageContent), the organisation page (OrgPageContent),
  * the space pages and the connector page, so they stay visually of a piece.
  *
- * None of them draws a box. A section is a heading on a hairline with its
- * content underneath; siblings stack with the rule between them, the way the
- * settings console already reads.
+ * Sections can either use the original hairline treatment or be lifted onto
+ * their own surface. The latter is used for the LinkedIn-inspired person
+ * profile layout without changing the other entity pages that share these
+ * primitives.
  */
 
 import React, { useState } from 'react';
@@ -43,12 +44,14 @@ export function StatItem({ value, label, onClick, accent }: {
   );
 }
 
-export function SectionCard({ id, title, size = 'md', ruled = false, badge, icon, accent, action, isOwner, onEdit, onAdd, scrollMargin, children }: {
+export function SectionCard({ id, title, size = 'md', ruled = false, card = false, badge, icon, accent, action, isOwner, onEdit, onAdd, scrollMargin, children }: {
   id: string; title: string;
   /** `lg` gives the heading a larger size, for a person's primary sections. */
   size?: 'md' | 'lg';
   /** Hairlines above and below: ruled siblings stacked with no gap share one line between them. */
   ruled?: boolean;
+  /** Lift this section onto its own surface, as used by person profiles. */
+  card?: boolean;
   badge?: number;
   /** A glyph before the title, drawn in `accent` (the entity's dark shade). */
   icon?: React.ReactNode; accent?: string;
@@ -60,7 +63,10 @@ export function SectionCard({ id, title, size = 'md', ruled = false, badge, icon
   scrollMargin?: string; children: React.ReactNode;
 }) {
   return (
-    <section id={id} className={`border-border-subtle ${ruled ? 'border-t last:border-b py-5' : 'border-t pt-5 first:border-t-0 first:pt-0'} ${scrollMargin ?? ''}`}>
+    <section id={id} className={`${card
+      ? 'rounded-2xl border border-border-subtle bg-surface-1 px-5 py-5 shadow-strip sm:px-6 sm:py-6'
+      : `border-border-subtle ${ruled ? 'border-t last:border-b py-5' : 'border-t pt-5 first:border-t-0 first:pt-0'}`
+    } ${scrollMargin ?? ''}`}>
       <div className="flex items-center justify-between gap-2 pb-3">
         <h2 className={`flex items-center gap-2 ${size === 'lg' ? 'text-xl' : 'text-[15px]'} font-bold font-open-sauce text-text-primary`}>
           {icon && <span style={{ color: accent }}>{icon}</span>}

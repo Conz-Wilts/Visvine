@@ -14,6 +14,7 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { entityNotePath, entityStub, hrefForNotePath, noteHref } from '@/lib/notes/entities'
 import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { isReservedTypeName } from '@/lib/types/nodeTypeRegistry'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
   cachedFetch,
@@ -24,7 +25,7 @@ import {
   type NoteRead,
 } from '../lib/contextPrefetch'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
-import { NoteEditor } from './NoteEditor'
+import { NoteEditor, type NoteHeaderSlotArgs } from './NoteEditor'
 import { NoteMetaRows } from './NoteMetaRows'
 import { type NoteMode } from './NoteModeToggle'
 import { AccessRequestCard } from './AccessRequestCard'
@@ -373,7 +374,11 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     )
   }
 
-  const title =
+  const typeOptions = (currentSpace?.nodeTypes ?? []).filter((candidate) =>
+    !!candidate.name?.trim() && !isReservedTypeName(candidate.name),
+  )
+  const allTags = Array.from(new Set(notesIndex.flatMap((note) => note.tags ?? []))).sort((a, b) => a.localeCompare(b))
+  const displayTitle =
     openMeta?.title?.trim() ||
     String(parseFrontmatter(shownRead.content).title ?? '').trim() ||
     (shown.path.split('/').pop() ?? shown.path).replace(/\.md$/i, '')
@@ -383,7 +388,18 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   // own .notes-title); width/padding mirror .notes-column so it lines up.
   // Type and tags come from the note's own frontmatter; the block itself decides
   // what counts as a type (see NoteMetaRows — console types only).
-  const headerCard = (
+  const headerCard = ({ frontmatter, replaceFrontmatter, editable }: NoteHeaderSlotArgs) => {
+    const title =
+      String(frontmatter.title ?? '').trim() ||
+      displayTitle
+    const type = typeof frontmatter.type === 'string' ? frontmatter.type : null
+    const tags = Array.isArray(frontmatter.tags) ? frontmatter.tags.map(String) : []
+    const changeType = (next: string | null) => {
+      const { type: _type, ...rest } = frontmatter
+      replaceFrontmatter(next ? { ...rest, type: next } : rest)
+    }
+    const changeTags = (next: string[]) => replaceFrontmatter({ ...frontmatter, tags: next })
+    return (
     <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">
       {/* leading-[1.25], not tighter: `truncate` hides overflow, so a line box
           shorter than the font's ascent+descent shaves the p/g/y descenders. */}
@@ -392,14 +408,28 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
       </h2>
       <NoteMetaRows
         className="mt-4"
-        type={openMeta?.frontmatter.type}
+        type={type}
         // A note that stands for a directory node is labelled by that node's
         // alias, the same name its card carries in the directory.
-        alias={entityByPath.get(path)?.alias ?? null}
-        tags={openMeta?.tags ?? []}
+        alias={entityByPath.get(shown.path)?.alias ?? null}
+        tags={tags}
         nodeTypes={currentSpace?.nodeTypes}
         aliases={currentSpace?.aliases as SpaceAlias[] | undefined}
         tagColors={currentSpace?.designConfig?.tagColors ?? null}
+        editable={editable}
+        typeOptions={typeOptions}
+        canEditType={typeof frontmatter.node !== 'string'}
+        onTypeChange={changeType}
+        onTagsChange={changeTags}
+        tagSuggestions={allTags}
+        onCreateTagColor={(tag, color) => {
+          if (!spaceId) return
+          void fetch(`/api/spaces/${encodeURIComponent(spaceId)}/tag-colors`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tag, color }),
+          }).catch(() => {})
+        }}
       />
       {access?.parent && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
@@ -419,7 +449,8 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         </div>
       )}
     </div>
-  )
+    )
+  }
 
   return (
     <div className="pb-10">
@@ -465,7 +496,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
           spaceId={spaceId}
           path={shown.path}
           kind="note"
-          title={title}
+          title={displayTitle}
           onClose={() => setShareOpen(false)}
         />
       )}

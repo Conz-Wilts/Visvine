@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { evictRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
-import { CameraIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, EarthIcon, LoaderCircleIcon, MapPinIcon, PencilIcon, Share2Icon, ShieldCheckIcon } from '@/features/shared/icons';
+import { CameraIcon, ChevronDownIcon, ChevronUpIcon, EarthIcon, LoaderCircleIcon, MapPinIcon, PencilIcon, ShieldCheckIcon } from '@/features/shared/icons';
 import Image from 'next/image';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import { useMemberConnection } from '@/features/profile/hooks/useMemberConnection';
@@ -50,7 +50,6 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileSpaces, setProfileSpaces] = useState<ProfileSpace[]>([]);
-  const [linkCopied, setLinkCopied] = useState(false);
 
   // Spaces shown on the profile: managed (admin) ones always, member ones
   // only when the owner has toggled them visible. Owner receives the full list
@@ -144,22 +143,13 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
 
   const sectionScrollMargin = overlay ? 'scroll-mt-4' : 'scroll-mt-20';
 
-  // The shared link is the plain profile URL, never your own ?view=me entry.
-  const copyProfileLink = async () => {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/directory/${encodeURIComponent(nodeId)}`);
-    } catch { return; }
-    setLinkCopied(true);
-    window.setTimeout(() => setLinkCopied(false), 2000);
-  };
-
   return (
     <div className="profile-content-fade flex flex-col gap-5">
       {/* ══ IDENTITY HERO — the avatar beside who they are, their spaces to the right ══ */}
-      <section className="flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">
-        <div className="relative w-32 h-32 sm:w-40 sm:h-40 flex-none rounded-2xl overflow-hidden bg-surface-2">
+      <section className="rounded-2xl border border-border-subtle bg-surface-1 px-5 py-5 shadow-strip sm:px-7 sm:py-7 flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">
+        <div className="relative w-44 h-44 sm:w-56 sm:h-56 flex-none rounded-2xl overflow-hidden bg-surface-2">
           {profile.imageUrl ? (
-            <Image src={profile.imageUrl} alt={profile.name} width={160} height={160} className="w-full h-full object-cover" />
+              <Image src={profile.imageUrl} alt={profile.name} width={224} height={224} className="w-full h-full object-cover" />
           ) : (
             <PersonSilhouette color={theme.base} />
           )}
@@ -185,7 +175,16 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
                 </span>
               )}
               {profile.pronouns && <span className="text-sm text-text-muted">{profile.pronouns}</span>}
-              {aliasName && <Chip tone="solid" color={aliasColor}>{aliasName}</Chip>}
+              {aliasName && (
+                <Chip
+                  tone="solid"
+                  size="lg"
+                  color={aliasColor}
+                  className="h-8 rounded-lg px-3 text-sm leading-normal"
+                >
+                  {aliasName}
+                </Chip>
+              )}
             </div>
 
             {profile.subtitle && (
@@ -239,11 +238,6 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
               ) : hasContact && (
                 <Button onClick={() => setModal('contactInfo')}>Contact info</Button>
               )}
-              <Button variant="neutral" onClick={() => void copyProfileLink()} className="inline-flex items-center gap-2">
-                {linkCopied
-                  ? <><CheckIcon className="w-4 h-4" /> Link copied</>
-                  : <><Share2Icon className="w-4 h-4" /> Share profile</>}
-              </Button>
             </div>
 
             {/* The member behind this profile. Only the people who can undo the
@@ -291,10 +285,10 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
         </div>
       </section>
 
-      {/* ══ BODY — full-width sections stacked on hairlines ══ */}
-      <div className="min-w-0 flex flex-col">
+      {/* ══ BODY — lifted sections with space between each card ══ */}
+      <div className="min-w-0 flex flex-col gap-5">
         {/* About */}
-        <SectionCard id="about" title="About" size="lg" ruled
+        <SectionCard id="about" title="About" size="lg" card
                      scrollMargin={sectionScrollMargin} isOwner={isOwner} onEdit={() => setModal('about')}>
           {profile.bio
             ? <BioText bio={profile.bio} theme={theme} />
@@ -302,7 +296,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
         </SectionCard>
 
         {/* Experience — their time on Visvine */}
-        <SectionCard id="experience" title="Experience" size="lg" ruled scrollMargin={sectionScrollMargin}>
+        <SectionCard id="experience" title="Experience" size="lg" card scrollMargin={sectionScrollMargin}>
           <ExperienceTimeline accountCreatedAt={profile.createdAt ?? null} />
         </SectionCard>
       </div>

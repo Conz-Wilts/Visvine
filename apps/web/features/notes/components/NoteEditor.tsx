@@ -38,7 +38,7 @@ import { NotePicker, type PickerEntity } from './NotePicker'
 import { LinkedReferences } from './LinkedReferences'
 import { NoteModeToggle, type NoteMode } from './NoteModeToggle'
 import { parseEntityHref } from '@/lib/notes/entities'
-import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { joinFrontmatter, splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
 import {
   folderOfIndexPath,
   isIndexPath,
@@ -51,7 +51,7 @@ import {
 import { notesApi } from '../lib/notesApi'
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext'
 import { TAB_MOTION_MS } from '@/components/ui/tabMotion'
-import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
+import type { NoteFrontmatter, NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 
 const AUTOSAVE_MS = 350
 // How long the tab bar's attached region takes to collapse (TAB_MOTION). The
@@ -105,7 +105,7 @@ interface NoteEditorProps {
   variant?: 'floating' | 'boxed' | 'embedded'
   // Embedded only: content rendered directly below the sticky toolbar and above
   // the note body (the entity header card), so it scrolls up behind the toolbar.
-  headerSlot?: React.ReactNode
+  headerSlot?: React.ReactNode | ((args: NoteHeaderSlotArgs) => React.ReactNode)
   /** Embedded only: render the note's own title heading above the body. Off by
    *  default there (the profile header IS the identity); on for a sub-note in
    *  an entity folder, whose title is its own. */
@@ -113,6 +113,18 @@ interface NoteEditorProps {
   // Embedded only: rendered at the far right of the toolbar row, after the
   // Editor/Raw toggle (the entity panel's Share button). Renders in raw mode too.
   toolbarTrailSlot?: React.ReactNode
+}
+
+/**
+ * The embedded header lives outside the editor's DOM, but its Type and Tags
+ * still belong to the same markdown document. A render callback lets that
+ * header change frontmatter through the editor, so an in-flight body autosave
+ * can never overwrite a just-clicked tag (or the other way around).
+ */
+export interface NoteHeaderSlotArgs {
+  frontmatter: NoteFrontmatter
+  replaceFrontmatter: (frontmatter: NoteFrontmatter) => void
+  editable: boolean
 }
 
 type MarkdownStorage = { markdown: { getMarkdown: () => string } }
@@ -179,6 +191,7 @@ export function NoteEditor({
   const embedded = variant === 'embedded'
   const floating = variant === 'floating'
   const [rawContent, setRawContent] = useState(initialContent)
+  const [headerFrontmatter, setHeaderFrontmatter] = useState<NoteFrontmatter>(() => parseFrontmatter(initialContent))
   const [linkPickerOpen, setLinkPickerOpen] = useState(false)
   // Viewport rect of the caret when `[[` opened the picker, so it can dock just
   // below where the user is typing rather than as a centered modal.
@@ -386,6 +399,7 @@ export function NoteEditor({
     pathRef.current = path
     const { frontmatter, body } = splitFrontmatter(initialContent)
     prefixRef.current = buildPrefix(frontmatter)
+    setHeaderFrontmatter(parseFrontmatter(initialContent))
     const split = splitChildrenBlock(stripDuplicateTitleHeading(body, titleFromContent(initialContent, path)))
     childrenBlockRef.current = split.block
     setChildren(parseChildrenBlock(split.block, childFolder))
@@ -417,6 +431,7 @@ export function NoteEditor({
       loadingRef.current = true
       const { frontmatter, body } = splitFrontmatter(rawContent)
       prefixRef.current = buildPrefix(frontmatter)
+      setHeaderFrontmatter(parseFrontmatter(rawContent))
       const split = splitChildrenBlock(body)
       childrenBlockRef.current = split.block
       setChildren(parseChildrenBlock(split.block, childFolder))
@@ -521,6 +536,22 @@ export function NoteEditor({
     setRawContent(value)
     if (canEdit) queueSave(value)
   }
+
+  // Keep frontmatter edits on the editor's one save pipeline. In particular,
+  // do not let a header write race the debounced body write: both compose from
+  // this same prefix and current editor document.
+  const replaceFrontmatter = useCallback((frontmatter: NoteFrontmatter) => {
+    if (!editor || !canEdit) return
+    const serialized = joinFrontmatter(frontmatter, '')
+    prefixRef.current = buildPrefix(splitFrontmatter(serialized).frontmatter)
+    setHeaderFrontmatter(frontmatter)
+    queueSave(composeContent(prefixRef.current, getMarkdown(editor), childrenBlockRef.current))
+    // Header controls have no visible "Saving…" state. Commit them now rather
+    // than making a person wait for the body debounce before a removed type/tag
+    // reaches the server. The content is still composed from the live editor,
+    // so this cannot discard a body edit made just before the click.
+    flush()
+  }, [editor, canEdit, queueSave, flush])
 
   const refactor = useCallback(async () => {
     if (!editor || refactoring) return
@@ -755,7 +786,9 @@ export function NoteEditor({
           <div key={mode} className={modeSwitched ? 'notes-mode-enter' : undefined}>
             {/* Raw mode shows the note's own frontmatter — title, type and tags are
                 right there in the text, so the header card would just repeat them. */}
-            {mode === 'wysiwyg' && headerSlot}
+            {mode === 'wysiwyg' && (typeof headerSlot === 'function'
+              ? headerSlot({ frontmatter: headerFrontmatter, replaceFrontmatter, editable: canEdit && !!editor })
+              : headerSlot)}
             {bodyContent}
           </div>
         </div>

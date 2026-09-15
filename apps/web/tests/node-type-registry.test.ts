@@ -5,7 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { DEFAULT_NODE_TYPES } from '../lib/types/context'
+import { DEFAULT_NODE_TYPES, getNodeGlyph } from '../lib/types/context'
 import {
   defaultNodeTypeColor,
   isReservedTypeName,
@@ -51,6 +51,15 @@ test('a built-in under its own name is already served', () => {
   const r = ok(mergeNodeType(null, { name: 'person', color: '#3b82f6' }))
   assert.equal(r.created, false)
   assert.equal(r.type.name, 'Person')
+})
+
+test('every directory type has an icon fallback', () => {
+  for (const type of [...DEFAULT_NODE_TYPES.map((entry) => entry.name), 'Model', 'Playbook']) {
+    assert.notEqual(getNodeGlyph(type), null, `${type} needs a card icon`)
+  }
+  assert.equal(getNodeGlyph('Tool'), 'tool')
+  assert.equal(getNodeGlyph('Model'), 'model')
+  assert.equal(getNodeGlyph('Playbook'), 'custom')
 })
 
 test('reserved names are refused whatever their casing', () => {

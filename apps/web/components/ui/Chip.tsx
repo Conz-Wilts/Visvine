@@ -27,7 +27,7 @@ export type ChipTone = 'solid' | 'muted' | 'dashed';
 export type ChipSize = 'xs' | 'sm' | 'md' | 'lg';
 
 const BASE =
-  'inline-flex max-w-full items-center rounded-md font-semibold leading-none whitespace-nowrap';
+  'inline-flex max-w-full items-center rounded-lg font-semibold leading-normal whitespace-nowrap';
 
 const SIZE_CLASS: Record<ChipSize, string> = {
   xs: 'h-5 gap-1 px-[7px] text-[10px]',

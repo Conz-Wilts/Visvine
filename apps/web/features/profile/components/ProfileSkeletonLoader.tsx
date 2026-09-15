@@ -35,8 +35,8 @@ export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps
       style={{ maxHeight: SKELETON_MAX_H }}
     >
       {/* ══ IDENTITY HERO — avatar beside identity + spaces ══ */}
-      <section className="flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">
-        <div className="w-32 h-32 sm:w-40 sm:h-40 flex-none rounded-2xl bg-surface-3" />
+      <section className="rounded-2xl border border-border-subtle bg-surface-1 px-5 py-5 shadow-strip sm:px-7 sm:py-7 flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">
+        <div className="w-44 h-44 sm:w-56 sm:h-56 flex-none rounded-2xl bg-surface-3" />
         <div className="min-w-0 flex-1 flex flex-col lg:flex-row lg:items-start gap-6 sm:pt-2">
           <div className="min-w-0 flex-1 space-y-3">
             <div className={`h-8 w-56 ${block}`} />          {/* name */}
@@ -115,7 +115,7 @@ export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps
 /** A section matching SectionCard/RailCard — a title on a hairline, then lines. */
 function SkeletonCard({ children }: { children: React.ReactNode }) {
   return (
-    <section className="border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
+    <section className="rounded-2xl border border-border-subtle bg-surface-1 px-5 py-5 shadow-strip sm:px-6 sm:py-6">
       <div className={`h-5 w-32 mb-4 ${block}`} />
       <div className="space-y-2.5">{children}</div>
     </section>

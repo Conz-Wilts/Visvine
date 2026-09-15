@@ -82,7 +82,6 @@ function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
   // Glow colours exposed as CSS vars so the hover *shadow* stays pure CSS — only
   // the tilt (which has to know where the pointer is) touches inline style.
   const cardStyle = {
-    borderColor: typeColor,
     '--card-glow': `${typeColor}55`,
     '--card-glow-strong': `${typeColor}99`,
   } as React.CSSProperties
@@ -90,7 +89,7 @@ function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
   return (
     <div
       ref={tiltRef}
-      className="bg-surface-1 rounded-2xl overflow-hidden cursor-pointer group flex flex-col w-full border-4 relative z-0 hover:z-10 transition-[box-shadow,transform] duration-200 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_16px_32px_rgba(0,0,0,0.16),0_0_20px_4px_var(--card-glow-strong)]"
+      className="bg-surface-1 rounded-2xl overflow-hidden cursor-pointer group flex flex-col w-full relative z-0 hover:z-10 transition-[box-shadow,transform] duration-200 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_16px_32px_rgba(0,0,0,0.16),0_0_20px_4px_var(--card-glow-strong)]"
       style={cardStyle}
       onClick={() => onClick?.(item)}
     >
@@ -127,18 +126,22 @@ function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
       </div>
 
       {/* Content — centred on the card's axis, name over tagline over chip */}
-      <div className="px-4 pt-3 pb-4 flex flex-col flex-1 min-h-0 items-center text-center">
+      <div className="px-4 pt-4 pb-4 flex flex-col flex-1 min-h-0 items-center text-center">
         <h3 className="font-semibold text-text-primary text-base leading-tight line-clamp-1 w-full">
           {displayName}
         </h3>
 
-        {/* Two lines are always reserved so the chip sits on one baseline across
-            the row whether or not an entry has a tagline. */}
-        <p className="mt-1.5 w-full text-[13px] font-normal leading-[1.35] text-text-secondary line-clamp-2 min-h-[35px]">
+        {/* Reserve a compact second line so chips align without leaving a large
+            gap below short descriptions. */}
+        <p className="mt-2 w-full text-[13px] font-normal leading-[1.35] text-text-secondary line-clamp-2 min-h-[28px]">
           {displaySubtitle ?? ''}
         </p>
 
-        <Chip color={typeColor} size="sm" className="mt-3.5">
+        <Chip
+          color={typeColor}
+          size="md"
+          className="mt-6"
+        >
           {nodeTypeLabel(item.type, item.alias, aliases, nodeTypes)}
         </Chip>
         {/* A row read through the people flow wears the room it belongs to:

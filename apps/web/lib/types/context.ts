@@ -454,12 +454,13 @@ export function getNodeTypeConfig(
 /**
  * The avatar-fallback glyph a node type should draw when it has no image. People
  * get the person silhouette; spaces and the other containers the cluster;
- * events a calendar; resources a document. Any other type returns null and the
- * caller falls back to name initials. A clean SVG-glyph system, not emoji.
+ * events a calendar; resources a document. Tools and models retain recognisable
+ * marks when their authored/provider icon is absent, and custom types use a
+ * neutral tag mark. A clean SVG-glyph system, not emoji.
  */
 export function getNodeGlyph(
   type: string | null | undefined
-): 'person' | 'group' | 'event' | 'resource' | 'connector' | 'agent' | null {
+): 'person' | 'group' | 'event' | 'resource' | 'connector' | 'agent' | 'tool' | 'model' | 'custom' | null {
   if (!type) return null;
   const normalized = type.toLowerCase();
   const canonical = TYPE_SYNONYMS[normalized] ?? normalized;
@@ -474,7 +475,9 @@ export function getNodeGlyph(
   // An agent brief is not a document: it is the thing that runs. Its own glyph
   // is what separates it from the notes it reads and writes.
   if (canonical === 'agent') return 'agent';
-  return null;
+  if (canonical === 'tool') return 'tool';
+  if (canonical === 'model') return 'model';
+  return 'custom';
 }
 
 /**
