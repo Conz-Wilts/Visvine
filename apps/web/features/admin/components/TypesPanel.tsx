@@ -367,9 +367,6 @@ function TypePlural({ typeName, plural, saving, onSave }: {
           if (e.key === 'Escape') { setDraft(plural ?? ''); e.currentTarget.blur(); }
         }}
       />
-      <p className="mt-1.5 text-xs text-text-muted">
-        What a table or filter of these is called. Left empty it reads &ldquo;{derived}&rdquo;.
-      </p>
     </Field>
   );
 }

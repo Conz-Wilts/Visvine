@@ -251,7 +251,7 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // the organisations recorded inside it.
   { name: 'Space',     color: '#78d870', shape: 'square'    },
   { name: 'Event',     color: '#ef4444', shape: 'rectangle' },
-  { name: 'Resource',  color: '#f59e0b', shape: 'rectangle' },
+  { name: 'Resource',  color: '#f97316', shape: 'rectangle' },
   // Structural types — the container kinds. Colours match the Create panel's
   // tiles so a thing looks the same wherever you meet it. Notes and uploaded
   // files are deliberately absent: they are content in a context, not nodes in
@@ -259,31 +259,30 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // called Space before the rename freed that name for the org type; stored
   // rows are migrated by scripts/rename-community-to-space.ts.
   { name: 'Section',   color: '#0ea5e9', shape: 'square'    },
-  { name: 'Channel',   color: '#e0685f', shape: 'rectangle' },
+  { name: 'Channel',   color: '#ec4899', shape: 'rectangle' },
   // A connector is a space's gateway to an external API or database, kept
   // as a note under connectors/. Rectangle like the other document types — the
   // indigo tint and the plug glyph are what set it apart.
-  { name: 'Connector', color: '#6366f1', shape: 'rectangle' },
+  { name: 'Connector', color: '#4f46e5', shape: 'rectangle' },
   // An agent is a scheduled worker authored as a note under agents/ (lib/agents).
   // Teal, the one saturated hue no other document type uses.
   { name: 'Agent',     color: '#0d9488', shape: 'rectangle' },
   // A Tool is a member-built app authored as an entity folder under tools/
   // (lib/tools) — its index is the config, its sub-notes the source. Square
-  // because a Tool is a container of its own surfaces, not a document; violet is
-  // the one palette hue (lib/profileTheme.ts PALETTES) no other type has taken.
-  { name: 'Tool',      color: '#8b5cf6', shape: 'square'    },
+  // because a Tool is a container of its own surfaces, not a document; purple,
+  // kept lighter than Connector's indigo so the two never read as one.
+  { name: 'Tool',      color: '#a855f7', shape: 'square'    },
   // A folder, which is its `index.md` (lib/notes/shared/indexNote.ts). It is
   // here so the word a folder shows has a colour and a spelling the console
   // owns like every other type — not so anything can be typed `Index`: the name
   // stays reserved (nodeTypeRegistry.ts RESERVED), no picker offers it and the
   // index contract still strips it from frontmatter. Square, like the other
-  // containers; the quietest hue in the set, because a folder is the one type
-  // that says nothing about its subject.
+  // containers; manila yellow, the colour a folder already is.
   //
   // `scope: 'note'` is the honest one: it labels a NOTE and never a node —
   // nothing syncs an `index:` node — so it belongs with the vocabulary the
   // directory's type filter skips rather than with the types a card can wear.
-  { name: 'Index',     color: '#64748b', shape: 'square', scope: 'note' },
+  { name: 'Index',     color: '#eab308', shape: 'square', scope: 'note' },
 ];
 
 // Aliases are entirely space-configured — there is no built-in list for any

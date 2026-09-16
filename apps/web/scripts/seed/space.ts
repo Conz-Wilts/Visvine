@@ -133,7 +133,7 @@ export const NODE_TYPES = [
   // findNodeTypeConfig and paints it its own colour.
   { name: 'Company', color: '#0891b2', shape: 'square' },
   { name: 'Event', color: '#ef4444', shape: 'rectangle' },
-  { name: 'Resource', color: '#0d9488', shape: 'circle' },
+  { name: 'Resource', color: '#f97316', shape: 'circle' },
   { name: 'Note', color: '#8b5cf6', shape: 'rectangle' },
   // The segment vocabulary — how we cut the customer base. (Blackbird's space
   // called the same shape a Sector.)
@@ -148,8 +148,8 @@ export const NODE_TYPES = [
   // a RESERVED machine type (lib/types/nodeTypeRegistry.ts) the console must
   // never offer to a note picker.
   { name: 'Section', color: '#0ea5e9', shape: 'square' },
-  { name: 'Channel', color: '#e0685f', shape: 'rectangle' },
-  { name: 'Connector', color: '#6366f1', shape: 'rectangle' },
+  { name: 'Channel', color: '#ec4899', shape: 'rectangle' },
+  { name: 'Connector', color: '#4f46e5', shape: 'rectangle' },
   { name: 'Agent', color: '#0d9488', shape: 'rectangle' },
   // Note-only vocabulary: `type: Deal` on a pipeline note, `type: Decision` on
   // a product decision. Scoped to notes, the way the draft-context surface
