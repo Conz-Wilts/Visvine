@@ -10,17 +10,17 @@
 // value go without reopening a menu. It exists only while something is active,
 // so the resting state stays a single line.
 //
-// The Table view has its own, slimmer bar (table/TableToolbar.tsx): the type
-// is a tab there and the header sorts, so this one belongs to the grid alone.
+// The type is the same TypeMenu the Table view's bar carries; the rest of that
+// bar (table/TableToolbar.tsx) is slimmer, because the header sorts there.
 // The grid is always A→Z.
 //
 // All state lives in the passed-in useDirectoryBrowse() instance.
 
 import { FilterDropdown } from '@/features/directory/components/FilterDropdown';
+import TypeMenu, { menuTypes } from '@/features/directory/components/TypeMenu';
 import Chip from '@/components/ui/Chip';
 import SearchInput from '@/components/ui/SearchInput';
 import { tagPalette } from '@/lib/tagColors';
-import { getNodeTypeConfig, pluralTypeName } from '@/lib/types';
 import type { SpaceAlias } from '@/lib/types';
 import type { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 
@@ -54,7 +54,14 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
   const aliases = (space?.aliases ?? []) as SpaceAlias[];
   const tagColors = space?.designConfig?.tagColors ?? null;
 
-  const activeCount = filterTypes.size + filterAliases.size + filterTags.size;
+  // The same menu the Table's bar carries. The grid is every type at once
+  // until one is picked, so All is the resting choice rather than the first
+  // type; a single type is the only other state.
+  const types = menuTypes(presentTypes, nodes);
+  const picked = filterTypes.size === 1 ? [...filterTypes][0].toLowerCase() : null;
+  const activeType = picked && types.some(t => t.id === picked) ? picked : 'all';
+
+  const activeCount = filterAliases.size + filterTags.size;
 
   const without = (set: Set<string>, value: string) => {
     const next = new Set(set);
@@ -63,7 +70,6 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
   };
 
   const clearAll = () => {
-    setFilterTypes(new Set());
     setFilterAliases(new Set());
     setFilterTags(new Set());
   };
@@ -94,30 +100,14 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
 
         <div className="hidden h-6 w-px shrink-0 bg-border-subtle sm:block" />
 
-        <FilterDropdown
-          label="Type"
-          options={presentTypes.map(t => {
-            const forType = aliases.filter(a => a.nodeType.toLowerCase() === t.toLowerCase());
-            return {
-              // The value is the type, the label names the SET of them
-              // (lib/types/plural.ts) — a row of the Type filter is `People 12`,
-              // while the chip on a card stays `Person`.
-              value: t,
-              label: pluralTypeName(t, space?.nodeTypes),
-              count: nodes.filter(n => n.type.toLowerCase() === t.toLowerCase()).length,
-              subOptions: forType.length > 0 ? forType.map(a => ({
-                value: a.name,
-                label: a.name,
-                color: a.color,
-                count: nodes.filter(n => n.type.toLowerCase() === t.toLowerCase() && n.alias === a.name).length,
-              })) : undefined,
-            };
-          })}
-          selected={filterTypes}
-          onChange={next => { setFilterTypes(next); if (next.size === 0) setFilterAliases(new Set()); }}
-          selectedSub={filterAliases}
-          onChangeSub={setFilterAliases}
-          getColor={t => getNodeTypeConfig(t, space?.nodeTypes).color}
+        <TypeMenu
+          types={types}
+          activeKey={activeType}
+          nodeTypes={space?.nodeTypes}
+          onChange={id => {
+            setFilterTypes(id === 'all' ? new Set() : new Set([types.find(t => t.id === id)?.name ?? id]));
+            setFilterAliases(new Set());
+          }}
         />
 
         <FilterDropdown
@@ -135,14 +125,6 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
 
       {activeCount > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {[...filterTypes].map(type => (
-            <FilterChip
-              key={`type-${type}`}
-              label={pluralTypeName(type, space?.nodeTypes)}
-              color={getNodeTypeConfig(type, space?.nodeTypes).color}
-              onRemove={() => setFilterTypes(without(filterTypes, type))}
-            />
-          ))}
           {[...filterAliases].map(alias => (
             <FilterChip
               key={`alias-${alias}`}

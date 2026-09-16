@@ -1,8 +1,9 @@
 'use client';
 
-// Which table you are in, as one word on the Table view's bar: the type on
-// show, with its colour square and its count, opening a menu of every type
-// that has rows — All first when there is more than one to be all of.
+// Which type you are looking at, as one word on the Grid's and the Table's
+// bar: the type on show, with its colour square and its count, opening a menu
+// of every type that has rows — All first when there is more than one to be
+// all of. A type with nothing in it is not offered.
 //
 // It is a dropdown rather than a column down the left because the list is
 // short and the table is wide: a rail spent 212px of every screen saying one
@@ -17,7 +18,7 @@ import { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown';
 import { ChevronDownIcon } from '@/features/shared/icons';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
 import { pluralTypeName } from '@/lib/types/plural';
-import type { NodeTypeConfig } from '@/lib/types';
+import { DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types';
 
 export interface MenuType {
   /** Lowercased id, the `?type=` value; `all` for every row at once. */
@@ -25,6 +26,32 @@ export interface MenuType {
   /** The type's own singular name — the row reads it in the plural. */
   name: string;
   count: number;
+}
+
+/** The menu's entries: every type with rows, built-ins first in their
+ *  canonical order, then the space's own — so Person is always the first stop
+ *  and a type the space invented sits after the ones everyone has. `extra`
+ *  rows (Agents, which the directory feed does not carry) follow them. An
+ *  entry is keyed by the type's own name, not its canonical base: Company
+ *  folds onto Space for the entity machinery, but a space that records both
+ *  wants two. */
+export function menuTypes(
+  presentTypes: string[],
+  nodes: { type: string }[],
+  extra: MenuType[] = [],
+): MenuType[] {
+  const rank = (name: string) => {
+    const i = DEFAULT_NODE_TYPES.findIndex((t) => t.name.toLowerCase() === name.toLowerCase());
+    return i === -1 ? DEFAULT_NODE_TYPES.length : i;
+  };
+  const typed = [...presentTypes]
+    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+    .map((name) => {
+      const id = name.toLowerCase();
+      return { id, name, count: nodes.filter((n) => n.type.toLowerCase() === id).length };
+    });
+  const withRows = [...typed, ...extra].filter((t) => t.count > 0);
+  return withRows.length > 1 ? [{ id: 'all', name: 'All', count: nodes.length }, ...withRows] : withRows;
 }
 
 /** A type's mark: the colour square, in a slot wide enough that All — which

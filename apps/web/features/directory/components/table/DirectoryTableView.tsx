@@ -16,7 +16,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { Alert } from '@/components/ui';
 import TableToolbar from './TableToolbar';
-import TypeMenu from './TypeMenu';
+import TypeMenu, { menuTypes } from '@/features/directory/components/TypeMenu';
 import DirectoryTable from './DirectoryTable';
 import AgentsRoster from '@/features/agents/components/AgentsRoster';
 import { useAgentsRoster } from '@/features/agents/lib/useAgentsRoster';
@@ -34,7 +34,7 @@ import {
   type CellPatch,
   type TableColumn,
 } from '@/lib/directory/table';
-import { DEFAULT_NODE_TYPES, findNodeTypeConfig, pluralTypeName, type DirectoryItem, type SpaceAlias } from '@/lib/types';
+import { findNodeTypeConfig, pluralTypeName, type DirectoryItem, type SpaceAlias } from '@/lib/types';
 
 interface DirectoryTableViewProps {
   browse: ReturnType<typeof useDirectoryBrowse>;
@@ -47,35 +47,15 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   const { space, loading, error, filteredItems, presentTypes, handleItemClick, handleDataChanged, nodes } = browse;
   const router = useSpaceRouter();
 
-  // The type menu's entries: every type with rows, built-ins first in their
-  // canonical order, then the space's own — so Person is always the first
-  // stop and a type the space invented sits after the ones everyone has. An
-  // entry is keyed by the type's own name, not its canonical base: Company
-  // folds onto Space for the entity machinery, but a space that records both
-  // wants two tables.
   // Agents are not in the directory feed (their nodes are structural, like a
   // connector's), so the menu's Agents entry — and the roster under it — come
   // from the agents route. Followed live only while it is the table shown.
   const isAgents = type?.toLowerCase() === 'agent';
   const roster = useAgentsRoster(space?.id ?? null, isAgents);
-  const types = useMemo(() => {
-    const rank = (name: string) => {
-      const i = DEFAULT_NODE_TYPES.findIndex((t) => t.name.toLowerCase() === name.toLowerCase());
-      return i === -1 ? DEFAULT_NODE_TYPES.length : i;
-    };
-    const fromNodes = [...presentTypes]
-      .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
-      .map((name) => {
-        const id = name.toLowerCase();
-        const count = nodes.filter((n) => n.type.toLowerCase() === id).length;
-        return { id, name, count };
-      })
-      .filter((t) => t.count > 0);
-    const agentCount = roster.data?.agents.length ?? 0;
-    const withAgents = agentCount > 0 ? [...fromNodes, { id: 'agent', name: 'Agent', count: agentCount }] : fromNodes;
-    // All leads when there is more than one table to be all of.
-    return withAgents.length > 1 ? [{ id: 'all', name: 'All', count: nodes.length }, ...withAgents] : withAgents;
-  }, [presentTypes, nodes, roster.data]);
+  const types = useMemo(
+    () => menuTypes(presentTypes, nodes, [{ id: 'agent', name: 'Agent', count: roster.data?.agents.length ?? 0 }]),
+    [presentTypes, nodes, roster.data],
+  );
 
   // The `?type=` is usually a type's own name, but crossing from a context note
   // it is the namespace's entity KIND (`spaces/` → space), and a space may
