@@ -65,9 +65,10 @@ leaks through its public child.
 
 **A room whose `flowContext` is on (and which is not secret) appears in the
 parent's context tree as a folder of its own inside one `Sub-spaces` folder
-(`subspaces.ts#ensureSubspacesFolder`), beside the other rooms and the locked
-ones — two levels under the space, and the folder is drawn only when there is
-a room to draw (`pruneEmptySubspacesFolder`).** Its paths live under the
+(`subspaces.ts#ensureSubspacesFolder`), beside the other rooms — two levels
+under the space, and the folder is drawn only when there is a room to draw
+(`pruneEmptySubspacesFolder`). A room that does not flow here is not drawn at
+all.** Its paths live under the
 reserved address `subspaces/<id>/`, which is also where it is drawn: nothing
 of the parent's is ever stored there, and a write there is a write *in the
 sub-space* (below). The `Sub-spaces` folder and each room's folder can be
@@ -236,14 +237,17 @@ rather than a `Space` with fields blanked, because a `Space` carries the
 aliases, the type vocabulary and the tool config, and none of that may cross.
 Discovering the parent (public, unjoined) earns nothing; standing in it does.
 
-Two surfaces draw it, both from `SpaceContext.lockedSubspaces`:
+One surface draws it, from `SpaceContext.lockedSubspaces`: the space
+switcher, as `LockedSubspaceRow` on the parent's branch, after the sub-spaces
+you are in — the name dimmed, a lock, "Asked" once you have.
 
-| surface | row |
-|---|---|
-| the space switcher | `LockedSubspaceRow` on the parent's branch, after the sub-spaces you are in — the name dimmed, a lock, "Asked" once you have |
-| the parent's context tree | a top-level folder (path `subspaces/<id>`), stamped `locked`, holding nothing — no chevron, no drag, no share (`graftLockedSubspace`, `NoteSidebar#LockedSubspaceFolderRow`) |
+The context tree does NOT draw it. That tree is where a room's context is
+read and written; a locked room has no context to read here and refuses every
+write (`federation.ts#writeTarget`), so a folder for it is a row that can only
+ever fail. Naming the room is the switcher's job, because the switcher is
+where the door already is.
 
-Pressing either opens `RequestSubspaceAccessDialog`: what the space is, how
+Pressing the row opens `RequestSubspaceAccessDialog`: what the space is, how
 many people are in it, and one button.
 
 **The door decides.** `POST /api/spaces/<id>/join` asks one question,

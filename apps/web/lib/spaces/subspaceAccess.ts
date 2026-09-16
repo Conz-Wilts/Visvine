@@ -289,11 +289,6 @@ export async function listLockedSubspaces(
   }))
 }
 
-/** The locked rows under one parent — the context tree's read. */
-export async function lockedSubspacesOf(parentId: string, userId: string): Promise<LockedSubspace[]> {
-  return listLockedSubspaces(userId, parentId)
-}
-
 /**
  * What pressing Join on `spaceId` writes for `userId` — deny, a pending
  * request, or an active membership — per lib/spaces/subspaces.ts#joinOutcome:

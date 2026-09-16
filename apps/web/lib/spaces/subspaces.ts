@@ -439,28 +439,6 @@ function rebaseNode(node: TreeNode, subspaceId: string): TreeNode {
 }
 
 /**
- * Name a PRIVATE sub-space in the parent's tree without opening it: the same
- * top-level folder, stamped `locked`, holding nothing.
- *
- * It is here for the reason the switcher's locked row is: a member of the
- * parent who cannot see the room has no way to ask for it. Nothing of the
- * sub-space crosses — not a note, not a child count — because nothing was
- * read; only the name it is listed under.
- */
-export function graftLockedSubspace(root: TreeNode, sub: { id: string; name: string }): TreeNode {
-  const folder: TreeNode = {
-    name: sub.id,
-    path: subspaceFolderPath(sub.id),
-    kind: 'folder',
-    title: sub.name,
-    space: sub.id,
-    locked: true,
-  }
-  ensureSubspacesFolder(root).children!.push(folder)
-  return folder
-}
-
-/**
  * Graft a sub-space's own tree into the parent's, in place, as a folder in
  * the `Sub-spaces` folder — one level under the space, beside the other
  * rooms. Its ADDRESS is the reserved `subspaces/<id>/`, which is also where it

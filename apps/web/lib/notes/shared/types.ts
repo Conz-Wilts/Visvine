@@ -68,11 +68,6 @@ export interface TreeNode {
   // with it (connectors and agents flagged `share: subspaces`), read-only
   // (lib/spaces/subspaces.ts#graftParent). `space` then names the parent.
   parent?: boolean
-  // Set on a `subspaces/<id>` folder standing for a PRIVATE sub-space: it is
-  // named here, and holds nothing. A private sub-space is closed, not secret —
-  // the row exists so a member of the parent can see it and ask
-  // (lib/spaces/subspaceAccess.ts#listLockedSubspaces).
-  locked?: boolean
 }
 
 // A note sitting in the trash (soft-deleted), awaiting restore or purge.

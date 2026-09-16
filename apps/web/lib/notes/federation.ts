@@ -38,11 +38,10 @@ import type { ContextPrincipal } from './shared/contextTypes'
 import type { NoteMeta, TreeNode } from './shared/types'
 import type { FusedResult, SearchFilters } from './shared/retrieval'
 import { isAdmin, membershipStatus } from '@/lib/auth'
-import { flowingSubspace, flowingSubspacesOf, lockedSubspacesOf, parentOfSubspace } from '@/lib/spaces/subspaceAccess'
+import { flowingSubspace, flowingSubspacesOf, parentOfSubspace } from '@/lib/spaces/subspaceAccess'
 import {
   PARENT_FOLDER,
   SUBSPACE_FOLDER,
-  graftLockedSubspace,
   graftParent,
   graftSubspace,
   isParentPath,
@@ -308,17 +307,13 @@ export async function federateTree(
   treeFor: (context: Context, principal: ContextPrincipal) => Promise<TreeNode>,
 ): Promise<void> {
   // Every sub-space is read at once; grafting keeps the readers' order so the
-  // tree is the same whichever answers first. The private ones are named after
-  // them, and nothing of theirs is read to do it — a locked folder is the name
-  // and the lock. Only for a signed-in caller standing in this space, which is
-  // the only person the row would mean anything to.
-  const [readers, locked] = await Promise.all([
-    subspaceReaders(p, context),
-    mayFederate(context) && p.userId ? lockedSubspacesOf(context.spaceId, p.userId) : Promise.resolve([]),
-  ])
+  // tree is the same whichever answers first. A room whose context does not
+  // flow here is not drawn at all — a folder that holds nothing and can take
+  // nothing is a dead row. The private ones are named on the switcher, where
+  // pressing one asks to join.
+  const readers = await subspaceReaders(p, context)
   const subRoots = await Promise.all(readers.map((r) => treeFor(r.context, r.principal)))
   readers.forEach((reader, i) => graftSubspace(root, reader.space, subRoots[i], reader.own))
-  for (const sub of locked) graftLockedSubspace(root, sub)
   await federateParent(context, root)
 }
 

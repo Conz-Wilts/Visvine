@@ -109,11 +109,6 @@ function acceptsDrop(drag: TreeDragValue, dest: string): boolean {
 
 const TreeDrag = createContext<TreeDragValue | null>(null)
 
-/** Pressing a locked sub-space's folder. Carried on a context rather than
- *  threaded through every FolderRow: a locked row only ever appears under
- *  the context root, but the recursion that reaches it is the same one. */
-const TreeLockedAsk = createContext<((spaceId: string) => void) | null>(null)
-
 /** The sub-spaces the viewer stands in, read off the grafted folders' `writable`
  *  stamp (lib/spaces/subspaces.ts#graftSubspace). Rows under one of these take
  *  the same edit affordances as the space's own — the server judges each write
@@ -189,10 +184,6 @@ interface NoteSidebarProps {
    *  changes the saved expansion â€” clearing it collapses the peek back to
    *  whatever the user had open. */
   revealPath?: string | null
-  /** Pressing a `subspaces/<id>` folder that stands for a PRIVATE sub-space —
-   *  the one the caller can see named but not open. Omit and the row still
-   *  draws, inert. */
-  onOpenLockedSubspace?: (spaceId: string) => void
   /** The Directory's search box, applied to the tree: the tree is pruned to
    *  what matches and every surviving folder is opened, so a match is never
    *  hidden inside a collapsed ancestor. Trash steps aside while it runs -
@@ -225,7 +216,6 @@ export function NoteSidebar({
   storageKey = null,
   revealPath = null,
   query = '',
-  onOpenLockedSubspace,
 }: NoteSidebarProps) {
   const searching = query.trim().length > 0
 
@@ -340,7 +330,6 @@ export function NoteSidebar({
 
   return (
     <TreeDrag.Provider value={drag}>
-    <TreeLockedAsk.Provider value={onOpenLockedSubspace ?? null}>
     <TreeWritableSpaces.Provider value={writableSpaces}>
     <div
       className={`flex h-full flex-col overflow-hidden ${
@@ -438,7 +427,6 @@ export function NoteSidebar({
       />
     )}
     </TreeWritableSpaces.Provider>
-    </TreeLockedAsk.Provider>
     </TreeDrag.Provider>
   )
 }
@@ -637,17 +625,6 @@ function Tree({
   return (
     <>
       {children.map((child, i) => {
-        // A private sub-space is named in this tree and holds nothing, so it
-        // never becomes a folder to open, drag into or share.
-        if (child.locked) {
-          return (
-            <LockedSubspaceFolderRow
-              key={child.path}
-              node={child}
-              guide={i === children.length - 1 ? 'last' : 'mid'}
-            />
-          )
-        }
         return child.kind === 'folder' ? (
           <FolderRow
             key={child.path}
@@ -696,52 +673,6 @@ function EmptyBranchRow() {
     <div className="flex items-center">
       <GuideLine guide="last" />
       <span className="py-1.5 pl-1.5 text-[13px] italic text-text-muted">Empty</span>
-    </div>
-  )
-}
-
-/**
- * A private sub-space, named in its parent's tree: the space's glyph, its name
- * dimmed, a lock. No chevron — there is nothing under it to open, and none of
- * it was read to draw this (lib/notes/federation.ts#federateTree).
- *
- * Pressing it asks. That is the whole reason the row exists: a member of the
- * parent who cannot see the room has no way to request the room.
- */
-function LockedSubspaceFolderRow({ node, guide }: { node: TreeNode; guide: Guide }) {
-  const ask = useContext(TreeLockedAsk)
-  const spaceId = node.space
-  // A locked room is still a folder of the parent's tree, so it can be placed
-  // like an open one — dragged only; it is never a drop target.
-  const drag = useContext(TreeDrag)
-  const draggable = !!drag?.canPlace
-  const isDragged = drag?.dragging?.path === node.path
-  return (
-    <div
-      className={`flex items-center ${isDragged ? 'opacity-50' : ''}`}
-      draggable={draggable}
-      onDragStart={(e) => {
-        if (!draggable) return
-        e.dataTransfer.setData('text/plain', node.path)
-        e.dataTransfer.effectAllowed = 'move'
-        drag!.begin({ path: node.path, kind: 'placed', label: node.title ?? node.name })
-      }}
-      onDragEnd={() => drag?.end()}
-    >
-      <GuideLine guide={guide} />
-      <button
-        type="button"
-        disabled={!ask || !spaceId}
-        onClick={() => spaceId && ask?.(spaceId)}
-        title={`${node.title ?? node.name} — private. Ask to join.`}
-        className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1.5 pl-1.5 pr-2 text-left text-[13px] text-text-muted enabled:hover:bg-surface-2 disabled:cursor-default"
-      >
-        <BlocksIcon className="h-4 w-4 shrink-0 opacity-60" />
-        <span className="min-w-0 flex-1 truncate opacity-70">{node.title ?? node.name}</span>
-        <span className="shrink-0 opacity-70 [&>svg]:h-3 [&>svg]:w-3">
-          <LockIcon />
-        </span>
-      </button>
     </div>
   )
 }

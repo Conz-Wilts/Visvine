@@ -31,7 +31,6 @@ import {
   subspaceConfigOf,
   subspaceOfPath,
   visibilityForListing,
-  graftLockedSubspace,
   graftSubspace,
   isSubspacePath,
   spaceBranches,
@@ -262,31 +261,6 @@ describe('spaceMark — a sub-space wears its parent’s picture', () => {
   })
   it('falls back to its own when the parent is not in the list', () => {
     assert.deepEqual(spaceMark(spaces[2], spaces), { name: 'Orphan', imageUrl: 'o.png' })
-  })
-})
-
-describe('graftLockedSubspace — named, not opened', () => {
-  const root = (): TreeNode => ({ name: '', path: '', kind: 'folder', children: [] })
-
-  it('a private sub-space is a folder with a name, a lock and nothing inside', () => {
-    const tree = root()
-    graftLockedSubspace(tree, { id: 'ops', name: 'Operations' })
-    assert.equal(tree.children?.[0].path, SUBSPACE_FOLDER)
-    const folder = tree.children?.[0].children?.[0]
-    assert.equal(folder?.path, subspaceFolderPath('ops'))
-    assert.equal(folder?.title, 'Operations')
-    assert.equal(folder?.locked, true)
-    assert.equal(folder?.children, undefined)
-  })
-
-  it('locked and flowing sub-spaces sit in the same Sub-spaces folder, side by side', () => {
-    const tree = root()
-    graftSubspace(tree, { id: 'open', name: 'Open' }, { name: '', path: '', kind: 'folder', children: [] })
-    graftLockedSubspace(tree, { id: 'shut', name: 'Shut' })
-    const rooms = tree.children?.[0].children
-    assert.deepEqual(rooms?.map((c) => c.name), ['open', 'shut'])
-    assert.equal(rooms?.[0].locked, undefined)
-    assert.equal(rooms?.[1].locked, true)
   })
 })
 

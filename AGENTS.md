@@ -116,10 +116,11 @@ rail. `visibility` is `public | private`. Creation always goes through
 - **A private sub-space is closed, not secret: the parent's members see its
   NAME.** `listLockedSubspaces` returns its own thin shape (never a `Space`,
   which carries aliases and tool config) for private sub-spaces of a space the
-  caller actively belongs to. Drawn twice — a locked row on the switcher's
-  branch, and a `subspaces/<id>/` folder stamped `locked` holding nothing
-  (`graftLockedSubspace`). A secret room (`listing: 'secret'`) is named
-  nowhere. Pressing either goes through the room's **door**: `POST …/join`
+  caller actively belongs to. Drawn in ONE place — a locked row on the
+  switcher's branch. The context tree draws only rooms whose context flows
+  here: a locked folder there holds nothing and can take nothing, so it is a
+  row that only ever fails. A secret room (`listing: 'secret'`) is named
+  nowhere. Pressing the row goes through the room's **door**: `POST …/join`
   writes what `selfJoinOutcome` → `subspaces.ts#joinOutcome` says — the house
   door for the parent's members, the world door for everyone else, each
   `invite` | `ask` | `open`, the world door never wider than the house's.
