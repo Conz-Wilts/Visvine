@@ -16,6 +16,7 @@ const space = (over: Partial<DiscoverSpace> & { id: string }): DiscoverSpace => 
   name: over.id,
   tags: [],
   memberCount: 1,
+  visibility: 'public',
   ...over,
 });
 
@@ -28,6 +29,15 @@ const spaces: DiscoverSpace[] = [
 
 test('the global record is never a Discover tile', () => {
   const listed = [...spaces, space({ id: 'visvine', name: 'Visvine' })];
+  assert.deepEqual(discoverableSpaces(listed).map((s) => s.id), spaces.map((s) => s.id));
+});
+
+test('a private space or sub-space is never a Discover tile', () => {
+  const listed = [
+    ...spaces,
+    space({ id: 'closed', visibility: 'private' }),
+    space({ id: 'room', visibility: 'private', parentId: spaces[0].id }),
+  ];
   assert.deepEqual(discoverableSpaces(listed).map((s) => s.id), spaces.map((s) => s.id));
 });
 

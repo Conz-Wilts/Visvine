@@ -19,6 +19,7 @@ export interface DiscoverSpace {
   imageUrl?: string;
   parentId?: string | null;
   createdAt?: string;
+  visibility?: string;
 }
 
 export interface DiscoverEvent {
@@ -48,13 +49,17 @@ export interface CountOption {
 }
 
 /**
- * The spaces Discover may show. Every public space except the global record:
- * Visvine is a public Space row so the context tree, search and entity folders
- * work on it unchanged, but it has no members and no door — everyone already
- * reads it — so offering it here is offering a Join that can only be refused.
+ * The spaces Discover may show: public ones, and nothing else. The list it
+ * narrows also holds the private spaces and sub-spaces the viewer is in or
+ * administers, and a private space is invite-only — being a member of one is
+ * no reason to advertise it, and a private room of a public house is never
+ * named to strangers. The global record is out too: Visvine is a public Space
+ * row so the context tree, search and entity folders work on it unchanged, but
+ * it has no members and no door — everyone already reads it — so offering it
+ * here is offering a Join that can only be refused.
  */
-export function discoverableSpaces<T extends Pick<DiscoverSpace, 'id'>>(spaces: readonly T[]): T[] {
-  return spaces.filter((space) => !isGlobalSpace(space.id));
+export function discoverableSpaces<T extends Pick<DiscoverSpace, 'id' | 'visibility'>>(spaces: readonly T[]): T[] {
+  return spaces.filter((space) => space.visibility === 'public' && !isGlobalSpace(space.id));
 }
 
 /** A space's country as an ISO code, read off its Location ("Auckland, New Zealand" → NZ). */
