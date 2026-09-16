@@ -48,7 +48,7 @@ import {
  *  │ (you)                            │  account: your avatar and its menu
  *  └──────────────────────────────────┘
  *
- *  Every row is the same shape: a 68px glyph cell on one column, then a label
+ *  Every row is the same shape: a 76px glyph cell on one column, then a label
  *  the collapsed rail clips away with overflow-hidden. Shut, the rail is a
  *  column of glyphs and nothing else. Only the container's width animates —
  *  nothing flips.
@@ -72,7 +72,7 @@ const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full h
 const RAIL_PAD_Y = 0;
 // paddingTop is its own number, because the head row is aligned to the shell's
 // top band rather than to the pane below it: the band is SHELL_TOP_BAR_H tall,
-// so the space avatar — 36px in a ROW_H-tall row — starts where its centre lands on
+// so the space avatar — 40px in a ROW_H-tall row — starts where its centre lands on
 // that band's centre line.
 const RAIL_PAD_TOP = Math.max(0, (SHELL_TOP_BAR_H - ROW_H) / 2);
 // A band boundary: the hairline sits ITEM_GAP below the last row and ITEM_GAP
@@ -338,7 +338,7 @@ export default function Sidebar() {
               active={pathname === "/discover" || pathname.startsWith("/discover/")}
               // Drawn at the Create disc's size rather than a glyph's: the two
               // rows of the top group are a pair, and read as one.
-              icon={<CompassIcon className="!h-9 !w-9" strokeWidth={1.4} />}
+              icon={<CompassIcon className="!h-10 !w-10" strokeWidth={1.4} />}
             />
           </div>
           {!noSpace && (
@@ -365,10 +365,10 @@ export default function Sidebar() {
                 // you come here to press reads first. The glyph cell is a fixed
                 // width, so the disc grows inside it without moving the name.
                 <span
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-white"
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-white"
                   style={{ background: "var(--theme-accent-color, #78d870)" }}
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" viewBox="0 0 24 24">
+                  <svg className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" viewBox="0 0 24 24">
                     <path d="M12 5v14M5 12h14" />
                   </svg>
                 </span>
