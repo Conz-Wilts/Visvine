@@ -701,13 +701,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
             draggingKey ? 'border-brand-green/60 bg-brand-green/5' : 'border-border-subtle'
           }`}
         >
-          {moreKeys.length === 0 ? (
-            <p className="py-3 text-center text-sm text-text-muted">
-              Drag a tool here to tuck it into the More popup.
-            </p>
-          ) : (
-            moreKeys.map(renderToolRow)
-          )}
+          {moreKeys.length === 0 ? <div className="h-11" /> : moreKeys.map(renderToolRow)}
         </div>
       </SettingsSection>
 

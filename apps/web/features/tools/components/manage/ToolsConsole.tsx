@@ -16,7 +16,6 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { SettingsSection } from '@/components/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchApprovalQueue, fetchAuthoredTools, fetchInstalls } from '@/features/tools/lib/client';
 import type { ApprovalQueueItem, AuthoredToolSummary, InstallSummary } from '@/lib/tools/api';
@@ -95,11 +94,11 @@ export function InstalledToolsPanel() {
     void load();
   }, [load]);
 
+  // Nothing installed is nothing to show — no heading, no empty state.
+  if (installs !== null && installs.length === 0) return <ToastHost toasts={toasts} onDismiss={dismiss} />;
+
   return (
-    <SettingsSection
-      title="Installed"
-      description="Versions this space runs, and the upgrades waiting to be applied."
-    >
+    <section className="border-t border-border-subtle pt-8 first:border-t-0 first:pt-0">
       <InstalledTab
         spaceId={spaceId}
         installs={installs ?? []}
@@ -116,7 +115,7 @@ export function InstalledToolsPanel() {
         onToast={toast}
       />
       <ToastHost toasts={toasts} onDismiss={dismiss} />
-    </SettingsSection>
+    </section>
   );
 }
 

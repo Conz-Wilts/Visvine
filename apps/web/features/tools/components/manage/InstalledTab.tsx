@@ -64,17 +64,7 @@ export default function InstalledTab({
   if (loading) return <RowsSkeleton />;
 
   if (installs.length === 0) {
-    return (
-      <EmptyState
-        icon={<BlocksIcon className="h-6 w-6" />}
-        title="This space runs no tools yet"
-        description={
-          isAdmin
-            ? 'This space runs no tools yet. Build one — see the Build section — or install one with the install_tool action.'
-            : 'This space runs no tools yet. An admin installs them.'
-        }
-      />
-    );
+    return null;
   }
 
   const act = async (install: InstallSummary, run: () => Promise<unknown>, done: string) => {
