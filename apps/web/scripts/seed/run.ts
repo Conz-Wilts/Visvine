@@ -4,7 +4,7 @@
  * WIPES the local database, then builds everything in one pass, in the order a
  * space is actually lived in:
  *
- *   1. base        the anchor users, Visvine HQ and its two rooms, provisioned
+ *   1. base        the anchor users, Visvine HQ and its three rooms, provisioned
  *                  the way the app provisions a space, then configured
  *   2. directory   65 organisations and the people at them, as records
  *   3. notes       the shared context and the admin's personal one

@@ -3,7 +3,8 @@
  *
  *  - Events — the event record, its `events/<slug>.md` note with the schedule
  *    mirrored into frontmatter (lib/eventRepo.ts#upsertEvent), attendees, and
- *    the attended/hosting edges.
+ *    the attended/hosting edges. An event naming a `space` is written in that
+ *    room instead, which is how the house comes to show a rolled-up one.
  *  - Channels — sections and channels, each with its node and its
  *    `sections/` / `channels/` note (lib/messages/conversationService.ts), and
  *    the messages in them.
@@ -23,6 +24,7 @@ import {
 } from '../../../lib/notes/context/entityNodes'
 import { upsertLink } from '../../../lib/notes/context/links'
 import { ingestSource } from '../../../lib/notes/sources/ingest'
+import { ensureMemberNode } from '../../../lib/spaces/memberNode'
 import { normalizeSourcePath, sourceKindOf } from '../../../lib/notes/shared/sourceTypes'
 import { SHARED_OWNER_KEY } from '../../../lib/notes/store'
 import {
@@ -61,6 +63,12 @@ export async function seedEvents(): Promise<{ events: number; attendees: number 
   let attendees = 0
 
   for (const e of EVENTS as SeedEvent[]) {
+    // A room's own event is written in the room, by the same code: the house
+    // reads it rolled up, and nothing about it is copied upward.
+    const spaceId = e.space ?? SPACE_ID
+    const hostNode =
+      spaceId === SPACE_ID ? ADMIN_NODE : await ensureMemberNode(spaceId, ADMIN_USER, actor, null)
+    if (!hostNode) throw new Error(`seed: no host node for ${e.slug} in ${spaceId}`)
     const eventId = `event:${e.slug}`
     const start = inDays(e.startInDays, e.startHour)
     const end = inDays(e.startInDays, e.endHour)
@@ -76,7 +84,7 @@ export async function seedEvents(): Promise<{ events: number; attendees: number 
       end_at: end,
       timezone: SPACE_TIMEZONE,
       locationData: { label: e.locationLabel, address: e.locationAddress, lat: e.lat, lon: e.lon },
-      hosts: [ADMIN_NODE],
+      hosts: [hostNode],
       organizerEmail: 'admin@local.dev',
       capacity: e.capacity,
       visibility: e.visibility,
@@ -105,12 +113,12 @@ export async function seedEvents(): Promise<{ events: number; attendees: number 
         alias: e.slug,
         tags: ['event'],
         metadata: metadata as object,
-        spaceId: SPACE_ID,
+        spaceId,
         createdAt: created,
       },
     })
     const note = await ensureEntityNote(
-      SPACE_ID,
+      spaceId,
       // The description rides in as the note's subtitle line; the body is left
       // for what people write about the event.
       { id: eventId, type: 'event', name: e.name, subtitle: e.description },
@@ -118,7 +126,7 @@ export async function seedEvents(): Promise<{ events: number; attendees: number 
     )
     if (note.noteError) throw new Error(`seed: event note for ${eventId}: ${note.noteError}`)
     await syncEntityNoteFrontmatter(
-      { id: eventId, type: 'event', spaceId: SPACE_ID, name: e.name, location: e.locationLabel, metadata },
+      { id: eventId, type: 'event', spaceId, name: e.name, location: e.locationLabel, metadata },
       actor,
     )
 
@@ -145,7 +153,7 @@ export async function seedEvents(): Promise<{ events: number; attendees: number 
       attendees++
       if (a.person && !['cancelled', 'invited'].includes(a.status)) {
         await upsertLink({
-          spaceId: SPACE_ID,
+          spaceId,
           sourceId: a.person,
           targetId: eventId,
           relationship: 'attended',
@@ -158,7 +166,7 @@ export async function seedEvents(): Promise<{ events: number; attendees: number 
       }
     }
     await upsertLink({
-      spaceId: SPACE_ID,
+      spaceId,
       sourceId: ADMIN_NODE,
       targetId: eventId,
       relationship: 'hosting',

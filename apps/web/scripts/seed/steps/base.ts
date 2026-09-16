@@ -198,14 +198,44 @@ export async function seedBase(): Promise<void> {
       creator: admin,
       parentId: SPACE_ID,
       preset: sub.preset,
-      ...('flowContext' in sub ? { flowContext: sub.flowContext } : {}),
+      // A room's own dials win over its preset, the way the dialog's advanced
+      // rows do.
+      ...(sub.flowContext !== undefined ? { flowContext: sub.flowContext } : {}),
+      ...(sub.flowEvents !== undefined ? { flowEvents: sub.flowEvents } : {}),
+      ...(sub.flowPeople !== undefined ? { flowPeople: sub.flowPeople } : {}),
+      ...(sub.parentAdmins !== undefined ? { parentAdmins: sub.parentAdmins } : {}),
     })
     if (!room.ok) throw new Error(`seed: provisioning ${sub.name} failed: ${room.error}`)
     if (room.space.id !== sub.id) {
       throw new Error(`seed: ${sub.name} provisioned as "${room.space.id}", but scripts/seed/space.ts says "${sub.id}"`)
     }
+    // The room's own directory records, before the notes that name them: an
+    // entity note becomes a folder only once its node exists.
+    for (const person of sub.people ?? []) {
+      await prisma.node.create({
+        data: {
+          id: `person:${person.slug}`,
+          type: 'person',
+          name: person.name,
+          subtitle: `${person.role}, ${person.org}`,
+          location: person.location,
+          tags: ['design-partner'],
+          metadata: { kind: 'contact', role: person.role, org: person.org, seeded: true },
+          spaceId: sub.id,
+        },
+      })
+    }
     for (const userId of sub.members) {
       if (userId !== ADMIN_USER) await join(sub.id, userId, [], null)
+    }
+    // A door set to `ask` answers with a pending membership and nothing else —
+    // no person node, no alias (lib/spaces/subspaces.ts#joinOutcome).
+    for (const userId of sub.pending ?? []) {
+      await prisma.spaceMember.upsert({
+        where: { userId_spaceId: { userId, spaceId: sub.id } },
+        create: { userId, spaceId: sub.id, status: 'pending' },
+        update: { status: 'pending' },
+      })
     }
     await putNotes({ spaceId: sub.id, ownerKey: SHARED_OWNER_KEY }, [...sub.notes], admin)
   }

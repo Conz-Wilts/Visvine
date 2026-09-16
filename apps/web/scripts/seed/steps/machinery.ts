@@ -10,6 +10,12 @@
  * come from the app's own projections. Only the HISTORY is fabricated, and it
  * is keyed to what the declarations made rather than to names typed twice.
  *
+ * Both agents are shared down into the rooms, one each way (docs/sub-spaces.md):
+ * the digest with `share_as: use`, so Design Partners may start it and it runs
+ * here as its own author, and the drafter with `share_as: run-in`, so the app
+ * fans a copy stamped `shared_from` into Leadership, which the house governs.
+ * Both are projections of the brief — the seed writes no such row itself.
+ *
  * Two honest caveats about that history:
  *  1. **No model key is stored.** The agents run on the space's model note,
  *     whose provider key is a secret this seed does not have; Run now fails
@@ -73,6 +79,7 @@ title: Dealflow digest
 description: Each weekday morning, what moved in the pipeline and across the accounts
 connectors: [crm]
 tools: [directory]
+share: [design-partners]
 max_turns: 30
 active: true
 every: "0 9 * * 1-5"
@@ -100,6 +107,8 @@ type: agent
 title: Investor update drafter
 description: Drafts the monthly investor update from the revenue roll-up
 tools: [directory]
+share: [leadership]
+share_as: run-in
 max_turns: 20
 active: false
 every: "0 7 1 * *"

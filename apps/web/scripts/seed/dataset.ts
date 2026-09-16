@@ -1278,6 +1278,12 @@ export interface SeedEventAttendee {
 }
 
 export interface SeedEvent {
+  /**
+   * The space that OWNS the event — a sub-space id for a room's own event,
+   * which the house then reads rolled up (lib/events/rollup.ts). Default: the
+   * house itself.
+   */
+  space?: string
   slug: string
   name: string
   description: string
@@ -1608,6 +1614,29 @@ export const EVENTS: SeedEvent[] = [
         role: 'Reporter',
         status: 'invited',
       },
+    ],
+  },
+  // Design Partners owns this one. The room's `flowEvents` dial is on and the
+  // event is public and published, so the house's hub shows it badged with the
+  // room it came from and nothing is copied (lib/events/rollup.ts).
+  {
+    space: 'design-partners',
+    slug: 'partner-demo-day',
+    name: 'Design Partner Demo Day',
+    description: 'Every partner shows the one thing they changed in their own space this quarter. Open to anyone curious about the programme.',
+    startInDays: 21,
+    startHour: 16,
+    endHour: 19,
+    locationLabel: 'GridAKL, Wynyard Quarter',
+    locationAddress: '12 Madden Street, Auckland 1010',
+    lat: -36.8447,
+    lon: 174.7562,
+    visibility: 'public',
+    capacity: 80,
+    views: 212,
+    attendees: [
+      { n: 1, name: 'Marama Whitiora', email: 'marama.whitiora@southerly-accelerator.example.com', company: 'Southerly Accelerator', role: 'Head of Programmes', status: 'going', response: 'going' },
+      { n: 2, name: 'Tomás Reiter', email: 'tomas.reiter@quarterdeck-partners.example.com', company: 'Quarterdeck Partners', role: 'Operations Lead', status: 'going', response: 'going' },
     ],
   },
 ]
