@@ -306,6 +306,10 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   const pressMove = (e: React.PointerEvent<HTMLElement>) => {
     const press = pressState.current;
     if (!press || dragState.current) return;
+    if (e.pointerType === 'mouse' && e.buttons === 0) {
+      pressState.current = null;
+      return;
+    }
     if (Math.abs(e.clientY - press.startY) < DRAG_THRESHOLD) return;
     dragState.current = {
       key: press.key,
@@ -314,16 +318,24 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
     };
     dragTranslate.current = 0;
     setDraggingKey(press.key);
-    const onMove = (ev: PointerEvent) => dragHandlers.current.moveDrag(ev);
+    // The drag lasts exactly as long as the button is held. A release the
+    // window never hears (let go outside it, or focus lost) shows up as a move
+    // with no button down, or as a blur — either ends it.
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerType === 'mouse' && ev.buttons === 0) onUp();
+      else dragHandlers.current.moveDrag(ev);
+    };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('blur', onUp);
       dragHandlers.current.endDrag();
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
+    window.addEventListener('blur', onUp);
     moveDrag(e);
   };
 
