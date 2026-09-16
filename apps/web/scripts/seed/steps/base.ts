@@ -1,6 +1,6 @@
 /**
  * The base layer: an empty database, the two anchor users, Visvine HQ and its
- * two rooms — each space created the way the app creates one
+ * four rooms — each space created the way the app creates one
  * (lib/spaces/provision.ts), then configured the way an admin would from the
  * console: its node types, its alias vocabulary and the grants behind it, and
  * the tools switched on.
@@ -27,9 +27,9 @@ import {
   SPACE_NAME,
   SPACE_TAGS,
   SPACE_TIMEZONE,
-  SUBSPACES,
   seedAliasId,
 } from '../space'
+import { SUBSPACES } from '../subspaces'
 import { putNotes } from '../write'
 
 /** Delete everything, in dependency order. */
@@ -219,7 +219,7 @@ export async function seedBase(): Promise<void> {
           name: person.name,
           subtitle: `${person.role}, ${person.org}`,
           location: person.location,
-          tags: ['design-partner'],
+          tags: [person.tag],
           metadata: { kind: 'contact', role: person.role, org: person.org, seeded: true },
           spaceId: sub.id,
         },
@@ -237,6 +237,19 @@ export async function seedBase(): Promise<void> {
         update: { status: 'pending' },
       })
     }
-    await putNotes({ spaceId: sub.id, ownerKey: SHARED_OWNER_KEY }, [...sub.notes], admin)
   }
+}
+
+/**
+ * Each room's own context, written after the tools have had their say: an
+ * event lands in a room as a note, so writing the room's curated root index
+ * before that would leave its child list a folder short.
+ */
+export async function seedSubspaceNotes(): Promise<{ rooms: number; notes: number }> {
+  const admin = anchorActor(ADMIN_USER)
+  let notes = 0
+  for (const sub of SUBSPACES) {
+    notes += await putNotes({ spaceId: sub.id, ownerKey: SHARED_OWNER_KEY }, [...sub.notes], admin)
+  }
+  return { rooms: SUBSPACES.length, notes }
 }

@@ -156,11 +156,12 @@ projections, with no backfill or rebuild pass afterwards.
 
 | where | what |
 |---|---|
-| `apps/web/scripts/seed/space.ts` | the space's identity: id, node types, aliases and their grants, the two rooms, the anchor users |
+| `apps/web/scripts/seed/space.ts` | the space's identity: id, node types, aliases and their grants, the anchor users |
+| `apps/web/scripts/seed/subspaces.ts` | the four rooms — Engineering, Marketing, Finance, Compensation — their dials, their people and their own context |
 | `apps/web/scripts/seed/dataset.ts` | the records: 65 organisations, their people, the team, events, channels, Drive files |
 | `apps/web/scripts/seed/notes.ts` | the shared context (organisations, people, segments, team, product, deals, data) and the admin's personal context |
 | `apps/web/scripts/seed/connectors.ts` | the demo connectors (sandbox, appdb, fund-metrics, OAuth CRM) and their secrets |
-| `apps/web/scripts/seed/run.ts` | the entry point; `steps/` holds the writers: base → directory → notes → events/channels/Drive → connectors → model + agents → global records → lived-in history (runs, queues, OAuth rows, publications, audit) |
+| `apps/web/scripts/seed/run.ts` | the entry point; `steps/` holds the writers: base → directory → notes → events/channels/Drive → rooms → connectors → model + agents → global records → lived-in history (runs, queues, OAuth rows, publications, audit) |
 
 Add an organisation to `ORGS` in `dataset.ts` and the directory, its notes, the
 indexes, the segment pages and the roll-ups all follow. One connector set can be

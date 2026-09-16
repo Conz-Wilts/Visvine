@@ -1616,13 +1616,13 @@ export const EVENTS: SeedEvent[] = [
       },
     ],
   },
-  // Design Partners owns this one. The room's `flowEvents` dial is on and the
-  // event is public and published, so the house's hub shows it badged with the
-  // room it came from and nothing is copied (lib/events/rollup.ts).
+  // Marketing owns this one. The room's `flowEvents` dial is on and the event is
+  // public and published, so the house's hub shows it badged with the room it
+  // came from and nothing is copied (lib/events/rollup.ts).
   {
-    space: 'design-partners',
-    slug: 'partner-demo-day',
-    name: 'Design Partner Demo Day',
+    space: 'marketing',
+    slug: 'demo-day',
+    name: 'Demo Day',
     description: 'Every partner shows the one thing they changed in their own space this quarter. Open to anyone curious about the programme.',
     startInDays: 21,
     startHour: 16,
@@ -1635,8 +1635,8 @@ export const EVENTS: SeedEvent[] = [
     capacity: 80,
     views: 212,
     attendees: [
-      { n: 1, name: 'Marama Whitiora', email: 'marama.whitiora@southerly-accelerator.example.com', company: 'Southerly Accelerator', role: 'Head of Programmes', status: 'going', response: 'going' },
-      { n: 2, name: 'Tomás Reiter', email: 'tomas.reiter@quarterdeck-partners.example.com', company: 'Quarterdeck Partners', role: 'Operations Lead', status: 'going', response: 'going' },
+      { n: 1, name: 'Tui Ranapia', email: 'tui.ranapia@kahu-studio.example.com', company: 'Kāhu Studio', role: 'Brand Partner', status: 'going', response: 'going' },
+      { n: 2, name: 'Joss Linden', email: 'joss.linden@southern-grid-weekly.example.com', company: 'Southern Grid Weekly', role: 'Editor', status: 'going', response: 'going' },
     ],
   },
 ]

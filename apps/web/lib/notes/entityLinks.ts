@@ -193,8 +193,11 @@ const UNADOPTABLE_ROOTS = new Set([
   'subspaces',
 ])
 
-/** How many `-2`, `-3`… suffixes to try before giving up on a free node id. */
-const MAX_ID_ATTEMPTS = 5
+/**
+ * How many `-2`, `-3`… suffixes to try before giving up on a free node id. Node
+ * ids are global, so the same name in many spaces takes one suffix per space.
+ */
+const MAX_ID_ATTEMPTS = 25
 
 /** May a note at this path be adopted at all, whatever it declares? */
 function adoptablePath(path: string): boolean {

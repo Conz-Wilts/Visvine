@@ -4,15 +4,16 @@
  * WIPES the local database, then builds everything in one pass, in the order a
  * space is actually lived in:
  *
- *   1. base        the anchor users, Visvine HQ and its three rooms, provisioned
+ *   1. base        the anchor users, Visvine HQ and its four rooms, provisioned
  *                  the way the app provisions a space, then configured
  *   2. directory   65 organisations and the people at them, as records
  *   3. notes       the shared context and the admin's personal one
  *   4. tools       events, channels and the Drive, each with its own notes
- *   5. connectors  the three demo connector sets and their secrets
- *   6. agents      the space's model and two agents
- *   7. global      the platform space's public records and action notes
- *   8. lived-in    the history a space accumulates: runs, queues, OAuth rows,
+ *   5. rooms       each room's own context, after the events that land in it
+ *   6. connectors  the three demo connector sets and their secrets
+ *   7. agents      the space's model and two agents
+ *   8. global      the platform space's public records and action notes
+ *   9. lived-in    the history a space accumulates: runs, queues, OAuth rows,
  *                  publications, message decorations, the audit ledger
  *
  * Every note goes through the note store, so the directory edges, folder
@@ -37,8 +38,9 @@ import { rebuildGlobalRecords } from '../../lib/global/record'
 import { syncActionNotes } from '../../lib/actions/sync'
 import { SHARED_OWNER_KEY } from '../../lib/notes/store'
 import { personal, shared } from './notes'
-import { ALIASES, ANCHORS, EDIT, SPACE_ID, SPACE_NAME, SUBSPACES } from './space'
-import { anchorActor, seedBase, wipe } from './steps/base'
+import { ALIASES, ANCHORS, EDIT, SPACE_ID, SPACE_NAME } from './space'
+import { SUBSPACES } from './subspaces'
+import { anchorActor, seedBase, seedSubspaceNotes, wipe } from './steps/base'
 import { seedDirectory } from './steps/directory'
 import { seedChannels, seedDrive, seedEvents } from './steps/tools'
 import { seedAgents, seedConnectors, seedLivedIn } from './steps/machinery'
@@ -74,6 +76,7 @@ async function main() {
     personal: await putNotes({ spaceId: SPACE_ID, ownerKey: admin.id }, personal, anchorActor(admin.id)),
   }))
   await step('events', seedEvents)
+  await step('rooms', seedSubspaceNotes)
   await step('channels', seedChannels)
   await step('drive', seedDrive)
   await step('connectors', seedConnectors)

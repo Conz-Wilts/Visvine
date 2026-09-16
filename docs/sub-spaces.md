@@ -387,13 +387,22 @@ its tool's glyph rather than a folder's, wherever it sits.
 
 ## Seed
 
-The seeded space has two rooms so the dials are on screen from the first
-seed: **Design Partners** (a *Programme*: listed to everyone, the house's
-members walk in, strangers ask; its `playbooks/` show in the parent's tree
-under `subspaces/design-partners/`) and **Leadership** (a
-*Council* with `flowContext` off: the house's members see the door and ask;
-nothing of its notes shows above, its public events would). Dev Admin
-administers both; Dev Member is in the public one only.
+The seeded space has four rooms, named after the teams in them, so the dials are
+on screen from the first seed (`scripts/seed/subspaces.ts`):
+
+- **Engineering** — a *Department*: the house walks in, and its runbooks,
+  services and decisions show in the parent's tree under
+  `subspaces/engineering/`.
+- **Marketing** — the room the world can find: listed, strangers ask at the
+  door, its demo day flows up as a public event, and the agency and press
+  records it keeps flow up as read-only people.
+- **Finance** — a *Council* with `flowContext` off: the house's members see the
+  door and ask; nothing of its packs shows above, its events would.
+- **Compensation** — a *Committee*: secret, flowing nothing, named nowhere
+  outside its own members.
+
+Dev Admin administers all four. Dev Member is in Engineering and Marketing, is
+pending at Finance's door, and is told nothing about Compensation.
 
 ## Tests
 

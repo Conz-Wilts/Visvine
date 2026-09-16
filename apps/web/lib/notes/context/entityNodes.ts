@@ -79,8 +79,12 @@ const RECORD_KEY: Partial<Record<EntityNodeType, string>> = {
 /** Writes made by a background job rather than a signed-in person. */
 const SYSTEM_ACTOR: Actor = { id: 'system', name: 'Visvine', email: null }
 
-/** How many `-2`, `-3`… suffixes to try before giving up on a free node id. */
-const MAX_ID_ATTEMPTS = 5
+/**
+ * How many `-2`, `-3`… suffixes to try before giving up on a free node id. Node
+ * ids are global, so the same member in many spaces takes one suffix per space —
+ * a low ceiling would leave them without a node in the space after it.
+ */
+const MAX_ID_ATTEMPTS = 25
 
 export interface SyncEntityNodeInput {
   spaceId: string

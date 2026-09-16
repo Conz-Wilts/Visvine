@@ -54,8 +54,12 @@ export function isCreatableType(type: string): type is CreatableType {
   return (CREATABLE_TYPES as readonly string[]).includes(type)
 }
 
-/** How many `-2`, `-3`… suffixes to try before giving up on a free id. */
-const MAX_ID_ATTEMPTS = 5
+/**
+ * How many `-2`, `-3`… suffixes to try before giving up on a free id. Node ids
+ * are global, so one person in many spaces holds one id per space: the ceiling
+ * is how many spaces a name may repeat across, not how many records a space has.
+ */
+const MAX_ID_ATTEMPTS = 25
 
 export interface CreateEntityInput {
   type: string
