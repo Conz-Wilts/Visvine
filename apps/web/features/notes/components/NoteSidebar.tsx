@@ -1,8 +1,9 @@
 ﻿'use client'
 
-// The notes sidebar: a folder/note tree. Folders expand/collapse
-// and carry a folder icon; notes carry their frontmatter type's glyph (person,
-// group, event, resource) or a document icon when untyped. Row actions (share,
+// The notes sidebar: a folder/note tree. Two marks, and only two: a folder is
+// a folder and a note is a document. A row's type, its tool and the space it
+// belongs to are all said by where it sits and what it is called, so a glyph
+// per kind only made the column harder to scan. Row actions (share,
 // move, delete) live behind a single menu revealed on hover. Nesting is shown
 // with tree guides: each nested row draws its own segment of the vertical line
 // plus an elbow into its icon, and the last child of a folder closes the line
@@ -15,9 +16,8 @@
 import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Modal, inputBaseClass } from '@/components/ui'
-import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
+import type { TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { TRASH_RETENTION_DAYS } from '@/lib/notes/shared/types'
-import { getNodeGlyph } from '@/lib/types'
 import {
   TreeBranch as Branch,
   TreeFolderIcon as FolderIcon,
@@ -29,8 +29,7 @@ import {
   TREE_ROW_BLEED as ROW_BLEED,
   type TreeGuideKind as Guide,
 } from '@/components/ui/TreeChrome'
-import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
-import { entityKindOf, isEntityFolderIndex } from '@/lib/notes/entities'
+import { isEntityFolderIndex } from '@/lib/notes/entities'
 import { filterTree, folderPathsIn } from '@/lib/notes/shared/context'
 import { tierRoot } from '@/lib/notes/shared/rootTiers'
 import {
@@ -40,7 +39,7 @@ import {
 } from '@/features/notes/hooks/useContextTreeState'
 import { canMoveInto, deleteFolderDenial, moveDenial, parentFolderOf } from '../lib/useContextTree'
 import { isFederatedPath, subspaceOfPath } from '@/lib/spaces/subspaces'
-import { canPlaceInto, isPeopleFolder, placeableOf, placementDenial, structuralIconOf } from '@/lib/notes/shared/placedFolders'
+import { canPlaceInto, placeableOf, placementDenial } from '@/lib/notes/shared/placedFolders'
 import { Icon } from '@/features/shared/icons'
 
 // Expansion state (openPaths + reveal overlay + persistence) lives in
@@ -50,14 +49,6 @@ import { Icon } from '@/features/shared/icons'
 function onSelectedPath(path: string, selectedPath: string | null): boolean {
   if (!selectedPath) return false
   return selectedPath === path || selectedPath.startsWith(`${path}/`)
-}
-
-// The glyph for a note's frontmatter type. `entityKindOf` is the wider net â€”
-// it catches retired organisation spellings getNodeGlyph has no entry for â€” so
-// those notes still read as the cluster glyph rather than falling back to
-// initials.
-function noteGlyph(type: string | undefined): NodeGlyph | null {
-  return getNodeGlyph(type) ?? (entityKindOf(type) === 'space' ? 'group' : null)
 }
 
 /** Access adornments for a folder row at ANY depth (shared context only):
@@ -138,7 +129,6 @@ function isMovable(path: string, kind: 'note' | 'folder', declares?: 'connector'
 
 interface NoteSidebarProps {
   tree: TreeNode
-  notes: NoteMeta[]
   selectedPath: string | null
   canEdit: boolean
   onSelect: (path: string) => void
@@ -205,7 +195,6 @@ interface NoteSidebarProps {
 
 export function NoteSidebar({
   tree,
-  notes,
   selectedPath,
   canEdit,
   onSelect,
@@ -230,15 +219,6 @@ export function NoteSidebar({
   onEnterSpace,
 }: NoteSidebarProps) {
   const searching = query.trim().length > 0
-
-  const glyphFor = useMemo(() => {
-    const map = new Map<string, NodeGlyph>()
-    for (const n of notes) {
-      const glyph = noteGlyph(n.frontmatter.type)
-      if (glyph) map.set(n.path, glyph)
-    }
-    return map
-  }, [notes])
 
   // The rooms whose rows take this space's edit affordances. Read off the
   // `writable` stamp, and read at the top level ONLY: a room's folder is a
@@ -391,7 +371,6 @@ export function NoteSidebar({
               onToggleFolder={toggleFolder}
               onOpenFolder={openFolder}
               selectedPath={selectedPath}
-              glyphFor={glyphFor}
               canEdit={canEdit}
               onSelect={onSelect}
               onDeleteNote={onDeleteNote}
@@ -407,7 +386,6 @@ export function NoteSidebar({
               onToggleFolder={toggleFolder}
               onOpenFolder={openFolder}
               selectedPath={selectedPath}
-              glyphFor={glyphFor}
               canEdit={canEdit}
               onSelect={onSelect}
               onDeleteNote={onDeleteNote}
@@ -613,7 +591,6 @@ function Tree({
   onToggleFolder,
   onOpenFolder,
   selectedPath,
-  glyphFor,
   canEdit,
   onSelect,
   onDeleteNote,
@@ -627,7 +604,6 @@ function Tree({
   onToggleFolder: (path: string, isOpen: boolean) => void
   onOpenFolder: (path: string) => void
   selectedPath: string | null
-  glyphFor: Map<string, NodeGlyph>
   canEdit: boolean
   onSelect: (path: string) => void
   onDeleteNote: (path: string) => void
@@ -666,7 +642,6 @@ function Tree({
             onToggleFolder={onToggleFolder}
             onOpenFolder={onOpenFolder}
             selectedPath={selectedPath}
-            glyphFor={glyphFor}
             canEdit={canEdit}
             onSelect={onSelect}
             onDeleteNote={onDeleteNote}
@@ -683,7 +658,6 @@ function Tree({
             declares={child.declares}
             guide={i === children.length - 1 ? 'last' : 'mid'}
             guideActive={selectedPath === child.path}
-            glyph={glyphFor.get(child.path) ?? null}
             selected={selectedPath === child.path}
             restrictedBadge={folderBadges?.get(child.path)?.restricted ?? false}
             canEdit={canEdit}
@@ -749,7 +723,6 @@ function FolderRow(props: {
   onToggleFolder: (path: string, isOpen: boolean) => void
   onOpenFolder: (path: string) => void
   selectedPath: string | null
-  glyphFor: Map<string, NodeGlyph>
   canEdit: boolean
   onSelect: (path: string) => void
   onDeleteNote: (path: string) => void
@@ -798,7 +771,6 @@ function FolderRow(props: {
   // grows back into a folder row the moment a sub-note lands.
   const entityIndex = hasIndex && isEntityFolderIndex(indexPath)
   const leaf = entityIndex && (props.node.children ?? []).every((c) => c.kind === 'note' && c.path === indexPath)
-  const entityGlyph = entityIndex ? (props.glyphFor.get(indexPath) ?? null) : null
 
   // Moving: a folder row is both a drag source (its whole subtree travels with
   // it) and the tree's only drop target - notes and folders are filed INTO
@@ -828,7 +800,6 @@ function FolderRow(props: {
   const isDragged = drag?.dragging?.path === props.node.path
   const accepts = !!drag && !drawnOnly && acceptsDrop(drag, props.node.path)
   const isDropTarget = accepts && drag?.dropFolder === props.node.path
-  const structuralIcon = structuralIconOf(props.node.path)
   // Hovering a shut folder mid-drag springs it open, so a note can be dropped
   // into a nested folder without letting go first.
   const springRef = useRef<number | null>(null)
@@ -901,7 +872,7 @@ function FolderRow(props: {
               selected ? 'text-brand-green' : 'text-text-muted'
             }`}
           >
-            {entityGlyph ? <GlyphIcon glyph={entityGlyph} /> : <FileIcon />}
+            <FileIcon />
           </span>
         ) : (
         <button
@@ -920,19 +891,9 @@ function FolderRow(props: {
               at the glyph's centre â€” exactly where CHILD_INDENT puts the
               children's guides, so the two read as one line. */}
           {open && <TreeStem active={onSelectedPath(props.node.path, props.selectedPath)} />}
-          {/* A built-in folder carries its tool's glyph
-              (lib/notes/shared/namespaces.ts). Everything else, a room read
-              into this tree included, is a folder: the tier it sits in already
-              says it is another space, so a second mark on the row only made
-              the column noisier. */}
-          {props.icon ??
-            (isPeopleFolder(props.node.path) ? (
-              <GlyphIcon glyph="person" />
-            ) : structuralIcon ? (
-              <Icon name={structuralIcon} className="h-4 w-4" />
-            ) : (
-              <FolderIcon open={open} />
-            ))}
+          {/* One mark for every folder. The root row is the exception the
+              caller passes in — it is the SPACE, and wears the space's. */}
+          {props.icon ?? <FolderIcon open={open} />}
         </button>
         )}
         <button
@@ -1018,7 +979,6 @@ function FolderRow(props: {
               onToggleFolder={props.onToggleFolder}
               onOpenFolder={props.onOpenFolder}
               selectedPath={props.selectedPath}
-              glyphFor={props.glyphFor}
               canEdit={props.canEdit}
               onSelect={props.onSelect}
               onDeleteNote={props.onDeleteNote}
@@ -1155,7 +1115,6 @@ function NoteRow({
   title,
   path,
   declares,
-  glyph,
   guide,
   guideActive,
   selected,
@@ -1168,7 +1127,6 @@ function NoteRow({
   title: string
   path: string
   declares?: 'connector' | 'model'
-  glyph: NodeGlyph | null
   /** Tree guide for a nested row. */
   guide?: Guide
   guideActive?: boolean
@@ -1215,7 +1173,7 @@ function NoteRow({
         }`}
       >
         <span className={`shrink-0 ${selected ? 'text-brand-green' : 'text-text-muted'}`}>
-          {glyph ? <GlyphIcon glyph={glyph} /> : <FileIcon />}
+          <FileIcon />
         </span>
         <span className={`truncate ${selected ? 'font-semibold text-text-primary' : 'text-text-primary'}`}>
           {title}
@@ -1319,7 +1277,6 @@ function MoveDialog({
                 (item.kind === 'placed'
                   ? placementDenial(item.path, folder.path, tree)
                   : moveDenial(item.path, item.kind, folder.path, item.declares)) ?? (allowed ? undefined : 'It is already here.')
-              const glyph = structuralIconOf(folder.path)
               return (
                 <button
                   key={folder.path || '<root>'}
@@ -1337,13 +1294,7 @@ function MoveDialog({
                   style={{ paddingLeft: q ? undefined : 12 + folder.depth * 14 }}
                 >
                   <span className="shrink-0 text-text-muted">
-                    {isPeopleFolder(folder.path) ? (
-                      <GlyphIcon glyph="person" />
-                    ) : glyph ? (
-                      <Icon name={glyph} className="h-4 w-4" />
-                    ) : (
-                      <FolderIcon />
-                    )}
+                    <FolderIcon />
                   </span>
                   <span className="truncate">{folder.label}</span>
                   {folder.path && (
@@ -1361,14 +1312,6 @@ function MoveDialog({
   )
 }
 
-// Type glyph (person/group/event/resource silhouette) sized to match FileIcon.
-function GlyphIcon({ glyph }: { glyph: NodeGlyph }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d={NODE_GLYPH_PATHS[glyph]} />
-    </svg>
-  )
-}
 
 function FileIcon() {
   return (

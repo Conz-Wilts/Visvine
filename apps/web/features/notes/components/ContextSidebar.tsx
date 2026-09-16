@@ -175,7 +175,6 @@ export function ContextSidebar({
           <>
             <NoteSidebar
               tree={ctx.tree}
-              notes={notes}
               selectedPath={selectedPath}
               canEdit
               onSelect={handleSelect}
