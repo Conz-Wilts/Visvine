@@ -689,7 +689,12 @@ export default function TypesPanel() {
   // disappears with it; a custom type is one a member named on a draft and
   // belongs to nobody but the space. Telling them apart is the difference
   // between "why can't I delete Channel" and "why is Playbook in this list".
-  const toolLabels = new Map(FEATURES.map(f => [f.key, f.label]));
+  // The Directory is not a tool a type comes from — every type, custom ones
+  // included, is browsed there — so the types it owns are headed as what they
+  // are: the ones the platform ships, set against the ones a member made.
+  const sectionLabel = (f: (typeof FEATURES)[number]) =>
+    f.key === 'directory' ? 'Built-in types' : f.label;
+  const toolLabels = new Map(FEATURES.map(f => [f.key, sectionLabel(f)]));
   // One bucket per tool, in the tool order the sidebar uses — the heading IS the
   // provenance, so a type never repeats its tool's name down the right edge.
   const byTool = new Map<string, NodeTypeConfig[]>();
@@ -717,7 +722,7 @@ export default function TypesPanel() {
   }
   // FEATURES order, so the sections read down the page the way the tools do in
   // the rail; a label with nothing under it after the search simply isn't drawn.
-  const toolSections = FEATURES.map(f => f.label)
+  const toolSections = FEATURES.map(sectionLabel)
     .filter((label, i, all) => all.indexOf(label) === i)
     .map(label => ({ label, types: byTool.get(label) ?? [] }))
     .filter(section => section.types.length > 0);
