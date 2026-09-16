@@ -18,6 +18,9 @@ export function useJoinFlow() {
   // Spaces whose door was "ask" and has been pressed: the word goes quiet
   // ("Asked") until an admin there answers.
   const [asked, setAsked] = useState<Set<string>>(() => new Set());
+  // A refused join says why. Without this the promise rejected into nothing
+  // and the press looked like it had worked.
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   const joinedIds = useMemo(() => new Set(joinedSpaces.map((s) => s.id)), [joinedSpaces]);
   const isJoined = useCallback((id: string) => joinedIds.has(id), [joinedIds]);
@@ -28,9 +31,12 @@ export function useJoinFlow() {
   const confirm = useCallback(
     async (spaceId: string, alias?: string) => {
       setJoining(true);
+      setJoinError(null);
       try {
         const status = await joinSpace(spaceId, alias);
         if (status === 'pending') setAsked((prev) => new Set(prev).add(spaceId));
+      } catch (err) {
+        setJoinError(err instanceof Error ? err.message : 'Could not join this space.');
       } finally {
         setJoining(false);
         setPending(null);
@@ -48,6 +54,7 @@ export function useJoinFlow() {
   );
 
   const cancel = useCallback(() => setPending(null), []);
+  const dismissJoinError = useCallback(() => setJoinError(null), []);
 
-  return { join, confirm, cancel, pending, joining, isJoined, isAsked, doorFor };
+  return { join, confirm, cancel, pending, joining, joinError, dismissJoinError, isJoined, isAsked, doorFor };
 }

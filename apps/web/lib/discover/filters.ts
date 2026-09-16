@@ -7,6 +7,7 @@
 // the same filter serves a space's `country` and an event's host space.
 
 import { getCountry, matchCountryInLocation } from '@/lib/countries';
+import { isGlobalSpace } from '@/lib/spaces/shared/global';
 
 export interface DiscoverSpace {
   id: string;
@@ -45,6 +46,16 @@ export interface CountOption {
   value: string;
   label: string;
   count: number;
+}
+
+/**
+ * The spaces Discover may show. Every public space except the global record:
+ * Visvine is a public Space row so the context tree, search and entity folders
+ * work on it unchanged, but it has no members and no door — everyone already
+ * reads it — so offering it here is offering a Join that can only be refused.
+ */
+export function discoverableSpaces<T extends Pick<DiscoverSpace, 'id'>>(spaces: readonly T[]): T[] {
+  return spaces.filter((space) => !isGlobalSpace(space.id));
 }
 
 /** A space's country as an ISO code: the column first, then the location text. */

@@ -19,18 +19,16 @@
 // to the global record (lib/global/binding.ts), which may or may not be claimed.
 
 import prisma from '@/lib/prisma'
+import { GLOBAL_SPACE_ID, GLOBAL_SPACE_NAME } from './shared/global'
 
-export const GLOBAL_SPACE_ID = 'visvine'
-export const GLOBAL_SPACE_NAME = 'Visvine'
-
-export function isGlobalSpace(spaceId: string | null | undefined): boolean {
-  return spaceId === GLOBAL_SPACE_ID
-}
-
-/** Space ids nobody may create a space under — see app/api/spaces/route.ts. */
-export function isReservedSpaceId(id: string): boolean {
-  return isGlobalSpace(id) || id.startsWith('me:')
-}
+// Identity lives in ./shared/global.ts so client code can read it without
+// prisma; re-exported here because this module is where the rules are written.
+export {
+  GLOBAL_SPACE_ID,
+  GLOBAL_SPACE_NAME,
+  isGlobalSpace,
+  isReservedSpaceId,
+} from './shared/global'
 
 /**
  * Create the global space if it is missing. Idempotent; safe to call from any

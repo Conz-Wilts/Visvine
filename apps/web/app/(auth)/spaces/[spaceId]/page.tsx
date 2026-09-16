@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation';
 import { CalendarIcon, CalendarPlusIcon, CheckIcon, ChevronRightIcon, EarthIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { viewerDoorFor } from '@/features/spaces/lib/viewerDoor';
+import { isGlobalSpace } from '@/lib/spaces/shared/global';
 import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import { hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, type NodeTypeConfig } from '@/lib/types';
@@ -102,6 +103,9 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
     return listed ? viewerDoorFor(listed, new Set(joinedSpaces.map((s) => s.id))) : 'deny';
   }, [spaces, joinedSpaces, spaceId]);
   const [asked, setAsked] = useState(false);
+  // The global record is a public space with no members and no door: everyone
+  // already reads it, so it offers nothing to press.
+  const isGlobal = isGlobalSpace(spaceId);
 
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -264,6 +268,8 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                     <NetworkIcon className="w-4 h-4 flex-none" /> Open space
                   </button>
                 </>
+              ) : isGlobal ? (
+                <span className="text-[13px] font-medium text-text-muted">The public record — open to everyone</span>
               ) : (
                 <button onClick={handleJoin} disabled={joining || asked || viewerDoor === 'deny'}
                   title={viewerDoor === 'deny' ? 'This space is invite only' : undefined}

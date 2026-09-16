@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   countryOptions,
+  discoverableSpaces,
   filterEvents,
   filterSpaces,
   groupEventsByDay,
@@ -24,6 +25,11 @@ const spaces: DiscoverSpace[] = [
   space({ id: 'room', name: 'Deal room', parentId: 'nzvc', tags: [] }),
   space({ id: 'orphan', name: 'Orphan room', parentId: 'hidden', tags: ['Climate'] }),
 ];
+
+test('the global record is never a Discover tile', () => {
+  const listed = [...spaces, space({ id: 'visvine', name: 'Visvine' })];
+  assert.deepEqual(discoverableSpaces(listed).map((s) => s.id), spaces.map((s) => s.id));
+});
 
 test('country comes from the column, then the location text', () => {
   assert.equal(spaceCountryCode(spaces[0]), 'NZ');

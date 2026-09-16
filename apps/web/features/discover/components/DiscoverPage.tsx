@@ -6,10 +6,10 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { FilterDropdown } from '@/features/directory/components/FilterDropdown';
 import ContentReveal from '@/components/ui/ContentReveal';
-import { Chip, SearchInput } from '@/components/ui';
+import { Alert, Chip, SearchInput } from '@/components/ui';
 import { getCountry } from '@/lib/countries';
 import { tagPalette } from '@/lib/tagColors';
-import { countryOptions, sectorOptions, spaceCountryCode, type EventFormat, type EventWhen } from '@/lib/discover/filters';
+import { countryOptions, discoverableSpaces, sectorOptions, spaceCountryCode, type EventFormat, type EventWhen } from '@/lib/discover/filters';
 import { useDiscoverEvents } from '../hooks/useDiscoverEvents';
 import { useJoinFlow } from '../hooks/useJoinFlow';
 import EventsBoard from './EventsBoard';
@@ -74,8 +74,11 @@ export default function DiscoverPage() {
     surface: null,
   });
 
-  const { spaces, loading: spacesLoading } = useSpace();
-  const { join, confirm, cancel, pending, joining, isJoined, isAsked, doorFor } = useJoinFlow();
+  const { spaces: visibleSpaces, loading: spacesLoading } = useSpace();
+  // The global record is visible to everyone and joinable by nobody, so it is
+  // never a tile here (lib/discover/filters.ts#discoverableSpaces).
+  const spaces = useMemo(() => discoverableSpaces(visibleSpaces), [visibleSpaces]);
+  const { join, confirm, cancel, pending, joining, joinError, dismissJoinError, isJoined, isAsked, doorFor } = useJoinFlow();
   const { events, loading: eventsLoading, error } = useDiscoverEvents();
 
   const [search, setSearch] = useState('');
@@ -170,6 +173,11 @@ export default function DiscoverPage() {
 
       <ContentReveal ready={ready} id={`panel-${view}`} role="tabpanel">
         <div className="w-full px-6 pt-7 pb-8">
+          {view === 'spaces' && joinError && (
+            <div className="mb-5">
+              <Alert onDismiss={dismissJoinError}>{joinError}</Alert>
+            </div>
+          )}
           {view === 'spaces' && (
             <SpacesView
               spaces={spaces}
