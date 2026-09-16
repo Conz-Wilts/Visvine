@@ -6,9 +6,9 @@
 //
 // It is a dropdown rather than a column down the left because the list is
 // short and the table is wide: a rail spent 212px of every screen saying one
-// thing the bar can say in a word. The trigger reads as the table's NAME —
-// larger and darker than the Filter/Sort buttons beside it — because it is
-// what the bar is about, not another control acting on it.
+// thing the bar can say in a word. The trigger is a solid box the height and
+// frame of the search input beside it, so the bar reads as two controls of
+// one family rather than a box and a word floating on the page.
 
 import { useRef, useState } from 'react';
 import { clsx } from 'clsx';
@@ -67,8 +67,9 @@ export default function TypeMenu({ types, activeKey, nodeTypes, onChange }: {
         disabled={only}
         onClick={() => setOpen((v) => !v)}
         className={clsx(
-          'flex h-9 shrink-0 items-center gap-2 rounded-md px-2.5 text-[15px] font-semibold text-text-primary transition-colors',
-          !only && 'hover:bg-surface-2',
+          'flex h-10 shrink-0 items-center gap-2 rounded-lg bg-surface-1 px-3.5 text-sm font-semibold text-text-primary ring-1 transition-[box-shadow,background-color]',
+          open ? 'ring-border-default' : 'ring-border-subtle',
+          !only && 'hover:bg-surface-2 hover:ring-border-default',
         )}
         aria-haspopup={only ? undefined : 'menu'}
         aria-expanded={only ? undefined : open}
@@ -76,7 +77,7 @@ export default function TypeMenu({ types, activeKey, nodeTypes, onChange }: {
         <Mark type={active} nodeTypes={nodeTypes} />
         <span className="truncate">{label(active, nodeTypes)}</span>
         <span className="text-[11px] font-semibold tabular-nums text-text-muted">{active.count}</span>
-        {!only && <ChevronDownIcon className="h-3.5 w-3.5 text-text-muted" />}
+        {!only && <ChevronDownIcon className={clsx('ml-1 h-3.5 w-3.5 text-text-muted transition-transform', open && 'rotate-180')} />}
       </button>
 
       {open && (
