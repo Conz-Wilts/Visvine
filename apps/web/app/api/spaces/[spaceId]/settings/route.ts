@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { matchCountryInLocation } from '@/lib/countries';
 import { mergeFeatureConfig } from '@/lib/featureAccess';
 import type { SpaceDesignConfig } from '@/lib/types';
 import {
@@ -230,7 +231,12 @@ export async function PUT(
         also: {
           ...(name !== undefined && { name: name.trim() }),
           ...(description !== undefined && { description }),
+          // Country is not asked for: it is where the Location sits — the
+          // picked place's own, else read out of the words.
           ...(country !== undefined && { country: country || null }),
+          ...(location !== undefined && country === undefined && {
+            country: matchCountryInLocation(location)?.code ?? null,
+          }),
           ...(location !== undefined && { location: location || null }),
           ...(tags !== undefined && { tags }),
           ...(visibility !== undefined && { visibility }),

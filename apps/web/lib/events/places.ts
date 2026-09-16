@@ -104,3 +104,71 @@ export async function placeLocation(placeId: string, label: string, sessionToken
     placeId: data.id || placeId,
   };
 }
+
+/**
+ * A space's location is a region, never a street: a country, a state or
+ * province, a county, a city. `(regions)` narrows the autocomplete to those
+ * plus postal codes and suburbs, which are dropped here as too fine-grained.
+ */
+const REGION_TYPES = new Set([
+  'country',
+  'administrative_area_level_1',
+  'administrative_area_level_2',
+  'administrative_area_level_3',
+  'locality',
+  'postal_town',
+  'colloquial_area',
+]);
+
+export interface RegionSuggestion {
+  placeId: string;
+  /** The whole name as a person writes it: "Auckland, New Zealand". */
+  label: string;
+  name: string;
+  detail: string;
+}
+
+interface RegionAutocompleteResponse {
+  suggestions?: Array<{
+    placePrediction?: {
+      placeId: string;
+      types?: string[];
+      structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } };
+      text?: { text?: string };
+    };
+  }>;
+}
+
+export async function suggestRegions(input: string, sessionToken?: string): Promise<RegionSuggestion[]> {
+  const q = input.trim();
+  if (q.length < 2) return [];
+  const data = await placesRequest<RegionAutocompleteResponse>('/places:autocomplete', {
+    method: 'POST',
+    fieldMask: 'suggestions.placePrediction.placeId,suggestions.placePrediction.types,suggestions.placePrediction.structuredFormat,suggestions.placePrediction.text',
+    body: JSON.stringify({ input: q, includedPrimaryTypes: ['(regions)'], ...(sessionToken ? { sessionToken } : {}) }),
+  });
+  return (data.suggestions ?? [])
+    .map((s) => s.placePrediction)
+    .filter((p): p is NonNullable<typeof p> => !!p?.placeId && (p.types ?? []).some((t) => REGION_TYPES.has(t)))
+    .map((p) => {
+      const name = p.structuredFormat?.mainText?.text ?? p.text?.text ?? '';
+      const detail = p.structuredFormat?.secondaryText?.text ?? '';
+      return { placeId: p.placeId, name, detail, label: p.text?.text ?? (detail ? `${name}, ${detail}` : name) };
+    })
+    .filter((p) => p.name);
+}
+
+interface RegionDetailsResponse {
+  addressComponents?: Array<{ shortText?: string; types?: string[] }>;
+}
+
+/** The ISO country a picked region sits in — the one fact Discover files a space under. */
+export async function regionCountry(placeId: string, sessionToken?: string): Promise<string | null> {
+  const qs = sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : '';
+  const data = await placesRequest<RegionDetailsResponse>(`/places/${encodeURIComponent(placeId)}${qs}`, {
+    method: 'GET',
+    fieldMask: 'addressComponents',
+  });
+  const code = data.addressComponents?.find((c) => c.types?.includes('country'))?.shortText?.trim().toUpperCase();
+  return code && /^[A-Z]{2}$/.test(code) ? code : null;
+}

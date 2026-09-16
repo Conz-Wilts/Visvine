@@ -4,7 +4,7 @@ export interface Country {
   name: string;
 }
 
-export const COUNTRIES: Country[] = [
+const COUNTRIES: Country[] = [
   { code: 'AF', name: 'Afghanistan' },
   { code: 'AL', name: 'Albania' },
   { code: 'DZ', name: 'Algeria' },

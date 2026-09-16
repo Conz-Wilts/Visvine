@@ -12,7 +12,7 @@ import React, { useState, useEffect, useMemo, useCallback, use } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
 import PageError from '@/components/ui/PageError';
 import Link from '@/features/shared/components/SpaceLink';
-import { CalendarIcon, CalendarPlusIcon, CheckIcon, ChevronRightIcon, EarthIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon } from '@/features/shared/icons';
+import { CalendarIcon, CalendarPlusIcon, CheckIcon, ChevronRightIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { viewerDoorFor } from '@/features/spaces/lib/viewerDoor';
 import { isGlobalSpace } from '@/lib/spaces/shared/global';
@@ -231,9 +231,6 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
                 {space.location && (
                   <span className="inline-flex items-center gap-1.5"><MapPinIcon className="w-3.5 h-3.5" />{space.location}</span>
-                )}
-                {space.country && (
-                  <span className="inline-flex items-center gap-1.5"><EarthIcon className="w-3.5 h-3.5" />{space.country}</span>
                 )}
                 <span className="inline-flex items-center gap-1.5"><CalendarIcon className="w-3.5 h-3.5" />Created {createdLabel}</span>
               </div>

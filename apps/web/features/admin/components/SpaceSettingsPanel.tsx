@@ -1,18 +1,18 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
-import { Trash2Icon, XIcon } from '@/features/shared/icons';
+import { Trash2Icon } from '@/features/shared/icons';
 import { Space } from '@/lib/types';
 import type { SpaceVisibility } from '@/lib/spaces/publicName';
-import { COUNTRIES, getCountry } from '@/lib/countries';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { Alert, Button, ConfirmDialog, CountryFlagIcon, Field, Input, Textarea, inputBaseClass } from '@/components/ui';
+import { Alert, Button, ConfirmDialog, Field, Input, Textarea, inputBaseClass } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useConsoleAction, useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { FetchJsonError, fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import SpaceImageUpload from '@/features/spaces/components/SpaceImageUpload';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
+import RegionAutocomplete from '@/features/spaces/components/RegionAutocomplete';
 import SubspacesSection from '@/features/spaces/components/SubspacesSection';
 import RoomDials from '@/features/spaces/components/RoomDials';
 
@@ -42,122 +42,6 @@ const LockIcon = () => (
   </svg>
 );
 
-// ─── Country Selector ─────────────────────────────────────────────────────────
-
-function CountrySelector({ value, onChange }: { value: string; onChange: (code: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const filtered = query.trim()
-    ? COUNTRIES.filter(c => c.name.toLowerCase().includes(query.toLowerCase()))
-    : COUNTRIES;
-
-  const selected = value ? getCountry(value) : null;
-
-  useEffect(() => {
-    function onMouseDown(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery('');
-      }
-    }
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
-  }, []);
-
-  const handleOpen = () => {
-    setOpen(true);
-    setTimeout(() => inputRef.current?.focus(), 0);
-  };
-
-  const handleSelect = (code: string) => {
-    onChange(code);
-    setOpen(false);
-    setQuery('');
-  };
-
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange('');
-    setOpen(false);
-  };
-
-  return (
-    <div ref={containerRef} className="relative">
-      {/* Trigger */}
-      <button
-        type="button"
-        onClick={handleOpen}
-        className={`${inputBaseClass} flex items-center gap-2 text-left`}
-      >
-        {selected ? (
-          <>
-            <CountryFlagIcon code={selected.code} className="w-[24px] h-[18px]" />
-            <span className="flex-1">{selected.name}</span>
-            <span
-              onClick={handleClear}
-              className="text-text-muted hover:text-text-primary ml-auto cursor-pointer text-xs px-1"
-              title="Clear"
-            >
-              <XIcon className="h-3 w-3" />
-            </span>
-          </>
-        ) : (
-          <span className="text-text-muted flex-1">Select a country…</span>
-        )}
-        <svg className="w-4 h-4 text-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {/* Dropdown */}
-      {open && (
-        <div className="absolute z-50 mt-1 w-full bg-surface-1 border border-border-subtle rounded-xl shadow-float overflow-hidden">
-          {/* Search */}
-          <div className="p-2 border-b border-border-subtle">
-            <Input
-              ref={inputRef}
-              type="text"
-              placeholder="Search countries…"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-            />
-          </div>
-
-          {/* List */}
-          <ul className="max-h-56 overflow-y-auto py-1">
-            {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-text-muted">No countries found</li>
-            ) : (
-              filtered.map(country => (
-                <li key={country.code}>
-                  <button
-                    type="button"
-                    onClick={() => handleSelect(country.code)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-surface-2 transition-colors ${
-                      value === country.code ? 'bg-surface-2 font-medium' : ''
-                    }`}
-                  >
-                    <CountryFlagIcon code={country.code} className="w-[22px] h-[16px]" />
-                    <span className="text-text-primary">{country.name}</span>
-                    {value === country.code && (
-                      <svg className="w-4 h-4 text-brand-green ml-auto shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Main Panel ───────────────────────────────────────────────────────────────
 
 export default function SpaceSettingsPanel({ space, onSaved }: Props) {
@@ -172,7 +56,6 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
   const [name, setName] = useState(space.name);
   const [nameError, setNameError] = useState('');
   const [description, setDescription] = useState(space.description);
-  const [country, setCountry] = useState(space.country ?? '');
   const [location, setLocation] = useState(space.location ?? '');
   const [imageUrl, setImageUrl] = useState(space.imageUrl ?? '');
   const [visibility, setVisibility] = useState<SpaceVisibility>(
@@ -343,29 +226,21 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
                 placeholder="What brings this space together?"
               />
             </Field>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field label="Country">
-                <CountrySelector
-                  value={country}
-                  onChange={code => {
-                    setCountry(code);
-                    queue({ country: code || null });
-                  }}
-                />
-              </Field>
-              <Field label="Location">
-                <Input
-                  type="text"
-                  value={location}
-                  onChange={e => {
-                    setLocation(e.target.value);
-                    queue({ location: e.target.value }, { debounceMs: 800 });
-                  }}
-                  onBlur={flush}
-                  placeholder="e.g. Auckland, New Zealand"
-                />
-              </Field>
-            </div>
+            <Field label="Location">
+              <RegionAutocomplete
+                value={location}
+                onType={label => {
+                  setLocation(label);
+                  queue({ location: label }, { debounceMs: 800 });
+                }}
+                onPick={(label, country) => {
+                  setLocation(label);
+                  queue({ location: label, ...(country ? { country } : {}) });
+                }}
+                onBlur={flush}
+                className={inputBaseClass}
+              />
+            </Field>
           </div>
         </div>
       </section>
