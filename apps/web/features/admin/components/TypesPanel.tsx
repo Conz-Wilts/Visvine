@@ -841,20 +841,17 @@ export default function TypesPanel() {
 
       {!anyToolTypes && <p className="text-sm text-text-muted">No matches.</p>}
 
-      {/* Member-made types. Rendered even when empty — an empty list is the
-          answer to "where do the types I name on a draft show up?". */}
-      <section>
-        <h3 className="border-b border-border-default pb-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-          Custom types
-        </h3>
-        {customTypes.length > 0 ? (
+      {/* Member-made types, drawn only when there are some. */}
+      {customTypes.length > 0 && (
+        <section>
+          <h3 className="border-b border-border-default pb-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+            Custom types
+          </h3>
           <div className="divide-y divide-border-subtle">
             {customTypes.map(renderRow)}
           </div>
-        ) : (
-          <p className="py-3 text-sm text-text-muted">{term ? 'No matches.' : 'None yet.'}</p>
-        )}
-      </section>
+        </section>
+      )}
 
       <ConfirmDialog
         open={deleting !== null}
