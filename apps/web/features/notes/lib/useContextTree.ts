@@ -18,6 +18,7 @@ import {
   noteHref,
 } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
+import { connectorHomeDenial, declaredConfigKind } from '@/lib/notes/shared/configKinds'
 import { drawnParentOf, placementDenial } from '@/lib/notes/shared/placedFolders'
 import {
   SUBSPACE_FOLDER,
@@ -58,7 +59,13 @@ export function parentFolderOf(path: string): string {
  * can't know each viewer's level per folder, so a rejected move surfaces the
  * server's message instead of being predicted here.
  */
-export function moveDenial(rawFrom: string, kind: 'note' | 'folder', rawDest: string): string | null {
+export function moveDenial(
+  rawFrom: string,
+  kind: 'note' | 'folder',
+  rawDest: string,
+  /** What the note declares (`TreeNode.declares`): a connector moves where a connector may. */
+  declares?: 'connector' | 'model' | null,
+): string | null {
   // parent/ is what the parent shares here, read-only: nothing moves in or
   // out. A sub-space's context (subspaces/<id>/…) moves WITHIN that sub-space
   // — the server hops the move across (lib/notes/federation.ts#moveTargets)
@@ -75,6 +82,15 @@ export function moveDenial(rawFrom: string, kind: 'note' | 'folder', rawDest: st
   }
   const from = fromSub ? fromSub.path : rawFrom
   const destFolder = destSub ? destSub.path : rawDest
+  // A connector is what a note DECLARES, not where it is filed
+  // (lib/notes/shared/configKinds.ts): it moves between `connectors/` and the
+  // space's own folders — the server's gate says who may — and only there.
+  const movingConnector = kind === 'note' && (declares === 'connector' || entityKindOfPath(from) === 'connector')
+  if (movingConnector) {
+    const home = connectorHomeDenial(`${destFolder ? `${destFolder}/` : ''}${from.split('/').pop()}`)
+    if (home) return home
+    return null
+  }
   // Into an entity's OWN folder (people/<slug>) is fine — that files the note
   // under the entity (and converts its note to the folder if needed). Into the
   // namespace root, or beside it as a would-be entity, is not.
@@ -128,8 +144,13 @@ export function deleteFolderDenial(path: string): string | null {
 }
 
 /** Whether a drop on `destFolder` would do anything (legal AND a real change). */
-export function canMoveInto(from: string, kind: 'note' | 'folder', destFolder: string): boolean {
-  return moveDenial(from, kind, destFolder) === null && destFolder !== parentFolderOf(from)
+export function canMoveInto(
+  from: string,
+  kind: 'note' | 'folder',
+  destFolder: string,
+  declares?: 'connector' | 'model' | null,
+): boolean {
+  return moveDenial(from, kind, destFolder, declares) === null && destFolder !== parentFolderOf(from)
 }
 
 /** A destructive action the tree has asked about but not yet performed. */
@@ -399,7 +420,7 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     (from: string, destFolder: string) => {
       if (!spaceId) return
       const to = movedPath(from, destFolder)
-      const denial = moveDenial(from, 'note', destFolder)
+      const denial = moveDenial(from, 'note', destFolder, declaredConfigKind(notes.find((n) => n.path === from)?.frontmatter))
       if (denial) return window.alert(denial)
       if (to === from) return
       notesApi
@@ -415,7 +436,7 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
           window.alert(e instanceof Error ? e.message : 'Failed to move the note')
         })
     },
-    [spaceId, currentPath, router],
+    [spaceId, notes, currentPath, router],
   )
 
   // Moving a folder takes its whole subtree with it (renameFolder server-side),

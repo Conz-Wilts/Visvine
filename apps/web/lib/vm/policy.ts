@@ -13,7 +13,6 @@
  * the same place rather than a second list that drifts from it.
  */
 import { createHash } from 'node:crypto'
-import prisma from '@/lib/prisma'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { isConnectorEnabled, parseConnectorPerimeter } from '@/lib/connectors/config'
 import { logger } from '@/lib/logger'
@@ -21,6 +20,7 @@ import { canonical, compile, type InjectRule, type VmPolicy } from '@visvine/vm-
 import { machineHostPatterns } from './shared/hosts'
 import { parentOfSubspace } from '@/lib/spaces/subspaceAccess'
 import { reachesRoom } from '@/lib/spaces/subspaces'
+import { connectorNoteRows } from '@/lib/connectors/locate'
 
 const SHARED_OWNER_KEY = 'shared'
 
@@ -56,16 +56,8 @@ interface EgressHosts {
  * `names` undefined means every connector the space has.
  */
 async function connectorRows(spaceId: string, names?: readonly string[]) {
-  return prisma.contextNote.findMany({
-    where: {
-      spaceId,
-      ownerKey: SHARED_OWNER_KEY,
-      deletedAt: null,
-      path: names ? { in: names.map((name) => `connectors/${name}.md`) } : { startsWith: 'connectors/', endsWith: '.md' },
-    },
-    select: { path: true, content: true },
-    orderBy: { path: 'asc' },
-  })
+  // Wherever the space filed them (lib/connectors/locate.ts).
+  return connectorNoteRows({ spaceId, ownerKey: SHARED_OWNER_KEY }, names)
 }
 
 async function egressHosts(spaceId: string, names?: readonly string[]): Promise<EgressHosts> {
@@ -77,8 +69,8 @@ async function egressHosts(spaceId: string, names?: readonly string[]): Promise<
   // the same hosts. Only the parent's notes whose `share:` reaches THIS room
   // (`all`, or a list naming it), and only for names this space has no note
   // of its own for — the same order the run resolves them in.
-  const ownNames = new Set(own.map((row) => row.path))
-  const wanted = names?.filter((name) => !ownNames.has(`connectors/${name}.md`))
+  const ownNames = new Set(own.map((row) => row.name))
+  const wanted = names?.filter((name) => !ownNames.has(name))
   const parent = wanted?.length === 0 ? null : await parentOfSubspace(spaceId)
   const theirs = parent ? await connectorRows(parent.id, wanted) : []
 
@@ -102,7 +94,7 @@ async function egressHosts(spaceId: string, names?: readonly string[]): Promise<
     for (const host of found.rejected) rejected.push(`${row.path}: ${host}`)
   }
   for (const row of own) read(row, false)
-  for (const row of theirs) if (!ownNames.has(row.path)) read(row, true)
+  for (const row of theirs) if (!ownNames.has(row.name)) read(row, true)
   return { hosts: [...hosts].sort(), unreadable, rejected }
 }
 

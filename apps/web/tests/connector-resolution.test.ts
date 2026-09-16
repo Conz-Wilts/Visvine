@@ -207,3 +207,80 @@ test('one person’s connector is never another’s', async (t) => {
     await teardown()
   }
 })
+
+test('a connector filed in a folder of the space’s own is the same connector', async (t) => {
+  const skip = await probe()
+  if (skip) return t.skip(skip)
+  await setup()
+  try {
+    // A space that files its connectors by team has moved the note, not the
+    // connector (lib/notes/shared/configKinds.ts): the name is the file name,
+    // and every reader finds it where it is.
+    await prisma!.contextNote.create({
+      data: { spaceId: SPACE, ownerKey: 'shared', path: 'teams/growth/hubspot.md', content: NOTE('HubSpot', 'api.hubapi.com'), createdBy: MINE },
+    })
+    const locate = await import('@/lib/connectors/locate')
+    assert.equal(await locate.connectorNotePathIn(shared, 'hubspot'), 'teams/growth/hubspot.md')
+    assert.equal(await locate.connectorNotePathIn(shared, 'drive'), null)
+    assert.deepEqual((await locate.connectorNoteRows(shared)).map((r) => [r.name, r.path]), [['hubspot', 'teams/growth/hubspot.md']])
+
+    const loaded = await (await service()).loadConnector(principal(MINE, SPACE), shared, 'hubspot')
+    assert.ok(loaded, 'the moved connector loads by name')
+    assert.equal(loaded.spaceId, SPACE)
+    assert.equal(loaded.personal, false)
+    assert.deepEqual([...loaded.perimeter.hosts], ['api.hubapi.com'])
+
+    const listed = await (await service()).listConnectors(principal(MINE, SPACE), shared)
+    assert.deepEqual(listed.map((c) => [c.name, c.path]), [['hubspot', 'teams/growth/hubspot.md']])
+    const described = await (await service()).describeConnector(principal(MINE, SPACE), shared, 'hubspot')
+    assert.equal(described?.path, 'teams/growth/hubspot.md')
+
+    // The built-in folder still wins its name over a copy elsewhere — the
+    // tie rule for data written before the write gate refused the second.
+    await prisma!.contextNote.create({
+      data: { spaceId: SPACE, ownerKey: 'shared', path: 'connectors/hubspot.md', content: NOTE('HubSpot at home', 'home.example.com'), createdBy: MINE },
+    })
+    assert.equal(await locate.connectorNotePathIn(shared, 'hubspot'), 'connectors/hubspot.md')
+  } finally {
+    await teardown()
+  }
+})
+
+test('the write gate follows the declaration: a connector is the admin’s wherever it sits', async (t) => {
+  const skip = await probe()
+  if (skip) return t.skip(skip)
+  await setup()
+  try {
+    const { configKindDenial, folderConfigKindDenial } = await import('@/lib/notes/contextService')
+    const admin = principal(MINE, SPACE)
+    const member: ContextPrincipal = { ...principal(OTHER, SPACE), spaceAdmin: false }
+    const hubspot = NOTE('HubSpot', 'api.hubapi.com')
+    await prisma!.contextNote.create({
+      data: { spaceId: SPACE, ownerKey: 'shared', path: 'teams/growth/hubspot.md', content: hubspot, createdBy: MINE },
+    })
+
+    // A member with edit rights in teams/ still cannot mint, edit, strip or
+    // delete a connector there.
+    assert.match((await configKindDenial(member, shared, 'teams/growth/slack.md', NOTE('Slack', 'slack.com'), { current: null }))!, /Only space admins/)
+    assert.match((await configKindDenial(member, shared, 'teams/growth/hubspot.md', hubspot))!, /Only space admins/)
+    assert.match((await configKindDenial(member, shared, 'teams/growth/hubspot.md', '---\ntitle: HubSpot\n---\n'))!, /Only space admins/)
+    assert.match((await configKindDenial(member, shared, 'teams/growth/hubspot.md', null))!, /Only space admins/)
+    assert.match((await folderConfigKindDenial(member, shared, 'teams/growth'))!, /holds the connector/)
+    assert.equal(await folderConfigKindDenial(admin, shared, 'teams/growth'), null)
+    // An ordinary note of theirs is untouched by this gate.
+    assert.equal(await configKindDenial(member, shared, 'teams/growth/plan.md', '---\ntitle: Plan\n---\n', { current: null }), null)
+
+    // An admin: anywhere a connector may sit, under its own name, once.
+    assert.equal(await configKindDenial(admin, shared, 'teams/growth/hubspot.md', hubspot), null)
+    assert.equal(await configKindDenial(admin, shared, 'ops/hubspot.md', null, { movingFrom: 'teams/growth/hubspot.md' }), null)
+    assert.equal(await configKindDenial(admin, shared, 'connectors/hubspot.md', null, { movingFrom: 'teams/growth/hubspot.md' }), null)
+    assert.match((await configKindDenial(admin, shared, 'people/craig/hubspot.md', null, { movingFrom: 'teams/growth/hubspot.md' }))!, /built-in folders/)
+    assert.match((await configKindDenial(admin, shared, 'ops/hubspot-2.md', null, { movingFrom: 'teams/growth/hubspot.md' }))!, /name is its file name/)
+    assert.match((await configKindDenial(admin, shared, 'ops/hubspot.md', NOTE('Another HubSpot', 'api.hubapi.com'), { current: null }))!, /already exists at teams\/growth\/hubspot\.md/)
+    // A `me:<userId>` space is administered by its owner (resolveContext
+    // stamps them admin), so their own write passes the same gate.
+    assert.equal(await configKindDenial(principal(OTHER, OTHER_SPACE), { spaceId: OTHER_SPACE, ownerKey: 'shared' }, 'connectors/x.md', hubspot), null)
+  } finally {
+    await teardown()
+  }
+})

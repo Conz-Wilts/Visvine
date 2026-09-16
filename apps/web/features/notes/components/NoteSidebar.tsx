@@ -73,6 +73,8 @@ interface FolderBadge {
  *  a sub-space, whose path stays put while the tree draws it elsewhere
  *  (lib/notes/shared/placedFolders.ts). */
 interface MovableItem {
+  /** What a note declares (`TreeNode.declares`) — a connector moves where a connector may. */
+  declares?: 'connector' | 'model'
   path: string
   kind: 'note' | 'folder' | 'placed'
   label: string
@@ -102,7 +104,7 @@ function acceptsDrop(drag: TreeDragValue, dest: string): boolean {
   if (!drag.dragging) return false
   return drag.dragging.kind === 'placed'
     ? canPlaceInto(drag.tree, drag.dragging.path, dest)
-    : canMoveInto(drag.dragging.path, drag.dragging.kind, dest)
+    : canMoveInto(drag.dragging.path, drag.dragging.kind, dest, drag.dragging.declares)
 }
 
 const TreeDrag = createContext<TreeDragValue | null>(null)
@@ -129,8 +131,8 @@ function readOnlyHere(path: string, writable: ReadonlySet<string>): boolean {
 /** Whether a row can be dragged at all: moving it to the folder it already sits
  *  in is a no-op, so a denial there is purely about the item itself (entity
  *  note, folder index, managed namespace). */
-function isMovable(path: string, kind: 'note' | 'folder'): boolean {
-  return moveDenial(path, kind, parentFolderOf(path)) === null
+function isMovable(path: string, kind: 'note' | 'folder', declares?: 'connector' | 'model'): boolean {
+  return moveDenial(path, kind, parentFolderOf(path), declares) === null
 }
 
 interface NoteSidebarProps {
@@ -670,6 +672,7 @@ function Tree({
             key={child.path}
             title={child.title ?? child.name}
             path={child.path}
+            declares={child.declares}
             guide={i === children.length - 1 ? 'last' : 'mid'}
             guideActive={selectedPath === child.path}
             glyph={glyphFor.get(child.path) ?? null}
@@ -1148,6 +1151,7 @@ function RowMenu({
 function NoteRow({
   title,
   path,
+  declares,
   glyph,
   guide,
   guideActive,
@@ -1160,6 +1164,7 @@ function NoteRow({
 }: {
   title: string
   path: string
+  declares?: 'connector' | 'model'
   glyph: NodeGlyph | null
   /** Tree guide for a nested row. */
   guide?: Guide
@@ -1176,8 +1181,8 @@ function NoteRow({
   // A sub-space's note is moved or deleted here only by someone who stands
   // in that sub-space; shared from here by nobody (see FolderRow).
   const readOnly = readOnlyHere(path, useContext(TreeWritableSpaces))
-  const item: MovableItem = { path, kind: 'note', label: title }
-  const draggable = !!drag && !readOnly && isMovable(path, 'note')
+  const item: MovableItem = { path, kind: 'note', label: title, ...(declares ? { declares } : {}) }
+  const draggable = !!drag && !readOnly && isMovable(path, 'note', declares)
   const isDragged = drag?.dragging?.path === path
   return (
     <div
@@ -1306,11 +1311,11 @@ function MoveDialog({
               const allowed =
                 item.kind === 'placed'
                   ? canPlaceInto(tree, item.path, folder.path)
-                  : canMoveInto(item.path, item.kind, folder.path)
+                  : canMoveInto(item.path, item.kind, folder.path, item.declares)
               const reason =
                 (item.kind === 'placed'
                   ? placementDenial(item.path, folder.path, tree)
-                  : moveDenial(item.path, item.kind, folder.path)) ?? (allowed ? undefined : 'It is already here.')
+                  : moveDenial(item.path, item.kind, folder.path, item.declares)) ?? (allowed ? undefined : 'It is already here.')
               const glyph = structuralIconOf(folder.path)
               return (
                 <button

@@ -280,6 +280,32 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   those is a way around an admin-only write gate, not a convenience. A rename
   carries the node (`repointAdoptedNodes`); an adopted folder's index carries
   `node:` like any entity index.
+- **A connector is what a note declares too, and the gate follows the
+  declaration** (`lib/notes/shared/configKinds.ts`, pure). The built-in
+  folders are where a new thing LANDS, not the only place it may be: a space
+  that files its connectors by team keeps `teams/growth/hubspot.md` with
+  `type: connector`, and that IS the connector — same name (the file name),
+  same node (`connector:<name>`, carried through a move by
+  `repointConnectorNodes`), same secrets, same runs. Because the
+  declaration is what makes it one, `contextService.configKindDenial` asks
+  it on every write, move and delete, of the note being written AND the note
+  already there: a note declaring `type: connector` or `type: model` is a
+  space admin's wherever it sits, so a member who can edit `teams/` can
+  neither mint a connector there nor strip the type off one; a folder
+  holding one is renamed or deleted by an admin only
+  (`folderConfigKindDenial`). A connector sits in `connectors/<name>.md` or a
+  folder of the space's own — never inside another built-in folder, never an
+  index, never under `subspaces/` or `parent/` (`connectorHomeDenial`) — and
+  changes folder, never file name, because briefs, connections and secrets
+  key on the name. **Nothing finds a connector by building its path**:
+  `lib/connectors/locate.ts` (`connectorNotePathIn`, `connectorNoteRows`) is
+  the one read, the runtime, the console, the machine policy, the webhook
+  door, the agent options and the house's share-down (`isSharedDown`) all go
+  through it, and `connectors/<name>.md` wins its name over a copy elsewhere.
+  The path gate on `connectors/` and `models/` stays as well. The tree stamps
+  `declares` on such a note so the sidebar offers the moves the server would
+  allow. Models keep their home for now: the gate follows their declaration,
+  the readers do not yet.
 - **Links are derived, not authored.** A markdown link to an entity's note,
   inside another shared-context note, creates the `mentioned` edge. There is no
   create-link operation anywhere.
@@ -630,8 +656,9 @@ authorization** — `lib/actions/resolve.ts` uses the same `resolveContext` /
 
 ## Connectors
 
-A connector is a note, and the two halves are the security model
-(`docs/connectors.md`):
+A connector is a note — `connectors/<name>.md` by default, or wherever an
+admin filed it (see *A connector is what a note declares* above) — and the two
+halves are the security model (`docs/connectors.md`):
 
 - **Frontmatter = perimeter.** Machine-enforced: `hosts:` (literal,
   SSRF-checked, never from a secret), `env:` (`{{secret:NAME}}` refs only),

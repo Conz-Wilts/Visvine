@@ -23,7 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireContext, fail, failFromError } from '@/lib/notes/api'
 import { canRemove, principalOf } from '@/lib/notes/resolve'
-import { writeDenial, writeDenialFull, moveGated, namespaceFeatureDenial } from '@/lib/notes/contextService'
+import { writeDenial, writeDenialFull, moveGated, namespaceFeatureDenial, configKindDenial } from '@/lib/notes/contextService'
 import { moveTargets, readFederated, writeTarget } from '@/lib/notes/federation'
 import { isFederatedPath } from '@/lib/spaces/subspaces'
 import {
@@ -83,6 +83,10 @@ export async function POST(req: NextRequest) {
     typeof body.content === 'string' && body.content.length > 0
       ? body.content
       : DEFAULT_NOTE(title, ctx.actor.name)
+  // A note that declares itself a connector or model is the admin's wherever
+  // it is filed (lib/notes/shared/configKinds.ts).
+  const declared = await configKindDenial(principal, ctx, at, content, { current: null })
+  if (declared) return fail(declared, 403)
   try {
     // createNote may redirect an entity write to the folder form the entity has
     // since taken (people/<slug>/index.md) — take the path it actually wrote.
@@ -113,7 +117,7 @@ export async function PUT(req: NextRequest) {
   const { context: ctx, principal, path: at } = target
   // Full check: folder gate + the replica block (published copies are
   // read-only in their destination — unlink to edit).
-  const denial = await writeDenialFull(principal, ctx, at)
+  const denial = (await writeDenialFull(principal, ctx, at)) ?? (await configKindDenial(principal, ctx, at, content))
   if (denial) return fail(denial, 403)
   const origin: NoteRevisionOrigin =
     body.origin === 'restore' ? 'restore' : body.origin === 'ai-refactor' ? 'ai-refactor' : 'edit'
@@ -167,7 +171,7 @@ export async function DELETE(req: NextRequest) {
   }
   // Deleting a published REPLICA is allowed — it deactivates the link — so the
   // sync folder gate applies here, not the replica block.
-  const denial = writeDenial(principal, ctx, at)
+  const denial = writeDenial(principal, ctx, at) ?? (await configKindDenial(principal, ctx, at, null))
   if (denial) return fail(denial, 403)
   try {
     await deleteNote(ctx, at)

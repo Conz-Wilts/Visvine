@@ -47,11 +47,12 @@ import { toolGroup, toolPermission, type ToolGroup, type ToolPermission } from '
 import { isLegacyModelConnector } from '@/lib/models/config'
 import { catalogEntryFor } from './catalog'
 import { declaredReachHosts } from '@/lib/vm/policy'
-import { parentShare, readSharedFromParent } from '@/lib/notes/federation'
+import { parentShare, readSharedConnectorFromParent } from '@/lib/notes/federation'
+import { connectorNotePathIn } from './locate'
+import { CONNECTOR_NAME_RE, connectorHomeDenial, connectorNameOfPath, isConnectorNoteAt } from '@/lib/notes/shared/configKinds'
 import { rebaseParentPath } from '@/lib/spaces/subspaces'
 
-const CONNECTORS_DIR = 'connectors/'
-const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
+const NAME_RE = CONNECTOR_NAME_RE
 const DOCS_CAP_CHARS = 4_000
 
 /**
@@ -148,21 +149,23 @@ async function readConnectorNote(
   opts: ConnectorLookup = {},
 ): Promise<ConnectorSource | null> {
   if (!NAME_RE.test(name)) return null
-  const path = `${CONNECTORS_DIR}${name}.md`
-  const here = await readVisible(p, context, path)
-  if (here !== null) {
+  // The note is wherever the space filed it (./locate.ts): `connectors/<name>.md`
+  // unless it was moved into a folder of the space's own.
+  const path = await connectorNotePathIn(context, name)
+  const here = path === null ? null : await readVisible(p, context, path)
+  if (here !== null && path !== null) {
     return { content: here, path, spaceId: context.spaceId, principal: p, personal: false, shared: false, sharedFrom: null }
   }
   if (opts.shared !== false) {
     // The parent's flag is the whole grant (lib/notes/federation.ts): no
     // standing in the parent is asked for, and none is given — the principal
     // is the same person, in the parent's space, an admin of nothing there.
-    const fromParent = await readSharedFromParent(context, path)
+    const fromParent = await readSharedConnectorFromParent(context, name)
     if (fromParent) {
       const owner = fromParent.share.space
       return {
         content: fromParent.content,
-        path,
+        path: fromParent.path,
         spaceId: owner.id,
         principal: { ...p, spaceId: owner.id, spaceAdmin: false },
         personal: false,
@@ -174,13 +177,14 @@ async function readConnectorNote(
   if (opts.personal === false || p.system) return null
   const lens = personalLens(opts.personalFor ?? p.userId, context)
   if (!lens) return null
-  const mine = await readVisible(lens.principal, lens.context, path)
-  if (mine === null) return null
+  const minePath = await connectorNotePathIn(lens.context, name)
+  const mine = minePath === null ? null : await readVisible(lens.principal, lens.context, minePath)
+  if (mine === null || minePath === null) return null
   // The principal keeps the caller's own name and email where it IS them, so
   // the audit line and any identity assertion still say who ran it.
   const principal =
     lens.principal.userId === p.userId ? { ...lens.principal, email: p.email, name: p.name } : lens.principal
-  return { content: mine, path, spaceId: lens.context.spaceId, principal, personal: true, shared: false, sharedFrom: null }
+  return { content: mine, path: minePath, spaceId: lens.context.spaceId, principal, personal: true, shared: false, sharedFrom: null }
 }
 
 export interface ConnectorSummary {
@@ -249,8 +253,9 @@ function summariseActions(actions: Record<string, ConnectorAction>): ConnectorAc
   return Object.entries(actions).map(([name, a]) => ({ name, description: a.description, params: a.params }))
 }
 
+/** A connector's name is its file name, wherever the note sits. */
 function connectorName(path: string): string {
-  return path.slice(CONNECTORS_DIR.length).replace(/\.md$/, '')
+  return connectorNameOfPath(path) ?? path.replace(/\.md$/, '').split('/').pop() ?? path
 }
 
 /**
@@ -333,7 +338,7 @@ async function listSharedFromParent(context: Context): Promise<ConnectorSummary[
   if (!share) return []
   const out: ConnectorSummary[] = []
   for (const raw of share.notes) {
-    if (!raw.path.startsWith(CONNECTORS_DIR) || !raw.path.endsWith('.md')) continue
+    if (!isConnectorNoteAt(raw.path, raw.content)) continue
     const summary = summariseNote(raw.path, raw.content)
     if (!summary) continue
     out.push({ ...summary, path: rebaseParentPath(raw.path), shared: true, sharedFrom: share.space })
@@ -345,8 +350,11 @@ async function listSharedFromParent(context: Context): Promise<ConnectorSummary[
 async function listConnectorsIn(p: ContextPrincipal, context: Context): Promise<ConnectorSummary[]> {
   const { raws } = await visibleVault(p, context)
   const summaries: ConnectorSummary[] = []
+  // Wherever the space filed them: a connector is the note that declares
+  // `type: connector` (lib/notes/shared/configKinds.ts), in `connectors/` or in
+  // a folder of the space's own.
   for (const raw of raws) {
-    if (!raw.path.startsWith(CONNECTORS_DIR) || !raw.path.endsWith('.md')) continue
+    if (!raw.path.endsWith('.md') || connectorHomeDenial(raw.path)) continue
     const summary = summariseNote(raw.path, raw.content)
     if (summary) summaries.push(summary)
   }
@@ -375,7 +383,7 @@ export async function listHiddenConnectors(p: ContextPrincipal, context: Context
   const { raws } = await getVault(context)
   const hidden: HiddenConnector[] = []
   for (const raw of raws) {
-    if (!raw.path.startsWith(CONNECTORS_DIR) || !raw.path.endsWith('.md')) continue
+    if (!raw.path.endsWith('.md') || connectorHomeDenial(raw.path)) continue
     if (canReadPath(p, context, raw.path)) continue
     const summary = summariseNote(raw.path, raw.content)
     if (!summary) continue
@@ -452,23 +460,23 @@ export async function describeConnector(
   opts: Pick<ConnectorLookup, 'shared'> = {},
 ): Promise<ConnectorDetail | null> {
   if (!NAME_RE.test(name)) return null
-  const path = `${CONNECTORS_DIR}${name}.md`
-  const content = await readVisible(p, context, path)
-  if (content !== null) {
+  const path = await connectorNotePathIn(context, name)
+  const content = path === null ? null : await readVisible(p, context, path)
+  if (content !== null && path !== null) {
     const summary = summariseNote(path, content)
     if (!summary) return null
     const parsed = parseConnectorPerimeter(parseFrontmatter(content))
     return { ...summary, perimeter: parsed.ok ? parsed.perimeter : null, ownerSpaceId: context.spaceId }
   }
   if (opts.shared === false) return null
-  const fromParent = await readSharedFromParent(context, path)
+  const fromParent = await readSharedConnectorFromParent(context, name)
   if (!fromParent) return null
-  const summary = summariseNote(path, fromParent.content)
+  const summary = summariseNote(fromParent.path, fromParent.content)
   if (!summary) return null
   const parsed = parseConnectorPerimeter(parseFrontmatter(fromParent.content))
   return {
     ...summary,
-    path: rebaseParentPath(path),
+    path: rebaseParentPath(fromParent.path),
     shared: true,
     sharedFrom: fromParent.share.space,
     perimeter: parsed.ok ? parsed.perimeter : null,

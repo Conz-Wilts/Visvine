@@ -10,8 +10,13 @@ space admins only) — all actions in `lib/actions/defs/`, reached through the o
 
 ## What a connector is
 
-One note, `connectors/<name>.md`. Its frontmatter declares the perimeter; its body is JavaScript
-documentation the model reads before writing code.
+One note carrying `type: connector`. It is written to `connectors/<name>.md`, and an admin may
+move it into any folder of the space's own (`teams/growth/hubspot.md`) — the connector is what the
+note DECLARES, its name is the file name, and every reader finds it where it is
+(`lib/connectors/locate.ts`). Only a space admin writes, edits, moves or deletes such a note
+wherever it sits (`lib/notes/shared/configKinds.ts`); it changes folder, never file name. Its
+frontmatter declares the perimeter; its body is JavaScript documentation the model reads before
+writing code.
 
 ```yaml
 ---

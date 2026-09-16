@@ -19,6 +19,7 @@ import { logger } from '@/lib/logger'
 import { upsertLink } from '@/lib/notes/context/links'
 import { pairKeyFor } from '@/lib/notes/context/relationships'
 import { spaceNodeId, removeEntityNode, syncEntityNode } from '@/lib/notes/context/entityNodes'
+import { connectorNameOfPath, isConnectorNoteAt } from './shared/configKinds'
 import {
   mergeContextMeta,
   nextContextMeta,
@@ -181,7 +182,9 @@ function notePathOfNode(metadata: unknown): string | null {
 // space's context. A `type: Person` note under one of them is not an invitation
 // to mint a node: connectors/ and models/ are admin-gated perimeters, agents/
 // and tools/ are note-first kinds with their own sync, and subspaces/ is a
-// sub-space's context grafted in read-only.
+// sub-space's context grafted in read-only. (The other direction — a
+// `type: connector` note in an ordinary folder — is a connector, synced by
+// syncConnectorNode from syncNoteNode; see lib/notes/shared/configKinds.ts.)
 const UNADOPTABLE_ROOTS = new Set([
   'agents',
   'connectors',
@@ -263,6 +266,47 @@ async function repointAdoptedNodes(
     const kind = entityKindOf(bound.type)
     const to = kind ? landedAt.get(adoptionKey(kind, bound.name ?? '')) : undefined
     if (!to || to === from) continue
+    await prisma.node.update({
+      where: { id: bound.id },
+      data: {
+        metadata: {
+          ...((bound.metadata as Record<string, unknown> | null) ?? {}),
+          notePath: to,
+        } as Prisma.InputJsonObject,
+      },
+    })
+  }
+}
+
+/**
+ * Carry connector nodes across a move the same way: a connector's node is
+ * bound to its note's path (`metadata.notePath`, the record key), and a move
+ * arrives as remove-then-add. The same NAME landing among the added paths as
+ * a connector is that note arriving, so the pointer follows it and the
+ * remove step then finds nothing at the old path — the node, its links and
+ * every href to `/directory/connector:<name>` survive.
+ */
+async function repointConnectorNodes(
+  spaceId: string,
+  removed: string[],
+  added: Array<[path: string, content: string]>,
+): Promise<void> {
+  if (removed.length === 0 || added.length === 0) return
+  const landedAt = new Map<string, string>()
+  for (const [path, content] of added) {
+    const name = connectorNameOfPath(path)
+    if (name && isConnectorNoteAt(path, content)) landedAt.set(name, path)
+  }
+  if (landedAt.size === 0) return
+  for (const from of removed) {
+    const name = connectorNameOfPath(from)
+    const to = name ? landedAt.get(name) : undefined
+    if (!to || to === from) continue
+    const bound = await prisma.node.findFirst({
+      where: { spaceId, type: 'connector', metadata: { path: ['notePath'], equals: from } },
+      select: { id: true, metadata: true },
+    })
+    if (!bound) continue
     await prisma.node.update({
       where: { id: bound.id },
       data: {
@@ -400,7 +444,17 @@ async function syncNoteNode(
   // A note OUTSIDE the namespaces that declares an entity type owns a node
   // too — index or not, since an entity's note is its folder's index wherever
   // the folder sits. Checked before the index skip for exactly that reason.
-  if (!kind) return syncAdoptedNode(spaceId, path, content)
+  // A connector is such a declaration as well (lib/notes/shared/configKinds.ts):
+  // `teams/growth/hubspot.md` with `type: connector` is the connector, and
+  // its node points at that path. Gone, the node bound to the path goes too.
+  if (!kind) {
+    if (content === null) {
+      const connectorGone = await removeEntityNode(spaceId, 'connector', path)
+      return (await syncAdoptedNode(spaceId, path, null)) || connectorGone
+    }
+    if (isConnectorNoteAt(path, content)) return syncConnectorNode(spaceId, path, content)
+    return syncAdoptedNode(spaceId, path, content)
+  }
   if (isIndexPath(path)) return false
   if (kind === 'connector') return syncConnectorNode(spaceId, path, content)
   if (kind === 'model') return syncModelNode(spaceId, path, content)
@@ -547,7 +601,7 @@ async function syncConnectorNode(
 ): Promise<boolean> {
   if (content === null) return removeEntityNode(spaceId, 'connector', path)
 
-  const name = path.replace(/\.md$/i, '').split('/').pop() || path
+  const name = connectorNameOfPath(path) ?? path.replace(/\.md$/i, '').split('/').pop() ?? path
   const fm = parseFrontmatter(content)
   const alias = typeof fm.alias === 'string' && fm.alias.trim() ? fm.alias.trim() : null
   const description = typeof fm.description === 'string' ? fm.description.trim() : ''
@@ -764,6 +818,7 @@ export async function syncContextLinksBulk(
     // Before the removes read the old paths as gone: a rename is a move, not a
     // death, and an adopted node's binding has to travel with its note.
     await repointAdoptedNodes(context.spaceId, removed, added)
+    await repointConnectorNodes(context.spaceId, removed, added)
     for (const path of removed) {
       changed = (await syncNoteNode(context.spaceId, path, null)) || changed
     }

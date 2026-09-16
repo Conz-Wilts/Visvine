@@ -20,7 +20,7 @@ import { principalOf, type ResolvedContext } from '@/lib/notes/resolve'
 import { createFolder, createIndexFolder, renameFolder, deleteFolder } from '@/lib/notes/store'
 import { indexPathOf } from '@/lib/notes/shared/indexNote'
 import { principalCanWrite } from '@/lib/notes/shared/permissions'
-import { namespaceFeatureDenial } from '@/lib/notes/contextService'
+import { namespaceFeatureDenial, folderConfigKindDenial } from '@/lib/notes/contextService'
 import { moveTargets, writeTarget } from '@/lib/notes/federation'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 
@@ -89,7 +89,7 @@ export async function PATCH(req: NextRequest) {
   const { context: ctx, principal, path: src } = ends.from
   const dst = ends.to.path
   if (gated(ctx)) {
-    const denial = reorganizeDenial(principal, src)
+    const denial = reorganizeDenial(principal, src) ?? (await folderConfigKindDenial(principal, ctx, src))
     if (denial) return fail(denial, 403)
     if (!principalCanWrite(principal, dst)) {
       return fail(`You need edit access at "${dst}" to move a folder there`, 403)
@@ -112,7 +112,7 @@ export async function DELETE(req: NextRequest) {
   if ('denial' in target) return fail(target.denial, 403)
   const { context: ctx, principal, path: at } = target
   if (gated(ctx)) {
-    const denial = reorganizeDenial(principal, at)
+    const denial = reorganizeDenial(principal, at) ?? (await folderConfigKindDenial(principal, ctx, at))
     if (denial) return fail(denial, 403)
   }
   try {

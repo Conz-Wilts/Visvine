@@ -33,6 +33,7 @@ import { SHARED_OWNER_KEY, listRaw, readNoteOrNull, type Context } from './store
 import type { ResolvedContext } from './resolve'
 import { buildNoteIndex, buildTree } from './shared/context'
 import { parseFrontmatter } from './shared/markdown'
+import { connectorNameOfPath, isConnectorNoteAt } from './shared/configKinds'
 import type { ContextPrincipal } from './shared/contextTypes'
 import type { NoteMeta, TreeNode } from './shared/types'
 import type { FusedResult, SearchFilters } from './shared/retrieval'
@@ -265,6 +266,22 @@ export async function readSharedFromParent(
   if (!share || !share.notes.some((n) => n.path === parentPath)) return null
   const content = await readNoteOrNull(share.context, parentPath)
   return content === null ? null : { share, content }
+}
+
+/**
+ * One shared parent CONNECTOR by name — the parent's note declaring
+ * `type: connector` under that file name, wherever the parent filed it
+ * (lib/notes/shared/configKinds.ts) — or null when the parent shares none.
+ * The path answered is the parent's own.
+ */
+export async function readSharedConnectorFromParent(
+  context: Context,
+  name: string,
+): Promise<{ share: ParentShare; content: string; path: string } | null> {
+  const share = await parentShare(context)
+  if (!share) return null
+  const note = share.notes.find((n) => connectorNameOfPath(n.path) === name && isConnectorNoteAt(n.path, n.content))
+  return note ? { share, content: note.content, path: note.path } : null
 }
 
 /**

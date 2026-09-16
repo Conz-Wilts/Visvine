@@ -26,6 +26,7 @@ import { readVisible, writeGated } from '@/lib/notes/contextService';
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown';
 import { ConnectorError, parseConnectorPerimeter } from '@/lib/connectors/config';
 import { listConnectorTools, loadConnector } from '@/lib/connectors/service';
+import { connectorNotePathIn } from '@/lib/connectors/locate';
 import {
   TOOL_PERMISSIONS,
   toolPolicyFrontmatter,
@@ -104,9 +105,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const tools = (body.tools as string[]).map((t) => t.trim());
 
   const principal = await principalOf(resolved);
-  const path = `connectors/${name}.md`;
-  const content = await readVisible(principal, resolved, path);
-  if (content === null) return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
+  const path = await connectorNotePathIn(resolved, name);
+  const content = path === null ? null : await readVisible(principal, resolved, path);
+  if (content === null || path === null) return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
 
   const fm = parseFrontmatter(content);
   // The policy is re-read from the note rather than sent by the client: two

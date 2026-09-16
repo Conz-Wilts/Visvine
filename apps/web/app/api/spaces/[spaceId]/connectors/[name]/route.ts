@@ -11,6 +11,7 @@ import {
 import { parseConnectorPerimeter, SANDBOX_LIMITS } from '@/lib/connectors/config';
 import { describeConnector, listConnectorCalls } from '@/lib/connectors/service';
 import { sharedConnectorRefusal } from '@/lib/connectors/sharedRefusal';
+import { connectorHomePath, connectorNotePathIn } from '@/lib/connectors/locate';
 
 /**
  * One connector, for its page in the directory. The list route's row plus the
@@ -133,7 +134,8 @@ export async function PATCH(
   }
 
   const principal = await principalOf(resolved);
-  const path = `connectors/${name}.md`;
+  // Wherever the space filed it (lib/connectors/locate.ts).
+  const path = (await connectorNotePathIn(resolved, name)) ?? connectorHomePath(name);
   const content = await readVisible(principal, resolved, path);
   if (content === null) {
     // The name may resolve to the parent's shared connector — which is not

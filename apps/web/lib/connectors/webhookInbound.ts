@@ -32,6 +32,8 @@ import { takeToken } from '@/lib/rateLimit'
 import { decryptSecret, encryptSecret } from '@/lib/crypto/secrets'
 import { enqueueAgentEvent, webhookRecipients } from '@/lib/agents/events'
 import { parseConnectorPerimeter } from './config'
+import { connectorNotePathIn } from './locate'
+import { CONNECTOR_NAME_RE } from '@/lib/notes/shared/configKinds'
 import { appOrigin } from './connectUrl'
 import {
   extractEventField,
@@ -45,8 +47,7 @@ import {
   type ConnectorWebhook,
 } from './webhook'
 
-const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
-const CONNECTORS_DIR = 'connectors/'
+const NAME_RE = CONNECTOR_NAME_RE
 
 /** 60 deliveries a minute per hook, refilling continuously. */
 const HOOK_RATE = { capacity: 60, refillPerSec: 1 }
@@ -83,7 +84,9 @@ interface WebhookConnectorNote {
  */
 async function loadWebhookConnector(spaceId: string, connector: string): Promise<WebhookConnectorNote | null> {
   if (!NAME_RE.test(connector)) return null
-  const path = `${CONNECTORS_DIR}${connector}.md`
+  // Wherever the space filed it (./locate.ts).
+  const path = await connectorNotePathIn({ spaceId, ownerKey: SHARED_OWNER_KEY }, connector)
+  if (!path) return null
   const row = await prisma.contextNote.findFirst({
     where: { spaceId, ownerKey: SHARED_OWNER_KEY, path, deletedAt: null },
     select: { content: true },

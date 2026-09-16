@@ -689,7 +689,7 @@ const RECIPES: Recipe[] = [
       { n: 2, tool: 'edit_context', why: 'The `visibility` argument on a write is how a note\'s own visibility is set.', args: { space_id: spaceId(ctx), path: '<path>', content: '<unchanged content>', visibility: 'inherit' }, optional: true },
     ],
     mustKnow: () => [
-      'connectors/ and models/ are admin-only to write. agents/ and tools/ are frozen against AI writes entirely.',
+      'connectors/ and models/ are admin-only to write, and so is any note declaring `type: connector` or `type: model` wherever it sits. agents/ and tools/ are frozen against AI writes entirely.',
       "subspaces/ is reserved and refused for everyone: it is a public sub-space's context, read into this one.",
     ],
     blockers: () => [],

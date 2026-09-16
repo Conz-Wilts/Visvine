@@ -40,6 +40,8 @@ import { namespaceFeatureRefusal, reservedWriteDenial, togglableNamespaceFeature
 import { getFeatureConfig } from '@/lib/auth'
 import { federatedWriteDenial } from '@/lib/spaces/subspaces'
 import { globalSelfRecordDenial } from '@/lib/global/gate'
+import { configKindOfContent, configKindWriteDenial, connectorHomeDenial, connectorNameOfPath, type ConfigKind } from './shared/configKinds'
+import { connectorNotePathIn } from '@/lib/connectors/locate'
 import { appendNoteLogEntry, toDateString } from './shared/noteLog'
 import type { ContextPrincipal, WriteResult } from './shared/contextTypes'
 import type { NoteMeta, NoteRevisionOrigin, RawNote, References } from './shared/types'
@@ -437,6 +439,78 @@ export async function writeDenialFull(
   return null
 }
 
+/**
+ * The gate that follows the DECLARATION rather than the path
+ * (lib/notes/shared/configKinds.ts). A note that says `type: connector` or
+ * `type: model` is machine configuration wherever it was filed, so only a
+ * space admin writes, edits, moves or deletes it — the note it is becoming
+ * (`next`) and the note already at `path` (`current`) are both asked, which is
+ * what stops a member from stripping the type off a connector in a folder
+ * they may otherwise edit, or from minting one there.
+ *
+ * For a connector two more things hold: it sits where a connector may
+ * (`connectorHomeDenial` — `connectors/<name>.md` or a folder of the space's
+ * own), and its name is unique in the context, because the name is what a
+ * brief's `connectors:` line, a secret suffix and the node id are cut from.
+ * `movingFrom` is the note's own path during a move, so it is not its own
+ * clash.
+ *
+ * `current` may be passed by a caller that has already read the note; left
+ * out, it is read here. Personal contexts hold no gate.
+ */
+export async function configKindDenial(
+  p: ContextPrincipal,
+  context: Context,
+  path: string,
+  next: string | null,
+  opts: { current?: string | null; movingFrom?: string } = {},
+): Promise<string | null> {
+  if (!isShared(context)) return null
+  const admin = p.system || principalIsSuperAdmin(p)
+  const nextKind = configKindOfContent(next)
+  const current = opts.current === undefined ? await store.readNoteOrNull(context, opts.movingFrom ?? path) : opts.current
+  const currentKind = configKindOfContent(current)
+  const kind: ConfigKind | null = nextKind ?? currentKind
+  if (!kind) return null
+  if (!admin) return configKindWriteDenial(kind)
+  if (kind !== 'connector' || (nextKind === null && !opts.movingFrom)) return null
+  const home = connectorHomeDenial(path)
+  if (home) return home
+  const name = connectorNameOfPath(path)
+  if (!name) return null
+  // The name is the identity — a brief's `connectors:` line, the stored
+  // connections and the secrets all key on it — so a connector changes folder,
+  // never file name.
+  if (opts.movingFrom && connectorNameOfPath(opts.movingFrom) !== name) {
+    return 'A connector’s name is its file name, and everything that uses it keys on that name — move it between folders, or connect the service again under the new name.'
+  }
+  const held = await connectorNotePathIn(context, name)
+  if (held && held !== path && held !== opts.movingFrom) {
+    return `A connector named "${name}" already exists at ${held} — a connector's name is its file name, and one space holds one of each.`
+  }
+  return null
+}
+
+/**
+ * Why a non-admin may not rename or delete `folder`, or null: it holds a
+ * connector or a model, which move and go with it, and those are the admin's
+ * (see configKindDenial). Nothing for an admin, or for a folder of ordinary
+ * notes.
+ */
+export async function folderConfigKindDenial(p: ContextPrincipal, context: Context, folder: string): Promise<string | null> {
+  if (!isShared(context) || p.system || principalIsSuperAdmin(p)) return null
+  const prefix = folder ? `${folder}/` : ''
+  const raws = await store.listRaw(context)
+  for (const raw of raws) {
+    if (prefix && !raw.path.startsWith(prefix)) continue
+    const kind = configKindOfContent(raw.content)
+    if (!kind) continue
+    const what = kind === 'connector' ? 'connector' : 'model'
+    return `"${folder}" holds the ${what} ${raw.path} — only a space admin can move or delete a folder with one in it.`
+  }
+  return null
+}
+
 /** Gated whole-note write, recording revision history. */
 export async function writeGated(
   p: ContextPrincipal,
@@ -446,7 +520,10 @@ export async function writeGated(
   origin: Parameters<typeof store.writeNote>[4] = 'edit',
   model?: string,
 ): Promise<WriteResult> {
-  const denial = (await writeDenialFull(p, context, path)) ?? lockedDenial(p, context, path, origin, model)
+  const denial =
+    (await writeDenialFull(p, context, path)) ??
+    lockedDenial(p, context, path, origin, model) ??
+    (await configKindDenial(p, context, path, content))
   if (denial) return { status: 'denied', reason: denial }
   const runsAsDenial = activationRunsAsDenial(p, context, path, content)
   if (runsAsDenial) return { status: 'denied', reason: runsAsDenial }
@@ -487,6 +564,8 @@ export async function appendLogGated(
   const denial = (await writeDenialFull(p, context, path)) ?? lockedDenial(p, context, path, origin, model)
   if (denial) return { status: 'denied', reason: denial }
   const current = await store.readNote(context, path)
+  const declared = await configKindDenial(p, context, path, null, { current })
+  if (declared) return { status: 'denied', reason: declared }
   const role =
     origin === 'edit' || origin === 'restore'
       ? roleLabel(p, context, path)
@@ -534,6 +613,10 @@ export async function moveGated(
   // tool was switched off, and gating `from` would trap it there.
   const namespace = await namespaceFeatureDenial(context, to)
   if (namespace) return { status: 'denied', reason: namespace }
+  // A connector or model moves as what it is: an admin's, to a place a
+  // connector may sit, under a name the context does not already hold.
+  const declared = await configKindDenial(p, context, to, null, { movingFrom: from })
+  if (declared) return { status: 'denied', reason: declared }
   const moved = await store.renameNote(context, from, to, actorOf(p), { origin, model })
   await rewriteInboundLinks(context, from, moved)
   if (isShared(context)) {

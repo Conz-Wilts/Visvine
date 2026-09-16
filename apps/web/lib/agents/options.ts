@@ -16,7 +16,7 @@
 import prisma from '@/lib/prisma'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { isConnectorEnabled } from '@/lib/connectors/config'
-import { isLegacyModelConnector } from '@/lib/models/config'
+import { connectorNoteRows } from '@/lib/connectors/locate'
 import { isAgentBriefPath, agentNameOfPath } from '@/lib/notes/entities'
 import { AGENT_TOOL_OPTIONS } from './config'
 import { defaultModelOf, noModelReason, spaceModels } from './spaceModels'
@@ -63,33 +63,25 @@ export interface AgentOptions {
 }
 
 export async function agentOptions(spaceId: string): Promise<AgentOptions> {
-  const [models, notes, sharedAgents] = await Promise.all([
+  const [models, connectorNotes, notes, sharedAgents] = await Promise.all([
     spaceModels(spaceId),
+    // Wherever the space filed them (lib/connectors/locate.ts).
+    connectorNoteRows({ spaceId, ownerKey: SHARED_OWNER_KEY }),
     prisma.contextNote.findMany({
-      where: {
-        spaceId,
-        ownerKey: SHARED_OWNER_KEY,
-        deletedAt: null,
-        OR: [{ path: { startsWith: 'connectors/', endsWith: '.md' } }, { path: { startsWith: 'agents/', endsWith: '.md' } }],
-      },
-      select: { path: true, content: true },
+      where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { startsWith: 'agents/', endsWith: '.md' } },
+      select: { path: true },
       orderBy: { path: 'asc' },
     }),
     sharedParentAgents(spaceId),
   ])
 
-  const connectors: AgentOptions['connectors'] = []
+  const connectors: AgentOptions['connectors'] = connectorNotes.map((row) => ({
+    name: row.name,
+    enabled: isConnectorEnabled(parseFrontmatter(row.content)),
+  }))
   const agents: string[] = []
   for (const row of notes) {
-    if (row.path.startsWith('connectors/')) {
-      const fm = parseFrontmatter(row.content)
-      // The pre-models/ shape of a model is a model, not a connector.
-      if (fm.type !== 'connector' || isLegacyModelConnector(fm)) continue
-      connectors.push({
-        name: row.path.slice('connectors/'.length, -'.md'.length),
-        enabled: isConnectorEnabled(fm),
-      })
-    } else if (isAgentBriefPath(row.path)) {
+    if (isAgentBriefPath(row.path)) {
       const name = agentNameOfPath(row.path)
       if (name && !agents.includes(name)) agents.push(name)
     }

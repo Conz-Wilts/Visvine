@@ -50,6 +50,10 @@ export interface TreeNode {
   path: string // context-relative POSIX path
   kind: 'folder' | 'note'
   title?: string // display title for notes
+  // Set on a note that declares a config kind (`type: connector` / `type:
+  // model`, lib/notes/shared/configKinds.ts) wherever it sits, so the sidebar
+  // can offer the moves a connector is allowed and not the ones it is not.
+  declares?: 'connector' | 'model'
   children?: TreeNode[]
   // Set on the folder a sub-space is read through (`subspaces/<id>`): the id
   // of that space. Everything under it is that space's own context, rebased

@@ -185,6 +185,9 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     dir: 'connectors',
     kind: 'connector',
     // A connector is a record in the directory whose note the console edits.
+    // This folder is where a new one is written; an admin may file it in a
+    // folder of the space's own afterwards, and it stays the connector, because
+    // a connector is what a note declares (./configKinds.ts).
     feature: 'directory',
     appearance: 'standing',
     writes: 'admin',

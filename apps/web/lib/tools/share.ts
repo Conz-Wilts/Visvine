@@ -23,6 +23,8 @@ import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { parentShare } from '@/lib/notes/federation'
+import { connectorNoteRows } from '@/lib/connectors/locate'
+import { connectorNameOfPath, isConnectorNoteAt } from '@/lib/notes/shared/configKinds'
 import { reachesRoom, shareTargets } from '@/lib/spaces/subspaces'
 import { parentOfSubspace } from '@/lib/spaces/subspaceAccess'
 import { readSpaceConfig, updateSpaceConfig } from '@/lib/spaces/spaceConfig'
@@ -81,22 +83,16 @@ export function sharedInstallPlan(input: {
 async function roomAvailability(roomId: string): Promise<SpaceAvailability> {
   const context = { spaceId: roomId, ownerKey: SHARED_OWNER_KEY }
   const [connectorRows, agentRows, config, shared] = await Promise.all([
-    prisma.contextNote.findMany({
-      where: { spaceId: roomId, ownerKey: SHARED_OWNER_KEY, deletedAt: null, path: { startsWith: 'connectors/', endsWith: '.md' } },
-      select: { path: true },
-    }),
+    connectorNoteRows(context),
     prisma.agentState.findMany({ where: { spaceId: roomId }, select: { name: true } }),
     readSpaceConfig(roomId),
     parentShare(context),
   ])
   const connectors = new Set<string>()
-  for (const row of connectorRows) {
-    const m = /^connectors\/([^/]+)\.md$/.exec(row.path)
-    if (m && m[1] !== 'index') connectors.add(m[1])
-  }
+  for (const row of connectorRows) connectors.add(row.name)
   for (const note of shared?.notes ?? []) {
-    const m = /^connectors\/([^/]+)\.md$/.exec(note.path)
-    if (m) connectors.add(m[1])
+    const name = connectorNameOfPath(note.path)
+    if (name && isConnectorNoteAt(note.path, note.content)) connectors.add(name)
   }
   const stored = (config?.nodeTypes ?? []) as NodeTypeConfig[]
   const types = new Set<string>()

@@ -3,6 +3,7 @@
 // Link extraction follows the OKF (Open Knowledge Format) v0.1 spec — notes
 // link to each other via standard markdown links, not [[wikilinks]] or #tags.
 
+import { declaredConfigKind } from './configKinds'
 import {
   parseFrontmatter,
   splitFrontmatter,
@@ -134,11 +135,13 @@ export function buildTree(metas: NoteMeta[]): TreeNode {
 
   for (const meta of [...metas].sort((a, b) => a.path.localeCompare(b.path))) {
     const parent = ensureFolder(meta.folder)
+    const declares = declaredConfigKind(meta.frontmatter)
     parent.children!.push({
       name: baseName(meta.path),
       path: meta.path,
       kind: 'note',
-      title: meta.title
+      title: meta.title,
+      ...(declares ? { declares } : {}),
     })
   }
 

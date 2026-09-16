@@ -207,9 +207,13 @@ function idSlug(id: string): string {
 // as an alias, because some other note may legitimately live there.
 //
 // Only the record kinds adopt. The config kinds (connector, model, agent,
-// tool, section, channel) are machine configuration read out of fixed folders
-// under an admin-only write gate, and a note anywhere that could mint one is a
-// way around that gate, not a convenience.
+// tool, section, channel) are machine configuration under an admin-only write
+// gate, and a note anywhere that could mint one is a way around that gate, not
+// a convenience. A connector is the one exception, and it is not an adoption:
+// the gate itself follows the declaration (lib/notes/shared/configKinds.ts,
+// contextService.configKindDenial), so a `type: connector` note in a folder of
+// the space's own is admin-written wherever it sits, and its node keeps the
+// connector's own pointer (relocatedConnectorPath) rather than an adoption.
 const ADOPTABLE_ENTITY_KINDS: ReadonlySet<EntityKind> = new Set<EntityKind>([
   'person',
   'space',
@@ -237,6 +241,23 @@ export function adoptedNotePath(node: EntityNodeLike): string | null {
   // A pointer that names a path in an entity namespace is the lazy-kind
   // pointer, not an adoption — entityNotePath reads it as before.
   return parseEntityHref(raw) ? null : raw
+}
+
+/**
+ * A connector's note when it was filed outside `connectors/` — the pointer
+ * every connector node carries (`metadata.notePath`), read as the note's
+ * address only when it is not the home namespace's own shape. A connector is
+ * what a note DECLARES (lib/notes/shared/configKinds.ts), so a space may keep
+ * `teams/growth/hubspot.md`; the node then answers to that path and to
+ * nothing under `connectors/`. Null for a connector at home and for every
+ * other kind.
+ */
+function relocatedConnectorPath(node: EntityNodeLike): string | null {
+  if (entityKindOf(node.type) !== 'connector') return null
+  const pointer = node.metadata?.notePath
+  if (typeof pointer !== 'string' || !pointer) return null
+  const raw = pointer.startsWith('/') ? pointer.slice(1) : pointer
+  return entityKindOfDir(raw) === 'connector' ? null : raw
 }
 
 // The flat form: person → people/<slug>.md, space → spaces/<slug>.md,
@@ -288,6 +309,8 @@ export function entityNotePath(node: EntityNodeLike): string | null {
   // names nothing.
   const adopted = adoptedNotePath(node)
   if (adopted) return adopted
+  const relocated = relocatedConnectorPath(node)
+  if (relocated) return relocated
   const index = entityIndexPathOf(node)
   if (isFolderOnlyEntityKind(kind)) return index
   const pointer = node.metadata?.notePath
@@ -309,6 +332,9 @@ export function entityNotePaths(node: EntityNodeLike): string[] {
   // derived people/<slug>.md would claim a path another note may hold.
   const adopted = adoptedNotePath(node)
   if (adopted) return [adopted]
+  // So does a connector filed outside `connectors/`: its home path is free.
+  const relocated = relocatedConnectorPath(node)
+  if (relocated) return [relocated]
   if (!isFolderOnlyEntityKind(kind) || FLAT_ALIAS_ENTITY_KINDS.has(kind)) return [flat, index]
   return [index]
 }
