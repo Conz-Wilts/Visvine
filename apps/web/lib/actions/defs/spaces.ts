@@ -15,6 +15,7 @@
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import { defineAction, ActionError } from '@/lib/actions/types'
+import { SPACE_DESCRIPTION_MAX_WORDS, descriptionDenial } from '@/lib/spaces/shared/description'
 import { isAdmin } from '@/lib/auth'
 import { provisionSpace } from '@/lib/spaces/provision'
 
@@ -46,7 +47,11 @@ export const SPACE_ACTIONS = [
       'nothing speculatively, since a space cannot be deleted through an action.',
     input: {
       name: z.string().trim().min(1).max(120).describe('The space\'s name — also the basis of its id'),
-      description: z.string().max(2000).optional().describe('One or two sentences on what the space is for'),
+      description: z
+        .string()
+        .refine((text) => !descriptionDenial(text), `At most ${SPACE_DESCRIPTION_MAX_WORDS} words`)
+        .optional()
+        .describe(`One or two sentences on what the space is for, at most ${SPACE_DESCRIPTION_MAX_WORDS} words`),
       visibility: z
         .enum(['private', 'public'])
         .optional()

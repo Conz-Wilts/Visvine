@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
+import { descriptionDenial } from '@/lib/spaces/shared/description';
 import { mergeFeatureConfig } from '@/lib/featureAccess';
 import type { SpaceDesignConfig } from '@/lib/types';
 import {
@@ -69,6 +70,8 @@ export async function PUT(
   if (name !== undefined && !name.trim()) {
     return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
   }
+  const descriptionError = typeof description === 'string' ? descriptionDenial(description) : null;
+  if (descriptionError) return NextResponse.json({ error: descriptionError }, { status: 400 });
 
 
   if (visibility !== undefined && visibility !== 'public' && visibility !== 'private') {

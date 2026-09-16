@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/session';
 import { handleApiError } from '@/lib/api/route';
 import { provisionSpace } from '@/lib/spaces/provision';
 import { isSpaceVisibility } from '@/lib/spaces/publicName';
+import { descriptionDenial } from '@/lib/spaces/shared/description';
 import { isAdmin } from '@/lib/auth';
 import { DOORS, LISTINGS, type Door, type Listing } from '@/lib/spaces/subspaces';
 
@@ -40,6 +41,8 @@ export async function POST(request: NextRequest) {
     if (!name) {
       return NextResponse.json({ error: 'Space name is required' }, { status: 400 });
     }
+    const descriptionError = descriptionDenial(description);
+    if (descriptionError) return NextResponse.json({ error: descriptionError }, { status: 400 });
     if (parentId && !(await isAdmin(session.userId, parentId, session.email))) {
       return NextResponse.json({ error: 'Only an admin of the space can create a sub-space inside it' }, { status: 403 });
     }

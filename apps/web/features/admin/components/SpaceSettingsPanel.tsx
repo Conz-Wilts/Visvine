@@ -12,6 +12,7 @@ import { useConsoleAction, useConsoleAutosave } from '@/features/admin/component
 import { FetchJsonError, fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import SpaceImageUpload from '@/features/spaces/components/SpaceImageUpload';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
+import { SPACE_DESCRIPTION_MAX_WORDS, clampWords, countWords } from '@/lib/spaces/shared/description';
 import RegionAutocomplete from '@/features/spaces/components/RegionAutocomplete';
 import SubspacesSection from '@/features/spaces/components/SubspacesSection';
 import RoomDials from '@/features/spaces/components/RoomDials';
@@ -215,16 +216,27 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
               />
             </Field>
             <Field label="Description">
-              <Textarea
-                rows={3}
-                value={description}
-                onChange={e => {
-                  setDescription(e.target.value);
-                  queue({ description: e.target.value }, { debounceMs: 800 });
-                }}
-                onBlur={flush}
-                placeholder="What brings this space together?"
-              />
+              <div className="relative">
+                <Textarea
+                  rows={3}
+                  value={description}
+                  onChange={e => {
+                    const next = clampWords(e.target.value);
+                    setDescription(next);
+                    queue({ description: next }, { debounceMs: 800 });
+                  }}
+                  onBlur={flush}
+                  className="pb-7"
+                />
+                <span
+                  aria-live="polite"
+                  className={`pointer-events-none absolute bottom-2 right-3 text-xs tabular-nums ${
+                    countWords(description) >= SPACE_DESCRIPTION_MAX_WORDS ? 'text-red-500' : 'text-text-muted'
+                  }`}
+                >
+                  {countWords(description)}/{SPACE_DESCRIPTION_MAX_WORDS} words
+                </span>
+              </div>
             </Field>
             <Field label="Location">
               <RegionAutocomplete
