@@ -22,6 +22,8 @@ import { useContextTree } from '../lib/useContextTree'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import SearchInput from '@/components/ui/SearchInput'
+import SpaceAvatar from '@/features/spaces/components/SpaceAvatar'
+import { spaceMark } from '@/lib/spaces/subspaces'
 import { NoteSidebar } from './NoteSidebar'
 import { SharePanel } from './SharePanel'
 import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext'
@@ -68,7 +70,7 @@ export function ContextSidebar({
   focusPath?: string | null
 }) {
   const router = useRouter()
-  const { currentSpace, setCurrentSpace } = useSpace()
+  const { currentSpace, setCurrentSpace, spaces } = useSpace()
   // The toolbar tray only centres over the note column, so the tree climbs
   // past it to sit flush under the tab row whenever it's open.
   const trayOpen = !!usePaneChromeState().chrome?.attachedOpen
@@ -179,7 +181,21 @@ export function ContextSidebar({
               onSelect={handleSelect}
               onDeleteNote={ctx.handleDeleteNote}
               bare
-              root={ctx.rootFolder}
+              // The tree's top row is the SPACE, so it wears the space's mark
+              // rather than a folder glyph — the same picture the rail's head
+              // shows (a sub-space wears its parent's, spaceMark), at the 16px
+              // the tree's other glyphs draw at.
+              root={{
+                ...ctx.rootFolder,
+                icon: currentSpace ? (
+                  <SpaceAvatar
+                    {...spaceMark(currentSpace, spaces)}
+                    size="xs"
+                    rounded="rounded-[4px]"
+                    className="shrink-0"
+                  />
+                ) : undefined,
+              }}
               storageKey={spaceId}
               query={query}
               // The search focus (and, on a profile, the open note) only PEEKS

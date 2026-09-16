@@ -5,7 +5,7 @@ import Avatar from '@/components/ui/Avatar';
 interface SpaceAvatarProps {
   name: string;
   imageUrl?: string;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   /** Tailwind rounding utility; override to keep the corner ratio consistent at custom sizes. */
   rounded?: string;
   className?: string;
@@ -14,6 +14,9 @@ interface SpaceAvatarProps {
 // Space avatars use their own size scale (with matching initials text sizes),
 // so they pass it through ui/Avatar's sizeClassName override.
 const SIZE_CLASSES = {
+  // `xs` is the 16px glyph size the trees draw at, so a space can stand in a
+  // row beside folder and entity glyphs without setting the row's height.
+  xs: 'w-4 h-4 text-[8px]',
   sm: 'w-6 h-6 text-xs',
   md: 'w-8 h-8 text-sm',
   lg: 'w-12 h-12 text-lg',
@@ -22,6 +25,7 @@ const SIZE_CLASSES = {
 
 /** Intrinsic px matching SIZE_CLASSES, forwarded so next/image knows the size. */
 const SIZE_PX: Record<keyof typeof SIZE_CLASSES, number> = {
+  xs: 16,
   sm: 24,
   md: 32,
   lg: 48,
