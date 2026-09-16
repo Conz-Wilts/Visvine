@@ -18,6 +18,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Modal, Input, Button } from '@/components/ui';
+import { XIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { ensureRootIndexNote } from '@/features/notes/lib/rootIndex';
 import { fetchJsonBody } from '@/lib/fetchJson';
@@ -75,12 +76,32 @@ export default function NewSpaceDialog({ parent, onClose }: {
   };
 
   return (
-    <Modal
-      onClose={onClose}
-      title={parent ? `New sub-space of ${parent.name}` : 'New space'}
-      size="sm"
-      footer={
-        <div className="flex justify-end gap-2 border-t border-border-subtle px-6 py-4">
+    <Modal onClose={onClose} size="sm" ariaLabel={parent ? 'New sub-space' : 'New space'}>
+      {/* One field and two buttons: no header rule, no footer rule — a line
+          only earns its place when it separates things that scroll apart. */}
+      <div className="relative flex flex-col items-center gap-4 px-6 pb-6 pt-8 text-center">
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-3 top-3 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+        >
+          <XIcon className="h-4 w-4" />
+        </button>
+        <h2 className="text-base font-semibold text-text-primary">
+          {parent ? `New sub-space of ${parent.name}` : 'New space'}
+        </h2>
+        {/* The placeholder is the label — one field needs no heading above it. */}
+        <Input
+          autoFocus
+          className="text-center"
+          aria-label={parent ? 'Sub-space name' : 'Space name'}
+          placeholder={parent ? 'Sub-space name' : 'Space name'}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+        />
+        {error && <div className="text-sm text-red-700">{error}</div>}
+        <div className="flex justify-center gap-2">
           <Button variant="ghost" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
@@ -94,21 +115,6 @@ export default function NewSpaceDialog({ parent, onClose }: {
             Create
           </Button>
         </div>
-      }
-    >
-      <div className="flex flex-col gap-4 px-6 py-5">
-        {/* The placeholder is the label — one field needs no heading above it. */}
-        <Input
-          autoFocus
-          aria-label={parent ? 'Sub-space name' : 'Space name'}
-          placeholder={parent ? 'Sub-space name' : 'Space name'}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-        />
-        {error && (
-          <div className="border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">{error}</div>
-        )}
       </div>
     </Modal>
   );
