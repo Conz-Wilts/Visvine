@@ -64,6 +64,11 @@ export interface TreeNode {
   // rows do. Each write is still judged in the sub-space, per path
   // (lib/notes/federation.ts#writeTarget). Absent: read-only here.
   writable?: boolean
+  // Set on a row the tree DRAWS but nothing stores: `main`, the tier holding
+  // the space's own context under the space row (lib/notes/shared/rootTiers.ts).
+  // Its path is reserved, so it is never dragged, dropped on, shared or
+  // deleted, and its index note is the context root's.
+  drawn?: 'main'
   // Set on the two roots another space's context is read through — the
   // `Sub-spaces` folder and `parent/`. Nothing of this space's own is stored
   // under either, so the tree draws them as their own tier, after every folder

@@ -93,13 +93,24 @@ rail. `visibility` is `public | private`. Creation always goes through
   the `create_space` action with `parent_id`); a
   sub-space cannot hold sub-spaces (`subspaces.ts#parentDenial`); sibling names
   are unique (`spaces_sibling_name_unique`).
-- **Another space's context is its own TIER in the tree, never a folder of
-  this one's.** `Sub-spaces` and `parent/` are stamped `federated`, which
-  sorts them after every folder the space actually holds
-  (`context.ts#sortTree`) and draws one hairline above the first of them
-  (`NoteSidebar#TierSeam`). A room's row offers **Open <room>** as well as the
-  folder, because expanding it (reading the room's context from here) and
-  standing in it are two different acts that otherwise look identical.
+- **The tree's top is the space, then `Main`, then the rooms** —
+  `lib/notes/shared/rootTiers.ts#tierRoot`, pure, applied to the DRAWN tree
+  last (after the search prune), so every read of a real path still sees the
+  tree the server sent. `Main` holds the space's own context and stands for the
+  context root: its path is the reserved `:main:` (a `:` prefix is not a note
+  path, the trick `TRASH_PATH` uses), the root's `index.md` folds into its row,
+  and `drawn: 'main'` is what keeps it out of drag, drop, Share and Delete. A
+  space with no rooms has one tier and gets no `Main` row, and a `Sub-spaces`
+  folder a space has PLACED under a folder of its own stays put. Nothing moves:
+  a room's notes are still addressed `subspaces/<id>/`.
+- **Another space's context is its own TIER, never a folder of this one's.**
+  A room row and `parent/` are stamped `federated`, which sorts them after
+  every folder the space holds (`context.ts#sortTree`) and draws one hairline
+  above the first of them (`NoteSidebar#TierSeam`). A room's row offers **Open
+  <room>**, because expanding it (reading the room's context from here) and
+  standing in it are two different acts that otherwise look identical — and in
+  the tree a room is READ ONLY (`writableSpaces` is empty by construction; the
+  write-hop through `federation.ts#writeTarget` still serves API callers).
 - **A listed sub-space's context flows up** as the folder `subspaces/<id>/`,
   federated at read time by `lib/notes/federation.ts` (tree, index, single
   read, search each have a federated form). **Through it you are who you are

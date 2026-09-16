@@ -32,6 +32,7 @@ import {
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
 import { entityKindOf, isEntityFolderIndex } from '@/lib/notes/entities'
 import { filterTree, folderPathsIn } from '@/lib/notes/shared/context'
+import { tierRoot } from '@/lib/notes/shared/rootTiers'
 import {
   TRASH_PATH,
   treeScrollMemory as scrollMemory,
@@ -239,7 +240,12 @@ export function NoteSidebar({
     return map
   }, [notes])
 
-  // A grafted sub-space folder sits at the top level; the stamp is on it alone.
+  // The rooms whose rows take this space's edit affordances. Read off the
+  // `writable` stamp, and read at the top level ONLY: a room's folder is a
+  // child of `Sub-spaces`, so today this set is empty and every row of another
+  // space's context is read-only here. That is the rule the tree means —
+  // you read a room here and work in it there ("Open <room>" on its row) —
+  // and this is where to look when it should stop being.
   const writableSpaces = useMemo(
     () => new Set((tree.children ?? []).filter((c) => c.space && c.writable).map((c) => c.space!)),
     [tree],
@@ -282,7 +288,14 @@ export function NoteSidebar({
 
   // Searching is a peek, like the reveal: it never writes the saved expansion,
   // so clearing the box puts the tree back exactly as the user left it.
-  const shownTree = useMemo(() => (searching ? filterTree(tree, query) : tree), [tree, query, searching])
+  // Tiered LAST, over whatever the search left: `Main` and the rooms are how
+  // the root is drawn, not what the tree holds, so every read of a real path —
+  // the search prune, the drag rules, the Move to... list — still sees the
+  // tree the server sent (lib/notes/shared/rootTiers.ts).
+  const shownTree = useMemo(
+    () => tierRoot(searching ? filterTree(tree, query) : tree),
+    [tree, query, searching],
+  )
   const openPaths = useMemo(
     () => (searching ? folderPathsIn(shownTree) : effectiveOpenPaths),
     [searching, shownTree, effectiveOpenPaths],
@@ -627,7 +640,7 @@ function Tree({
   // the index (clicking the folder name opens it; see FolderRow). The context
   // root included: its index.md folds into the root folder row, so the
   // space reads as the parent folder of everything below it.
-  const ownIndex = node.path ? `${node.path}/index.md` : 'index.md'
+  const ownIndex = node.path && node.drawn !== 'main' ? `${node.path}/index.md` : 'index.md'
   const children = (node.children ?? []).filter(
     (c) => !(c.kind === 'note' && c.path === ownIndex),
   )
@@ -735,6 +748,10 @@ function FolderRow(props: {
   // this row only reads it and reports toggles.
   const open = props.openPaths.has(props.node.path)
   const setOpen = () => props.onToggleFolder(props.node.path, open)
+  // `Main` is drawn, not stored: it stands for the context root, so the space's
+  // home note folds into its row the way it folded into the root's — and its
+  // reserved path is never dragged, dropped on, shared or deleted.
+  const drawnOnly = props.node.drawn === 'main'
   // Grants live at any depth now, so every folder row can carry a badge and a
   // Share affordance (keyed by the folder's full path).
   const badge = props.folderBadges?.get(props.node.path)
@@ -746,7 +763,7 @@ function FolderRow(props: {
   // and carries no menu that would try.
   const federated = isFederatedPath(props.node.path)
   const readOnly = readOnlyHere(props.node.path, useContext(TreeWritableSpaces))
-  const showAccess = !!props.onFolderAccess && !federated
+  const showAccess = !!props.onFolderAccess && !federated && !drawnOnly
   // Folder-note behaviour: when the folder has an index.md (hidden as a child
   // row by Tree), the folder row IS that note â€” clicking the name opens it and
   // selection highlights here. The chevron keeps expand/collapse to itself.
@@ -755,7 +772,7 @@ function FolderRow(props: {
   // The folder's display name: an explicit label (the context root's), else the
   // title its index note declares, else the path segment.
   const folderLabel = props.label ?? props.node.title ?? props.node.name
-  const indexPath = props.node.path ? `${props.node.path}/index.md` : 'index.md'
+  const indexPath = props.node.path && !drawnOnly ? `${props.node.path}/index.md` : 'index.md'
   const hasIndex = (props.node.children ?? []).some((c) => c.kind === 'note' && c.path === indexPath)
   const selected = hasIndex && props.selectedPath === indexPath
   // A directory entity is a folder from its first write, so most people and
@@ -790,11 +807,12 @@ function FolderRow(props: {
   const draggable =
     !!drag &&
     !!props.node.path &&
+    !drawnOnly &&
     (placeable
       ? drag.canPlace && (placeable.space === null || !readOnly)
       : !readOnly && isMovable(props.node.path, 'folder'))
   const isDragged = drag?.dragging?.path === props.node.path
-  const accepts = !!drag && acceptsDrop(drag, props.node.path)
+  const accepts = !!drag && !drawnOnly && acceptsDrop(drag, props.node.path)
   const isDropTarget = accepts && drag?.dropFolder === props.node.path
   const structuralIcon = structuralIconOf(props.node.path)
   // Hovering a shut folder mid-drag springs it open, so a note can be dropped
@@ -959,7 +977,7 @@ function FolderRow(props: {
             // built-in folder: agents/, connectors/, tools/, people/ and the
             // rest are structure the runtime resolves against, so the row
             // offers no way to remove one (deleteFolderDenial).
-            ...(props.onDeleteFolder && !readOnly && !deleteFolderDenial(props.node.path)
+            ...(props.onDeleteFolder && !readOnly && !drawnOnly && !deleteFolderDenial(props.node.path)
               ? [
                   {
                     label: 'Delete',

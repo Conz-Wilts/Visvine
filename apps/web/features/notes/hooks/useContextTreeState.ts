@@ -25,8 +25,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ancestorFolders } from '@/lib/notes/shared/indexNote'
+import { MAIN_PATH } from '@/lib/notes/shared/rootTiers'
+import { isFederatedPath } from '@/lib/spaces/subspaces'
 
 const ROOT_PATH = ''
+
+/** What a tree opens at: the space row, and the `Main` tier under it when the
+ *  space has rooms to draw beside it (lib/notes/shared/rootTiers.ts). Main is
+ *  where the space's own folders are, so leaving it shut would open the tree
+ *  on nothing. Harmless when there is no Main row — the key matches nothing. */
+const INITIAL_OPEN = [ROOT_PATH, MAIN_PATH]
 
 // Per-space expansion for the current visit. A module-level map, not
 // localStorage and not component state: the tree re-mounts on every navigation
@@ -54,14 +62,18 @@ export function resetContextTreeState(): void {
 export const TRASH_PATH = ':trash:'
 
 /** Every folder on the way down to `path`, root row included:
- *  'people/acme/index.md' → ['', 'people', 'people/acme']. */
+ *  'people/acme/index.md' → ['', ':main:', 'people', 'people/acme'].
+ *  A path of the space's OWN is drawn inside `Main`, so a reveal that does not
+ *  open it stops one row short of what it was revealing. Another space's
+ *  context is drawn beside Main, never in it. */
 function ancestorChain(path: string): string[] {
-  return [ROOT_PATH, ...ancestorFolders(path)]
+  const tier = isFederatedPath(path) ? [] : [MAIN_PATH]
+  return [ROOT_PATH, ...tier, ...ancestorFolders(path)]
 }
 
 function readOpenPaths(storageKey: string | null): Set<string> {
-  if (!storageKey) return new Set([ROOT_PATH])
-  return new Set(visitOpen.get(storageKey) ?? [ROOT_PATH])
+  if (!storageKey) return new Set(INITIAL_OPEN)
+  return new Set(visitOpen.get(storageKey) ?? INITIAL_OPEN)
 }
 
 export interface ContextTreeState {

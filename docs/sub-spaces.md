@@ -70,6 +70,24 @@ under the space, and the folder is drawn only when there is a room to draw
 (`pruneEmptySubspacesFolder`). A room that does not flow here is not drawn at
 all.**
 
+The tree's top is drawn in tiers (`lib/notes/shared/rootTiers.ts#tierRoot`):
+
+```
+Visvine          the space — the root row
+  Main           everything this space holds, its own context
+  Finance        a room, read into this tree
+  HR
+  Operations
+```
+
+`Main` is drawn, never stored. It carries the reserved path `:main:` and
+stands for the context root, so the space's own `index.md` folds into its row
+exactly as it folded into the root's; `drawn: 'main'` keeps it out of drag,
+drop, Share and Delete. A space with no rooms has one tier and gets no `Main`
+row. `tierRoot` runs on the DRAWN tree, after the search prune — every read of
+a real path (the drag rules, the Move to… list, placement) still sees the tree
+the server sent, and no note's address changes.
+
 The `Sub-spaces` folder and `parent/` are stamped `federated`, and that stamp
 is a TIER: `context.ts#sortTree` puts them after every folder the space
 actually holds, and `NoteSidebar#TierSeam` draws one hairline above the first
