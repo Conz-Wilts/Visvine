@@ -705,9 +705,23 @@ function Tree({
 }
 
 /** The hairline between this space's own context and the spaces read into it.
- *  Sits in the guide gutter's own column so it starts where the rows do. */
+ *
+ *  Built like a row rather than as a rule between rows: the guide column first,
+ *  carrying its own piece of the vertical stroke, then the hairline filling the
+ *  rest of the width. Drawn as a plain margin it broke the tree's vertical line
+ *  in two and stopped short of the panel edge — the seam marks a tier, and a
+ *  tier boundary crossing the branch it divides is exactly wrong. */
 function TierSeam() {
-  return <div className="my-1 ml-[14px] border-t border-border-subtle" />
+  return (
+    <div className="relative h-2" aria-hidden="true">
+      {/* The branch's own stroke, continued through the seam: the guide column
+          is where GuideLine puts it on every row above and below. */}
+      <span className="tree-line absolute left-0 top-0 h-full w-px bg-border-default/70" />
+      {/* Meets that stroke on the left and bleeds past the panel on the right
+          (the scroll container clips it), so the hairline has no loose end. */}
+      <span className="absolute inset-x-0 top-1/2 -mr-[999px] h-px bg-border-subtle" />
+    </div>
+  )
 }
 
 /** What an open folder shows when it holds nothing: the guide ends in an
