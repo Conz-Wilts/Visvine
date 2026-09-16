@@ -59,3 +59,9 @@ test('the merge cleans a plural on the way in and drops a blank one', () => {
   assert.equal(Object.hasOwn(merged[0], 'plural'), false)
   assert.equal(merged[1].plural, 'Points of contact')
 })
+
+test('a built-in says its plural by rule, whatever a space stored', () => {
+  assert.equal(pluralTypeName('Person', [type('Person', 'Humans')]), 'People')
+  assert.equal(normalizeTypePlural('Humans', 'Person'), undefined)
+  assert.equal(normalizeTypePlural('Guidebooks', 'Playbook'), 'Guidebooks')
+})

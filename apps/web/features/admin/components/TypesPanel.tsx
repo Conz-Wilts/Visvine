@@ -766,14 +766,16 @@ export default function TypesPanel() {
             <TypeSettings
               typeName={liveType.name}
               typeColor={liveType.color}
-              plural={
+              // A built-in's plural is the rule's (lib/types/plural.ts); only a
+              // type the space made has a name the rule might get wrong.
+              plural={deletable ? (
                 <TypePlural
                   typeName={liveType.name}
                   plural={liveType.plural}
                   saving={saving}
                   onSave={next => handleUpdateTypePlural(liveType, next)}
                 />
-              }
+              ) : undefined}
               pageOwner={
                 noteScoped ? (
                   <TypePageOwner

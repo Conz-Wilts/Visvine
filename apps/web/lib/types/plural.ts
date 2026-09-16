@@ -7,12 +7,14 @@
 // the `## People` heading in a folder's index. Those two readings are the same
 // configured type, so nothing about them belongs in a second column a space has
 // to fill in: the plural is derived from the name by the English rule below, and
-// `NodeTypeConfig.plural` exists only for the name the rule gets wrong.
+// `NodeTypeConfig.plural` exists only for the name the rule gets wrong — on a
+// type a space made. A built-in's plural is the rule's, fixed: the rule says
+// every one of them right, so an override there could only ever be wrong.
 //
-// Pure and leaf (only a type import), so the index-note contract, the client
+// Pure (it reads only the type table), so the index-note contract, the client
 // components and the tests all read the one rule.
 
-import type { NodeTypeConfig } from './context';
+import { DEFAULT_NODE_TYPES, type NodeTypeConfig } from './context';
 
 /**
  * Types whose plural no rule reaches. Deliberately short: each row is a word
@@ -81,11 +83,18 @@ export function pluralizeTypeWord(name: string): string {
 export function pluralTypeName(name: string, nodeTypes?: NodeTypeConfig[]): string {
   const key = name.trim().toLowerCase();
   const stored = (nodeTypes ?? []).find((t) => t.name?.trim().toLowerCase() === key);
-  const declared = (stored?.plural ?? '').trim();
+  const declared = hasFixedPlural(name) ? '' : (stored?.plural ?? '').trim();
   if (declared) return declared;
   // Derived from the STORED spelling when there is one: a `?type=person` out of
   // a URL reads `People`, not `people`.
   return pluralizeTypeWord(stored?.name ?? name);
+}
+
+/** A built-in type says its plural by rule alone; only a type a space made
+ *  takes an override. */
+function hasFixedPlural(name: string): boolean {
+  const key = name.trim().toLowerCase();
+  return DEFAULT_NODE_TYPES.some((t) => t.name.toLowerCase() === key);
 }
 
 /** Longest a plural may be — it labels a tab, like the name it comes from. */
@@ -104,6 +113,7 @@ const PLURAL_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} \-&]*$/u;
  * always a usable one.
  */
 export function normalizeTypePlural(raw: string | null | undefined, name: string): string | undefined {
+  if (hasFixedPlural(name)) return undefined;
   const collapsed = (raw ?? '').trim().replace(/\s+/g, ' ').slice(0, MAX_PLURAL);
   if (!collapsed || !PLURAL_PATTERN.test(collapsed)) return undefined;
   if (collapsed.toLowerCase() === pluralizeTypeWord(name).toLowerCase()) return undefined;
