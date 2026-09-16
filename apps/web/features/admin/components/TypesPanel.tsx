@@ -690,7 +690,7 @@ export default function TypesPanel() {
   // included, is browsed there — so the types it owns are headed as what they
   // are: the ones the platform ships, set against the ones a member made.
   const sectionLabel = (f: (typeof FEATURES)[number]) =>
-    f.key === 'directory' ? 'Built-in types' : f.label;
+    f.key === 'directory' ? 'General types' : f.label;
   const toolLabels = new Map(FEATURES.map(f => [f.key, sectionLabel(f)]));
   // One bucket per tool, in the tool order the sidebar uses — the heading IS the
   // provenance, so a type never repeats its tool's name down the right edge.
