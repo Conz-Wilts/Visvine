@@ -9,7 +9,6 @@ import assert from 'node:assert/strict'
 import {
   CLEAN_FIX_KINDS,
   cleanScheduleDenial,
-  describeCleanSchedule,
   effectiveFixKinds,
   embedAfterCleanStatus,
   MAX_CLEANS_PER_TICK,
@@ -68,11 +67,6 @@ test('the next run is the next occurrence in the space zone, never a backfill', 
     nextCleanRunAt(settings, new Date('2026-03-01T00:00:00Z'), null).toISOString(),
     '2026-03-01T03:30:00.000Z',
   )
-})
-
-test('the schedule describes itself the same way everywhere', () => {
-  assert.equal(describeCleanSchedule({ hour: 3, minute: 30 }, 'Pacific/Auckland'), '3:30am each night (Pacific/Auckland)')
-  assert.equal(describeCleanSchedule({ hour: 0, minute: 0 }, null), '12:00am each night (UTC)')
 })
 
 test('embedding toggles default on, and a patch keeps what it did not send', () => {

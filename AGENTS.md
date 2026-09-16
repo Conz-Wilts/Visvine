@@ -69,6 +69,27 @@ scripts/               repo-level db/env tooling
 - Tests: `node --import tsx --test tests/*.test.ts`. Prefer the pure layer
   (`lib/notes/shared/*`, `lib/connectors/perimeter.ts`) over routes.
 
+## Design
+
+Clean, simple, intentional. **If a screen needs text to explain itself, the
+screen is wrong** — fix the design, don't caption it.
+
+- **Labels name, they don't explain.** One to three words: `Fixes`, `Semantic
+  search`, `Run now`. No section descriptions, no sentences under a checkbox,
+  no "(off = …)" in a label, no restating what a control already shows.
+- **A section's switch sits in its header**, beside its title — not as a
+  second labelled row underneath saying the same thing.
+- **Say only the exceptional.** No "No folder is frozen", "Nothing is
+  scheduled", "Nothing has run yet": an empty section is hidden, a normal state
+  is silent. A warning line appears only when something is actually wrong.
+- **State is data, joined by `·`**: `Runs as Ana · sees 73 of 73 notes · next
+  in 5h` — one muted line, not a paragraph per fact.
+- **How it works belongs in `docs/` and code comments**, never on the page.
+  The guarantees a feature keeps (gates, scope, what it never writes) are
+  enforced by the server; the UI does not recite them.
+- Surfaces are flat: hairline sections, no cards, tokens not `gray-*`, shadows
+  only on things that float.
+
 ## A space is a tenant, and may hold sub-spaces
 
 Every space is a `Space` row with its own context, members, aliases and tool

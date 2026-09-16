@@ -1,14 +1,8 @@
 'use client';
 
 // Console → Clean: the space's nightly clean — whether it runs, when, what it
-// is allowed to write, what it can actually reach, and what every pass did.
-//
-// The panel is deliberately blunt about REACH, because a clean is unattended
-// and acts as a person: it runs as the admin who turned it on, sees only what
-// they can read, writes only where they can write, never touches a folder
-// frozen for AI, and never leaves this space — a public sub-space's context is
-// read here but cleaned in the space that owns it. All four of those are stated
-// on the page rather than left to be discovered from a run that did nothing.
+// may write, whom it acts as, and what every pass did. Reach is one status
+// line; a frozen folder or a lapsed admin is the only reach worth a sentence.
 
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Input, SettingsSection, Skeleton } from '@/components/ui';
@@ -19,8 +13,6 @@ import { timeAgo } from '@/lib/date';
 import { useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
 import {
   CLEAN_FIX_KINDS,
-  describeCleanSchedule,
-  embedAfterCleanStatus,
   type CleanEmbedStatus,
   type CleanScheduleSettings,
 } from '@/lib/notes/shared/cleanSchedule';
@@ -85,81 +77,72 @@ function statusTone(status: string): string {
   return 'text-text-primary';
 }
 
-function embedLine(embed: RunRow['embed']): string {
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+function embedLine(embed: RunRow['embed']): string | null {
   switch (embed.status) {
-    case 'off':
-      return 'Embedding is off for this space.';
-    case 'no-key':
-      return 'Not embedded — the deployment has no embedding key.';
-    case 'skipped':
-      return 'Not embedded — embed after clean is off.';
     case 'failed':
       return `Embedding failed: ${embed.message ?? 'unknown error'}`;
+    case 'succeeded':
+      return `Embedded ${plural(embed.notes, 'note')}, ${plural(embed.chunks, 'chunk')}`;
     default:
-      return `Embedded ${embed.notes} note${embed.notes === 1 ? '' : 's'}, ${embed.chunks} chunk${embed.chunks === 1 ? '' : 's'}${
-        embed.sources ? `, ${embed.sources} source chunk${embed.sources === 1 ? '' : 's'}` : ''
-      }.${embed.message ? ` ${embed.message}` : ''}`;
+      return null;
   }
 }
 
-/** One pass, as a row: when, who it acted as, what it saw, what it wrote. */
+/** One pass: when, and what it did. Open for the detail. */
 function RunLine({ run }: { run: RunRow }) {
   const [open, setOpen] = useState(false);
   const worklistTotal = run.worklist.reduce((sum, g) => sum + g.count, 0);
+  const embed = run.status === 'succeeded' ? embedLine(run.embed) : null;
   return (
-    <div className="border-t border-border-subtle py-3 first:border-t-0">
+    <div className="py-3">
       <button
         type="button"
         className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-1 text-left text-[13px]"
         onClick={() => setOpen((v) => !v)}
       >
         <span className="text-text-primary">{timeAgo(run.startedAt)}</span>
-        <span className="text-text-muted">{run.trigger === 'manual' ? 'run by hand' : 'scheduled'}</span>
         <span className={statusTone(run.status)}>{run.status}</span>
         <span className="ml-auto tabular-nums text-text-muted">
-          {run.applied} applied · {run.inScopeNotes}/{run.analyzedNotes} notes in scope
-          {worklistTotal > 0 && ` · ${worklistTotal} for a person`}
+          {run.applied} fixed
+          {worklistTotal > 0 && ` · ${worklistTotal} to review`}
         </span>
       </button>
       {open && (
-        <div className="mt-2 space-y-2 pl-1 text-xs text-text-muted">
+        <div className="mt-2 space-y-1 text-xs text-text-muted">
           <p>
-            Ran as {run.runAs?.name ?? 'someone who has since left'} · mode {run.mode}
-            {run.targetPath ? ` · ${run.targetPath}/` : ''} · {run.safeFixes} safe fixes found
+            {run.trigger === 'manual' ? 'Manual' : 'Scheduled'} · {run.runAs?.name ?? 'former admin'} · {run.mode}
+            {run.targetPath ? ` · ${run.targetPath}/` : ''} · {run.inScopeNotes}/{run.analyzedNotes} notes
           </p>
           {run.errorMessage && <p className="text-red-600">{run.errorMessage}</p>}
           {Object.keys(run.appliedByKind).length > 0 && (
             <p>
-              Applied:{' '}
               {Object.entries(run.appliedByKind)
-                .map(([kind, n]) => `${n} × ${CLEAN_FIX_KINDS.find((k) => k.kind === kind)?.label ?? kind}`)
-                .join(', ')}
+                .map(([kind, n]) => `${CLEAN_FIX_KINDS.find((k) => k.kind === kind)?.label ?? kind} ${n}`)
+                .join(' · ')}
             </p>
           )}
-          {run.truncated && (
-            <p>Full mode looked at the first 1,500 notes by path; narrow the folder to reach the rest.</p>
-          )}
+          {run.truncated && <p>Stopped at 1,500 notes</p>}
           {run.worklist.length > 0 && (
-            <div className="space-y-1">
-              <p>Left for a person: {run.worklist.map((g) => `${g.count} ${g.kind}`).join(', ')}</p>
-              <ul className="space-y-0.5 pl-3">
-                {run.worklist.flatMap((g) =>
-                  g.items.slice(0, 5).map((item) => (
-                    <li key={`${g.kind}:${item.path}`} className="truncate">
-                      <span className="text-text-primary">{item.path}</span> — {item.detail}
-                    </li>
-                  )),
-                )}
-              </ul>
-            </div>
+            <ul className="space-y-0.5">
+              {run.worklist.flatMap((g) =>
+                g.items.slice(0, 5).map((item) => (
+                  <li key={`${g.kind}:${item.path}`} className="truncate">
+                    <span className="text-text-primary">{item.path}</span> {item.detail}
+                  </li>
+                )),
+              )}
+            </ul>
           )}
           {run.skipped.length > 0 && (
             <p>
-              Refused at the gate: {run.skipped.length} —{' '}
-              {run.skipped[0].path}: {run.skipped[0].reason}
+              Refused {run.skipped.length} · {run.skipped[0].path}: {run.skipped[0].reason}
             </p>
           )}
-          {run.status === 'succeeded' && <p>{embedLine(run.embed)}</p>}
+          {embed && <p>{embed}</p>}
         </div>
       )}
     </div>
@@ -225,78 +208,88 @@ export default function CleanPanel({ spaceId }: { spaceId: string }) {
   }
 
   const kinds = schedule.fixKinds.length ? schedule.fixKinds : CLEAN_FIX_KINDS.map((k) => k.kind);
+  const status = [
+    schedule.runAs && `Runs as ${schedule.runAs.name}`,
+    reach && `sees ${reach.visibleNotes} of ${reach.totalNotes} notes`,
+    schedule.enabled && schedule.nextRunAt && `next ${timeAgo(schedule.nextRunAt)}`,
+    schedule.lastRunAt && `last ${timeAgo(schedule.lastRunAt)}`,
+  ].filter(Boolean);
 
   return (
     <div className="space-y-8">
       <SettingsSection
         title="Nightly clean"
-        description={`${describeCleanSchedule(schedule, schedule.timezone)} — the mechanical fixes applied, everything that needs judgment left as a worklist.`}
         action={
-          <Button variant="ghost" size="sm" onClick={runNow} disabled={running}>
-            {running ? 'Running…' : 'Run now'}
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={runNow} disabled={running}>
+              {running ? 'Running…' : 'Run now'}
+            </Button>
+            <Toggle
+              checked={schedule.enabled}
+              onChange={(enabled) => update({ enabled })}
+              aria-label="Nightly clean"
+            />
+          </div>
         }
       >
-        <div className="flex flex-wrap items-center gap-4">
-          <Toggle
-            checked={schedule.enabled}
-            onChange={(enabled) => update({ enabled })}
-            label={schedule.enabled ? 'On' : 'Off'}
-          />
+        <div className="flex flex-wrap items-center gap-3">
           <Select
-            className="w-36"
+            className="w-32"
             value={String(schedule.hour)}
             onChange={(e) => update({ hour: Number(e.target.value) })}
-            aria-label="Hour the clean runs"
+            aria-label="Time"
           >
             {HOURS.map((h) => (
               <option key={h} value={h}>{hourLabel(h)}</option>
             ))}
           </Select>
           <Select
-            className="w-44"
+            className="w-28"
             value={schedule.mode}
             onChange={(e) => update({ mode: e.target.value as 'light' | 'full' })}
-            aria-label="How deep the clean looks"
+            aria-label="Depth"
           >
-            <option value="light">Light — the usual checks</option>
-            <option value="full">Full — also duplicates and conflicts</option>
+            <option value="light">Light</option>
+            <option value="full">Full</option>
           </Select>
           <Input
             className="w-48"
-            placeholder="whole space"
+            placeholder="Whole space"
             value={schedule.targetPath ?? ''}
             onChange={(e) => update({ targetPath: e.target.value || null }, { debounceMs: 600 })}
             onBlur={flush}
-            aria-label="Folder to clean"
+            aria-label="Folder"
           />
+          <span className="text-xs text-text-muted">{schedule.timezone || 'UTC'}</span>
         </div>
-        <p className="mt-3 text-xs text-text-muted">
-          {schedule.enabled && schedule.nextRunAt
-            ? `Next ${timeAgo(schedule.nextRunAt)}.`
-            : 'Nothing is scheduled.'}
-          {schedule.lastRunAt && ` Last ran ${timeAgo(schedule.lastRunAt)}.`}
-        </p>
+        {status.length > 0 && (
+          <p className="mt-3 text-xs tabular-nums text-text-muted">{status.join(' · ')}</p>
+        )}
+        {schedule.runAs && !schedule.runAs.isAdmin && (
+          <p className="mt-1 text-xs text-red-600">{schedule.runAs.name} is no longer an admin. Turn it on again to take over.</p>
+        )}
+        {reach && reach.lockedFolders.length > 0 && (
+          <p className="mt-1 text-xs text-text-muted">Frozen: {reach.lockedFolders.join(', ')}</p>
+        )}
         {notice && <p className="mt-2 text-xs text-red-600">{notice}</p>}
       </SettingsSection>
 
       <SettingsSection
-        title="What it may write"
-        description="Only these mechanical fixes, and only on notes the person it runs as could edit by hand. Duplicates, contradictions and orphans are never applied — they come back as a worklist."
-      >
-        <div className="mb-4">
+        title="Fixes"
+        action={
           <Toggle
             checked={schedule.applyFixes}
             onChange={(applyFixes) => update({ applyFixes })}
-            label="Apply fixes (off = analyse and report only)"
+            aria-label="Apply fixes"
           />
-        </div>
+        }
+      >
         <div className="space-y-2">
           {CLEAN_FIX_KINDS.map((fix) => (
-            <label key={fix.kind} className="flex items-start gap-3 text-[13px]">
+            <label key={fix.kind} className="flex items-center gap-3 text-[13px] text-text-primary">
               <input
                 type="checkbox"
-                className="mt-1 accent-brand-green"
+                className="accent-brand-green"
                 disabled={!schedule.applyFixes}
                 checked={kinds.includes(fix.kind)}
                 onChange={(e) => {
@@ -306,91 +299,44 @@ export default function CleanPanel({ spaceId }: { spaceId: string }) {
                   update({ fixKinds: next });
                 }}
               />
-              <span>
-                <span className="text-text-primary">{fix.label}</span>
-                <span className="block text-xs text-text-muted">{fix.detail}</span>
-              </span>
+              {fix.label}
             </label>
           ))}
         </div>
       </SettingsSection>
 
       <SettingsSection
-        title="Embedding"
-        description="Whether this space's notes get vectors for semantic search — each note whole, and each section of it as a chunk — and whether a clean re-embeds what it changed in the same pass. Off stops the nightly sweep and search's semantic half alike."
-      >
-        <div className="space-y-3">
+        title="Semantic search"
+        action={
           <Toggle
             checked={schedule.embedEnabled}
             onChange={(embedEnabled) => update({ embedEnabled })}
-            label={schedule.embedEnabled ? 'Embedding on' : 'Embedding off — search is keyword and links only'}
+            aria-label="Semantic search"
           />
-          <Toggle
-            checked={schedule.embedAfterClean}
-            onChange={(embedAfterClean) => update({ embedAfterClean })}
-            label="Embed after each clean"
-          />
-          <p className="text-xs text-text-muted">
-            {!schedule.embedKeyed
-              ? 'The deployment has no embedding key, so nothing is embedded whatever these say.'
-              : embedAfterCleanStatus(schedule, true).embed
-                ? 'A pass re-embeds the notes it changed and anything else that is stale, up to 400 notes; the rest waits for the nightly sweep.'
-                : 'A pass leaves embedding to the nightly sweep.'}
-            {reach && schedule.embedEnabled && schedule.embedKeyed && (
-              <span className="tabular-nums">
-                {' '}
-                Now: {reach.embeddedNotes} of {reach.totalNotes} notes embedded whole, {reach.chunkedNotes} chunked.
-              </span>
-            )}
-          </p>
-        </div>
-      </SettingsSection>
-
-      <SettingsSection
-        title="What it can reach"
-        description="A clean has no standing of its own. It acts as one admin, through the same permission model as a person clicking through the app."
+        }
       >
-        <div className="space-y-2 text-[13px] text-text-muted">
-          <p>
-            Runs as{' '}
-            <span className="text-text-primary">{schedule.runAs?.name ?? 'nobody yet — turn it on to run as yourself'}</span>
-            {schedule.runAs && !schedule.runAs.isAdmin && (
-              <span className="text-red-600"> — no longer an admin, so nothing will run. Turn it on again to take it over.</span>
-            )}
-          </p>
-          {reach && (
-            <>
-              <p className="tabular-nums">
-                Sees <span className="text-text-primary">{reach.visibleNotes}</span> of {reach.totalNotes} notes
-                {reach.visibleNotes < reach.totalNotes && ' — the rest sit behind restricted folders they hold no grant for.'}
-              </p>
-              <p>
-                {reach.lockedFolders.length
-                  ? `Never writes ${reach.lockedFolders.length} folder${reach.lockedFolders.length === 1 ? '' : 's'} frozen for AI: ${reach.lockedFolders.join(', ')}.`
-                  : 'No folder is frozen for AI.'}
-              </p>
-              <p>
-                {reach.restrictedFolders.length
-                  ? `Restricted folders in this space: ${reach.restrictedFolders.join(', ')}.`
-                  : 'No folder is restricted.'}
-              </p>
-              <p>
-                {reach.subspaces > 0
-                  ? `The ${reach.subspaces} public sub-space${reach.subspaces === 1 ? '' : 's'} read into this space are never cleaned from here — each is cleaned in the space that owns its notes.`
-                  : 'Cleaning stays in this space. A sub-space is cleaned in the space that owns its notes.'}
-              </p>
-            </>
-          )}
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title="History" description="Every pass, scheduled or by hand. Open one for what it wrote and what it left.">
-        {runs.length === 0 ? (
-          <p className="text-[13px] text-text-muted">Nothing has run yet.</p>
+        <Toggle
+          checked={schedule.embedAfterClean}
+          disabled={!schedule.embedEnabled}
+          onChange={(embedAfterClean) => update({ embedAfterClean })}
+          label="Re-embed after each clean"
+        />
+        {!schedule.embedKeyed ? (
+          <Alert variant="info" className="mt-3">No embedding key on this deployment.</Alert>
         ) : (
-          <div>{runs.map((run) => <RunLine key={run.id} run={run} />)}</div>
+          reach && schedule.embedEnabled && (
+            <p className="mt-3 text-xs tabular-nums text-text-muted">
+              {reach.embeddedNotes} of {reach.totalNotes} notes embedded
+            </p>
+          )
         )}
       </SettingsSection>
+
+      {runs.length > 0 && (
+        <SettingsSection title="History">
+          <div className="divide-y divide-border-subtle">{runs.map((run) => <RunLine key={run.id} run={run} />)}</div>
+        </SettingsSection>
+      )}
     </div>
   );
 }

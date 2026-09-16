@@ -20,37 +20,13 @@ export type CleanFixKind = AutoFix['kind']
  * (duplicates, contradictions, orphans) is never applied by a schedule — it
  * comes back as the worklist for a person or an agent.
  */
-export const CLEAN_FIX_KINDS: ReadonlyArray<{ kind: CleanFixKind; label: string; detail: string }> = [
-  {
-    kind: 'addMissingFrontmatter',
-    label: 'Fill in missing frontmatter',
-    detail: 'Only fields with no value — an existing one is never overwritten.',
-  },
-  {
-    kind: 'fixBrokenLink',
-    label: 'Repair broken links',
-    detail: 'Only where the dead link resolves to exactly one note.',
-  },
-  {
-    kind: 'linkMention',
-    label: 'Link unambiguous mentions',
-    detail: "A note's title in another note's prose, where only one note owns that name.",
-  },
-  {
-    kind: 'setStale',
-    label: 'Mark long-untouched notes stale',
-    detail: 'Never entity or index notes — a person is not neglected for sitting still.',
-  },
-  {
-    kind: 'setExpired',
-    label: 'Retire notes past their own expiry',
-    detail: 'Carries out the `expires:` date the author wrote down.',
-  },
-  {
-    kind: 'linkSupersession',
-    label: 'Record supersession back-pointers',
-    detail: 'When another note declares `supersedes:` this one, stamp `superseded_by` and retire it.',
-  },
+export const CLEAN_FIX_KINDS: ReadonlyArray<{ kind: CleanFixKind; label: string }> = [
+  { kind: 'addMissingFrontmatter', label: 'Fill missing frontmatter' },
+  { kind: 'fixBrokenLink', label: 'Repair broken links' },
+  { kind: 'linkMention', label: 'Link mentions' },
+  { kind: 'setStale', label: 'Mark stale notes' },
+  { kind: 'setExpired', label: 'Retire expired notes' },
+  { kind: 'linkSupersession', label: 'Retire superseded notes' },
 ]
 
 const KIND_SET = new Set<string>(CLEAN_FIX_KINDS.map((k) => k.kind))
@@ -200,13 +176,3 @@ export function nextCleanRunAt(
   return nextOccurrence({ kind: 'daily', hour: settings.hour, minute: settings.minute }, after, timezone || 'UTC')
 }
 
-/** "3:30am each night (Pacific/Auckland)" — the one sentence every surface says. */
-export function describeCleanSchedule(
-  settings: Pick<CleanScheduleSettings, 'hour' | 'minute'>,
-  timezone: string | null,
-): string {
-  const suffix = settings.hour < 12 ? 'am' : 'pm'
-  const h = settings.hour % 12 === 0 ? 12 : settings.hour % 12
-  const m = String(settings.minute).padStart(2, '0')
-  return `${h}:${m}${suffix} each night (${timezone || 'UTC'})`
-}
