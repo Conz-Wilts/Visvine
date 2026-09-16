@@ -254,7 +254,13 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   // Pointer-driven drag: the grabbed card floats with the cursor (inline
   // translateY on the row) while the other rows FLIP out of its way live.
   // Refs, not state, so pointermove never waits on a re-render.
-  const dragState = useRef<{ key: string; grabOffset: number; el: HTMLElement; initialSequence: string[] } | null>(null);
+  // A drag across the More divider moves the row into the other list, and React
+  // remounts it there — so the row is looked up by key on every move, and the
+  // move/up listeners live on the window rather than on an element that may be
+  // detached mid-drag (whose pointerup would never arrive, leaving it lifted).
+  const dragState = useRef<{ key: string; grabOffset: number; initialSequence: string[] } | null>(null);
+  const rowEl = (key: string) =>
+    flipRoot.current?.querySelector<HTMLElement>(`[data-flip-key="row:${key}"]`) ?? null;
   const dragTranslate = useRef(0);
   const orderRef = useRef(order);
   orderRef.current = order;
@@ -285,7 +291,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
    * controls that live on the row (the admins-only toggle, the remove button)
    * opt out with data-no-drag.
    */
-  const pressState = useRef<{ key: string; startY: number; pointerId: number; el: HTMLElement; grabOffset: number } | null>(null);
+  const pressState = useRef<{ key: string; startY: number; grabOffset: number } | null>(null);
 
   const pressRow = (e: React.PointerEvent<HTMLDivElement>, key: string) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -293,34 +299,47 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
     pressState.current = {
       key,
       startY: e.clientY,
-      pointerId: e.pointerId,
-      el: e.currentTarget,
       grabOffset: e.clientY - e.currentTarget.getBoundingClientRect().top,
     };
   };
 
-  const moveDrag = (e: React.PointerEvent<HTMLElement>) => {
+  const pressMove = (e: React.PointerEvent<HTMLElement>) => {
     const press = pressState.current;
-    if (press && !dragState.current) {
-      if (Math.abs(e.clientY - press.startY) < DRAG_THRESHOLD) return;
-      press.el.setPointerCapture(press.pointerId);
-      dragState.current = {
-        key: press.key,
-        grabOffset: press.grabOffset,
-        el: press.el,
-        initialSequence: sequenceRef.current,
-      };
-      dragTranslate.current = 0;
-      setDraggingKey(press.key);
-    }
+    if (!press || dragState.current) return;
+    if (Math.abs(e.clientY - press.startY) < DRAG_THRESHOLD) return;
+    dragState.current = {
+      key: press.key,
+      grabOffset: press.grabOffset,
+      initialSequence: sequenceRef.current,
+    };
+    dragTranslate.current = 0;
+    setDraggingKey(press.key);
+    const onMove = (ev: PointerEvent) => dragHandlers.current.moveDrag(ev);
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      dragHandlers.current.endDrag();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    moveDrag(e);
+  };
+
+  const moveDrag = (e: { clientY: number }) => {
     const drag = dragState.current;
     if (!drag) return;
+    const el = rowEl(drag.key);
+    if (!el) return;
     // The row's layout slot shifts when the list reorders under it, so derive
-    // it fresh each move: on-screen top minus the transform we applied.
-    const baseTop = drag.el.getBoundingClientRect().top - dragTranslate.current;
+    // it fresh each move: on-screen top minus the transform we applied. A
+    // remounted row carries no transform yet, so read what it actually has.
+    const applied = el.style.transform ? dragTranslate.current : 0;
+    const baseTop = el.getBoundingClientRect().top - applied;
     const translate = e.clientY - drag.grabOffset - baseTop;
     dragTranslate.current = translate;
-    drag.el.style.transform = `translateY(${translate}px) scale(1.02)`;
+    el.style.transform = `translateY(${translate}px) scale(1.02)`;
 
     // The More divider is a row like any other here, so dragging past it both
     // reorders and moves the tool in or out of the More popup.
@@ -351,10 +370,11 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
     dragState.current = null;
     const translate = dragTranslate.current;
     dragTranslate.current = 0;
-    drag.el.style.transform = '';
-    if (Math.abs(translate) > 1) {
+    const el = rowEl(drag.key);
+    if (el) el.style.transform = '';
+    if (el && Math.abs(translate) > 1) {
       // Settle the card from wherever the cursor left it into its new slot.
-      drag.el.animate(
+      el.animate(
         [{ transform: `translateY(${translate}px) scale(1.02)` }, { transform: 'translateY(0) scale(1)' }],
         { duration: 280, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
       );
@@ -365,6 +385,9 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
       commit(enabled, adminOnly, orderRef.current, moreRef.current);
     }
   };
+  // The window listeners outlive a render; they call the latest closures.
+  const dragHandlers = useRef({ moveDrag, endDrag });
+  dragHandlers.current = { moveDrag, endDrag };
 
   const { queue } = useConsoleAutosave(async (patch) => {
     const data = await fetchJsonBody<{ space: Partial<Space> }>(`/api/spaces/${space.id}/settings`, 'PUT', patch);
@@ -537,9 +560,9 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
         data-flip-key={`row:${feature.key}`}
         // The whole card is the drag handle — press anywhere on it and move.
         onPointerDown={e => pressRow(e, feature.key)}
-        onPointerMove={moveDrag}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
+        onPointerMove={pressMove}
+        onPointerUp={() => { if (!dragState.current) pressState.current = null; }}
+        onPointerCancel={() => { if (!dragState.current) pressState.current = null; }}
         // Even padding on every row — trimming the first and last would leave
         // the dividers unevenly spaced.
         className={`cursor-grab select-none py-4 ${
