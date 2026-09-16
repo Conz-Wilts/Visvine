@@ -93,6 +93,13 @@ rail. `visibility` is `public | private`. Creation always goes through
   the `create_space` action with `parent_id`); a
   sub-space cannot hold sub-spaces (`subspaces.ts#parentDenial`); sibling names
   are unique (`spaces_sibling_name_unique`).
+- **Another space's context is its own TIER in the tree, never a folder of
+  this one's.** `Sub-spaces` and `parent/` are stamped `federated`, which
+  sorts them after every folder the space actually holds
+  (`context.ts#sortTree`) and draws one hairline above the first of them
+  (`NoteSidebar#TierSeam`). A room's row offers **Open <room>** as well as the
+  folder, because expanding it (reading the room's context from here) and
+  standing in it are two different acts that otherwise look identical.
 - **A listed sub-space's context flows up** as the folder `subspaces/<id>/`,
   federated at read time by `lib/notes/federation.ts` (tree, index, single
   read, search each have a federated form). **Through it you are who you are

@@ -58,7 +58,7 @@ export function ensureSubspacesFolder(root: TreeNode): TreeNode {
   root.children ??= []
   const existing = root.children.find((c) => c.path === SUBSPACE_FOLDER)
   if (existing) return existing
-  const folder: TreeNode = { name: SUBSPACE_FOLDER, path: SUBSPACE_FOLDER, kind: 'folder', title: SUBSPACES_TITLE, children: [] }
+  const folder: TreeNode = { name: SUBSPACE_FOLDER, path: SUBSPACE_FOLDER, kind: 'folder', title: SUBSPACES_TITLE, federated: true, children: [] }
   root.children.push(folder)
   return folder
 }
@@ -253,6 +253,7 @@ export function graftParent(root: TreeNode, parent: { id: string; name: string }
     title: parent.name,
     space: parent.id,
     parent: true,
+    federated: true,
     children: (sharedRoot.children ?? []).map(rebaseParentNode),
   }
   root.children ??= []

@@ -47,6 +47,7 @@ import {
 } from '../lib/spaces/subspaces'
 import { normalizePublicName } from '../lib/spaces/publicName'
 import type { TreeNode } from '../lib/notes/shared/types'
+import { sortTree } from '../lib/notes/shared/context'
 
 describe('parentDenial — one level deep', () => {
   it('a top-level space may hold sub-spaces', () => {
@@ -261,6 +262,32 @@ describe('spaceMark — a sub-space wears its parent’s picture', () => {
   })
   it('falls back to its own when the parent is not in the list', () => {
     assert.deepEqual(spaceMark(spaces[2], spaces), { name: 'Orphan', imageUrl: 'o.png' })
+  })
+})
+
+describe('another space is its own tier, below this one’s own context', () => {
+  const folder = (name: string): TreeNode => ({ name, path: name, kind: 'folder', title: name, children: [] })
+
+  it('`Sub-spaces` and `parent/` sort after every folder of the space’s own', () => {
+    const root: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
+    root.children!.push(folder('zebras'), folder('agents'))
+    ensureSubspacesFolder(root)
+    graftParent(root, { id: 'house', name: 'Blackbird' }, { name: '', path: '', kind: 'folder', children: [] })
+    sortTree(root)
+    assert.deepEqual(
+      root.children!.map((c) => c.path),
+      ['agents', 'zebras', PARENT_FOLDER, SUBSPACE_FOLDER],
+    )
+  })
+
+  it('a room’s folder is not federated itself — inside `Sub-spaces` the rooms sort by name', () => {
+    const root: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
+    const empty = (): TreeNode => ({ name: '', path: '', kind: 'folder', children: [] })
+    graftSubspace(root, { id: 'ops', name: 'Operations' }, empty())
+    graftSubspace(root, { id: 'growth', name: 'Growth' }, empty())
+    sortTree(root)
+    assert.deepEqual(root.children![0].children!.map((c) => c.title), ['Growth', 'Operations'])
+    assert.equal(root.children![0].children![0].federated, undefined)
   })
 })
 

@@ -68,7 +68,20 @@ parent's context tree as a folder of its own inside one `Sub-spaces` folder
 (`subspaces.ts#ensureSubspacesFolder`), beside the other rooms — two levels
 under the space, and the folder is drawn only when there is a room to draw
 (`pruneEmptySubspacesFolder`). A room that does not flow here is not drawn at
-all.** Its paths live under the
+all.**
+
+The `Sub-spaces` folder and `parent/` are stamped `federated`, and that stamp
+is a TIER: `context.ts#sortTree` puts them after every folder the space
+actually holds, and `NoteSidebar#TierSeam` draws one hairline above the first
+of them. Sorted by title they landed between the space's own folders, which is
+what made a room read as one more folder here rather than a window into
+another space. A room's folder itself is not stamped — inside `Sub-spaces` the
+rooms sort by name like anything else.
+
+A room's row offers **Open &lt;room&gt;** in its menu, wired to
+`setCurrentSpace`. Expanding the folder reads the room's context from here;
+opening it stands you in the room. Two different acts, and the row is the one
+place they look the same. Its paths live under the
 reserved address `subspaces/<id>/`, which is also where it is drawn: nothing
 of the parent's is ever stored there, and a write there is a write *in the
 sub-space* (below). The `Sub-spaces` folder and each room's folder can be

@@ -12,7 +12,7 @@
 // notes live there for a week (restore or delete-forever from the row menu)
 // before the server purges them.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Modal, inputBaseClass } from '@/components/ui'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
@@ -109,6 +109,11 @@ function acceptsDrop(drag: TreeDragValue, dest: string): boolean {
 
 const TreeDrag = createContext<TreeDragValue | null>(null)
 
+/** Entering a sub-space read into this tree — switching to it, not opening a
+ *  folder. Carried on a context for the reason TreeDrag is: the row that needs
+ *  it sits at the end of a recursion whose props are already long. */
+const TreeEnterSpace = createContext<((spaceId: string) => void) | null>(null)
+
 /** The sub-spaces the viewer stands in, read off the grafted folders' `writable`
  *  stamp (lib/spaces/subspaces.ts#graftSubspace). Rows under one of these take
  *  the same edit affordances as the space's own — the server judges each write
@@ -184,6 +189,11 @@ interface NoteSidebarProps {
    *  changes the saved expansion â€” clearing it collapses the peek back to
    *  whatever the user had open. */
   revealPath?: string | null
+  /** Switching to a sub-space whose context is read into this tree. The room's
+   *  folder row offers it as "Open <room>", because expanding the folder and
+   *  standing in the room are two different things and the row is the only
+   *  place they look alike. Omit and the row simply doesn't offer it. */
+  onEnterSpace?: (spaceId: string) => void
   /** The Directory's search box, applied to the tree: the tree is pruned to
    *  what matches and every surviving folder is opened, so a match is never
    *  hidden inside a collapsed ancestor. Trash steps aside while it runs -
@@ -216,6 +226,7 @@ export function NoteSidebar({
   storageKey = null,
   revealPath = null,
   query = '',
+  onEnterSpace,
 }: NoteSidebarProps) {
   const searching = query.trim().length > 0
 
@@ -330,6 +341,7 @@ export function NoteSidebar({
 
   return (
     <TreeDrag.Provider value={drag}>
+    <TreeEnterSpace.Provider value={onEnterSpace ?? null}>
     <TreeWritableSpaces.Provider value={writableSpaces}>
     <div
       className={`flex h-full flex-col overflow-hidden ${
@@ -427,6 +439,7 @@ export function NoteSidebar({
       />
     )}
     </TreeWritableSpaces.Provider>
+    </TreeEnterSpace.Provider>
     </TreeDrag.Provider>
   )
 }
@@ -625,7 +638,12 @@ function Tree({
   return (
     <>
       {children.map((child, i) => {
-        return child.kind === 'folder' ? (
+        // Where the space's own context ends and another space's begins. The
+        // federated roots sort last (context.ts#sortTree), so one hairline
+        // before the first of them is the whole tier boundary — without it a
+        // room reads as one more folder of this space's.
+        const seam = !!child.federated && !children[i - 1]?.federated
+        const row = child.kind === 'folder' ? (
           <FolderRow
             key={child.path}
             node={child}
@@ -661,9 +679,22 @@ function Tree({
             onShare={onShareNote}
           />
         )
+        if (!seam) return row
+        return (
+          <Fragment key={`${child.path}-tier`}>
+            <TierSeam />
+            {row}
+          </Fragment>
+        )
       })}
     </>
   )
+}
+
+/** The hairline between this space's own context and the spaces read into it.
+ *  Sits in the guide gutter's own column so it starts where the rows do. */
+function TierSeam() {
+  return <div className="my-1 ml-[14px] border-t border-border-subtle" />
 }
 
 /** What an open folder shows when it holds nothing: the guide ends in an
@@ -743,6 +774,12 @@ function FolderRow(props: {
   // folders, never next to a note. The context root row is the target for "top
   // level"; it is never a source.
   const drag = useContext(TreeDrag)
+  // A room read into this tree: `space` names it and `parent` is unset (the
+  // parent's shared folder carries both). Its row offers the door as well as
+  // the folder — expanding it reads the room's context from here, opening it
+  // stands you in the room.
+  const enterSpace = useContext(TreeEnterSpace)
+  const room = props.node.space && !props.node.parent ? props.node.space : null
   // A structural folder is PLACED, not moved: its path stays and the tree draws
   // it under the drop. The `Sub-spaces` folder and a room's folder are placed
   // in THIS space's tree (its index notes), so they drag even though their rows
@@ -909,6 +946,9 @@ function FolderRow(props: {
           selected={selected}
           hoverClass="group-hover/folder:opacity-100"
           items={[
+            ...(room && enterSpace
+              ? [{ label: `Open ${folderLabel}`, icon: <Icon name="arrow-right" className="h-4 w-4" />, onClick: () => enterSpace(room) }]
+              : []),
             ...(showAccess
               ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => props.onFolderAccess!(props.node.path) }]
               : []),

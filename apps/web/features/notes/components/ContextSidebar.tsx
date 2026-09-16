@@ -68,7 +68,7 @@ export function ContextSidebar({
   focusPath?: string | null
 }) {
   const router = useRouter()
-  const { currentSpace } = useSpace()
+  const { currentSpace, setCurrentSpace } = useSpace()
   // The toolbar tray only centres over the note column, so the tree climbs
   // past it to sit flush under the tab row whenever it's open.
   const trayOpen = !!usePaneChromeState().chrome?.attachedOpen
@@ -197,6 +197,7 @@ export function ContextSidebar({
               onDeleteFolder={ctx.handleDeleteFolder}
               // Drag a note (or a whole folder) onto another folder to file it
               // there; the same move is in each row's menu as "Move to...".
+              onEnterSpace={setCurrentSpace}
               onMoveNote={ctx.handleMoveNote}
               onMoveFolder={ctx.handleMoveFolder}
               // A built-in folder or a sub-space dropped on a folder is PLACED

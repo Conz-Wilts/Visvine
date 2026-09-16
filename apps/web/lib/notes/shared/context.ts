@@ -207,6 +207,13 @@ export function sortTree(node: TreeNode): void {
     return
   }
   node.children.sort((a, b) => {
+    // Another space's context is its own tier, below everything this space
+    // holds: `Sub-spaces` and `parent/` sorted by title landed among the
+    // space's own folders, which is what made a room read as a folder of this
+    // space rather than a window into another one.
+    if (!a.federated !== !b.federated) {
+      return a.federated ? 1 : -1
+    }
     if (a.kind !== b.kind) {
       return a.kind === 'folder' ? -1 : 1
     }

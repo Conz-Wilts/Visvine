@@ -64,6 +64,11 @@ export interface TreeNode {
   // rows do. Each write is still judged in the sub-space, per path
   // (lib/notes/federation.ts#writeTarget). Absent: read-only here.
   writable?: boolean
+  // Set on the two roots another space's context is read through — the
+  // `Sub-spaces` folder and `parent/`. Nothing of this space's own is stored
+  // under either, so the tree draws them as their own tier, after every folder
+  // the space actually holds (`context.ts#sortTree`).
+  federated?: boolean
   // Set on the `parent` folder: what the space this one sits inside shares
   // with it (connectors and agents flagged `share: subspaces`), read-only
   // (lib/spaces/subspaces.ts#graftParent). `space` then names the parent.
