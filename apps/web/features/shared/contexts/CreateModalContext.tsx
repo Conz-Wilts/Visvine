@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRoutePathname } from '@/features/shared/hooks/useRoutePathname';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useSpace } from './SpaceContext';
 import { createSafeContext } from './createSafeContext';
 import { flowFor, rowForKind, type CreateKind } from '@/lib/create/rows';
@@ -88,8 +89,8 @@ export function CreateModalProvider({ children }: { children: React.ReactNode })
  * beside the rail. With no type the panel opens on its list.
  */
 export function useCreateSurface() {
-  const router = useRouter();
-  const pathname = usePathname();
+  const router = useSpaceRouter();
+  const pathname = useRoutePathname();
   const { open } = useCreateModal();
   const { currentSpace, isAdmin } = useSpace();
 

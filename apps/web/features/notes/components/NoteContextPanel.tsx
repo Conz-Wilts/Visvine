@@ -8,7 +8,7 @@
 // creation). A missing note here is just "not found" — this surface never creates.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
 import { BlocksIcon, RadioIcon, XIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { entityNotePath, entityStub, hrefForNotePath, noteHref } from '@/lib/notes/entities'
@@ -49,7 +49,7 @@ interface NoteContextPanelProps {
 }
 
 export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady }: NoteContextPanelProps) {
-  const router = useRouter()
+  const router = useSpaceRouter()
   const { currentSpace } = useSpace()
   const spaceId = currentSpace?.id ?? null
   const isPersonalSpace = spaceId?.startsWith(PERSONAL_ID_PREFIX) ?? false

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { LoaderCircleIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { defaultLandingHref } from '@/features/shared/lib/features';
@@ -19,7 +19,7 @@ import type { SpaceFeatureConfig } from '@/lib/types';
  */
 export default function HomePage() {
   const { currentSpace, loading, isAdmin } = useSpace();
-  const router = useRouter();
+  const router = useSpaceRouter();
 
   useEffect(() => {
     if (loading) return;

@@ -19,7 +19,7 @@
  */
 
 import { useState } from 'react';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { BlocksIcon, CircleArrowUpIcon, ExternalLinkIcon, TriangleAlertIcon } from '@/features/shared/icons';
 import { Chip, ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
 import Button from '@/components/ui/Button';

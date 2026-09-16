@@ -21,7 +21,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { KeyRoundIcon, PencilIcon, TriangleAlertIcon } from '@/features/shared/icons';
 import { Skeleton } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { Avatar } from '@/components/ui';
 import type { AgentReadiness, AgentSubscriber, AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ConnectorReadinessNotices from './ConnectorReadinessNotices';

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { spaceMark } from '@/lib/spaces/subspaces';

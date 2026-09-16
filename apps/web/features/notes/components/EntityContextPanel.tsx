@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RadioIcon, XIcon } from '@/features/shared/icons';
-import { useRouter } from 'next/navigation'
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
 import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { useNodeProfile, patchCachedNodeProfile } from '@/features/shared/hooks/useNodeProfile'
@@ -83,7 +83,7 @@ export function EntityContextPanel({
   onModeChange,
   onReady,
 }: EntityContextPanelProps) {
-  const router = useRouter()
+  const router = useSpaceRouter()
   const { currentSpace } = useSpace()
   const spaceId = currentSpace?.id ?? null
   const isPersonalSpace = spaceId?.startsWith(PERSONAL_ID_PREFIX) ?? false

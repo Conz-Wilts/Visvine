@@ -29,7 +29,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useCopied } from '@/features/shared/hooks/useCopied';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { CheckIcon, CopyIcon, KeyRoundIcon, PencilIcon, PlayIcon, PlusIcon, RefreshCwIcon, Trash2Icon, TriangleAlertIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import ShareWithRooms from '@/features/shared/components/ShareWithRooms';

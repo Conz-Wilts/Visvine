@@ -9,7 +9,6 @@
 // from a preset — the structures people build, as dial settings.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Alert, Button, Input, Modal } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -54,7 +53,6 @@ function flowsWord(sub: SubspaceDto): string {
 }
 
 export default function SubspacesSection({ spaceId, spaceName }: { spaceId: string; spaceName: string }) {
-  const router = useRouter();
   const { joinedSpaces, spaces, refreshSpace, setCurrentSpace } = useSpace();
   const [rows, setRows] = useState<SubspaceDto[] | null>(null);
   const [creating, setCreating] = useState(false);
@@ -155,8 +153,7 @@ export default function SubspacesSection({ spaceId, spaceName }: { spaceId: stri
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    setCurrentSpace(sub.id);
-                    router.push('/directory');
+                    setCurrentSpace(sub.id, '/directory');
                   }}
                 >
                   Open

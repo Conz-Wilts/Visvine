@@ -7,7 +7,7 @@
 // Directory's own does; `/resources/<id>` is still a file's full page, and
 // `/resources` sends you here.
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useResources } from '@/features/resources/hooks/useResources';
 import ResourceDetailDrawer from '@/features/resources/components/ResourceDetailDrawer';
@@ -65,7 +65,7 @@ interface ResourcesBrowserProps {
 }
 
 export default function ResourcesBrowser({ id, role }: ResourcesBrowserProps = {}) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const { currentSpace } = useSpace();
   const spaceId = currentSpace?.id ?? null;
   const { resources, folders, loading, refetch } = useResources(spaceId);

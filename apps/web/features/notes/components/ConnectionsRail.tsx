@@ -17,7 +17,7 @@
 // their own note view: the same rule the docked tree and the note body follow.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { CONNECTIONS_RAIL_W, useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
@@ -30,7 +30,7 @@ import type { NoteMeta } from '@/lib/notes/shared/types';
 import ContextLinksPanel from './ContextLinksPanel';
 
 export default function ConnectionsRail({ path, open }: { path: string | null; open: boolean }) {
-  const router = useRouter();
+  const router = useSpaceRouter();
 
   // The slide. The rail mounts closed (offscreen right) and flips to open on
   // the next frame, so the first paint and the slid-in state are separated and

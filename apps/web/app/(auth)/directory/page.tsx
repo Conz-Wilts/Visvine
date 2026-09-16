@@ -1,7 +1,8 @@
 'use client';
 
 import React, { Suspense, useCallback, useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import NodeGrid from '@/features/directory/components/NodeGrid';
 import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
 import DirectoryTableView from '@/features/directory/components/table/DirectoryTableView';
@@ -48,7 +49,7 @@ export default function DashboardPage() {
 }
 
 function DirectoryPane() {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const { currentSpace, loading: spaceLoading } = useSpace();
   const noSpace = !spaceLoading && !currentSpace;
   const spaceId = currentSpace?.id ?? null;

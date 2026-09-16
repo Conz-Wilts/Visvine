@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -37,7 +37,7 @@ export default function SpaceSelector() {
   // The switcher and Create new share the rail's edge, one at a time.
   const { close: closeCreate } = useCreateModal();
   const { session } = useAuth();
-  const router = useRouter();
+  const router = useSpaceRouter();
   // The console is the space's own settings, so it hangs off the space — not
   // off a rail row of its own. Same gate the console page applies.
   const canManage = Boolean(currentSpace) && (isAdmin || session?.user?.isSuperAdmin === true);

@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { clsx } from 'clsx';
 import { Chip } from '@/components/ui';
 import type { ToolDegraded } from '@/lib/tools/protocol';

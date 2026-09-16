@@ -24,9 +24,10 @@
  * is a Tool they cannot fix.
  */
 
+import { useSpaceHref } from '@/features/shared/contexts/SpaceContext';
 import { useState } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { CheckIcon, CopyIcon, ExternalLinkIcon, EyeIcon, HammerIcon, Trash2Icon } from '@/features/shared/icons';
 import { Chip, ConfirmDialog, EmptyState, Modal, Skeleton, Textarea } from '@/components/ui';
 import Alert from '@/components/ui/Alert';
@@ -598,7 +599,7 @@ function CopyPreviewLink({
   onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
 }) {
   const [copied, copy] = useCopied(2000);
-  const href = `/tools/preview/${encodeURIComponent(name)}`;
+  const href = useSpaceHref()(`/tools/preview/${encodeURIComponent(name)}`);
 
   return (
     <button

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { Trash2Icon, XIcon } from '@/features/shared/icons';
 import { Space } from '@/lib/types';
 import type { SpaceVisibility } from '@/lib/spaces/publicName';
@@ -161,7 +161,7 @@ function CountrySelector({ value, onChange }: { value: string; onChange: (code: 
 // ─── Main Panel ───────────────────────────────────────────────────────────────
 
 export default function SpaceSettingsPanel({ space, onSaved }: Props) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const { refreshSpace, spaces } = useSpace();
   // A sub-space names its parent; a top-level space lists its sub-spaces.
   // Nesting is one level, so a space is one or the other (docs/sub-spaces.md).

@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { VirtuosoHandle } from 'react-virtuoso';
 import { useHeader } from '@/features/shared/contexts/HeaderContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
@@ -50,7 +51,8 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   // from anywhere via this context.
   const { open: openCreateModal } = useCreateModal();
 
-  const basePath = '/channels';
+  // Under the space's prefix: the history writes below set the URL by hand.
+  const basePath = spaceCtx.spaceHref('/channels');
 
   const [activeConversation, setActiveConversation] = useState<ConversationSummary | null>(null);
   const [messages, setMessages] = useState<SerializedMessage[]>([]);
@@ -93,7 +95,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   // Legacy ?new=channel deep link (older "Create new → Channel" tile routed here):
   // channel creation now lives in the global Create modal, so open that instead of
   // the retired on-page form, and clear the param.
-  const router = useRouter();
+  const router = useSpaceRouter();
   const searchParams = useSearchParams();
   useEffect(() => {
     if (searchParams.get('new') === 'channel') {

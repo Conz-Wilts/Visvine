@@ -14,7 +14,8 @@
 // context, so those get Context/Raw and no first tab at all.
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, usePathname, useSearchParams } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import PageError from '@/components/ui/PageError';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -84,7 +85,7 @@ function useContextTabAvailable(node: NBNode | null): boolean {
 // Context and Raw are the same note behind the same availability gate — Raw is
 // just the editor in raw mode, promoted to a tab of its own.
 function useProfileTabParam(): [ProfileTab | null, (tab: ProfileTab) => void] {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const param = searchParams.get('tab');
@@ -268,7 +269,7 @@ function PersonRoute({ nodeId }: { nodeId: string }) {
  * there is nothing to resolve).
  */
 function useResolvedNodeId(personId: string | null) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const { currentSpace } = useSpace();
   const spaceId = currentSpace?.id ?? null;
   const [state, setState] = useState<{ loading: boolean; nodeId: string | null }>({
@@ -623,7 +624,7 @@ function NoteOnlyPage({ nodeId, firstTab, href, ariaLabel, notFoundTitle }: {
   const contextAvailable = useContextTabAvailable(node);
   const [wantedTab, setTabParam] = useProfileTabParam();
   const [activeTab, setActiveTab] = useState<ProfileTab>(wantedTab ?? 'context');
-  const router = useRouter();
+  const router = useSpaceRouter();
   usePrefetchEntityContext(nodeId, node, contextAvailable);
   const notePath = useEntityNotePath(nodeId, node);
   const noteSurface = isNoteTab(activeTab) && contextAvailable;
@@ -985,7 +986,7 @@ function SpaceRoute({ nodeId }: { nodeId: string }) {
 // sit over the skeleton. A null href means the destination is still resolving —
 // hold the skeleton rather than navigating somewhere wrong.
 function PageRedirect({ href }: { href: string | null }) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   useEffect(() => {
     if (href) router.replace(href);
   }, [href, router]);

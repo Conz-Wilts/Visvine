@@ -18,7 +18,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useRouter } from 'next/navigation'
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { RotateCcwIcon, Trash2Icon } from '@/features/shared/icons'
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext'
@@ -43,7 +43,7 @@ function daysLeft(deletedAt: number): number {
 const noop = () => {}
 
 export function TrashPreviewPanel({ id, mode = 'wysiwyg' }: { id: string; mode?: NoteMode }) {
-  const router = useRouter()
+  const router = useSpaceRouter()
   const { currentSpace } = useSpace()
   const { tabTrailHost } = useContextPanel()
   const spaceId = currentSpace?.id ?? null

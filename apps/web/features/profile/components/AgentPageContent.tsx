@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { PlayIcon, SettingsIcon } from '@/features/shared/icons';
 import { Alert, Skeleton } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
@@ -53,7 +54,7 @@ interface DetailResponse {
 
 export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const name = nodeId.startsWith('agent:') ? nodeId.slice('agent:'.length) : nodeId;
-  const router = useRouter();
+  const router = useSpaceRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const runParam = params.get('run');

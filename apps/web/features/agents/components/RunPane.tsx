@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { hrefForNotePath } from '@/lib/notes/entities';
 import { useRun, type RunDetail } from '../lib/useRun';
 import { fmtDuration, terminalLabel } from '../lib/rowState';

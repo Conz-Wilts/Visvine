@@ -3,6 +3,13 @@ import { verifySession, COOKIE_NAME } from "@/lib/session";
 import { isDevAuthEnabled } from "@/lib/dev-auth";
 import { toolsHostDecision } from "@/lib/tools/origin";
 import { buildCsp, newNonce } from "@/lib/security/csp";
+import {
+  isSpaceScopedPath,
+  parseSpacePath,
+  SPACE_URL_PREFIX,
+  type SpaceUrl,
+} from "@/lib/spaces/shared/spaceUrl";
+import { SPACE_COOKIE, SPACE_PREFIX_HEADER } from "@/lib/spaces/shared/spaceCookie";
 
 const PUBLIC_PATHS = [
   "/signin",
@@ -120,11 +127,44 @@ export async function proxy(req: NextRequest) {
 
   if (isPublic) return forward();
 
+  /**
+   * A signed-in request for a page. A space URL (`/s/<space>/<page>`) renders
+   * the unprefixed route, told which prefix it came under; an unprefixed space
+   * page is sent to the same page under a space — the one the page it was
+   * opened FROM stands in, so a tab keeps its own space, else the space this
+   * browser last stood in. With neither (a first visit, no space yet), it
+   * renders as it is and the client decides.
+   */
+  const signedIn = (): NextResponse => {
+    const spaceUrl = parseSpacePath(pathname);
+    if (spaceUrl) {
+      const prefix = spacePrefixOf(spaceUrl);
+      const headers = new Headers(req.headers);
+      headers.set("x-nonce", nonce);
+      headers.set("Content-Security-Policy", csp);
+      headers.set(SPACE_PREFIX_HEADER, prefix);
+      const target = new URL(`${spaceUrl.rest}${req.nextUrl.search}`, req.url);
+      const res = NextResponse.rewrite(target, { request: { headers } });
+      const remembered = prefix.slice(SPACE_URL_PREFIX.length + 1);
+      if (req.cookies.get(SPACE_COOKIE)?.value !== remembered) {
+        res.cookies.set(SPACE_COOKIE, remembered, { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 365 });
+      }
+      return secured(res);
+    }
+    if (req.method === "GET" && isSpaceScopedPath(pathname)) {
+      const prefix = refererSpacePrefix(req) ?? cookieSpacePrefix(req);
+      if (prefix) {
+        return secured(NextResponse.redirect(new URL(`${prefix}${pathname}${req.nextUrl.search}`, req.url), 307));
+      }
+    }
+    return forward();
+  };
+
   // Check cookie-based session
   const cookieToken = req.cookies.get(COOKIE_NAME)?.value;
   if (cookieToken) {
     const session = await verifySession(cookieToken);
-    if (session) return forward();
+    if (session) return signedIn();
   }
 
   // Check Bearer token (mobile app)
@@ -132,7 +172,7 @@ export async function proxy(req: NextRequest) {
   if (authHeader?.startsWith("Bearer ")) {
     const bearerToken = authHeader.substring(7);
     const session = await verifySession(bearerToken);
-    if (session) return forward();
+    if (session) return signedIn();
   }
 
   // API requests must never be redirected to the sign-in page: a JSON client
@@ -153,7 +193,7 @@ export async function proxy(req: NextRequest) {
   // as the slug here without a DB lookup.) Organizer sub-routes
   // (/events/<id>/manage|edit|rsvp), the list (/events) and /events/new are not
   // matched and still fall through to sign-in.
-  const eventDetail = pathname.match(/^\/events\/([^/]+)$/);
+  const eventDetail = (parseSpacePath(pathname)?.rest ?? pathname).match(/^\/events\/([^/]+)$/);
   if (eventDetail && eventDetail[1] !== "new") {
     const slug = decodeURIComponent(eventDetail[1]).replace(/^event:/, "");
     return secured(NextResponse.redirect(new URL(`/e/${encodeURIComponent(slug)}`, req.url)));
@@ -166,6 +206,36 @@ export async function proxy(req: NextRequest) {
   // it can't keep bouncing future requests.
   if (cookieToken) redirect.cookies.delete(COOKIE_NAME);
   return secured(redirect);
+}
+
+/** `/s/<house>` or `/s/<house>/<room>`, as the URL spelled it. */
+function spacePrefixOf(url: SpaceUrl): string {
+  const house = encodeURIComponent(url.houseId);
+  return url.roomId
+    ? `${SPACE_URL_PREFIX}/${house}/${encodeURIComponent(url.roomId)}`
+    : `${SPACE_URL_PREFIX}/${house}`;
+}
+
+/** The space of the same-origin page a request was made from, if it stood in one. */
+function refererSpacePrefix(req: NextRequest): string | null {
+  const referer = req.headers.get("referer");
+  if (!referer) return null;
+  try {
+    const from = new URL(referer);
+    if (from.host !== req.nextUrl.host && from.host !== req.headers.get("host")) return null;
+    const url = parseSpacePath(from.pathname);
+    return url ? spacePrefixOf(url) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The space this browser last stood in. */
+function cookieSpacePrefix(req: NextRequest): string | null {
+  const value = req.cookies.get(SPACE_COOKIE)?.value;
+  if (!value) return null;
+  const url = parseSpacePath(`${SPACE_URL_PREFIX}/${value}/home`);
+  return url ? spacePrefixOf(url) : null;
 }
 
 export const config = {

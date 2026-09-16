@@ -15,8 +15,9 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import Link from '@/features/shared/components/SpaceLink';
+import { useSearchParams } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { GuestManager } from '@/features/events/components/GuestManager';
@@ -62,7 +63,7 @@ const EVENT_TABS: TabConfig[] = [
 const isNoteTab = (tab: PageTab) => tab === 'context' || tab === 'raw';
 
 export default function EventDetailClient({ eventId, manage = false }: { eventId: string; manage?: boolean }) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const searchParams = useSearchParams();
   const { currentSpace, joinedSpaces, spaces } = useSpace();
   const { session } = useAuth();

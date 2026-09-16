@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import PDFViewer from '@/features/resources/components/PDFViewer';
 import CommentsPanel from '@/features/resources/components/CommentsPanel';
 import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';

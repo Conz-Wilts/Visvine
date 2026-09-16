@@ -228,8 +228,8 @@ test('create_tool returns the three files, both preview links and the SDK pointe
   ])
   // Both forms, always: the desktop app opens the deep link in place, anything
   // else needs the URL.
-  assert.equal(result.desktop_deep_link, 'visvine-desktop://open/tools/preview/board')
-  assert.equal(result.preview_url, 'https://visvine.test/tools/preview/board')
+  assert.equal(result.desktop_deep_link, 'visvine-desktop://open/s/space_1/tools/preview/board')
+  assert.equal(result.preview_url, 'https://visvine.test/s/space_1/tools/preview/board')
   assert.equal(result.build.ok, true)
   assert.ok(
     result.next.some((line) => line.includes('get_tool_sdk')),
@@ -519,8 +519,8 @@ test('preview_tool hands back both links and refuses to pretend a broken tool re
     { space_id: SPACE, name: 'board' },
     deps({ describeAuthoredTool: async () => detail() }),
   )
-  assert.equal(ok.desktop_deep_link, 'visvine-desktop://open/tools/preview/board')
-  assert.equal(ok.preview_url, 'https://visvine.test/tools/preview/board')
+  assert.equal(ok.desktop_deep_link, 'visvine-desktop://open/s/space_1/tools/preview/board')
+  assert.equal(ok.preview_url, 'https://visvine.test/s/space_1/tools/preview/board')
   assert.match(ok.renders, /renders the working copy/)
 
   const broken = await appToolHandlers.previewTool(
@@ -639,7 +639,7 @@ test('install_tool resolves a key to its newest approved version', async () => {
     }),
   )
   assert.deepEqual(installed, [[SPACE, 'ver_9', { userId: 'user_1', email: 'ada@local.dev' }]])
-  assert.equal(result.href, '/t/board')
+  assert.equal(result.href, '/s/space_1/t/board')
   // Missing dependencies never block the install — they show as a checklist.
   assert.equal(result.requirements.degraded, true)
   assert.deepEqual(result.requirements.missing, ['No connector in this space matches hubspot'])
@@ -755,7 +755,7 @@ test('preview_tool renders only when asked, and passes the image and console err
   assert.equal(rendered.screenshot?.png_base64, 'aGVsbG8=')
   assert.equal(rendered.screenshot?.jpeg_base64, null)
   assert.deepEqual(rendered.screenshot?.console_errors, ['console.error: boom'])
-  assert.equal(rendered.preview_url, 'https://visvine.test/tools/preview/board')
+  assert.equal(rendered.preview_url, 'https://visvine.test/s/space_1/tools/preview/board')
 
   // Without the flag no browser is touched (capturePreview is unstubbed and would throw).
   const plain = await appToolHandlers.previewTool(
@@ -777,7 +777,7 @@ test('preview_tool says why a screenshot is unavailable and keeps the links', as
   )
   assert.equal(result.screenshot?.available, false)
   assert.match(result.screenshot?.reason ?? '', /off in this deployment/)
-  assert.equal(result.desktop_deep_link, 'visvine-desktop://open/tools/preview/board')
+  assert.equal(result.desktop_deep_link, 'visvine-desktop://open/s/space_1/tools/preview/board')
 })
 
 test('check_tool { render } folds runtime console errors into the warnings, image-free', async () => {

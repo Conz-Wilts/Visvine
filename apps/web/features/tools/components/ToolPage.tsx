@@ -17,7 +17,7 @@
  */
 
 import { useEffect } from 'react';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { useHeader } from '@/features/shared/contexts/HeaderContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { canAccessFeature, toolRailKey } from '@/features/shared/lib/features';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { Button, Input, Modal } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary } from '@/lib/agents/service';

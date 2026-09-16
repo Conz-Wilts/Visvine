@@ -56,6 +56,7 @@
  * the SAME frontmatter now: `parseAgentBrief` ignores the activation keys and
  * `parseAgentActivation` ignores the brief's.
  */
+import { inSpace, stripSpacePrefix } from '@/lib/spaces/shared/spaceUrl'
 import { parentAdministers, reachesRoom, shareTargets } from '@/lib/spaces/subspaces'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
@@ -121,15 +122,16 @@ export function agentActivationPath(name: string): string {
  * way a Profile tab belongs to a person node. There is no agents tool, rail row
  * or roster page; a run to open rides along as `?run=<id>`.
  */
-export function agentPageHref(name: string, runId?: string | null): string {
-  const href = `/directory/${encodeURIComponent(`agent:${name}`)}`
-  return runId ? `${href}?run=${encodeURIComponent(runId)}` : href
+export function agentPageHref(name: string, runId?: string | null, spaceId?: string): string {
+  const path = `/directory/${encodeURIComponent(`agent:${name}`)}`
+  const href = runId ? `${path}?run=${encodeURIComponent(runId)}` : path
+  return spaceId ? inSpace(spaceId, href) : href
 }
 
 /** The agent name an agent-page href names, or null. Inverse of agentPageHref (either encoding). */
 export function agentNameOfHref(href: string | null | undefined): string | null {
   if (!href) return null
-  const m = /^\/directory\/(agent(?::|%3A)[^/?#]+)/i.exec(href)
+  const m = /^\/directory\/(agent(?::|%3A)[^/?#]+)/i.exec(stripSpacePrefix(href))
   if (!m) return null
   let id: string
   try {

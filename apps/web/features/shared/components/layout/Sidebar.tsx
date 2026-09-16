@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/features/shared/components/SpaceLink";
+import { useRoutePathname } from "@/features/shared/hooks/useRoutePathname";
 import { useEffect, useRef, useState } from "react";
 import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/CreateModalContext";
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
@@ -93,7 +93,7 @@ const LEAVE_FAR_PX = 200;
 const LEAVE_SLACK_PX = 40;
 const RAIL_MOTION = `${RAIL_MOTION_MS}ms cubic-bezier(0.25, 0.1, 0.25, 1)`;
 export default function Sidebar() {
-  const pathname = usePathname();
+  const pathname = useRoutePathname();
   const { isOpen: createOpen, close: closeCreate } = useCreateModal();
   const createSurface = useCreateSurface();
   const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen } = useSidebar();

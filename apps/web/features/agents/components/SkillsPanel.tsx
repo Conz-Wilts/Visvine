@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { Alert, Button, Skeleton } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 

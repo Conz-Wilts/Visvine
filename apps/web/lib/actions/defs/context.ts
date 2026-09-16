@@ -13,6 +13,7 @@
  * every client on connect. Write it for the model that has to act on it.
  */
 
+import { inSpace } from '@/lib/spaces/shared/spaceUrl'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import {
@@ -1480,7 +1481,7 @@ export const CONTEXT_ACTIONS = [
           models: models.map((m) => ({
             name: m.name,
             path: m.path,
-            page: `/directory/${encodeURIComponent(`model:${m.name}`)}`,
+            page: inSpace(context.spaceId, `/directory/${encodeURIComponent(`model:${m.name}`)}`),
             provider: m.provider.id,
             provider_label: m.provider.label,
             model: m.ref,
@@ -1909,7 +1910,7 @@ export const CONTEXT_ACTIONS = [
           error: result && !result.ok ? result.error : null,
           // Where a person watches it — the agent's page, on the run just started:
           // the steps as they happen, the machine beside them.
-          watch: agentPageHref(args.agent, runId),
+          watch: agentPageHref(args.agent, runId, args.space_id),
         }
       },
     }),
@@ -2018,7 +2019,7 @@ export const CONTEXT_ACTIONS = [
           ready: needs.ready,
           needs: needs.needs,
           plan: needs.plan,
-          page: agentPageHref(r.name),
+          page: agentPageHref(r.name, null, context.spaceId),
           // A brief nobody has seen run is a guess. Offer the rehearsal before
           // the switch: it costs the space nothing and it is the only look at
           // the output anyone gets before an unattended run produces it.
@@ -2074,7 +2075,7 @@ export const CONTEXT_ACTIONS = [
           agent: agent.name,
           title: agent.title,
           path: agent.path,
-          page: agentPageHref(agent.name),
+          page: agentPageHref(agent.name, null, context.spaceId),
           active: agent.activation.active,
           runs_on: agent.modelEffective,
           model_source: agent.model ? 'pinned in the brief' : agent.modelNote ? `the space's model (${agent.modelNote})` : 'none',
@@ -2170,7 +2171,7 @@ export const CONTEXT_ACTIONS = [
           timezone: zone || null,
         })
         if (!r.ok) throw new ActionError(r.status, r.error)
-        return { agent: args.agent, active: true, warning: r.warning, page: agentPageHref(args.agent) }
+        return { agent: args.agent, active: true, warning: r.warning, page: agentPageHref(args.agent, null, context.spaceId) }
       },
     }),
     defineAction({
@@ -2189,7 +2190,7 @@ export const CONTEXT_ACTIONS = [
         const { principal, context } = await resolveTarget(ctx, args.space_id)
         const r = await switchOffAgent(principal, context, args.agent)
         if (!r.ok) throw new ActionError(r.status, r.error)
-        return { agent: args.agent, active: false, page: agentPageHref(args.agent) }
+        return { agent: args.agent, active: false, page: agentPageHref(args.agent, null, context.spaceId) }
       },
     }),
 ]

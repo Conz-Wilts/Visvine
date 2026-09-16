@@ -149,7 +149,7 @@ export const VM_ACTIONS = [
           started: result.started,
           already_running: result.alreadyRunning,
           // Where a person goes to see it, which is the point of a headful browser.
-          watch: agentPageHref(args.agent),
+          watch: agentPageHref(args.agent, null, target.context.spaceId),
         }
       } catch (err) {
         if (err instanceof QuotaExceededError) throw new ActionError(429, err.message)

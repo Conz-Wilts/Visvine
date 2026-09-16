@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
+import Link from '@/features/shared/components/SpaceLink';
 import { clsx } from 'clsx';
 import { RefreshCwIcon } from '@/features/shared/icons';
 import { Button, Skeleton } from '@/components/ui';
@@ -77,7 +77,7 @@ export default function ToolFrame({
   mode: 'page' | 'tab' | 'preview';
   className?: string;
 }) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const { theme } = useTheme();
 
   // Bumped by Reload; re-mints the token and remounts the frame from scratch.

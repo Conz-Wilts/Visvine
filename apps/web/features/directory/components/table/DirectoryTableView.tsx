@@ -13,7 +13,7 @@
 // row must not flicker backwards. The overrides live as long as this view.
 
 import { useCallback, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { Alert } from '@/components/ui';
 import TableToolbar from './TableToolbar';
 import TypeMenu from './TypeMenu';
@@ -45,7 +45,7 @@ interface DirectoryTableViewProps {
 
 export default function DirectoryTableView({ browse, type, onTypeChange }: DirectoryTableViewProps) {
   const { space, loading, error, filteredItems, presentTypes, handleItemClick, handleDataChanged, nodes } = browse;
-  const router = useRouter();
+  const router = useSpaceRouter();
 
   // The type menu's entries: every type with rows, built-ins first in their
   // canonical order, then the space's own — so Person is always the first

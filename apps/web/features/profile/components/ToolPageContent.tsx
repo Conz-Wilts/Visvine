@@ -25,9 +25,10 @@
  * one Tool and six boxes would imply six subjects.
  */
 
+import { useSpaceHref } from '@/features/shared/contexts/SpaceContext';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { CheckIcon, CopyIcon, ExternalLinkIcon, TriangleAlertIcon, UploadIcon } from '@/features/shared/icons';
 import { Button, Modal, Skeleton, Textarea } from '@/components/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -333,6 +334,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [copied, copy] = useCopied(2000);
+  const spaceHref = useSpaceHref();
 
   const reload = useCallback(async () => {
     if (!spaceId) return;
@@ -371,7 +373,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
       `Work on the Visvine tool "${name}" in space "${spaceId}", using Visvine's MCP server.`,
       `Call get_tool_sdk once first, then read_tool { space_id: "${spaceId}", name: "${name}" }.`,
       `Edit with write_tool (files: index.md, ${TOOL_SOURCE_FILES.ui.authorName}, ${TOOL_SOURCE_FILES.data.authorName}) — the fresh build comes back on every write.`,
-      `Run check_tool before publishing. Preview: ${origin}/tools/preview/${name}`,
+      `Run check_tool before publishing. Preview: ${origin}${spaceHref(`/tools/preview/${name}`)}`,
     ].join('\n');
     if (!(await copy(hint))) {
       setNotice('Could not reach the clipboard — copy the preview URL from the address bar instead.');

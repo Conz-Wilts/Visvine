@@ -7,7 +7,7 @@
 // badges and every mutation live here rather than in the component.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { contextDisplayName } from '@/lib/notes/shared/contextSettings'
 import {
@@ -187,7 +187,7 @@ export interface ContextTreeOptions {
 }
 
 export function useContextTree({ spaceId, enabled, currentPath = null }: ContextTreeOptions) {
-  const router = useRouter()
+  const router = useSpaceRouter()
   const { currentSpace } = useSpace()
 
   const [tree, setTree] = useState<TreeNode>(EMPTY_TREE)

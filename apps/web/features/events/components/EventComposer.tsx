@@ -1,5 +1,6 @@
 'use client';
 
+import { useSpaceHref } from '@/features/shared/contexts/SpaceContext';
 import { Alert } from '@/components/ui';
 
 /**
@@ -12,7 +13,7 @@ import { Alert } from '@/components/ui';
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
 import type { NBEvent, EventVisibility, FormField } from '@/lib/types';
 import { VenueAutocomplete } from './VenueAutocomplete';
@@ -95,7 +96,7 @@ function plusHoursIso(iso: string, hours: number): string {
 }
 
 export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete }: EventComposerProps) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const draftIdRef = useRef<`event:${string}`>(initialEvent?.id ?? makeDraftId());
   const createdRef = useRef(mode === 'edit');
 
@@ -696,12 +697,13 @@ function Toggle({ label, hint, value, onChange }: { label: string; hint: string;
 
 function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: string; onClose: () => void }) {
   const [copied, copy] = useCopied(2000);
+  const spaceHref = useSpaceHref();
   const slug = event.slug ?? event.id.replace(/^event:/, '');
   // Only `public` events have a working /e/<slug> page; space/unlisted events
   // are shared via their in-app page (members only). Don't hand out a public link
   // that the visibility gate would 404.
   const isPublic = event.visibility === 'public';
-  const path = isPublic ? `/e/${slug}` : `/events/${event.id}`;
+  const path = isPublic ? `/e/${slug}` : spaceHref(`/events/${event.id}`);
   const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
 
   const copyLink = () => { void copy(publicUrl); };

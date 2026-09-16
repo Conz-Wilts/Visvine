@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRoutePathname } from '@/features/shared/hooks/useRoutePathname';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/SidebarContext';
@@ -34,8 +35,8 @@ const ALIAS_ADMIN_HREF = '/admin?section=types';
  * column back.
  */
 export default function CreatePanel() {
-  const router = useRouter();
-  const pathname = usePathname();
+  const router = useSpaceRouter();
+  const pathname = useRoutePathname();
   const { isOpen, defaultFolder, close } = useCreateModal();
   const { currentSpace, isAdmin } = useSpace();
   const { reduced } = useSidebar();

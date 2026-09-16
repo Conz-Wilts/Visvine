@@ -18,7 +18,8 @@
 // lib/tools/typePages.ts for who is allowed to own what.
 
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
@@ -102,7 +103,7 @@ function useNoteIndexEntry(
 
 function NoteViewerRoute() {
   const params = useParams();
-  const router = useRouter();
+  const router = useSpaceRouter();
   const { releaseDockNow } = useContextPanel();
   const { currentSpace } = useSpace();
   const raw = params.path;

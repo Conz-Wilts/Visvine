@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import {
   BotIcon,
   CheckIcon,

@@ -28,7 +28,7 @@
 // the very orphan the flow exists to avoid.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
 import { CheckIcon, ChevronRightIcon, XIcon } from '@/features/shared/icons';
 import { CHIP_ACCENT_HOVER, Chip, chipClass, Modal } from '@/components/ui'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
@@ -199,7 +199,7 @@ export function DraftContextPanel({
   // A custom type is a narrowing of 'note' (see customType below), so asking
   // for one is asking for a note.
   const initialType: DraftType | null = initialBuiltIn ?? (initialCustomType ? 'note' : null)
-  const router = useRouter()
+  const router = useSpaceRouter()
   const { currentSpace, isAdmin } = useSpace()
   const spaceId = currentSpace?.id ?? null
   const { entities, entityByPath, allTags } = useDirectoryEntities()

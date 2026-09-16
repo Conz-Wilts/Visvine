@@ -27,6 +27,7 @@
  * database. `registerAppTools` is the only thing that reaches for the live
  * implementations.
  */
+import { inSpace } from '@/lib/spaces/shared/spaceUrl'
 import { z } from 'zod'
 import { defineAction, ActionError, type ActionCaller } from '@/lib/actions/types'
 import { resolveTarget, type Target } from '@/lib/actions/resolve'
@@ -218,10 +219,11 @@ function buildReport(build: BuildSummary | null) {
  * desktop app opens the deep link in place, and anything else (a browser, a
  * terminal that only prints links) needs the URL.
  */
-function previewLinks(name: string, origin: string) {
+function previewLinks(name: string, origin: string, spaceId: string) {
+  const path = inSpace(spaceId, `/tools/preview/${name}`)
   return {
-    desktop_deep_link: `visvine-desktop://open/tools/preview/${name}`,
-    preview_url: `${origin}/tools/preview/${name}`,
+    desktop_deep_link: `visvine-desktop://open${path}`,
+    preview_url: `${origin}${path}`,
   }
 }
 
@@ -340,7 +342,7 @@ async function createTool(ctx: ActionCaller, args: CreateToolArgs, deps: AppTool
     name: result.name,
     files: SCAFFOLDED_FILES.map((file) => `tools/${result.name}/${file}`),
     build: buildReport(result.build),
-    ...previewLinks(result.name, deps.appOrigin()),
+    ...previewLinks(result.name, deps.appOrigin(), target.context.spaceId),
     next: [
       'Call get_tool_sdk once — it returns the authoring guide, the @visvine/tool-kit type definitions and the bridge method list.',
       `Then write_tool { name: "${result.name}", file: "ui.tsx", content } and read the build it hands back.`,
@@ -419,7 +421,7 @@ async function writeTool(ctx: ActionCaller, args: WriteToolArgs, deps: AppToolDe
     // On every write, not only on create: the person you are working for asked
     // for something they can LOOK at, and a link they already have is one they
     // do not have to ask for again.
-    ...previewLinks(args.name, deps.appOrigin()),
+    ...previewLinks(args.name, deps.appOrigin(), target.context.spaceId),
     // The point of this tool: the write and its compile result are one answer,
     // so an author iterates on diagnostics without a second call.
     build: report,
@@ -540,7 +542,7 @@ async function previewTool(ctx: ActionCaller, args: PreviewToolArgs, deps: AppTo
   return {
     name: detail.name,
     title: detail.title,
-    ...previewLinks(detail.name, deps.appOrigin()),
+    ...previewLinks(detail.name, deps.appOrigin(), target.context.spaceId),
     build: report,
     // Without `screenshot: true` nothing is rendered here — the link is the
     // feedback channel. A tool that does not compile will render an error card.
@@ -637,7 +639,7 @@ async function publishTool(ctx: ActionCaller, args: PublishToolArgs, deps: AppTo
     perimeter: describePerimeter(result.version.perimeter),
     tags: result.version.tags,
     release_notes: result.version.releaseNotes,
-    ...previewLinks(args.name, deps.appOrigin()),
+    ...previewLinks(args.name, deps.appOrigin(), target.context.spaceId),
     // Where it went, said plainly, because the single most confusing thing an
     // author can believe is that publishing made their tool public. It did not:
     // this space is the whole audience until somebody lists it.
@@ -677,7 +679,7 @@ async function installTool(ctx: ActionCaller, args: InstallToolArgs, deps: AppTo
     title: result.install.title,
     version: result.install.version,
     enabled: result.install.enabled,
-    href: `/t/${result.install.slug}`,
+    href: inSpace(target.context.spaceId, `/t/${result.install.slug}`),
     requirements: {
       degraded: result.install.degraded,
       missing: describeRequirements(result.install.requirements),

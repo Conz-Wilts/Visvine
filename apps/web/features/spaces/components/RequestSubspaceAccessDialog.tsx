@@ -17,7 +17,6 @@
 //   reads "Join", the membership lands active, and the dialog walks in.
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Modal, Button } from '@/components/ui';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -33,7 +32,6 @@ export default function RequestSubspaceAccessDialog({
   parentName: string;
   onClose: () => void;
 }) {
-  const router = useRouter();
   const { requestSubspaceAccess, joinSpace, refreshSpace, setCurrentSpace } = useSpace();
   const open = space.houseDoor === 'open';
   const inviteOnly = space.houseDoor === 'invite';
@@ -65,9 +63,8 @@ export default function RequestSubspaceAccessDialog({
       await joinSpace(space.id);
       invalidateRequestCache(`spaces:subspaces:${space.parentId}`);
       await refreshSpace();
-      setCurrentSpace(space.id);
       onClose();
-      router.push('/directory');
+      setCurrentSpace(space, '/directory');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not join');
       setAsking(false);

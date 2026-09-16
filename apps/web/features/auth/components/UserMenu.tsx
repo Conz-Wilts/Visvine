@@ -1,7 +1,8 @@
 "use client";
 
+import { stripSpacePrefix } from "@/lib/spaces/shared/spaceUrl";
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useSpaceRouter } from "@/features/shared/hooks/useSpaceRouter";
 import Image from "next/image";
 import { signOut } from "@/features/auth/lib/auth-client";
 import { useAuth } from "@/features/auth/contexts/AuthContext";
@@ -38,14 +39,14 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const bandRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
+  const router = useSpaceRouter();
 
   // `?connectors=` anywhere but Settings goes on to Settings, keeping whatever
   // else the URL carried (a sign-in's outcome). Read off `location` rather than
   // useSearchParams — the account band is shell chrome on every page, and a
   // hook that forces a Suspense boundary there would be paid by all of them.
   useEffect(() => {
-    if (typeof window === "undefined" || window.location.pathname === "/settings") return;
+    if (typeof window === "undefined" || stripSpacePrefix(window.location.pathname) === "/settings") return;
     const params = new URLSearchParams(window.location.search);
     const href = settingsHrefFor(params.get(CONNECTORS_PARAM));
     if (!href) return;

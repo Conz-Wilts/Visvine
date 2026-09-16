@@ -11,8 +11,7 @@
 import React, { useState, useEffect, useMemo, useCallback, use } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
 import PageError from '@/components/ui/PageError';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Link from '@/features/shared/components/SpaceLink';
 import { CalendarIcon, CalendarPlusIcon, CheckIcon, ChevronRightIcon, EarthIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { viewerDoorFor } from '@/features/spaces/lib/viewerDoor';
@@ -94,7 +93,6 @@ const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId: string }> }) {
   const { spaceId: rawSpaceId } = use(params);
   const spaceId = decodeURIComponent(rawSpaceId);
-  const router = useRouter();
   const { joinSpace, leaveSpace, setCurrentSpace, refreshSpace, spaces, joinedSpaces } = useSpace();
   // The door this viewer meets, from the client's copy of the dials; a space
   // not in the list (a secret room reached by link) gets the invite-only word.
@@ -151,10 +149,10 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
   // Entering the space lands on whichever tab its admin put first, so this
   // goes through the /home resolver. The switch must happen before the push —
   // /home reads the current space to pick the tab.
-  const openSpace = () => { setCurrentSpace(spaceId); router.push('/home'); };
+  const openSpace = () => { setCurrentSpace(spaceId, '/home'); };
   // Links that specifically mean "show me the network" still go straight to the
   // directory, whatever the space's landing tab is.
-  const openDirectory = () => { setCurrentSpace(spaceId); router.push('/directory'); };
+  const openDirectory = () => { setCurrentSpace(spaceId, '/directory'); };
 
   const share = () => { void copy(window.location.href); };
 

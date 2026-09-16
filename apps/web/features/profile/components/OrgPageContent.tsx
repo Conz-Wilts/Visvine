@@ -20,7 +20,7 @@
 
 import React, { useMemo } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { CheckIcon, ChevronRightIcon, EarthIcon, MapPinIcon, Share2Icon, UsersIcon } from '@/features/shared/icons';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';

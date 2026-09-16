@@ -1,5 +1,6 @@
 'use client';
 
+import Link from '@/features/shared/components/SpaceLink';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Chip } from '@/components/ui';
@@ -209,13 +210,13 @@ export default function EntitySetup({
       )}
 
       {conflict?.nodeId && (
-        <a
+        <Link
           href={`/directory/${encodeURIComponent(conflict.nodeId)}`}
           className="text-xs text-text-secondary underline-offset-2 hover:underline"
           style={{ color: accent }}
         >
           Open it
-        </a>
+        </Link>
       )}
 
       {cropping && typeof document !== 'undefined' &&

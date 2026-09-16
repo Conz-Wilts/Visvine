@@ -8,7 +8,7 @@
 // visibility and write denials come free.
 
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 import { notesApi } from '../lib/notesApi'
@@ -18,7 +18,7 @@ import PageError from '@/components/ui/PageError'
 const PAGE_CHARS = 20_000
 
 export function SourcePreviewPanel({ path }: { path: string }) {
-  const router = useRouter()
+  const router = useSpaceRouter()
   const { currentSpace } = useSpace()
   const spaceId = currentSpace?.id ?? null
 

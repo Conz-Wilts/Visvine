@@ -15,7 +15,7 @@
 // Types → Person, with every other type's labels. The toggles in a member's
 // open row are this same list applied one person at a time.
 
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { getNodeTypeConfig } from '@/lib/types';
 import { Alert, SettingsSection } from '@/components/ui';

@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Link from '@/features/shared/components/SpaceLink';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useCardTilt } from '@/features/directory/hooks/useCardTilt';
 import { Chip, CountryFlagIcon } from '@/components/ui';
 import { getInitials } from '@/lib/avatarUtils';
@@ -49,7 +49,7 @@ export default function SpaceTile({
   /** A branch tile: shorter media, one line of facts, no sectors. */
   compact?: boolean;
 }) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const tiltRef = useCardTilt();
   const country = spaceCountryCode(space);
   const href = `/spaces/${encodeURIComponent(space.id)}`;

@@ -3,7 +3,7 @@
 import React, { ReactNode, useCallback, useMemo } from "react";
 import { createSafeContext } from "@/features/shared/contexts/createSafeContext";
 import { useSession, signOut as signOutClient } from "@/features/auth/lib/auth-client";
-import { useRouter } from "next/navigation";
+import { useSpaceRouter } from "@/features/shared/hooks/useSpaceRouter";
 import type { Session, SessionUser } from "@/features/auth/lib/auth-client";
 
 interface AuthContextValue {
@@ -30,7 +30,7 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children, initialSession }: AuthProviderProps) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const { data: session, isPending: isLoading } = useSession(initialSession);
 
   const handleSignOut = useCallback(async () => {

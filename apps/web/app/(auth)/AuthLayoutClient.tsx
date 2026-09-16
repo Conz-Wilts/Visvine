@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useSpaceRouter } from "@/features/shared/hooks/useSpaceRouter";
+import { useRoutePathname } from "@/features/shared/hooks/useRoutePathname";
 import Sidebar from "@/features/shared/components/layout/Sidebar";
 import { HeaderProvider } from "@/features/shared/contexts/HeaderContext";
 import ShellTopBar from "@/features/shared/components/layout/ShellTopBar";
@@ -30,8 +31,8 @@ import type { LockedSubspace } from "@/lib/spaces/subspaceAccess";
 // matching feature must own the path prefix — so /directory/foo is guarded too.
 function useFeatureRouteGuard() {
   const { currentSpace, loading, isAdmin } = useSpace();
-  const pathname = usePathname();
-  const router = useRouter();
+  const pathname = useRoutePathname();
+  const router = useSpaceRouter();
 
   useEffect(() => {
     if (loading || !currentSpace) return;
@@ -65,7 +66,7 @@ export function useViewportPane(fills = true) {
 function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   const { expanded } = useSidebar();
   const [viewportPane, setViewportPane] = useState(false);
-  const pathname = usePathname();
+  const pathname = useRoutePathname();
   useFeatureRouteGuard();
 
   // /channels is a Slack-style full-bleed surface: panels run edge-to-edge and

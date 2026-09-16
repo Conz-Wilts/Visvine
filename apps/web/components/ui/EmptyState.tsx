@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 
 interface EmptyStateAction {
   label: string;

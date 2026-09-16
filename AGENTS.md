@@ -186,6 +186,37 @@ rail. `visibility` is `public | private`. Creation always goes through
   parent is also visible to you; the switcher opens a parent's sub-spaces on its
   chevron (`subspaces.ts#spaceBranches`, `SpaceListRow`, `TreeSpine`).
 
+## The space is in the URL
+
+Every page that renders inside a space is addressed `/s/<space>/<page>`, or
+`/s/<house>/<room>/<page>` in a sub-space (`lib/spaces/shared/spaceUrl.ts`,
+pure and tested). A link is the whole address: shared, bookmarked or restored
+it opens the same space, and two tabs stand in two spaces.
+
+- **The routes do not move.** `proxy.ts` rewrites a space URL onto the
+  unprefixed route and hands the page the prefix (`x-visvine-space-prefix`);
+  `redirectInSpace` keeps a server `redirect()` under it. The page roots are
+  `SPACE_ROUTE_ROOTS`; `/spaces`, `/discover`, `/e/<slug>` and the rest sit
+  outside every space.
+- **The URL decides the space.** `SpaceContext` resolves `currentSpace` from the
+  path and never falls back to another space under a space URL. A room named
+  without its house is re-addressed under it; a space the viewer is not in goes
+  to `/spaces/<id>`, whose overview answers 404 to anyone its listing hides it
+  from. `localStorage` and the `vv_space` cookie only answer a page reached
+  with no space in it.
+- **Navigation goes through the wrappers**: `Link` from
+  `features/shared/components/SpaceLink`, `useSpaceRouter`, `spaceHref` /
+  `useSpaceHref`, `useRoutePathname` for "which page is this". Lint refuses raw
+  `next/link` and `useRouter`. An unprefixed in-app href still works — the proxy
+  sends it under the space of the page it came from — but costs a hop and copies
+  without a space.
+- **Switching is a navigation**: `setCurrentSpace(space, path?)` goes to `path`
+  in that space, or to the same section (`sameSectionIn`).
+- **Server hrefs name the space by id** (`inSpace`) — an action's `watch`,
+  `page`, `href`, `preview_url`. The client re-addresses a room under its house.
+- **No space id may be a page name** (`isSpaceRouteName`, in
+  `isReservedSpaceId`): a room's id sits where the page does.
+
 ## Creating things
 
 **Create new is a panel of the rail, and `lib/create/rows.ts#createRows` is the

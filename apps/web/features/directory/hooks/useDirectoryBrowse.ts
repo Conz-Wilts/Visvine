@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useDirectoryNodes } from '@/features/directory/hooks/useDirectoryNodes';
 import { clearContextCache } from '@/features/notes/hooks/useSpaceContextData';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -44,7 +44,7 @@ export function useDirectoryBrowse() {
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
   const [filterAliases, setFilterAliases] = useState<Set<string>>(new Set());
   const [filterTags, setFilterTags] = useState<Set<string>>(new Set());
-  const router = useRouter();
+  const router = useSpaceRouter();
 
   const { nodes: allNodes, loading, error, space, refresh } = useDirectoryNodes();
   const { isAdmin } = useSpace();

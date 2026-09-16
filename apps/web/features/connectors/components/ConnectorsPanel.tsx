@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { Avatar, Button, ConfirmDialog, Field, Input, SearchInput, Skeleton, Alert } from '@/components/ui';
 import Select from '@/components/ui/Select';
 import NewRow from '@/components/ui/NewRow';
@@ -288,7 +289,7 @@ export default function ConnectorsPanel({
   /** A member's request was answered — the console re-counts its badge. */
   onRequestsChanged?: () => void;
 } = {}) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const { currentSpace } = useSpace();
   const openCreate = useCreateSurface();
   const spaceId = space ?? currentSpace?.id ?? null;

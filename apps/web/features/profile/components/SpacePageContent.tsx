@@ -25,7 +25,7 @@
 
 import React, { useMemo } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { CalendarIcon, CheckIcon, ChevronRightIcon, EarthIcon, MapPinIcon, Share2Icon } from '@/features/shared/icons';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';

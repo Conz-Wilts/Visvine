@@ -16,7 +16,6 @@
 // here, on the switcher that already owns "which space am I in".
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Modal, Input, Button } from '@/components/ui';
 import { XIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -34,7 +33,6 @@ export default function NewSpaceDialog({ parent, onClose }: {
   parent?: { id: string; name: string } | null;
   onClose: () => void;
 }) {
-  const router = useRouter();
   const { refreshSpace, setCurrentSpace } = useSpace();
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
@@ -66,9 +64,8 @@ export default function NewSpaceDialog({ parent, onClose }: {
       // space being built — means the Context tab has somewhere to go from the
       // first click.
       await ensureRootIndexNote(space.id, space.name);
-      setCurrentSpace(space.id);
       onClose();
-      router.push('/directory');
+      setCurrentSpace(space, '/directory');
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to create ${parent ? 'sub-space' : 'space'}`);
       setSaving(false);

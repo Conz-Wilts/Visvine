@@ -2,7 +2,8 @@
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { clsx } from 'clsx';
 import SaveStatus from './SaveStatus';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
@@ -61,7 +62,7 @@ export default function ConsoleShell({
   ariaLabel = 'Console sections',
 }: ConsoleShellProps) {
   const { shellTabsHost, shellTrailHost } = useContextPanel();
-  const router = useRouter();
+  const router = useSpaceRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 

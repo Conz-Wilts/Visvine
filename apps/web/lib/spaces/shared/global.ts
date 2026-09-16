@@ -2,6 +2,8 @@
 // component can ask "is this the global record?" without pulling the server
 // half (lib/spaces/globalSpace.ts, which imports prisma) into the bundle.
 
+import { isSpaceRouteName } from './spaceUrl'
+
 export const GLOBAL_SPACE_ID = 'visvine'
 export const GLOBAL_SPACE_NAME = 'Visvine'
 
@@ -15,7 +17,11 @@ export function isGlobalSpace(spaceId: string | null | undefined): boolean {
   return spaceId === GLOBAL_SPACE_ID
 }
 
-/** Space ids nobody may create a space under — see app/api/spaces/route.ts. */
+/**
+ * Space ids nobody may create a space under — see app/api/spaces/route.ts. A
+ * page route is one too: a room's id sits where the page does in its URL
+ * (lib/spaces/shared/spaceUrl.ts).
+ */
 export function isReservedSpaceId(id: string): boolean {
-  return isGlobalSpace(id) || id.startsWith('me:')
+  return isGlobalSpace(id) || id.startsWith('me:') || isSpaceRouteName(id)
 }

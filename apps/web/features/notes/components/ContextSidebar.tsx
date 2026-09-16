@@ -12,7 +12,7 @@
 // /context browser's rail. This component is the column only.
 
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { usePaneChromeState } from '@/features/shared/contexts/PaneShellContext'
 import { TRAY_ROW_H } from '@/features/shared/components/pane/PaneTabBar'
@@ -69,7 +69,7 @@ export function ContextSidebar({
    *  null leaves the last selection in place. */
   focusPath?: string | null
 }) {
-  const router = useRouter()
+  const router = useSpaceRouter()
   const { currentSpace, setCurrentSpace, spaces } = useSpace()
   // The toolbar tray only centres over the note column, so the tree climbs
   // past it to sit flush under the tab row whenever it's open.

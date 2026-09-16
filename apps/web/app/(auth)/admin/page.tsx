@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import PeopleDataProvider from '@/features/admin/components/people/PeopleDataContext';
 import MembersPanel from '@/features/admin/components/people/MembersPanel';
@@ -142,7 +142,7 @@ function AdminConsole({ space, onSaved }: {
 
 export default function AdminPage() {
   const { currentSpace, isAdmin, loading, refreshSpace } = useSpace();
-  const router = useRouter();
+  const router = useSpaceRouter();
   const [localSpace, setLocalSpace] = useState<Space | null>(null);
 
   useEffect(() => {

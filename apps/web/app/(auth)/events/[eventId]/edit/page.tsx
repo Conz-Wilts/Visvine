@@ -6,7 +6,7 @@
 
 import { use, useEffect, useState } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { invalidateEventDetail, loadEventDetail } from '@/features/events/lib/eventDetail';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { EventComposer } from '@/features/events/components/EventComposer';
@@ -16,7 +16,7 @@ import PageError from '@/components/ui/PageError';
 
 export default function EditEventPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = use(params);
-  const router = useRouter();
+  const router = useSpaceRouter();
   const { currentSpace } = useSpace();
   const [event, setEvent] = useState<NBEvent | null>(null);
   const [loading, setLoading] = useState(true);

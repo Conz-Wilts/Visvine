@@ -1,7 +1,7 @@
 'use client';
 
 import { ExternalLinkIcon, RefreshCwIcon, TriangleAlertIcon } from '@/features/shared/icons';
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { clsx } from 'clsx';
 import { Button } from '@/components/ui';
 

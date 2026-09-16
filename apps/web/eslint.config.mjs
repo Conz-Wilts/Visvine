@@ -17,6 +17,21 @@ const ICON_LIBRARIES = {
   message: "Icons are ours — import from '@/features/shared/icons' (see docs/icons.md).",
 };
 
+// The space is part of every in-app URL (/s/<space>/…, lib/spaces/shared/spaceUrl.ts).
+// Navigation goes through the wrappers that put it there, so a new link cannot
+// quietly drop a person out of the space they are standing in.
+const SPACE_URL_PATHS = [
+  {
+    name: "next/link",
+    message: "Import Link from '@/features/shared/components/SpaceLink' — it keeps the space in the URL.",
+  },
+  {
+    name: "next/navigation",
+    importNames: ["useRouter"],
+    message: "Use useSpaceRouter from '@/features/shared/hooks/useSpaceRouter' — it keeps the space in the URL.",
+  },
+];
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTypescript,
@@ -73,6 +88,20 @@ const eslintConfig = defineConfig([
     // components/ now holds only domain-agnostic primitives. Domain UI lives in
     // features/<domain>/components/.
     files: ["**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [COMPONENTS_BOUNDARY, ICON_LIBRARIES], paths: SPACE_URL_PATHS },
+      ],
+    },
+  },
+  {
+    // The three places that wrap Next's navigation for space URLs.
+    files: [
+      "features/shared/components/SpaceLink.tsx",
+      "features/shared/hooks/useSpaceRouter.ts",
+      "features/shared/contexts/SpaceContext.tsx",
+    ],
     rules: {
       "no-restricted-imports": [
         "error",

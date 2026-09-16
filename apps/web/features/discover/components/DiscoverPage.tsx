@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { FilterDropdown } from '@/features/directory/components/FilterDropdown';
@@ -52,7 +53,7 @@ const FORMAT: Array<{ value: EventFormat; label: string }> = [
  * the search, then the filters as words.
  */
 export default function DiscoverPage() {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const view: DiscoverView = isDiscoverView(params.get('view')) ? (params.get('view') as DiscoverView) : 'spaces';

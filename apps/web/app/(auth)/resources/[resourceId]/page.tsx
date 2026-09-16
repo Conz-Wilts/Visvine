@@ -10,8 +10,8 @@
 
 import { useState, useEffect, useCallback, use } from 'react';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Link from '@/features/shared/components/SpaceLink';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -58,7 +58,7 @@ function timeAgo(iso: string): string {
 export default function ResourceDetailPage({ params }: { params: Promise<{ resourceId: string }> }) {
   const { resourceId: rawResourceId } = use(params);
   const resourceId = decodeURIComponent(rawResourceId);
-  const router = useRouter();
+  const router = useSpaceRouter();
   const { session } = useAuth();
   const { isAdmin } = useSpace();
 

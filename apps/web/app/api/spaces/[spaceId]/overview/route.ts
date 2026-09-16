@@ -13,6 +13,8 @@ import { subspaceEventsOf } from '@/lib/events/subspaceRollup';
 import { mergeByStart } from '@/lib/events/rollup';
 import { normalizeStatus, isEventPast } from '@/lib/eventUtils';
 import { personAliases, type SpaceAlias } from '@/lib/types/context';
+import { listingOf } from '@/lib/spaces/subspaces';
+import { isAdmin } from '@/lib/auth';
 
 export async function GET(
   _req: NextRequest,
@@ -29,7 +31,7 @@ export async function GET(
         select: {
           id: true, name: true, description: true, location: true, country: true,
           tags: true, imageUrl: true, nodeTypes: true, createdAt: true,
-          aliases: true,
+          aliases: true, visibility: true, parentId: true, listing: true,
         },
       }),
       prisma.spaceMember.findUnique({
@@ -38,6 +40,21 @@ export async function GET(
       }),
     ]);
     if (!space) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    // The pitch is as visible as the space's listing (lib/spaces/subspaces.ts
+    // #listingOf): a world space to anyone, a house room to its house's
+    // members, a secret one to nobody outside it — answered exactly as a space
+    // that does not exist, so a link to it says nothing.
+    if (membership === null && !isSuperAdmin(session.email)) {
+      const listing = listingOf(space);
+      const seen =
+        listing === 'world' ||
+        (listing === 'house' && space.parentId !== null &&
+          (await prisma.spaceMember.count({
+            where: { userId: session.userId, spaceId: space.parentId, status: 'active' },
+          })) > 0) ||
+        (await isAdmin(session.userId, spaceId, session.email));
+      if (!seen) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     // Who "organizes" this space = who holds a Person alias that owns it. The
     // owning ids come off the row just read, so only their holders are fetched
     // rather than every alias row in the space.
@@ -121,8 +138,9 @@ export async function GET(
       }));
     }
 
+    const { visibility: _visibility, parentId: _parentId, listing: _listing, ...pitch } = space;
     return NextResponse.json({
-      space: { ...space, createdAt: space.createdAt.toISOString(), memberCount: memberTotal },
+      space: { ...pitch, createdAt: space.createdAt.toISOString(), memberCount: memberTotal },
       viewer: { isMember, isAdmin: organizerIds.has(session.userId) },
       counts: {
         members: memberTotal,

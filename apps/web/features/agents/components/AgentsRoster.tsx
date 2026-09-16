@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import { useMemo } from 'react';
 import { Alert, Skeleton } from '@/components/ui';
 import { clockEntries, groupAgents, whoLabel } from '@/lib/agents/shared/roster';

@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from '@/features/shared/components/SpaceLink';
 import type { ConnectorReadiness } from '@/lib/connectors/service';
 
 /**

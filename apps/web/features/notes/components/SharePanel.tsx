@@ -21,6 +21,7 @@
 // All enforcement is server-side (/api/notes/access) — this dialog only
 // renders what that endpoint says the caller may do.
 
+import { useSpaceHref } from '@/features/shared/contexts/SpaceContext'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { BotIcon, CheckIcon, ChevronDownIcon, Link2Icon, LockIcon, LockOpenIcon, UsersIcon, UsersRoundIcon, XIcon } from '@/features/shared/icons';
@@ -388,6 +389,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
   const typeaheadRef = useRef<HTMLDivElement>(null)
 
   const [copied, copy] = useCopied()
+  const spaceHref = useSpaceHref()
 
   const adding = pending.length > 0
 
@@ -931,7 +933,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
                 {kind === 'note' ? (
                   <button
                     type="button"
-                    onClick={() => void copy(`${window.location.origin}${noteHref(path)}`)}
+                    onClick={() => void copy(`${window.location.origin}${spaceHref(noteHref(path))}`)}
                     className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border-default px-3 text-sm font-medium text-text-secondary transition hover:bg-surface-2"
                   >
                     <Link2Icon className="h-4 w-4" />

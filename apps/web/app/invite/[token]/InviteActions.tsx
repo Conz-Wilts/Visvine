@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { fetchJsonBody } from '@/lib/fetchJson';
 
 /**
@@ -17,7 +17,7 @@ export default function InviteActions({
   spaceId: string;
   initialStatus: 'active' | 'pending' | null;
 }) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const [status, setStatus] = useState<'active' | 'pending' | null>(initialStatus);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

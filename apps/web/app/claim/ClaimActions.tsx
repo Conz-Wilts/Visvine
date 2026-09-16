@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useSpaceRouter } from "@/features/shared/hooks/useSpaceRouter";
 
 interface ClaimActionsProps {
   token: string;
@@ -9,7 +9,7 @@ interface ClaimActionsProps {
 }
 
 export function ClaimActions({ token, callbackUrl }: ClaimActionsProps) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

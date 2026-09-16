@@ -1,5 +1,6 @@
 'use client';
 
+import Link from '@/features/shared/components/SpaceLink';
 import { LOCAL_RUNTIMES, localModelRef, localRuntimeOf } from '@/lib/agents/local';
 import { useEffect, useState } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
@@ -93,9 +94,9 @@ export default function AgentSettingsFields({
           <p className="mb-2 text-[13px] text-text-secondary">
             No model in this space yet.{' '}
             {isAdmin && (
-              <a href="/admin?section=connectors" className="font-medium text-text-primary underline underline-offset-2">
+              <Link href="/admin?section=connectors" className="font-medium text-text-primary underline underline-offset-2">
                 Add one
-              </a>
+              </Link>
             )}
           </p>
         )}

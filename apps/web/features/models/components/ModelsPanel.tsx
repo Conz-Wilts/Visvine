@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { Alert, Button, Field, Input, Skeleton } from '@/components/ui';
 import NewRow from '@/components/ui/NewRow';
 import { ArrowLeftIcon } from '@/features/shared/icons';
@@ -72,7 +72,7 @@ function statusOf(m: ModelRow): { label: string; tone: 'ok' | 'warn' | 'bad' | '
 export default function ModelsPanel({ space }: {
   space: string;
 }) {
-  const router = useRouter();
+  const router = useSpaceRouter();
   const [rows, setRows] = useState<ModelRow[]>([]);
   const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(true);
