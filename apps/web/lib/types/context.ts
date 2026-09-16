@@ -22,6 +22,14 @@ export interface NodeTypeConfig {
    */
   scope?: 'note';
   /**
+   * What to call a SET of these, when the English rule in lib/types/plural.ts
+   * gets the name wrong. Absent on every type whose plural is derivable, which
+   * is nearly all of them — the surfaces that name a set (the Directory's
+   * tables, the Type filter, a folder index's headings) read
+   * `pluralTypeName`, never this field directly.
+   */
+  plural?: string;
+  /**
    * What this type TRACKS, beyond the rows every entity of it already carries
    * (lib/create/typeFields.ts): the columns the Directory's table shows for
    * it, and the properties an agent can read off its entity note. Each

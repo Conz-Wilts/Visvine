@@ -391,7 +391,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
             <SectionCard id="network" title="Network"
                          action={isMember ? (
                            <button onClick={openDirectory} className="inline-flex items-center gap-1 text-[13px] font-semibold hover:underline" style={{ color: theme.dark }}>
-                             Explore <ChevronRightIcon className="w-3.5 h-3.5" />
+                             See all <ChevronRightIcon className="w-3.5 h-3.5" />
                            </button>
                          ) : undefined}>
               <div className="flex flex-wrap gap-1.5">

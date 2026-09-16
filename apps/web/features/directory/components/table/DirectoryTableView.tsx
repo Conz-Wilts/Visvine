@@ -36,7 +36,7 @@ import {
   type CellPatch,
   type TableColumn,
 } from '@/lib/directory/table';
-import { DEFAULT_NODE_TYPES, findNodeTypeConfig, type DirectoryItem, type SpaceAlias } from '@/lib/types';
+import { DEFAULT_NODE_TYPES, findNodeTypeConfig, pluralTypeName, type DirectoryItem, type SpaceAlias } from '@/lib/types';
 
 interface DirectoryTableViewProps {
   browse: ReturnType<typeof useDirectoryBrowse>;
@@ -193,7 +193,11 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
             the surface. */}
         <TableToolbar
           browse={browse}
-          searchPlaceholder={activeName && !isAll ? `Search ${activeName.toLowerCase()}s…` : 'Search the directory…'}
+          searchPlaceholder={
+            activeName && !isAll
+              ? `Search ${pluralTypeName(activeName, space?.nodeTypes).toLowerCase()}…`
+              : 'Search the directory…'
+          }
           typeKey={activeKey ?? ''}
           columns={isAgents ? [] : table.visible}
           tagOptions={isAgents ? [...new Set((roster.data?.agents ?? []).flatMap((a) => a.tags))].sort() : undefined}

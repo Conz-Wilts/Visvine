@@ -406,6 +406,16 @@ only).
   `DELETE /api/spaces/<id>/node-types` — admin-only, and `removeNodeType`
   refuses anything not `scope: 'note'`. Notes keep their `type:`, they just stop
   being coloured.
+- **A type is named singular and said plural by rule.** A chip labels one
+  thing (`Person`); a tab over a table, a Type filter row and a folder index's
+  heading name the set (`People`) — `lib/types/plural.ts` is the one rule
+  (`pluralizeTypeWord`, head-word inflection + a short irregular table), read by
+  `pluralTypeName(name, nodeTypes)` on every such surface and by
+  `indexNote.ts#pluralizeType`. `NodeTypeConfig.plural` is the override for the
+  name the rule gets wrong, cleaned in `mergeNodeTypeList`
+  (`normalizeTypePlural` drops a blank, malformed or redundant one so a rename
+  keeps deriving) and edited as one optional field on Console → Types. A
+  heading never reads the override — changing it must not rewrite notes.
 - **A viewer's arrangement is theirs**: column order, hidden columns, widths and
   sort live in `localStorage` per space and type (`useTableView`), never on the
   space record. An unknown column appears at its canonical place.

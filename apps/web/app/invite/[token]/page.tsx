@@ -59,7 +59,7 @@ export default async function InvitePage({
               href="/discover"
               className="mt-6 inline-block rounded-lg bg-brand-green px-4 py-2 text-sm font-medium text-white"
             >
-              Explore spaces
+              Discover spaces
             </a>
           </div>
         ) : (

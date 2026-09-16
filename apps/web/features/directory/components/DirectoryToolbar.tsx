@@ -20,7 +20,7 @@ import { FilterDropdown } from '@/features/directory/components/FilterDropdown';
 import Chip from '@/components/ui/Chip';
 import SearchInput from '@/components/ui/SearchInput';
 import { tagPalette } from '@/lib/tagColors';
-import { getNodeTypeConfig } from '@/lib/types';
+import { getNodeTypeConfig, pluralTypeName } from '@/lib/types';
 import type { SpaceAlias } from '@/lib/types';
 import type { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 
@@ -99,8 +99,11 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
           options={presentTypes.map(t => {
             const forType = aliases.filter(a => a.nodeType.toLowerCase() === t.toLowerCase());
             return {
+              // The value is the type, the label names the SET of them
+              // (lib/types/plural.ts) — a row of the Type filter is `People 12`,
+              // while the chip on a card stays `Person`.
               value: t,
-              label: t,
+              label: pluralTypeName(t, space?.nodeTypes),
               count: nodes.filter(n => n.type.toLowerCase() === t.toLowerCase()).length,
               subOptions: forType.length > 0 ? forType.map(a => ({
                 value: a.name,
@@ -135,7 +138,7 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
           {[...filterTypes].map(type => (
             <FilterChip
               key={`type-${type}`}
-              label={type}
+              label={pluralTypeName(type, space?.nodeTypes)}
               color={getNodeTypeConfig(type, space?.nodeTypes).color}
               onRemove={() => setFilterTypes(without(filterTypes, type))}
             />

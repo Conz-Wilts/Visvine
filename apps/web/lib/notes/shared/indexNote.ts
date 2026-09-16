@@ -45,6 +45,7 @@
 // lib/notes/store.ts. No fs/DOM access, unit-testable like the rest of
 // lib/notes/shared/*.
 
+import { pluralizeTypeWord } from '@/lib/types/plural'
 import { reservedDescriptions } from './namespaces'
 import {
   joinFrontmatter,
@@ -339,18 +340,13 @@ const SUBDIRECTORY_SECTION = 'Subdirectories'
 const UNTYPED_SECTION = 'Notes'
 
 // A type name as a section heading: one folder of people reads `## People`, not
-// `## Person`. English-shaped and deliberately small — a producer-chosen type
-// the rule mangles still round-trips, because the heading is a label and the
-// child's own `type:` is the record.
+// `## Person`. The rule is lib/types/plural.ts, shared with every surface that
+// names a set of a type — a heading never reads a space's `plural` override,
+// because changing one must not rewrite the headings of notes already written.
 export function pluralizeType(type: string): string {
   const word = type.trim()
   if (!word) return UNTYPED_SECTION
-  if (/person$/i.test(word)) return word.replace(/person$/i, (m) => (m === 'PERSON' ? 'PEOPLE' : 'People'))
-  // A type already written plural (`Metrics`) is left alone; `Class` is not.
-  if (/[^s]s$/i.test(word)) return word
-  if (/(s|x|z|ch|sh)$/i.test(word)) return `${word}es`
-  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`
-  return `${word}s`
+  return pluralizeTypeWord(word)
 }
 
 // The section a child belongs in, and the order the sections come in:

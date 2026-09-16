@@ -4,6 +4,7 @@
 
 export * from './context';
 export * from './nodeTypeRegistry';
+export * from './plural';
 export * from './space';
 export * from './events';
 export * from './resources';

@@ -11,7 +11,13 @@
 
 import { useState, useEffect, type ReactNode } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { DEFAULT_NODE_TYPES, aliasesForType, mergeNodeTypeList } from '@/lib/types';
+import {
+  DEFAULT_NODE_TYPES,
+  aliasesForType,
+  mergeNodeTypeList,
+  normalizeTypePlural,
+  pluralizeTypeWord,
+} from '@/lib/types';
 import type { SpaceAlias, Space, NodeTypeConfig } from '@/lib/types';
 import { isNodeTypeEnabled, nodeTypeToolKey } from '@/lib/featureAccess';
 import { fetchJsonBody } from '@/lib/fetchJson';
@@ -313,6 +319,61 @@ function TypePageOwner({ typeName, claimants, onChoose, saving }: {
   );
 }
 
+// ─── Plural ───────────────────────────────────────────────────────────────────
+
+/**
+ * What a SET of this type is called.
+ *
+ * A type is named in the singular, because a chip on a card labels one thing —
+ * but a tab over a table of them, and a row of the Directory's Type filter,
+ * name the set: `People`, not `Person`. That word is derived from the name by
+ * the English rule in lib/types/plural.ts, so this field is empty for nearly
+ * every type and exists only for the name the rule gets wrong. The placeholder
+ * is what the rule says, so an admin can see the derived word without an
+ * override standing in the way of it — and typing that same word back stores
+ * nothing, which keeps the derivation alive if the type is ever renamed.
+ */
+function TypePlural({ typeName, plural, saving, onSave }: {
+  typeName: string;
+  plural?: string;
+  saving: boolean;
+  onSave: (plural: string | undefined) => void;
+}) {
+  const derived = pluralizeTypeWord(typeName);
+  const [draft, setDraft] = useState(plural ?? '');
+  // The panel follows the record: every save refreshes the space, and a type
+  // opened with one override must not keep showing the word it opened with.
+  useEffect(() => { setDraft(plural ?? ''); }, [plural, typeName]);
+
+  const commit = () => {
+    const next = normalizeTypePlural(draft, typeName);
+    setDraft(next ?? '');
+    if ((next ?? '') !== (plural ?? '')) onSave(next);
+  };
+
+  return (
+    <Field label="Plural">
+      <Input
+        value={draft}
+        placeholder={derived}
+        disabled={saving}
+        maxLength={40}
+        className="max-w-[260px] px-3 py-2 text-sm"
+        aria-label={`What a set of ${typeName} is called`}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+          if (e.key === 'Escape') { setDraft(plural ?? ''); e.currentTarget.blur(); }
+        }}
+      />
+      <p className="mt-1.5 text-xs text-text-muted">
+        What a table or filter of these is called. Left empty it reads &ldquo;{derived}&rdquo;.
+      </p>
+    </Field>
+  );
+}
+
 // ─── Type row + its settings ──────────────────────────────────────────────────
 
 /** A labelled line inside the settings panel. */
@@ -416,9 +477,11 @@ function TypeRow({ typeName, typeColor, previewChips, expanded, onOpen, onUpdate
  * brought in — the way to take it back out of the vocabulary. Its colour is
  * not here: the swatch on the row is the whole control.
  */
-function TypeSettings({ typeName, typeColor, pageOwner, aliases, allAliases, isPerson, noteScoped, newOpen, onNewStart, onNewDone, onAddAlias, onRemoveAlias, onRenameAlias, onUpdateAliasColor, onDelete, saving }: {
+function TypeSettings({ typeName, typeColor, plural, pageOwner, aliases, allAliases, isPerson, noteScoped, newOpen, onNewStart, onNewDone, onAddAlias, onRemoveAlias, onRenameAlias, onUpdateAliasColor, onDelete, saving }: {
   typeName: string;
   typeColor: string;
+  /** The word for a set of these, when the derived one is wrong. */
+  plural?: ReactNode;
   /** Which installed Tool draws this type's page. Member-made types only. */
   pageOwner?: ReactNode;
   aliases: SpaceAlias[];
@@ -474,6 +537,8 @@ function TypeSettings({ typeName, typeColor, pageOwner, aliases, allAliases, isP
           saving={saving}
         />
       )}
+
+      {plural}
 
       {pageOwner}
 
@@ -566,6 +631,10 @@ export default function TypesPanel() {
   // by merging the edited entry in — mapping alone would silently no-op.
   const handleUpdateTypeColor = (type: NodeTypeConfig, color: string) =>
     saveTypes(mergeNodeTypeList(types, [{ ...type, color }]));
+  // Clearing the field is `plural: undefined` — mergeNodeTypeList drops the key
+  // rather than storing a blank, so the type goes back to deriving its plural.
+  const handleUpdateTypePlural = (type: NodeTypeConfig, plural: string | undefined) =>
+    saveTypes(mergeNodeTypeList(types, [{ ...type, plural }]));
 
   // Deleting is the one edit the whole-record PUT can't express — it merges
   // additively, on purpose — so it has its own call. Notes already declaring
@@ -689,6 +758,14 @@ export default function TypesPanel() {
             <TypeSettings
               typeName={liveType.name}
               typeColor={liveType.color}
+              plural={
+                <TypePlural
+                  typeName={liveType.name}
+                  plural={liveType.plural}
+                  saving={saving}
+                  onSave={next => handleUpdateTypePlural(liveType, next)}
+                />
+              }
               pageOwner={
                 noteScoped ? (
                   <TypePageOwner

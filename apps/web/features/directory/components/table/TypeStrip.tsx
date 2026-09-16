@@ -10,11 +10,13 @@
 
 import { clsx } from 'clsx';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
+import { pluralTypeName } from '@/lib/types/plural';
 import type { NodeTypeConfig } from '@/lib/types';
 
 export interface StripType {
   /** Lowercased id, the `?type=` value; `all` for every row at once. */
   id: string;
+  /** The type's own singular name — the tab reads it in the plural. */
   name: string;
   count: number;
 }
@@ -43,7 +45,9 @@ export default function TypeStrip({ types, activeKey, nodeTypes, onChange }: {
             )}
           >
             {!all && <span aria-hidden className="h-2.5 w-2.5 shrink-0 rounded-[3px]" style={{ background: getTypeColor(type.name, nodeTypes) }} />}
-            <span>{type.name}</span>
+            {/* A tab names a TABLE, which is a set: `People`, not `Person`
+                (lib/types/plural.ts). The id stays the singular type. */}
+            <span>{all ? type.name : pluralTypeName(type.name, nodeTypes)}</span>
             <span className={clsx('shrink-0 text-[11px] tabular-nums', active ? 'text-text-secondary' : 'text-text-muted')}>
               {type.count}
             </span>

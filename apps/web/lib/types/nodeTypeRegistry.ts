@@ -12,6 +12,7 @@ import {
   findNodeTypeConfig,
   type NodeTypeConfig,
 } from './context';
+import { normalizeTypePlural } from './plural';
 
 /** Longest a type name may be — it has to fit a chip. */
 const MAX_NAME = 32;
@@ -93,8 +94,8 @@ export function seedNodeTypes(stored: NodeTypeConfig[] | null | undefined): Node
  * The console saves the WHOLE space record from a client snapshot that can
  * be minutes old (features/admin/components/TypesPanel.tsx), so a plain
  * overwrite means an admin recolouring Person deletes every type a member
- * created in the meantime. Incoming entries win on colour/shape — that is
- * the edit being saved — and anything stored but absent from the payload is
+ * created in the meantime. Incoming entries win on colour/shape/plural — that
+ * is the edit being saved — and anything stored but absent from the payload is
  * kept. Removing a type is therefore not something a stale snapshot can do by
  * accident; it needs its own deliberate call.
  */
@@ -103,12 +104,23 @@ export function mergeNodeTypeList(
   incoming: NodeTypeConfig[] | null | undefined,
 ): NodeTypeConfig[] {
   const key = (t: NodeTypeConfig) => t.name?.trim().toLowerCase();
-  const edits = new Map((incoming ?? []).map((t) => [key(t), t]));
+  // A plural is cleaned on the way in, here rather than at the route, because
+  // this is the one door every whole-record save comes through: an empty,
+  // malformed or redundant override is simply not stored, and the rule labels
+  // the type (lib/types/plural.ts).
+  const clean = (t: NodeTypeConfig): NodeTypeConfig => {
+    const plural = normalizeTypePlural(t.plural, t.name ?? '');
+    if (plural) return { ...t, plural };
+    const rest = { ...t };
+    delete rest.plural;
+    return rest;
+  };
+  const edits = new Map((incoming ?? []).map((t) => [key(t), clean(t)]));
   // Stored order is kept — a recolour must not shuffle the vocabulary.
   const next = (stored ?? []).map((t) => edits.get(key(t)) ?? t);
   const kept = new Set((stored ?? []).map(key));
   for (const type of incoming ?? []) {
-    if (!kept.has(key(type))) next.push(type);
+    if (!kept.has(key(type))) next.push(clean(type));
   }
   return next;
 }
