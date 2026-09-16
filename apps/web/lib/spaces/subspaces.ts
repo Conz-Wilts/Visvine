@@ -419,7 +419,7 @@ export interface Preset {
   flowPeople: boolean
   parentAdmins: boolean
 }
-export const PRESETS: readonly Preset[] = [
+const PRESETS: readonly Preset[] = [
   { key: 'department', name: 'Department', blurb: 'A team inside the house. Anyone here walks in; everything flows up; the house’s admins manage it.', listing: 'house', houseDoor: 'open', worldDoor: 'invite', flowContext: true, flowEvents: true, flowPeople: true, parentAdmins: true },
   { key: 'programme', name: 'Programme', blurb: 'A cohort or accelerator run from here. Anyone can find it and ask to join; the house’s members walk in.', listing: 'world', houseDoor: 'open', worldDoor: 'ask', flowContext: true, flowEvents: true, flowPeople: false, parentAdmins: true },
   { key: 'committee', name: 'Committee', blurb: 'A room nobody else can see. Invite only; nothing flows up.', listing: 'secret', houseDoor: 'invite', worldDoor: 'invite', flowContext: false, flowEvents: false, flowPeople: false, parentAdmins: true },

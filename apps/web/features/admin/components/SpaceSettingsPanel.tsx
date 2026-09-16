@@ -378,7 +378,7 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
         />
       )}
 
-      {!isSubspace && <SubspacesSection spaceId={space.id} spaceName={space.name} />}
+      {!isSubspace && <SubspacesSection spaceId={space.id} />}
 
       {/* The button names the action, so it stands alone — no heading, no label row. */}
       <section>

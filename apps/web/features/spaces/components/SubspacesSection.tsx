@@ -4,20 +4,17 @@
 // rooms of this house, and the house's side of the wall. A room is its own
 // tenant from the moment it exists (own members, own admins, own tools) and
 // its four dials are its own to set, so a row here is a listing plus the one
-// thing the HOUSE decides: whether its model keys reach the room. Creating a
-// room is the one act only this space's admins can perform, and it starts
-// from a preset — the structures people build, as dial settings.
+// thing the HOUSE decides: whether its model keys reach the room. Rooms are
+// made from the space switcher, not here; with none, the section is not drawn.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Input, Modal } from '@/components/ui';
+import { Alert, Button } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
-import { ensureRootIndexNote } from '@/features/notes/lib/rootIndex';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
-import { PlusIcon } from '@/features/shared/icons';
-import { PRESETS, subspaceConfigOf, type SubspaceConfig } from '@/lib/spaces/subspaces';
+import { subspaceConfigOf, type SubspaceConfig } from '@/lib/spaces/subspaces';
 import type { Space } from '@/lib/types';
 
 export interface SubspaceDto {
@@ -52,10 +49,9 @@ function flowsWord(sub: SubspaceDto): string {
   return on.length ? `${on.join(', ')} flow up` : 'nothing flows up';
 }
 
-export default function SubspacesSection({ spaceId, spaceName }: { spaceId: string; spaceName: string }) {
+export default function SubspacesSection({ spaceId }: { spaceId: string }) {
   const { joinedSpaces, spaces, refreshSpace, setCurrentSpace } = useSpace();
   const [rows, setRows] = useState<SubspaceDto[] | null>(null);
-  const [creating, setCreating] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
 
   // The house's side, read off the space row the client already holds and
@@ -110,27 +106,12 @@ export default function SubspacesSection({ spaceId, spaceName }: { spaceId: stri
 
   const joined = (id: string) => joinedSpaces.some((s) => s.id === id);
 
+  if (rows === null || rows.length === 0) return null;
+
   return (
     <section>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h2 className="text-base font-semibold text-text-primary">Sub-spaces</h2>
-          <p className="mt-0.5 text-sm text-text-muted">
-            Rooms of this house, each its own space with its own members, admins and tools. What a room shows
-            here, who may walk in and who holds its keys are set in the room&rsquo;s own Settings. Here: what this
-            house shares down.
-          </p>
-        </div>
-        <Button variant="neutral" size="sm" className="inline-flex shrink-0 items-center gap-1.5" onClick={() => setCreating(true)}>
-          <PlusIcon size={16} aria-hidden />
-          New sub-space
-        </Button>
-      </div>
-
-      {rows === null ? null : rows.length === 0 ? (
-        <p className="mt-4 text-sm text-text-muted">No sub-spaces yet.</p>
-      ) : (
-        <ul className="mt-4 divide-y divide-border-subtle">
+      <h2 className="text-base font-semibold text-text-primary">Sub-spaces</h2>
+      <ul className="mt-4 divide-y divide-border-subtle">
           {rows.map((sub) => (
             <li key={sub.id} className="flex flex-wrap items-center gap-3 py-3">
               <SpaceAvatar name={sub.name} imageUrl={sub.imageUrl} size="sm" />
@@ -164,9 +145,7 @@ export default function SubspacesSection({ spaceId, spaceName }: { spaceId: stri
             </li>
           ))}
         </ul>
-      )}
 
-      {rows !== null && rows.length > 0 && (
         <div className="mt-5 rounded-lg border border-border-subtle px-4 py-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -210,113 +189,6 @@ export default function SubspacesSection({ spaceId, spaceName }: { spaceId: stri
           )}
           {configError && <Alert variant="error" className="mt-3">{configError}</Alert>}
         </div>
-      )}
-
-      {creating && (
-        <NewSubspaceDialog
-          parentId={spaceId}
-          parentName={spaceName}
-          onClose={() => setCreating(false)}
-          onCreated={async () => {
-            await Promise.all([refreshSpace(), load(true)]);
-          }}
-        />
-      )}
     </section>
-  );
-}
-
-function NewSubspaceDialog({
-  parentId,
-  parentName,
-  onClose,
-  onCreated,
-}: {
-  parentId: string;
-  parentName: string;
-  onClose: () => void;
-  onCreated: () => Promise<void>;
-}) {
-  const [name, setName] = useState('');
-  const [preset, setPreset] = useState<string>('department');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const ready = name.trim().length > 0;
-
-  const submit = async () => {
-    if (!ready || saving) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const { space } = await fetchJsonBody<{ space: { id: string; name: string } }>('/api/spaces', 'POST', {
-        name: name.trim(),
-        parentId,
-        preset,
-      });
-      // The context has to exist before anyone opens it — the same wait the
-      // top-level create makes (NewSpaceDialog).
-      await ensureRootIndexNote(space.id, space.name);
-      await onCreated();
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create sub-space');
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal
-      onClose={onClose}
-      title={`New sub-space of ${parentName}`}
-      size="sm"
-      footer={
-        <div className="flex justify-end gap-2 border-t border-border-subtle px-6 py-4">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button variant="brand" onClick={submit} disabled={!ready} loading={saving} loadingText="Creating…">
-            Create
-          </Button>
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-4 px-6 py-5">
-        <Input
-          autoFocus
-          aria-label="Sub-space name"
-          placeholder="Sub-space name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-        />
-        {/* The structures people build, as dial settings. A preset only decides
-            where the room's dials start; each one stays editable in the room's
-            own Settings afterwards. */}
-        <div role="radiogroup" aria-label="Room preset" className="grid gap-2">
-          {PRESETS.map((p) => {
-            const active = p.key === preset;
-            return (
-              <button
-                key={p.key}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                onClick={() => setPreset(p.key)}
-                className={`flex flex-col gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors ${
-                  active
-                    ? 'border-brand-green bg-brand-green/10 text-text-primary'
-                    : 'border-border-subtle bg-surface-1 text-text-secondary hover:border-border-default'
-                }`}
-              >
-                <span className="text-sm font-medium">{p.name}</span>
-                <span className="text-xs text-text-muted">{p.blurb}</span>
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-xs text-text-muted">
-          You become its admin{preset === 'tenant' ? '' : `, and so are ${parentName}'s admins until the room says otherwise`}. It starts with every optional tool off and its own member list.
-        </p>
-        {error && <Alert variant="error">{error}</Alert>}
-      </div>
-    </Modal>
   );
 }
