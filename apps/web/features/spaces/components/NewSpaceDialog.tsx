@@ -76,18 +76,24 @@ export default function NewSpaceDialog({ parent, onClose }: {
   };
 
   return (
-    <Modal onClose={onClose} size="sm" ariaLabel={parent ? 'New sub-space' : 'New space'}>
+    <Modal
+      onClose={onClose}
+      // One field wide, and no wider: a name is short, so a panel sized to the
+      // page would be a lot of empty white either side of it.
+      maxWidth="max-w-[clamp(21rem,30vw,26rem)]"
+      ariaLabel={parent ? 'New sub-space' : 'New space'}
+    >
       {/* One field and two buttons: no header rule, no footer rule — a line
           only earns its place when it separates things that scroll apart. */}
-      <div className="relative flex flex-col items-center gap-4 px-6 pb-6 pt-8 text-center">
+      <div className="relative flex flex-col items-stretch gap-6 px-6 pb-6 pt-9 text-center">
         <button
           onClick={onClose}
           aria-label="Close"
           className="absolute right-3 top-3 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
         >
-          <XIcon className="h-4 w-4" />
+          <XIcon className="h-5 w-5" />
         </button>
-        <h2 className="text-base font-semibold text-text-primary">
+        <h2 className="text-lg font-semibold text-text-primary">
           {parent ? `New sub-space of ${parent.name}` : 'New space'}
         </h2>
         {/* The placeholder is the label — one field needs no heading above it. */}
@@ -101,10 +107,9 @@ export default function NewSpaceDialog({ parent, onClose }: {
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
         />
         {error && <div className="text-sm text-red-700">{error}</div>}
-        <div className="flex justify-center gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
+        {/* Create alone: the close button in the corner is already the way out,
+            and a Cancel beside it would be the same act said twice. */}
+        <div className="flex items-center justify-center">
           <Button
             variant="brand"
             onClick={submit}
