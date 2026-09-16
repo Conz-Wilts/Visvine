@@ -15,7 +15,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    // The theme boot script ((auth)/layout.tsx) sets the accent vars on <html> before hydration.
+    <html lang="en" suppressHydrationWarning>
       <body className="text-text-secondary antialiased">
         {children}
       </body>

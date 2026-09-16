@@ -5,7 +5,9 @@
 export const dynamic = 'force-dynamic';
 export const dynamicParams = true;
 
+import { headers } from 'next/headers';
 import AuthLayoutClient from './AuthLayoutClient';
+import { themeBootScript } from '@/features/shared/lib/colorThemes';
 import { getSession, isSuperAdmin } from '@/lib/session';
 import { listVisibleSpaces, listUserSpaceIds } from '@/lib/spaces/queries';
 import { listLockedSubspaces } from '@/lib/spaces/subspaceAccess';
@@ -17,12 +19,16 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
   // Shapes match what /api/auth/session, /api/data/spaces and
   // /api/user/spaces return, so provider state is identical either way.
   const session = await getSession();
+  // Runs before the shell paints, so a chosen accent never flashes green first.
+  const themeScript = (
+    <script nonce={(await headers()).get('x-nonce') ?? undefined} dangerouslySetInnerHTML={{ __html: themeBootScript() }} />
+  );
 
   if (!session) {
     // Signed out (the proxy normally redirects before this renders). Pass an
     // explicit null session so the client doesn't re-fetch it, but leave the
     // space props undefined — the provider keeps its old client-side path.
-    return <AuthLayoutClient initialSession={null}>{children}</AuthLayoutClient>;
+    return <>{themeScript}<AuthLayoutClient initialSession={null}>{children}</AuthLayoutClient></>;
   }
 
   const [spaces, memberships, locked] = await Promise.all([
@@ -47,13 +53,16 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
   };
 
   return (
-    <AuthLayoutClient
-      initialSession={initialSession}
-      initialSpaces={spaces}
-      initialMemberships={memberships}
-      initialLockedSubspaces={lockedSubspaces}
-    >
-      {children}
-    </AuthLayoutClient>
+    <>
+      {themeScript}
+      <AuthLayoutClient
+        initialSession={initialSession}
+        initialSpaces={spaces}
+        initialMemberships={memberships}
+        initialLockedSubspaces={lockedSubspaces}
+      >
+        {children}
+      </AuthLayoutClient>
+    </>
   );
 }

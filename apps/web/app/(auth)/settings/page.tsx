@@ -1,7 +1,8 @@
 'use client';
 
 import React, { Suspense } from 'react';
-import { useTheme, COLOR_THEMES, ColorTheme } from '@/features/shared/contexts/ThemeContext';
+import { useTheme } from '@/features/shared/contexts/ThemeContext';
+import { COLOR_THEMES, type ColorTheme } from '@/features/shared/lib/colorThemes';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import LoadingText from '@/components/ui/LoadingText';
 import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePanel';
