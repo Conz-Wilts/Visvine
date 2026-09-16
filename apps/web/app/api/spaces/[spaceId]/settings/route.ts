@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { matchCountryInLocation } from '@/lib/countries';
 import { mergeFeatureConfig } from '@/lib/featureAccess';
 import type { SpaceDesignConfig } from '@/lib/types';
 import {
@@ -43,12 +42,11 @@ export async function PUT(
   // `timezone` is deliberately not read: a scheduled agent names its own zone
   // in its own brief, so there is no space-wide default to set here.
   const {
-    name, description, country, location, tags, designConfig, featureConfig,
+    name, description, location, tags, designConfig, featureConfig,
     listing, houseDoor, worldDoor, flowContext, flowEvents, flowPeople, parentAdmins, subspaceConfig,
   } = body as {
     name?: string;
     description?: string;
-    country?: string | null;
     location?: string;
     tags?: string[];
     designConfig?: Record<string, unknown>;
@@ -72,9 +70,6 @@ export async function PUT(
     return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
   }
 
-  if (country !== undefined && country !== null && typeof country !== 'string') {
-    return NextResponse.json({ error: 'country must be a string' }, { status: 400 });
-  }
 
   if (visibility !== undefined && visibility !== 'public' && visibility !== 'private') {
     return NextResponse.json({ error: 'visibility must be public or private' }, { status: 400 });
@@ -231,12 +226,6 @@ export async function PUT(
         also: {
           ...(name !== undefined && { name: name.trim() }),
           ...(description !== undefined && { description }),
-          // Country is not asked for: it is where the Location sits — the
-          // picked place's own, else read out of the words.
-          ...(country !== undefined && { country: country || null }),
-          ...(location !== undefined && country === undefined && {
-            country: matchCountryInLocation(location)?.code ?? null,
-          }),
           ...(location !== undefined && { location: location || null }),
           ...(tags !== undefined && { tags }),
           ...(visibility !== undefined && { visibility }),
@@ -275,7 +264,6 @@ export async function PUT(
       id: updated.id,
       name: updated.name,
       description: updated.description,
-      country: updated.country,
       location: updated.location,
       tags: updated.tags,
       designConfig: updated.designConfig,

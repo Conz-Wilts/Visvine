@@ -54,7 +54,6 @@ export interface Space {
   id: string;
   name: string;
   description: string;
-  country?: string;  // ISO 3166-1 alpha-2 code e.g. "NZ", "US"
   location?: string;
   tags: string[];
   memberCount: number;

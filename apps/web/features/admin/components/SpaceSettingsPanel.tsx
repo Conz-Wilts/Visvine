@@ -233,9 +233,9 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
                   setLocation(label);
                   queue({ location: label }, { debounceMs: 800 });
                 }}
-                onPick={(label, country) => {
+                onPick={label => {
                   setLocation(label);
-                  queue({ location: label, ...(country ? { country } : {}) });
+                  queue({ location: label });
                 }}
                 onBlur={flush}
                 className={inputBaseClass}

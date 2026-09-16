@@ -157,18 +157,3 @@ export async function suggestRegions(input: string, sessionToken?: string): Prom
     })
     .filter((p) => p.name);
 }
-
-interface RegionDetailsResponse {
-  addressComponents?: Array<{ shortText?: string; types?: string[] }>;
-}
-
-/** The ISO country a picked region sits in — the one fact Discover files a space under. */
-export async function regionCountry(placeId: string, sessionToken?: string): Promise<string | null> {
-  const qs = sessionToken ? `?sessionToken=${encodeURIComponent(sessionToken)}` : '';
-  const data = await placesRequest<RegionDetailsResponse>(`/places/${encodeURIComponent(placeId)}${qs}`, {
-    method: 'GET',
-    fieldMask: 'addressComponents',
-  });
-  const code = data.addressComponents?.find((c) => c.types?.includes('country'))?.shortText?.trim().toUpperCase();
-  return code && /^[A-Z]{2}$/.test(code) ? code : null;
-}

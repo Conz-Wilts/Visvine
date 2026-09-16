@@ -29,7 +29,7 @@ export async function GET(
       prisma.space.findUnique({
         where: { id: spaceId },
         select: {
-          id: true, name: true, description: true, location: true, country: true,
+          id: true, name: true, description: true, location: true,
           tags: true, imageUrl: true, nodeTypes: true, createdAt: true,
           aliases: true, visibility: true, parentId: true, listing: true,
         },

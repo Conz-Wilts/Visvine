@@ -19,7 +19,6 @@ import {
   ANCHORS,
   MEMBER_NODE,
   NODE_TYPES,
-  SPACE_COUNTRY,
   SPACE_DESCRIPTION,
   SPACE_GRANTS,
   SPACE_ID,
@@ -140,7 +139,6 @@ export async function seedBase(): Promise<void> {
     where: { id: SPACE_ID },
     data: {
       tags: [...SPACE_TAGS],
-      country: SPACE_COUNTRY,
       timezone: SPACE_TIMEZONE,
       nodeTypes: NODE_TYPES,
       featureConfig: featureConfig as object,

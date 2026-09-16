@@ -10,7 +10,6 @@ const VISIBLE_SPACE_SELECT = {
   id: true,
   name: true,
   description: true,
-  country: true,
   location: true,
   tags: true,
   createdAt: true,
@@ -102,7 +101,6 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
     id: c.id,
     name: c.name,
     description: c.description ?? '',
-    country: c.country ?? undefined,
     location: c.location ?? undefined,
     tags: c.tags ?? [],
     memberCount: c._count.members,
@@ -153,7 +151,6 @@ export interface SpaceMembership {
   id: string;
   name: string;
   description: string | null;
-  country: string | null;
   location: string | null;
   tags: string[];
   memberCount: number;
@@ -176,7 +173,6 @@ const MEMBERSHIP_SPACE_SELECT = {
   id: true,
   name: true,
   description: true,
-  country: true,
   location: true,
   tags: true,
   createdAt: true,
@@ -216,7 +212,6 @@ export async function listUserSpaces(session: SessionPayload): Promise<SpaceMemb
     id: space.id,
     name: space.name,
     description: space.description,
-    country: space.country,
     location: space.location,
     tags: space.tags,
     memberCount: space._count.members,

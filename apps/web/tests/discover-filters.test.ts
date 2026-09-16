@@ -20,7 +20,7 @@ const space = (over: Partial<DiscoverSpace> & { id: string }): DiscoverSpace => 
 });
 
 const spaces: DiscoverSpace[] = [
-  space({ id: 'nzvc', name: 'NZ Ventures', country: 'nz', tags: ['VC', 'Fintech'] }),
+  space({ id: 'nzvc', name: 'NZ Ventures', location: 'Auckland, NZ', tags: ['VC', 'Fintech'] }),
   space({ id: 'syd', name: 'Sydney Founders', location: 'Sydney, Australia', tags: ['fintech', 'Founders'] }),
   space({ id: 'room', name: 'Deal room', parentId: 'nzvc', tags: [] }),
   space({ id: 'orphan', name: 'Orphan room', parentId: 'hidden', tags: ['Climate'] }),
@@ -31,7 +31,7 @@ test('the global record is never a Discover tile', () => {
   assert.deepEqual(discoverableSpaces(listed).map((s) => s.id), spaces.map((s) => s.id));
 });
 
-test('country comes from the column, then the location text', () => {
+test('country is read off the location text', () => {
   assert.equal(spaceCountryCode(spaces[0]), 'NZ');
   assert.equal(spaceCountryCode(spaces[1]), 'AU');
   assert.equal(spaceCountryCode(spaces[2]), null);

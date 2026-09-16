@@ -13,7 +13,6 @@ export interface DiscoverSpace {
   id: string;
   name: string;
   description?: string;
-  country?: string;
   location?: string;
   tags: string[];
   memberCount: number;
@@ -58,10 +57,8 @@ export function discoverableSpaces<T extends Pick<DiscoverSpace, 'id'>>(spaces: 
   return spaces.filter((space) => !isGlobalSpace(space.id));
 }
 
-/** A space's country as an ISO code: the column first, then the location text. */
-export function spaceCountryCode(space: Pick<DiscoverSpace, 'country' | 'location'>): string | null {
-  const code = space.country?.trim().toUpperCase();
-  if (code && getCountry(code)) return code;
+/** A space's country as an ISO code, read off its Location ("Auckland, New Zealand" → NZ). */
+export function spaceCountryCode(space: Pick<DiscoverSpace, 'location'>): string | null {
   return matchCountryInLocation(space.location)?.code ?? null;
 }
 

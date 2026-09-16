@@ -7,9 +7,9 @@ import { MapPinIcon } from '@/features/shared/icons';
 
 /**
  * A space's Location: a country, region or city, never an address. Typing
- * asks /api/places/regions; picking one stores its name and the ISO country
- * it sits in, which is what Discover files the space under. Without a map key
- * the field is plain text and the server reads the country out of the words.
+ * asks /api/places/regions; picking one stores Google's name for it, which
+ * ends in the country Discover files the space under. Without a map key the
+ * field is plain text.
  */
 export default function RegionAutocomplete({
   value,
@@ -21,8 +21,8 @@ export default function RegionAutocomplete({
   value: string;
   /** A hand edit — the text alone. */
   onType: (label: string) => void;
-  /** A picked region — its name and, when Google knows it, its country. */
-  onPick: (label: string, country: string | null) => void;
+  /** A picked region, by its whole name. */
+  onPick: (label: string) => void;
   onBlur?: () => void;
   className?: string;
 }) {
@@ -57,30 +57,20 @@ export default function RegionAutocomplete({
     }, 250);
   };
 
-  const pick = async (s: RegionSuggestion) => {
+  const pick = (s: RegionSuggestion) => {
     if (timer.current) clearTimeout(timer.current);
     latest.current++;
     setOpen(false);
     setSuggestions([]);
-    const token = sessionToken.current;
     sessionToken.current = newToken();
-    let country: string | null = null;
-    try {
-      const res = await fetchJson<{ country: string | null }>(
-        `/api/places/regions/${encodeURIComponent(s.placeId)}?session=${token}`,
-      );
-      country = res.country;
-    } catch {
-      // The name still saves; the server reads a country out of it.
-    }
-    onPick(s.label, country);
+    onPick(s.label);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!open) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setHighlighted((h) => Math.min(h + 1, suggestions.length - 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlighted((h) => Math.max(h - 1, 0)); }
-    else if (e.key === 'Enter') { e.preventDefault(); if (suggestions[highlighted]) void pick(suggestions[highlighted]); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (suggestions[highlighted]) pick(suggestions[highlighted]); }
     else if (e.key === 'Escape') setOpen(false);
   };
 
@@ -114,7 +104,7 @@ export default function RegionAutocomplete({
           {suggestions.map((s, i) => (
             <li
               key={s.placeId}
-              onMouseDown={(e) => { e.preventDefault(); void pick(s); }}
+              onMouseDown={(e) => { e.preventDefault(); pick(s); }}
               onMouseEnter={() => setHighlighted(i)}
               className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm transition-colors"
               style={{ background: i === highlighted ? 'var(--color-surface-2)' : 'transparent' }}

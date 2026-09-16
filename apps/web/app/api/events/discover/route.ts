@@ -41,7 +41,7 @@ export async function GET() {
         imageUrl: true,
         alias: true,
         metadata: true,
-        space: { select: { id: true, name: true, imageUrl: true, country: true, location: true } },
+        space: { select: { id: true, name: true, imageUrl: true, location: true } },
       },
     });
 
@@ -65,7 +65,7 @@ export async function GET() {
           spaceName: row.space?.name ?? null,
           spaceImageUrl: row.space?.imageUrl ?? null,
           country: row.space
-            ? spaceCountryCode({ country: row.space.country ?? undefined, location: row.space.location ?? undefined })
+            ? spaceCountryCode({ location: row.space.location ?? undefined })
             : null,
         };
         return {

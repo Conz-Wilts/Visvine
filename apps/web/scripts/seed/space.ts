@@ -33,7 +33,6 @@ export const SPACE_DESCRIPTION =
   'Visvine building Visvine. The spaces that run on us, the people who run them, ' +
   'and the product decisions behind it all.'
 export const SPACE_LOCATION = 'Auckland, New Zealand'
-export const SPACE_COUNTRY = 'NZ'
 export const SPACE_TAGS = ['Product', 'Community', 'SaaS', 'New Zealand']
 export const SPACE_TIMEZONE = 'Pacific/Auckland'
 

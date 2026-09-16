@@ -68,7 +68,6 @@ interface Overview {
     name: string;
     description?: string | null;
     location?: string | null;
-    country?: string | null;
     tags: string[];
     imageUrl?: string | null;
     nodeTypes?: NodeTypeConfig[] | null;
