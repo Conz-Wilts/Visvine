@@ -181,7 +181,7 @@ const TableBody = React.forwardRef<
           key={`filler-${i}`}
           aria-hidden
           data-filler
-          className="h-11 border-b border-border-subtle"
+          className="h-12 border-b border-border-subtle"
           style={i === fillerRows - 1 ? { height: lastFillerHeight } : undefined}
         >
           {columns.map((column, j) => (
@@ -205,7 +205,7 @@ const TableRow = ({ item: _item, style, ...props }: React.ComponentPropsWithoutR
   <tr
     {...props}
     style={style}
-    className="group h-11 border-b border-border-subtle"
+    className="group h-12 border-b border-border-subtle"
   />
 );
 
@@ -377,7 +377,7 @@ export default function DirectoryTable({
     return (
       <div className="flex flex-col divide-y divide-border-subtle">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="flex h-12 items-center gap-6 px-3">
+          <div key={i} className="flex h-12 items-center gap-6 px-4">
             <Skeleton className="h-7 w-7 rounded-lg" />
             <Skeleton className="h-3.5 w-40" />
             <Skeleton className="h-3.5 w-28" />
@@ -407,7 +407,7 @@ export default function DirectoryTable({
           computeItemKey={(_, item) => item.id}
           increaseViewportBy={{ top: 240, bottom: 480 }}
           fixedHeaderContent={() => (
-            <tr className="h-10 border-b border-border-default">
+            <tr className="h-11 border-b border-border-default">
               {columns.map((column) => {
                 const active = sort?.key === column.key;
                 const isName = column.source === 'name';
@@ -453,7 +453,7 @@ export default function DirectoryTable({
                       aria-haspopup="menu"
                       aria-expanded={menu?.key === column.key}
                       className={clsx(
-                        'flex h-10 w-full min-w-0 items-center gap-2 px-3 transition-colors hover:text-text-primary',
+                        'flex h-11 w-full min-w-0 items-center gap-2 px-4 transition-colors hover:text-text-primary',
                         column.kind === 'number' && 'justify-end',
                         (active || lit) && 'text-text-primary',
                       )}
@@ -515,7 +515,7 @@ export default function DirectoryTable({
                   aria-expanded={addAnchor !== null}
                   title="Add a column"
                   className={clsx(
-                    'flex h-10 w-full items-center gap-2 px-3 text-[13px] font-medium text-text-muted transition-colors hover:text-text-primary',
+                    'flex h-11 w-full items-center gap-2 px-4 text-[13px] font-medium text-text-muted transition-colors hover:text-text-primary',
                     addAnchor && 'text-text-primary',
                   )}
                 >
@@ -536,7 +536,7 @@ export default function DirectoryTable({
                 <td
                   key={column.key}
                   className={clsx(
-                    'border-r border-border-subtle px-3 align-middle',
+                    'border-r border-border-subtle px-4 align-middle',
                     litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
                     i === 0 && column.source === 'name' && 'sticky left-0 z-10',
                     column.kind === 'number' && 'text-right',
@@ -588,7 +588,7 @@ export default function DirectoryTable({
                       <td
                         key={column.key}
                         className={clsx(
-                          'h-11 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2',
+                          'h-12 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2',
                           litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
                         )}
                       >
@@ -683,7 +683,7 @@ function NameCell({ item, accentColor, onOpen, onRename }: {
 }) {
   const [editing, setEditing] = useState(false);
   return (
-    <div className="flex h-11 min-w-0 items-center gap-2.5 pl-3 pr-1">
+    <div className="flex h-12 min-w-0 items-center gap-2.5 pl-4 pr-1.5">
       <Avatar
         name={item.name}
         imageUrl={item.image_url}

@@ -1,12 +1,11 @@
 'use client';
 
-// The Directory's Table view: the strip of tables (TypeStrip), a slim control
-// bar under it (TableToolbar) and one of them. A table is per type because the
-// columns are — a Person has a role and a company, an Event has a date and a
-// capacity — so the grid's type filter becomes the strip here, and the bar's
-// filters (search, alias, tag) narrow within the table picked. `All` is the
-// one table across types: the core every entity has — name, type, tags —
-// and nothing a single type owns.
+// The Directory's Table view: one slim control bar (TableToolbar) and the
+// table it names. A table is per type because the columns are — a Person has a
+// role and a company, an Event has a date and a capacity — so the grid's type
+// filter becomes a dropdown on the bar (TypeMenu) and search narrows within
+// the table picked. `All` is the one table across types: the core every entity
+// has — name, type, tags — and nothing a single type owns.
 //
 // Edits go straight to the record (`PATCH /api/nodes/<id>`) and are held
 // optimistically over the fetched rows: the directory response is cached for
@@ -16,9 +15,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert } from '@/components/ui';
-import ColumnsMenu from './ColumnsMenu';
 import TableToolbar from './TableToolbar';
-import TypeStrip from './TypeStrip';
+import TypeMenu from './TypeMenu';
 import DirectoryTable from './DirectoryTable';
 import AgentsRoster from '@/features/agents/components/AgentsRoster';
 import { useAgentsRoster } from '@/features/agents/lib/useAgentsRoster';
@@ -132,8 +130,8 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
     return table.arranged.filter((c) => !shown.has(c.key));
   }, [table.visible, table.arranged]);
 
-  // The rows: the toolbar's search/alias/tag result, narrowed to the tab's
-  // type (the grid's type filter is not consulted here — the tab IS it),
+  // The rows: the toolbar's search/alias/tag result, narrowed to the table's
+  // type (the grid's type filter is not consulted here — the dropdown IS it),
   // with this view's edits laid over, in the header's sort.
   const [overrides, setOverrides] = useState<Map<string, CellPatch[]>>(new Map());
   const aliasNames = useMemo(() => new Set((space?.aliases ?? []).map((a) => (a as SpaceAlias).name)), [space?.aliases]);
@@ -178,14 +176,10 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   // cannot have both: the horizontal scroller would be the head's containing
   // scroll box, not the page.
   return (
+    // No left padding: the bar's first control stands on the same line as the
+    // table's left edge under it, so the two read as one column.
     <div className="flex h-full min-h-0 min-w-0 flex-col">
-      <div className="shrink-0 px-6 pt-1">
-        {/* Which table you are in comes first: the strip names the thing, the
-            bar below it narrows that thing. */}
-        <div className="pb-1">
-          <TypeStrip types={types} activeKey={activeKey ?? ''} nodeTypes={space?.nodeTypes} onChange={onTypeChange} />
-        </div>
-
+      <div className="shrink-0 pr-4 pt-1.5">
         {/* Search is one of the bar's controls here, not a band of its own: the
             Table already states what it is showing and narrows it from that
             line, so the box belongs on it, at the height of the buttons beside
@@ -193,29 +187,15 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
             the surface. */}
         <TableToolbar
           browse={browse}
+          typeMenu={
+            <TypeMenu types={types} activeKey={activeKey ?? ''} nodeTypes={space?.nodeTypes} onChange={onTypeChange} />
+          }
           searchPlaceholder={
             activeName && !isAll
               ? `Search ${pluralTypeName(activeName, space?.nodeTypes).toLowerCase()}…`
               : 'Search the directory…'
           }
           typeKey={activeKey ?? ''}
-          columns={isAgents ? [] : table.visible}
-          tagOptions={isAgents ? [...new Set((roster.data?.agents ?? []).flatMap((a) => a.tags))].sort() : undefined}
-          sort={table.view.sort}
-          onSortChange={table.setSort}
-          trailing={
-            activeKey && !isAgents ? (
-              <ColumnsMenu
-                typeName={activeName}
-                arranged={table.arranged}
-                view={table.view}
-                onToggle={table.toggle}
-                onMove={table.move}
-                onReset={table.reset}
-                fields={fields}
-              />
-            ) : null
-          }
         />
 
         {(error || saveError) && (

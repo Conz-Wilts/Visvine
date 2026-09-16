@@ -38,7 +38,7 @@ interface TableCellProps {
 // and the ring inside the cell's own edges: the cell lights up, nothing
 // floats over the grid.
 const INPUT_CLASS =
-  'h-full w-full bg-surface-1 px-3 text-sm text-text-primary outline-none ring-1 ring-inset ring-[var(--color-brand-green)]';
+  'h-full w-full bg-surface-1 px-4 text-sm text-text-primary outline-none ring-1 ring-inset ring-[var(--color-brand-green)]';
 
 export default function TableCell({ column, value, aliasColor, typeLabel, tagColors, onSave, autoEdit = false, onDone }: TableCellProps) {
   const [draft, setDraft] = useState<string | null>(autoEdit ? editValue(value, column) : null);
@@ -92,7 +92,7 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
   if (column.kind === 'checkbox') {
     const checked = value === true || value === 'true';
     return (
-      <div className="flex h-full items-center px-3.5">
+      <div className="flex h-full items-center px-4">
         <input
           type="checkbox"
           checked={checked}
@@ -211,7 +211,7 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
       onKeyDown={editable ? (e) => { if (e.key === 'Enter') begin(); } : undefined}
       title={error ?? (editable ? undefined : text || undefined)}
       className={clsx(
-        'flex h-full min-w-0 items-center px-3 text-sm text-text-primary',
+        'flex h-full min-w-0 items-center px-4 text-sm text-text-primary',
         column.kind === 'number' && 'justify-end',
         editable && 'cursor-text rounded-md outline-none focus-visible:ring-1 focus-visible:ring-border-default',
         saving && 'opacity-60',
