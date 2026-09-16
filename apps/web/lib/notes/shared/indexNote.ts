@@ -35,10 +35,12 @@
 //
 // Index-ness is the PATH, and only the path. A note's `type:` says what it is
 // ABOUT — so a person's context folder is `type: Person`, and a folder about
-// nothing in particular carries no type at all. There is no `Index` type in
-// this system; `declaresIndexType` exists to reject the spelling, not to act
-// on it. A folder appears when one is needed: write a note under `a/b/` and
-// `a/b.md` becomes `a/b/index.md` by itself (store.ensureParentFolderNote).
+// nothing in particular carries no type at all. `Index` is never STORED —
+// `declaresIndexType` exists to reject the spelling, not to act on it — but a
+// plain folder still shows the word where a type is shown, derived from the
+// path by `displayTypeOf`. A folder appears when one is needed: write a note
+// under `a/b/` and `a/b.md` becomes `a/b/index.md` by itself
+// (store.ensureParentFolderNote).
 //
 // These are the pure path/content helpers; the DB side (ensureAncestorIndexes,
 // createIndexFolder, convertNoteToIndex, refreshFolderIndex) lives in
@@ -80,6 +82,28 @@ export function folderOfIndexPath(indexPath: string): string {
 export function declaresIndexType(content: string): boolean {
   const declared = parseFrontmatter(content).type
   return typeof declared === 'string' && declared.trim().toLowerCase() === 'index'
+}
+
+/**
+ * The word a folder's index SHOWS where a note's type is shown.
+ *
+ * Display only, and derived from the path every time it is drawn: nothing ever
+ * stores it (enforceIndexFrontmatter strips the spelling, db:notes:verify fails
+ * on a survivor), because index-ness is the path and a stored `type: Index`
+ * would also regroup every parent's child listing out of OKF's own
+ * `Subdirectories` heading.
+ */
+export const INDEX_DISPLAY_TYPE = 'Index'
+
+/**
+ * The type a note shows: what it DECLARES when it declares one — a person's
+ * context folder is a Person, not an Index — else `Index` for a folder, whose
+ * shape is its type, else nothing, which is what a plain note is.
+ */
+export function displayTypeOf(path: string, declaredType?: string | null): string | null {
+  const declared = declaredType?.trim()
+  if (declared) return declared
+  return isIndexPath(path) ? INDEX_DISPLAY_TYPE : null
 }
 
 /**

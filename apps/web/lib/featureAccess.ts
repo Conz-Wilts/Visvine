@@ -194,6 +194,10 @@ const NODE_TYPE_TOOL_KEYS: Record<string, string> = {
   resource: 'directory',
   agent: 'directory',
   connector: 'directory',
+  // A folder's type. Context is the note tree under the Directory, so Index is
+  // filed there with the rest of it — here and not in NODE_TYPE_FEATURE_KEYS,
+  // because context is not a feature a space can switch off.
+  index: 'directory',
 };
 
 /** The tool a built-in node type comes from, or null if no tool owns it. */

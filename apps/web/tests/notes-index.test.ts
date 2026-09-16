@@ -18,6 +18,8 @@ import {
   indexFolderPathOf,
   indexPathOf,
   declaresIndexType,
+  displayTypeOf,
+  INDEX_DISPLAY_TYPE,
   isIndexPath,
   newIndexContent,
   nextIndexTitle,
@@ -472,4 +474,18 @@ test('foldCuratedChildren drops a heading whose whole section folded away, and i
   assert.equal(splitFrontmatter(content).body, 'Who\'s who.\n\n## Notes\n')
   const plain = '---\ntitle: Team\n---\n\nJust prose.\n'
   assert.equal(foldCuratedChildren(plain, [{ path: 'team/niki.md', title: 'Niki' }]).content, plain)
+})
+
+test('displayTypeOf: a folder is an Index, a typed folder is its subject, a note is nothing', () => {
+  assert.equal(displayTypeOf('people/index.md', null), INDEX_DISPLAY_TYPE)
+  assert.equal(displayTypeOf('index.md', ''), INDEX_DISPLAY_TYPE)
+  assert.equal(displayTypeOf('people/ann/index.md', 'Person'), 'Person')
+  assert.equal(displayTypeOf('thesis.md', null), null)
+  assert.equal(displayTypeOf('thesis.md', 'Resource'), 'Resource')
+})
+
+test('the Index label is shown, never stored: the contract still strips the spelling', () => {
+  const written = enforceIndexFrontmatter(`---\ntype: ${INDEX_DISPLAY_TYPE}\ntitle: Growth\n---\n`, 'growth')
+  assert.equal(declaresIndexType(written), false)
+  assert.equal(displayTypeOf('growth/index.md', null), INDEX_DISPLAY_TYPE)
 })

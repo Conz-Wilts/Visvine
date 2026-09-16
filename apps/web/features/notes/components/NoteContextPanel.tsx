@@ -14,6 +14,7 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { entityNotePath, entityStub, hrefForNotePath, noteHref } from '@/lib/notes/entities'
 import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { displayTypeOf } from '@/lib/notes/shared/indexNote'
 import { isReservedTypeName } from '@/lib/types/nodeTypeRegistry'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
@@ -413,6 +414,9 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         // alias, the same name its card carries in the directory.
         alias={entityByPath.get(shown.path)?.alias ?? null}
         tags={tags}
+        // A folder declaring no subject is still an Index — the shape is the
+        // path, so the word is derived, never read out of the frontmatter.
+        shapeType={displayTypeOf(shown.path, type)}
         nodeTypes={currentSpace?.nodeTypes}
         aliases={currentSpace?.aliases as SpaceAlias[] | undefined}
         tagColors={currentSpace?.designConfig?.tagColors ?? null}

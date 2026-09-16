@@ -68,7 +68,11 @@ export function buildTypeCatalog(opts: {
   /** The space's whole alias list (`Space.aliases`), scoped per type here. */
   aliases?: SpaceAlias[]
 }): TypeCatalogEntry[] {
-  return DEFAULT_NODE_TYPES.map((config) => {
+  // The closed NODE vocabulary, which is not the whole type list: a built-in
+  // stored `scope: 'note'` types a note and never a node — `Index`, which is
+  // what a folder shows — so naming it here would offer an agent a type nothing
+  // can wear. Same rule the directory's type filter applies.
+  return DEFAULT_NODE_TYPES.filter((config) => config.scope !== 'note').map((config) => {
     const type = canonicalNodeType(config.name)
     // Person's list is grafted with the built-in Admin alias, which is stored
     // implicitly — omitting it would tell an agent it can create one.

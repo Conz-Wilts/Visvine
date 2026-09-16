@@ -22,9 +22,11 @@ const MAX_NAME = 32;
  *
  * `Index` names a SHAPE, not a subject: a folder is a path (its `index.md`),
  * and a note's type says what it is ABOUT — so a folder about Connor is
- * `type: Person`. A space that created an "Index" type would put the two axes
- * back into one field, which is the confusion the model exists to remove; the
- * index contract strips the word on write (lib/notes/shared/indexNote.ts).
+ * `type: Person`. Every space HAS an Index type (DEFAULT_NODE_TYPES), because
+ * the word a folder shows deserves the console's colour and spelling like any
+ * other; reserving it is what keeps that from becoming a value somebody writes.
+ * Nothing offers it, and the index contract strips it on write
+ * (lib/notes/shared/indexNote.ts).
  * `Note` and `File` are the two things that are content in a context rather
  * than nodes in the graph — the draft menu offers them already and they are not
  * node types.

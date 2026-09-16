@@ -4,7 +4,17 @@
 // shows a note it isn't editing: the standalone note view and the Context
 // browser's note column.
 //
-// A note's type and tags always show. The type is resolved against the types
+// A note's type and tags always show. A note that declares none can still HAVE
+// one by its shape — a plain folder is an Index — and `shapeType` is how the
+// caller says so: it labels the chip, is never removable, and is not a value
+// anything writes (lib/notes/shared/indexNote.ts). It is a real entry in the
+// vocabulary all the same, so it wears the console's colour like every type.
+//
+// Editing is the chip itself: press it, pick from a float of chips (TypePicker).
+// There was a `<select>` here, which drew every type as identical black text —
+// the one thing that tells two types apart, gone at the moment of choosing.
+//
+// The type is resolved against the types
 // the space created in its console, so the chip carries the console's own
 // spelling and colour; a type the console doesn't know still shows (a note that
 // says what it is must be able to say so) but falls back to the neutral grey
@@ -17,12 +27,13 @@
 // Label above value, not beside it — a note's column is narrow and a label
 // gutter would eat a third of it.
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import Chip, { CHIP_ACCENT_HOVER, chipClass } from '@/components/ui/Chip'
 import { findAlias, getNodeTypeConfig, nodeTypeLabel } from '@/lib/types'
 import { tagKey, tagPalette } from '@/lib/tagColors'
 import type { SpaceAlias, NodeTypeConfig } from '@/lib/types'
 import { TagCombobox } from './TagCombobox'
+import { TypePicker } from './TypePicker'
 
 const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-text-muted'
 
@@ -47,6 +58,12 @@ interface NoteMetaRowsProps {
   editable?: boolean
   /** Types that may be assigned here. The caller owns vocabulary policy. */
   typeOptions?: NodeTypeConfig[]
+  /**
+   * The type the note has by its SHAPE, shown when it declares none — `Index`
+   * for a folder. Display only: picking a real type replaces it, and there is
+   * nothing to remove, because it was never stored.
+   */
+  shapeType?: string | null
   /** False where a type is structural (for example, an entity folder index). */
   canEditType?: boolean
   onTypeChange?: (type: string | null) => void
@@ -59,14 +76,21 @@ interface NoteMetaRowsProps {
 }
 
 export function NoteMetaRows({
-  type, alias, tags, nodeTypes, aliases, tagColors, editable = false, typeOptions, canEditType = true,
+  type, alias, tags, nodeTypes, aliases, tagColors, editable = false, typeOptions, shapeType = null, canEditType = true,
   onTypeChange, onTagsChange, tagSuggestions = [], onCreateTagColor, className = '',
 }: NoteMetaRowsProps) {
   const [addingTag, setAddingTag] = useState(false)
+  const [pickingType, setPickingType] = useState(false)
+  const typeAnchor = useRef<HTMLSpanElement>(null)
   const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const trimmedType = type?.trim() || null
+  const shape = trimmedType ? null : shapeType?.trim() || null
   const typeEditable = editable && canEditType
   const typeConfig = trimmedType ? getNodeTypeConfig(trimmedType, nodeTypes) : null
+  // A shape resolves through the space's vocabulary like any other type — that
+  // is what `Index` is doing in DEFAULT_NODE_TYPES — so a folder's chip is the
+  // console's colour, not one hard-coded here.
+  const shapeConfig = shape ? getNodeTypeConfig(shape, nodeTypes) : null
   // An alias carries its own colour, the one the directory card is painted in.
   const aliasConfig = trimmedType ? findAlias(aliases, alias, trimmedType) : undefined
   const colors = { ...(tagColors ?? {}), ...tagColorOverride }
@@ -94,11 +118,11 @@ export function NoteMetaRows({
     addTag(tag)
   }
 
-  if (!typeConfig && tags.length === 0 && !editable) return null
+  if (!typeConfig && !shape && tags.length === 0 && !editable) return null
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
-      {(typeConfig || typeEditable) && (
+      {(typeConfig || shape || typeEditable) && (
         <div className="flex flex-col gap-1">
           <span className={LABEL_CLASS}>Type</span>
           <span className="flex">
@@ -106,35 +130,41 @@ export function NoteMetaRows({
                 for one type, wherever you meet it — and its alias in preference
                 to it, since that's the name the space actually uses. */}
             {typeEditable ? (
-              <span className="flex items-center gap-1">
-                <select
-                  aria-label="Note type"
-                  value={trimmedType ?? ''}
-                  onChange={(event) => onTypeChange?.(event.target.value || null)}
-                  className="h-7 max-w-full rounded-lg border border-border-default bg-surface-1 px-2.5 text-[13px] font-semibold text-text-primary outline-none focus:border-brand-green"
+              // The chip IS the control: press it to change the type, and the
+              // options come back as the chips they will become.
+              <span ref={typeAnchor} className="relative">
+                <Chip
+                  size="lg"
+                  // Nothing declared and no shape to stand in for it: the empty
+                  // slot, drawn like "+ Add tag" one row below.
+                  tone={typeConfig || shapeConfig ? 'solid' : 'dashed'}
+                  color={aliasConfig?.color ?? typeConfig?.color ?? shapeConfig?.color}
+                  onClick={() => setPickingType((open) => !open)}
+                  onRemove={trimmedType ? () => onTypeChange?.(null) : undefined}
+                  removeLabel="Remove type"
+                  title="Change type"
                 >
-                  <option value="">No type</option>
-                  {trimmedType && !options.some((option) => option.name.toLowerCase() === trimmedType.toLowerCase()) && (
-                    <option value={trimmedType}>{trimmedType}</option>
-                  )}
-                  {options.map((option) => <option key={option.name} value={option.name}>{option.name}</option>)}
-                </select>
-                {trimmedType && (
-                  <button
-                    type="button"
-                    aria-label="Remove type"
-                    title="Remove type"
-                    onClick={() => onTypeChange?.(null)}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-border-default text-lg leading-none text-text-muted transition hover:border-red-400 hover:text-red-600"
-                  >
-                    ×
-                  </button>
+                  {typeConfig ? nodeTypeLabel(trimmedType, alias, aliases, nodeTypes) : shape ?? '+ Add type'}
+                </Chip>
+                {pickingType && (
+                  <TypePicker
+                    options={options}
+                    current={trimmedType}
+                    // What clearing LEAVES: a folder goes back to being an Index,
+                    // it does not become typeless.
+                    clearLabel={shapeType?.trim() ? `No type (${shapeType.trim()})` : 'No type'}
+                    onPick={(next) => onTypeChange?.(next)}
+                    anchorRef={typeAnchor}
+                    onClose={() => setPickingType(false)}
+                  />
                 )}
               </span>
             ) : typeConfig ? (
               <Chip size="lg" color={aliasConfig?.color ?? typeConfig.color}>
                 {nodeTypeLabel(trimmedType, alias, aliases, nodeTypes)}
               </Chip>
+            ) : shape ? (
+              <Chip size="lg" color={shapeConfig?.color}>{shape}</Chip>
             ) : null}
           </span>
         </div>

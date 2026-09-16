@@ -145,3 +145,20 @@ test('a member-made type can be removed, and nothing else can', () => {
   )
   assert.equal(removeNodeType(mislabelled, 'Person').ok, false)
 })
+
+test('Index is a built-in every new space has, and one nobody can author or delete', () => {
+  // A new space stores no list, so the defaults ARE its vocabulary.
+  const fresh = seedNodeTypes(null)
+  const index = fresh.find((t) => t.name === 'Index')
+  assert.ok(index, 'every space has an Index type')
+  assert.equal(index!.scope, 'note', 'it labels a note, never a node')
+
+  // Reserved, so no picker offers it and no member can mint it.
+  assert.equal(isReservedTypeName('Index'), true)
+  assert.equal(mergeNodeType(null, { name: 'Index', color: '#111111' }).ok, false)
+
+  // Built-in, so the console cannot shorten the list by it either.
+  const removed = removeNodeType(fresh, 'Index')
+  assert.equal(removed.ok, false)
+  assert.match(removed.ok ? '' : removed.error, /built-in/)
+})

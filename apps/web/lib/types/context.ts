@@ -272,6 +272,18 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // because a Tool is a container of its own surfaces, not a document; violet is
   // the one palette hue (lib/profileTheme.ts PALETTES) no other type has taken.
   { name: 'Tool',      color: '#8b5cf6', shape: 'square'    },
+  // A folder, which is its `index.md` (lib/notes/shared/indexNote.ts). It is
+  // here so the word a folder shows has a colour and a spelling the console
+  // owns like every other type — not so anything can be typed `Index`: the name
+  // stays reserved (nodeTypeRegistry.ts RESERVED), no picker offers it and the
+  // index contract still strips it from frontmatter. Square, like the other
+  // containers; the quietest hue in the set, because a folder is the one type
+  // that says nothing about its subject.
+  //
+  // `scope: 'note'` is the honest one: it labels a NOTE and never a node —
+  // nothing syncs an `index:` node — so it belongs with the vocabulary the
+  // directory's type filter skips rather than with the types a card can wear.
+  { name: 'Index',     color: '#64748b', shape: 'square', scope: 'note' },
 ];
 
 // Aliases are entirely space-configured — there is no built-in list for any
@@ -292,10 +304,10 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
  * node shows up in its grid too, which reads as a "this space" card and links
  * to /spaces/<id>.
  *
- * `note`, `file` and `index` are still listed so any row left over from when
- * those types existed stays filtered out of the grid and the graph rather than
- * surfacing as a grey unknown. Nothing writes them any more — `index` least of
- * all: a folder is a path, never a type (lib/notes/shared/indexNote.ts).
+ * `note`, `file` and `index` are listed so they stay out of the grid and the
+ * graph. `index` is a live entry in the vocabulary — it is what a folder's chip
+ * is coloured by — but never a node: a folder is a path, and its `type:` is
+ * still stripped on write (lib/notes/shared/indexNote.ts).
  */
 export const STRUCTURAL_NODE_TYPES: readonly string[] = [
   'section',

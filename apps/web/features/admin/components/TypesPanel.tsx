@@ -728,6 +728,12 @@ export default function TypesPanel() {
   const renderRow = (liveType: NodeTypeConfig) => {
     const isPerson = liveType.name.toLowerCase() === PERMISSION_TYPE;
     const noteScoped = liveType.scope === 'note';
+    // A built-in is never deletable, whatever scope the space stored it with
+    // (removeNodeType asks the registry too) — so the button that would be
+    // refused is not offered. `Index` is the one built-in that IS note-scoped.
+    const deletable = noteScoped && !DEFAULT_NODE_TYPES.some(
+      (t) => t.name.toLowerCase() === liveType.name.trim().toLowerCase(),
+    );
     const typeAliases = aliasesForType(aliases, liveType.name);
     const expanded = openName?.toLowerCase() === liveType.name.toLowerCase();
     // Only a member-made type can have a Tool-owned page; pageClaimantsFor
@@ -789,7 +795,7 @@ export default function TypesPanel() {
               onRemoveAlias={handleRemoveAlias}
               onRenameAlias={handleRenameAlias}
               onUpdateAliasColor={handleUpdateAliasColor}
-              onDelete={noteScoped ? () => setDeleting(liveType) : undefined}
+              onDelete={deletable ? () => setDeleting(liveType) : undefined}
               saving={saving}
             />
           </div>

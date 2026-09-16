@@ -30,11 +30,12 @@ import { isFederatedPath } from '@/lib/spaces/subspaces'
 
 const ROOT_PATH = ''
 
-/** What a tree opens at: the space row, and the `Main` tier under it when the
- *  space has rooms to draw beside it (lib/notes/shared/rootTiers.ts). Main is
- *  where the space's own folders are, so leaving it shut would open the tree
- *  on nothing. Harmless when there is no Main row — the key matches nothing. */
-const INITIAL_OPEN = [ROOT_PATH, MAIN_PATH]
+/** What a tree opens at: the space row, and nothing else. A space with rooms
+ *  draws `Main` beside them (lib/notes/shared/rootTiers.ts), and that tier
+ *  starts SHUT too — the tiers are the shape of the space, and opening one of
+ *  them buries the others under a namespace list nobody asked for. A reveal
+ *  still opens Main on its way down (ancestorChain). */
+const INITIAL_OPEN = [ROOT_PATH]
 
 // Per-space expansion for the current visit. A module-level map, not
 // localStorage and not component state: the tree re-mounts on every navigation
