@@ -217,11 +217,13 @@ describe('withHolds — the frontmatter patch', () => {
 })
 
 describe('structuralIconOf — the glyph', () => {
-  it('a built-in folder wears its tool’s glyph, a room the blocks mark, a plain folder none', () => {
+  it('a built-in folder wears its tool’s glyph, a room and a plain folder none', () => {
     assert.equal(structuralIconOf('agents'), 'nav-agents')
     assert.equal(structuralIconOf('people'), 'nav-directory')
     assert.equal(structuralIconOf(SUBSPACE_FOLDER), 'blocks')
-    assert.equal(structuralIconOf('subspaces/dp'), 'blocks')
+    // A room takes the plain folder glyph: the tier it is drawn in already
+    // says it is another space (lib/notes/shared/rootTiers.ts).
+    assert.equal(structuralIconOf('subspaces/dp'), null)
     assert.equal(structuralIconOf('subspaces/dp/agents'), 'nav-agents')
     assert.equal(structuralIconOf('parent'), 'blocks')
     assert.equal(structuralIconOf('ops'), null)

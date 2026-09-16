@@ -41,7 +41,7 @@ import {
 import { canMoveInto, deleteFolderDenial, moveDenial, parentFolderOf } from '../lib/useContextTree'
 import { isFederatedPath, subspaceOfPath } from '@/lib/spaces/subspaces'
 import { canPlaceInto, isPeopleFolder, placeableOf, placementDenial, structuralIconOf } from '@/lib/notes/shared/placedFolders'
-import { BlocksIcon, Icon } from '@/features/shared/icons'
+import { Icon } from '@/features/shared/icons'
 
 // Expansion state (openPaths + reveal overlay + persistence) lives in
 // useContextTreeState, shared with the full-screen Context explorer so both
@@ -920,16 +920,16 @@ function FolderRow(props: {
               at the glyph's centre â€” exactly where CHILD_INDENT puts the
               children's guides, so the two read as one line. */}
           {open && <TreeStem active={onSelectedPath(props.node.path, props.selectedPath)} />}
-          {/* A built-in folder carries its tool's glyph, and a sub-space read
-              into this tree a space's — each the shape of what it is rather
-              than a folder somebody made (lib/notes/shared/namespaces.ts). */}
+          {/* A built-in folder carries its tool's glyph
+              (lib/notes/shared/namespaces.ts). Everything else, a room read
+              into this tree included, is a folder: the tier it sits in already
+              says it is another space, so a second mark on the row only made
+              the column noisier. */}
           {props.icon ??
             (isPeopleFolder(props.node.path) ? (
               <GlyphIcon glyph="person" />
             ) : structuralIcon ? (
               <Icon name={structuralIcon} className="h-4 w-4" />
-            ) : props.node.space ? (
-              <BlocksIcon className="h-4 w-4" />
             ) : (
               <FolderIcon open={open} />
             ))}

@@ -251,7 +251,10 @@ function findAnywhere(node: TreeNode, path: string): TreeNode | null {
  */
 export function structuralIconOf(path: string): IconName | null {
   const sub = parseSubspacePath(path)
-  if (sub && !sub.path) return 'blocks'
+  // A room's own folder takes the plain folder glyph, like any other folder:
+  // it is drawn in the tier that already says it is another space
+  // (lib/notes/shared/rootTiers.ts), so a second mark only added noise.
+  if (sub && !sub.path) return null
   const inner = sub ? sub.path : path
   const ns = namespaceOf(inner)
   return ns && ns.dir === inner ? ns.icon : null
