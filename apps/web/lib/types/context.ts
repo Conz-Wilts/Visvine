@@ -69,11 +69,9 @@ export interface NBNode {
   /** The member this node is connected to (Node.identityId → Identity.userId).
    *  Absent = a plain context: no Profile tab, freely renameable. */
   connected_user_id?: string | null;
-  /** Set when this node is a sub-space's, read through its parent's directory
-   *  (lib/directory/peopleFlow.ts): which room. Its presence means read-only here. */
-  via_space?: { id: string; name: string };
-  /** The other rooms holding the same person, folded into this row by the people flow. */
-  also_in?: Array<{ id: string; name: string }>;
+  /** The same identity's records elsewhere in the family that the viewer can
+   *  open (lib/directory/shared/samePerson.ts). Absent when there are none. */
+  same_person?: Array<{ node_id: string; space: { id: string; name: string; parent_id: string | null } }>;
   /** The cross-space identity this node stands for (people/orgs) — how the same person is recognised across spaces. */
   identity_id?: string;
   createdAt?: string;

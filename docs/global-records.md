@@ -79,7 +79,7 @@ LinkedIn takes the identity the family's other spaces already hold under that
 name, when exactly one identity does. Two identities under one name fall back
 to the global resolver. A `split`/`rejected` resolution is honoured. Members
 need none of this: a joining member's node is connected to their own identity.
-The house's directory then draws one row per identity (`peopleFlow.ts`).
+Each space's directory draws its own record; the person's page names the family's other records of that identity (`lib/directory/shared/samePerson.ts`).
 
 People recorded before the rule are folded by
 `pnpm --filter @visvine/web db:identity:family` (`--dry` to see the plan;

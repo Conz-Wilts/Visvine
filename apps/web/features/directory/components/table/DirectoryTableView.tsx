@@ -129,7 +129,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
     async (item: DirectoryItem, column: TableColumn, value: unknown) => {
       const patch = cellPatch(column, value);
       // Another space's row read here (people flow) is not this space's to edit.
-      if (!patch || !spaceId || item.via_space) return;
+      if (!patch || !spaceId) return;
       setSaveError(null);
       try {
         await fetchJsonBody(`/api/nodes/${encodeURIComponent(item.id)}`, 'PATCH', { spaceId, ...patch });

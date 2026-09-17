@@ -12,7 +12,7 @@ import { isGlobalSpace } from '@/lib/spaces/globalSpace';
 import { GLOBAL_MODE_KEY, syncGlobalRecordSafe } from '@/lib/global/record';
 import { requireApiSession } from '@/lib/api/route';
 import { syncEntityNoteFrontmatter } from '@/lib/notes/context/entityNodes';
-import { peopleFlowReadThrough } from '@/lib/directory/peopleFlowAccess';
+import { samePersonRecords } from '@/lib/directory/samePerson';
 
 const MAX_NAME_LEN = 120;
 
@@ -57,7 +57,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   const node = await prisma.node.findUnique({
     where: { id: nodeId },
-    select: { id: true, type: true, name: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, alias: true, spaceId: true, createdAt: true, identity: { select: { userId: true } } },
+    select: { id: true, type: true, name: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, alias: true, spaceId: true, createdAt: true, identityId: true, identity: { select: { userId: true } } },
   });
 
   if (!node) {
@@ -69,20 +69,15 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   // personal space is likewise private to its owner. Anyone else gets a 404 so
   // the endpoint reveals nothing — not even that the node exists. The gate
   // runs before the graph is read, so a refused caller costs one row.
-  // ...or a member of the space this node's space sits inside, when that
-  // room lends its directory upward (lib/directory/peopleFlowAccess.ts) —
-  // the same read the house's directory grid already made. A read only: the
-  // PATCH below keeps the own-space gate, and the page shows the row as the
-  // room's, not the house's.
-  let viaSpace: { id: string; name: string } | null = null;
   if (node.spaceId && (await spaceMemberForbidden(session.userId, node.spaceId, session.email))) {
-    viaSpace = await peopleFlowReadThrough(node.spaceId, session.userId);
-    if (!viaSpace) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
 
   // Links + connected node data in one shot, bounded: a hub's page shows its
   // first MAX_CONNECTIONS with the true total beside them.
-  const [linksWithNodes, connectionCount] = await Promise.all([
+  // The same person elsewhere in the family, for the spaces this viewer can
+  // open: the one join across records, drawn on the page and never as a row.
+  const [linksWithNodes, connectionCount, samePerson] = await Promise.all([
     prisma.$queryRaw<Array<{
       source_id: string;
       target_id: string;
@@ -107,6 +102,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       LIMIT ${MAX_CONNECTIONS}
     `,
     prisma.link.count({ where: { OR: [{ sourceId: nodeId }, { targetId: nodeId }] } }),
+    node.spaceId ? samePersonRecords({ id: node.id, spaceId: node.spaceId, identityId: node.identityId }, session.userId) : Promise.resolve([]),
   ]);
 
   // The member this node is connected to: the identity link is canonical; a
@@ -162,7 +158,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         alias: node.alias ?? undefined,
         space_id: node.spaceId ?? undefined,
         connected_user_id: connectedUserId ?? undefined,
-        ...(viaSpace ? { via_space: viaSpace } : {}),
+        ...(node.identityId ? { identity_id: node.identityId } : {}),
+        ...(samePerson.length > 0 ? { same_person: samePerson } : {}),
         createdAt: node.createdAt.toISOString(),
       },
       connectionCount,

@@ -41,8 +41,7 @@ import { clsx } from 'clsx';
 import { TableVirtuoso, type TableComponents } from 'react-virtuoso';
 import Avatar from '@/components/ui/Avatar';
 import { ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
-import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, BlocksIcon } from '@/features/shared/icons';
-import { roomsOf } from '@/lib/directory/peopleFlow';
+import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon } from '@/features/shared/icons';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
 import AddColumnMenu from './AddColumnMenu';
 import ColumnHeaderMenu from './ColumnHeaderMenu';
@@ -580,7 +579,7 @@ export default function DirectoryTable({
                             item={item}
                             accentColor={alias?.color ?? typeColor ?? undefined}
                             onOpen={() => onOpen(item)}
-                            onRename={onSaveCell && !item.via_space ? (next) => onSaveCell(item, column, next) : undefined}
+                            onRename={onSaveCell ? (next) => onSaveCell(item, column, next) : undefined}
                           />
                         </td>
                       );
@@ -599,7 +598,7 @@ export default function DirectoryTable({
                           aliasColor={alias?.color ?? typeColor}
                           typeLabel={typeLabel}
                           tagColors={tagColors}
-                          onSave={onSaveCell && column.editable && !item.via_space ? (v) => onSaveCell(item, column, v) : undefined}
+                          onSave={onSaveCell && column.editable ? (v) => onSaveCell(item, column, v) : undefined}
                         />
                       </td>
                     );
@@ -715,16 +714,6 @@ function NameCell({ item, accentColor, onOpen, onRename }: {
           >
             <span className="truncate font-medium text-text-primary hover:underline">{item.name}</span>
           </button>
-          {/* The rooms holding this person, through the people flow — one row per person. */}
-          {roomsOf(item).length > 0 && (
-            <span
-              className="ml-2 inline-flex shrink-0 items-center gap-1 text-[11px] text-text-muted"
-              title={roomsOf(item).map((r) => r.name).join(' · ')}
-            >
-              <BlocksIcon className="h-3 w-3" />
-              <span className="max-w-[9rem] truncate">{roomsOf(item).map((r) => r.name).join(' · ')}</span>
-            </span>
-          )}
           {onRename && (
             <button
               type="button"

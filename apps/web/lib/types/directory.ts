@@ -22,9 +22,5 @@ export interface DirectoryItem {
   pronouns?: string
   /** The node's whole metadata blob — the tracked fields read from it. */
   metadata?: Record<string, unknown>
-  /** Another space's row, read here through the people flow — never edited or exported as this space's own. */
-  via_space?: { id: string; name: string }
-  /** The other rooms holding the same person, folded into this one row. */
-  also_in?: Array<{ id: string; name: string }>
   createdAt?: string
 }

@@ -265,13 +265,13 @@ function indexLine(m: NoteMeta): string {
 
 const NODE_SELECT = {
   id: true, type: true, name: true, alias: true, subtitle: true, location: true,
-  url: true, imageUrl: true, tags: true, metadata: true,
+  url: true, imageUrl: true, tags: true, metadata: true, identityId: true,
 } as const
 
 type NodeRow = {
   id: string; type: string; name: string; alias: string | null; subtitle: string | null
   location: string | null; url: string | null; imageUrl: string | null
-  tags: string[]; metadata: unknown
+  tags: string[]; metadata: unknown; identityId?: string | null
 }
 
 /** A node row as entities.ts wants it — metadata typed, so `metadata.notePath`
@@ -287,6 +287,9 @@ function describeNode(row: NodeRow) {
     node_id: row.id,
     type: row.type,
     name: row.name,
+    // The same identity in another space is the same person with that
+    // space's own record — the one cross-space link there is.
+    identity_id: row.identityId ?? null,
     alias: row.alias,
     subtitle: row.subtitle,
     location: row.location,
@@ -621,6 +624,7 @@ export const CONTEXT_ACTIONS = [
                     node_id: r.id,
                     type: r.type,
                     name: r.name,
+                    identity_id: r.identityId ?? null,
                     subtitle: r.subtitle,
                     note_path: notePath,
                     mention: mentionFor(r.name, notePath),

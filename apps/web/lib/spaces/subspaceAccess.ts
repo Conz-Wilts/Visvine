@@ -10,7 +10,6 @@ import {
   asDoor,
   flowsContext,
   flowsEvents,
-  flowsPeople,
   joinOutcome,
   listingOf,
   parentDenial,
@@ -158,11 +157,6 @@ export async function flowingSubspacesOf(parentId: string): Promise<Array<{ id: 
 /** The sub-spaces whose public EVENTS flow up (the room's `flowEvents`). */
 export async function eventFlowingSubspacesOf(parentId: string): Promise<Array<{ id: string; name: string }>> {
   return subspacesWhere(parentId, flowsEvents)
-}
-
-/** The sub-spaces whose directory flows up (the room's `flowPeople`). */
-export async function peopleFlowingSubspacesOf(parentId: string): Promise<Array<{ id: string; name: string }>> {
-  return subspacesWhere(parentId, flowsPeople)
 }
 
 async function subspacesWhere(
