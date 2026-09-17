@@ -80,6 +80,12 @@ const nextConfig: NextConfig = {
     ];
   },
   images: {
+    // Next 16 ships `qualities: [75]` and coerces anything else to it. A
+    // profile picture is re-encoded by the optimizer on top of the WebP the
+    // upload already wrote, and 75 on 75 is what makes a good photograph look
+    // grainy in the directory grid. 90 is the allowlist entry avatar surfaces
+    // ask for; 75 stays for everything incidental.
+    qualities: [75, 90],
     remotePatterns: [
       {
         protocol: "https",

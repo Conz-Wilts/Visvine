@@ -95,6 +95,9 @@ export default function Avatar({
         alt={name}
         width={px}
         height={px}
+        // The optimizer re-encodes what the upload already wrote as WebP, and
+        // at the default 75 that second pass is what shows on a face.
+        quality={90}
         className={`${cls} object-cover shrink-0 ${className}`}
         style={style}
         // Hosts outside next.config remotePatterns (e.g. the server-only GCS

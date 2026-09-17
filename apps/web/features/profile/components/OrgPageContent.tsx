@@ -19,6 +19,8 @@
  */
 
 import React, { useMemo } from 'react';
+import Image from 'next/image'
+import { isOptimizableImageUrl } from '@/lib/mediaUrl'
 import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from '@/features/shared/components/SpaceLink';
 import { CheckIcon, ChevronRightIcon, EarthIcon, MapPinIcon, Share2Icon, UsersIcon } from '@/features/shared/icons';
@@ -96,7 +98,9 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
             cropped: a logo with whitespace must not be zoomed to fill. */}
         <div className="relative w-48 h-48 sm:w-60 sm:h-auto flex-none rounded-lg overflow-hidden bg-surface-2">
           {node.image_url ? (
-            <img src={node.image_url} alt={node.name} className="w-full h-full object-contain p-4" />
+            <Image src={node.image_url} alt={node.name} fill sizes="240px" quality={90}
+                   unoptimized={!isOptimizableImageUrl(node.image_url)}
+                   className="object-contain p-4" />
           ) : glyph && glyph !== 'person' ? (
             <TypeSilhouette glyph={glyph} color={theme.base} />
           ) : (

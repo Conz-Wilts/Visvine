@@ -11,6 +11,12 @@ interface AuthContextValue {
   session: Session | null;
   isLoading: boolean;
   signOut: () => Promise<void>;
+  /**
+   * Re-read the session. The name and picture the shell draws come from the
+   * person's row, not the token, so editing your profile calls this to move
+   * the account band with it.
+   */
+  refreshSession: () => Promise<void>;
 }
 
 // `useAuth` is the one client read of the session under the authed shell. The
@@ -31,7 +37,7 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children, initialSession }: AuthProviderProps) {
   const router = useSpaceRouter();
-  const { data: session, isPending: isLoading } = useSession(initialSession);
+  const { data: session, isPending: isLoading, refresh: refreshSession } = useSession(initialSession);
 
   const handleSignOut = useCallback(async () => {
     await signOutClient();
@@ -45,8 +51,9 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
       session: session ?? null,
       isLoading,
       signOut: handleSignOut,
+      refreshSession,
     }),
-    [session, isLoading, handleSignOut]
+    [session, isLoading, handleSignOut, refreshSession]
   );
 
   return (

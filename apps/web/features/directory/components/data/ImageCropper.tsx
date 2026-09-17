@@ -22,6 +22,13 @@ const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.1;
 const DEFAULT_OUTPUT_WIDTH = 400; // 4:3 to match node card aspect ratio
 const DEFAULT_OUTPUT_HEIGHT = 300;
+// `outputWidth`/`outputHeight` give the SHAPE of the crop, not its resolution.
+// Writing the canvas at exactly those numbers threw away everything a good
+// photograph had: a 4000px picture became a 400px JPEG before it ever reached
+// the server, and no amount of quality downstream brings that back. The canvas
+// is sized from the pixels the crop rectangle actually covers instead, capped
+// here and never upscaled past the source.
+const MAX_OUTPUT_EDGE = 1440;
 
 export default function ImageCropper({
   imageFile,
@@ -182,13 +189,6 @@ export default function ImageCropper({
   const handleCrop = useCallback(() => {
     if (!imageUrl || imageSize.width === 0) return;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = outputWidth;
-    canvas.height = outputHeight;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
     const img = new Image();
     img.onload = () => {
       const scaled = getScaledDimensions();
@@ -207,34 +207,44 @@ export default function ImageCropper({
       const sourceX = (centerX - containerWidth / 2) * scaleX;
       const sourceY = (centerY - containerHeight / 2) * scaleY;
 
+      // The crop's own resolution, in the requested aspect ratio.
+      const aspect = outputWidth / outputHeight;
+      const longEdge = Math.min(
+        MAX_OUTPUT_EDGE,
+        Math.max(outputWidth, outputHeight, Math.round(Math.max(cropWidth, cropHeight))),
+      );
+      const width = aspect >= 1 ? longEdge : Math.round(longEdge * aspect);
+      const height = aspect >= 1 ? Math.round(longEdge / aspect) : longEdge;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
       // For circle shape, clip canvas so output has a transparent circular mask
       if (shape === 'circle') {
         ctx.beginPath();
-        ctx.arc(outputWidth / 2, outputHeight / 2, outputWidth / 2, 0, Math.PI * 2);
+        ctx.arc(width / 2, height / 2, width / 2, 0, Math.PI * 2);
         ctx.clip();
       }
 
       // Draw the cropped region
-      ctx.drawImage(
-        img,
-        sourceX,
-        sourceY,
-        cropWidth,
-        cropHeight,
-        0,
-        0,
-        outputWidth,
-        outputHeight
-      );
+      ctx.drawImage(img, sourceX, sourceY, cropWidth, cropHeight, 0, 0, width, height);
 
+      // WebP either way: it carries the circle's alpha the way PNG does, at a
+      // fraction of the bytes, and the upload re-encodes to WebP regardless.
       canvas.toBlob(
         (blob) => {
           if (blob) {
             onCrop(blob);
           }
         },
-        shape === 'circle' ? 'image/png' : 'image/jpeg',
-        0.9
+        'image/webp',
+        0.92,
       );
     };
     img.src = imageUrl;

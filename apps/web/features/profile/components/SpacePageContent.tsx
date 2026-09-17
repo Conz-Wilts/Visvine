@@ -24,6 +24,8 @@
  */
 
 import React, { useMemo } from 'react';
+import Image from 'next/image'
+import { isOptimizableImageUrl } from '@/lib/mediaUrl'
 import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from '@/features/shared/components/SpaceLink';
 import { CalendarIcon, CheckIcon, ChevronRightIcon, EarthIcon, MapPinIcon, Share2Icon } from '@/features/shared/icons';
@@ -101,9 +103,11 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
         {/* Contained, not cropped: a logo with whitespace must not be zoomed
             to fill, so the object-fit differs from the member-space page
             whose image is a cover photo. */}
-        <div className="w-48 h-48 sm:w-60 sm:h-60 aspect-square flex-none rounded-lg overflow-hidden bg-surface-2">
+        <div className="relative w-48 h-48 sm:w-60 sm:h-60 aspect-square flex-none rounded-lg overflow-hidden bg-surface-2">
           {node.image_url ? (
-            <img src={node.image_url} alt={node.name} className="w-full h-full object-contain p-6" />
+            <Image src={node.image_url} alt={node.name} fill sizes="240px" quality={90}
+                   unoptimized={!isOptimizableImageUrl(node.image_url)}
+                   className="object-contain p-6" />
           ) : glyph && glyph !== 'person' ? (
             <TypeSilhouette glyph={glyph} color={theme.base} />
           ) : (

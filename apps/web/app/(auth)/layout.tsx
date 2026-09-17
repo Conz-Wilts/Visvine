@@ -8,7 +8,8 @@ export const dynamicParams = true;
 import { headers } from 'next/headers';
 import AuthLayoutClient from './AuthLayoutClient';
 import { themeBootScript } from '@/features/shared/lib/colorThemes';
-import { getSession, isSuperAdmin } from '@/lib/session';
+import { getSession } from '@/lib/session';
+import { resolveSessionUser } from '@/lib/sessionUser';
 import { listVisibleSpaces, listUserSpaceIds } from '@/lib/spaces/queries';
 import { listLockedSubspaces } from '@/lib/spaces/subspaceAccess';
 import type { Session } from '@/features/auth/lib/auth-client';
@@ -31,26 +32,18 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
     return <>{themeScript}<AuthLayoutClient initialSession={null}>{children}</AuthLayoutClient></>;
   }
 
-  const [spaces, memberships, locked] = await Promise.all([
+  const [spaces, memberships, locked, user] = await Promise.all([
     listVisibleSpaces(session),
     listUserSpaceIds(session),
     listLockedSubspaces(session.userId),
+    resolveSessionUser(session),
   ]);
   // A parent's admin who reaches a private sub-space through `parentAdmins`
   // has it in `spaces` already; the locked row would be a door beside an
   // open one.
   const lockedSubspaces = locked.filter((l) => !spaces.some((s) => s.id === l.id));
 
-  const initialSession: Session = {
-    user: {
-      id: session.userId,
-      name: session.name,
-      email: session.email,
-      image: session.image,
-      nodeId: session.nodeId,
-      isSuperAdmin: isSuperAdmin(session.email),
-    },
-  };
+  const initialSession: Session = { user };
 
   return (
     <>

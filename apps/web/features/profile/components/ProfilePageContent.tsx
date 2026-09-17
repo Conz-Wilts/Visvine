@@ -26,6 +26,7 @@ import EditBasicInfoModal from './edit/EditBasicInfoModal';
 import EditAboutModal from './edit/EditAboutModal';
 import EditContactModal from './edit/EditContactModal';
 import SpacesModal, { type ProfileSpace } from './SpacesModal';
+import type { FullProfile } from '@/lib/types/profile';
 import ExperienceTimeline from './ExperienceTimeline';
 import ContactInfoModal from './ContactInfoModal';
 
@@ -42,7 +43,7 @@ interface ProfilePageContentProps {
 }
 
 export default function ProfilePageContent({ nodeId, overlay = false, selfView = false }: ProfilePageContentProps) {
-  const { session } = useAuth();
+  const { session, refreshSession } = useAuth();
   const { currentSpace } = useSpace();
   const { profile, loading, error, updateBasicInfo, reload } = useProfile(nodeId);
   const { data: nodeData } = useNodeProfile(nodeId);
@@ -98,6 +99,15 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
     (session?.user?.nodeId && session.user.nodeId === nodeId)
   );
 
+  // Your name and your picture are shell chrome too — the account band at the
+  // foot of the rail draws them. Saving either moves the band with it; the
+  // session is re-read rather than patched, so the band and this page can
+  // never disagree about what was actually stored.
+  const saveBasicInfo = useCallback(async (patch: Partial<FullProfile>) => {
+    await updateBasicInfo(patch);
+    if (isOwner && (patch.imageUrl !== undefined || patch.name !== undefined)) await refreshSession();
+  }, [updateBasicInfo, isOwner, refreshSession]);
+
   const changeAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -106,7 +116,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
     setAvatarUploading(true);
     try {
       const url = await uploadImage('person', profile.id, file);
-      await updateBasicInfo({ imageUrl: url });
+      await saveBasicInfo({ imageUrl: url });
     } catch { /* keep previous avatar */ } finally {
       setAvatarUploading(false);
     }
@@ -149,7 +159,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
       <section className="rounded-2xl border border-border-subtle bg-surface-1 px-5 py-5 shadow-strip sm:px-7 sm:py-7 flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">
         <div className="relative w-44 h-44 sm:w-56 sm:h-56 flex-none rounded-2xl overflow-hidden bg-surface-2">
           {profile.imageUrl ? (
-              <Image src={profile.imageUrl} alt={profile.name} width={224} height={224} className="w-full h-full object-cover" />
+              <Image src={profile.imageUrl} alt={profile.name} width={224} height={224} quality={90} className="w-full h-full object-cover" />
           ) : (
             <PersonSilhouette color={theme.base} />
           )}
@@ -302,9 +312,9 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
       </div>
 
       {/* Modals */}
-      {modal === 'basicInfo' && <EditBasicInfoModal open onClose={() => setModal(null)} profile={profile} onSave={updateBasicInfo} />}
-      {modal === 'about' && <EditAboutModal open onClose={() => setModal(null)} bio={profile.bio} onSave={updateBasicInfo} />}
-      {modal === 'contact' && <EditContactModal open onClose={() => setModal(null)} profile={profile} onSave={updateBasicInfo} />}
+      {modal === 'basicInfo' && <EditBasicInfoModal open onClose={() => setModal(null)} profile={profile} onSave={saveBasicInfo} />}
+      {modal === 'about' && <EditAboutModal open onClose={() => setModal(null)} bio={profile.bio} onSave={saveBasicInfo} />}
+      {modal === 'contact' && <EditContactModal open onClose={() => setModal(null)} profile={profile} onSave={saveBasicInfo} />}
       {modal === 'contactInfo' && (
         <ContactInfoModal open onClose={() => setModal(null)} profile={profile}
                           isOwner={isOwner} onEdit={() => setModal('contact')} />

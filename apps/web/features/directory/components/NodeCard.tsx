@@ -36,6 +36,7 @@
 // across a whole screen of cards, not whispered.
 
 import React from 'react'
+import Image from 'next/image'
 import type { DirectoryItem } from '@/lib/types'
 import { getHeaderBgStyle } from './typeStyles'
 import { getInitials } from '@/lib/avatarUtils'
@@ -46,6 +47,7 @@ import PersonSilhouette from '@/components/ui/PersonSilhouette'
 import TypeSilhouette from '@/components/ui/TypeSilhouette'
 import { useProfileCache } from '@/features/shared/contexts/ProfileContext'
 import { useCardTilt } from '../hooks/useCardTilt'
+import { isOptimizableImageUrl } from '@/lib/mediaUrl'
 
 interface DirectoryCardProps {
   item: DirectoryItem
@@ -93,17 +95,25 @@ function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
       onClick={() => onClick?.(item)}
     >
       {/* Media — 1:1, the same square the profile hero uses */}
-      <div className="aspect-square w-full shrink-0 overflow-hidden">
+      <div className="relative aspect-square w-full shrink-0 overflow-hidden">
         {displayImageUrl ? (
-          <img
+          // Through the optimizer, with `sizes` set from the grid's own track:
+          // the card is a ~300px square that doubles on a retina screen, and
+          // drawing the stored image at its native width was what made a sharp
+          // photograph look grainy here. A blob/data preview and any host
+          // outside next.config's remotePatterns render unoptimized.
+          <Image
             src={displayImageUrl}
             alt={displayName}
+            fill
+            sizes="(max-width: 640px) 50vw, 320px"
+            quality={90}
             loading="lazy"
-            decoding="async"
+            unoptimized={!isOptimizableImageUrl(displayImageUrl)}
             className={
               contained
-                ? 'w-full h-full object-contain p-6 bg-surface-2'
-                : 'w-full h-full object-cover object-center group-hover:scale-[1.03] transition-transform duration-300'
+                ? 'object-contain p-6 bg-surface-2'
+                : 'object-cover object-center group-hover:scale-[1.03] transition-transform duration-300'
             }
           />
         ) : isPerson ? (

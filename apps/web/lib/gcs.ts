@@ -61,11 +61,19 @@ export const RESOURCES_BUCKET = () => requireEnv('GCS_RESOURCES_BUCKET');
 // Image variants generated on every profile/space image upload
 type AvatarSize = 'original' | 'avatar-lg' | 'avatar-md' | 'avatar-sm';
 
+// `avatar-lg` is the one variant anything reads — it is the URL the upload
+// returns and the DB stores — so it is the master copy, not a thumbnail. It was
+// 400px, which the directory grid (a ~300px square, doubled on a retina screen)
+// and the profile hero both had to stretch: a sharp photograph arrived grainy
+// no matter how good the original was. At 1440/q90 every avatar surface is
+// downscaling, and next/image is what sizes it per surface, so nothing pays for
+// the resolution it doesn't draw. The smaller variants are kept for callers
+// that address them directly.
 const AVATAR_VARIANTS: Array<{ name: AvatarSize; size: number; quality: number }> = [
-  { name: 'original',   size: 1080, quality: 82 },
-  { name: 'avatar-lg',  size: 400,  quality: 80 },
-  { name: 'avatar-md',  size: 200,  quality: 78 },
-  { name: 'avatar-sm',  size: 64,   quality: 75 },
+  { name: 'original',   size: 2048, quality: 90 },
+  { name: 'avatar-lg',  size: 1440, quality: 90 },
+  { name: 'avatar-md',  size: 400,  quality: 86 },
+  { name: 'avatar-sm',  size: 128,  quality: 82 },
 ];
 
 // Upload a profile/space image — generates 4 WebP variants in parallel
@@ -81,8 +89,8 @@ export async function uploadProfileImage(
     AVATAR_VARIANTS.map(async ({ name, size, quality }) => {
       const processed = await base
         .clone()
-        .resize(size, size, { fit: 'inside', withoutEnlargement: true })
-        .webp({ quality, effort: 4 })
+        .resize(size, size, { fit: 'inside', withoutEnlargement: true, kernel: 'lanczos3' })
+        .webp({ quality, effort: 5, smartSubsample: true })
         .toBuffer();
       await saveObject(MEDIA_BUCKET(), `${prefix}/${name}.webp`, processed, 'image/webp', 'public, max-age=86400');
     })
