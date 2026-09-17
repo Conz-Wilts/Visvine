@@ -1,6 +1,7 @@
 /**
- * `search_context` with no space: the same search, once per space the caller
- * can act in, fused by lib/actions/shared/everywhere.ts.
+ * A read with no space: the same read, once per space the caller can act in.
+ * `search_context` fuses its rankings through lib/actions/shared/everywhere.ts;
+ * the list actions stamp each row with its space through `inSpaces`.
  *
  * Nothing here widens what a person can read. Each space is resolved with
  * `resolveTarget` — the membership and grant lens the web routes use — and
@@ -16,6 +17,7 @@ import type { BrainSearchResult, SearchOptions } from '@/lib/notes/contextServic
 import { planSearch } from '@/lib/notes/queryRewrite'
 import { fuseAcrossSpaces, searchFanout, type SearchedSpace, type SpaceHit } from '@/lib/actions/shared/everywhere'
 import { logger } from '@/lib/logger'
+import prisma from '@/lib/prisma'
 
 export interface EverywhereResult {
   hits: SpaceHit[]
@@ -63,4 +65,47 @@ export async function searchEverywhere(
     searched: spaces,
     skipped,
   }
+}
+
+export interface SpaceRun<T> {
+  space: SearchedSpace
+  result: T
+}
+
+/**
+ * One read, in the space named or in every space the caller can act in.
+ * `list_events`, `list_agents` and `list_connectors` share this with
+ * `search_context`: the same resolve per space, the same cap, and a space that
+ * fails narrowing the answer rather than failing it. The caller folds the
+ * per-space results into its own shape, stamping each row with `space`.
+ */
+export async function inSpaces<T>(
+  ctx: ActionCaller,
+  spaceId: string | undefined,
+  read: (space: SearchedSpace) => Promise<T>,
+): Promise<{ runs: SpaceRun<T>[]; searched: SearchedSpace[]; skipped: number }> {
+  const mine = await listMySpaces(ctx)
+  const chosen = spaceId ? mine.filter((s) => s.id === spaceId) : mine
+  // A named space the caller is not a member of (an admin's reach, say) is
+  // still resolved — resolveTarget is the gate, membership only the listing.
+  if (spaceId && chosen.length === 0) {
+    await resolveTarget(ctx, spaceId)
+    const row = await prisma.space.findUnique({ where: { id: spaceId }, select: { name: true, parentId: true } })
+    chosen.push({ id: spaceId, name: row?.name ?? spaceId, your_aliases: [], you_manage_it: false, is_personal_space: false, parent_id: row?.parentId ?? null })
+  }
+  const { searched, skipped } = searchFanout(chosen)
+  const spaces: SearchedSpace[] = searched.map((s) => ({ id: s.id, name: s.name, parent_id: s.parent_id }))
+  const runs: SpaceRun<T>[] = []
+  await Promise.all(
+    spaces.map(async (space) => {
+      try {
+        runs.push({ space, result: await read(space) })
+      } catch (err) {
+        if (spaceId) throw err
+        logger.warn('actions.in_spaces.space_failed', { err, spaceId: space.id })
+      }
+    }),
+  )
+  runs.sort((a, b) => spaces.findIndex((s) => s.id === a.space.id) - spaces.findIndex((s) => s.id === b.space.id))
+  return { runs, searched: spaces, skipped }
 }

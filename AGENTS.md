@@ -279,14 +279,17 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   (`personalOwnerId` set) exist only from before this rule: still private to
   their owner, never grant-gated, and nothing provisions one. Every action
   that writes, runs or lists ONE space targets the space named in `space_id`
-  — there is no `scope` argument. **`search_context` alone may omit it**: it
-  then runs the same federated search in every space the caller can act in
+  — there is no `scope` argument. **The reads may omit it** — `search_context`,
+  `list_events`, `list_agents`, `list_connectors` (`inSpaces` in
+  `lib/actions/searchEverywhere.ts`; `list_context` is bearings in ONE space
+  and keeps it). `search_context` without one runs the same federated search
+  in every space the caller can act in
   (`lib/actions/searchEverywhere.ts`, each under `resolveTarget`, one plan
   shared, capped at `MAX_SEARCH_SPACES`) and folds the rankings
   (`shared/everywhere.ts`, pure: a room the caller is in is searched directly,
   so the house's `subspaces/<id>/` hop into it is dropped). Every hit and
   entity carries `space`, `read_with` carries `space_id`, and `spaces` says
-  what was searched. A write with no `space_id` is refused by `runAction` with
+  what was searched; the list reads stamp every row with `space`. A write with no `space_id` is refused by `runAction` with
   the caller's spaces named, so the model asks the person which space rather
   than guess — nothing server-side ever picks a tenant for a write.
 - Account deletion (`lib/account/deleteAccount.ts`, `DELETE /api/account`) is

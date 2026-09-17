@@ -30,7 +30,7 @@ import {
   readSourceVisible,
 } from '@/lib/notes/contextService'
 import { federatedMetas, readFederated, searchFederated } from '@/lib/notes/federation'
-import { searchEverywhere } from '@/lib/actions/searchEverywhere'
+import { inSpaces, searchEverywhere } from '@/lib/actions/searchEverywhere'
 import { readableRoots, LEVEL_EDIT } from '@/lib/notes/shared/authz'
 import { audienceSummary } from '@/lib/notes/shared/audience'
 import { loadSpaceAccess, grantAccess, setFolderRestricted } from '@/lib/notes/access'
@@ -358,11 +358,12 @@ export const CONTEXT_ACTIONS = [
       name: 'list_spaces',
       scope: 'context:read',
       summary:
-        'The spaces you can act in, with your role in each. Every write needs a space_id; search_context does not.',
+        'The spaces you can act in, with your role in each. Every write needs a space_id; the reads search all of them without one.',
       description:
         'List the spaces you can act in, with your role in each and whether it is your own personal space. ' +
-        'Every action that writes, runs or lists ONE space needs a space_id (the wire name for a space id); ' +
-        'search_context without one searches all of these. When a request does not say which space a write ' +
+        'Every action that writes or runs needs a space_id (the wire name for a space id); the reads — ' +
+        'search_context, list_events, list_agents, list_connectors — search all of these when it is omitted, ' +
+        'each row stamped with its space. list_context is bearings in ONE space and always needs one. When a request does not say which space a write ' +
         'belongs in, ask the person rather than guess — a note in the wrong space is read by the wrong people.',
       input: {},
       annotations: { readOnlyHint: true },
@@ -1000,29 +1001,36 @@ export const CONTEXT_ACTIONS = [
         'briefing and marketing copy belong. Drafts are included and marked — a draft is visible only to its ' +
         'hosts and admins until it is published.',
       input: {
-        space_id: spaceArg,
+        space_id: spaceArg
+          .optional()
+          .describe('The space to read. Omit to read every space you can act in, each row stamped with its space.'),
         when: z.enum(['upcoming', 'past', 'all']).optional().describe("Default 'upcoming'"),
         limit: z.number().int().min(1).max(200).optional().describe('Default 25'),
       },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        await requireSpaceContext(ctx, args.space_id)
-        const { events, attendees } = await getEventsData(args.space_id)
         const when = args.when ?? 'upcoming'
         const now = Date.now()
-        const inWindow = (e: (typeof events)[number]) => {
-          if (when === 'all') return true
-          const at = Date.parse(e.endAt ?? e.startAt)
-          if (Number.isNaN(at)) return when === 'upcoming'
-          return when === 'upcoming' ? at >= now : at < now
-        }
-        const chosen = events
-          .filter(inWindow)
-          .sort((a, b) => (a.startAt < b.startAt ? 1 : -1))
+        const { runs, searched, skipped } = await inSpaces(ctx, args.space_id, async (space) => {
+          await requireSpaceContext(ctx, space.id)
+          const { events, attendees } = await getEventsData(space.id)
+          const inWindow = (e: (typeof events)[number]) => {
+            if (when === 'all') return true
+            const at = Date.parse(e.endAt ?? e.startAt)
+            if (Number.isNaN(at)) return when === 'upcoming'
+            return when === 'upcoming' ? at >= now : at < now
+          }
+          return events.filter(inWindow).map((e) => ({ space, e, attendees }))
+        })
+        const chosen = runs
+          .flatMap((r) => r.result)
+          .sort((a, b) => (a.e.startAt < b.e.startAt ? 1 : -1))
           .slice(0, args.limit ?? 25)
 
         return {
-          events: chosen.map((e) => ({
+          spaces: { searched, skipped },
+          events: chosen.map(({ space, e, attendees }) => ({
+            space,
             event_id: e.id,
             title: e.title,
             start_at: e.startAt,
@@ -1478,13 +1486,21 @@ export const CONTEXT_ACTIONS = [
         '(Connectors → Add a connector) with one press, a sign-in or a pasted key. For a service that is not, a ' +
         'connector is a NOTE at connectors/<name>.md an admin writes with edit_context; the create_connector recipe ' +
         '(the visvine router with `request`) has the frontmatter contract and the steps.',
-      input: { space_id: spaceArg },
+      input: { space_id: spaceArg
+          .optional()
+          .describe('The space to read. Omit to read every space you can act in, each row stamped with its space.') },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        const { principal, context } = await resolveTarget(ctx, args.space_id)
-        // `personal: true` — the caller's own connectors resolve here too, so
-        // the catalogue has to name them or they cannot be asked for.
-        return { connectors: await listConnectors(principal, context, { personal: true }) }
+        const { runs, searched, skipped } = await inSpaces(ctx, args.space_id, async (space) => {
+          const { principal, context } = await resolveTarget(ctx, space.id)
+          // `personal: true` — the caller's own connectors resolve here too, so
+          // the catalogue has to name them or they cannot be asked for.
+          return listConnectors(principal, context, { personal: true })
+        })
+        return {
+          spaces: { searched, skipped },
+          connectors: runs.flatMap((r) => r.result.map((c) => ({ space: r.space, ...c }))),
+        }
       },
     }),
     defineAction({
@@ -1857,14 +1873,20 @@ export const CONTEXT_ACTIONS = [
         'activation, and creating one does NOT start it. Briefs are EDITED on the note itself, not ' +
         'through edit_context: agents/ is frozen against generic AI writes so that a sweep cannot silently ' +
         'switch off every agent in the space.',
-      input: { space_id: spaceArg },
+      input: { space_id: spaceArg
+          .optional()
+          .describe('The space to read. Omit to read every space you can act in, each row stamped with its space.') },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        const { principal, context } = await resolveTarget(ctx, args.space_id)
-        const { agents, heartbeatAt } = await listAgents(principal, context)
+        const { runs, searched, skipped } = await inSpaces(ctx, args.space_id, async (space) => {
+          const { principal, context } = await resolveTarget(ctx, space.id)
+          return listAgents(principal, context)
+        })
         return {
-          scheduler_last_tick_at: heartbeatAt,
-          agents: agents.map((a) => ({
+          spaces: { searched, skipped },
+          scheduler_last_tick_at: runs.map((r) => r.result.heartbeatAt).find((t) => t) ?? null,
+          agents: runs.flatMap((r) => r.result.agents.map((a) => ({ space: r.space, a }))).map(({ space, a }) => ({
+            space,
             name: a.name,
             title: a.title,
             description: a.description,
