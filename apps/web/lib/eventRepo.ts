@@ -28,6 +28,7 @@ function nodeRowToNBNode(row: {
   id: string; type: string; name: string; alias: string | null; subtitle: string | null;
   location: string | null; url: string | null; imageUrl: string | null;
   tags: string[]; metadata: unknown; spaceId: string | null; createdAt?: Date;
+  identityId?: string | null;
 }): NBNode {
   return {
     id: row.id,
@@ -41,6 +42,7 @@ function nodeRowToNBNode(row: {
     tags: row.tags,
     metadata: (row.metadata as Record<string, unknown>) ?? {},
     space_id: row.spaceId ?? undefined,
+    ...(row.identityId ? { identity_id: row.identityId } : {}),
     createdAt: row.createdAt?.toISOString(),
   };
 }
@@ -124,7 +126,7 @@ function attendeeRowToNBAttendee(a: {
 async function fetchSpaceNodes(spaceId: string): Promise<NBNode[]> {
   const allRows = await prisma.node.findMany({
     where: { spaceId },
-    select: { id: true, type: true, name: true, alias: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, spaceId: true, createdAt: true },
+    select: { id: true, type: true, name: true, alias: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, spaceId: true, createdAt: true, identityId: true },
   });
 
   // Keep draft and unlisted (private) events out of the directory/context — they're

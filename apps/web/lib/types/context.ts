@@ -72,6 +72,10 @@ export interface NBNode {
   /** Set when this node is a sub-space's, read through its parent's directory
    *  (lib/directory/peopleFlow.ts): which room. Its presence means read-only here. */
   via_space?: { id: string; name: string };
+  /** The other rooms holding the same person, folded into this row by the people flow. */
+  also_in?: Array<{ id: string; name: string }>;
+  /** The cross-space identity this node stands for (people/orgs) — how the same person is recognised across spaces. */
+  identity_id?: string;
   createdAt?: string;
   // Force context will add these during simulation
   x?: number;

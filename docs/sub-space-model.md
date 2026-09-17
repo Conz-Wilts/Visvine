@@ -80,7 +80,7 @@ name would reveal it.
 |---|---|---|
 | `context` | the room's shared context as one folder in the house's tree, under the room's name, inside the house's `Sub-spaces` folder (placeable elsewhere) | on when listed |
 | `events` | the room's public events on the house's calendar, badged with the room | on when listed |
-| `people` | the room's directory (people and organisations) in the house's directory, badged | off |
+| `people` | the room's directory (people and organisations) in the house's directory, badged; one row per person (same identity folds, house's record wins, rooms listed) | off |
 
 Through the wall you are who you are in the room. A house member who is
 **also in the room** reads and edits its folder as they would inside it —

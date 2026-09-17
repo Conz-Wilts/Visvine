@@ -42,6 +42,7 @@ import { TableVirtuoso, type TableComponents } from 'react-virtuoso';
 import Avatar from '@/components/ui/Avatar';
 import { ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
 import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon, BlocksIcon } from '@/features/shared/icons';
+import { roomsOf } from '@/lib/directory/peopleFlow';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
 import AddColumnMenu from './AddColumnMenu';
 import ColumnHeaderMenu from './ColumnHeaderMenu';
@@ -714,14 +715,14 @@ function NameCell({ item, accentColor, onOpen, onRename }: {
           >
             <span className="truncate font-medium text-text-primary hover:underline">{item.name}</span>
           </button>
-          {/* Read through the people flow: another space's row, never edited here. */}
-          {item.via_space && (
+          {/* The rooms holding this person, through the people flow — one row per person. */}
+          {roomsOf(item).length > 0 && (
             <span
               className="ml-2 inline-flex shrink-0 items-center gap-1 text-[11px] text-text-muted"
-              title={`From ${item.via_space.name}, a sub-space of this one — read-only here`}
+              title={roomsOf(item).map((r) => r.name).join(' · ')}
             >
               <BlocksIcon className="h-3 w-3" />
-              <span className="max-w-[9rem] truncate">{item.via_space.name}</span>
+              <span className="max-w-[9rem] truncate">{roomsOf(item).map((r) => r.name).join(' · ')}</span>
             </span>
           )}
           {onRename && (
