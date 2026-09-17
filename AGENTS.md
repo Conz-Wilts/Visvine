@@ -180,10 +180,9 @@ rail. `visibility` is `public | private`. Creation always goes through
   a person added anywhere in the family with no email/LinkedIn takes the
   identity the family already uses for that name, when exactly one does
   (`lib/identity/family.ts`, applied by `attachIdentity` and note adoption) —
-  and the person's page names the family's other records of it, only for
-  spaces the viewer belongs to, each opening that space's own record
-  (`lib/directory/shared/samePerson.ts`, `same_person` on
-  `GET /api/nodes/<id>`, `AlsoIn.tsx`). Action reads stamp every entity with
+  and `GET /api/nodes/<id>` carries the family's other records of it as
+  `same_person`, only for spaces the viewer belongs to
+  (`lib/directory/shared/samePerson.ts`). Action reads stamp every entity with
   `identity_id` so an agent sees two spaces' records as one person. Down, per note and per room: a house's
   `connectors/`, `agents/` or `tools/` note with `share: all | [rooms]` is
   read into those rooms as the read-only `parent/` folder (`graftParent`,
