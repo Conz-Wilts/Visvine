@@ -55,7 +55,6 @@ export default function RoomDials({ space, parentName, save }: Props) {
   const [worldDoor, setWorldDoor] = useState<Door>(asDoor(space.worldDoor, 'open'));
   const [flowContext, setFlowContext] = useState(space.flowContext !== false);
   const [flowEvents, setFlowEvents] = useState(space.flowEvents !== false);
-  const [flowPeople, setFlowPeople] = useState(space.flowPeople === true);
   const [parentAdmins, setParentAdmins] = useState(Boolean(space.parentAdmins));
   const { administersDirectly } = useSpace();
   // Only a holder of the room's OWN admin alias may hand governance back on;
@@ -80,7 +79,7 @@ export default function RoomDials({ space, parentName, save }: Props) {
     try {
       await save({ listing: next });
       if (previous === 'secret' && next !== 'secret') {
-        setNotice(`Now listed. What flows up is back to the switches below — context ${flowContext ? 'on' : 'off'}, events ${flowEvents ? 'on' : 'off'}, people ${flowPeople ? 'on' : 'off'}.`);
+        setNotice(`Now listed. What flows up is back to the switches below — context ${flowContext ? 'on' : 'off'}, events ${flowEvents ? 'on' : 'off'}.`);
       } else if (previous === 'world' && next === 'secret') {
         setNotice('Off Discover and off the band on the next read. Members stay; pending asks are kept for admins here to answer.');
       } else if (previous === 'world') {
@@ -114,8 +113,8 @@ export default function RoomDials({ space, parentName, save }: Props) {
   };
 
   // ── Flows ─────────────────────────────────────────────────────────────────
-  const applyFlow = async (key: 'flowContext' | 'flowEvents' | 'flowPeople', next: boolean) => {
-    const set = key === 'flowContext' ? setFlowContext : key === 'flowEvents' ? setFlowEvents : setFlowPeople;
+  const applyFlow = async (key: 'flowContext' | 'flowEvents', next: boolean) => {
+    const set = key === 'flowContext' ? setFlowContext : setFlowEvents;
     setError('');
     set(next);
     try {
@@ -229,13 +228,6 @@ export default function RoomDials({ space, parentName, save }: Props) {
             checked={flowEvents && !secret}
             disabled={secret}
             onChange={(v) => void applyFlow('flowEvents', v)}
-          />
-          <FlowRow
-            title="People"
-            blurb={`This room's people and organisations appear in ${parentName}'s directory, badged with this room.`}
-            checked={flowPeople && !secret}
-            disabled={secret}
-            onChange={(v) => void applyFlow('flowPeople', v)}
           />
         </div>
       </DialBlock>

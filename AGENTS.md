@@ -169,17 +169,22 @@ rail. `visibility` is `public | private`. Creation always goes through
 - **A room answers four dials, each owned by the side that owns the thing;
   nothing is inherited** (`docs/sub-space-model.md`, code map in
   `docs/sub-spaces.md`). `listing` (secret/house/world; `visibility` stays
-  the gate column, derived world ⇔ public — `listingOf`), two doors, three
-  upward flows (`flowContext` / `flowEvents` / `flowPeople`; none from a
-  secret room), and `parentAdmins`. Up: context as the `subspaces/<id>/`
-  folder (editable by the room's members, read-only for the rest), **public events** (`viaSpace`; hub card and
-  `GET /api/events?includeSubspaces=1`; detail through
-  `requireSpaceMemberOrParent`), and **people** (`via_space` nodes in the
-  house's directory, read-only — one row per `identity_id`, the house's own
-  record winning, with the other rooms as `also_in`: `peopleFlow.ts#mergePeopleFlow`;
+  the gate column, derived world ⇔ public — `listingOf`), two doors, two
+  upward flows (`flowContext` / `flowEvents`; none from a secret room), and
+  `parentAdmins`. Up: context as the `subspaces/<id>/` folder (editable by
+  the room's members, read-only for the rest) and **public events**
+  (`viaSpace`; hub card and `GET /api/events?includeSubspaces=1`; detail
+  through `requireSpaceMemberOrParent`). **People never flow: a space's
+  directory is what that space records.** A room's person is a record of the
+  room, reached in the room; the one join across the family is the identity —
   a person added anywhere in the family with no email/LinkedIn takes the
-  identity the family already uses for that name, when exactly one does —
-  `lib/identity/family.ts`, applied by `attachIdentity` and note adoption). Down, per note and per room: a house's
+  identity the family already uses for that name, when exactly one does
+  (`lib/identity/family.ts`, applied by `attachIdentity` and note adoption) —
+  and the person's page names the family's other records of it, only for
+  spaces the viewer belongs to, each opening that space's own record
+  (`lib/directory/shared/samePerson.ts`, `same_person` on
+  `GET /api/nodes/<id>`, `AlsoIn.tsx`). Action reads stamp every entity with
+  `identity_id` so an agent sees two spaces' records as one person. Down, per note and per room: a house's
   `connectors/`, `agents/` or `tools/` note with `share: all | [rooms]` is
   read into those rooms as the read-only `parent/` folder (`graftParent`,
   `federation.ts#parentShare`) — **no principal on that side; the flag is the

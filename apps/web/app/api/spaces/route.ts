@@ -61,7 +61,6 @@ export async function POST(request: NextRequest) {
             worldDoor,
             flowContext: bool(body.flowContext),
             flowEvents: bool(body.flowEvents),
-            flowPeople: bool(body.flowPeople),
             parentAdmins: bool(body.parentAdmins),
           }
         : {}),

@@ -28,7 +28,6 @@ export interface SubspaceDto {
   worldDoor: 'invite' | 'ask' | 'open';
   flowContext: boolean;
   flowEvents: boolean;
-  flowPeople: boolean;
   parentAdmins: boolean;
   memberCount: number;
   upcomingEvents: number;
@@ -45,7 +44,7 @@ function listingWord(sub: SubspaceDto): string {
 
 function flowsWord(sub: SubspaceDto): string {
   if (sub.listing === 'secret') return 'nothing flows up';
-  const on = [sub.flowContext && 'context', sub.flowEvents && 'events', sub.flowPeople && 'people'].filter(Boolean);
+  const on = [sub.flowContext && 'context', sub.flowEvents && 'events'].filter(Boolean);
   return on.length ? `${on.join(', ')} flow up` : 'nothing flows up';
 }
 

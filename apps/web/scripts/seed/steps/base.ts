@@ -200,7 +200,6 @@ export async function seedBase(): Promise<void> {
       // rows do.
       ...(sub.flowContext !== undefined ? { flowContext: sub.flowContext } : {}),
       ...(sub.flowEvents !== undefined ? { flowEvents: sub.flowEvents } : {}),
-      ...(sub.flowPeople !== undefined ? { flowPeople: sub.flowPeople } : {}),
       ...(sub.parentAdmins !== undefined ? { parentAdmins: sub.parentAdmins } : {}),
     })
     if (!room.ok) throw new Error(`seed: provisioning ${sub.name} failed: ${room.error}`)

@@ -80,7 +80,13 @@ name would reveal it.
 |---|---|---|
 | `context` | the room's shared context as one folder in the house's tree, under the room's name, inside the house's `Sub-spaces` folder (placeable elsewhere) | on when listed |
 | `events` | the room's public events on the house's calendar, badged with the room | on when listed |
-| `people` | the room's directory (people and organisations) in the house's directory, badged; one row per person (same identity folds, house's record wins, rooms listed) | off |
+
+People do not flow. A space's directory is what that space records; a room's
+person is the room's record, reached in the room. The same person across the
+family is one identity, and their page in any space names the family's other
+records of them — only the spaces the viewer belongs to — each opening that
+space's own record. Two records of one person never merge: each space keeps
+its own title, tags, fields and notes.
 
 Through the wall you are who you are in the room. A house member who is
 **also in the room** reads and edits its folder as they would inside it —
@@ -128,14 +134,14 @@ not, and the copy is refused rather than run with borrowed rights.
 A room is created from a preset; every preset is just the four dials filled
 in, and every dial stays editable afterwards.
 
-| preset | listing | house door | world door | up: context / events / people | down (by the house) | governed by house |
+| preset | listing | house door | world door | up: context / events | down (by the house) | governed by house |
 |---|---|---|---|---|---|---|
-| **Department** — Engineering inside a company | `house` | `open` | — | on / on / on | `share: all` | on |
-| **Programme** — an accelerator run by a fund | `world` | `open` | `ask` | on / on / off | chosen items only | on |
-| **Committee** — a deal committee inside a fund | `secret` | `invite` | — | off / off / off | chosen items only | on |
-| **Council** — a members' council inside a public community | `house` | `ask` | — | on / on / off | chosen items only | on |
-| **Tenant** — a startup's own space hosted by an accelerator | `house` or `secret` | `invite` | — | off / on / off | a "perks" connector, if any | **off** |
-| **Topic room** — a room in an open network | `world` | `open` | `open` | on / on / on | `share: all` | on |
+| **Department** — Engineering inside a company | `house` | `open` | — | on / on | `share: all` | on |
+| **Programme** — an accelerator run by a fund | `world` | `open` | `ask` | on / on | chosen items only | on |
+| **Committee** — a deal committee inside a fund | `secret` | `invite` | — | off / off | chosen items only | on |
+| **Council** — a members' council inside a public community | `house` | `ask` | — | on / on | chosen items only | on |
+| **Tenant** — a startup's own space hosted by an accelerator | `house` or `secret` | `invite` | — | off / on | a "perks" connector, if any | **off** |
+| **Topic room** — a room in an open network | `world` | `open` | `open` | on / on | `share: all` | on |
 
 ## The six structures, worked through
 
@@ -206,8 +212,8 @@ off**, events up on, governance **off**.
 
 `world` house, `world` rooms, every door `open`, everything up and down.
 
-- Anyone joins anything. The rooms' context, events and people all show at
-  the top. Tools installed at the top are installed in every room.
+- Anyone joins anything. The rooms' context and events show at the top;
+  each room's people are its own, one identity across the network. Tools installed at the top are installed in every room.
 
 ## Invalid or degenerate settings, and what the console does
 
@@ -230,7 +236,7 @@ off**, events up on, governance **off**.
 
 Everything above is built (2026-09-15): the four dials as columns on
 `spaces` (`listing`, `house_door`, `world_door`, `flow_context`,
-`flow_events`, `flow_people`, `parent_admins`) plus the house's
+`flow_events`, `parent_admins`) plus the house's
 `subspace_config`; presets in the New sub-space dialog; per-item, per-room
 `share:` on connector, agent and Tool notes; `share_as: run-in` agents;
 model keys flowing down by the house's choice; a member of a room editing

@@ -44,7 +44,7 @@ export async function PUT(
   // in its own brief, so there is no space-wide default to set here.
   const {
     name, description, location, tags, designConfig, featureConfig,
-    listing, houseDoor, worldDoor, flowContext, flowEvents, flowPeople, parentAdmins, subspaceConfig,
+    listing, houseDoor, worldDoor, flowContext, flowEvents, parentAdmins, subspaceConfig,
   } = body as {
     name?: string;
     description?: string;
@@ -58,7 +58,6 @@ export async function PUT(
     worldDoor?: string;
     flowContext?: boolean;
     flowEvents?: boolean;
-    flowPeople?: boolean;
     parentAdmins?: boolean;
     subspaceConfig?: { modelKeys?: unknown };
   };
@@ -85,7 +84,7 @@ export async function PUT(
       return NextResponse.json({ error: `${key} must be invite, ask or open` }, { status: 400 });
     }
   }
-  for (const [key, value] of [['flowContext', flowContext], ['flowEvents', flowEvents], ['flowPeople', flowPeople], ['parentAdmins', parentAdmins]] as const) {
+  for (const [key, value] of [['flowContext', flowContext], ['flowEvents', flowEvents], ['parentAdmins', parentAdmins]] as const) {
     if (value !== undefined && typeof value !== 'boolean') {
       return NextResponse.json({ error: `${key} must be a boolean` }, { status: 400 });
     }
@@ -95,7 +94,7 @@ export async function PUT(
   // a top-level space has none of them; the house's `subspaceConfig` is the
   // one thing only a top-level space has.
   const dialPatch = listing !== undefined || houseDoor !== undefined || worldDoor !== undefined
-    || flowContext !== undefined || flowEvents !== undefined || flowPeople !== undefined || parentAdmins !== undefined;
+    || flowContext !== undefined || flowEvents !== undefined || parentAdmins !== undefined;
   let stored: (Record<string, unknown> & { parentId: string | null; parentAdmins: boolean }) | null = null;
   if (dialPatch || subspaceConfig !== undefined) {
     stored = await prisma.space.findUnique({ where: { id: spaceId }, select: DIAL_SELECT });
@@ -237,7 +236,6 @@ export async function PUT(
           ...(worldDoor !== undefined && { worldDoor }),
           ...(flowContext !== undefined && { flowContext }),
           ...(flowEvents !== undefined && { flowEvents }),
-          ...(flowPeople !== undefined && { flowPeople }),
           ...(parentAdmins !== undefined && { parentAdmins }),
           ...(subspaceConfigPatch !== undefined && { subspaceConfig: subspaceConfigPatch as object }),
         },
@@ -277,7 +275,6 @@ export async function PUT(
       worldDoor: updated.worldDoor,
       flowContext: updated.flowContext,
       flowEvents: updated.flowEvents,
-      flowPeople: updated.flowPeople,
       parentAdmins: updated.parentAdmins,
       subspaceConfig: subspaceConfigOf(updated.subspaceConfig),
       timezone: updated.timezone,

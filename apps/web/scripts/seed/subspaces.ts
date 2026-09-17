@@ -42,12 +42,12 @@ export interface SeedSubspace {
   preset: string
   flowContext?: boolean
   flowEvents?: boolean
-  flowPeople?: boolean
   parentAdmins?: boolean
   /**
    * People who belong to the ROOM and not to the house — directory records of
-   * its own, which is what a room's `flowPeople` dial actually carries upward.
-   * Written as nodes first, then as the notes that name them.
+   * its own, reached in the room and, for the same identity, from the
+   * person's page in the house. Written as nodes first, then as the notes
+   * that name them.
    */
   people?: ReadonlyArray<{
     slug: string
@@ -680,9 +680,6 @@ export const SUBSPACES: readonly SeedSubspace[] = [
     // The one room the WORLD can find: listed, the house's members walk in,
     // strangers ask at the door.
     preset: 'programme',
-    // The studio and the press are people the house should see, so this room's
-    // directory flows up as read-only `via_space` rows.
-    flowPeople: true,
     people: [
       {
         slug: 'tui-ranapia',

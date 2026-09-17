@@ -54,7 +54,6 @@ model Space {
   // secret room, whatever these say.
   flowContext     Boolean                @default(true) @map("flow_context")
   flowEvents      Boolean                @default(true) @map("flow_events")
-  flowPeople      Boolean                @default(false) @map("flow_people")
   // Whether the parent's admins administer this sub-space too (lib/auth.ts
   // #isAdmin). On when a parent's admin creates the room; switching it off is
   // the room's own act and only a holder of the room's own admin alias can

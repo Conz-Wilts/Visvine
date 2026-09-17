@@ -44,7 +44,6 @@ export interface ProvisionInput {
   worldDoor?: Door
   flowContext?: boolean
   flowEvents?: boolean
-  flowPeople?: boolean
   parentAdmins?: boolean
 }
 
@@ -80,7 +79,6 @@ export async function provisionSpace(input: ProvisionInput): Promise<ProvisionRe
         worldDoor: input.worldDoor ?? preset?.worldDoor ?? 'open',
         flowContext: input.flowContext ?? preset?.flowContext ?? listing !== 'secret',
         flowEvents: input.flowEvents ?? preset?.flowEvents ?? listing !== 'secret',
-        flowPeople: input.flowPeople ?? preset?.flowPeople ?? false,
         parentAdmins: input.parentAdmins ?? preset?.parentAdmins ?? true,
       }
     : {}

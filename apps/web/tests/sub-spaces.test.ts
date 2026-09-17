@@ -23,7 +23,6 @@ import {
   doorsOf,
   flowsContext,
   flowsEvents,
-  flowsPeople,
   joinOutcome,
   listingOf,
   presetByKey,
@@ -446,8 +445,6 @@ describe('listingOf / doorsOf / joinOutcome — the dials', () => {
     assert.equal(flowsContext({ ...room, flowContext: false }), false)
     assert.equal(flowsContext({ ...room, listing: 'secret', flowContext: true }), false)
     assert.equal(flowsEvents({ ...room, flowEvents: true }), true)
-    assert.equal(flowsPeople({ ...room }), false)
-    assert.equal(flowsPeople({ ...room, flowPeople: true }), true)
     assert.equal(flowsUp({ ...room, visibility: 'public' }), true)
   })
   it('share targets: all, a list, or nobody — and only connectors, agents and tools', () => {

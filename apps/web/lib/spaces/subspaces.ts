@@ -28,7 +28,7 @@
 //     into every sub-space as a read-only top-level folder addressed under the
 //     reserved `parent/` (`graftParent`) — the note's flag is the whole grant;
 //   - a room decides who sees it (`listing`), who walks in (two `doors`),
-//     what flows up (`flowContext` / `flowEvents` / `flowPeople`) and whether
+//     what flows up (`flowContext` / `flowEvents`) and whether
 //     the parent's admins hold its keys (`parentAdmins`) — the four dials.
 
 import type { TreeNode } from '@/lib/notes/shared/types'
@@ -295,7 +295,6 @@ export interface Dials {
   worldDoor?: string | null
   flowContext?: boolean | null
   flowEvents?: boolean | null
-  flowPeople?: boolean | null
 }
 
 export function asDoor(raw: unknown, fallback: Door): Door {
@@ -366,9 +365,6 @@ export function flowsContext(space: Dials): boolean {
 export function flowsEvents(space: Dials): boolean {
   return listedToHouse(space) && space.flowEvents !== false
 }
-export function flowsPeople(space: Dials): boolean {
-  return listedToHouse(space) && space.flowPeople === true
-}
 /** Kept for the callers that meant "context flows": the same answer as flowsContext. */
 export function flowsUp(space: Dials): boolean {
   return flowsContext(space)
@@ -416,16 +412,15 @@ export interface Preset {
   worldDoor: Door
   flowContext: boolean
   flowEvents: boolean
-  flowPeople: boolean
   parentAdmins: boolean
 }
 const PRESETS: readonly Preset[] = [
-  { key: 'department', name: 'Department', blurb: 'A team inside the house. Anyone here walks in; everything flows up; the house’s admins manage it.', listing: 'house', houseDoor: 'open', worldDoor: 'invite', flowContext: true, flowEvents: true, flowPeople: true, parentAdmins: true },
-  { key: 'programme', name: 'Programme', blurb: 'A cohort or accelerator run from here. Anyone can find it and ask to join; the house’s members walk in.', listing: 'world', houseDoor: 'open', worldDoor: 'ask', flowContext: true, flowEvents: true, flowPeople: false, parentAdmins: true },
-  { key: 'committee', name: 'Committee', blurb: 'A room nobody else can see. Invite only; nothing flows up.', listing: 'secret', houseDoor: 'invite', worldDoor: 'invite', flowContext: false, flowEvents: false, flowPeople: false, parentAdmins: true },
-  { key: 'council', name: 'Council', blurb: 'A room the house’s members can see and ask to join.', listing: 'house', houseDoor: 'ask', worldDoor: 'invite', flowContext: true, flowEvents: true, flowPeople: false, parentAdmins: true },
-  { key: 'tenant', name: 'Tenant', blurb: 'Someone else’s space, hosted here. Invite only, autonomous; only its events show at the top.', listing: 'house', houseDoor: 'invite', worldDoor: 'invite', flowContext: false, flowEvents: true, flowPeople: false, parentAdmins: false },
-  { key: 'topic', name: 'Topic room', blurb: 'A public room in an open network. Everyone walks in; everything flows up.', listing: 'world', houseDoor: 'open', worldDoor: 'open', flowContext: true, flowEvents: true, flowPeople: true, parentAdmins: true },
+  { key: 'department', name: 'Department', blurb: 'A team inside the house. Anyone here walks in; everything flows up; the house’s admins manage it.', listing: 'house', houseDoor: 'open', worldDoor: 'invite', flowContext: true, flowEvents: true, parentAdmins: true },
+  { key: 'programme', name: 'Programme', blurb: 'A cohort or accelerator run from here. Anyone can find it and ask to join; the house’s members walk in.', listing: 'world', houseDoor: 'open', worldDoor: 'ask', flowContext: true, flowEvents: true, parentAdmins: true },
+  { key: 'committee', name: 'Committee', blurb: 'A room nobody else can see. Invite only; nothing flows up.', listing: 'secret', houseDoor: 'invite', worldDoor: 'invite', flowContext: false, flowEvents: false, parentAdmins: true },
+  { key: 'council', name: 'Council', blurb: 'A room the house’s members can see and ask to join.', listing: 'house', houseDoor: 'ask', worldDoor: 'invite', flowContext: true, flowEvents: true, parentAdmins: true },
+  { key: 'tenant', name: 'Tenant', blurb: 'Someone else’s space, hosted here. Invite only, autonomous; only its events show at the top.', listing: 'house', houseDoor: 'invite', worldDoor: 'invite', flowContext: false, flowEvents: true, parentAdmins: false },
+  { key: 'topic', name: 'Topic room', blurb: 'A public room in an open network. Everyone walks in; everything flows up.', listing: 'world', houseDoor: 'open', worldDoor: 'open', flowContext: true, flowEvents: true, parentAdmins: true },
 ]
 export function presetByKey(key: string | null | undefined): Preset | null {
   return PRESETS.find((p) => p.key === key) ?? null

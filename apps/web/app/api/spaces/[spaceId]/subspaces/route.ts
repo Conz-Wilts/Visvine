@@ -81,7 +81,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
         worldDoor: r.worldDoor,
         flowContext: r.flowContext,
         flowEvents: r.flowEvents,
-        flowPeople: r.flowPeople,
         parentAdmins: r.parentAdmins,
         memberCount: r.memberCount,
         upcomingEvents: upcoming.get(r.id) ?? 0,

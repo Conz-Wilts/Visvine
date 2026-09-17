@@ -36,8 +36,8 @@ export const SPACE_ACTIONS = [
       'one. Names must be unique among siblings. A room has four dials, filled by `preset` (department, programme, ' +
       'committee, council, tenant, topic) and overridable one by one: `listing` (secret | house | world — who can ' +
       'see it exists), `house_door` and `world_door` (invite | ask | open — who walks in without an invite; the ' +
-      "world's door is never wider than the house's), `flow_context` / `flow_events` / `flow_people` (what the " +
-      "parent's members read of it, nothing from a secret room), and `parent_admins` (whether the parent's admins " +
+      "world's door is never wider than the house's), `flow_context` / `flow_events` (what the " +
+      "parent's members read of it, nothing from a secret room; a room's people are its own — the person's page names the family's other records of them), and `parent_admins` (whether the parent's admins " +
       'manage it too — on by default; the room can switch it off later and the parent cannot switch it back).\n\n' +
       'VISIBILITY (top-level spaces) defaults to private. A public space\'s name must be unique among public ' +
       "spaces. For a room, `listing` decides visibility: world is public.\n\n" +
@@ -69,7 +69,6 @@ export const SPACE_ACTIONS = [
       world_door: z.enum(['invite', 'ask', 'open']).optional().describe("Everyone else's door, only when listing is world"),
       flow_context: z.boolean().optional().describe("Whether the parent's members read the room's context"),
       flow_events: z.boolean().optional().describe("Whether the room's public events show on the parent's calendar"),
-      flow_people: z.boolean().optional().describe("Whether the room's directory shows in the parent's"),
       parent_admins: z.boolean().optional().describe("Whether the parent's admins manage the room too (default true)"),
     },
     run: async (ctx, args) => {
@@ -97,7 +96,6 @@ export const SPACE_ACTIONS = [
               worldDoor: args.world_door,
               flowContext: args.flow_context,
               flowEvents: args.flow_events,
-              flowPeople: args.flow_people,
               parentAdmins: args.parent_admins,
             }
           : {}),

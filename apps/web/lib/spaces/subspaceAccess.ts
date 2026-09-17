@@ -31,7 +31,6 @@ export interface SubspaceRow {
   worldDoor: Door
   flowContext: boolean
   flowEvents: boolean
-  flowPeople: boolean
   parentAdmins: boolean
   memberCount: number
   createdAt: Date
@@ -46,7 +45,6 @@ export const DIAL_SELECT = {
   worldDoor: true,
   flowContext: true,
   flowEvents: true,
-  flowPeople: true,
   parentAdmins: true,
 } as const
 
@@ -72,7 +70,6 @@ function toRow(s: {
   worldDoor: string
   flowContext: boolean
   flowEvents: boolean
-  flowPeople: boolean
   parentAdmins: boolean
   createdAt: Date
   _count: { members: number }
@@ -89,7 +86,6 @@ function toRow(s: {
     worldDoor: asDoor(s.worldDoor, 'open'),
     flowContext: s.flowContext,
     flowEvents: s.flowEvents,
-    flowPeople: s.flowPeople,
     parentAdmins: s.parentAdmins,
     memberCount: s._count.members,
     createdAt: s.createdAt,
@@ -161,7 +157,7 @@ export async function eventFlowingSubspacesOf(parentId: string): Promise<Array<{
 
 async function subspacesWhere(
   parentId: string,
-  rule: (row: { visibility: string; parentId: string | null; listing: string; flowContext: boolean; flowEvents: boolean; flowPeople: boolean }) => boolean,
+  rule: (row: { visibility: string; parentId: string | null; listing: string; flowContext: boolean; flowEvents: boolean }) => boolean,
 ): Promise<Array<{ id: string; name: string }>> {
   const rows = await prisma.space.findMany({
     where: { parentId },

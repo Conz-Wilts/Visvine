@@ -20,7 +20,7 @@ and the reasons; this is the code map.
 |---|---|---|---|
 | Listing — `secret` \| `house` \| `world` | `listing`, with `visibility` derived (world ⇔ public) | `listingOf`, `visibilityForListing`, `listedToHouse` | the room's Settings; `PUT …/settings { listing }` |
 | Doors — `invite` \| `ask` \| `open`, one for the house's members, one for the world | `house_door`, `world_door` | `doorsOf` (world clamped to house; both `invite` on a secret room), `joinOutcome` | the room's Settings |
-| Flows up — context, events, people | `flow_context`, `flow_events`, `flow_people` | `flowsContext` / `flowsEvents` / `flowsPeople` (all false for a secret room) | the room's Settings |
+| Flows up — context, events | `flow_context`, `flow_events` | `flowsContext` / `flowsEvents` (both false for a secret room). People never flow: `lib/directory/shared/samePerson.ts` joins the family's records of one identity on the person's page | the room's Settings |
 | Governance | `parent_admins` | `parentAdministers`; one step in `lib/auth.ts#isAdmin` | the room's Settings; ON when a house admin creates it; only a holder of the room's own admin alias may switch it back on |
 | Down (the house's) | per note: `share: all` \| `[room ids]` on `connectors/`, `agents/`, `tools/`; `share_as: use` \| `run-in` on agents; `subspace_config.modelKeys` | `shareTargets`, `isSharedDown(path, fm, roomId)`, `reachesRoom`, `subspaceConfigOf` | the connector / agent / Tool page; Console → Sub-spaces for model keys |
 
@@ -395,7 +395,7 @@ on screen from the first seed (`scripts/seed/subspaces.ts`):
   `subspaces/engineering/`.
 - **Marketing** — the room the world can find: listed, strangers ask at the
   door, its demo day flows up as a public event, and the agency and press
-  records it keeps flow up as read-only people.
+  records it keeps are its own, reached in the room.
 - **Finance** — a *Council* with `flowContext` off: the house's members see the
   door and ask; nothing of its packs shows above, its events would.
 - **Compensation** — a *Committee*: secret, flowing nothing, named nowhere

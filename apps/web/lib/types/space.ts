@@ -79,7 +79,6 @@ export interface Space {
   // What flows up into the parent (nothing from a secret room).
   flowContext?: boolean;
   flowEvents?: boolean;
-  flowPeople?: boolean;
   // Whether the parent's admins administer this sub-space too (lib/auth.ts).
   parentAdmins?: boolean;
   // The house's side: which rooms its model keys reach.
