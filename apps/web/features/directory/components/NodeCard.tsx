@@ -46,8 +46,6 @@ import PersonSilhouette from '@/components/ui/PersonSilhouette'
 import TypeSilhouette from '@/components/ui/TypeSilhouette'
 import { useProfileCache } from '@/features/shared/contexts/ProfileContext'
 import { useCardTilt } from '../hooks/useCardTilt'
-import { BlocksIcon } from '@/features/shared/icons'
-import { roomsOf } from '@/lib/directory/peopleFlow'
 
 interface DirectoryCardProps {
   item: DirectoryItem
@@ -72,8 +70,6 @@ function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
 
   const displayName = cached?.name ?? item.name
   const displaySubtitle = cached?.subtitle ?? item.subtitle
-  const rooms = roomsOf(item)
-  const roomNames = rooms.map((r) => r.name).join(' · ')
   const displayImageUrl = cached?.imageUrl ?? item.image_url
 
   const glyph = getNodeGlyph(item.type)
@@ -147,17 +143,6 @@ function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
         >
           {nodeTypeLabel(item.type, item.alias, aliases, nodeTypes)}
         </Chip>
-        {/* The rooms that hold this person, read through the people flow.
-            One card per person: a room's copy folds into the house's own. */}
-        {rooms.length > 0 && (
-          <span
-            className="mt-2 inline-flex max-w-full items-center gap-1 text-[11px] text-text-muted"
-            title={roomNames}
-          >
-            <BlocksIcon className="h-3 w-3 shrink-0" />
-            <span className="truncate">{roomNames}</span>
-          </span>
-        )}
       </div>
     </div>
   )

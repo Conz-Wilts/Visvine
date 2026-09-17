@@ -218,12 +218,16 @@ async function fetchSpaceLinks(spaceId: string): Promise<NBLink[]> {
 /**
  * Nodes-only data source for the directory grid/table. Cached under the shared
  * `context-data-v2` tag, which every node/profile write already revalidates.
+ * The key names the payload's shape: a row carries `identity_id`, which the
+ * people flow folds on, so a cache written before that field must not be
+ * served — a script that binds identities (`db:identity:family`) writes rows
+ * without touching the tag.
  */
 export async function getSpaceNodes(spaceId: string): Promise<NBNode[]> {
   try {
     return await unstable_cache(
       () => fetchSpaceNodes(spaceId),
-      ['space-nodes', spaceId],
+      ['space-nodes-v2', spaceId],
       { tags: ['context-data-v2'] },
     )();
   } catch (err) {
