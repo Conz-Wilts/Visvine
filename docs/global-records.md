@@ -81,3 +81,10 @@ to the global resolver. A `split`/`rejected` resolution is honoured. Members
 need none of this: a joining member's node is connected to their own identity.
 The house's directory then draws one row per identity (`peopleFlow.ts`).
 
+People recorded before the rule are folded by
+`pnpm --filter @visvine/web db:identity:family` (`--dry` to see the plan;
+`lib/identity/familyCleanup.ts`), which the seed also runs before building the
+Visvine records. It gives every person node an identity and merges one person
+held under several identities across a family, never two member accounts, two
+emails or LinkedIns, a Visvine record, a recorded split, or the same name twice
+in one space — those are printed as left alone.

@@ -35,6 +35,7 @@ import '../../../../scripts/guard-local-db.mjs'
 import 'dotenv/config'
 import prisma from '../../lib/prisma'
 import { rebuildGlobalRecords } from '../../lib/global/record'
+import { cleanupFamilyIdentities } from '../../lib/identity/familyCleanup'
 import { syncActionNotes } from '../../lib/actions/sync'
 import { SHARED_OWNER_KEY } from '../../lib/notes/store'
 import { personal, shared } from './notes'
@@ -81,6 +82,12 @@ async function main() {
   await step('drive', seedDrive)
   await step('connectors', seedConnectors)
   await step('agents', seedAgents)
+  // One identity per person across the house and its rooms, before the
+  // Visvine records are built from them (lib/identity/family.ts).
+  await step('identities', async () => {
+    const { attached, merged, resolved } = await cleanupFamilyIdentities()
+    return { attached, merged, resolved }
+  })
   await step('global', async () => {
     const records = await rebuildGlobalRecords()
     const actions = await syncActionNotes()

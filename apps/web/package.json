@@ -38,6 +38,7 @@
     "db:embed": "tsx scripts/embed-context.ts",
     "db:memories": "tsx scripts/derive-memories.ts",
     "db:global:rebuild": "tsx scripts/rebuild-global-records.ts",
+    "db:identity:family": "tsx scripts/cleanup-family-identities.ts",
     "db:entities:folders": "tsx scripts/migrate-entity-folders.ts",
     "db:agents:folders": "tsx scripts/migrate-agent-folders.ts",
     "db:agents:activation": "tsx scripts/fold-agent-activation.ts",
