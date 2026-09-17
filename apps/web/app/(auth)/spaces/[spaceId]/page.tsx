@@ -284,7 +284,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
               <StatItem value={counts.upcomingEvents} label={counts.upcomingEvents === 1 ? 'Upcoming event' : 'Upcoming events'}
                         onClick={() => jump('events')} accent={theme.dark} />
             )}
-            {isMember && (
+            {isMember && resources.length > 0 && (
               <StatItem value={counts.resources} label={counts.resources === 1 ? 'Resource' : 'Resources'}
                         onClick={() => jump('resources')} accent={theme.dark} />
             )}
@@ -326,34 +326,23 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
             </SectionCard>
           )}
 
-          {isMember && (
-            <SectionCard id="resources" title="Resources" scrollMargin="scroll-mt-20"
-                         badge={resources.length > 0 ? counts.resources : undefined}
-                         action={resources.length > 0 ? <Link href="/directory?view=resources" className="text-[13px] font-semibold hover:underline" style={{ color: theme.dark }}>View all</Link> : undefined}>
-              {resources.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
-                  {resources.map((r) => (
-                    <Link key={r.id} href={`/resources/${encodeURIComponent(r.id)}`}
-                          className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-2">
-                      <FileTypeIcon type={r.fileType} className="h-9 w-9 flex-none" />
-                      <span className="min-w-0">
-                        <b className="block text-[13.5px] font-semibold text-text-primary truncate">{r.name}</b>
-                        <span className="block text-xs text-text-muted truncate">
-                          {FILE_LABEL[r.fileType] ?? r.fileType.toUpperCase()}
-                          {r.fileSize ? ` · ${formatBytes(r.fileSize)}` : ''}
-                        </span>
+          {isMember && resources.length > 0 && (
+            <SectionCard id="resources" title="Resources" scrollMargin="scroll-mt-20" badge={counts.resources}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+                {resources.map((r) => (
+                  <Link key={r.id} href={`/resources/${encodeURIComponent(r.id)}`}
+                        className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-2">
+                    <FileTypeIcon type={r.fileType} className="h-9 w-9 flex-none" />
+                    <span className="min-w-0">
+                      <b className="block text-[13.5px] font-semibold text-text-primary truncate">{r.name}</b>
+                      <span className="block text-xs text-text-muted truncate">
+                        {FILE_LABEL[r.fileType] ?? r.fileType.toUpperCase()}
+                        {r.fileSize ? ` · ${formatBytes(r.fileSize)}` : ''}
                       </span>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-                  <span className="text-text-muted">Nothing shared yet.</span>
-                  <Link href="/directory?view=resources" className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
-                    <PlusIcon className="w-4 h-4" /> Upload the first resource
+                    </span>
                   </Link>
-                </div>
-              )}
+                ))}
+              </div>
             </SectionCard>
           )}
         </div>

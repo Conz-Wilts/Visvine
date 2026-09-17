@@ -501,7 +501,7 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
 
 ## The Directory
 
-`/directory` is one page, four tabs — Grid · Table · Context · Resources — with
+`/directory` is one page, three tabs — Grid · Context · Table — with
 the view on the URL (`?view=table&type=person`). Grid and Table share
 `useDirectoryBrowse`; Table is per TYPE because the columns are, picked from
 `table/TypeStrip.tsx`. `?type=all` is the one cross-type table (core columns

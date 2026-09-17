@@ -1,4 +1,4 @@
-// The Directory's four views, as one list and one href builder.
+// The Directory's three views, as one list and one href builder.
 //
 // Two surfaces put these tabs in the pane bar — the Directory page itself and
 // any context note under it — and they have to agree on the order and on where
@@ -9,7 +9,7 @@
 // chosen first.
 //
 // **The type travels with the view.** `?type=` is the Table's per-type tab, and
-// carrying it through Grid and Resources — which ignore it — is what makes
+// carrying it through Grid — which ignores it — is what makes
 // leaving the Table and coming back land where it was left. From a context note
 // the type is the note's own namespace (`people/craig/index.md` → person), so
 // crossing to the Table from what you were reading opens that type's table
@@ -17,7 +17,7 @@
 //
 // Pure — no React, no DOM. `tests/directory-views.test.ts` covers it.
 
-export type DirectoryView = 'grid' | 'table' | 'resources'
+export type DirectoryView = 'grid' | 'table'
 
 /** A pane-bar tab, structurally the shell's `PaneTabItem`. */
 export interface DirectoryTab {
@@ -33,17 +33,16 @@ export function directoryTabs(): DirectoryTab[] {
     { id: 'grid', label: 'Grid' },
     { id: CONTEXT_TAB_ID, label: 'Context' },
     { id: 'table', label: 'Table' },
-    { id: 'resources', label: 'Resources' },
   ]
 }
 
 export function isDirectoryView(id: string): id is DirectoryView {
-  return id === 'grid' || id === 'table' || id === 'resources'
+  return id === 'grid' || id === 'table'
 }
 
 /**
  * Where a view tab goes. The type rides along when there is one — a table
- * needs it, the other two keep it so the round trip remembers.
+ * needs it, the grid keeps it so the round trip remembers.
  */
 export function directoryViewHref(view: DirectoryView, type?: string | null): string {
   const params = new URLSearchParams()
@@ -53,3 +52,9 @@ export function directoryViewHref(view: DirectoryView, type?: string | null): st
   const query = params.toString()
   return query ? `/directory?${query}` : '/directory'
 }
+
+/**
+ * Where a `?view=resources` or `/resources` link lands: the table of the
+ * space's resources.
+ */
+export const RESOURCES_HREF = directoryViewHref('table', 'resource')

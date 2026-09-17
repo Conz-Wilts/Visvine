@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from 'react';
 
-export const FILE_BG: Record<string, string> = {
+const FILE_BG: Record<string, string> = {
   pdf:      'bg-red-100 text-red-600',
   xlsx:     'bg-green-100 text-green-600',
   csv:      'bg-emerald-100 text-emerald-600',

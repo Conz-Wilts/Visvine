@@ -60,7 +60,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
   const resourceId = decodeURIComponent(rawResourceId);
   const router = useSpaceRouter();
   const { session } = useAuth();
-  const { isAdmin } = useSpace();
+  const { isAdmin, currentSpace } = useSpace();
 
   const [detail, setDetail] = useState<ResourceDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -130,7 +130,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
   const handleDelete = async () => {
     if (!resource || !confirm(`Delete "${resource.name}"? This can't be undone.`)) return;
     await fetch(`/api/resources?id=${encodeURIComponent(resourceId)}`, { method: 'DELETE' });
-    router.push('/directory?view=resources');
+    router.push(`/spaces/${encodeURIComponent(resource.spaceId)}`);
   };
 
   const reviewChange = async (changeId: string, status: 'approved' | 'rejected') => {
@@ -164,8 +164,8 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
       {/* ── sticky header bar ── */}
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-border-subtle bg-surface-1/85 backdrop-blur">
         <div className="flex min-w-0 items-center gap-1.5 text-sm">
-          <Link href="/directory?view=resources" className="inline-flex items-center gap-0.5 font-semibold text-text-muted hover:text-text-primary transition flex-none">
-            <ChevronLeftIcon className="w-4 h-4" /> Resources
+          <Link href={`/spaces/${encodeURIComponent(resource.spaceId)}`} className="inline-flex items-center gap-0.5 font-semibold text-text-muted hover:text-text-primary transition flex-none">
+            <ChevronLeftIcon className="w-4 h-4" /> {currentSpace?.id === resource.spaceId ? currentSpace.name : 'Space'}
           </Link>
           <span className="text-text-muted flex-none">/</span>
           <span className="font-semibold text-text-primary truncate">{resource.name}</span>

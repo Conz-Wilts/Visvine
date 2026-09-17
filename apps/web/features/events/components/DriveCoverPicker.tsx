@@ -86,7 +86,7 @@ export function DriveCoverPicker({ spaceId, eventId, onClose, onPicked }: Props)
       ) : shown.length === 0 ? (
         <p className="py-12 text-sm text-brand-grey text-center">
           {images.length === 0
-            ? 'No pictures in this space’s Drive yet — upload one there and it will show up here.'
+            ? 'No pictures yet.'
             : 'Nothing matches that.'}
         </p>
       ) : (

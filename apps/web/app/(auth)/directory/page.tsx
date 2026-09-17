@@ -6,7 +6,6 @@ import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import NodeGrid from '@/features/directory/components/NodeGrid';
 import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
 import DirectoryTableView from '@/features/directory/components/table/DirectoryTableView';
-import ResourcesBrowser from '@/features/resources/components/ResourcesBrowser';
 import ContentReveal from '@/components/ui/ContentReveal';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useViewportPane } from '@/app/(auth)/AuthLayoutClient';
@@ -22,7 +21,13 @@ import {
 import { ensureRootIndexNote, ROOT_INDEX_PATH } from '@/features/notes/lib/rootIndex';
 import { resetContextTreeState } from '@/features/notes/hooks/useContextTreeState';
 import { noteHref } from '@/lib/notes/entities';
-import { directoryTabs, directoryViewHref, isDirectoryView, type DirectoryView } from '@/lib/directory/views';
+import {
+  directoryTabs,
+  directoryViewHref,
+  isDirectoryView,
+  RESOURCES_HREF,
+  type DirectoryView,
+} from '@/lib/directory/views';
 import type { NoteMeta } from '@/lib/notes/shared/types';
 import type { SpaceAlias } from '@/lib/types';
 
@@ -32,8 +37,7 @@ const DIRECTORY_TABS: PaneTabItem[] = directoryTabs();
 /**
  * The Directory: a searchable, filterable card grid of everyone and everything
  * (Grid), the same entries as rows with a column per thing their type tracks
- * (Table, `?view=table&type=<type>`), and the space's Drive (Resources,
- * `?view=resources`). The Context tab
+ * (Table, `?view=table&type=<type>`). The Context tab
  * in the pane bar isn't a view of this page — it navigates to the context's
  * top-level index note (`index.md`, the space's home page). The bar itself
  * lives in the persistent pane shell (directory/layout.tsx) — this page just
@@ -83,7 +87,7 @@ function DirectoryPane() {
   // grid and hop straight to the index note.
   const searchParams = useSearchParams();
   const viewParam = searchParams.get('view');
-  const view: DirectoryView = viewParam === 'resources' || viewParam === 'table' ? viewParam : 'grid';
+  const view: DirectoryView = viewParam === 'table' ? viewParam : 'grid';
   const typeParam = searchParams.get('type');
   const wantsContext = viewParam === 'context';
   const redirected = useRef(false);
@@ -92,6 +96,11 @@ function DirectoryPane() {
     redirected.current = true;
     openContext();
   }, [wantsContext, spaceId, openContext]);
+
+  // ?view=resources is the resources table.
+  useEffect(() => {
+    if (viewParam === 'resources') router.replace(RESOURCES_HREF);
+  }, [viewParam, router]);
 
   // Selecting Grid closes any docked tree now, skipping the release grace:
   // the grace exists for navigations where another surface re-claims the dock,
@@ -127,7 +136,7 @@ function DirectoryPane() {
   // click is a route change over a warm cache.
   usePrefetchContextRoot(spaceId, !noSpace);
 
-  // Standing on the grid (or the table, or Resources) is leaving Context, so
+  // Standing on the grid (or the table) is leaving Context, so
   // the tree's expansion is forgotten here: entering Context always opens at
   // the space root with one layer under it, never on the chain that happened to
   // be open last time.
@@ -137,7 +146,7 @@ function DirectoryPane() {
 
   // The Table sizes itself to the viewport and scrolls inside itself, so
   // <main> keeps no scrollbar gutter for it and the grid reaches the screen's
-  // right edge. Grid and Resources scroll <main> and keep theirs.
+  // right edge. The grid scrolls <main> and keeps its.
   useViewportPane(view === 'table');
 
   const browse = useDirectoryBrowse();
@@ -177,14 +186,6 @@ function DirectoryPane() {
     );
   }
 
-  if (view === 'resources') {
-    return (
-      <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 112px)' }}>
-        <ResourcesBrowser id="panel-resources" role="tabpanel" />
-      </div>
-    );
-  }
-
   return (
     // The surface fills the pane exactly, so a short grid has nothing to
     // scroll: the shell's 64px band and <main>'s 48px of padding — the tab
@@ -211,7 +212,7 @@ function DirectoryPane() {
             )}
 
             {/* No per-card cascade: the whole view is already rising as one
-                block, the same way the other three tabs do. */}
+                block, the same way the other tabs do. */}
             <NodeGrid
               items={filteredItems}
               loading={loading}

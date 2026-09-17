@@ -7,26 +7,26 @@ import {
   directoryTabs,
   directoryViewHref,
   isDirectoryView,
+  RESOURCES_HREF,
 } from '../lib/directory/views'
 
 test('Context sits beside Grid, before the Table', () => {
   assert.deepEqual(
     directoryTabs().map((t) => t.id),
-    ['grid', CONTEXT_TAB_ID, 'table', 'resources'],
+    ['grid', CONTEXT_TAB_ID, 'table'],
   )
 })
 
 test('Context is not a view — it is a navigation', () => {
   assert.equal(isDirectoryView('grid'), true)
   assert.equal(isDirectoryView('table'), true)
-  assert.equal(isDirectoryView('resources'), true)
+  assert.equal(isDirectoryView('resources'), false)
   assert.equal(isDirectoryView(CONTEXT_TAB_ID), false)
 })
 
 test('the grid is the bare route; the others name themselves', () => {
   assert.equal(directoryViewHref('grid'), '/directory')
   assert.equal(directoryViewHref('table'), '/directory?view=table')
-  assert.equal(directoryViewHref('resources'), '/directory?view=resources')
 })
 
 test('a type rides along, lower-cased, so the round trip remembers it', () => {
@@ -45,4 +45,8 @@ test('a blank type is no type at all', () => {
 
 test('a type that needs escaping is escaped', () => {
   assert.equal(directoryViewHref('table', 'deal flow'), '/directory?view=table&type=deal+flow')
+})
+
+test('a Resources link lands on the resources table', () => {
+  assert.equal(RESOURCES_HREF, '/directory?view=table&type=resource')
 })
