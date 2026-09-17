@@ -201,6 +201,12 @@ export interface BrainSearchResult {
 export interface SearchOptions {
   /** Widen the plan with an LLM rewrite when one is configured (default true). */
   rewrite?: boolean
+  /**
+   * A plan already made for this query. A search over several spaces plans
+   * once — the rewrite is one LLM call — and hands every space the same
+   * phrasings, so no space is searched on narrower words than another.
+   */
+  plan?: { plan: QueryPlan; rewrite: RewriteStatus }
 }
 
 /**
@@ -229,7 +235,7 @@ export async function searchContext(
     .map((s) => s.path)
 
   const now = Date.now()
-  const { plan, rewrite } = await planSearch(query, now, { rewrite: opts.rewrite ?? true })
+  const { plan, rewrite } = opts.plan ?? (await planSearch(query, now, { rewrite: opts.rewrite ?? true }))
 
   // One batched embed of every phrasing, shared by both vector stages. The
   // text stages rank on the topic (time words stripped), so that is what is

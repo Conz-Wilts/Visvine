@@ -77,8 +77,11 @@ function spaceBlock(space: PlanSpaceFacts | null): string {
     return [
       '## Which space',
       '',
-      'No `space_id` was given, so this plan is generic. Run `list_spaces` and ask again with one, and the',
-      "plan will know your role, the space's enabled features, and what it already has.",
+      'No `space_id` was given, so this plan is generic. `search_context` needs none — it searches every',
+      'space you can act in and stamps each hit with its space. A write, a run or a listing of one space',
+      'does: run `list_spaces`, and when the request does not say which space, ASK the person rather than',
+      'pick — a note in the wrong space is read by the wrong people. Ask again with one and the plan will',
+      "know your role, the space's enabled features, and what it already has.",
     ].join('\n')
   }
   const off = Object.entries(space.features)

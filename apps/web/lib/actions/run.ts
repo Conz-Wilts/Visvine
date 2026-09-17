@@ -16,6 +16,7 @@
  * regardless of what their token says.
  */
 import { actionByName, schemaOf } from '@/lib/actions/registry'
+import { listMySpaces } from '@/lib/actions/resolve'
 import { ActionError, type ActionCaller, type ActionDef } from '@/lib/actions/types'
 
 export interface ActionOutcome {
@@ -33,6 +34,23 @@ function requireAction(name: string): ActionDef {
   )
 }
 
+/**
+ * The refusal for a call that named no space. It carries the candidates by
+ * name so the caller can ask the person a precise question — "Visvine or
+ * Acme?" — rather than guess. A write landing in the wrong space is read by
+ * the wrong people, which is why nothing here picks one.
+ */
+async function whichSpace(caller: ActionCaller, name: string): Promise<string> {
+  const mine = await listMySpaces(caller).catch(() => [])
+  const named = mine.map((s) => `${s.name} (\`${s.id}\`)`).join(', ')
+  return (
+    `'${name}' needs a space_id. ` +
+    (mine.length
+      ? `You can act in: ${named}. If the request does not say which, ask the person which space before going on.`
+      : 'You are in no space yet; create or join one first.')
+  )
+}
+
 export async function runAction(
   caller: ActionCaller,
   name: string,
@@ -47,6 +65,9 @@ export async function runAction(
   const parsed = schemaOf(def).safeParse(input ?? {})
   if (!parsed.success) {
     const issue = parsed.error.issues[0]
+    if (issue && issue.path.length === 1 && issue.path[0] === 'space_id' && issue.code === 'invalid_type') {
+      throw new ActionError(400, await whichSpace(caller, name))
+    }
     const where = issue?.path?.length ? `${issue.path.join('.')}: ` : ''
     throw new ActionError(400, `${where}${issue?.message ?? 'Invalid input'}`)
   }

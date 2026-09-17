@@ -30,6 +30,7 @@ import {
   readSourceVisible,
 } from '@/lib/notes/contextService'
 import { federatedMetas, readFederated, searchFederated } from '@/lib/notes/federation'
+import { searchEverywhere } from '@/lib/actions/searchEverywhere'
 import { readableRoots, LEVEL_EDIT } from '@/lib/notes/shared/authz'
 import { audienceSummary } from '@/lib/notes/shared/audience'
 import { loadSpaceAccess, grantAccess, setFolderRestricted } from '@/lib/notes/access'
@@ -357,10 +358,12 @@ export const CONTEXT_ACTIONS = [
       name: 'list_spaces',
       scope: 'context:read',
       summary:
-        'The spaces you can act in, with your role in each. Every other action needs a space_id.',
+        'The spaces you can act in, with your role in each. Every write needs a space_id; search_context does not.',
       description:
         'List the spaces you can act in, with your role in each and whether it is your own personal space. ' +
-        'Start here: every other tool needs a space_id (the wire name for a space id).',
+        'Every action that writes, runs or lists ONE space needs a space_id (the wire name for a space id); ' +
+        'search_context without one searches all of these. When a request does not say which space a write ' +
+        'belongs in, ask the person rather than guess — a note in the wrong space is read by the wrong people.',
       input: {},
       annotations: { readOnlyHint: true },
       run: async (ctx, _args) => ({
@@ -535,9 +538,15 @@ export const CONTEXT_ACTIONS = [
         '"since March", "2026-03-15") and become a date filter; a query that is ONLY about a time ' +
         '("what happened yesterday") returns that period newest-first. A history question ("why did we stop…", ' +
         '"what did we use to…") ranks retired notes at full weight. The `plan` field reports all of this — ' +
-        'the phrasings searched, the date range read, and whether the query rewrite ran.',
+        'the phrasings searched, the date range read, and whether the query rewrite ran. ' +
+        'Omit `space_id` to search EVERY space you can act in at once; each hit then says which `space` it was ' +
+        'read in, and `spaces` lists what was searched. When results span more than one space, say which ' +
+        'space each came from, and never carry what one space says into a write in another unless the ' +
+        'person asked for exactly that — if it is unclear where something should go, ask them which space.',
       input: {
-        space_id: spaceArg,
+        space_id: spaceArg
+          .optional()
+          .describe('The space to search. Omit to search every space you can act in, each hit stamped with its space.'),
         query: z.string().describe('Natural-language or keyword query'),
         k: z.number().int().min(1).max(50).optional().describe('Max results per kind (default 10)'),
         type: z.string().optional().describe("Filter notes by frontmatter `type`, entities by node type"),
@@ -555,28 +564,40 @@ export const CONTEXT_ACTIONS = [
       },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
-        const { principal, context } = await resolveTarget(ctx, args.space_id)
         const k = args.k ?? 10
+        const filters = {
+          type: args.type,
+          tags: args.tags,
+          folderId: args.folder,
+          updatedAfter: args.updated_after,
+          updatedBefore: args.updated_before,
+        }
 
-        const { hits, semantic, plan } = await searchFederated(
-          principal,
-          context,
-          args.query,
-          {
-            type: args.type,
-            tags: args.tags,
-            folderId: args.folder,
-            updatedAfter: args.updated_after,
-            updatedBefore: args.updated_before,
-          },
-          k,
-          { rewrite: args.rewrite },
-        )
+        // One space: the federated search as the routes run it. No space: the
+        // same search in each space the caller can act in, fused, every hit
+        // stamped with the space it was read in (lib/actions/searchEverywhere.ts).
+        const everywhere = args.space_id
+          ? null
+          : await searchEverywhere(ctx, args.query, filters, k, { rewrite: args.rewrite })
+        const one = args.space_id
+          ? await (async () => {
+              const { principal, context } = await resolveTarget(ctx, args.space_id!)
+              const r = await searchFederated(principal, context, args.query, filters, k, { rewrite: args.rewrite })
+              const row = await prisma.space.findUnique({
+                where: { id: args.space_id },
+                select: { id: true, name: true, parentId: true },
+              })
+              const space = { id: args.space_id!, name: row?.name ?? args.space_id!, parent_id: row?.parentId ?? null }
+              return { ...r, hits: r.hits.map((h) => ({ ...h, space })), searched: [space], skipped: 0 }
+            })()
+          : null
+        const { hits, semantic, plan, searched, skipped } = (everywhere ?? one)!
+        const spaceById = new Map(searched.map((s) => [s.id, s]))
 
         const entities = (
                 await prisma.node.findMany({
                   where: {
-                    spaceId: args.space_id,
+                    spaceId: { in: searched.map((s) => s.id) },
                     OR: [
                       { name: { contains: args.query, mode: 'insensitive' } },
                       { alias: { contains: args.query, mode: 'insensitive' } },
@@ -586,7 +607,7 @@ export const CONTEXT_ACTIONS = [
                     // are found by a search for either name.
                     ...(args.type ? { type: { in: nodeTypeSpellings(args.type) } } : {}),
                   },
-                  select: NODE_SELECT,
+                  select: { ...NODE_SELECT, spaceId: true },
                   take: k,
                 })
               )
@@ -595,6 +616,7 @@ export const CONTEXT_ACTIONS = [
                   const notePath = entityNotePath(nodeLike(r))
                   return {
                     kind: 'entity' as const,
+                    space: spaceById.get(r.spaceId ?? '') ?? { id: r.spaceId ?? '', name: r.spaceId ?? '', parent_id: null },
                     node_id: r.id,
                     type: r.type,
                     name: r.name,
@@ -605,6 +627,10 @@ export const CONTEXT_ACTIONS = [
                 })
 
         return {
+          // Where this search looked. One entry when a space was named; every
+          // space the caller can act in otherwise, capped — `skipped` says how
+          // many did not fit, so the caller can name one to reach it.
+          spaces: { searched, skipped },
           semantic,
           plan: {
             queries: plan.queries,
@@ -621,6 +647,7 @@ export const CONTEXT_ACTIONS = [
           // path that looks like a note and isn't.
           notes: hits.map((h) => ({
             kind: h.kind,
+            space: h.space,
             path: h.path,
             title: h.title,
             snippet: h.snippet ?? null,
@@ -628,8 +655,8 @@ export const CONTEXT_ACTIONS = [
             // Present only when the note is not current — see shared/lifecycle.ts.
             ...(h.status ? { status: h.status } : {}),
             ...(h.kind === 'source'
-              ? { seq: h.seq, read_with: { tool: 'read_file', path: h.path } }
-              : { read_with: { tool: 'read_context', note_path: h.path } }),
+              ? { seq: h.seq, read_with: { tool: 'read_file', space_id: h.space.id, path: h.path } }
+              : { read_with: { tool: 'read_context', space_id: h.space.id, note_path: h.path } }),
           })),
         }
       },

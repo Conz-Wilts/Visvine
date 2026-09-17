@@ -278,7 +278,17 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   then and `/home` sends them to the directory. `me:<userId>` rows
   (`personalOwnerId` set) exist only from before this rule: still private to
   their owner, never grant-gated, and nothing provisions one. Every action
-  targets the space named in `space_id` — there is no `scope` argument.
+  that writes, runs or lists ONE space targets the space named in `space_id`
+  — there is no `scope` argument. **`search_context` alone may omit it**: it
+  then runs the same federated search in every space the caller can act in
+  (`lib/actions/searchEverywhere.ts`, each under `resolveTarget`, one plan
+  shared, capped at `MAX_SEARCH_SPACES`) and folds the rankings
+  (`shared/everywhere.ts`, pure: a room the caller is in is searched directly,
+  so the house's `subspaces/<id>/` hop into it is dropped). Every hit and
+  entity carries `space`, `read_with` carries `space_id`, and `spaces` says
+  what was searched. A write with no `space_id` is refused by `runAction` with
+  the caller's spaces named, so the model asks the person which space rather
+  than guess — nothing server-side ever picks a tenant for a write.
 - Account deletion (`lib/account/deleteAccount.ts`, `DELETE /api/account`) is
   the one place a person erases themselves. Cascades cover only half — personal
   context tables key `owner_key`, aliases/grants/OAuth key a bare `user_id`,
