@@ -17,6 +17,7 @@ import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
 import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { useNodeProfile, patchCachedNodeProfile } from '@/features/shared/hooks/useNodeProfile'
+import AlsoIn from '@/features/directory/components/AlsoIn'
 import { findAlias, nodeTypeLabel } from '@/lib/types'
 import { getTypeColor } from '@/features/directory/components/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
@@ -762,13 +763,10 @@ export function EntityContextPanel({
         </div>
       ) : showEditor ? (
         <>
-          {!noteExists && (
-            <p className="mx-auto mb-4 max-w-3xl text-center text-sm text-text-muted">
-              {subPath
-                ? 'This note does not exist yet — start typing below to create it.'
-                : `No shared context for ${displayName} yet — start typing below to create it.`}
-            </p>
-          )}
+          {/* The same person's records in the family's other spaces, over the
+              note: the context about them elsewhere is one click away, and
+              only the spaces the viewer belongs to are named. */}
+          {!subPath && <AlsoIn node={node} className="mx-auto mb-4 max-w-3xl text-center" />}
           {/* Keyed and fed from `shown`, never from the in-flight `path`: the editor
               is the note it actually holds. When the next read lands, this key
               changes and React swaps the editor — and the toolbar it portals into

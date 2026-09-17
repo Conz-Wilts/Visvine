@@ -40,7 +40,6 @@ import ConnectorPageContent from '@/features/profile/components/ConnectorPageCon
 import AgentPageContent from '@/features/profile/components/AgentPageContent';
 import ModelPageContent from '@/features/profile/components/ModelPageContent';
 import ToolPageContent from '@/features/profile/components/ToolPageContent';
-import AlsoIn from '@/features/directory/components/AlsoIn';
 
 /** URL-level tab ids. Kept as a type for the ?tab= plumbing — the bar itself
  *  takes plain string ids via the shell registration. `tool:<slug>` is an
@@ -389,7 +388,6 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
           cards on the page background. profile-enter stays on the content only:
           the persistent bar above it must not play an entrance. */}
       <div className="profile-enter mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl">
-        <AlsoIn node={node} />
         <ProfilePageContent nodeId={nodeId} selfView={selfView} />
       </div>
     </div>
@@ -512,12 +510,7 @@ function NodePage({ nodeId, firstTab, ariaLabel, notFoundTitle, renderBody }: {
         role="tabpanel"
         className="profile-enter mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl"
       >
-        {activeTab === 'about' && (
-          <>
-            <AlsoIn node={node} />
-            {renderBody(nodeId)}
-          </>
-        )}
+        {activeTab === 'about' && renderBody(nodeId)}
       </div>
     </div>
   );
