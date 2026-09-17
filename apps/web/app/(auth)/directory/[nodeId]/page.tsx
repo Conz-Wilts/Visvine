@@ -41,6 +41,7 @@ import { fileIdOf } from '@/lib/resources/shared/fileNode';
 import ConnectorPageContent from '@/features/profile/components/ConnectorPageContent';
 import AgentPageContent from '@/features/profile/components/AgentPageContent';
 import ModelPageContent from '@/features/profile/components/ModelPageContent';
+import { useViewportPane } from '@/app/(auth)/AuthLayoutClient';
 import ToolPageContent from '@/features/profile/components/ToolPageContent';
 
 /** URL-level tab ids. Kept as a type for the ?tab= plumbing — the bar itself
@@ -733,6 +734,9 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
 
   const loadingState = loading && !data;
   const errorState = !loadingState && (!!error || !data);
+  const fileId = fileIdOf(node?.metadata);
+  // The file view sizes itself to the viewport and scrolls inside itself.
+  useViewportPane(!!fileId && activeTab === 'preview' && !toolOwner);
 
   useEntityChrome({
     firstTab: RESOURCE_FIRST_TAB,
@@ -762,7 +766,6 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
   // A resource that holds a file shows the file, filling the pane to the
   // viewport the way the Directory's table does; one that holds a link shows
   // the link.
-  const fileId = fileIdOf(node?.metadata);
   if (fileId) {
     return (
       <div role="tabpanel" className="profile-enter -mb-6 w-full">

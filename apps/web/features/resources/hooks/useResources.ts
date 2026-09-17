@@ -1,8 +1,8 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import type { Resource, ResourceFolder } from '@/lib/types';
 import { fetchJson } from '@/lib/fetchJson';
-import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
+import { swrFetch } from '@/features/shared/lib/requestCache';
 
 const driveKeys = {
   files: (spaceId: string) => `drive:files:${spaceId}`,
@@ -25,13 +25,6 @@ function loadDrive(spaceId: string, onData: (drive: Partial<Drive>) => void): Pr
   ]).then(([resources, folders]) => ({ resources, folders }));
 }
 
-/** Forget a space's Drive listing, so the next reader fetches it afresh. A
- *  write that changed the Drive (upload, rename, delete) calls this before
- *  `refetch`; a reader that merely re-mounts paints from the cache. */
-function invalidateDrive(spaceId: string) {
-  invalidateRequestCache(driveKeys.files(spaceId), driveKeys.folders(spaceId));
-}
-
 /**
  * A space's Drive: every file and every folder, fetched together so the tree
  * and its contents never disagree on screen. Read through the shared request
@@ -43,14 +36,6 @@ export function useResources(spaceId: string | null) {
   const [folders, setFolders] = useState<ResourceFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [version, setVersion] = useState(0);
-
-  // A write's `refetch` drops the cache first; a mount's load goes through it.
-  const refetch = useCallback(async () => {
-    if (!spaceId) return;
-    invalidateDrive(spaceId);
-    setVersion((v) => v + 1);
-  }, [spaceId]);
 
   useEffect(() => {
     if (!spaceId) { setResources([]); setFolders([]); return; }
@@ -69,7 +54,7 @@ export function useResources(spaceId: string | null) {
         if (live) setLoading(false);
       });
     return () => { live = false; };
-  }, [spaceId, version]);
+  }, [spaceId]);
 
-  return { resources, folders, loading, error, refetch };
+  return { resources, folders, loading, error };
 }
