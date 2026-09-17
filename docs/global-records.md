@@ -70,3 +70,14 @@ card already following the record (`global_follow` / `followGlobal`).
 Member connection (`/api/nodes/[id]/connection`) still exists: it is the
 identity being **claimed** by a user. Binding and connection are the same
 `identityId`; connecting adds `Identity.userId`.
+
+## Within a space family (`lib/identity/family.ts`)
+
+Across the platform a bare name only suggests a match. Inside one family — a
+house and its rooms — it is enough: a person node created with no email or
+LinkedIn takes the identity the family's other spaces already hold under that
+name, when exactly one identity does. Two identities under one name fall back
+to the global resolver. A `split`/`rejected` resolution is honoured. Members
+need none of this: a joining member's node is connected to their own identity.
+The house's directory then draws one row per identity (`peopleFlow.ts`).
+

@@ -19,6 +19,7 @@ import { logger } from '@/lib/logger'
 import { upsertLink } from '@/lib/notes/context/links'
 import { pairKeyFor } from '@/lib/notes/context/relationships'
 import { spaceNodeId, removeEntityNode, syncEntityNode } from '@/lib/notes/context/entityNodes'
+import { attachIdentity } from '@/lib/identity/attachIdentity'
 import { connectorNameOfPath, isConnectorNoteAt } from './shared/configKinds'
 import {
   mergeContextMeta,
@@ -404,6 +405,11 @@ export async function syncAdoptedNode(
         },
         select: { id: true },
       })
+      // A declared person is the same person the rest of the space family
+      // (or the platform, on a strong id) already knows — one identity, so
+      // the house's directory draws them once.
+      const { identityId } = await attachIdentity({ id, type: kind, name, url: null, location: null, metadata: {}, space_id: spaceId })
+      if (identityId) await prisma.node.update({ where: { id }, data: { identityId } })
       return true
     } catch (err) {
       // Node ids are global, so a taken id is expected — suffix and retry.

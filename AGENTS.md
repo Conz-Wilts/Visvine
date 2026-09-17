@@ -176,7 +176,10 @@ rail. `visibility` is `public | private`. Creation always goes through
   `GET /api/events?includeSubspaces=1`; detail through
   `requireSpaceMemberOrParent`), and **people** (`via_space` nodes in the
   house's directory, read-only — one row per `identity_id`, the house's own
-  record winning, with the other rooms as `also_in`: `peopleFlow.ts#mergePeopleFlow`). Down, per note and per room: a house's
+  record winning, with the other rooms as `also_in`: `peopleFlow.ts#mergePeopleFlow`;
+  a person added anywhere in the family with no email/LinkedIn takes the
+  identity the family already uses for that name, when exactly one does —
+  `lib/identity/family.ts`, applied by `attachIdentity` and note adoption). Down, per note and per room: a house's
   `connectors/`, `agents/` or `tools/` note with `share: all | [rooms]` is
   read into those rooms as the read-only `parent/` folder (`graftParent`,
   `federation.ts#parentShare`) — **no principal on that side; the flag is the

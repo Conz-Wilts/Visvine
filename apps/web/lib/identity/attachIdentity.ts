@@ -5,11 +5,14 @@
 // never merges with its identity, with no error anywhere.
 
 import prisma from '@/lib/prisma'
+import { logger } from '@/lib/logger'
 import type { NBNode } from '@/lib/types'
 import { entityKindOf } from '@/lib/notes/entities'
 import { isOwnSpaceNode } from '@/lib/types/context'
 import { tryResolveIdentity, confirmIdentity, type ResolveResult } from './resolve'
 import type { IdentityKind } from './match'
+import { familyIdentityFor } from './family'
+import { nameKey } from './normalize'
 
 /**
  * Which canonical-identity kind (if any) a node participates in.
@@ -69,6 +72,17 @@ export async function attachIdentity(
     }
   }
 
+  // The same person elsewhere in this space's family (family.ts): a room
+  // adding someone its house already holds, or the reverse, joins that record
+  // instead of starting a second one.
+  if (kind === 'person') {
+    const familyId = await familyIdentitySafe(node, meta)
+    if (familyId) {
+      await confirmIdentity(node.id, familyId, { actorUserId, reason: 'same person in this space family' })
+      return { identityId: familyId, resolution: null }
+    }
+  }
+
   const resolution = await tryResolveIdentity(
     node.id,
     {
@@ -89,4 +103,57 @@ export async function attachIdentity(
   )
 
   return { identityId: resolution?.identityId ?? null, resolution }
+}
+
+/** The spaces one family spans: the house and every room under it. */
+async function familySpaceIds(spaceId: string): Promise<string[]> {
+  const space = await prisma.space.findUnique({ where: { id: spaceId }, select: { parentId: true } })
+  if (!space) return []
+  const house = space.parentId ?? spaceId
+  const rooms = await prisma.space.findMany({ where: { parentId: house }, select: { id: true } })
+  return [house, ...rooms.map((r) => r.id)]
+}
+
+async function familyIdentitySafe(
+  node: Pick<NBNode, 'id' | 'name' | 'space_id'>,
+  meta: Record<string, unknown>,
+): Promise<string | null> {
+  if (!node.space_id) return null
+  try {
+    const family = (await familySpaceIds(node.space_id)).filter((id) => id !== node.space_id)
+    if (family.length === 0) return null
+    const [rows, refused] = await Promise.all([
+      prisma.node.findMany({
+        where: {
+          spaceId: { in: family },
+          identityId: { not: null },
+          type: { in: ['person', 'Person', 'people', 'People'] },
+          OR: [
+            { name: { equals: node.name.trim(), mode: 'insensitive' } },
+            { identity: { nameKey: nameKey(node.name) } },
+          ],
+        },
+        select: { name: true, identityId: true, identity: { select: { canonicalName: true } } },
+        take: 50,
+      }),
+      prisma.identityResolution.findMany({
+        where: { nodeId: node.id, decision: { in: ['rejected', 'split'] } },
+        select: { identityId: true },
+      }),
+    ])
+    // A node may be renamed locally, so the identity's canonical name speaks for it too.
+    const candidates = rows.flatMap((r) => {
+      const identityId = r.identityId as string
+      return [r.name, r.identity?.canonicalName ?? ''].map((name) => ({ identityId, name }))
+    })
+    const rejected = new Set(refused.map((r) => r.identityId).filter((x): x is string => !!x))
+    return familyIdentityFor(
+      { name: node.name, email: (meta.email as string) ?? null, linkedinUrl: (meta.linkedinUrl as string) ?? null },
+      candidates,
+      rejected,
+    )
+  } catch (err) {
+    logger.error('identity.family.failed', { err, nodeId: node.id })
+    return null
+  }
 }
