@@ -86,6 +86,16 @@ const nextConfig: NextConfig = {
     // grainy in the directory grid. 90 is the allowlist entry avatar surfaces
     // ask for; 75 stays for everything incidental.
     qualities: [75, 90],
+    // Next forbids a query string on a LOCAL image by default (its implicit
+    // localPatterns is `{ pathname: '**', search: '' }`), and every stored
+    // avatar URL carries the `?v=<uploaded-at>` cache-buster the media proxy
+    // needs to move off a five-minute-old picture. Without this entry every
+    // next/image over /api/media answers 400 "url parameter is not allowed".
+    // Defining localPatterns replaces the default, so the second row keeps it.
+    localPatterns: [
+      { pathname: "/api/media/**" },
+      { pathname: "**", search: "" },
+    ],
     remotePatterns: [
       {
         protocol: "https",
