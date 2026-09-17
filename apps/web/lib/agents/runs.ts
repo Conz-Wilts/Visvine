@@ -315,28 +315,17 @@ export async function spendForMonth(spaceId: string, name: string | null, at: Da
 }
 
 /**
- * The space's whole model spend for the UTC month of `at`, from the ledger
- * rather than the prunable run rows — so it includes teachings and every
- * agent. What the space-wide cap compares against.
+ * The space's spend on one provider's key for the UTC month of `at`, from the
+ * ledger rather than the prunable run rows — so it includes teachings and
+ * every agent. The ledger's `model` is `<provider>/<modelId>`, so every model
+ * on the key counts. What the model note's `budget_monthly:` compares against.
  */
-export async function ledgerSpendForMonth(spaceId: string, at: Date): Promise<bigint> {
+export async function ledgerSpendForMonth(spaceId: string, providerId: string, at: Date): Promise<bigint> {
   const agg = await prisma.agentModelUsage.aggregate({
-    where: { spaceId, month: monthBounds(at).start },
+    where: { spaceId, month: monthBounds(at).start, model: { startsWith: `${providerId}/` } },
     _sum: { costMicros: true },
   })
   return agg._sum.costMicros ?? BigInt(0)
-}
-
-/**
- * The space-wide monthly model cap, in cents — `agentBudgetMonthlyCents` in
- * the space's featureConfig (set from the Usage console section, no deploy),
- * the way the machine quota rides `vmMonthlyHours`. Absent or invalid =
- * uncapped: the spend is the space's own key, so the default is theirs to cap.
- */
-export async function spaceBudgetCents(spaceId: string): Promise<number | null> {
-  const space = await prisma.space.findUnique({ where: { id: spaceId }, select: { featureConfig: true } })
-  const raw = ((space?.featureConfig ?? {}) as Record<string, unknown>).agentBudgetMonthlyCents
-  return typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : null
 }
 
 /** Retention: drop runs older than RUN_RETENTION_DAYS, keeping the newest RUN_KEEP_PER_AGENT per agent. */

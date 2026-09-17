@@ -14,7 +14,7 @@ import { classifyModelStatus, type ChatConfig } from '@/lib/notes/ai'
 import { parseModelBaseUrl } from '@/lib/models/config'
 import { localRuntimeOf, localRuntimeRefusal } from './local'
 import { parseModelRef, type ModelPricing, type ModelRef, type ProviderEntry } from './registry'
-import { customEndpointOf, declaredPricingFor, defaultModelOf, noModelReason, spaceModels, type SpaceModel } from './spaceModels'
+import { customEndpointOf, declaredPricingFor, defaultModelOf, keyBudgetCentsFor, noModelReason, spaceModels, type SpaceModel } from './spaceModels'
 import { fetchedPricing } from './prices'
 
 export * from './registry'
@@ -48,7 +48,15 @@ async function resolveModelPricing(models: readonly SpaceModel[], ref: ModelRef)
 }
 
 export type ResolveModelResult =
-  | { ok: true; config: ChatConfig; ref: ModelRef; /** The note it came from (its path), when the brief named no model. */ modelNote: string | null }
+  | {
+      ok: true
+      config: ChatConfig
+      ref: ModelRef
+      /** The note it came from (its path), when the brief named no model. */
+      modelNote: string | null
+      /** The provider key's monthly cap in cents (the notes' `budget_monthly:`), null = uncapped. */
+      keyBudgetCents: number | null
+    }
   | { ok: false; reason: 'no_model' | 'no_key' | 'no_endpoint' | 'bad_key' | 'invalid_model' | 'local_runtime'; message: string }
 
 /**
@@ -110,7 +118,7 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
       }
     }
   }
-  // Without a resolved price the run is metered in tokens only and the space's
+  // Without a resolved price the run is metered in tokens only and the key's
   // dollar cap cannot bind — see MAX_RUN_TOKENS, which is why that is a
   // degraded cap and not an absent one.
   const pricing = await resolveModelPricing(models, ref)
@@ -137,7 +145,13 @@ export async function resolveAgentChatConfig(spaceId: string, modelRaw: unknown)
   } catch {
     return { ok: false, reason: 'bad_key', message: 'The stored model key could not be decrypted (SECRETS_KEY).' }
   }
-  return { ok: true, ref: { ...ref, pricing }, modelNote, config: { apiKey, baseURL, model: ref.modelId } }
+  return {
+    ok: true,
+    ref: { ...ref, pricing },
+    modelNote,
+    keyBudgetCents: keyBudgetCentsFor(models, ref.provider.id),
+    config: { apiKey, baseURL, model: ref.modelId },
+  }
 }
 
 export type KeyProbeResult = { ok: true } | { ok: false; kind: 'auth' | 'upstream'; message: string }

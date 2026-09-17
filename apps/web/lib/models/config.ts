@@ -30,6 +30,7 @@
  *   model: claude-sonnet-5   (the model this note runs; see below)
  *   base_url: https://…      (custom only, required; refused on the others)
  *   pricing: { <id>: { input_per_m, output_per_m } }   (optional)
+ *   budget_monthly: 50       (optional — USD a month this provider's key may spend)
  *   enabled: false           (optional — held in reserve)
  *   recipe: anthropic        (the catalogue row it came from; display only)
  *   description: …           (optional)
@@ -103,12 +104,19 @@ export interface ModelConfig {
    *
    * Registry providers carry their own prices in code. A custom endpoint cannot
    * — nobody but the admin knows what their gateway bills — so without this a
-   * space's monthly cap has nothing to compare against and never binds. Prices
-   * are declared, not discovered: a wrong number here means a wrong cap, which
-   * is why the run's token backstop (lib/agents/budget.ts) does not depend on
-   * it.
+   * note's `budget_monthly:` has nothing to compare against and never binds.
+   * Prices are declared, not discovered: a wrong number here means a wrong cap,
+   * which is why the run's token backstop (lib/agents/budget.ts) does not
+   * depend on it.
    */
   pricing: Readonly<Record<string, ModelPricing>>
+  /**
+   * `budget_monthly:` in cents — the ceiling on what this note's provider key
+   * spends in a UTC month, across every agent and teaching that runs on it.
+   * Null = uncapped. It lives here, beside the key that pays, because the key
+   * is the thing being capped; a space on two providers caps each.
+   */
+  budgetMonthlyCents: number | null
 }
 
 export type ParseModelResult =
@@ -180,6 +188,8 @@ export function parseModel(fm: NoteFrontmatter): ParseModelResult {
   }
   const pricing = parseModelPricing(fm.pricing)
   if (!pricing.ok) return pricing
+  const budget = parseModelBudget(fm.budget_monthly)
+  if (!budget.ok) return budget
 
   const model = parseModelId(fm.model)
   if (!model.ok) return model
@@ -194,11 +204,21 @@ export function parseModel(fm: NoteFrontmatter): ParseModelResult {
         error: `A ${provider.label} model must not declare \`base_url:\` — its endpoint is pinned by Visvine. Use \`provider: custom\` for your own endpoint`,
       }
     }
-    return { ok: true, config: { provider, baseURL: provider.baseURL, modelId, pricing: pricing.pricing } }
+    return { ok: true, config: { provider, baseURL: provider.baseURL, modelId, pricing: pricing.pricing, budgetMonthlyCents: budget.cents } }
   }
   const base = parseModelBaseUrl(fm.base_url)
   if (!base.ok) return base
-  return { ok: true, config: { provider, baseURL: base.url, modelId, pricing: pricing.pricing } }
+  return { ok: true, config: { provider, baseURL: base.url, modelId, pricing: pricing.pricing, budgetMonthlyCents: budget.cents } }
+}
+
+/**
+ * `budget_monthly:` — US dollars per UTC month, e.g. `50` or `12.5`. Refused
+ * rather than coerced when malformed, for the same reason a price is.
+ */
+function parseModelBudget(raw: unknown): { ok: true; cents: number | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, cents: null }
+  if (!isPrice(raw)) return { ok: false, error: '`budget_monthly:` must be a non-negative number of US dollars, e.g. 50' }
+  return { ok: true, cents: Math.round(raw * 100) }
 }
 
 /**

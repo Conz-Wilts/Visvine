@@ -16,7 +16,7 @@
 // already carrying the current model are left alone — so overlapping runs and
 // re-runs are harmless.
 //
-// A space may switch embedding OFF (the Console's Clean section,
+// A space may switch embedding OFF (the Console's General → Nightly,
 // `context_clean_schedules.embed_enabled`). Off means off everywhere: this
 // sweep skips the space's embedding half, the query-time catch-up in
 // vectorStage stops too (contextService reads the same flag), and only the

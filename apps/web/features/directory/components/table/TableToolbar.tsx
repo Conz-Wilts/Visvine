@@ -67,10 +67,10 @@ export default function TableToolbar({ browse, typeKey, typeMenu, searchPlacehol
         onChange={setSearchTerm}
         placeholder={searchPlaceholder}
         size="md"
-        // The width the context tree's box comes out at: its 300px column less
-        // the 16px of padding either side. Same height, same width, so the two
-        // read as one control appearing in two places rather than two controls.
-        className="w-[284px] shrink-0"
+        // The width the context tree's box comes out at: its 360px column less
+        // the tree's padding. Same height, same width, so the two read as one
+        // control appearing in two places rather than two controls.
+        className="w-[344px] shrink-0"
       />
 
       {typeMenu}

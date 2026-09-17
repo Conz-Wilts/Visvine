@@ -121,7 +121,7 @@ export interface AgentSummary {
   modelProblem: string | null
   rowState: AgentRowState
   /** Admin-only; stripped for members by the route. */
-  /** The agent's monthly cap. Nothing reports what it spent — see BudgetPanel. */
+  /** The agent's monthly cap. Nothing reports what it spent; the key's cap is the model note's `budget_monthly:`. */
   spend: { budgetMonthlyCents: number | null } | null
 }
 

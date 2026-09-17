@@ -28,7 +28,7 @@ import {
   subspaceWriteDenial,
 } from '@/lib/spaces/subspaces'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
-import { notesApi, type AccessOverviewResponse } from './notesApi'
+import { notesApi, type AccessOverviewResponse, type MovePreviewResponse } from './notesApi'
 import { contextKeys, invalidateContextCache, swrFetch, watchContextCache } from './contextPrefetch'
 
 const EMPTY_TREE: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
@@ -153,6 +153,33 @@ export function canMoveInto(
   return moveDenial(from, kind, destFolder, declares) === null && destFolder !== parentFolderOf(from)
 }
 
+/** How a drop ended — the tree animates each differently: the row lands, the
+ *  chip flies home, or it flies home and the tree says why. */
+export type MoveOutcome =
+  | { status: 'moved'; path: string }
+  | { status: 'cancelled' }
+  | { status: 'failed'; message: string }
+
+/** Where in the destination a drop put the row: the folder's new `order:`
+ *  list, given the path the item ended up at (a move may suffix the name). It
+ *  is stored BEFORE the tree reloads, so the row never shows anywhere else. */
+export type DropOrder = (landedPath: string) => string[]
+
+/** What the moved item and its destination are called in the tree — the popup's title. */
+export interface MoveLabels {
+  item: string
+  dest: string
+}
+
+/** A drop waiting on the person: it changes who can see the item (MoveAccessDialog). */
+export interface MoveAsk {
+  kind: 'note' | 'folder'
+  labels: MoveLabels
+  preview: MovePreviewResponse
+  confirm: () => void
+  cancel: () => void
+}
+
 /** A destructive action the tree has asked about but not yet performed. */
 interface PendingConfirm {
   title: string
@@ -196,6 +223,7 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
   const [overview, setOverview] = useState<AccessOverviewResponse | null>(null)
   const [contextName, setContextName] = useState<string | null>(null)
   const [shareTarget, setShareTarget] = useState<{ path: string; kind: 'note' | 'folder' } | null>(null)
+  const [moveAsk, setMoveAsk] = useState<MoveAsk | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Bumped after a tree mutation (delete, restore, purge) to re-run the loads.
@@ -304,7 +332,9 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
   // Access overview: restricted/locked boundaries (folders AND private notes)
   // for the 🔒 badges. Personal spaces have no boundaries — skip the fetch.
   // The Share panel changes what this says, so its CLOSING drops the cached
-  // overview and reads it again; opening it reads nothing new.
+  // overview and reads it again; opening it reads nothing new. A move does
+  // too — a restricted item takes its boundary with it — so a tree change
+  // (whose mutators drop the cached overview) re-reads it as well.
   const shareOpen = shareTarget !== null
   const shareWasOpen = useRef(false)
   useEffect(() => {
@@ -327,7 +357,7 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     return () => {
       cancelled = true
     }
-  }, [spaceId, active, shareOpen])
+  }, [spaceId, active, shareOpen, treeVersion])
 
   const folderBadges = useMemo(() => {
     if (!overview) return undefined
@@ -413,77 +443,148 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     [spaceId, notes, currentPath, router],
   )
 
+  // A move that changes who can see the item asks first: the server plays the
+  // move over the space's grants (/api/notes/move-preview) and, when the
+  // audience, a restricted boundary, Freeze-for-AI or a sub-space share would
+  // change, the drop waits on MoveAccessDialog. A move that changes none of it
+  // just happens. A preview that fails is not a reason to block the move — the
+  // server judges the move itself either way.
+  const confirmedMove = useCallback(
+    async (
+      kind: 'note' | 'folder',
+      from: string,
+      to: string,
+      labels: MoveLabels,
+      run: () => Promise<MoveOutcome>,
+    ): Promise<MoveOutcome> => {
+      const preview = await notesApi.movePreview(spaceId!, from, to, kind).catch(() => null)
+      if (!preview?.hasChanges) return run()
+      return new Promise<MoveOutcome>((resolve) => {
+        setMoveAsk({
+          kind,
+          labels,
+          preview,
+          confirm: () => {
+            setMoveAsk(null)
+            void run().then(resolve)
+          },
+          cancel: () => {
+            setMoveAsk(null)
+            resolve({ status: 'cancelled' })
+          },
+        })
+      })
+    },
+    [spaceId],
+  )
+
   // Moving a note = a rename to the same filename under another folder. The
   // server rewrites every inbound link to the new path, so the only client-side
   // work is the optimistic-free reload + following the note if it was open.
   const handleMoveNote = useCallback(
-    (from: string, destFolder: string) => {
-      if (!spaceId) return
+    async (from: string, destFolder: string, labels: MoveLabels, order?: DropOrder): Promise<MoveOutcome> => {
+      if (!spaceId) return { status: 'cancelled' }
       const to = movedPath(from, destFolder)
       const denial = moveDenial(from, 'note', destFolder, declaredConfigKind(notes.find((n) => n.path === from)?.frontmatter))
-      if (denial) return window.alert(denial)
-      if (to === from) return
-      notesApi
-        .rename(spaceId, from, to)
-        .then(({ path }) => {
-          invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
-          setTreeVersion((v) => v + 1)
-          // The server may suffix the name if the destination was taken — follow
-          // the path it actually wrote, not the one we asked for.
-          if (from === currentPath) router.replace(noteHref(path))
-        })
-        .catch((e: unknown) => {
-          window.alert(e instanceof Error ? e.message : 'Failed to move the note')
-        })
+      if (denial) return { status: 'failed', message: denial }
+      if (to === from) return { status: 'cancelled' }
+      return confirmedMove('note', from, to, labels, () =>
+        notesApi
+          .rename(spaceId, from, to)
+          .then(async ({ path }): Promise<MoveOutcome> => {
+            // The move stands even if its place in the folder can't be kept.
+            if (order) await notesApi.orderFolder(spaceId, destFolder, order(path)).catch(() => {})
+            invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId), contextKeys.overview(spaceId))
+            setTreeVersion((v) => v + 1)
+            // The server may suffix the name if the destination was taken — follow
+            // the path it actually wrote, not the one we asked for.
+            if (from === currentPath) router.replace(noteHref(path))
+            return { status: 'moved', path }
+          })
+          .catch((e: unknown): MoveOutcome => ({
+            status: 'failed',
+            message: e instanceof Error ? e.message : 'Failed to move the note',
+          })),
+      )
     },
-    [spaceId, notes, currentPath, router],
+    [spaceId, notes, currentPath, router, confirmedMove],
   )
 
   // Moving a folder takes its whole subtree with it (renameFolder server-side),
   // so an open note inside it follows to the equivalent path.
   const handleMoveFolder = useCallback(
-    (from: string, destFolder: string) => {
-      if (!spaceId) return
+    async (from: string, destFolder: string, labels: MoveLabels, order?: DropOrder): Promise<MoveOutcome> => {
+      if (!spaceId) return { status: 'cancelled' }
       const to = movedPath(from, destFolder)
       const denial = moveDenial(from, 'folder', destFolder)
-      if (denial) return window.alert(denial)
-      if (to === from) return
-      notesApi
-        .renameFolder(spaceId, from, to)
-        .then(({ path }) => {
-          invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
-          setTreeVersion((v) => v + 1)
-          if (currentPath?.startsWith(`${from}/`)) {
-            router.replace(noteHref(`${path}${currentPath.slice(from.length)}`))
-          }
-        })
-        .catch((e: unknown) => {
-          window.alert(e instanceof Error ? e.message : 'Failed to move the folder')
-        })
+      if (denial) return { status: 'failed', message: denial }
+      if (to === from) return { status: 'cancelled' }
+      return confirmedMove('folder', from, to, labels, () =>
+        notesApi
+          .renameFolder(spaceId, from, to)
+          .then(async ({ path }): Promise<MoveOutcome> => {
+            if (order) await notesApi.orderFolder(spaceId, destFolder, order(path)).catch(() => {})
+            invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId), contextKeys.overview(spaceId))
+            setTreeVersion((v) => v + 1)
+            if (currentPath?.startsWith(`${from}/`)) {
+              router.replace(noteHref(`${path}${currentPath.slice(from.length)}`))
+            }
+            return { status: 'moved', path }
+          })
+          .catch((e: unknown): MoveOutcome => ({
+            status: 'failed',
+            message: e instanceof Error ? e.message : 'Failed to move the folder',
+          })),
+      )
     },
-    [spaceId, currentPath, router],
+    [spaceId, currentPath, router, confirmedMove],
   )
 
   // Placing a built-in folder or a sub-space under a folder of the space's
   // own: nothing moves — the container's index note records it and the tree
-  // draws it there (lib/notes/shared/placedFolders.ts). No open note changes path.
+  // draws it there (lib/notes/shared/placedFolders.ts). No open note changes
+  // path, and no path means no access changes: a placement never asks.
   const handlePlaceFolder = useCallback(
-    (path: string, destFolder: string) => {
-      if (!spaceId) return
+    async (path: string, destFolder: string, order?: DropOrder): Promise<MoveOutcome> => {
+      if (!spaceId) return { status: 'cancelled' }
       const denial = placementDenial(path, destFolder, tree)
-      if (denial) return window.alert(denial)
-      if (drawnParentOf(tree, path) === destFolder) return
-      notesApi
+      if (denial) return { status: 'failed', message: denial }
+      if (drawnParentOf(tree, path) === destFolder) return { status: 'cancelled' }
+      return notesApi
         .placeFolder(spaceId, path, destFolder)
-        .then(() => {
+        .then(async (): Promise<MoveOutcome> => {
+          if (order) await notesApi.orderFolder(spaceId, destFolder, order(path)).catch(() => {})
           invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
           setTreeVersion((v) => v + 1)
+          return { status: 'moved', path }
         })
-        .catch((e: unknown) => {
-          window.alert(e instanceof Error ? e.message : 'Failed to place the folder')
-        })
+        .catch((e: unknown): MoveOutcome => ({
+          status: 'failed',
+          message: e instanceof Error ? e.message : 'Failed to place the folder',
+        }))
     },
     [spaceId, tree],
+  )
+
+  // Rearranging a folder: nothing moves — the folder's index note records the
+  // order its rows were dragged into and the tree sorts by it
+  // (lib/notes/shared/folderOrder.ts). No path changes, so it never asks.
+  const handleOrderFolder = useCallback(
+    async (folder: string, order: string[], path: string): Promise<MoveOutcome> => {
+      if (!spaceId) return { status: 'cancelled' }
+      return notesApi
+        .orderFolder(spaceId, folder, order)
+        .then((): MoveOutcome => {
+          invalidateContextCache(contextKeys.tree(spaceId))
+          setTreeVersion((v) => v + 1)
+          return { status: 'moved', path }
+        })
+        .catch((e: unknown): MoveOutcome => ({
+          status: 'failed',
+          message: e instanceof Error ? e.message : 'Failed to reorder the folder',
+        }))
+    },
+    [spaceId],
   )
 
   // Restoring puts the note back at its original path (suffixed if something
@@ -587,6 +688,8 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     handleMoveNote,
     handleMoveFolder,
     handlePlaceFolder,
+    handleOrderFolder,
+    moveAsk,
     handleRestoreTrash,
     handlePurgeTrash,
     handleEmptyTrash,

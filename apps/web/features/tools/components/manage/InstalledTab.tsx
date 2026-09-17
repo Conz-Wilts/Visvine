@@ -82,7 +82,7 @@ export default function InstalledTab({
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="-my-4 divide-y divide-border-subtle">
         {installs.map((install) => (
           <InstallRow
             key={install.id}
@@ -140,7 +140,7 @@ function InstallRow({
   const missing = describeRequirements(install.requirements);
 
   return (
-    <section className="border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
+    <section className="py-4">
       <header className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -237,7 +237,7 @@ function InstallRow({
       )}
 
       {install.types.length > 0 && (
-        <div className="mt-3 border-t border-border-subtle pt-3">
+        <div className="mt-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Type pages</p>
           <ul className="space-y-2">
             {install.types.map((surface) => {
@@ -284,14 +284,14 @@ function InstallRow({
       )}
 
       {isAdmin && !install.sharedFrom && (
-        <div className="mt-3 flex justify-end border-t border-border-subtle pt-3">
+        <div className="mt-3 flex justify-end">
           <Button variant="danger-text" size="sm" onClick={onRemove} disabled={busy}>
             Uninstall
           </Button>
         </div>
       )}
       {isAdmin && install.sharedFrom && (
-        <p className="mt-3 border-t border-border-subtle pt-3 text-xs text-text-muted">
+        <p className="mt-3 text-xs text-text-muted">
           Installed here by {install.sharedFrom.name}; it follows the version that space runs. Turn it off here, or stop sharing it there.
         </p>
       )}

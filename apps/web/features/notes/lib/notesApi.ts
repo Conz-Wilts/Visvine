@@ -53,6 +53,31 @@ export interface PathAccessResponse {
   parent?: { id: string; name: string } | null
 }
 
+/** One subject whose access to a moved item changes (levels are names; null = none). */
+export interface MovePreviewSubject {
+  subjectType: 'space' | 'alias' | 'user'
+  subjectId: string
+  name: string
+  before: 'view' | 'edit' | null
+  after: 'view' | 'edit' | null
+}
+
+/** GET /api/notes/move-preview — what a move does to who can see the item. */
+export interface MovePreviewResponse {
+  hasChanges: boolean
+  gained: MovePreviewSubject[]
+  lost: MovePreviewSubject[]
+  changed: MovePreviewSubject[]
+  /** The restricted folder the item moves into / out of. */
+  entersRestricted: string | null
+  leavesRestricted: string | null
+  /** Freeze-for-AI, before and after. */
+  lockedBefore: boolean
+  lockedAfter: boolean
+  /** A `share:`-flagged note starts or stops being shared down to sub-spaces. */
+  sharedDown: 'starts' | 'stops' | null
+}
+
 /** GET /api/notes/access (no path) — the context-wide overview for tree badges
  *  and (for space admins) the full grant dump behind the Access page. */
 export interface AccessOverviewResponse {
@@ -173,6 +198,9 @@ export const notesApi = {
    *  (`container: ''` = the top). The path stays; only the tree changes. */
   placeFolder: (c: string, path: string, container: string) =>
     sendJson<{ ok: true }>('/api/notes/folders/place', 'POST', { spaceId: c, path, container }),
+  /** Store the order a folder's rows were dragged into ('' = the top). */
+  orderFolder: (c: string, folder: string, order: string[]) =>
+    sendJson<{ ok: true }>('/api/notes/folders/order', 'POST', { spaceId: c, folder, order }),
   deleteFolder: async (c: string, path: string) => {
     return fetchJson<{ ok: true }>(`/api/notes/folders?${qs(c, { path })}`, { method: 'DELETE' })
   },
@@ -210,6 +238,9 @@ export const notesApi = {
   /** The caller's standing at one path ('' = context root) + who-has-access list. */
   getAccess: (c: string, path: string) =>
     getJson<PathAccessResponse>(`/api/notes/access?${qs(c, { path })}`),
+  /** What moving `from` to `to` does to who can see it — read before the move. */
+  movePreview: (c: string, from: string, to: string, kind: 'note' | 'folder') =>
+    getJson<MovePreviewResponse>(`/api/notes/move-preview?${qs(c, { from, to, kind })}`),
   /** Context-wide access overview (restricted/locked folders, gate) for badges. */
   getAccessOverview: (c: string) =>
     getJson<AccessOverviewResponse>(`/api/notes/access?${qs(c)}`),

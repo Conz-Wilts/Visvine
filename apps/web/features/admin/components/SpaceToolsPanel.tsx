@@ -655,26 +655,30 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
     <div ref={flipRoot} className="w-full space-y-8">
       {/* The sidebar rail, in order. Drag a row to reorder it or to move it
           into the More section below, lock to restrict it to admins, × to
-          remove it. */}
-      {/* No heading here — the console's tab bar already names the section.
-          Only the Add tool button sits above the list. */}
-      <section>
-        {/* Always shown, even with nothing left to add — the picker says so
-            itself rather than the button vanishing. */}
-        <div className="mb-4 flex justify-end">
+          remove it.
+
+          Sections are separated by spacing alone, except More, which keeps
+          its hairline so the rail and the popup read as two lists. Every list sits -mt-3
+          under its heading so the first row's top padding doesn't double the
+          gap, which keeps heading→row spacing identical in every section. */}
+      <SettingsSection
+        flush
+        large
+        title="Active tools"
+        action={
+          // Always shown, even with nothing left to add — the picker says so
+          // itself rather than the button vanishing.
           <button
             type="button"
             onClick={() => { setPickerQuery(''); setPickerOpen(true); }}
-            className="inline-flex items-center gap-1 rounded-lg bg-brand-green px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="-my-1.5 inline-flex items-center gap-1 rounded-lg bg-brand-green px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
           >
             <PlusIcon />
             Add tool
           </button>
-        </div>
-        {/* -mt-4 cancels the first row's top padding so the gap above the list
-            matches every other section, while the rows themselves stay evenly
-            padded. */}
-        <div className="-mt-4 divide-y divide-border-subtle">
+        }
+      >
+        <div className="-mt-3 divide-y divide-border-subtle">
         {railKeys.length === 0 && (
           <p className="py-3 text-sm text-text-muted">
             Every tool is in More. Drag one back up here to give it a sidebar row.
@@ -682,12 +686,14 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
         )}
         {railKeys.map(renderToolRow)}
         </div>
-      </section>
+      </SettingsSection>
 
       {/* The More popup, as its own section — the drop target is the whole
           block, so dragging a row into it tucks the tool away (and dragging one
-          out puts it back on the rail). */}
+          out puts it back on the rail). Its outline only appears mid-drag, as
+          the drop cue. */}
       <SettingsSection
+        large
         title={
           <span className="flex items-center gap-1.5">
             <MoreDotsIcon />
@@ -697,11 +703,12 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
       >
         <div
           data-flip-key={`row:${MORE_DIVIDER}`}
-          className={`divide-y divide-border-subtle border-y px-3 transition-colors ${
-            draggingKey ? 'border-brand-green/60 bg-brand-green/5' : 'border-border-subtle'
+          // min-h keeps an empty More a drop target now that it has no hint text.
+          className={`-mt-3 min-h-14 divide-y divide-border-subtle rounded-xl ring-1 transition-colors ${
+            draggingKey ? 'ring-brand-green/60 bg-brand-green/5' : 'ring-transparent'
           }`}
         >
-          {moreKeys.length === 0 ? <div className="h-11" /> : moreKeys.map(renderToolRow)}
+          {moreKeys.map(renderToolRow)}
         </div>
       </SettingsSection>
 
@@ -710,10 +717,11 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
           Still an on/off switch like any other tool, just not a draggable one. */}
       {unplaceableFeatures.length > 0 && (
         <SettingsSection
+          flush
           title="No sidebar row"
           description="Reached elsewhere in the app, so there's nothing to reorder — just on or off."
         >
-          <div className="divide-y divide-border-subtle">
+          <div className="-mt-3 divide-y divide-border-subtle">
             {enabledUnplaceable.length === 0 ? (
               <p className="py-3 text-sm text-text-muted">
                 Nothing on. Add one from the picker above.

@@ -14,8 +14,8 @@ import SpaceImageUpload from '@/features/spaces/components/SpaceImageUpload';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { SPACE_DESCRIPTION_MAX_WORDS, clampWords, countWords } from '@/lib/spaces/shared/description';
 import RegionAutocomplete from '@/features/spaces/components/RegionAutocomplete';
-import SubspacesSection from '@/features/spaces/components/SubspacesSection';
 import RoomDials from '@/features/spaces/components/RoomDials';
+import NightlySection from '@/features/admin/components/NightlySection';
 
 interface Props {
   space: Space;
@@ -265,7 +265,7 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
         />
       )}
 
-      {!isSubspace && <SubspacesSection spaceId={space.id} />}
+      <NightlySection key={space.id} spaceId={space.id} />
 
       {/* The button names the action, so it stands alone — no heading, no label row. */}
       <section>

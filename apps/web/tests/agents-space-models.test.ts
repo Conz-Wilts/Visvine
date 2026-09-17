@@ -8,6 +8,7 @@ import {
   customEndpointOf,
   declaredPricingFor,
   defaultModelOf,
+  keyBudgetCentsFor,
   modelKeyOwner,
   modelKeysLent,
   noModelReason,
@@ -39,6 +40,7 @@ function model(over: Partial<SpaceModel> & { name: string; providerId: string })
     keyStored: over.keyStored ?? true,
     enabled: over.enabled ?? true,
     pricing: over.pricing ?? {},
+    budgetMonthlyCents: over.budgetMonthlyCents ?? null,
     problem: over.problem ?? null,
   }
 }
@@ -142,4 +144,28 @@ test('a model key is the room\'s own, else the house\'s where the house lends it
     { spaceId: 'r', via: 'own' },
   )
   assert.equal(modelKeysLent([], 'r'), false)
+})
+
+test('keyBudgetCentsFor: the budget on a provider key is the tightest its notes declare', () => {
+  const a = model({ name: 'a', providerId: 'openrouter', modelId: 'x', budgetMonthlyCents: 5000 })
+  const b = model({ name: 'b', providerId: 'openrouter', modelId: 'y', budgetMonthlyCents: 2000, enabled: false })
+  const c = model({ name: 'c', providerId: 'anthropic', budgetMonthlyCents: 100 })
+  const d = model({ name: 'd', providerId: 'openai' })
+  assert.equal(keyBudgetCentsFor([a, b, c, d], 'openrouter'), 2000, 'the tighter wins, even from a note turned off')
+  assert.equal(keyBudgetCentsFor([a, b, c, d], 'anthropic'), 100)
+  assert.equal(keyBudgetCentsFor([a, b, c, d], 'openai'), null, 'no budget_monthly: = uncapped')
+})
+
+test('budget_monthly: parses as US dollars and refuses anything else', () => {
+  const ok = parseModel(parseFrontmatter('---\ntype: model\nprovider: anthropic\nbudget_monthly: 12.5\n---'))
+  assert.ok(ok.ok)
+  assert.equal(ok.config.budgetMonthlyCents, 1250)
+  const none = parseModel({ type: 'model', provider: 'anthropic' })
+  assert.ok(none.ok)
+  assert.equal(none.config.budgetMonthlyCents, null)
+  for (const bad of ['fifty', -1, [50]]) {
+    const r = parseModel({ type: 'model', provider: 'anthropic', budget_monthly: bad })
+    assert.ok(!r.ok, String(bad))
+    assert.match(r.error, /budget_monthly:/)
+  }
 })

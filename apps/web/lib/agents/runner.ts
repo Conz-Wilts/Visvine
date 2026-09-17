@@ -34,7 +34,7 @@ import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_M
 import { releaseMachineAfterRun } from '@/lib/vm/lease'
 import { principalForUser } from './principal'
 import { resolveAgentChatConfig } from './providers'
-import { clipEventText, finishRun, flushRunEvents, ledgerSpendForMonth, recordRunInput, spaceBudgetCents, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
+import { clipEventText, finishRun, flushRunEvents, ledgerSpendForMonth, recordRunInput, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
 import { memoryForPrompt, memoryPath, setLastRun } from './shared/memory'
 import { agentPreamble } from './shared/prompt'
 import { skillsForRun, skillsMessage } from './skills'
@@ -250,25 +250,26 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     }
     await flushRunEvents(runId, events, { model: modelUsed })
 
-    // 4. Budget before we spend a token — the agent's cap AND the space's.
-    const [spentMicros, spaceSpentMicros, spaceCapCents] = await Promise.all([
+    // 4. Budget before we spend a token — the agent's cap AND the key's
+    //    (`budget_monthly:` on the model note).
+    const keyCapCents = resolved.keyBudgetCents
+    const [spentMicros, keySpentMicros] = await Promise.all([
       spendForMonth(spaceId, name, now),
-      ledgerSpendForMonth(spaceId, now),
-      spaceBudgetCents(spaceId),
+      keyCapCents === null ? Promise.resolve(null) : ledgerSpendForMonth(spaceId, ref.provider.id, now),
     ])
     const budget: BudgetState = {
       spentThisMonthMicros: spentMicros,
       monthlyCapCents: state.budgetMonthlyCents,
       pricing: ref.pricing,
-      spaceSpentThisMonthMicros: spaceSpentMicros,
-      spaceCapCents,
+      keySpentThisMonthMicros: keySpentMicros,
+      keyCapCents,
     }
     const capHit = preRunStop(budget)
     if (capHit) {
       return fail(
         'budget',
-        capHit.cap === 'space'
-          ? "The space's monthly model budget is reached — the run was not started."
+        capHit.cap === 'key'
+          ? `The monthly budget on the ${ref.provider.label} model is reached — the run was not started.`
           : 'Monthly budget reached — the run was not started.',
         { countsAsFailure: false, model: modelUsed },
       )

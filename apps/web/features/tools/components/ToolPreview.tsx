@@ -256,7 +256,7 @@ function PreviewUnavailable({
               : (message ?? 'Could not load this tool.')}
         </p>
         <Link
-          href="/admin?section=build"
+          href="/admin?section=tools"
           className="mt-5 inline-flex items-center rounded-lg bg-brand-green px-3.5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
         >
           Tools in this space

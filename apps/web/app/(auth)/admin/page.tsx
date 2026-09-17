@@ -7,34 +7,31 @@ import PeopleDataProvider from '@/features/admin/components/people/PeopleDataCon
 import MembersPanel from '@/features/admin/components/people/MembersPanel';
 import SpaceSettingsPanel from '@/features/admin/components/SpaceSettingsPanel';
 import TypesPanel from '@/features/admin/components/TypesPanel';
-import CleanPanel from '@/features/admin/components/CleanPanel';
 import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
 import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
 import { useConnectorRequestCount } from '@/features/connectors/hooks/useConnectorRequestCount';
-import BudgetPanel from '@/features/agents/components/BudgetPanel';
 import ToolReviewPanel, { useToolReviewQueue } from '@/features/admin/components/ToolReviewPanel';
 import {
-  AuthoredToolsPanel,
   InstalledToolsPanel,
   ToolApprovalsPanel,
   useToolApprovalQueue,
 } from '@/features/tools/components/manage/ToolsConsole';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
-import { LoadingText, Alert } from '@/components/ui';
+import { LoadingText, Alert, SettingsSection } from '@/components/ui';
 import { Space } from '@/lib/types';
 
 // Each section owns one job, and the job is one noun: General is the space's own
 // record, Tools is a row per tool (whether the space has it, where it sits, who
-// may open it, and which version it runs), Build is the tools written here,
-// Approvals is what a member published and is waiting on an admin, Connectors is
-// the space's gateways to the outside world, Types is what kinds of thing the
+// may open it, and which version it runs — plus, for a super admin, the global
+// marketplace review queue at the bottom), Approvals is what a member published
+// and is waiting on an admin, Connectors is the space's gateways to the outside world, Types is what kinds of thing the
 // space records, and Members is the people — the invite link, both request
 // queues, the aliases they can hold, and the roll itself.
 //
 // There is no Tools destination outside this console: a tool is authored by a
-// coding agent over MCP and previewed at /tools/preview/<name>, and every
-// decision about one is admin work, which is what this console is.
+// coding agent over MCP and previewed at /tools/preview/<name>; publishing it
+// happens on the tool's own page, and every other decision about one is here.
 // Types and Members share a single data load (PeopleDataProvider; Types shows the
 // same alias chips under Person), which is also where the Members badge count
 // comes from: one definition of "waiting", not one per component.
@@ -48,10 +45,10 @@ function AdminConsole({ space, onSaved }: {
     [],
   );
 
-  // Tool review is the one section that is not about this space: the queue is
-  // global and the gate is Visvine super admin, so a space admin never sees the
-  // tab. The routes behind it are gated the same way — hiding it is the courtesy,
-  // not the security.
+  // Tool review is the one block that is not about this space: the queue is
+  // global and the gate is Visvine super admin, so a space admin never sees it
+  // at the bottom of Tools. The routes behind it are gated the same way —
+  // hiding it is the courtesy, not the security.
   const { session } = useAuth();
   const isSuperAdmin = session?.user?.isSuperAdmin === true;
   const reviewQueue = useToolReviewQueue(isSuperAdmin);
@@ -65,24 +62,20 @@ function AdminConsole({ space, onSaved }: {
 
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', width: 'form' },
-    { id: 'tools', label: 'Tools', width: 'form' },
-    { id: 'build', label: 'Build', width: 'wide' },
+    {
+      id: 'tools',
+      label: 'Tools',
+      width: 'form',
+      badge: isSuperAdmin ? reviewQueue.items.length : undefined,
+    },
     { id: 'approvals', label: 'Approvals', width: 'wide', badge: approvals.count },
     { id: 'types', label: 'Types', width: 'form' },
     // Connectors has no rail row of its own — it is admins-only by nature, so
     // this console IS its surface (lib/featureAccess NAV_HIDDEN_FEATURE_KEYS).
     { id: 'connectors', label: 'Connectors', width: 'form', badge: connectorRequests.count },
-    // The nightly clean: whether the space's context tidies itself, when, as
-    // whom, and what every pass did. A sub-space's panel says why it holds none.
-    { id: 'clean', label: 'Clean', width: 'form' },
-    // The model bill: what agents spent, per month, by model and by agent.
-    { id: 'budget', label: 'Budget', width: 'form' },
     // Both queues a person can be waiting in — to join, and for context access —
     // are resolved here, so one badge counts them both.
     { id: 'members', label: 'Members', width: 'wide', badge: pending.members + pending.requests },
-    ...(isSuperAdmin
-      ? ([{ id: 'review', label: 'Tool review', width: 'wide', badge: reviewQueue.items.length }] as const)
-      : []),
   ];
 
   return (
@@ -105,10 +98,19 @@ function AdminConsole({ space, onSaved }: {
                 <div className="space-y-8">
                   <SpaceToolsPanel key={space.id} space={space} onSaved={onSaved} />
                   <InstalledToolsPanel key={`${space.id}-installs`} />
+                  {/* Not keyed on the space: the queue outlives whichever
+                      space the console happens to be pointed at. */}
+                  {isSuperAdmin && (
+                    <SettingsSection flush large title="Tool review">
+                      {/* pt-1 lines the queue up with the first row under the
+                          other headings, which carries its own top padding. */}
+                      <div className="pt-1">
+                        <ToolReviewPanel queue={reviewQueue} />
+                      </div>
+                    </SettingsSection>
+                  )}
                 </div>
               );
-            case 'build':
-              return <AuthoredToolsPanel key={space.id} />;
             case 'approvals':
               return (
                 <ToolApprovalsPanel
@@ -119,18 +121,10 @@ function AdminConsole({ space, onSaved }: {
               );
             case 'connectors':
               return <ConnectorsPanel key={space.id} onRequestsChanged={connectorRequests.refresh} />;
-            case 'clean':
-              return <CleanPanel key={space.id} spaceId={space.id} />;
-            case 'budget':
-              return <BudgetPanel key={space.id} spaceId={space.id} />;
             case 'members':
               return <MembersPanel key={space.id} />;
             case 'types':
               return <TypesPanel key={`${space.id}-${JSON.stringify(space.nodeTypes)}`} />;
-            // Not keyed on the space: the queue outlives whichever space the
-            // console happens to be pointed at.
-            case 'review':
-              return isSuperAdmin ? <ToolReviewPanel queue={reviewQueue} /> : null;
             default:
               return null;
           }

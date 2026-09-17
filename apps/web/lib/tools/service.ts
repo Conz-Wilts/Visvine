@@ -107,7 +107,7 @@ export interface AuthoredToolDetail extends AuthoredToolSummary {
    * is the one place unsanitized author markup leaves the server. It is here so
    * an author can read back what they wrote and fix it. **Never render it as
    * HTML.** Anything that draws a Tool's icon must read the build's `iconSvg`
-   * (sanitized by lib/tools/iconSvg.ts), the way ToolIconPicker does.
+   * (sanitized by lib/tools/iconSvg.ts), the way features/tools/components/toolIcons.tsx does.
    */
   sources: Record<ToolFileName, string | null>
 }

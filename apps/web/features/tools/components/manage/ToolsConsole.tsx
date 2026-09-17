@@ -17,12 +17,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { fetchApprovalQueue, fetchAuthoredTools, fetchInstalls } from '@/features/tools/lib/client';
-import type { ApprovalQueueItem, AuthoredToolSummary, InstallSummary } from '@/lib/tools/api';
+import { fetchApprovalQueue, fetchInstalls } from '@/features/tools/lib/client';
+import type { ApprovalQueueItem, InstallSummary } from '@/lib/tools/api';
 import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import ApprovalsTab from './ApprovalsTab';
 import InstalledTab from './InstalledTab';
-import MineTab from './MineTab';
 import { ToastHost, useToasts, type ToastTone } from './Toasts';
 
 const toolKeys = {
@@ -98,7 +97,7 @@ export function InstalledToolsPanel() {
   if (installs !== null && installs.length === 0) return <ToastHost toasts={toasts} onDismiss={dismiss} />;
 
   return (
-    <section className="border-t border-border-subtle pt-8 first:border-t-0 first:pt-0">
+    <section>
       <InstalledTab
         spaceId={spaceId}
         installs={installs ?? []}
@@ -116,55 +115,6 @@ export function InstalledToolsPanel() {
       />
       <ToastHost toasts={toasts} onDismiss={dismiss} />
     </section>
-  );
-}
-
-/**
- * "Build" — the working copies authored in this space: what builds, what
- * doesn't, and the way to ship one.
- */
-export function AuthoredToolsPanel() {
-  const { currentSpace } = useSpace();
-  const spaceId = currentSpace?.id ?? null;
-  const { toasts, toast, dismiss } = usePanelToasts();
-
-  const [tools, setTools] = useState<AuthoredToolSummary[] | null>(null);
-  const run = useRef(0);
-
-  const load = useCallback(async () => {
-    const token = ++run.current;
-    if (!spaceId) {
-      setTools([]);
-      return;
-    }
-    try {
-      const body = await fetchAuthoredTools(spaceId);
-      if (token !== run.current) return;
-      setTools(body.tools);
-    } catch (err) {
-      if (token !== run.current) return;
-      setTools([]);
-      toast('error', err instanceof Error ? err.message : 'Could not read the tools you have written.');
-    }
-  }, [spaceId, toast]);
-
-  useEffect(() => {
-    setTools(null);
-    void load();
-  }, [load]);
-
-  return (
-    <>
-      <MineTab
-        spaceId={spaceId}
-        tools={tools ?? []}
-        isAdmin
-        loading={tools === null}
-        onChanged={() => void load()}
-        onToast={toast}
-      />
-      <ToastHost toasts={toasts} onDismiss={dismiss} />
-    </>
   );
 }
 

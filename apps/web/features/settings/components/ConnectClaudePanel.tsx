@@ -1,6 +1,6 @@
 'use client';
 
-// Settings → MCP. How someone points Claude at their own Visvine context.
+// Settings → General → MCP. How someone points Claude at their own Visvine context.
 //
 // One server, one address (lib/mcp/config.ts), and one tool behind it: reading,
 // searching and writing context, the Drive, events, connectors, agents, and
@@ -51,8 +51,8 @@ function useMcpConnectInfo() {
 }
 
 /**
- * Read-only address + Copy, mirroring the invite-link row in the console so the
- * two "copy this and hand it over" affordances look the same.
+ * The address as plain, selectable text beside Copy — no field chrome, and
+ * wrapping rather than truncating so the whole URL is always readable.
  */
 function McpServerUrlRow({ url, label = 'MCP server address' }: { url: string | null; label?: string }) {
   const [copied, copy] = useCopied();
@@ -60,13 +60,13 @@ function McpServerUrlRow({ url, label = 'MCP server address' }: { url: string | 
   const copyUrl = () => { if (url) void copy(url); };
 
   return (
-    <div className="flex items-center gap-2">
-      <input
-        readOnly
-        value={url ?? 'Loading…'}
+    <div className="flex items-center gap-3">
+      <p
         aria-label={label}
-        className="min-w-0 flex-1 truncate rounded-xl border border-transparent bg-surface-2 px-3.5 py-2.5 font-mono text-xs text-text-secondary"
-      />
+        className="min-w-0 flex-1 select-all break-all text-lg text-text-primary"
+      >
+        {url ?? 'Loading…'}
+      </p>
       <Button variant="brand" onClick={copyUrl} disabled={!url}>
         {copied ? 'Copied' : 'Copy'}
       </Button>
@@ -78,15 +78,9 @@ export default function ConnectClaudePanel() {
   const { info, error } = useMcpConnectInfo();
 
   return (
-    <div className="space-y-8">
+    <SettingsSection title="MCP">
       {error && <Alert variant="error" inline>{error}</Alert>}
-
-      <SettingsSection
-        title="Connect Claude"
-        description="One address for everything: your Visvine context — the entities, notes and connections in every space you're a member of — plus the Drive, events, connectors, agents, and building Tools with a coding agent. Visvine runs the server itself; there is nothing to install. What a connection can do is decided when you approve it, not by which address you use."
-      >
-        <McpServerUrlRow url={info?.url ?? null} />
-      </SettingsSection>
-    </div>
+      <McpServerUrlRow url={info?.url ?? null} />
+    </SettingsSection>
   );
 }

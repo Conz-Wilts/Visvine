@@ -288,6 +288,37 @@ export interface AccessListEntry {
 }
 
 /**
+ * How a grant's subject reads to a person: the space's name, the alias's, or
+ * the member's. Alias subjects hold an alias ID, so the display name comes from
+ * the space's own vocabulary — one read, not a join.
+ */
+export async function subjectNamer(
+  spaceId: string,
+  subjects: Array<{ subjectType: GrantSubjectType; subjectId: string }>,
+): Promise<(subjectType: GrantSubjectType, subjectId: string) => { name: string; email?: string }> {
+  const userIds = [...new Set(subjects.filter((s) => s.subjectType === 'user').map((s) => s.subjectId))]
+  const [space, users] = await Promise.all([
+    prisma.space.findUnique({ where: { id: spaceId }, select: { name: true, aliases: true } }),
+    userIds.length
+      ? prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : Promise.resolve([]),
+  ])
+  const userById = new Map(users.map((u) => [u.id, u]))
+  const spaceAliases = (space?.aliases ?? []) as unknown as SpaceAlias[]
+  return (subjectType, subjectId) => {
+    if (subjectType === 'space') return { name: `Everyone in ${space?.name ?? 'this space'}` }
+    // A grant outlives the alias it names only if the delete cascade failed,
+    // so falling back to the id is a diagnostic, not a label.
+    if (subjectType === 'alias') return { name: findAliasByRef(spaceAliases, subjectId, 'Person')?.name ?? subjectId }
+    const user = userById.get(subjectId)
+    return { name: user?.name ?? 'Former member', email: user?.email ?? undefined }
+  }
+}
+
+/**
  * The merged "who has access" list for a path: one row per subject holding a
  * reaching grant, with its effective level and the winning grant's provenance.
  * (Space admins additionally reach everything and administer access — a role,
@@ -304,41 +335,19 @@ export async function accessListFor(spaceId: string, path: string): Promise<Acce
     bySubject.set(key, list)
   }
 
-  // Alias subjects hold an alias ID, so the display name comes from the
-  // space's own vocabulary — one read, not a join.
-  const userIds = [...bySubject.keys()]
-    .filter((k) => k.startsWith('user:'))
-    .map((k) => k.slice('user:'.length))
-  const [space, users] = await Promise.all([
-    prisma.space.findUnique({ where: { id: spaceId }, select: { name: true, aliases: true } }),
-    userIds.length
-      ? prisma.user.findMany({
-          where: { id: { in: userIds } },
-          select: { id: true, name: true, email: true },
-        })
-      : Promise.resolve([]),
-  ])
-  const userById = new Map(users.map((u) => [u.id, u]))
-  const spaceAliases = (space?.aliases ?? []) as unknown as SpaceAlias[]
+  const nameOf = await subjectNamer(spaceId, reaching)
 
   const entries: AccessListEntry[] = []
   for (const rows of bySubject.values()) {
     const [subjectType, subjectId] = [rows[0].subjectType, rows[0].subjectId]
     const win = winningGrant(rows, path, restricted)
     if (!win) continue
-    const name =
-      subjectType === 'space'
-        ? `Everyone in ${space?.name ?? 'this space'}`
-        : subjectType === 'alias'
-          ? // A grant outlives the alias it names only if the delete cascade
-            // failed, so falling back to the id is a diagnostic, not a label.
-            (findAliasByRef(spaceAliases, subjectId, 'Person')?.name ?? subjectId)
-          : (userById.get(subjectId)?.name ?? 'Former member')
+    const { name, email } = nameOf(subjectType, subjectId)
     entries.push({
       subjectType,
       subjectId,
       name,
-      email: subjectType === 'user' ? (userById.get(subjectId)?.email ?? undefined) : undefined,
+      email,
       level: win.level,
       levelName: levelName(win.level),
       via: win.resourcePath,

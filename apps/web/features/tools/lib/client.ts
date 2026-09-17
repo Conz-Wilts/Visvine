@@ -16,15 +16,12 @@ import { fetchJson, fetchJsonBody } from '@/lib/fetchJson'
 import type {
   ApprovalDecisionResponse,
   ApprovalQueueResponse,
-  AuthoredToolsResponse,
   AuthoredToolView,
   CreateToolRequest,
   CreateToolResponse,
   InstallUpdatedResponse,
   InstallsResponse,
-  ListingResponse,
   PublishResponse,
-  ToolIconResponse,
   VersionResponse,
 } from '@/lib/tools/api'
 import type { TypeClaims } from '@/lib/tools/installs'
@@ -71,13 +68,6 @@ export function uninstallTool(spaceId: string, installId: string): Promise<{ ok:
 }
 
 // ── authoring ─────────────────────────────────────────
-
-export function fetchAuthoredTools(spaceId: string, signal?: AbortSignal): Promise<AuthoredToolsResponse> {
-  return fetchJson<AuthoredToolsResponse>(
-    `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring`,
-    { signal },
-  )
-}
 
 /** The working copy, its checklist against this space, and its publication trail. */
 export function fetchAuthoredTool(
@@ -174,44 +164,7 @@ export function reviewSpaceVersion(
   })
 }
 
-/** Offer an approved version to every other space — Visvine reviews it. */
-export function listOnMarketplace(
-  spaceId: string,
-  versionId: string,
-  note?: string,
-): Promise<ListingResponse> {
-  return fetchJsonBody<ListingResponse>(versionsUrl(spaceId, versionId), 'POST', {
-    action: 'list',
-    ...(note ? { note } : {}),
-  })
-}
-
-/** Take a listing request back out of Visvine's queue. */
-export function unlistFromMarketplace(spaceId: string, versionId: string): Promise<ListingResponse> {
-  return fetchJsonBody<ListingResponse>(versionsUrl(spaceId, versionId), 'POST', { action: 'unlist' })
-}
-
 function versionsUrl(spaceId: string, versionId?: string): string {
   const base = `/api/spaces/${encodeURIComponent(spaceId)}/tools/versions`
   return versionId ? `${base}/${encodeURIComponent(versionId)}` : base
-}
-
-/**
- * Set or clear a Tool's own rail glyph.
- *
- * The response carries the rebuilt BUILD, not just an ok: an SVG that fails the
- * sanitizer comes back as a build error rather than an HTTP error, because that
- * is the same channel every other authoring mistake arrives on and the author
- * is already reading it.
- */
-export function setToolIcon(spaceId: string, name: string, svg: string): Promise<ToolIconResponse> {
-  return fetchJsonBody<ToolIconResponse>(iconUrl(spaceId, name), 'PUT', { svg });
-}
-
-export function clearToolIcon(spaceId: string, name: string): Promise<ToolIconResponse> {
-  return fetchJson<ToolIconResponse>(iconUrl(spaceId, name), { method: 'DELETE' });
-}
-
-function iconUrl(spaceId: string, name: string): string {
-  return `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}/icon`;
 }

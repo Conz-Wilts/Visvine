@@ -339,6 +339,48 @@ html, body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Drag-to-move in the context tree (features/notes/hooks/useTreeDrag.tsx).
+   The held row is tinted wherever it is drawn, rows slide by transform
+   (useTreeFlip), and the destination lights
+   as ONE block — the folder and everything open under it — because that is
+   what a drop anywhere in it files into. The wash is the theme accent
+   (--color-brand-green follows the ThemeContext override), never a fixed green. */
+/* The held row, wherever the tree is drawing it right now. */
+.tree-row-held {
+  background-color: color-mix(in srgb, var(--color-brand-green) 15%, transparent);
+}
+/* The held row itself, off the tree (useTreeDrag's lift): it rises on the grab
+   and comes back down as it settles into the slot. */
+@keyframes tree-lift-up {
+  from { transform: scale(1); box-shadow: 0 0 0 rgb(0 0 0 / 0); }
+}
+.tree-lift {
+  transform: scale(1.03);
+  transform-origin: center;
+  box-shadow: 0 14px 32px -8px rgb(0 0 0 / 0.28), 0 4px 10px -4px rgb(0 0 0 / 0.18);
+  animation: tree-lift-up 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  transition: transform 180ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow 180ms ease-out, opacity 120ms ease-out;
+}
+.tree-lift.tree-lift-down {
+  transform: scale(1);
+  box-shadow: 0 0 0 rgb(0 0 0 / 0);
+}
+.tree-drop-zone {
+  border-radius: 10px;
+}
+.tree-drop-zone-on {
+  background-color: color-mix(in srgb, var(--color-brand-green) 9%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--color-brand-green) 55%, transparent);
+}
+@keyframes tree-row-land {
+  0%   { background-color: color-mix(in srgb, var(--color-brand-green) 20%, transparent); }
+  /* No end frame: it fades to the row's OWN background, which for the open
+     note is the selection band, not nothing. */
+}
+.tree-row-land {
+  animation: tree-row-land 1s ease-out;
+}
+
 /* A spine growing downward (TreeChrome's TreeSpine): the stroke draws from the
    row above and each row lands as the line reaches it, so opening a set reads
    as it being drawn rather than switched on. Durations and delays are inline —
@@ -368,8 +410,11 @@ html, body {
   .tabbar-label-enter,
   .tabbar-label-exit,
   .tree-spine-enter .tree-line,
-  .tree-spine-enter .tree-spine-row {
+  .tree-spine-enter .tree-spine-row,
+  .tree-row-land,
+  .tree-lift {
     animation: none !important;
+    transition: none !important;
   }
 }
 

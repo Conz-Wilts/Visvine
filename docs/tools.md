@@ -154,7 +154,7 @@ calls the same `createTool` scaffold `create_tool` uses (a `railLabel` becomes
 preview link plus the MCP address from `mcpResourceUrl()` — "finish it with
 your coding agent (Settings → MCP)".
 
-The console's **Build** section can also delete a working copy:
+The console's **Tools** section can also delete a working copy:
 `DELETE /api/spaces/[spaceId]/tools/authoring/[name]` →
 `lib/tools/service.ts#deleteTool` trashes the Tool's notes, removes its folder,
 `tool:<name>` node and build, and (admin) uninstalls it from the space. Held to
@@ -319,8 +319,8 @@ act with a second reviewer. That split is carried by two independent columns on
    or reject with a note the author reads. Approving flags every install **in
    this space's subtree** pinned to an older version with an offered upgrade; it
    never changes what is running anywhere.
-3. **List** (`submitToMarketplace`, `action: 'list'`; Build → "Submit to
-   marketplace…") is the only thing that offers a Tool to other spaces, and it
+3. **List** (`submitToMarketplace`, `action: 'list'`; no console button since
+   the Build section was removed — API only) is the only thing that offers a Tool to other spaces, and it
    is a space admin acting on a version their space has **already approved**.
    It sets `marketplaceStatus: 'pending'`. `withdrawFromMarketplace`
    (`action: 'unlist'`) takes it back out of the queue.
@@ -594,8 +594,9 @@ registry order *first*, with the new Tool appended after it. `tools` itself is
 rail row of its own and no on/off switch. What a space runs is decided by the
 pipeline itself — a version is approved, then installed. There is no `/tools`
 destination: the Space Console owns every one of those decisions (Tools =
-placement + the installed versions, Build = the working copies written here,
-Approvals = what a member published), and cross-space install is the
+placement + the installed versions + the super-admin marketplace review queue
+at the bottom, Approvals = what a member published; a working copy is published
+from its own tool page), and cross-space install is the
 `install_tool` action rather than a browsable catalogue.
 
 ### Type pages

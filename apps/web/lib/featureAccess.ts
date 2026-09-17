@@ -194,6 +194,7 @@ const NODE_TYPE_TOOL_KEYS: Record<string, string> = {
   resource: 'directory',
   agent: 'directory',
   connector: 'directory',
+  model: 'directory',
   // Events and Tools have no rail row: an event is a node opened at
   // `/directory/event:<slug>`, and a Tool is managed from the console.
   event: 'directory',

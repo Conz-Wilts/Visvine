@@ -109,7 +109,7 @@ const BUILT_INS: readonly BuiltIn[] = [
   { id: 'agent', label: 'Agent', configName: 'Agent', color: '#0d9488' },
   { id: 'tool', label: 'Tool', configName: 'Tool', color: '#a855f7' },
   { id: 'connector', label: 'Connector', configName: 'Connector', color: '#4f46e5' },
-  { id: 'model', label: 'Model', configName: null, color: '#64748b' },
+  { id: 'model', label: 'Model', configName: 'Model', color: '#b45309' },
 ]
 
 export interface CreateRowsInput extends CreatePermissions {

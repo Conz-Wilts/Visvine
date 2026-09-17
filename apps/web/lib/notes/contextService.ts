@@ -240,7 +240,7 @@ export async function searchContext(
   // One batched embed of every phrasing, shared by both vector stages. The
   // text stages rank on the topic (time words stripped), so that is what is
   // embedded for the original — the alternates are embedded as written.
-  // A space that switched embedding off (the Console's Clean section) gets
+  // A space that switched embedding off (the Console's General → Nightly) gets
   // no semantic half at all — not the query embed, not the lazy catch-up —
   // and says so the way a missing key does.
   const report: SemanticReport = {}

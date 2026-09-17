@@ -16,6 +16,10 @@ interface SettingsSectionProps {
   /** Optional node pinned to the right of the header (e.g. a button). */
   action?: React.ReactNode;
   className?: string;
+  /** Drop the hairline above the section — spacing alone separates it. */
+  flush?: boolean;
+  /** A larger title — the size of the General tab's field labels. */
+  large?: boolean;
   children: React.ReactNode;
 }
 
@@ -24,15 +28,20 @@ export default function SettingsSection({
   description,
   action,
   className,
+  flush = false,
+  large = false,
   children,
 }: SettingsSectionProps) {
   return (
     <section
-      className={clsx('border-t border-border-subtle pt-8 first:border-t-0 first:pt-0', className)}
+      className={clsx(
+        !flush && 'border-t border-border-subtle pt-8 first:border-t-0 first:pt-0',
+        className,
+      )}
     >
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-text-primary mb-1">{title}</h3>
+          <h3 className={clsx(large ? 'text-base' : 'text-sm', 'mb-1 font-semibold text-text-primary')}>{title}</h3>
           {description && <p className="text-xs text-text-muted">{description}</p>}
         </div>
         {action && <div className="shrink-0">{action}</div>}

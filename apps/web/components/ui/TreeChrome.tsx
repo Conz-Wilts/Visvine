@@ -39,7 +39,7 @@ export function TreeGuide({ guide, active = false }: { guide: TreeGuideKind; act
   const line = active ? 'bg-brand-green/60' : 'bg-border-default/70';
   const edge = active ? 'border-brand-green/60' : 'border-border-default/70';
   return (
-    <span className="relative flex w-3 shrink-0 self-stretch" aria-hidden="true">
+    <span data-tree-guide className="relative flex w-3 shrink-0 self-stretch" aria-hidden="true">
       {/* `tree-line` marks the vertical strokes so a spine being revealed can
           draw them downward (globals.css) rather than switching them on. */}
       {guide === 'last' ? (

@@ -25,7 +25,10 @@ const SIZES = {
   },
   lg: {
     frame: 'gap-2.5 rounded-xl px-4 py-3 border border-border-subtle',
-    input: 'text-[15px]',
+    // A whole-pixel line: 15px at the default 1.5 is 22.5, which left the box
+    // 48.5px tall and put everything centred beside it on a half pixel, where
+    // Windows rendered small digits at two different baselines.
+    input: 'text-[15px] leading-[22px]',
     icon: 'h-[18px] w-[18px]',
     clear: 'h-4 w-4',
   },

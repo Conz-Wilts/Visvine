@@ -22,15 +22,14 @@ import { useContextTree } from '../lib/useContextTree'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import SearchInput from '@/components/ui/SearchInput'
-import SpaceAvatar from '@/features/spaces/components/SpaceAvatar'
-import { spaceMark } from '@/lib/spaces/subspaces'
 import { NoteSidebar } from './NoteSidebar'
 import { SharePanel } from './SharePanel'
+import { MoveAccessDialog } from './MoveAccessDialog'
 import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext'
 
 /** Width of the tree column. The pane tab bars inset their toolbar tray by the
  *  same amount so the tray centres over the note, not the whole pane. */
-export const CONTEXT_PANEL_W = 300
+export const CONTEXT_PANEL_W = 360
 /** <main>'s bottom padding (pb-6 in AuthLayoutClient). The column runs THROUGH
  *  it to the viewport's bottom edge, and carries a matching negative
  *  margin-bottom so it does that without growing the row it sits in: the extra
@@ -70,7 +69,7 @@ export function ContextSidebar({
   focusPath?: string | null
 }) {
   const router = useSpaceRouter()
-  const { currentSpace, setCurrentSpace, spaces } = useSpace()
+  const { currentSpace, setCurrentSpace } = useSpace()
   // The toolbar tray only centres over the note column, so the tree climbs
   // past it to sit flush under the tab row whenever it's open.
   const trayOpen = !!usePaneChromeState().chrome?.attachedOpen
@@ -180,21 +179,7 @@ export function ContextSidebar({
               onSelect={handleSelect}
               onDeleteNote={ctx.handleDeleteNote}
               bare
-              // The tree's top row is the SPACE, so it wears the space's mark
-              // rather than a folder glyph — the same picture the rail's head
-              // shows (a sub-space wears its parent's, spaceMark), at the 16px
-              // the tree's other glyphs draw at.
-              root={{
-                ...ctx.rootFolder,
-                icon: currentSpace ? (
-                  <SpaceAvatar
-                    {...spaceMark(currentSpace, spaces)}
-                    size="xs"
-                    rounded="rounded-[4px]"
-                    className="shrink-0"
-                  />
-                ) : undefined,
-              }}
+              root={ctx.rootFolder}
               storageKey={spaceId}
               query={query}
               // The search focus (and, on a profile, the open note) only PEEKS
@@ -210,14 +195,17 @@ export function ContextSidebar({
               }
               onShareNote={(path) => setShareTarget({ path, kind: 'note' })}
               onDeleteFolder={ctx.handleDeleteFolder}
-              // Drag a note (or a whole folder) onto another folder to file it
-              // there; the same move is in each row's menu as "Move to...".
+              // Drag a note (or a whole folder) anywhere in the tree to file it
+              // into the folder under the pointer. Dragging is the only way to
+              // move; a drop that changes who can see the item asks first
+              // (MoveAccessDialog, below).
               onEnterSpace={setCurrentSpace}
               onMoveNote={ctx.handleMoveNote}
               onMoveFolder={ctx.handleMoveFolder}
               // A built-in folder or a sub-space dropped on a folder is PLACED
               // there — drawn under it, its path unchanged.
               onPlaceFolder={ctx.handlePlaceFolder}
+              onOrderFolder={ctx.handleOrderFolder}
               trash={trash}
               // A trashed note reads in the main content area, like any other
               // note — its own route, not a dialog over the tree.
@@ -240,6 +228,8 @@ export function ContextSidebar({
       {/* Every delete in the tree asks here — in the middle of the screen, in
           the app's own chrome, rather than in a browser confirm. */}
       <ConfirmDialog {...ctx.confirm} />
+      {/* A drop that changes who can see the item waits here for a yes. */}
+      <MoveAccessDialog ask={ctx.moveAsk} />
     </aside>
   )
 }

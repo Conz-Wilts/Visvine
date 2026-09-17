@@ -23,7 +23,7 @@ import type { BuildDiagnostic, BuildSummary } from '@/lib/tools/builds';
  * looking at the same defect, and a line that formatted differently in the two
  * places would read as two.
  */
-export function toolDiagnosticLine(d: BuildDiagnostic): string {
+function toolDiagnosticLine(d: BuildDiagnostic): string {
   const at = d.line === null ? '' : `:${d.line}:${d.column ?? 0}`;
   return `${d.file}${at} ${d.message}`;
 }

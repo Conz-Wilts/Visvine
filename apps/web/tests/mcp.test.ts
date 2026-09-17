@@ -512,7 +512,7 @@ test('the type catalog covers the whole closed vocabulary with the right creatab
   const entries = catalog({ usageByType: { person: 3, connector: 1 } })
   assert.deepEqual(
     entries.map((e) => e.type),
-    ['person', 'space', 'event', 'resource', 'section', 'channel', 'connector', 'agent', 'tool'],
+    ['person', 'space', 'event', 'resource', 'section', 'channel', 'connector', 'agent', 'tool', 'model'],
   )
   const creatable = entries.filter((e) => e.creatable_via_add_context).map((e) => e.type)
   // Catalog order, not CREATABLE_TYPES order: an event is creatable now (it

@@ -5,6 +5,7 @@ import { useTheme } from '@/features/shared/contexts/ThemeContext';
 import { COLOR_THEMES, type ColorTheme } from '@/features/shared/lib/colorThemes';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import LoadingText from '@/components/ui/LoadingText';
+import { SettingsSection } from '@/components/ui';
 import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePanel';
 import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPanel';
 import { ConnectorsSection, ModelsSection } from '@/features/settings/components/SettingsConnectors';
@@ -18,17 +19,14 @@ import { ConnectorsSection, ModelsSection } from '@/features/settings/components
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
-// Only the tabs that do something. Privacy was a coming-soon placeholder and is
-// gone until there's something behind it; Account is here because deleting your
-// account is something.
+// Only the tabs that do something. General holds everything about you that is
+// not about a space: theme, the MCP address, deleting your account.
 // Connectors and Models are about the space you are in, from where you stand
 // in it (SettingsConnectors).
 const SECTIONS: ConsoleSection[] = [
-  { id: 'appearance', label: 'Appearance', width: 'form' },
+  { id: 'general', label: 'General', width: 'form' },
   { id: 'connectors', label: 'Connectors', width: 'form' },
   { id: 'models', label: 'Models', width: 'form' },
-  { id: 'mcp', label: 'MCP', width: 'form' },
-  { id: 'account', label: 'Account', width: 'form' },
 ];
 
 // ─── Swatches ─────────────────────────────────────────────────────────────────
@@ -58,27 +56,31 @@ function ThemeSwatch({ t, active, onSelect }: { t: ColorTheme; active: boolean; 
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
-function AppearanceSection() {
+function ThemeSection() {
   const { theme, setTheme } = useTheme();
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h3 className="text-sm font-semibold text-text-primary mb-1">Theme</h3>
-        <p className="text-lg font-bold mb-4" style={{ color: theme.accent }}>
-          {theme.name}
-        </p>
-        <div className="flex flex-wrap gap-3">
-          {COLOR_THEMES.map(t => (
-            <ThemeSwatch
-              key={t.id}
-              t={t}
-              active={theme.id === t.id}
-              onSelect={() => setTheme(t.id)}
-            />
-          ))}
-        </div>
+    <SettingsSection title="Theme">
+      <div className="flex flex-wrap gap-3">
+        {COLOR_THEMES.map(t => (
+          <ThemeSwatch
+            key={t.id}
+            t={t}
+            active={theme.id === t.id}
+            onSelect={() => setTheme(t.id)}
+          />
+        ))}
       </div>
+    </SettingsSection>
+  );
+}
+
+function GeneralSection() {
+  return (
+    <div className="space-y-8">
+      <ThemeSection />
+      <ConnectClaudePanel />
+      <DeleteAccountPanel />
     </div>
   );
 }
@@ -87,20 +89,12 @@ function AppearanceSection() {
 
 function renderSection(id: string) {
   switch (id) {
-    case 'appearance':
-      return <AppearanceSection />;
+    case 'general':
+      return <GeneralSection />;
     case 'connectors':
       return <ConnectorsSection />;
     case 'models':
       return <ModelsSection />;
-    case 'mcp':
-      return <ConnectClaudePanel />;
-    case 'account':
-      return (
-        <div className="space-y-8">
-          <DeleteAccountPanel />
-        </div>
-      );
     default:
       return null;
   }

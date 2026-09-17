@@ -4,6 +4,8 @@
 // link to each other via standard markdown links, not [[wikilinks]] or #tags.
 
 import { declaredConfigKind } from './configKinds'
+import { compareByOrder, orderOf } from './folderOrder'
+import { folderOfIndexPath, isIndexPath } from './indexNote'
 import {
   parseFrontmatter,
   splitFrontmatter,
@@ -113,6 +115,15 @@ export function buildTree(metas: NoteMeta[]): TreeNode {
   // Resolved up front: sortTree keys on `title ?? name`, so a folder must
   // know its title before the tree is sorted.
   const titles = folderTitles(metas)
+  // And its order: a folder somebody has arranged keeps that arrangement
+  // (lib/notes/shared/folderOrder.ts), read off the same index notes.
+  const orders = new Map<string, string[]>()
+  for (const meta of metas) {
+    if (!isIndexPath(meta.path)) continue
+    const order = orderOf(meta.frontmatter)
+    if (order.length) orders.set(folderOfIndexPath(meta.path), order)
+  }
+  if (orders.has('')) root.order = orders.get('')
 
   const ensureFolder = (folderPath: string): TreeNode => {
     const existing = folders.get(folderPath)
@@ -126,6 +137,7 @@ export function buildTree(metas: NoteMeta[]): TreeNode {
       path: folderPath,
       kind: 'folder',
       ...(title ? { title } : {}),
+      ...(orders.has(folderPath) ? { order: orders.get(folderPath) } : {}),
       children: []
     }
     parent.children!.push(node)
@@ -200,12 +212,15 @@ export function folderPathsIn(node: TreeNode): Set<string> {
 }
 
 // Folders first, then notes, each alphabetically by display name — a folder's
-// index title when it has one, its path segment otherwise. Exported because the
+// index title when it has one, its path segment otherwise — unless the folder
+// has been arranged by hand: the rows its `order:` names come first, as listed
+// (lib/notes/shared/folderOrder.ts). Exported because the
 // tree API sorts again after grafting explicitly-created empty folders.
 export function sortTree(node: TreeNode): void {
   if (!node.children) {
     return
   }
+  const rank = new Map((node.order ?? []).map((key, i) => [key, i]))
   node.children.sort((a, b) => {
     // Another space's context is its own tier, below everything this space
     // holds: `Sub-spaces` and `parent/` sorted by title landed among the
@@ -213,6 +228,10 @@ export function sortTree(node: TreeNode): void {
     // space rather than a window into another one.
     if (!a.federated !== !b.federated) {
       return a.federated ? 1 : -1
+    }
+    const arranged = rank.size ? compareByOrder(rank, node.path, a.path, b.path) : 0
+    if (arranged !== 0) {
+      return arranged
     }
     if (a.kind !== b.kind) {
       return a.kind === 'folder' ? -1 : 1

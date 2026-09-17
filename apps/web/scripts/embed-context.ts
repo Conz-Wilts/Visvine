@@ -27,7 +27,7 @@ async function main() {
   console.log(`Embedding with ${config.model}${only ? ` for ${only}` : ' (all spaces)'}…`);
   const result = await embedSweep(only);
   if (result.disabled) {
-    console.log('That space has embedding switched off (Console → Clean). Nothing embedded; orphans pruned.');
+    console.log('That space has embedding switched off (Console → General → Nightly). Nothing embedded; orphans pruned.');
     return;
   }
   console.log(

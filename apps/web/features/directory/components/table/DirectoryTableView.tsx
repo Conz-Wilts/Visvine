@@ -53,8 +53,13 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   const isAgents = type?.toLowerCase() === 'agent';
   const roster = useAgentsRoster(space?.id ?? null, isAgents);
   const types = useMemo(
-    () => menuTypes(presentTypes, nodes, [{ id: 'agent', name: 'Agent', count: roster.data?.agents.length ?? 0 }]),
-    [presentTypes, nodes, roster.data],
+    () => menuTypes(
+      presentTypes,
+      nodes,
+      [{ id: 'agent', name: 'Agent', count: roster.data?.agents.length ?? 0 }],
+      space?.aliases as SpaceAlias[] | undefined,
+    ),
+    [presentTypes, nodes, roster.data, space?.aliases],
   );
 
   // The `?type=` is usually a type's own name, but crossing from a context note
@@ -168,7 +173,16 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
         <TableToolbar
           browse={browse}
           typeMenu={
-            <TypeMenu types={types} activeKey={activeKey ?? ''} nodeTypes={space?.nodeTypes} onChange={onTypeChange} />
+            <TypeMenu
+              types={types}
+              activeKey={activeKey ?? ''}
+              activeAlias={browse.filterAliases.size === 1 ? [...browse.filterAliases][0] : null}
+              nodeTypes={space?.nodeTypes}
+              onChange={(id, alias) => {
+                onTypeChange(id);
+                browse.setFilterAliases(alias ? new Set([alias]) : new Set());
+              }}
+            />
           }
           searchPlaceholder={
             activeName && !isAll

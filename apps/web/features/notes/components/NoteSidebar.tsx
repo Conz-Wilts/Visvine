@@ -3,8 +3,10 @@
 // The notes sidebar: a folder/note tree. Two marks, and only two: a folder is
 // a folder and a note is a document. A row's type, its tool and the space it
 // belongs to are all said by where it sits and what it is called, so a glyph
-// per kind only made the column harder to scan. Row actions (share,
-// move, delete) live behind a single menu revealed on hover. Nesting is shown
+// per kind only made the column harder to scan. Row actions (share, delete)
+// live behind a single menu revealed on hover; MOVING is a drag, and only a
+// drag — pick a row up and drop it anywhere in the column (useTreeDrag).
+// Nesting is shown
 // with tree guides: each nested row draws its own segment of the vertical line
 // plus an elbow into its icon, and the last child of a folder closes the line
 // off with a rounded corner, so depth reads at a glance. Expanding a folder puts
@@ -13,9 +15,8 @@
 // notes live there for a week (restore or delete-forever from the row menu)
 // before the server purges them.
 
-import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Modal, inputBaseClass } from '@/components/ui'
 import type { TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { TRASH_RETENTION_DAYS } from '@/lib/notes/shared/types'
 import {
@@ -38,9 +39,14 @@ import {
   useContextTreeState,
 } from '@/features/notes/hooks/useContextTreeState'
 import { canMoveInto, deleteFolderDenial, moveDenial, parentFolderOf } from '../lib/useContextTree'
-import { isFederatedPath, subspaceOfPath } from '@/lib/spaces/subspaces'
-import { canPlaceInto, placeableOf, placementDenial } from '@/lib/notes/shared/placedFolders'
+import { SUBSPACE_FOLDER, isFederatedPath, subspaceOfPath } from '@/lib/spaces/subspaces'
+import { canPlaceInto, drawnParentOf, placeableOf, placementDenial } from '@/lib/notes/shared/placedFolders'
+import { orderKeyOf } from '@/lib/notes/shared/folderOrder'
+import { indexPathOf } from '@/lib/notes/shared/indexNote'
 import { Icon } from '@/features/shared/icons'
+import { useTreeDrag, type DropVerdict, type TreeDragItem, type TreeSlot } from '../hooks/useTreeDrag'
+import { useTreeFlip } from '../hooks/useTreeFlip'
+import type { DropOrder, MoveLabels, MoveOutcome } from '../lib/useContextTree'
 
 // Expansion state (openPaths + reveal overlay + persistence) lives in
 // useContextTreeState, shared with the full-screen Context explorer so both
@@ -60,46 +66,92 @@ interface FolderBadge {
   level?: string
 }
 
-/** A row the tree can move: a note, a folder (with everything under it), or a
- *  structural folder that is PLACED rather than moved — a built-in folder or
- *  a sub-space, whose path stays put while the tree draws it elsewhere
- *  (lib/notes/shared/placedFolders.ts). */
-interface MovableItem {
-  /** What a note declares (`TreeNode.declares`) — a connector moves where a connector may. */
-  declares?: 'connector' | 'model'
-  path: string
-  kind: 'note' | 'folder' | 'placed'
-  label: string
-}
+type MovableItem = TreeDragItem
 
-/** Drag-to-move state, shared with every row rather than threaded through the
+/** Drag-to-move, shared with every row rather than threaded through the
  *  recursive Tree/FolderRow props (they already carry a dozen). Null when the
- *  host surface passed no move handlers — rows then aren't draggable at all. */
+ *  host surface passed no move handlers — rows then can't be picked up at all. */
 interface TreeDragValue {
   dragging: MovableItem | null
-  /** Folder currently under the pointer ('' = the context root, null = none). */
-  dropFolder: string | null
-  /** The tree as drawn — a placement's cycle guard walks it. */
-  tree: TreeNode
+  /** Where the held row would drop: the place between rows the tree keeps open
+   *  for it (useTreeDrag). Null when it has none — over a shut folder, or a row
+   *  with no place of its own held somewhere it may not go. */
+  slot: TreeSlot | null
+  /** The SHUT folder a drop right now would file into — it lights up, since
+   *  there is nowhere inside it to show a slot. */
+  intoFolder: string | null
+  /** Whether the held row is off the tree (in hand) — so it leaves home. */
+  away: boolean
+  /** The drop is made and the move is running: the slot shows the row itself. */
+  dropped: boolean
   /** Whether the host surface places structural folders at all. */
   canPlace: boolean
-  begin: (item: MovableItem) => void
-  end: () => void
-  hover: (folderPath: string | null) => void
-  move: (item: MovableItem, destFolder: string) => void
-  /** Opens the "Move to…" dialog — the keyboard/menu path to the same move. */
-  requestMove: (item: MovableItem) => void
+  /** A row's onPointerDown — the drag starts once the pointer travels. */
+  press: (item: MovableItem, e: React.PointerEvent<HTMLElement>) => void
 }
 
-/** Whether dropping `dragging` on `dest` would do anything — a placement or a move, by the item's kind. */
-function acceptsDrop(drag: TreeDragValue, dest: string): boolean {
-  if (!drag.dragging) return false
-  return drag.dragging.kind === 'placed'
-    ? canPlaceInto(drag.tree, drag.dragging.path, dest)
-    : canMoveInto(drag.dragging.path, drag.dragging.kind, dest, drag.dragging.declares)
+/** Whether `item` may be dropped into `dest` — a placement or a move, by the
+ *  item's kind — and, when it may not, what to say about it. Already being
+ *  there is a quiet no, and so is a folder held over its own subtree: that is
+ *  where every drag of it starts. */
+function dropVerdict(tree: TreeNode, item: MovableItem, dest: string, canOrder: boolean): DropVerdict {
+  // Home: the folder is not changing, only the row's place in it.
+  if (canOrder && dest !== SUBSPACE_FOLDER && drawnParentOf(tree, item.path) === dest) return { ok: true }
+  const ok =
+    item.kind === 'placed'
+      ? canPlaceInto(tree, item.path, dest)
+      : canMoveInto(item.path, item.kind, dest, item.declares)
+  if (ok) return { ok: true }
+  if (item.kind !== 'note' && (dest === item.path || dest.startsWith(`${item.path}/`))) return { ok: false, reason: null }
+  return {
+    ok: false,
+    reason:
+      item.kind === 'placed'
+        ? placementDenial(item.path, dest, tree)
+        : moveDenial(item.path, item.kind, dest, item.declares),
+  }
+}
+
+/** The folder node at `path` wherever the tree DRAWS it — a placed folder is
+ *  not under its path-parent. */
+function folderNodeIn(node: TreeNode, path: string): TreeNode | null {
+  if (node.path === path) return node
+  for (const child of node.children ?? []) {
+    if (child.kind !== 'folder') continue
+    const hit = folderNodeIn(child, path)
+    if (hit) return hit
+  }
+  return null
+}
+
+/** The `order:` list that puts `item` at `index` among `folder`'s rows — the
+ *  rows as Tree draws them: no home note, no held row. */
+function orderWith(tree: TreeNode, folder: string, item: string, index: number): DropOrder {
+  const own = indexPathOf(folder)
+  const rows = (folderNodeIn(tree, folder)?.children ?? [])
+    .filter((c) => c.path !== item && !(c.kind === 'note' && c.path === own))
+    .map((c) => orderKeyOf(folder, c.path))
+  return (landed) => {
+    const key = orderKeyOf(folder, landed)
+    const rest = rows.filter((k) => k !== key)
+    return [...rest.slice(0, index), key, ...rest.slice(index)]
+  }
+}
+
+/** What a folder is called in the tree ('' and anything unfound → null). */
+function folderLabelIn(node: TreeNode, path: string): string | null {
+  for (const child of node.children ?? []) {
+    if (child.kind !== 'folder') continue
+    if (child.path === path) return child.title ?? child.name
+    if (path.startsWith(`${child.path}/`)) return folderLabelIn(child, path)
+  }
+  return null
 }
 
 const TreeDrag = createContext<TreeDragValue | null>(null)
+
+/** The path a drop just landed at — its row glows there for a moment. */
+const TreeLanded = createContext<string | null>(null)
 
 /** Entering a sub-space read into this tree — switching to it, not opening a
  *  folder. Carried on a context for the reason TreeDrag is: the row that needs
@@ -143,16 +195,21 @@ interface NoteSidebarProps {
   /** â‹¯ menu action on folder rows: delete the folder (and the notes inside). */
   onDeleteFolder?: (folderPath: string, label?: string) => void
   /** File a note into another folder ('' = the context root). Passing both move
-   *  handlers turns on dragging and the rows' "Move to..." action; omit them for
-   *  a read-only tree. Authority stays server-side - a rejected move surfaces
-   *  its message. */
-  onMoveNote?: (from: string, destFolder: string) => void
+   *  handlers turns on dragging; omit them for a read-only tree. Authority
+   *  stays server-side — a rejected move comes back as a `failed` outcome and
+   *  the tree says why. The handler may hold the drop open to ask first (a move
+   *  that changes who can see the item), which is why it answers with a promise. */
+  onMoveNote?: (from: string, destFolder: string, labels: MoveLabels, order?: DropOrder) => Promise<MoveOutcome>
   /** Move a folder and everything under it. */
-  onMoveFolder?: (from: string, destFolder: string) => void
+  onMoveFolder?: (from: string, destFolder: string, labels: MoveLabels, order?: DropOrder) => Promise<MoveOutcome>
   /** Place a built-in folder or a sub-space under a folder of the space's own
    *  ('' = the top): the path stays, the tree draws it there
    *  (lib/notes/shared/placedFolders.ts). Omit and those rows don't drag. */
-  onPlaceFolder?: (path: string, destFolder: string) => void
+  onPlaceFolder?: (path: string, destFolder: string, order?: DropOrder) => Promise<MoveOutcome>
+  /** Keep the order a folder's rows were dragged into ('' = the top): nothing
+   *  moves, the folder's index note records it (lib/notes/shared/folderOrder.ts).
+   *  Omit and a drag only changes folders — rows stay sorted by name. */
+  onOrderFolder?: (folder: string, order: string[], path: string) => Promise<MoveOutcome>
   /** Render without card chrome (bg/border/shadow) â€” used when the sidebar sits on
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
@@ -206,6 +263,7 @@ export function NoteSidebar({
   onMoveNote,
   onMoveFolder,
   onPlaceFolder,
+  onOrderFolder,
   trash = null,
   onRestoreTrash,
   onPurgeTrash,
@@ -231,37 +289,6 @@ export function NoteSidebar({
     [tree],
   )
 
-  // Moving: dragging a row onto a folder, or the same move from the row menu
-  // via the "Move to..." dialog. Both go through one `move` so the rules and the
-  // handlers stay in one place.
-  const [dragging, setDragging] = useState<MovableItem | null>(null)
-  const [dropFolder, setDropFolder] = useState<string | null>(null)
-  const [moveTarget, setMoveTarget] = useState<MovableItem | null>(null)
-  const movingEnabled = canEdit && !!onMoveNote && !!onMoveFolder
-
-  const drag = useMemo<TreeDragValue | null>(() => {
-    if (!movingEnabled) return null
-    const move = (item: MovableItem, destFolder: string) => {
-      if (item.kind === 'placed') onPlaceFolder?.(item.path, destFolder)
-      else if (item.kind === 'folder') onMoveFolder!(item.path, destFolder)
-      else onMoveNote!(item.path, destFolder)
-    }
-    return {
-      dragging,
-      dropFolder,
-      tree,
-      canPlace: !!onPlaceFolder,
-      begin: (item) => setDragging(item),
-      end: () => {
-        setDragging(null)
-        setDropFolder(null)
-      },
-      hover: setDropFolder,
-      move,
-      requestMove: setMoveTarget,
-    }
-  }, [movingEnabled, dragging, dropFolder, tree, onMoveNote, onMoveFolder, onPlaceFolder])
-
   // Which folders are expanded â€” persisted per scope, with the reveal peek
   // layered on top (see useContextTreeState for the full story).
   const { effectiveOpenPaths, toggleFolder, openFolder } = useContextTreeState(storageKey, revealPath)
@@ -270,16 +297,21 @@ export function NoteSidebar({
   // so clearing the box puts the tree back exactly as the user left it.
   // Tiered LAST, over whatever the search left: `Main` and the rooms are how
   // the root is drawn, not what the tree holds, so every read of a real path —
-  // the search prune, the drag rules, the Move to... list — still sees the
+  // the search prune, the drag rules — still sees the
   // tree the server sent (lib/notes/shared/rootTiers.ts).
   const shownTree = useMemo(
     () => tierRoot(searching ? filterTree(tree, query) : tree),
     [tree, query, searching],
   )
-  const openPaths = useMemo(
-    () => (searching ? folderPathsIn(shownTree) : effectiveOpenPaths),
-    [searching, shownTree, effectiveOpenPaths],
-  )
+  // Folders a drag has sprung open are a peek too: open while the pointer is
+  // in them, shut again once it has left, and never written to the saved
+  // expansion — only the folder a drop actually lands in is opened for good.
+  const [sprung, setSprung] = useState<ReadonlySet<string>>(new Set())
+  const openPaths = useMemo(() => {
+    if (searching) return folderPathsIn(shownTree)
+    if (sprung.size === 0) return effectiveOpenPaths
+    return new Set([...effectiveOpenPaths, ...sprung])
+  }, [searching, shownTree, effectiveOpenPaths, sprung])
   const noMatches = searching && (shownTree.children ?? []).length === 0
 
   // Keep the selected row in view when selection changes from outside the tree
@@ -289,6 +321,109 @@ export function NoteSidebar({
   // collapsed ancestor folder auto-opens in response to the same selection
   // change, so the row may only mount a render later.
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Moving is a drag, and it reads like a sortable list: the row lifts off the
+  // tree and follows the pointer, the tree keeps a slot open where it would
+  // drop (Tree), the rows around the slot slide to make room as it passes them
+  // (useTreeFlip), and folders open under the pointer and shut behind it. Every
+  // point resolves to a place between rows — before or after the row under it,
+  // or inside the folder under it — and the engine asks `dropVerdict` whether
+  // the item may go in that folder. Dropping in the folder it came from is a
+  // reorder. The rules read the tree the server sent, not the tiered one drawn.
+  // A searched tree shows some of each folder, so a place in it isn't a place
+  // in the folder: a drag there still moves, and the row lands by name.
+  const [landed, setLanded] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const movingEnabled = canEdit && !!onMoveNote && !!onMoveFolder
+  const canOrder = !!onOrderFolder && !searching
+  const rootLabel = root?.label ?? 'the top level'
+  // A successful drop keeps the row drawn in its new folder until the reloaded
+  // tree arrives with the real one there — otherwise it would blink back home
+  // for the length of a fetch.
+  const treeArrived = useRef<(() => void) | null>(null)
+  useLayoutEffect(() => {
+    treeArrived.current?.()
+    treeArrived.current = null
+  }, [tree])
+  const { dragging, slot, intoFolder, away, dropped, press, lift, probe } = useTreeDrag({
+    scrollRef,
+    // Another space's folder keeps its own order, arranged from inside it.
+    verdict: (item, folder) =>
+      dropVerdict(tree, item, folder, canOrder && !readOnlyHere(indexPathOf(folder), writableSpaces)),
+    onSpring: (folder) => setSprung((prev) => new Set(prev).add(folder)),
+    // Shut what the drag opened and the pointer has left: a sprung folder stays
+    // open only while the pointer is on it or on something inside it.
+    onHover: (folder) =>
+      setSprung((prev) => {
+        const keep = [...prev].filter((p) => folder !== null && (folder === p || folder.startsWith(`${p}/`)))
+        return keep.length === prev.size ? prev : new Set(keep)
+      }),
+    onEnd: () => setSprung((prev) => (prev.size === 0 ? prev : new Set())),
+    onDrop: async (item, folder, index) => {
+      const labels = { item: item.label, dest: (folder && folderLabelIn(tree, folder)) || rootLabel }
+      // The place it was dropped at is stored with the move, before the tree
+      // reloads, so the row never shows anywhere but where it was put.
+      const order = canOrder && index !== null ? orderWith(tree, folder, item.path, index) : undefined
+      const outcome =
+        order && drawnParentOf(tree, item.path) === folder
+          ? await onOrderFolder!(folder, order(item.path), item.path)
+          : item.kind === 'placed'
+            ? await onPlaceFolder?.(item.path, folder, order)
+            : item.kind === 'folder'
+              ? await onMoveFolder!(item.path, folder, labels, order)
+              : await onMoveNote!(item.path, folder, labels, order)
+      if (outcome?.status === 'failed') setNotice(outcome.message)
+      if (outcome?.status !== 'moved') return
+      if (folder) openFolder(folder)
+      setLanded(outcome.path)
+      await new Promise<void>((resolve) => {
+        treeArrived.current = resolve
+        window.setTimeout(resolve, 2000)
+      })
+    },
+  })
+  const drag = useMemo<TreeDragValue | null>(
+    () => (movingEnabled ? { dragging, slot, intoFolder, away, dropped, canPlace: !!onPlaceFolder, press } : null),
+    [movingEnabled, dragging, slot, intoFolder, away, dropped, onPlaceFolder, press],
+  )
+
+  const layout = useMemo(() => ({}), [dragging, slot, away, dropped, openPaths, tree]) // eslint-disable-line react-hooks/exhaustive-deps -- identity IS the signal
+  useTreeFlip(scrollRef, probe, dragging !== null, layout, openPaths)
+
+  // The row that just landed glows where it now sits, and is brought into view
+  // if the move put it off screen. It mounts a reload after the drop, so the
+  // scroll retries for a moment, like the selection's below.
+  useEffect(() => {
+    if (!landed) return
+    let raf = 0
+    let attempts = 0
+    const reveal = () => {
+      const container = scrollRef.current
+      const el = container?.querySelector(`[data-tree-item="${CSS.escape(landed)}"]`)
+      if (container && el) {
+        const c = container.getBoundingClientRect()
+        const r = el.getBoundingClientRect()
+        if (r.top < c.top || r.bottom > c.bottom) {
+          const top = container.scrollTop + (r.top - c.top) - (c.height - r.height) / 2
+          container.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+        }
+      } else if (attempts++ < 40) {
+        raf = requestAnimationFrame(reveal)
+      }
+    }
+    reveal()
+    const clear = window.setTimeout(() => setLanded(null), 2200)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(clear)
+    }
+  }, [landed])
+
+  useEffect(() => {
+    if (!notice) return
+    const clear = window.setTimeout(() => setNotice(null), 7000)
+    return () => window.clearTimeout(clear)
+  }, [notice])
 
   // Restore before the reveal effect below runs, so an already-visible selected
   // row is found in place and no scroll animation plays at all.
@@ -334,10 +469,11 @@ export function NoteSidebar({
 
   return (
     <TreeDrag.Provider value={drag}>
+    <TreeLanded.Provider value={landed}>
     <TreeEnterSpace.Provider value={onEnterSpace ?? null}>
     <TreeWritableSpaces.Provider value={writableSpaces}>
     <div
-      className={`flex h-full flex-col overflow-hidden ${
+      className={`relative flex h-full flex-col overflow-hidden ${
         /* bare = docked into the Sidebar column, which draws its own seam;
            floating = the tree beside a note, divided from it by one hairline */
         bare ? '' : 'border-r border-border-subtle'
@@ -350,9 +486,13 @@ export function NoteSidebar({
           would resolve x to auto and show a horizontal scrollbar). No px here:
           the row bands must reach both panel edges â€” rows carry their own
           inner padding. */}
+      {/* The scrollport is itself a drop zone: the blank below the last row
+          files to the top level, so there is no dead space to miss into. */}
       <div
         ref={scrollRef}
         onScroll={rememberScroll}
+        data-drop-folder=""
+        style={{ overflowAnchor: 'none' }}
         className="scrollbar-on-hover flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-3"
       >
         {/* pl only â€” it insets the row CONTENT off the panel edge while the
@@ -416,21 +556,23 @@ export function NoteSidebar({
           )}
         </div>
       </div>
+      {/* Why a drop didn't take — the structural rule or the server's own
+          words — said in the column it happened in, not in a browser alert. */}
+      {notice && (
+        <button
+          type="button"
+          onClick={() => setNotice(null)}
+          className="dropdown-pop absolute inset-x-3 bottom-3 z-10 rounded-xl border border-border-subtle border-l-2 border-l-red-500 bg-surface-1 px-3 py-2 text-left text-sm leading-snug text-text-secondary shadow-float"
+        >
+          <span className="font-medium text-text-primary">Couldn’t move it. </span>
+          {notice}
+        </button>
+      )}
     </div>
-    {moveTarget && drag && (
-      <MoveDialog
-        item={moveTarget}
-        tree={tree}
-        rootLabel={root?.label ?? 'Context root'}
-        onClose={() => setMoveTarget(null)}
-        onPick={(destFolder) => {
-          setMoveTarget(null)
-          drag.move(moveTarget, destFolder)
-        }}
-      />
-    )}
+    {lift}
     </TreeWritableSpaces.Provider>
     </TreeEnterSpace.Provider>
+    </TreeLanded.Provider>
     </TreeDrag.Provider>
   )
 }
@@ -461,8 +603,8 @@ function TrashFolder({
   onOpen?: (entry: TrashEntry) => void
 }) {
   return (
-    <div className="mt-1">
-      <div className={`group/trash flex items-center pr-1.5 transition hover:bg-surface-2 ${ROW_BLEED}`}>
+    <div className="mt-1" data-drop-none>
+      <div data-flip-key=":trash:" className={`group/trash flex items-center pr-1.5 transition hover:bg-surface-2 ${ROW_BLEED}`}>
         <button
           type="button"
           aria-label={open ? 'Collapse trash' : 'Expand trash'}
@@ -612,18 +754,38 @@ function Tree({
   onShareNote?: (path: string) => void
   onDeleteFolder?: (folderPath: string, label?: string) => void
 }) {
+  const drag = useContext(TreeDrag)
   // A folder's own index.md never renders as a child row â€” the folder row IS
   // the index (clicking the folder name opens it; see FolderRow). The context
   // root included: its index.md folds into the root folder row, so the
   // space reads as the parent folder of everything below it.
   const ownIndex = node.path && node.drawn !== 'main' ? `${node.path}/index.md` : 'index.md'
+  // The held row is in hand, not in the tree: what the tree shows of it is the
+  // slot it would drop into (below).
+  const away = drag?.dragging && drag.away ? drag.dragging.path : null
   const children = (node.children ?? []).filter(
-    (c) => !(c.kind === 'note' && c.path === ownIndex),
+    (c) => !(c.kind === 'note' && c.path === ownIndex) && c.path !== away,
   )
   // An open folder with nothing in it draws a stem into blank space, which
   // reads as a branch that failed to load. One elbow into the word "Empty"
   // ends the line where the folder does.
-  if (children.length === 0) return <EmptyBranchRow />
+  // The slot: while a row is held over a place in THIS folder, that place is
+  // kept open for it — an empty row between the two it would sit between, which
+  // moves as the pointer does. Every row says which place it is
+  // (`data-slot-*`), and that is how the engine turns the point under the
+  // pointer into one. `Main` is the context root's rows, so a place at the top
+  // is a place there, not on the root that merely holds the tiers — whose rows
+  // (Main, the rooms) have no places between them at all. Another space's
+  // context is its own tier below this one's, so the last place is above it.
+  const folderPath = node.drawn === 'main' ? '' : node.path
+  const tiered = !node.path && (node.children ?? []).some((c) => c.drawn === 'main')
+  const held = drag?.dragging && drag.slot?.folder === folderPath && !tiered ? drag.dragging : null
+  const firstFederated = children.findIndex((c) => c.federated)
+  const lastPlace = firstFederated === -1 ? children.length : firstFederated
+  const previewAt = held ? Math.min(drag!.slot!.index, lastPlace) : -1
+  const settled = !!drag?.dropped
+  if (children.length === 0) return held ? <DropPreviewRow item={held} guide="last" settled={settled} /> : <EmptyBranchRow />
+  const last = children.length - 1
   return (
     <>
       {children.map((child, i) => {
@@ -636,7 +798,8 @@ function Tree({
           <FolderRow
             key={child.path}
             node={child}
-            guide={i === children.length - 1 ? 'last' : 'mid'}
+            place={tiered || child.federated ? undefined : { folder: folderPath, index: i }}
+            guide={i === last && previewAt <= last ? 'last' : 'mid'}
             guideActive={onSelectedPath(child.path, selectedPath)}
             openPaths={openPaths}
             onToggleFolder={onToggleFolder}
@@ -656,7 +819,8 @@ function Tree({
             title={child.title ?? child.name}
             path={child.path}
             declares={child.declares}
-            guide={i === children.length - 1 ? 'last' : 'mid'}
+            place={tiered || child.federated ? undefined : { folder: folderPath, index: i }}
+            guide={i === last && previewAt <= last ? 'last' : 'mid'}
             guideActive={selectedPath === child.path}
             selected={selectedPath === child.path}
             restrictedBadge={folderBadges?.get(child.path)?.restricted ?? false}
@@ -666,14 +830,17 @@ function Tree({
             onShare={onShareNote}
           />
         )
-        if (!seam) return row
+        const preview = held && previewAt === i ? <DropPreviewRow item={held} guide="mid" settled={settled} /> : null
+        if (!seam && !preview) return row
         return (
           <Fragment key={`${child.path}-tier`}>
-            <TierSeam />
+            {preview}
+            {seam && <TierSeam />}
             {row}
           </Fragment>
         )
       })}
+      {held && previewAt > last && <DropPreviewRow item={held} guide="last" settled={settled} />}
     </>
   )
 }
@@ -709,8 +876,36 @@ function EmptyBranchRow() {
   )
 }
 
+/** The slot: the place kept open for the held row, among the folder's
+ *  children. While the row is in hand it is an EMPTY, unmarked gap the row's size — the
+ *  row itself is the lift at the pointer — and once dropped it shows the row,
+ *  until the reloaded tree arrives with the real one. It carries the held row's
+ *  flip key, so it slides from place to place rather than jumping, and takes no
+ *  pointer: the engine reads "the pointer is on the slot" as "stay". */
+function DropPreviewRow({ item, guide, settled }: { item: MovableItem; guide: Guide; settled: boolean }) {
+  return (
+    <div
+      aria-hidden="true"
+      data-drop-slot
+      data-flip-key={item.path}
+      className={`pointer-events-none flex items-center pr-1.5 ${ROW_BLEED}`}
+    >
+      <GuideLine guide={guide} />
+      <span className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-[15px] ${settled ? '' : 'invisible'}`}>
+        <span className="shrink-0 text-brand-green">
+          {item.kind === 'note' ? <FileIcon /> : <FolderIcon />}
+        </span>
+        <span className="truncate font-medium text-text-primary">{item.label}</span>
+      </span>
+    </div>
+  )
+}
+
 function FolderRow(props: {
   node: TreeNode
+  /** Which place among its folder's rows this is (Tree) — absent on a row with
+   *  no places beside it: the root, `Main`, a room, another space's context. */
+  place?: TreeSlot
   /** Tree guide for a nested row. */
   guide?: Guide
   /** The open note is this folder or lives inside it â€” tints the guide. */
@@ -772,10 +967,11 @@ function FolderRow(props: {
   const entityIndex = hasIndex && isEntityFolderIndex(indexPath)
   const leaf = entityIndex && (props.node.children ?? []).every((c) => c.kind === 'note' && c.path === indexPath)
 
-  // Moving: a folder row is both a drag source (its whole subtree travels with
-  // it) and the tree's only drop target - notes and folders are filed INTO
-  // folders, never next to a note. The context root row is the target for "top
-  // level"; it is never a source.
+  // Moving: a folder row is a drag source (its whole subtree travels with it)
+  // and a destination — and so is everything under it: a drop on any row files
+  // into the folder that row belongs to, so the whole open folder is the
+  // target and lights up as one block. The context root row is "top level"; it
+  // is never a source.
   const drag = useContext(TreeDrag)
   // A room read into this tree: `space` names it and `parent` is unset (the
   // parent's shared folder carries both). Its row offers the door as well as
@@ -798,65 +994,29 @@ function FolderRow(props: {
       ? drag.canPlace && (placeable.space === null || !readOnly)
       : !readOnly && isMovable(props.node.path, 'folder'))
   const isDragged = drag?.dragging?.path === props.node.path
-  const accepts = !!drag && !drawnOnly && acceptsDrop(drag, props.node.path)
-  const isDropTarget = accepts && drag?.dropFolder === props.node.path
-  // Hovering a shut folder mid-drag springs it open, so a note can be dropped
-  // into a nested folder without letting go first.
-  const springRef = useRef<number | null>(null)
-  const cancelSpring = () => {
-    if (springRef.current !== null) {
-      window.clearTimeout(springRef.current)
-      springRef.current = null
-    }
-  }
-  useEffect(() => cancelSpring, [])
+  // `Main` stands for the context root, so a drop on it files to the top.
+  const dropPath = drawnOnly ? '' : props.node.path
+  const isDropTarget = !!drag?.dragging && drag.intoFolder === dropPath && !drawnOnly
+  const justLanded = useContext(TreeLanded) === props.node.path && !!props.node.path
 
   return (
-    <div>
+    <div
+      data-drop-folder={dropPath}
+      className={`tree-drop-zone ${isDropTarget ? 'tree-drop-zone-on' : ''}`}
+    >
       <div
-        draggable={draggable}
-        onDragStart={(e) => {
-          if (!draggable) return
-          e.dataTransfer.setData('text/plain', props.node.path)
-          e.dataTransfer.effectAllowed = 'move'
-          drag!.begin(item)
-        }}
-        onDragEnd={() => {
-          cancelSpring()
-          drag?.end()
-        }}
-        onDragOver={(e) => {
-          if (!accepts) return
-          e.preventDefault()
-          e.stopPropagation()
-          e.dataTransfer.dropEffect = 'move'
-          if (drag!.dropFolder !== props.node.path) drag!.hover(props.node.path)
-          if (!open && springRef.current === null) {
-            springRef.current = window.setTimeout(() => {
-              springRef.current = null
-              props.onOpenFolder(props.node.path)
-            }, 600)
-          }
-        }}
-        onDragLeave={(e) => {
-          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
-          cancelSpring()
-          if (drag?.dropFolder === props.node.path) drag.hover(null)
-        }}
-        onDrop={(e) => {
-          if (!accepts) return
-          e.preventDefault()
-          e.stopPropagation()
-          cancelSpring()
-          const dragged = drag!.dragging!
-          drag!.end()
-          drag!.move(dragged, props.node.path)
-        }}
+        data-tree-item={props.node.path}
+        data-flip-key={props.node.path || ':root:'}
+        data-folder-row={dropPath}
+        {...(open && !leaf ? { 'data-folder-open': '' } : {})}
+        {...(props.place ? { 'data-slot-parent': props.place.folder, 'data-slot-index': props.place.index } : {})}
+        // Resting on a shut folder mid-drag springs it open (useTreeDrag), so
+        // a note can be dropped into a nested folder without letting go first.
+        {...(!open && !leaf && !isDragged ? { 'data-spring-folder': props.node.path } : {})}
+        onPointerDown={draggable ? (e) => drag!.press(item, e) : undefined}
         className={`group/folder flex items-center pr-1.5 transition ${ROW_BLEED} ${
           selected ? 'bg-brand-green/15' : 'hover:bg-surface-2'
-        } ${isDragged ? 'opacity-50' : ''} ${
-          isDropTarget ? 'bg-brand-green/15 ring-1 ring-inset ring-brand-green' : ''
-        }`}
+        } ${isDragged ? 'tree-row-held' : ''} ${justLanded ? 'tree-row-land' : ''}`}
       >
         {props.guide && <GuideLine guide={props.guide} active={props.guideActive} />}
         {/* The folder glyph is the expand/collapse control â€” open vs shut is
@@ -891,8 +1051,7 @@ function FolderRow(props: {
               at the glyph's centre â€” exactly where CHILD_INDENT puts the
               children's guides, so the two read as one line. */}
           {open && <TreeStem active={onSelectedPath(props.node.path, props.selectedPath)} />}
-          {/* One mark for every folder. The root row is the exception the
-              caller passes in — it is the SPACE, and wears the space's. */}
+          {/* One mark for every folder, the root row included. */}
           {props.icon ?? <FolderIcon open={open} />}
         </button>
         )}
@@ -944,9 +1103,6 @@ function FolderRow(props: {
               : []),
             ...(showAccess
               ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => props.onFolderAccess!(props.node.path) }]
-              : []),
-            ...(draggable
-              ? [{ label: placeable ? 'Place in...' : 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
               : []),
             // No Delete on the root (that row is the context itself), nor on a
             // built-in folder: agents/, connectors/, tools/, people/ and the
@@ -1006,7 +1162,7 @@ interface RowMenuItem {
 const ROW_MENU_W = 160
 const ROW_MENU_ITEM_H = 34
 
-/** The â‹¯ button every row shows on hover, opening its actions (share, move, delete,
+/** The â‹¯ button every row shows on hover, opening its actions (share, delete,
  *  shareâ€¦) in a small popup. The popup is a fixed-position portal: the tree's
  *  scroll container clips overflow on both axes, so an absolutely positioned
  *  menu inside the row would be cut off at the panel edge. Fixed positioning
@@ -1068,6 +1224,7 @@ function RowMenu({
       <button
         ref={btnRef}
         type="button"
+        data-no-drag
         title="More actions"
         aria-haspopup="menu"
         aria-expanded={!!pos}
@@ -1115,6 +1272,7 @@ function NoteRow({
   title,
   path,
   declares,
+  place,
   guide,
   guideActive,
   selected,
@@ -1127,6 +1285,8 @@ function NoteRow({
   title: string
   path: string
   declares?: 'connector' | 'model'
+  /** Which place among its folder's rows this is (Tree). */
+  place?: TreeSlot
   /** Tree guide for a nested row. */
   guide?: Guide
   guideActive?: boolean
@@ -1145,22 +1305,17 @@ function NoteRow({
   const item: MovableItem = { path, kind: 'note', label: title, ...(declares ? { declares } : {}) }
   const draggable = !!drag && !readOnly && isMovable(path, 'note', declares)
   const isDragged = drag?.dragging?.path === path
+  const justLanded = useContext(TreeLanded) === path
   return (
     <div
       data-note-path={path}
-      draggable={draggable}
-      onDragStart={(e) => {
-        if (!draggable) return
-        // text/plain keeps the drag valid for the browser's own machinery (and
-        // shows the path if it ever lands outside the tree).
-        e.dataTransfer.setData('text/plain', path)
-        e.dataTransfer.effectAllowed = 'move'
-        drag!.begin(item)
-      }}
-      onDragEnd={() => drag?.end()}
+      data-tree-item={path}
+      data-flip-key={path}
+      {...(place ? { 'data-slot-parent': place.folder, 'data-slot-index': place.index } : {})}
+      onPointerDown={draggable ? (e) => drag!.press(item, e) : undefined}
       className={`group flex items-center pr-1.5 transition ${ROW_BLEED} ${
         selected ? 'bg-brand-green/15' : 'hover:bg-surface-2'
-      } ${isDragged ? 'opacity-50' : ''}`}
+      } ${isDragged ? 'tree-row-held' : ''} ${justLanded ? 'tree-row-land' : ''}`}
     >
       {guide && <GuideLine guide={guide} active={guideActive} />}
       <button
@@ -1193,9 +1348,6 @@ function NoteRow({
           ...(onShare && !isFederatedPath(path)
             ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => onShare(path) }]
             : []),
-          ...(draggable
-            ? [{ label: 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
-            : []),
           ...(canEdit && !readOnly
             ? [{ label: 'Delete', icon: <TrashIcon />, danger: true, onClick: () => onDelete(path) }]
             : []),
@@ -1204,114 +1356,6 @@ function NoteRow({
     </div>
   )
 }
-
-// -- Move to... dialog --------------------------------------------------------
-
-interface FolderChoice {
-  path: string
-  label: string
-  depth: number
-}
-
-/** Every folder in the tree, depth-first, so the list reads in tree order. */
-function collectFolders(node: TreeNode, out: FolderChoice[], depth = 0): void {
-  for (const child of node.children ?? []) {
-    if (child.kind !== 'folder') continue
-    out.push({ path: child.path, label: child.title ?? child.name, depth })
-    collectFolders(child, out, depth + 1)
-  }
-}
-
-/**
- * The pointer-free half of moving: pick the destination folder from a filtered
- * list. Folders the item can't go into stay visible but disabled, with the
- * reason on hover - a managed entity namespace should read as "not here",
- * not vanish from the tree the user is looking at.
- */
-function MoveDialog({
-  item,
-  tree,
-  rootLabel,
-  onClose,
-  onPick,
-}: {
-  item: MovableItem
-  tree: TreeNode
-  rootLabel: string
-  onClose: () => void
-  onPick: (destFolder: string) => void
-}) {
-  const [query, setQuery] = useState('')
-  const folders = useMemo(() => {
-    const out: FolderChoice[] = [{ path: '', label: rootLabel, depth: 0 }]
-    collectFolders(tree, out)
-    return out
-  }, [tree, rootLabel])
-
-  const q = query.trim().toLowerCase()
-  const shown = q
-    ? folders.filter((f) => f.label.toLowerCase().includes(q) || f.path.toLowerCase().includes(q))
-    : folders
-  const placing = item.kind === 'placed'
-
-  return (
-    <Modal onClose={onClose} size="sm" title={`${placing ? 'Place' : 'Move'} “${item.label}”`}>
-      <div className="flex flex-col gap-3">
-        <input
-          autoFocus
-          className={inputBaseClass}
-          placeholder="Filter folders"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div className="max-h-[50vh] overflow-y-auto rounded-xl border border-border-default">
-          {shown.length === 0 ? (
-            <p className="px-3 py-4 text-sm text-text-muted">No folder matches “{query}”.</p>
-          ) : (
-            shown.map((folder) => {
-              const allowed =
-                item.kind === 'placed'
-                  ? canPlaceInto(tree, item.path, folder.path)
-                  : canMoveInto(item.path, item.kind, folder.path, item.declares)
-              const reason =
-                (item.kind === 'placed'
-                  ? placementDenial(item.path, folder.path, tree)
-                  : moveDenial(item.path, item.kind, folder.path, item.declares)) ?? (allowed ? undefined : 'It is already here.')
-              return (
-                <button
-                  key={folder.path || '<root>'}
-                  type="button"
-                  disabled={!allowed}
-                  title={reason}
-                  onClick={() => onPick(folder.path)}
-                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
-                    allowed
-                      ? 'text-text-primary hover:bg-surface-2'
-                      : 'cursor-not-allowed text-text-muted'
-                  }`}
-                  // Search flattens the tree, so indentation only means depth
-                  // while the full list is showing.
-                  style={{ paddingLeft: q ? undefined : 12 + folder.depth * 14 }}
-                >
-                  <span className="shrink-0 text-text-muted">
-                    <FolderIcon />
-                  </span>
-                  <span className="truncate">{folder.label}</span>
-                  {folder.path && (
-                    <span className="ml-auto shrink-0 truncate font-mono text-[11px] text-text-muted">
-                      {folder.path}
-                    </span>
-                  )}
-                </button>
-              )
-            })
-          )}
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
 
 function FileIcon() {
   return (
@@ -1329,17 +1373,6 @@ function KebabIcon() {
       <circle cx="5" cy="12" r="1.9" />
       <circle cx="12" cy="12" r="1.9" />
       <circle cx="19" cy="12" r="1.9" />
-    </svg>
-  )
-}
-
-// Folder-with-arrow (lucide FolderInput) - the rows' "Move to..." action.
-function MoveIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2" />
-      <path d="M2 13h10" />
-      <path d="m9 16 3-3-3-3" />
     </svg>
   )
 }

@@ -42,7 +42,7 @@ export function semanticConfigured(): boolean {
 
 /**
  * What the semantic half of a search actually did. `off` is the space's own
- * choice (embedding switched off in its Clean section), as opposed to
+ * choice (embedding switched off under General → Nightly), as opposed to
  * `no-key`, which is the deployment's.
  */
 export type SemanticStatus = 'on' | 'no-key' | 'off' | 'error'

@@ -91,3 +91,21 @@ export interface Space {
   // consumer can tell "no tools" from "not loaded".
   installedTools?: InstalledToolDto[];
 }
+
+/** A row of `GET /api/spaces/[spaceId]/subspaces` — one room of this house. */
+export interface SubspaceDto {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl?: string;
+  visibility: 'public' | 'private';
+  listing: 'secret' | 'house' | 'world';
+  houseDoor: 'invite' | 'ask' | 'open';
+  worldDoor: 'invite' | 'ask' | 'open';
+  flowContext: boolean;
+  flowEvents: boolean;
+  parentAdmins: boolean;
+  memberCount: number;
+  upcomingEvents: number;
+  viewerStatus: 'admin' | 'member' | 'pending' | 'none';
+}

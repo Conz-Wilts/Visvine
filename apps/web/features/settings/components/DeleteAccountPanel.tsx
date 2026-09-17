@@ -1,6 +1,6 @@
 'use client';
 
-// Settings → Account. The one destructive action a person can take on their own
+// Settings → General → Delete account. The one destructive action a person can take on their own
 // behalf: delete the account *and* the profile behind it.
 //
 // The profile is called out explicitly in the copy because the two must not come
@@ -12,14 +12,6 @@ import { useState } from 'react';
 import { Alert, Button, Input, Modal, SettingsSection } from '@/components/ui';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
-
-const REMOVED = [
-  'Your profile — name, photo, bio, contact details and links',
-  'Your personal notes and context in every space',
-  'Your space memberships, aliases and context access',
-  'Your messages, posts, comments and reactions',
-  'Your entry in every space directory',
-];
 
 export default function DeleteAccountPanel() {
   const { session } = useAuth();
@@ -59,23 +51,7 @@ export default function DeleteAccountPanel() {
   };
 
   return (
-    <SettingsSection
-      title="Delete account"
-      description="Removes your account and your profile data. This cannot be undone."
-    >
-      <ul className="mb-4 space-y-1 text-xs text-text-muted">
-        {REMOVED.map((item) => (
-          <li key={item} className="flex gap-2">
-            <span aria-hidden>•</span>
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-      <p className="mb-4 text-xs text-text-muted">
-        Notes other people wrote about you in a space&apos;s shared context stay with that
-        space — that text is theirs, not yours. Ask an admin of the space to remove it.
-      </p>
-
+    <SettingsSection title="Delete account">
       <Button variant="danger" onClick={() => setOpen(true)} disabled={!email}>
         Delete my account
       </Button>

@@ -1,24 +1,24 @@
-// The pure half of the space's nightly clean (lib/notes/cleanSchedule.ts): what
+// The pure half of the space's nightly pass (lib/notes/cleanSchedule.ts): what
 // a schedule may say, when it next fires, and where a schedule may exist at all.
 // Pure — no Prisma/Node/DOM imports, so the rules are unit-testable.
 //
-// The clean itself is the existing role-aware pass (./clean.ts + ./review.ts)
-// run on a clock. Nothing here widens what it may touch: a schedule chooses the
-// hour, the mode, the folder and WHICH of the safe fixes get applied — never
-// who the pass acts as, and never a fix outside the mechanical allow-list.
+// A schedule is three answers: whether to clean, whether to embed, and when.
+// Clean on runs the existing role-aware pass (./clean.ts + ./review.ts) over the
+// whole space with every safe fix, then embeds if embedding is on too. Embed on
+// alone embeds only what is new or edited since its last vector — no clean.
+// Nothing here widens what a pass may touch: never who it acts as, and never a
+// fix outside the mechanical allow-list.
 
 import { nextOccurrence } from '@/lib/agents/config'
 import type { AutoFix } from './review'
-import { SUBSPACE_FOLDER } from '@/lib/spaces/subspaces'
 
 export type CleanFixKind = AutoFix['kind']
 
 /**
- * The mechanical fixes a schedule may apply, in the order the dashboard lists
- * them. This IS the ceiling: `sanitizeCleanSchedule` drops anything else, so a
- * hand-edited row can never teach the nightly pass a new trick. Judgment work
- * (duplicates, contradictions, orphans) is never applied by a schedule — it
- * comes back as the worklist for a person or an agent.
+ * The mechanical fixes a scheduled clean applies — all of them. This IS the
+ * ceiling: the runner passes exactly this set, so no stored value can teach
+ * the nightly pass a new trick. Judgment work (duplicates, contradictions,
+ * orphans) is never applied by a schedule — it comes back as the worklist.
  */
 export const CLEAN_FIX_KINDS: ReadonlyArray<{ kind: CleanFixKind; label: string }> = [
   { kind: 'addMissingFrontmatter', label: 'Fill missing frontmatter' },
@@ -29,56 +29,40 @@ export const CLEAN_FIX_KINDS: ReadonlyArray<{ kind: CleanFixKind; label: string 
   { kind: 'linkSupersession', label: 'Retire superseded notes' },
 ]
 
-const KIND_SET = new Set<string>(CLEAN_FIX_KINDS.map((k) => k.kind))
-
 export interface CleanScheduleSettings {
+  /** Run the clean at `hour:minute`. */
   enabled: boolean
   hour: number
   minute: number
-  mode: 'light' | 'full'
-  targetPath: string | null
-  applyFixes: boolean
-  /** Empty = every kind in CLEAN_FIX_KINDS. */
-  fixKinds: CleanFixKind[]
   /**
-   * Whether this space's notes are embedded at all. Off stops the nightly
-   * sweep, the query-time catch-up and the post-clean pass alike; search
-   * reports `semantic: 'off'`. Independent of `enabled` — a space may embed
-   * without cleaning, or clean without embedding.
+   * Whether this space's notes are embedded at all, and — when there is a
+   * schedule — embed new or edited notes at `hour:minute`, after the clean if
+   * that is on too. Off stops the nightly sweep and the query-time catch-up
+   * alike; search reports `semantic: 'off'`. No row = on.
    */
   embedEnabled: boolean
-  /** Re-embed what a pass changed, in the same pass. Needs `embedEnabled`. */
-  embedAfterClean: boolean
 }
 
 export const DEFAULT_CLEAN_SETTINGS: CleanScheduleSettings = {
   enabled: false,
   hour: 3,
   minute: 30,
-  mode: 'light',
-  targetPath: null,
-  applyFixes: true,
-  fixKinds: [],
   embedEnabled: true,
-  embedAfterClean: true,
 }
 
-/** How the pass after a clean decides whether to embed, and what to record when it does not. */
-export type CleanEmbedStatus = 'off' | 'no-key' | 'skipped' | 'succeeded' | 'failed'
+/** What a pass's embed did, as the run row records it. */
+export type CleanEmbedStatus = 'off' | 'no-key' | 'succeeded' | 'failed'
 
-/**
- * Whether a pass embeds afterwards, and if not, the status the run row keeps.
- * Pure so the dashboard can say "this schedule will never embed" before the
- * first run rather than after it.
- */
-export function embedAfterCleanStatus(
-  settings: Pick<CleanScheduleSettings, 'embedEnabled' | 'embedAfterClean'>,
-  keyed: boolean,
-): { embed: boolean; status: CleanEmbedStatus } {
-  if (!settings.embedEnabled) return { embed: false, status: 'off' }
-  if (!settings.embedAfterClean) return { embed: false, status: 'skipped' }
+/** Whether a pass embeds, and if not, the status the run row keeps. */
+export function embedDecision(embedEnabled: boolean, keyed: boolean): { embed: boolean; status: CleanEmbedStatus } {
+  if (!embedEnabled) return { embed: false, status: 'off' }
   if (!keyed) return { embed: false, status: 'no-key' }
   return { embed: true, status: 'succeeded' }
+}
+
+/** Whether a schedule fires at all: something has to be switched on. */
+export function scheduleActive(settings: Pick<CleanScheduleSettings, 'enabled' | 'embedEnabled'>): boolean {
+  return settings.enabled || settings.embedEnabled
 }
 
 /**
@@ -87,7 +71,7 @@ export function embedAfterCleanStatus(
  * takes it — the cap bounds one request, never the night's work.
  */
 export const MAX_CLEANS_PER_TICK = 5
-/** Stale notes the post-clean embed takes in one pass; the rest wait for the nightly. */
+/** Stale notes one scheduled embed takes; the rest wait for the next night. */
 export const POST_CLEAN_EMBED_NOTES = 400
 /** Worklist items kept on the run row, per kind — enough to act on, never the whole space. */
 export const WORKLIST_ITEMS_KEPT = 25
@@ -123,44 +107,18 @@ function clampInt(value: unknown, min: number, max: number, fallback: number): n
   return n
 }
 
-/** A folder path the pass may target: trimmed, slash-free at both ends, never a sub-space's. */
-export function normalizeCleanTarget(input: unknown): string | null {
-  if (typeof input !== 'string') return null
-  const path = input.trim().replace(/^\/+|\/+$/g, '')
-  if (!path) return null
-  // `subspaces/` is the federated read of this space's public sub-spaces. Even
-  // targeted by hand it is never cleaned from here.
-  if (path === SUBSPACE_FOLDER || path.startsWith(`${SUBSPACE_FOLDER}/`)) return null
-  return path
-}
-
 /**
  * Coerce whatever a client (or an old row) supplies into settings the runner
  * can act on. Every field falls back rather than throwing: a schedule that
  * cannot be read must keep running on its defaults, not stop.
  */
 export function sanitizeCleanSchedule(input: Partial<Record<keyof CleanScheduleSettings, unknown>>): CleanScheduleSettings {
-  const kinds = Array.isArray(input.fixKinds)
-    ? [...new Set(input.fixKinds.filter((k): k is CleanFixKind => typeof k === 'string' && KIND_SET.has(k)))]
-    : DEFAULT_CLEAN_SETTINGS.fixKinds
   return {
     enabled: input.enabled === true,
     hour: clampInt(input.hour, 0, 23, DEFAULT_CLEAN_SETTINGS.hour),
     minute: clampInt(input.minute, 0, 59, DEFAULT_CLEAN_SETTINGS.minute),
-    mode: input.mode === 'full' ? 'full' : 'light',
-    targetPath: normalizeCleanTarget(input.targetPath),
-    applyFixes: input.applyFixes !== false,
-    fixKinds: kinds,
     embedEnabled: input.embedEnabled !== false,
-    embedAfterClean: input.embedAfterClean !== false,
   }
-}
-
-/** The fix kinds a schedule actually applies — empty `fixKinds` means all of them. */
-export function effectiveFixKinds(settings: Pick<CleanScheduleSettings, 'applyFixes' | 'fixKinds'>): CleanFixKind[] {
-  if (!settings.applyFixes) return []
-  if (settings.fixKinds.length === 0) return CLEAN_FIX_KINDS.map((k) => k.kind)
-  return settings.fixKinds
 }
 
 /**

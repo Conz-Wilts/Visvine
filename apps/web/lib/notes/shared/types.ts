@@ -55,6 +55,9 @@ export interface TreeNode {
   // can offer the moves a connector is allowed and not the ones it is not.
   declares?: 'connector' | 'model'
   children?: TreeNode[]
+  // Set on a folder somebody has arranged: its index note's `order:` list,
+  // which sortTree honours ahead of the by-name sort (folderOrder.ts).
+  order?: string[]
   // Set on the folder a sub-space is read through (`subspaces/<id>`): the id
   // of that space. Everything under it is that space's own context, rebased
   // into this tree (lib/spaces/subspaces.ts).

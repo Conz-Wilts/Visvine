@@ -56,41 +56,41 @@ test('preRunStop only when the month is already at the cap, and it says which ca
   assert.equal(preRunStop({ spentThisMonthMicros: BigInt(9_999_999), monthlyCapCents: null, pricing }), null, 'uncapped')
   assert.equal(preRunStop({ spentThisMonthMicros: BigInt(9_999_999), monthlyCapCents: 1, pricing: null }), null, 'no pricing = tokens only')
 
-  // The space's ledger cap binds even when the agent's own cap is fine — and
+  // The key's ledger cap binds even when the agent's own cap is fine — and
   // the agent's cap is named first when both bind, because it is the one the
   // agent's admin strip shows.
   const underAgentCap = { spentThisMonthMicros: BigInt(0), monthlyCapCents: null, pricing }
   assert.deepEqual(
-    preRunStop({ ...underAgentCap, spaceSpentThisMonthMicros: BigInt(10_000_000), spaceCapCents: 1000 }),
-    { cap: 'space' },
+    preRunStop({ ...underAgentCap, keySpentThisMonthMicros: BigInt(10_000_000), keyCapCents: 1000 }),
+    { cap: 'key' },
   )
   assert.equal(
-    preRunStop({ ...underAgentCap, spaceSpentThisMonthMicros: BigInt(5_000_000), spaceCapCents: 1000 }),
+    preRunStop({ ...underAgentCap, keySpentThisMonthMicros: BigInt(5_000_000), keyCapCents: 1000 }),
     null,
-    'space cap not yet reached',
+    'key cap not yet reached',
   )
   assert.deepEqual(
     preRunStop({
       spentThisMonthMicros: BigInt(5_000_000),
       monthlyCapCents: 500,
       pricing,
-      spaceSpentThisMonthMicros: BigInt(10_000_000),
-      spaceCapCents: 1000,
+      keySpentThisMonthMicros: BigInt(10_000_000),
+      keyCapCents: 1000,
     }),
     { cap: 'agent' },
   )
 })
 
-test('perTurnStop: the space cap stops a run mid-flight too', () => {
+test('perTurnStop: the key cap stops a run mid-flight too', () => {
   const state: BudgetState = {
     spentThisMonthMicros: BigInt(0),
     monthlyCapCents: null,
     pricing,
-    spaceSpentThisMonthMicros: BigInt(9_000_000), // $9 of a $10 space cap
-    spaceCapCents: 1000,
+    keySpentThisMonthMicros: BigInt(9_000_000), // $9 of a $10 key cap
+    keyCapCents: 1000,
   }
   assert.equal(perTurnStop(state, { promptTokens: 0, completionTokens: 0 }), null)
-  // $1 more in this run reaches the space's $10.
+  // $1 more in this run reaches the key's $10.
   assert.equal(perTurnStop(state, { promptTokens: 0, completionTokens: 66_667 }), 'budget')
 })
 

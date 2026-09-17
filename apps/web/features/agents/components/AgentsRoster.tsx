@@ -86,7 +86,7 @@ export default function AgentsRoster({
         <div className="mb-6 flex flex-col border-b border-border-subtle pb-4">
           {clock.map((e) => {
             const agent = e.kind === 'clean' ? null : byName.get(e.name);
-            const href = e.kind === 'clean' ? '/admin?section=clean' : agentHref(e.name);
+            const href = e.kind === 'clean' ? '/admin?section=general' : agentHref(e.name);
             return (
               <Link
                 key={`${e.kind}:${e.name}`}

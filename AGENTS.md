@@ -550,41 +550,43 @@ only).
 
 ## The nightly clean
 
-**A space cleans itself on a clock, as a person.** `/admin?section=clean` turns
-it on and shows every pass. It is the role-aware clean (`lib/notes/clean.ts`,
-the same code `clean_context` runs) behind a schedule row, holding no authority
-of its own.
+**A space cleans and embeds itself on a clock, as a person.** Console →
+General → **Nightly** is three controls: a time, **Clean**, and **Embed new or
+edited notes**. Clean on runs the role-aware clean (`lib/notes/clean.ts`, the
+same code `clean_context` runs) and then the embed if that is on; Embed on alone
+only runs `embedSweep`, which touches nothing but new or edited notes. No Run
+now, no depth/folder/fix pickers — a scheduled clean is always light,
+whole-space, every safe fix. The schedule row holds no authority of its own.
 
-- **It runs as the admin who turned it on** (`run_as_user_id`), under their
-  principal: their lens decides what is analysed, their gate what is written,
-  origin `maintenance`. **Run now** acts as whoever pressed it. If that person
-  stops being an admin the run is recorded `skipped`.
-- **Only the mechanical allow-list is applied**, narrowed by what the schedule
-  opted into (`shared/cleanSchedule.ts#CLEAN_FIX_KINDS` is the ceiling; a
-  hand-edited row cannot widen it): frontmatter fill, one-match link repair,
-  unambiguous mention linking, stale, expiry, supersession. Duplicates,
-  contradictions and orphans come back as the worklist. Frozen folders are
-  reported, never written. It never changes a type, an alias or a folder —
-  restructuring is judgment, and judgment goes to the worklist.
+- **A clean runs as the admin who last saved the schedule** (`run_as_user_id`),
+  under their principal: their lens decides what is analysed, their gate what
+  is written, origin `maintenance`. If that person stops being an admin the run
+  is recorded `skipped`.
+- **Only the mechanical allow-list is applied**
+  (`shared/cleanSchedule.ts#CLEAN_FIX_KINDS` is the ceiling): frontmatter fill,
+  one-match link repair, unambiguous mention linking, stale, expiry,
+  supersession. Duplicates, contradictions and orphans come back as the
+  worklist. Frozen folders are reported, never written. It never changes a
+  type, an alias or a folder.
 - **Cleaning happens in the space that OWNS the notes, at the top level.** A
   sub-space holds no schedule and a parent never cleans one: `buildCleanScope`
-  puts `spaces/` out of scope, `normalizeCleanTarget` refuses one as a target.
-- **The minute tick fires it**, claiming due rows with a conditional UPDATE that
-  advances `next_run_at` itself — N instances racing produce one run, and a
-  night the deployment was down is skipped, never replayed. One tick runs at
-  most `MAX_CLEANS_PER_TICK`, oldest first.
+  puts `subspaces/` out of scope.
+- **The minute tick fires it** when `enabled` OR `embed_enabled`, claiming due
+  rows with a conditional UPDATE that advances `next_run_at` itself — N
+  instances racing produce one run, and a night the deployment was down is
+  skipped, never replayed. One tick runs at most `MAX_CLEANS_PER_TICK`.
 - **The same row owns embedding.** `embed_enabled` is the space's switch for the
   semantic half — off stops the nightly sweep, the query-time catch-up and the
   vector stages alike (`searchContext` reports `semantic: 'off'`, distinct from
-  `no-key`); no row means on. `embed_after_clean` re-embeds what a pass changed,
-  capped at `POST_CLEAN_EMBED_NOTES`, with its own column (`embed_status`) so an
-  embedding failure never fails a clean that wrote. `embedSweep(spaceId)` is the
-  one implementation behind all three callers.
+  `no-key`); no row means on. The scheduled embed is capped at
+  `POST_CLEAN_EMBED_NOTES`, with its own column (`embed_status`) so an embedding
+  failure never fails a clean that wrote.
 
-Every pass writes a `context_clean_runs` row: what it could see, what was in
-scope, what it wrote by kind, what a gate refused, what it left, whether full
-mode hit its cap, and what the embed did. `saveCleanSchedule` merges a patch, so
-the console can save one field. Deleting the admin it runs as switches it off.
+Every pass writes a `context_clean_runs` row (`mode: 'embed'` for an embed-only
+pass). `saveCleanSchedule` merges a patch, so the console can save one field.
+Deleting the admin it runs as switches the clean off. `mode`, `target_path`,
+`apply_fixes`, `fix_kinds` and `embed_after_clean` are unused columns awaiting
+a drop migration.
 
 ## Search
 
@@ -904,8 +906,8 @@ sweep.
   reconcile rather than one to trust. `agent_model_usage` is still written and
   `registry.ts` still carries `pricing` — the BUDGET CAP is computed from them
   (`lib/agents/budget.ts`), and removing either would silently uncap every
-  space. The cap alone is the console's **Budget** section
-  (`/admin?section=budget`, `BudgetPanel`).
+  space. The cap is declared on the model note itself (`budget_monthly:`, US
+  dollars a month for that provider's key) — there is no console Budget section.
 - **A member's own plan is a model only the desktop app can run.** A brief may
   pin `model: local/claude` or `local/codex` (`lib/agents/local.ts`). The server
   can name it and never call it: `resolveAgentChatConfig` answers

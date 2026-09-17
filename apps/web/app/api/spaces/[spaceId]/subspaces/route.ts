@@ -1,8 +1,8 @@
 // GET /api/spaces/<id>/subspaces — the sub-spaces of a space
 // (docs/sub-spaces.md). An admin of the space sees every one; a member sees
 // the public ones and the private ones they are in. Each row says where the
-// caller stands in it and how many events it has coming, so the console's
-// Sub-spaces section (SubspacesSection) is one round trip. Creating one is
+// caller stands in it and how many events it has coming, so the room pickers
+// (ShareWithRooms, AgentSettingsFields) are one round trip. Creating one is
 // POST /api/spaces with `parentId`.
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiSession, handleApiError } from '@/lib/api/route';

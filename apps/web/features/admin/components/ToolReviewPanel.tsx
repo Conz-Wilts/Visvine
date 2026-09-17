@@ -264,18 +264,15 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
         {/* What is waiting. Decided versions leave the screen — a past verdict
             is read on the Tool's own version trail, not here. */}
         <div className="w-full shrink-0 space-y-6 lg:w-72">
+          {/* No "Waiting" label: the section heading above names the queue and
+              the Tools tab badge carries the count. */}
           <section>
-            <h2 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-text-muted">
-              Waiting {queue.items.length > 0 && `(${queue.items.length})`}
-            </h2>
             {queue.loading ? (
-              <div className="px-3">
-                <LoadingText text="Loading queue…" />
-              </div>
+              <LoadingText text="Loading queue…" />
             ) : queue.error ? (
               <Alert variant="error">{queue.error}</Alert>
             ) : queue.items.length === 0 ? (
-              <p className="px-3 text-sm text-text-muted">Nothing is waiting for review.</p>
+              <p className="text-sm text-text-muted">Nothing is waiting for review.</p>
             ) : (
               <div className="space-y-1">
                 {queue.items.map((item) => (

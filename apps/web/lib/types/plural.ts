@@ -86,8 +86,10 @@ export function pluralTypeName(name: string, nodeTypes?: NodeTypeConfig[]): stri
   const declared = hasFixedPlural(name) ? '' : (stored?.plural ?? '').trim();
   if (declared) return declared;
   // Derived from the STORED spelling when there is one: a `?type=person` out of
-  // a URL reads `People`, not `people`.
-  return pluralizeTypeWord(stored?.name ?? name);
+  // a URL reads `People`, not `people`. A built-in the space's list predates
+  // (`model` on a space created before Model was one) takes the built-in's.
+  const builtIn = DEFAULT_NODE_TYPES.find((t) => t.name.toLowerCase() === key);
+  return pluralizeTypeWord(stored?.name ?? builtIn?.name ?? name);
 }
 
 /** A built-in type says its plural by rule alone; only a type a space made

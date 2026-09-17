@@ -16,8 +16,8 @@
 //
 // All state lives in the passed-in useDirectoryBrowse() instance.
 
-import { FilterDropdown } from '@/features/directory/components/FilterDropdown';
 import TypeMenu, { menuTypes } from '@/features/directory/components/TypeMenu';
+import TagMenu from '@/features/directory/components/TagMenu';
 import Chip from '@/components/ui/Chip';
 import SearchInput from '@/components/ui/SearchInput';
 import { tagPalette } from '@/lib/tagColors';
@@ -57,9 +57,10 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
   // The same menu the Table's bar carries. The grid is every type at once
   // until one is picked, so All is the resting choice rather than the first
   // type; a single type is the only other state.
-  const types = menuTypes(presentTypes, nodes);
+  const types = menuTypes(presentTypes, nodes, [], aliases);
   const picked = filterTypes.size === 1 ? [...filterTypes][0].toLowerCase() : null;
   const activeType = picked && types.some(t => t.id === picked) ? picked : 'all';
+  const activeAlias = filterAliases.size === 1 ? [...filterAliases][0] : null;
 
   const activeCount = filterAliases.size + filterTags.size;
 
@@ -103,21 +104,21 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
         <TypeMenu
           types={types}
           activeKey={activeType}
+          activeAlias={activeAlias}
           nodeTypes={space?.nodeTypes}
-          onChange={id => {
+          onChange={(id, alias) => {
             setFilterTypes(id === 'all' ? new Set() : new Set([types.find(t => t.id === id)?.name ?? id]));
-            setFilterAliases(new Set());
+            setFilterAliases(alias ? new Set([alias]) : new Set());
           }}
         />
 
-        <FilterDropdown
-          label="Tag"
-          options={presentTags.map(t => ({
-            value: t,
-            label: t,
+        <TagMenu
+          tags={presentTags.map(t => ({
+            name: t,
             count: nodes.filter(n => (n.tags ?? []).includes(t)).length,
           }))}
           selected={filterTags}
+          total={nodes.length}
           onChange={setFilterTags}
           getColor={t => tagPalette(t, tagColors).base}
         />

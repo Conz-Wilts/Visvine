@@ -217,10 +217,12 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   is no Usage section, no cost on a run and none on a model's page. It is written for one
   purpose, the budget cap below, which is why `registry.ts` still carries `pricing` even though
   no surface prints a dollar.
-- **The space-wide monthly cap** is `agentBudgetMonthlyCents` in the space's featureConfig
-  (set in the console's **Budget** section, `/admin?section=budget` → `BudgetPanel`,
-  `PUT …/usage` — no schema, no deploy, like `vmMonthlyHours`),
-  compared against the whole ledger, so every agent and every teaching counts toward it. Checked
+- **The key's monthly cap** is declared on the model note — `budget_monthly: 50` (US dollars,
+  `lib/models/config.ts#parseModelBudget`) — beside the key that pays, not in the console. It caps
+  the provider's key: compared against every ledger row the space has for that provider
+  (`runs.ts#ledgerSpendForMonth`), so every agent, every model on the key and every teaching counts
+  toward it; two notes on one provider that disagree resolve to the tighter
+  (`providers.ts#keyBudgetCentsFor`). No `budget_monthly:` = uncapped. Checked
   beside the agent's own cap before every run and between turns (`budget.ts#preRunStop` says which
   cap bound, so the failure message does too); reaching it pauses runs, never deactivates.
 - Failure policy: 401/403 from the provider → `key_rejected`, deactivated; 429/402/5xx → wait for

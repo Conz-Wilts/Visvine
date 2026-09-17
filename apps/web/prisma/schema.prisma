@@ -1741,8 +1741,8 @@ model RateLimitBucket {
   @@map("rate_limit_buckets")
 }
 
-/// The space's nightly clean (lib/notes/cleanSchedule.ts): one row per space,
-/// written from the Space Console's Clean section, read every minute by the
+/// The space's nightly pass (lib/notes/cleanSchedule.ts): one row per space,
+/// written from the Space Console's General → Nightly, read every minute by the
 /// agent tick. It carries no authority of its own — `runAsUserId` is the admin
 /// who turned it on, and the pass runs under THEIR principal, so it sees what
 /// they see (the visibility lens), writes only where they may write, and skips
@@ -1755,19 +1755,21 @@ model ContextCleanSchedule {
   /// Wall-clock hour in the space's timezone (Space.timezone, UTC when unset).
   hour        Int       @default(3)
   minute      Int       @default(30)
+  /// UNUSED since the console collapsed to clean/embed/time (2026-09): a
+  /// scheduled clean is always light, whole-space, every safe fix, and embeds
+  /// whenever embedEnabled is on. Kept so a deploy's old image still reads the
+  /// table; drop mode/targetPath/applyFixes/fixKinds/embedAfterClean in a
+  /// follow-up migration once no image selects them.
   mode        String    @default("light") // light | full
-  /// Narrow the pass to one folder; null = everything the runner can reach.
   targetPath  String?   @map("target_path")
-  /// False = analyse and report only; nothing is written.
   applyFixes  Boolean   @default(true) @map("apply_fixes")
-  /// The AutoFix kinds this schedule may apply. Empty = every safe kind.
   fixKinds    String[]  @default([]) @map("fix_kinds")
   runAsUserId String    @map("run_as_user_id")
   /// Whether this space's notes are embedded at all — the nightly sweep, the
-  /// query-time catch-up and the post-clean pass all read it. No row = on.
+  /// query-time catch-up and the scheduled pass all read it. With a schedule it
+  /// also embeds new or edited notes at hour:minute (after the clean when
+  /// `enabled`). No row = on. The tick fires a row when enabled OR embedEnabled.
   embedEnabled    Boolean @default(true) @map("embed_enabled")
-  /// Re-embed what the clean just changed, in the same pass, so the night's
-  /// edits are searchable by morning rather than after the next sweep.
   embedAfterClean Boolean @default(true) @map("embed_after_clean")
   updatedBy   String?   @map("updated_by")
   updatedAt   DateTime  @updatedAt @map("updated_at")
@@ -1791,7 +1793,7 @@ model ContextCleanRun {
   status        String    @default("running") // running | succeeded | failed | skipped
   startedAt     DateTime  @default(now()) @map("started_at")
   endedAt       DateTime? @map("ended_at")
-  /// userId who pressed Run now; null for a scheduled fire.
+  /// userId who pressed the old Run now; null for a scheduled fire.
   startedBy     String?   @map("started_by")
   /// Whose principal the pass acted as.
   runAsUserId   String    @map("run_as_user_id")

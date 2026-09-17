@@ -62,6 +62,8 @@ export interface SpaceModel {
   enabled: boolean
   /** Prices the note declares, per model id. */
   pricing: Readonly<Record<string, ModelPricing>>
+  /** `budget_monthly:` in cents — the cap on this provider's key; null = uncapped. */
+  budgetMonthlyCents: number | null
   /** Why this one cannot be run, or null when it can. */
   problem: string | null
 }
@@ -189,6 +191,7 @@ async function modelsOf(spaceId: string, houseName: string | null): Promise<Spac
       keyStored: stored.has(parsed.config.provider.keySecret),
       enabled: isConnectorEnabled(fm),
       pricing: parsed.config.pricing,
+      budgetMonthlyCents: parsed.config.budgetMonthlyCents,
     }
     out.push({ ...base, problem: problemWith(base) })
   }
@@ -253,6 +256,22 @@ export function customEndpointOf(
   }
   const [first] = custom
   return { ok: true, baseURL: first.baseURL, name: first.name, pricing: first.pricing }
+}
+
+/**
+ * The monthly cap on a provider's key: the `budget_monthly:` its model notes
+ * declare. A note stands for its provider's key, so every note on that
+ * provider speaks for the same money — two that disagree resolve to the
+ * tighter, the one an admin would be surprised to see exceeded. A note that is
+ * turned off still caps: its budget is about the key, not about running.
+ */
+export function keyBudgetCentsFor(models: readonly SpaceModel[], providerId: string): number | null {
+  let cap: number | null = null
+  for (const m of models) {
+    if (m.provider.id !== providerId || m.budgetMonthlyCents === null) continue
+    cap = cap === null ? m.budgetMonthlyCents : Math.min(cap, m.budgetMonthlyCents)
+  }
+  return cap
 }
 
 /** The prices the space's notes declare for one provider — first note wins per id. */

@@ -14,7 +14,7 @@ import { Button } from '@/components/ui';
 import { TriangleAlertIcon } from '@/features/shared/icons';
 import { swrFetch } from '@/features/shared/lib/requestCache';
 import { fetchJson } from '@/lib/fetchJson';
-import type { SubspaceDto } from '@/features/spaces/components/SubspacesSection';
+import type { SubspaceDto } from '@/lib/types/space';
 
 export type ShareValue = 'none' | 'all' | string[];
 

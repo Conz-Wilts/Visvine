@@ -22,7 +22,7 @@ and the reasons; this is the code map.
 | Doors — `invite` \| `ask` \| `open`, one for the house's members, one for the world | `house_door`, `world_door` | `doorsOf` (world clamped to house; both `invite` on a secret room), `joinOutcome` | the room's Settings |
 | Flows up — context, events | `flow_context`, `flow_events` | `flowsContext` / `flowsEvents` (both false for a secret room). People never flow: `lib/directory/shared/samePerson.ts` joins the family's records of one identity on the person's page | the room's Settings |
 | Governance | `parent_admins` | `parentAdministers`; one step in `lib/auth.ts#isAdmin` | the room's Settings; ON when a house admin creates it; only a holder of the room's own admin alias may switch it back on |
-| Down (the house's) | per note: `share: all` \| `[room ids]` on `connectors/`, `agents/`, `tools/`; `share_as: use` \| `run-in` on agents; `subspace_config.modelKeys` | `shareTargets`, `isSharedDown(path, fm, roomId)`, `reachesRoom`, `subspaceConfigOf` | the connector / agent / Tool page; Console → Sub-spaces for model keys |
+| Down (the house's) | per note: `share: all` \| `[room ids]` on `connectors/`, `agents/`, `tools/`; `share_as: use` \| `run-in` on agents; `subspace_config.modelKeys` | `shareTargets`, `isSharedDown(path, fm, roomId)`, `reachesRoom`, `subspaceConfigOf` | the connector / agent / Tool page; no UI for model keys (removed 2026-09-18) |
 
 `visibility` stays the column every gate reads; `listing` only adds the
 secret/house distinction inside private and is derived for a top-level
@@ -85,7 +85,7 @@ stands for the context root, so the space's own `index.md` folds into its row
 exactly as it folded into the root's; `drawn: 'main'` keeps it out of drag,
 drop, Share and Delete. A space with no rooms has one tier and gets no `Main`
 row. `tierRoot` runs on the DRAWN tree, after the search prune — every read of
-a real path (the drag rules, the Move to… list, placement) still sees the tree
+a real path (the drag rules, placement) still sees the tree
 the server sent, and no note's address changes.
 
 The `Sub-spaces` folder and `parent/` are stamped `federated`, and that stamp
@@ -360,10 +360,11 @@ its tool's glyph rather than a folder's, wherever it sits.
   grid, and the house-side `hiddenFromBand` preference that went with it,
   were removed 2026-09-15.)
 
-- **Console → Settings → Sub-spaces** (`SubspacesSection`): the sub-spaces of
-  this space, the model-key preference, and **New sub-space** —
-  a name and a preset (the dials are editable afterwards in the room's own
-  Settings, which shows all four).
+- **Console → Settings** no longer lists a space's sub-spaces (the section
+  and its model-key control were removed 2026-09-18; `subspace_config.modelKeys`
+  is still honoured server-side but has no UI). Sub-spaces are made from the
+  switcher with a name and a preset (the dials are editable afterwards in the
+  room's own Settings, which shows all four).
   Creating one is an act of the parent's admins (`POST /api/spaces` with
   `parentId`, refused otherwise); the creator becomes the sub-space's admin.
   A sub-space's own Settings names its parent and says what its visibility

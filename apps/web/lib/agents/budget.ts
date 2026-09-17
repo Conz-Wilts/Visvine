@@ -6,9 +6,9 @@
  * Three ceilings, all soft-but-close (overshoot bounded by one model turn):
  * - the agent's monthly cap (`AgentState.budgetMonthlyCents`, admin-set,
  *   null = uncapped) — checked before the run and between turns;
- * - the space's monthly cap (`featureConfig.agentBudgetMonthlyCents`, set from
- *   the Usage console section), compared against the whole ledger
- *   (`agent_model_usage`) so every agent and every teaching counts toward it;
+ * - the provider key's monthly cap (`budget_monthly:` on its model note), compared
+ *   against everything the ledger (`agent_model_usage`) shows the space spent on
+ *   that provider, so every agent and every teaching on the key counts toward it;
  * - a fixed per-run backstop (`MAX_RUN_COST_CENTS`) so a runaway loop on an
  *   uncapped agent cannot spend without bound.
  * With BYO keys the softness is tolerable: it is the Space capping its own
@@ -66,10 +66,10 @@ export interface BudgetState {
   monthlyCapCents: number | null
   /** Pricing for the run's model; null = tokens only, no dollar enforcement. */
   pricing: ModelPricing | null
-  /** The whole space's ledger spend this month (agent_model_usage — every agent, plus teaching). */
-  spaceSpentThisMonthMicros?: bigint | null
-  /** The space-wide cap (`featureConfig.agentBudgetMonthlyCents`); null/absent = uncapped. */
-  spaceCapCents?: number | null
+  /** The space's ledger spend on this provider this month (agent_model_usage — every agent, plus teaching). */
+  keySpentThisMonthMicros?: bigint | null
+  /** The key's cap (the model note's `budget_monthly:`); null/absent = uncapped. */
+  keyCapCents?: number | null
 }
 
 function atCap(spentMicros: bigint | null | undefined, capCents: number | null | undefined, extraMicros = BigInt(0)): boolean {
@@ -79,14 +79,14 @@ function atCap(spentMicros: bigint | null | undefined, capCents: number | null |
 
 /**
  * Should a run start? Null = go; otherwise which cap said no — the message
- * differs, because raising an agent's cap does nothing when the space's is the
+ * differs, because raising an agent's cap does nothing when the key's is the
  * one that bound. With unknown pricing there is nothing to compare, so the run
  * goes ahead (the panel says "tokens only").
  */
-export function preRunStop(state: BudgetState): { cap: 'agent' | 'space' } | null {
+export function preRunStop(state: BudgetState): { cap: 'agent' | 'key' } | null {
   if (state.pricing === null) return null
   if (atCap(state.spentThisMonthMicros, state.monthlyCapCents)) return { cap: 'agent' }
-  if (atCap(state.spaceSpentThisMonthMicros, state.spaceCapCents)) return { cap: 'space' }
+  if (atCap(state.keySpentThisMonthMicros, state.keyCapCents)) return { cap: 'key' }
   return null
 }
 
@@ -103,7 +103,7 @@ export function perTurnStop(state: BudgetState, runUsage: ChatUsage): 'budget' |
   if (runCost === null) return null
   if (runCost >= BigInt(MAX_RUN_COST_CENTS) * BigInt(MICROS_PER_CENT)) return 'run_cap'
   if (atCap(state.spentThisMonthMicros, state.monthlyCapCents, runCost)) return 'budget'
-  if (atCap(state.spaceSpentThisMonthMicros, state.spaceCapCents, runCost)) return 'budget'
+  if (atCap(state.keySpentThisMonthMicros, state.keyCapCents, runCost)) return 'budget'
   return null
 }
 

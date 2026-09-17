@@ -274,6 +274,11 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // because a Tool is a container of its own surfaces, not a document; purple,
   // kept lighter than Connector's indigo so the two never read as one.
   { name: 'Tool',      color: '#a855f7', shape: 'square'    },
+  // A model is what agents run on, kept as a note under models/ (lib/models).
+  // Without a row here it fell through to the unknown-type grey and the Type
+  // filter showed the raw lowercase `models`. Amber-brown, a hue no other
+  // document type uses.
+  { name: 'Model',     color: '#b45309', shape: 'rectangle' },
   // A folder, which is its `index.md` (lib/notes/shared/indexNote.ts). It is
   // here so the word a folder shows has a colour and a spelling the console
   // owns like every other type — not so anything can be typed `Index`: the name

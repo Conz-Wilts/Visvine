@@ -4,7 +4,7 @@ import Link from '@/features/shared/components/SpaceLink';
 import { LOCAL_RUNTIMES, localModelRef, localRuntimeOf } from '@/lib/agents/local';
 import { useEffect, useState } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
-import type { SubspaceDto } from '@/features/spaces/components/SubspacesSection';
+import type { SubspaceDto } from '@/lib/types/space';
 import { Chip, Field, Input } from '@/components/ui';
 import Select from '@/components/ui/Select';
 import Toggle from '@/components/ui/Toggle';
