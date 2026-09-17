@@ -36,6 +36,8 @@ import { isSelfView } from '@/features/profile/lib/selfView';
 import OrgPageContent from '@/features/profile/components/OrgPageContent';
 import SpacePageContent from '@/features/profile/components/SpacePageContent';
 import ResourcePreviewContent from '@/features/profile/components/ResourcePreviewContent';
+import ResourceFile from '@/features/resources/components/ResourceFile';
+import { fileIdOf } from '@/lib/resources/shared/fileNode';
 import ConnectorPageContent from '@/features/profile/components/ConnectorPageContent';
 import AgentPageContent from '@/features/profile/components/AgentPageContent';
 import ModelPageContent from '@/features/profile/components/ModelPageContent';
@@ -682,9 +684,9 @@ function NoteOnlyPage({ nodeId, firstTab, href, ariaLabel, notFoundTitle }: {
 
 // ── Resource nodes → Preview + Context (no generic profile) ──────────────────
 
-// Resources are documents/links, not people, so there's no generic profile:
-// the default tab previews the resource URL and Context is the usual notes
-// panel.
+// Resources are files and links, not people, so there's no generic profile:
+// the default tab shows the resource — its file (`metadata.fileId`), or a
+// preview of its URL — and Context is the usual notes panel.
 const RESOURCE_FIRST_TAB: PaneTabItem = { id: 'preview', label: 'Preview' };
 
 function ResourceNodePage({ nodeId }: { nodeId: string }) {
@@ -755,6 +757,18 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
 
   if (toolOwner) {
     return <ToolTabBody owner={toolOwner} nodeId={nodeId} node={node} notePath={notePath} />;
+  }
+
+  // A resource that holds a file shows the file, filling the pane to the
+  // viewport the way the Directory's table does; one that holds a link shows
+  // the link.
+  const fileId = fileIdOf(node?.metadata);
+  if (fileId) {
+    return (
+      <div role="tabpanel" className="profile-enter -mb-6 w-full">
+        <ResourceFile key={fileId} resourceId={fileId} className="h-[calc(100dvh-88px)]" />
+      </div>
+    );
   }
 
   return (

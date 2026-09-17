@@ -15,6 +15,8 @@ import { fetchJsonBody } from '@/lib/fetchJson';
 import { uploadCroppedImage, validateImageFile } from '@/lib/imageUpload';
 import type { NBNode, SpaceAlias } from '@/lib/types';
 import { aliasesForType } from '@/lib/types';
+import { resourceNameOf } from '@/lib/resources/shared/fileNode';
+import { formatBytes } from '@/lib/utils';
 import MatchPanel from '../MatchPanel';
 import { LocationAutocomplete } from '../LocationAutocomplete';
 import { fieldClass, SetupSection, useDraftCommit, type DraftKindProps } from './shared';
@@ -27,10 +29,16 @@ const SECTION_LABEL: Record<EntityKind, string> = {
   resource: 'What this is',
 };
 
-/** Where the new thing opens: a person on their profile, the rest on the note. */
-function createdHref(type: EntityKind, nodeId: string): string {
+/** The Drive's per-file ceiling (lib/resources/service.ts#MAX_RESOURCE_BYTES). */
+const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Where the new thing opens: a person on their profile, a resource holding a
+ * file on that file, the rest on the note.
+ */
+function createdHref(type: EntityKind, nodeId: string, hasFile: boolean): string {
   const id = encodeURIComponent(nodeId);
-  return type === 'person' ? `/directory/${id}` : `/directory/${id}?tab=context`;
+  return type === 'person' || hasFile ? `/directory/${id}` : `/directory/${id}?tab=context`;
 }
 
 /**
@@ -62,6 +70,7 @@ export default function EntitySetup({
   const [cropping, setCropping] = useState<File | null>(null);
   const [photo, setPhoto] = useState<{ blob: Blob; preview: string } | null>(null);
   const [conflict, setConflict] = useState<{ nodeId: string | null } | null>(null);
+  const [file, setFile] = useState<File | null>(null);
 
   const { spaceId, title: name, accent, setTitle, setTags } = shared;
 
@@ -148,12 +157,30 @@ export default function EntitySetup({
         node.image_url = url;
       }
     }
+    let attached = false;
+    if (file) {
+      // The file is the resource's content: stored, indexed and bound to this
+      // node in one call. A failed upload leaves the resource, which can take a
+      // file again.
+      const form = new FormData();
+      form.append('file', file);
+      form.append('spaceId', spaceId);
+      form.append('nodeId', node.id);
+      const upload = await fetch('/api/resources/upload', { method: 'POST', body: form }).catch(() => null);
+      if (upload?.ok) {
+        const uploaded = (await upload.json().catch(() => null)) as { id?: string } | null;
+        if (uploaded?.id) {
+          node.metadata = { ...(node.metadata ?? {}), fileId: uploaded.id };
+          attached = true;
+        }
+      }
+    }
     primeNodeProfile(node.id, node);
     invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId));
     // The directory grid, the graph and the `[[ ]]` picker all read a cache.
     clearContextCache(spaceId);
-    return createdHref(type, node.id);
-  }, [spaceId, type, name, alias, identityId, followGlobal, pickedSpace, fields, photo, shared]);
+    return createdHref(type, node.id, attached);
+  }, [spaceId, type, name, alias, identityId, followGlobal, pickedSpace, fields, photo, file, shared]);
 
   useDraftCommit({ onReadyChange, registerCommit }, name.trim().length > 0, commit);
 
@@ -190,6 +217,16 @@ export default function EntitySetup({
               onChange={(v) => edit(() => setFields((p) => ({ ...p, [def.key]: v })))}
             />
           ))}
+          {type === 'resource' && (
+            <FileRow
+              file={file}
+              onPick={(picked) => {
+                setFile(picked);
+                if (!name.trim()) setTitle(resourceNameOf(picked.name));
+              }}
+              onClear={() => setFile(null)}
+            />
+          )}
         </div>
       </div>
 
@@ -305,6 +342,50 @@ function PhotoButton({
         ref={inputRef}
         type="file"
         accept="image/*"
+        className="sr-only"
+        onChange={(e) => { take(e.target.files?.[0]); e.target.value = ''; }}
+      />
+    </div>
+  );
+}
+
+/** A resource's file: picked or dropped, shown by name until it is created. */
+function FileRow({ file, onPick, onClear }: {
+  file: File | null;
+  onPick: (file: File) => void;
+  onClear: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const take = (picked: File | undefined) => {
+    if (!picked) return;
+    if (picked.size > MAX_FILE_BYTES) { setProblem(`Over ${formatBytes(MAX_FILE_BYTES)}`); return; }
+    setProblem(null);
+    onPick(picked);
+  };
+  return (
+    <div
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); take(e.dataTransfer.files[0]); }}
+      className={`${fieldClass} flex items-center justify-between gap-2`}
+    >
+      {file ? (
+        <>
+          <span className="min-w-0 truncate text-text-primary">
+            {file.name} <span className="text-text-muted">· {formatBytes(file.size)}</span>
+          </span>
+          <button type="button" onClick={onClear} aria-label="Remove file" className="shrink-0 text-text-muted hover:text-text-primary">
+            ×
+          </button>
+        </>
+      ) : (
+        <button type="button" onClick={() => inputRef.current?.click()} className="w-full text-left text-text-muted hover:text-text-primary">
+          {problem ?? 'File'}
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
         className="sr-only"
         onChange={(e) => { take(e.target.files?.[0]); e.target.value = ''; }}
       />

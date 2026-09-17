@@ -8,8 +8,9 @@ import { MAX_RESOURCE_BYTES, uploadResource } from '@/lib/resources/service';
 export const maxDuration = 300;
 
 /**
- * Upload a file into a space's Drive: store the bytes, record the file, and run
- * it through the RAG pipeline so its contents are searchable.
+ * Upload a file into a space's Drive: store the bytes, record the file, run it
+ * through the RAG pipeline so its contents are searchable, and bind it to its
+ * Resource — the node named by `nodeId`, or a new one named after the file.
  *
  * One call, where there used to be two. The old flow uploaded here and then had
  * the BROWSER post the resulting record — object path included — to
@@ -27,6 +28,8 @@ export async function POST(req: NextRequest) {
   const spaceId = formData.get('spaceId') as string | null;
   const folderIdRaw = formData.get('folderId');
   const folderId = typeof folderIdRaw === 'string' && folderIdRaw ? folderIdRaw : null;
+  const nodeIdRaw = formData.get('nodeId');
+  const nodeId = typeof nodeIdRaw === 'string' && nodeIdRaw ? nodeIdRaw : null;
 
   if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 });
   if (!spaceId) return NextResponse.json({ error: 'spaceId is required' }, { status: 400 });
@@ -50,6 +53,7 @@ export async function POST(req: NextRequest) {
       buffer: Buffer.from(await file.arrayBuffer()),
       uploadedBy: session.userId,
       folderId,
+      nodeId,
     });
     return NextResponse.json(resource);
   } catch (err) {

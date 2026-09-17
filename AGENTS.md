@@ -534,6 +534,14 @@ only).
   (`normalizeTypePlural` drops a blank, malformed or redundant one so a rename
   keeps deriving) and edited as one optional field on Console → Types. A
   heading never reads the override — changing it must not rewrite notes.
+- **A resource shows its file.** A Drive upload is the content of a `resource`
+  node, named by `metadata.fileId` (`lib/resources/node.ts`, pure half
+  `shared/fileNode.ts`): the upload makes that node, or binds the one Create →
+  Resource just made, replacing the file it held. The node's Preview tab is the
+  file (`ResourceFile`); a resource without one previews its `url`.
+  `/resources/<id>` redirects to the node, deleting the node deletes the file,
+  deleting the file drops the node and keeps the note. `db:resources:link`
+  gives a file made before this its node.
 - **A viewer's arrangement is theirs**: column order, hidden columns, widths and
   sort live in `localStorage` per space and type (`useTableView`), never on the
   space record. An unknown column appears at its canonical place.

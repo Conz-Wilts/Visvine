@@ -27,6 +27,7 @@ import { ingestSource } from '../../../lib/notes/sources/ingest'
 import { ensureMemberNode } from '../../../lib/spaces/memberNode'
 import { normalizeSourcePath, sourceKindOf } from '../../../lib/notes/shared/sourceTypes'
 import { SHARED_OWNER_KEY } from '../../../lib/notes/store'
+import { linkFileNode } from '../../../lib/resources/node'
 import {
   CHANNELS,
   CHANNEL_SECTIONS,
@@ -302,6 +303,8 @@ export async function seedDrive(): Promise<{ files: number; indexed: number }> {
         createdAt: daysAgo(r.daysAgo),
       },
     })
+    // Every file is the content of a Resource, as an upload makes it.
+    await linkFileNode(resource, null, { revalidate: false })
     if (!kind) continue
     const meta = await ingestSource(context, {
       path: normalizeSourcePath(`resources/${r.file}`),

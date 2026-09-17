@@ -28,8 +28,7 @@ interface Props {
 }
 
 export function DriveCoverPicker({ spaceId, eventId, onClose, onPicked }: Props) {
-  // The same Drive listing the Resources tab holds, through the same cache —
-  // opening the picker after browsing the Drive costs no request.
+  // The space's Drive listing, through the shared cache.
   const { resources, folders, loading, error: driveError } = useResources(spaceId);
   const images = useMemo(
     () => (loading && resources.length === 0 ? null : resources.filter((f) => f.fileType === 'image')),

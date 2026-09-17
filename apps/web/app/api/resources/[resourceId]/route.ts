@@ -6,10 +6,11 @@ import { z } from 'zod';
 import { requireApiSession, forbiddenResponse, parseBody, handleApiError } from '@/lib/api/route';
 import { featureAccessForbidden, isAdmin } from '@/lib/auth';
 import { moveResource, renameResource } from '@/lib/resources/folders';
+import { findNodeIdByRecord } from '@/lib/notes/context/entityNodes';
 
 /**
  * GET /api/resources/[resourceId] — single resource with a fresh signed URL,
- * uploader profile, and activity counts. Space members only.
+ * uploader profile, activity counts and its Resource node. Space members only.
  */
 export async function GET(
   _req: NextRequest,
@@ -46,7 +47,7 @@ export async function GET(
     }
   }
 
-  const [uploader, pendingChanges] = await Promise.all([
+  const [uploader, pendingChanges, nodeId] = await Promise.all([
     resource.uploadedBy
       ? prisma.user.findUnique({
           where: { id: resource.uploadedBy },
@@ -54,11 +55,14 @@ export async function GET(
         })
       : Promise.resolve(null),
     prisma.resourceChange.count({ where: { resourceId, status: 'pending' } }),
+    findNodeIdByRecord(resource.spaceId, 'resource', resource.id),
   ]);
 
   const { _count, ...rest } = resource;
   return NextResponse.json({
     resource: { ...rest, fileUrl, createdAt: resource.createdAt.toISOString() },
+    /** The Resource this file is the content of — its page is where it is shown. */
+    nodeId,
     uploader: uploader
       ? {
           id: uploader.id,

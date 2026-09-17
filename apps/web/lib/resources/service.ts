@@ -46,6 +46,7 @@ import * as sourceStore from '@/lib/notes/sourceStore'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import { normalizeSourcePath, sourceKindOf } from '@/lib/notes/shared/sourceTypes'
 import { requireFolderInSpace } from '@/lib/resources/folders'
+import { linkFileNode, removeFileNode, requireResourceNode } from '@/lib/resources/node'
 
 /** Per-file ceiling. Buffered whole before sharp runs, so this is a memory bound. */
 export const MAX_RESOURCE_BYTES = 25 * 1024 * 1024
@@ -120,7 +121,7 @@ async function freeSourcePath(context: Context, filename: string): Promise<strin
 /**
  * Keep the Drive's context folder as private as the Drive itself.
  *
- * The two surfaces have different gates — the Resources tab is gated by the
+ * The two surfaces have different gates — the files are gated by the
  * `directory` feature key that owns the page it sits on, the indexed contents
  * by the context visibility lens —
  * so a space that restricted its directory to admins would otherwise have handed
@@ -152,6 +153,25 @@ export interface UploadInput {
   uploadedBy: string
   /** The folder to land in; null (the default) is the root. */
   folderId?: string | null
+  /**
+   * The resource node this file is the content of. Omitted, the upload gets a
+   * node of its own, named after the file.
+   */
+  nodeId?: string | null
+}
+
+export type UploadedFile = DriveFile & { nodeId: string | null }
+
+/**
+ * Store a file, index it, and give it its Resource: the node whose page shows
+ * it. A file the node already had is replaced — a Resource has one file.
+ */
+export async function uploadResource(input: UploadInput): Promise<UploadedFile> {
+  if (input.nodeId) await requireResourceNode(input.spaceId, input.nodeId)
+  const file = await storeResource(input)
+  const { nodeId, replacedFileId } = await linkFileNode(file, input.nodeId ?? null)
+  if (replacedFileId && replacedFileId !== file.id) await deleteResource(replacedFileId)
+  return { ...file, nodeId }
 }
 
 /**
@@ -164,7 +184,7 @@ export interface UploadInput {
  * losing an upload because an embedding call timed out would be a far worse
  * failure than an un-indexed file.
  */
-export async function uploadResource(input: UploadInput): Promise<DriveFile> {
+async function storeResource(input: UploadInput): Promise<DriveFile> {
   const { spaceId, buffer, uploadedBy } = input
   const folderId = input.folderId ?? null
   await requireFolderInSpace(spaceId, folderId)
@@ -325,6 +345,7 @@ export async function deleteResource(resourceId: string): Promise<boolean> {
       .catch((err) => logger.error('resources.deleteSource.failed', { resourceId, err }))
   }
   await prisma.resource.delete({ where: { id: resource.id } })
+  await removeFileNode(resource.spaceId, resource.id)
 
   // Last, and best-effort: an orphaned object costs storage, an orphaned record
   // costs a broken page.

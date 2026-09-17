@@ -90,21 +90,6 @@ export function FileTypeIcon({ type, className = '' }: { type: string; className
   );
 }
 
-// ─── Pin persistence (localStorage) ──────────────────────────────────────────
-
-const PINNED_KEY = 'nb_pinned_resources';
-
-export function getPinned(): string[] {
-  if (typeof window === 'undefined') return [];
-  try { return JSON.parse(localStorage.getItem(PINNED_KEY) ?? '[]'); } catch { return []; }
-}
-
-export function togglePin(id: string) {
-  const list = getPinned();
-  const next = list.includes(id) ? list.filter(x => x !== id) : [...list, id];
-  localStorage.setItem(PINNED_KEY, JSON.stringify(next));
-}
-
 // ─── Docx viewer ─────────────────────────────────────────────────────────────
 
 export function DocxViewer({ resourceId }: { resourceId: string }) {

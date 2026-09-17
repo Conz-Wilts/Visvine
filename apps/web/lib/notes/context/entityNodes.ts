@@ -69,6 +69,7 @@ const CONTAINS_RELATIONSHIP = 'contains'
 const RECORD_KEY: Partial<Record<EntityNodeType, string>> = {
   person: 'userId',
   space: 'spaceRef',
+  resource: 'fileId',
   section: 'sectionId',
   channel: 'conversationId',
   connector: 'notePath',
@@ -180,7 +181,7 @@ function sameEntityType(stored: string, type: EntityNodeType): boolean {
  * stashed in metadata, so a renamed space keeps its node (and its note, and
  * its position on the canvas) instead of sprouting a second one.
  */
-async function findNodeIdByRecord(
+export async function findNodeIdByRecord(
   spaceId: string,
   type: EntityNodeType,
   recordId: string,

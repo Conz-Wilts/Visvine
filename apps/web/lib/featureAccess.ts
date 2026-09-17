@@ -181,7 +181,7 @@ export function featureNodeTypeNames(featureKey: string): string[] {
  * Resources is one of the Directory's tabs, and Connectors is a console section.
  * The types they used to be filed under are the Directory's, because the
  * Directory is where each of them is a node you can open: an agent is watched on
- * `/directory/agent:<name>`, a resource is a row in the Resources tab, and a
+ * `/directory/agent:<name>`, a resource is a node whose page shows its file, and a
  * connector's note is reached from its record.
  *
  * A type absent from here is one a member invented: it has no tool, and the

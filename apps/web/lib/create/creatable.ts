@@ -48,8 +48,8 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'agent':
       return true
 
-    // A resource is a row in the Directory's own Resources tab — there is no
-    // Resources tool to gate on, and the directory is in every space.
+    // A resource is a Directory record — there is no Resources tool to gate
+    // on, and the directory is in every space.
     case 'resource':
       return true
 

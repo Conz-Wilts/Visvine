@@ -18,6 +18,7 @@
     "eval:retrieval": "tsx scripts/eval-retrieval.ts",
     "db:projections:rebuild": "tsx scripts/rebuild-projections.ts",
     "db:resources:reindex": "tsx scripts/reindex-resources.ts",
+    "db:resources:link": "tsx scripts/link-resource-files.ts",
     "db:gc:objects": "tsx scripts/gc-orphan-objects.ts",
     "db:constraints:validate": "tsx scripts/validate-constraints.ts",
     "test:coverage": "node --import tsx --test --experimental-test-coverage tests/*.test.ts",

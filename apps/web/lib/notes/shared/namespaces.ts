@@ -137,8 +137,8 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
   {
     dir: 'resources',
     kind: 'resource',
-    // The Drive is a TAB of the directory (Grid, Context, Resources), not a
-    // tool of its own — there is no `resources` key any more.
+    // Resources are Directory records, each a file or a link — not a tool of
+    // their own, so there is no `resources` key.
     feature: 'directory',
     appearance: 'standing',
     writes: 'anyone',

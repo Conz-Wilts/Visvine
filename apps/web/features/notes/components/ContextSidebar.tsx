@@ -151,7 +151,7 @@ export function ContextSidebar({
       <div className="flex min-h-0 flex-1 flex-col" style={{ width: CONTEXT_PANEL_W }}>
         {/* The tree's own filter, sized to the column: the `md` field, running
             the full width the tree rows run and starting on the same left edge
-            they do. The Grid and Resources tabs carry the big `lg` field
+            they do. The Grid carries the big `lg` field
             because search is the whole surface there; here it is one control
             at the head of a list, the way the Table's is one control on its
             bar. */}

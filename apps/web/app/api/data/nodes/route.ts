@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { purgeNodeObjects } from '@/lib/storage/purge';
+import { fileIdsOfNodes } from '@/lib/resources/node';
+import { deleteResource } from '@/lib/resources/service';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { getSession, isAdmin, spaceMemberForbidden, directoryAccessForbidden } from '@/lib/auth';
@@ -263,6 +265,8 @@ export async function DELETE(request: NextRequest) {
     await purgeNodeObjects([id]).catch((err) =>
       logger.error('api.data.nodes.delete.purge_failed', { id, spaceId, err })
     );
+    // A Resource's file goes with it (which also drops the node).
+    for (const fileId of await fileIdsOfNodes([id])) await deleteResource(fileId);
     await prisma.node.deleteMany({ where: { id, spaceId } });
 
     revalidateTag('context-data-v2', { expire: 0 });

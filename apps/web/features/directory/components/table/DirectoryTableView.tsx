@@ -163,7 +163,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
         {/* Search is one of the bar's controls here, not a band of its own: the
             Table already states what it is showing and narrows it from that
             line, so the box belongs on it, at the height of the buttons beside
-            it. The Grid and Resources tabs keep the big field, where search IS
+            it. The Grid keeps the big field, where search IS
             the surface. */}
         <TableToolbar
           browse={browse}
