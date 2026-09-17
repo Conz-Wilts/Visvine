@@ -240,21 +240,35 @@ test('reading context can never author, whatever the connection asked for', () =
   }
 })
 
+// The reads that cover every space the caller can act in when no space is
+// named (lib/actions/searchEverywhere.ts). Each is read-only and stamps every
+// row with the space it came from; a write is never on this list, because a
+// write with no tenant is how a note lands where nobody intended.
+const READS_ACROSS_SPACES = ['search_context', 'list_events', 'list_agents', 'list_connectors']
+
 test('every action validates its own input', () => {
   // The registry is the perimeter, and a schema that accepts anything is a hole
-  // in it. Every action that names a space must require one — passing the
-  // tenant boundary as an optional argument is how a call ends up somewhere
-  // nobody intended.
+  // in it. Every action that names a space must require one, except the reads
+  // above — and those must be read-only, so an optional tenant can only ever
+  // widen what is READ, under the caller's own standing in each space.
   for (const def of allActions()) {
     const schema = schemaOf(def)
     assert.ok(schema, `${def.name} has no schema`)
-    if ('space_id' in def.input) {
-      assert.equal(
-        schema.safeParse({}).success,
-        false,
-        `${def.name} takes a space_id but accepts a call without one`,
-      )
+    if (!('space_id' in def.input)) continue
+    if (READS_ACROSS_SPACES.includes(def.name)) {
+      assert.equal(def.scope, 'context:read', `${def.name} reads across spaces but is not read-only`)
+      assert.equal(def.annotations?.readOnlyHint, true, `${def.name} reads across spaces without readOnlyHint`)
+      // The other arguments still apply (search_context needs its query), so
+      // the probe supplies them and leaves only space_id out.
+      const rest = def.name === 'search_context' ? { query: 'x' } : {}
+      assert.equal(schema.safeParse(rest).success, true, `${def.name} should accept a call with no space`)
+      continue
     }
+    assert.equal(
+      schema.safeParse({}).success,
+      false,
+      `${def.name} takes a space_id but accepts a call without one`,
+    )
   }
 })
 
