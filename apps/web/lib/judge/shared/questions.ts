@@ -187,3 +187,17 @@ export const impliedServiceQuestion = (service: string, about: string): NoulQues
     `Nothing in the instructions needs ${service}.`,
   )
 export const IMPLIED_SERVICE_AT = 0.8
+
+// ── MCP tools ───────────────────────────────────────────────────────────────
+
+/** State: { name, description }. What a tool does to the account behind it — a proposal an admin reads, never a verdict. */
+export const TOOL_EFFECT_QUESTION: ChoiceQuestion = {
+  type: 'choice',
+  instructions: 'What does calling this tool do to the account or data behind it?',
+  criteria: {
+    reads: 'It only reads, lists, searches or fetches. Nothing is changed.',
+    writes: 'It creates, updates, sends or posts something, and that can be edited or undone.',
+    destroys: 'It deletes, removes, archives, revokes, pays or does something that cannot be undone.',
+  },
+}
+export const TOOL_EFFECT_CONFIDENCE = 0.7

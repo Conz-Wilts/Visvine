@@ -37,6 +37,8 @@ interface ConnectorTool {
   description: string | null;
   group: 'read' | 'writes';
   permission: ToolPermission;
+  /** What the tool's own description suggests, when it differs from what is set. */
+  suggested?: ToolPermission;
 }
 
 interface Listing {
@@ -287,8 +289,12 @@ export default function ConnectorToolPermissions({
                   <li key={tool.name} className="flex min-h-12 items-center gap-3 py-2 pl-6">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-text-primary">{tool.title ?? tool.name}</p>
-                      {tool.description && (
-                        <p className="truncate text-xs text-text-muted">{tool.description}</p>
+                      {(tool.description || (tool.suggested && tool.suggested !== tool.permission)) && (
+                        <p className="truncate text-xs text-text-muted">
+                          {[tool.suggested && tool.suggested !== tool.permission ? `Suggested ${tool.suggested}` : null, tool.description]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
                       )}
                     </div>
                     <ToolSwitch

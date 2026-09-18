@@ -10,6 +10,9 @@
  * an agent's run_connector calls and what the console's terminal calls — same
  * perimeter, same secrets, same audit line. There is no thinner admin path.
  */
+import { decideMany } from '@/lib/judge/client'
+import { choiceOf } from '@/lib/judge/shared/types'
+import { TOOL_EFFECT_CONFIDENCE, TOOL_EFFECT_QUESTION } from '@/lib/judge/shared/questions'
 import prisma from '@/lib/prisma'
 import { decryptSecret } from '@/lib/crypto/secrets'
 import { canReadPath, readVisible, visibleVault } from '@/lib/notes/contextService'
@@ -1031,16 +1034,30 @@ export async function listConnectorTools(loaded: LoadedConnector): Promise<Conne
     )
     auditConnectorCall(p, loaded.path, `list tools → ${tools.length} tool(s)`)
     const policy = loaded.perimeter.tools
+    // A proposal per tool, read from what the tool says it does: reads → allow,
+    // writes → ask, destroys → deny. The GROUP stays the server's own
+    // annotation (unannotated = writes, the safe way to be wrong) and the
+    // permission stays what the admin saved; this is only what to consider.
+    const effects = await decideMany(
+      tools.map((t: McpToolInfo) => ({ state: { name: t.name, description: t.description ?? '' }, questions: { effect: TOOL_EFFECT_QUESTION } })),
+      { deadlineMs: 3_000 },
+    ).catch(() => [])
+    const proposal = { reads: 'allow', writes: 'ask', destroys: 'deny' } as const
     return {
       url,
       default: policy.default,
-      tools: tools.map((t: McpToolInfo) => ({
-        name: t.name,
-        title: t.title,
-        description: t.description,
-        group: toolGroup(t.annotations),
-        permission: toolPermission(policy, t.name),
-      })),
+      tools: tools.map((t: McpToolInfo, i: number) => {
+        const effect = choiceOf(effects[i], 'effect')
+        const suggested = effect && effect.confidence >= TOOL_EFFECT_CONFIDENCE ? proposal[effect.choice as keyof typeof proposal] : undefined
+        return {
+          name: t.name,
+          title: t.title,
+          description: t.description,
+          group: toolGroup(t.annotations),
+          permission: toolPermission(policy, t.name),
+          ...(suggested ? { suggested } : {}),
+        }
+      }),
     }
   } catch (e) {
     if (e instanceof ConnectorError) auditConnectorCall(p, loaded.path, `list tools → ${e.code}: ${e.message}`)
