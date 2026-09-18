@@ -116,7 +116,7 @@ export function isAppSignInUrl(url: string, appUrl: string): boolean {
 
 /** The browser page that begins a desktop sign-in for this challenge. */
 export function signInStartUrl(appUrl: string, challenge: string): string {
-  const url = new URL(`${appUrl}/api/auth/desktop/start`);
+  const url = new URL(`${appUrl}/desktop/signin`);
   url.searchParams.set("challenge", challenge);
   return url.toString();
 }

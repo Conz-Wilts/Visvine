@@ -80,7 +80,7 @@ test("isAppSignInUrl only claims the hop to the provider", () => {
 test("signInStartUrl carries the challenge to the app's own origin", () => {
   assert.equal(
     signInStartUrl("https://visvine.com", "abc-123_x"),
-    "https://visvine.com/api/auth/desktop/start?challenge=abc-123_x",
+    "https://visvine.com/desktop/signin?challenge=abc-123_x",
   );
 });
 

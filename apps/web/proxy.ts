@@ -18,6 +18,9 @@ const PUBLIC_PATHS = [
   // a health check that needs the auth stack to be healthy cannot report on it.
   "/api/health",
   "/claim",
+  // The desktop shell's sign-in page gates itself, so the challenge on its URL
+  // survives the hop through /signin (this redirect carries the path alone).
+  "/desktop/signin",
   "/api/media",
   // Public event share pages + their no-login RSVP API (visvine.com/e/<slug>).
   "/e/",
