@@ -1,4 +1,4 @@
-import { THEME_ACCENT, NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils';
+import { THEME_ACCENT, NODE_GLYPH_PATHS, NODE_GLYPH_FILL_RULE, type NodeGlyph } from '@/lib/avatarUtils';
 
 interface TypeSilhouetteProps {
   /** Which node-type glyph to draw (the getNodeGlyph value space). */
@@ -26,7 +26,7 @@ export default function TypeSilhouette({ glyph, color = THEME_ACCENT, className 
         className="h-[60%] w-[60%]"
         aria-hidden="true"
       >
-        <path d={NODE_GLYPH_PATHS[glyph]} />
+        <path d={NODE_GLYPH_PATHS[glyph]} fillRule={NODE_GLYPH_FILL_RULE[glyph]} />
       </svg>
     </div>
   );

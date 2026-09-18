@@ -479,7 +479,7 @@ export function getNodeTypeConfig(
 
 /**
  * The avatar-fallback glyph a node type should draw when it has no image. People
- * get the person silhouette; spaces and the other containers the cluster;
+ * get the person silhouette; spaces and the other containers a cube;
  * events a calendar; resources a document. Tools and models retain recognisable
  * marks when their authored/provider icon is absent, and custom types use a
  * neutral tag mark. A clean SVG-glyph system, not emoji.
@@ -494,7 +494,7 @@ export function getNodeGlyph(
   if (canonical === 'event' || canonical === 'events') return 'event';
   if (canonical === 'resource' || canonical === 'resources') return 'resource';
   // Containers reuse the existing glyphs rather than inventing new ones: a
-  // space/section/channel reads as a cluster. The glyph key is still called
+  // space/section/channel reads as a cube. The glyph key is still called
   // 'group' — it is the shape's name, not a node type.
   if (canonical === 'space' || canonical === 'section' || canonical === 'channel') return 'group';
   if (canonical === 'connector') return 'connector';

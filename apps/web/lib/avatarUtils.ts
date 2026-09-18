@@ -19,21 +19,23 @@ export const PERSON_SILHOUETTE_PATH =
   'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.42 0-8 2.69-8 6v2h16v-2c0-3.31-3.58-6-8-6Z';
 
 /**
- * SVG path for the group/organisation avatar fallback (24×24 viewBox): a house —
- * reads as "space/place" rather than a cluster of people. The canvas glyph
- * drawer and <TypeSilhouette> both draw this so the glyph is identical on the
- * context and in the DOM. Filled (non-zero winding), so it fills white the same
- * way the person glyph does.
+ * SVG path for the space/container avatar fallback (24×24 viewBox): an
+ * isometric cube — a space is a volume things live inside, not a building.
+ * Three faces split by thin gaps so it reads as solid at avatar size. The glyph
+ * key stays 'group' (see getNodeGlyph). Filled (non-zero winding), so it fills
+ * white the same way the person glyph does.
  */
 const GROUP_SILHOUETTE_PATH =
-  'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z';
+  'M12 2.2 20.4 6.9 12 11.6 3.6 6.9Z M2.8 8.6 11.1 13.2V22L2.8 17.3Z M21.2 8.6 12.9 13.2V22L21.2 17.3Z';
 
 /**
- * SVG path for the event avatar fallback (24×24 viewBox): a calendar with a
- * marked date. Drawn identically by <TypeSilhouette> and the canvas renderers.
+ * SVG path for the event avatar fallback (24×24 viewBox): a calendar page with a
+ * solid header band and a grid of days. The body and days nest, so it is drawn
+ * with the even-odd rule (NODE_GLYPH_FILL_RULE).
  */
 const EVENT_SILHOUETTE_PATH =
-  'M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z';
+  'M7 2.8a1 1 0 0 1 2 0V4h6V2.8a1 1 0 0 1 2 0V4h2a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2Z M5 9h14v10H5Z' +
+  'M6.8 11h2.2v2.2H6.8Z M10.9 11h2.2v2.2h-2.2Z M15 11h2.2v2.2H15Z M6.8 14.8h2.2V17H6.8Z M10.9 14.8h2.2V17h-2.2Z';
 
 /**
  * SVG path for the resource avatar fallback (24×24 viewBox): a document with
@@ -62,9 +64,13 @@ const AGENT_SILHOUETTE_PATH =
 const TOOL_SILHOUETTE_PATH =
   'M22.7 19.3 13.4 10a6 6 0 0 0-7.7-7.7l3.1 3.1-2.8 2.8-3.1-3.1a6 6 0 0 0 7.7 7.7l9.3 9.3a2 2 0 0 0 2.8-2.8z';
 
-/** Model avatar: a compact chip, used when its provider logo is absent. */
+/**
+ * Model avatar: the AI sparkle — a large four-point star with a small one — used
+ * when its provider logo is absent. Solid, no cut-outs.
+ */
 const MODEL_SILHOUETTE_PATH =
-  'M9 2h6v2h2a2 2 0 0 1 2 2v2h2v6h-2v2a2 2 0 0 1-2 2h-2v2H9v-2H7a2 2 0 0 1-2-2v-2H3V8h2V6a2 2 0 0 1 2-2h2V2zm-2 6v8h10V8H7zm2 2h6v4H9v-4z';
+  'M10 4.5C10.7 10.3 11.7 11.8 18.5 13 11.7 14.2 10.7 15.7 10 21.5 9.3 15.7 8.3 14.2 1.5 13 8.3 11.8 9.3 10.3 10 4.5Z' +
+  'M18.3 2C18.7 4.6 19.2 5.2 22 5.7 19.2 6.2 18.7 6.8 18.3 9.4 17.9 6.8 17.4 6.2 14.6 5.7 17.4 5.2 17.9 4.6 18.3 2Z';
 
 /** Custom-type avatar: a neutral tag mark so cards never degrade to initials. */
 const CUSTOM_SILHOUETTE_PATH =
@@ -83,6 +89,11 @@ export const NODE_GLYPH_PATHS = {
 } as const;
 
 export type NodeGlyph = keyof typeof NODE_GLYPH_PATHS;
+
+/** Glyphs whose holes are drawn by the even-odd rule rather than reversed winding. */
+export const NODE_GLYPH_FILL_RULE: Partial<Record<NodeGlyph, 'evenodd'>> = {
+  event: 'evenodd',
+};
 
 export function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
