@@ -37,7 +37,7 @@ export async function adviseWrite(p: ContextPrincipal, context: Context, path: s
 
   const { raws, metas } = await visibleVault(p, context)
   const bodyByPath = new Map(raws.map((r) => [r.path, splitFrontmatter(r.content).body]))
-  const found = await searchContext(p, context, `${title} ${body.slice(0, 200)}`, {}, CANDIDATES + 1, { rewrite: false, judge: false })
+  const found = await searchContext(p, context, `${title} ${body.slice(0, 200)}`, {}, CANDIDATES + 1, { judge: false })
   // A space with its semantic half off sends no note text to a model.
   if (found.semantic === 'off') return null
   const hits = found.hits.filter((h) => h.kind === 'note' && h.path !== path && !isIndexPath(h.path)).slice(0, CANDIDATES)

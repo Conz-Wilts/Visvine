@@ -1,5 +1,5 @@
 // POST /api/notes/search
-//   { spaceId, scope, query, k?, filters?, rewrite? } → { results: FusedResult[], semantic, plan }
+//   { spaceId, scope, query, k?, filters?, judge? } → { results: FusedResult[], semantic, plan }
 // Fused retrieval (query plan → frontmatter/date filter → BM25 → pgvector →
 // chunks → link context, weighted RRF) over
 // everything the caller can read in the context; the visibility lens and the
@@ -34,9 +34,7 @@ export async function POST(req: NextRequest) {
   const k = typeof body.k === 'number' ? body.k : undefined
   const p = await principalOf(context)
   try {
-    const rewrite = typeof body.rewrite === 'boolean' ? body.rewrite : undefined
     const { hits, semantic, plan, answerable } = await searchFederated(p, context, query, parseFilters(body.filters), k, {
-      rewrite,
       // A person scanning rows as they type wants them now; a caller that
       // wants only what is about the query asks for the judge.
       judge: body.judge === true,

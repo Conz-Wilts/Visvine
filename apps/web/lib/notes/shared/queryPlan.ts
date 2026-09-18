@@ -12,16 +12,13 @@
 //     to…"), in which case a retired note is exactly what they are after and
 //     the lifecycle down-ranking must not bury it.
 //
-// All of it is deterministic and free. An LLM rewrite (lib/notes/queryRewrite.ts)
-// can widen the plan with alternate phrasings and a date range it inferred, and
-// is merged in here — but a date the parser found always wins over one a model
-// guessed, and nothing a model returns can do more than add phrasings and bounds.
+// All of it is deterministic and free.
 //
 // Days are UTC. Pure — no Prisma/Node/DOM imports.
 
 import type { NoteMeta } from './types'
 
-export interface DateRange {
+interface DateRange {
   /** Inclusive epoch-ms lower bound, or null for "no lower bound". */
   start: number | null
   /** Inclusive epoch-ms upper bound, or null for "no upper bound". */
@@ -314,68 +311,12 @@ export function planQuery(query: string, now: number): QueryPlan {
   return { queries: [query.trim()], topic: temporalOnly ? '' : topic || query.trim(), dateRange, temporalOnly, intent }
 }
 
-// LLM rewrite — untrusted output, coerced here.
-
-/** What a query-rewrite model is asked to return. */
-export interface QueryRewrite {
-  /** Alternate phrasings of the same ask — never includes the original. */
-  queries: string[]
-  dateRange: DateRange | null
-}
-
-const MAX_ALTERNATES = 3
-const MAX_ALTERNATE_CHARS = 200
-
 function parseIso(v: unknown, endOfDay: boolean): number | null {
   if (typeof v !== 'string' || !v.trim()) return null
   const s = v.trim()
   const bare = /^\d{4}-\d{2}-\d{2}$/.test(s)
   const ms = Date.parse(bare ? `${s}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z` : s)
   return Number.isNaN(ms) ? null : ms
-}
-
-/**
- * Validate/repair a model's rewrite. Drops empty, over-long and duplicate
- * phrasings and the original itself; caps the count; parses the date range
- * and discards one whose bounds crossed. Returns null when nothing useful
- * survived, so the caller falls back to the plain plan.
- */
-export function coerceQueryRewrite(raw: unknown, original: string): QueryRewrite | null {
-  const r = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
-  const seen = new Set([original.trim().toLowerCase()])
-  const queries: string[] = []
-  for (const q of Array.isArray(r.queries) ? r.queries : []) {
-    if (typeof q !== 'string') continue
-    const s = q.replace(/\s+/g, ' ').trim()
-    if (!s || s.length > MAX_ALTERNATE_CHARS || seen.has(s.toLowerCase())) continue
-    seen.add(s.toLowerCase())
-    queries.push(s)
-    if (queries.length >= MAX_ALTERNATES) break
-  }
-  let dateRange: DateRange | null = null
-  const dr = typeof r.dateRange === 'object' && r.dateRange !== null ? (r.dateRange as Record<string, unknown>) : null
-  if (dr) {
-    const start = parseIso(dr.start, false)
-    const end = parseIso(dr.end, true)
-    if ((start !== null || end !== null) && !(start !== null && end !== null && start > end)) {
-      dateRange = { start, end }
-    }
-  }
-  if (!queries.length && !dateRange) return null
-  return { queries, dateRange }
-}
-
-/**
- * Widen a plan with a rewrite: alternates are appended after the original; a
- * date range is taken from the model only when the parser found none. Whether
- * the search is temporal-only is decided by the parser alone — a model saying
- * "this is about last week" must not switch off the text stages.
- */
-export function mergeRewrite(plan: QueryPlan, rewrite: QueryRewrite | null): QueryPlan {
-  if (!rewrite) return plan
-  const queries = [...plan.queries]
-  for (const q of rewrite.queries) if (!queries.some((x) => x.toLowerCase() === q.toLowerCase())) queries.push(q)
-  return { ...plan, queries, dateRange: plan.dateRange ?? rewrite.dateRange }
 }
 
 // Applying the plan.

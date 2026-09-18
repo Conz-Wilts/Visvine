@@ -30,10 +30,10 @@ const JUDGE_WINDOW = MAX_BATCH * 2
 const JUDGE_DEADLINE_MS = 2_000
 const JUDGE_TEXT_CHARS = 900
 
-export type RerankMode = 'judge' | 'llm' | 'off'
+type RerankMode = 'judge' | 'llm' | 'off'
 
 /** Which rerank the deployment runs: CONTEXT_RERANK, else the judge when it is configured. */
-export function rerankMode(): RerankMode {
+function rerankMode(): RerankMode {
   const mode = process.env.CONTEXT_RERANK?.trim().toLowerCase()
   if (mode === 'off' || mode === 'llm') return mode
   return judgeConfigured() ? 'judge' : 'off'

@@ -544,7 +544,7 @@ export const CONTEXT_ACTIONS = [
         '"since March", "2026-03-15") and become a date filter; a query that is ONLY about a time ' +
         '("what happened yesterday") returns that period newest-first. A history question ("why did we stop…", ' +
         '"what did we use to…") ranks retired notes at full weight. The `plan` field reports all of this — ' +
-        'the phrasings searched, the date range read, and whether the query rewrite ran. ' +
+        'the query searched, the date range read, and whether it read as a history question. ' +
         'When a judge has read the candidates, hits that are not about the query are dropped — so fewer than `k` ' +
         'may come back, each with a `relevance` (0–1) — and `answerable: false` means nothing you can read here ' +
         'is about the query: say so, or try different words, rather than answering from nothing. ' +
@@ -568,10 +568,6 @@ export const CONTEXT_ACTIONS = [
           .describe("Only this top-level folder, e.g. 'people' ('' = the context root)"),
         updated_after: z.number().optional().describe('Only notes modified at/after this epoch-ms timestamp'),
         updated_before: z.number().optional().describe('Only notes modified at/before this epoch-ms timestamp'),
-        rewrite: z
-          .boolean()
-          .optional()
-          .describe('Widen the search with LLM-proposed phrasings (default true; pass false for an exact, faster search)'),
       },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
@@ -589,11 +585,11 @@ export const CONTEXT_ACTIONS = [
         // stamped with the space it was read in (lib/actions/searchEverywhere.ts).
         const everywhere = args.space_id
           ? null
-          : await searchEverywhere(ctx, args.query, filters, k, { rewrite: args.rewrite })
+          : await searchEverywhere(ctx, args.query, filters, k, {})
         const one = args.space_id
           ? await (async () => {
               const { principal, context } = await resolveTarget(ctx, args.space_id!)
-              const r = await searchFederated(principal, context, args.query, filters, k, { rewrite: args.rewrite })
+              const r = await searchFederated(principal, context, args.query, filters, k, {})
               const row = await prisma.space.findUnique({
                 where: { id: args.space_id },
                 select: { id: true, name: true, parentId: true },
@@ -656,7 +652,6 @@ export const CONTEXT_ACTIONS = [
               : null,
             temporal_only: plan.temporalOnly,
             intent: plan.intent,
-            rewrite: plan.rewrite,
           },
           entities,
           // A source hit is a chunk of an uploaded file: it has no note to read,

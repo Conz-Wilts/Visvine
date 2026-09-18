@@ -196,8 +196,7 @@ export interface FuseOptions {
   /** Expand the top BM25 hits with their link neighborhood (default true). */
   contextExpand?: boolean
   /**
-   * The plan to run. Defaults to the deterministic plan for `query` at `now`;
-   * the server passes one widened by the LLM rewrite.
+   * The plan to run. Defaults to the deterministic plan for `query` at `now`.
    */
   plan?: QueryPlan
   /** Epoch ms for relative dates in the query (default: the wall clock). */

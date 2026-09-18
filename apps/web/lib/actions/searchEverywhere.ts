@@ -5,9 +5,7 @@
  *
  * Nothing here widens what a person can read. Each space is resolved with
  * `resolveTarget` — the membership and grant lens the web routes use — and
- * searched under that principal, exactly as a call naming it would be. The
- * plan is made once so every space is searched on the same words and the
- * rewrite is paid for once.
+ * searched under that principal, exactly as a call naming it would be.
  */
 import type { ActionCaller } from '@/lib/actions/types'
 import { listMySpaces, resolveTarget } from '@/lib/actions/resolve'
@@ -15,7 +13,7 @@ import { searchFederated } from '@/lib/notes/federation'
 import { compareAcrossSearches, type SearchFilters } from '@/lib/notes/shared/retrieval'
 import { judgeHits } from '@/lib/notes/rerank'
 import type { BrainSearchResult, SearchOptions } from '@/lib/notes/contextService'
-import { planSearch } from '@/lib/notes/queryRewrite'
+import { planQuery } from '@/lib/notes/shared/queryPlan'
 import { fuseAcrossSpaces, searchFanout, type SearchedSpace, type SpaceHit } from '@/lib/actions/shared/everywhere'
 import { logger } from '@/lib/logger'
 import prisma from '@/lib/prisma'
@@ -39,14 +37,14 @@ export async function searchEverywhere(
   const mine = await listMySpaces(ctx)
   const { searched, skipped } = searchFanout(mine)
   const spaces: SearchedSpace[] = searched.map((s) => ({ id: s.id, name: s.name, parent_id: s.parent_id }))
-  const planned = await planSearch(query, Date.now(), { rewrite: opts.rewrite ?? true })
+  const plan = planQuery(query, Date.now())
 
   const runs = await Promise.all(
     spaces.map(async (space) => {
       try {
         const { principal, context } = await resolveTarget(ctx, space.id)
         // Judged once, after the fold (below), so no space spends a window of its own.
-        const r = await searchFederated(principal, context, query, filters, k, { ...opts, plan: planned, judge: false })
+        const r = await searchFederated(principal, context, query, filters, k, { ...opts, judge: false })
         return { space, result: r }
       } catch (err) {
         // One space failing (membership just revoked, a stage erroring) narrows
@@ -65,9 +63,9 @@ export async function searchEverywhere(
   // at query time; its hits ride along unjudged, after the judged ones.
   const closed = new Set(runs.filter((r) => r.result?.semantic === 'off').map((r) => r.space.id))
   const open = folded.filter((h) => !closed.has(h.space.id))
-  const topic = planned.plan.topic || query
+  const topic = plan.topic || query
   const verdict =
-    opts.judge === false || planned.plan.temporalOnly || planned.plan.intent === 'history' ? { hits: open, judged: false } : await judgeHits(topic, open, k)
+    opts.judge === false || plan.temporalOnly || plan.intent === 'history' ? { hits: open, judged: false } : await judgeHits(topic, open, k)
   const judged = {
     judged: verdict.judged,
     hits: [...verdict.hits, ...folded.filter((h) => closed.has(h.space.id))].sort(compareAcrossSearches).slice(0, k),
@@ -76,7 +74,7 @@ export async function searchEverywhere(
     hits: judged.hits,
     ...(judged.judged ? { answerable: judged.hits.length > 0 } : {}),
     semantic: first?.semantic ?? 'no-key',
-    plan: first?.plan ?? { ...planned.plan, rewrite: planned.rewrite },
+    plan: first?.plan ?? plan,
     searched: spaces,
     skipped,
   }

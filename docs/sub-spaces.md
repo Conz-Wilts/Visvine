@@ -119,7 +119,7 @@ Which surfaces federate:
 | tree | `GET /api/notes/tree` | a top-level folder (path `subspaces/<id>`) grafted in, its root index as the folder's index, the folder stamped `space: <id>` |
 | note index | `GET /api/notes`, `list_context`, an agent's `list_context` | the sub-space's `NoteMeta[]` with `path`, `folder` and `linkTargets` rebased |
 | one note | `GET /api/notes/item`, `read_context`, an agent's `read_context` | read through the sub-space's reader; body links rewritten to `/subspaces/<id>/…` |
-| search | `POST /api/notes/search`, `search_context`, an agent's `search_context` | the sub-space searched with the same plan (no second rewrite call), hits fused by score |
+| search | `POST /api/notes/search`, `search_context`, an agent's `search_context` | the sub-space searched with the same plan, hits fused by score |
 | access | `GET /api/notes/access?path=subspaces/…` | `canRead` / `canWrite` per the reader (below), never `canManage`, never `gated`, plus `subspace: {id, name, member}` for the editor's one-line banner |
 | write | `POST`/`PUT`/`PATCH`/`DELETE /api/notes/item`, `POST`/`PATCH`/`DELETE /api/notes/folders` | hopped into the sub-space by `federation.ts#writeTarget` / `moveTargets` (below); response paths rebased back |
 

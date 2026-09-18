@@ -639,28 +639,24 @@ the regression gate.
   pure, deterministic): time words become `updatedAfter/Before` and are stripped
   from the ranked text; a query with nothing topical left is *temporal-only* and
   answered by recency with no text stage; a history phrasing turns lifecycle
-  down-ranking off, because the retired note IS the answer. The server widens
-  the plan with one structured LLM call (`lib/notes/queryRewrite.ts`, skipped
-  for ≤3-word and temporal-only queries): up to three phrasings, each its own
-  stage at weight 0.7, plus a date range only if the parser found none. The
-  rewrite is untrusted (`coerceQueryRewrite`) and can only add. A caller's
-  explicit bound disables inference. Every result reports its `plan`.
+  down-ranking off, because the retired note IS the answer. No model rewrites
+  the query: the caller searching (an agent, a model over MCP) rephrases and
+  searches again itself. A caller's explicit bound disables inference. Every
+  result reports its `plan`.
 - **The head of the ranking is judged, and what is not about the query is
   dropped** (`lib/notes/rerank.ts`, behind the injected `Reranker`; the judge is
   below). A `Reranker` with a `floor` drops; one without only reorders. So a
   search may return fewer than `k` hits, each with `relevance`, and
   `answerable: false` means nothing the caller can read is about the query. It
   sits out history and temporal-only plans, and the web search route (a person
-  scanning rows) unless asked. With a judge in the search the LLM rewrite runs
-  only after a weak first pass. Hits from different searches — a house and its
+  scanning rows) unless asked. Hits from different searches — a house and its
   rooms, several spaces — order by `relevance` (`compareAcrossSearches`), the
   one number that compares across corpora; the all-spaces search judges once,
   after the fold. `CONTEXT_RERANK=llm` swaps in a listwise chat rerank that
   only reorders; `off` runs neither. `pnpm eval:judge` is the live harness.
 - **The deployment's own AI is ONE key: `OPENROUTER_API_KEY`.** Chat
   (`lib/notes/ai.ts`, default `deepseek/deepseek-v4-flash-0731`, override
-  `OPENROUTER_MODEL`; the search rewrite alone runs on `OPENROUTER_REWRITE_MODEL`,
-  default `google/gemini-2.5-flash-lite`, because a person waits on it), the judge (`lib/judge/`, `JUDGE_MODEL`) and embeddings (`lib/notes/embeddings.ts`,
+  `OPENROUTER_MODEL`), the judge (`lib/judge/`, `JUDGE_MODEL`) and embeddings (`lib/notes/embeddings.ts`,
   `openai/text-embedding-3-small` at 768 dims, `EMBED_MODEL`) both go through
   OpenRouter. Without it the response reports `semantic: "no-key"` rather than
   degrading silently; after setting it run `pnpm db:embed` once. A space's

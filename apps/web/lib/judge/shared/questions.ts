@@ -36,14 +36,6 @@ export const SEARCH_RELEVANT_FLOOR = 0.35
 export const searchScore = (relevant: number, answers: number | undefined): number =>
   answers === undefined ? relevant : 0.5 * relevant + 0.5 * answers
 
-/**
- * A first pass whose best hit is at or over this needs no second: the query as
- * asked found what it was about, and the rewrite running alongside it is
- * discarded. Gated on what the search found, not on the words — asked whether
- * a query could be reworded, the judge rates an invoice number as rewordable.
- */
-export const REWRITE_UNNEEDED_AT = 0.6
-
 // ── Agents ──────────────────────────────────────────────────────────────────
 
 /** State: { agent_instructions, saved_note: { path, title, text } }. */

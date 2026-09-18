@@ -387,9 +387,7 @@ export async function searchFederated(
         query,
         { ...filters, folderId: undefined },
         k,
-        // The rewrite is one LLM call per search; the parent's plan already
-        // paid for it, and a sub-space's search reuses the same words.
-        { ...opts, rewrite: false },
+        opts,
       ),
     ),
   )

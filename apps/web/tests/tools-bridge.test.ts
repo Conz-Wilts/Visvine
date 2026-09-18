@@ -42,7 +42,6 @@ const PLAN = {
   dateRange: null,
   temporalOnly: false,
   intent: 'current' as const,
-  rewrite: 'off' as const,
 }
 
 // ── fixtures ──────────────────────────────────────────────────────────────────

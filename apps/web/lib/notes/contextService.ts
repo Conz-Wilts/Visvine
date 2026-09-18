@@ -21,10 +21,8 @@ import { getVault, vaultFor } from './vaultCache'
 import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { rewriteLinks } from './shared/linkRewrite'
 import { fusedSearch, type FusedResult, type SearchFilters } from './shared/retrieval'
-import { planSearch, type RewriteStatus } from './queryRewrite'
-import { createReranker, rerankMode, type RerankReport } from './rerank'
-import { REWRITE_UNNEEDED_AT } from '@/lib/judge/shared/questions'
-import type { QueryPlan } from './shared/queryPlan'
+import { createReranker, type RerankReport } from './rerank'
+import { planQuery, type QueryPlan } from './shared/queryPlan'
 import { computeReferences, redactReferences } from './shared/references'
 import { pathVisibleTo } from './shared/visibility'
 import { folderIdOfPath } from './shared/placement'
@@ -199,21 +197,12 @@ export interface BrainSearchResult {
    * What the search decided the query was asking — the phrasings it ran, the
    * date range it read out of the words, whether it answered by recency alone,
    * and whether it treated the ask as a history question. Reported so a caller
-   * can see why "last week" returned what it did, and whether the LLM rewrite
-   * ran ('on'), was unconfigured ('off'), was not worth it ('skipped') or failed.
+   * can see why "last week" returned what it did.
    */
-  plan: QueryPlan & { rewrite: RewriteStatus }
+  plan: QueryPlan
 }
 
 export interface SearchOptions {
-  /** Widen the plan with an LLM rewrite when one is configured (default true). */
-  rewrite?: boolean
-  /**
-   * A plan already made for this query. A search over several spaces plans
-   * once — the rewrite is one LLM call — and hands every space the same
-   * phrasings, so no space is searched on narrower words than another.
-   */
-  plan?: { plan: QueryPlan; rewrite: RewriteStatus }
   /**
    * Judge the head of the ranking and drop what is not about the query
    * (lib/notes/rerank.ts). Default true; a person scanning a result list as
@@ -256,67 +245,39 @@ export async function searchContext(
   const enabled = keyed && (await embeddingEnabledFor(context.spaceId))
   const mtimes = new Map(metas.map((m) => [m.path, m.mtime]))
 
-  const run = async (plan: QueryPlan, rerankReport: RerankReport) => {
-    // One batched embed of every phrasing, shared by both vector stages. The
-    // text stages rank on the topic (time words stripped), so that is what is
-    // embedded for the original — the alternates are embedded as written.
-    const queryVectors = new Map<string, number[]>()
-    const phrasings = [plan.topic || query, ...plan.queries.slice(1)]
-    if (enabled && !plan.temporalOnly) {
-      try {
-        const vectors = await embedTexts(phrasings)
-        phrasings.forEach((q, i) => queryVectors.set(q, vectors[i]))
-      } catch (err) {
-        report.error = err instanceof Error ? err.message : String(err)
-        logger.error('notes.search.embed_failed', { err })
-      }
-    }
-    return fusedSearch(notes, query, filters, {
-      k,
-      plan,
-      now,
-      vector: createVectorStage(context, queryVectors, report),
-      sources: createSourceStage(context, sourcePaths, queryVectors, report),
-      // Claims and chunks rank only for the visible notes at their CURRENT mtime.
-      memories: createMemoryStage(context, mtimes, queryVectors, report),
-      chunks: createChunkStage(context, mtimes, queryVectors, report),
-      rerank: opts.judge === false || !enabled ? undefined : createReranker(rerankReport),
-    })
-  }
-
-  // The LLM rewrite is a recall aid a caller waits on. With a judge in the
-  // search it starts alongside the first pass and is USED only when that pass
-  // found nothing the judge rates well — then the search runs again on its
-  // phrasings. A strong first pass discards it. Without a judge, or with a plan
-  // handed in, the plan is made up front as before.
-  const wantRewrite = opts.rewrite ?? true
-  const judging = opts.judge !== false && enabled && rerankMode() === 'judge'
-  let rerankReport: RerankReport = {}
-  let planned = opts.plan ?? (await planSearch(query, now, { rewrite: wantRewrite && !judging }))
-  let hits: FusedResult[]
-  if (opts.plan || !wantRewrite || !judging) {
-    hits = await run(planned.plan, rerankReport)
-  } else {
-    const widening = planSearch(query, now, { rewrite: true }) // never rejects: a failure is 'error'
-    hits = await run(planned.plan, rerankReport)
-    if (rerankReport.judged && hits.some((h) => (h.relevance ?? 0) >= REWRITE_UNNEEDED_AT)) {
-      planned = { ...planned, rewrite: 'skipped' }
-    } else {
-      planned = await widening
-      if (planned.rewrite === 'on') {
-        rerankReport = {}
-        hits = await run(planned.plan, rerankReport)
-      }
+  const plan = planQuery(query, now)
+  const rerankReport: RerankReport = {}
+  // The text stages rank on the topic (time words stripped), so that is what
+  // is embedded, once, for both vector stages.
+  const queryVectors = new Map<string, number[]>()
+  const topic = plan.topic || query
+  if (enabled && !plan.temporalOnly) {
+    try {
+      const [vector] = await embedTexts([topic])
+      queryVectors.set(topic, vector)
+    } catch (err) {
+      report.error = err instanceof Error ? err.message : String(err)
+      logger.error('notes.search.embed_failed', { err })
     }
   }
-  const { plan, rewrite } = planned
+  const hits = await fusedSearch(notes, query, filters, {
+    k,
+    plan,
+    now,
+    vector: createVectorStage(context, queryVectors, report),
+    sources: createSourceStage(context, sourcePaths, queryVectors, report),
+    // Claims and chunks rank only for the visible notes at their CURRENT mtime.
+    memories: createMemoryStage(context, mtimes, queryVectors, report),
+    chunks: createChunkStage(context, mtimes, queryVectors, report),
+    rerank: opts.judge === false || !enabled ? undefined : createReranker(rerankReport),
+  })
   for (const h of hits) {
     if (isAuditedRead(p, context, h.path)) {
       void logAudit(p.spaceId, { userId: p.userId, name: p.name, action: 'read', path: h.path })
     }
   }
   const semantic: SemanticStatus = !keyed ? 'no-key' : !enabled ? 'off' : report.error ? 'error' : 'on'
-  return { hits, semantic, ...(rerankReport.judged ? { answerable: hits.length > 0 } : {}), plan: { ...plan, rewrite } }
+  return { hits, semantic, ...(rerankReport.judged ? { answerable: hits.length > 0 } : {}), plan }
 }
 
 // write gate

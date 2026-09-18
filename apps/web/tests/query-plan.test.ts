@@ -1,13 +1,11 @@
 // Unit tests for the query plan: temporal phrases → date range, the
-// temporal-only decision, history intent, and coercion of an LLM rewrite.
+// temporal-only decision, and history intent.
 // Run: node --import tsx --test tests/query-plan.test.ts
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  coerceQueryRewrite,
   inDateRange,
-  mergeRewrite,
   noteTimeOf,
   planQuery,
 } from '../lib/notes/shared/queryPlan'
@@ -102,47 +100,6 @@ test('planQuery: history intent is read from the phrasing', () => {
     assert.equal(planQuery(q, NOW).intent, 'history', q)
   }
   assert.equal(planQuery('current pricing model', NOW).intent, 'current')
-})
-
-test('coerceQueryRewrite: keeps up to three clean alternates and a sane range', () => {
-  const r = coerceQueryRewrite(
-    {
-      queries: ['Pricing Model', 'seat pricing', '  per-seat   price ', 'seat pricing', 'x'.repeat(300), 4, 'fifth'],
-      dateRange: { start: '2026-06-01', end: '2026-06-30' },
-    },
-    'pricing model',
-  )
-  assert.ok(r)
-  // The original is dropped (case-insensitively), whitespace collapsed, duplicates and junk removed, capped at 3.
-  assert.deepEqual(r.queries, ['seat pricing', 'per-seat price', 'fifth'])
-  assert.deepEqual(r.dateRange, { start: day('2026-06-01'), end: dayEnd('2026-06-30') })
-})
-
-test('coerceQueryRewrite: crossed or unparseable dates are dropped; nothing useful → null', () => {
-  assert.equal(coerceQueryRewrite({ queries: [], dateRange: { start: 'soon', end: null } }, 'q'), null)
-  assert.equal(coerceQueryRewrite({ dateRange: { start: '2026-07-01', end: '2026-06-01' } }, 'q'), null)
-  assert.equal(coerceQueryRewrite('not an object', 'q'), null)
-  assert.deepEqual(coerceQueryRewrite({ dateRange: { start: null, end: '2026-06-01' } }, 'q'), {
-    queries: [],
-    dateRange: { start: null, end: dayEnd('2026-06-01') },
-  })
-})
-
-test('mergeRewrite: alternates are appended, a parsed date beats a guessed one', () => {
-  const parsed = planQuery('seats in June', NOW)
-  const merged = mergeRewrite(parsed, {
-    queries: ['seat count', 'seats in june'],
-    dateRange: { start: day('2020-01-01'), end: null },
-  })
-  assert.deepEqual(merged.queries, ['seats in June', 'seat count'])
-  assert.deepEqual(merged.dateRange, parsed.dateRange)
-  assert.equal(merged.temporalOnly, false)
-
-  // …and fills the range in when the parser found none.
-  const plain = planQuery('the offsite', NOW)
-  const widened = mergeRewrite(plain, { queries: [], dateRange: { start: day('2026-05-01'), end: dayEnd('2026-05-03') } })
-  assert.deepEqual(widened.dateRange, { start: day('2026-05-01'), end: dayEnd('2026-05-03') })
-  assert.equal(mergeRewrite(plain, null), plain)
 })
 
 test('noteTimeOf prefers a frontmatter date over mtime; inDateRange honours open bounds', () => {
