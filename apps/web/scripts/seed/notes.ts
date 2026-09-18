@@ -323,8 +323,6 @@ ${[...investors]
 The one board seat sits with ${orgByName('Hillcrest Seed Partners')}. What they see
 that the wider team does not is the ${link('revenue roll-up', '/data/revenue-roll-up.md')} — the single
 note the Board alias grants, and the tightest grant in this space.
-
-Back to ${link('Organisations', '/spaces/index.md')}.
 `)
 
 note(shared, 'spaces/partners.md', { type: 'Note', title: 'Partners', description: 'who does the work we are bad at', tags: ['partners'] }, `
@@ -335,8 +333,6 @@ ${[...partners].sort((a, b) => a.org.name.localeCompare(b.org.name)).map((o) => 
 
 Partner-sourced customers are worth tracking separately: they onboard faster and
 churn less, because somebody else did the hard part properly.
-
-Back to ${link('Organisations', '/spaces/index.md')}.
 `)
 
 // ---- people ------------------------------------------------------------------
@@ -375,7 +371,7 @@ for (const person of model.people) {
         `Keeper of the ${link('revenue roll-up', '/data/revenue-roll-up.md')} and the ${link('dashboards', '/data/dashboards.md')}.`,
       )
     }
-    sections.push('', `Part of the ${link('team', '/team/index.md')} · Back to ${link('People', '/people/index.md')}`)
+    sections.push('', `Part of the ${link('team', '/team/index.md')}.`)
   } else {
     if (person.bio) sections.push(person.bio, '')
     const meta: string[] = [`- **Role:** ${person.role}`]
@@ -391,7 +387,6 @@ for (const person of model.people) {
     if (owners.length) {
       sections.push('', '## Our side', owners.map((t) => `- ${personLink(t)} — ${t.role}`).join('\n'))
     }
-    sections.push('', `Back to ${link('People', '/people/index.md')}`)
   }
 
   // A person is a folder: the note is its index, sub-notes go beside it.
@@ -705,7 +700,7 @@ for (const d of DECISIONS) {
     shared,
     `product/decisions/${d.slug}.md`,
     { type: 'Decision', title: d.title, description: `${d.status} · ${d.date}`, tags: ['decision', 'product'] },
-    `${d.body}\n\nBack to ${link('Decisions', '/product/decisions/index.md')} · ${link('Principles', '/product/principles.md')}`,
+    d.body,
   )
 }
 
