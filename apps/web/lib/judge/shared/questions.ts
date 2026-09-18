@@ -36,13 +36,14 @@ export const SEARCH_RELEVANT_FLOOR = 0.35
 export const searchScore = (relevant: number, answers: number | undefined): number =>
   answers === undefined ? relevant : 0.5 * relevant + 0.5 * answers
 
-/** State: the query alone. */
-export const REWRITE_QUESTION = noul(
-  'Could this search query be worded in a noticeably different way and still mean the same thing?',
-  'The query is a question or a description whose key words have common synonyms or another natural phrasing.',
-  'The query is a name, an identifier, a quoted phrase or a literal keyword with no useful paraphrase.',
-)
-export const REWRITE_FLOOR = 0.4
+/**
+ * A first pass whose best hit is at or over this needs no second: the query as
+ * asked found what it was about, and the LLM rewrite (a recall aid, seconds
+ * long) is skipped. Whether a query COULD be reworded is not something the
+ * judge can tell — it rates an invoice number as rewordable — so the rewrite is
+ * gated on what the search found, not on the words.
+ */
+export const REWRITE_UNNEEDED_AT = 0.6
 
 // ── Agents ──────────────────────────────────────────────────────────────────
 
@@ -125,3 +126,16 @@ export const CLAIMS_COVER_QUESTION = noul(
 /** The stored claims stand when each is still stated at or over this, and the note adds nothing over COVER_BELOW. */
 export const CLAIM_STILL_STATED = 0.7
 export const CLAIMS_COVER_BELOW = 0.6
+
+// ── Writing ─────────────────────────────────────────────────────────────────
+
+/** A note about to be written is "about the same subject" as an existing one at or over this SAME_NOTE position. */
+export const SIMILAR_AT = 1.0
+/** A suggested type or folder is offered only over this confidence. */
+export const FILING_CONFIDENCE = 0.6
+
+export const filingQuestion = (what: 'type' | 'folder', options: Record<string, string>): ChoiceQuestion => ({
+  type: 'choice',
+  instructions: what === 'type' ? 'Which kind of note is this?' : 'Which folder does this note belong in?',
+  criteria: { ...options, none: what === 'type' ? 'None of these kinds fits.' : 'None of these folders fits.' },
+})

@@ -30,6 +30,8 @@ import {
   readSourceVisible,
 } from '@/lib/notes/contextService'
 import { federatedMetas, readFederated, searchFederated } from '@/lib/notes/federation'
+import { adviseWrite } from '@/lib/notes/beforeWrite'
+import { flagConflicts } from '@/lib/notes/rerank'
 import { inSpaces, searchEverywhere } from '@/lib/actions/searchEverywhere'
 import { readableRoots, LEVEL_EDIT } from '@/lib/notes/shared/authz'
 import { audienceSummary } from '@/lib/notes/shared/audience'
@@ -546,6 +548,8 @@ export const CONTEXT_ACTIONS = [
         'When a judge has read the candidates, hits that are not about the query are dropped — so fewer than `k` ' +
         'may come back, each with a `relevance` (0–1) — and `answerable: false` means nothing you can read here ' +
         'is about the query: say so, or try different words, rather than answering from nothing. ' +
+        'A hit carries `conflicts_with` when another leading hit states something that cannot also be true: read both, ' +
+        'prefer the one whose `status` is current, and tell the person the record disagrees rather than picking silently. ' +
         'Omit `space_id` to search EVERY space you can act in at once; each hit then says which `space` it was ' +
         'read in, and `spaces` lists what was searched. When results span more than one space, say which ' +
         'space each came from, and never carry what one space says into a write in another unless the ' +
@@ -598,7 +602,9 @@ export const CONTEXT_ACTIONS = [
               return { ...r, hits: r.hits.map((h) => ({ ...h, space })), searched: [space], skipped: 0 }
             })()
           : null
-        const { hits, semantic, plan, searched, skipped, answerable } = (everywhere ?? one)!
+        const { hits: found, semantic, plan, searched, skipped, answerable } = (everywhere ?? one)!
+        // Two leading hits that disagree are said to disagree (rerank.ts#flagConflicts).
+        const hits = await flagConflicts(found)
         const spaceById = new Map(searched.map((s) => [s.id, s]))
 
         const entities = (
@@ -664,6 +670,7 @@ export const CONTEXT_ACTIONS = [
             snippet: h.snippet ?? null,
             ...(h.claim ? { claim: h.claim } : {}),
             ...(h.relevance !== undefined ? { relevance: h.relevance } : {}),
+            ...(h.conflicts_with ? { conflicts_with: h.conflicts_with } : {}),
             // Present only when the note is not current — see shared/lifecycle.ts.
             ...(h.status ? { status: h.status } : {}),
             ...(h.kind === 'source'
@@ -1178,6 +1185,8 @@ export const CONTEXT_ACTIONS = [
         'its folder (list_context shows each folder\'s audience). Writes are attributed to the authenticated ' +
         'caller — list_context\'s `you` says who that is here. Read the note first when editing, or you will ' +
         'clobber it; use append_context when you only want to add. ' +
+        'Creating a note answers with `similar` when existing notes are already about the same subject, and ' +
+        '`suggested` (type, folder) when the note names neither — pass check_only:true to get both WITHOUT writing. ' +
         LINK_RULE +
         'Folders and their index, the lifecycle frontmatter (`status:`, `supersedes:`, `expires:`) and the rest of ' +
         'mentions: the writing_notes guide, appended below.',
@@ -1187,6 +1196,12 @@ export const CONTEXT_ACTIONS = [
         path: z.string().describe("Context-relative path ending in .md, e.g. 'people/craig-piggott.md'"),
         content: z.string().describe('The full markdown content of the note, including frontmatter'),
         visibility: visibilityArg,
+        check_only: z
+          .boolean()
+          .optional()
+          .describe(
+            'Write NOTHING; answer with `similar` (existing notes about the same subject) and `suggested` (a type and folder this space already uses). Ask this before creating a note you are not sure is new.',
+          ),
       },
       run: async (ctx, args) => {
         const { principal, context, resolved } = await resolveTarget(ctx, args.space_id)
@@ -1194,7 +1209,25 @@ export const CONTEXT_ACTIONS = [
         // space — checked before the write, since afterwards the note always
         // exists. Personal spaces are private already.
         const gated = !resolved.isPersonalSpace
-        const existed = gated ? (await readNoteOrNull(context, args.path)) !== null : true
+        const isNew = (await readNoteOrNull(context, args.path)) === null
+        const existed = gated ? !isNew : true
+        // A NEW note is checked against what is already here (beforeWrite.ts).
+        // Advice, never a refusal: the write below still happens unless the
+        // caller asked only to check.
+        const advice = isNew ? await adviseWrite(principal, context, args.path, args.content).catch(() => null) : null
+        const adviceFields = advice
+          ? {
+              ...(advice.similar.length
+                ? {
+                    similar: advice.similar,
+                    similar_advice:
+                      'These notes are already about this. Prefer append_context or edit_context on one of them over a second note saying the same thing; if this note replaces one, say so with `supersedes:`.',
+                  }
+                : {}),
+              ...(advice.suggested ? { suggested: advice.suggested } : {}),
+            }
+          : {}
+        if (args.check_only) return { status: 'checked', path: args.path, exists: !isNew, ...adviceFields }
         // Stamped as an agent revision so human and agent edits stay
         // distinguishable in the note's history.
         const result = unwrapWrite(
@@ -1207,6 +1240,7 @@ export const CONTEXT_ACTIONS = [
         return {
           status: 'applied',
           path: result.path,
+          ...adviceFields,
           // Index paths are folders: the store holds them to the index contract
           // (a title, the managed child markers, and an entity's type and
           // `node:` when the folder is one) whatever the write carried.

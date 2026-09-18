@@ -10,7 +10,7 @@
 // answers of the asked shape with numbers in range, so a caller reading
 // `answers.x` either gets a usable value or undefined.
 
-export type JudgeText = string
+type JudgeText = string
 
 export interface NoulQuestion {
   type: 'noul'
@@ -32,11 +32,11 @@ export interface ScoreQuestion {
   criteria: JudgeText[]
 }
 
-export type JudgeQuestion = NoulQuestion | ChoiceQuestion | ScoreQuestion
+type JudgeQuestion = NoulQuestion | ChoiceQuestion | ScoreQuestion
 export type JudgeQuestions = Record<string, JudgeQuestion>
 export type JudgeState = string | Record<string, unknown> | unknown[]
 
-export interface NoulAnswer {
+interface NoulAnswer {
   type: 'noul'
   noul: number
 }
@@ -51,7 +51,7 @@ export interface ScoreAnswer {
   score: number
   confidence: number
 }
-export type JudgeAnswer = NoulAnswer | ChoiceAnswer | ScoreAnswer
+type JudgeAnswer = NoulAnswer | ChoiceAnswer | ScoreAnswer
 export type JudgeAnswers = Record<string, JudgeAnswer>
 
 const unit = (v: unknown): number | null =>

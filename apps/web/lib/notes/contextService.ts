@@ -23,6 +23,7 @@ import { rewriteLinks } from './shared/linkRewrite'
 import { fusedSearch, type FusedResult, type SearchFilters } from './shared/retrieval'
 import { planSearch, type RewriteStatus } from './queryRewrite'
 import { createReranker, type RerankReport } from './rerank'
+import { REWRITE_UNNEEDED_AT } from '@/lib/judge/shared/questions'
 import type { QueryPlan } from './shared/queryPlan'
 import { computeReferences, redactReferences } from './shared/references'
 import { pathVisibleTo } from './shared/visibility'
@@ -247,44 +248,70 @@ export async function searchContext(
     .map((s) => s.path)
 
   const now = Date.now()
-  const { plan, rewrite } = opts.plan ?? (await planSearch(query, now, { rewrite: opts.rewrite ?? true }))
-
-  // One batched embed of every phrasing, shared by both vector stages. The
-  // text stages rank on the topic (time words stripped), so that is what is
-  // embedded for the original — the alternates are embedded as written.
   // A space that switched embedding off (the Console's General → Nightly) gets
-  // no semantic half at all — not the query embed, not the lazy catch-up —
-  // and says so the way a missing key does.
+  // no semantic half at all — not the query embed, not the lazy catch-up, not
+  // the judge — and says so the way a missing key does.
   const report: SemanticReport = {}
   const keyed = semanticConfigured()
   const enabled = keyed && (await embeddingEnabledFor(context.spaceId))
-  const configured = keyed && enabled
-  const queryVectors = new Map<string, number[]>()
-  const phrasings = [plan.topic || query, ...plan.queries.slice(1)]
-  if (configured && !plan.temporalOnly) {
-    try {
-      const vectors = await embedTexts(phrasings)
-      phrasings.forEach((q, i) => queryVectors.set(q, vectors[i]))
-    } catch (err) {
-      report.error = err instanceof Error ? err.message : String(err)
-      logger.error('notes.search.embed_failed', { err })
+  const mtimes = new Map(metas.map((m) => [m.path, m.mtime]))
+
+  const run = async (plan: QueryPlan, rerankReport: RerankReport) => {
+    // One batched embed of every phrasing, shared by both vector stages. The
+    // text stages rank on the topic (time words stripped), so that is what is
+    // embedded for the original — the alternates are embedded as written.
+    const queryVectors = new Map<string, number[]>()
+    const phrasings = [plan.topic || query, ...plan.queries.slice(1)]
+    if (enabled && !plan.temporalOnly) {
+      try {
+        const vectors = await embedTexts(phrasings)
+        phrasings.forEach((q, i) => queryVectors.set(q, vectors[i]))
+      } catch (err) {
+        report.error = err instanceof Error ? err.message : String(err)
+        logger.error('notes.search.embed_failed', { err })
+      }
     }
+    return fusedSearch(notes, query, filters, {
+      k,
+      plan,
+      now,
+      vector: createVectorStage(context, queryVectors, report),
+      sources: createSourceStage(context, sourcePaths, queryVectors, report),
+      // Claims and chunks rank only for the visible notes at their CURRENT mtime.
+      memories: createMemoryStage(context, mtimes, queryVectors, report),
+      chunks: createChunkStage(context, mtimes, queryVectors, report),
+      rerank: opts.judge === false || !enabled ? undefined : createReranker(rerankReport),
+    })
   }
 
-  const rerankReport: RerankReport = {}
-  const hits = await fusedSearch(notes, query, filters, {
-    k,
-    plan,
-    now,
-    vector: createVectorStage(context, queryVectors, report),
-    sources: createSourceStage(context, sourcePaths, queryVectors, report),
-    // Claims rank only for the visible notes at their CURRENT mtime.
-    memories: createMemoryStage(context, new Map(metas.map((m) => [m.path, m.mtime])), queryVectors, report),
-    chunks: createChunkStage(context, new Map(metas.map((m) => [m.path, m.mtime])), queryVectors, report),
-    // A space that switched the semantic half off sends no note text to a
-    // model at query time, and that covers the judge.
-    rerank: opts.judge === false || !enabled ? undefined : createReranker(rerankReport),
-  })
+  // The LLM rewrite is a recall aid that costs seconds. With a judge in the
+  // search it is only worth paying for when the query AS ASKED found nothing
+  // the judge rates well: search first, and widen only on a weak first pass.
+  // Without a judge (or with a plan handed in) the rewrite runs up front.
+  const wantRewrite = opts.rewrite ?? true
+  let rerankReport: RerankReport = {}
+  const judging = opts.judge !== false && enabled && createReranker()?.floor !== undefined
+  let planned = opts.plan ?? (await planSearch(query, now, { rewrite: wantRewrite && !judging }))
+  let hits = opts.plan || !wantRewrite || !judging ? await run(planned.plan, rerankReport) : null
+  if (!hits) {
+    const first = await run(planned.plan, rerankReport)
+    const strong = rerankReport.judged && first.some((h) => (h.relevance ?? 0) >= REWRITE_UNNEEDED_AT)
+    if (strong) {
+      hits = first
+      planned = { plan: planned.plan, rewrite: 'skipped' }
+    } else {
+      const widened = await planSearch(query, now, { rewrite: true })
+      if (widened.rewrite === 'on') {
+        rerankReport = {}
+        planned = widened
+        hits = await run(widened.plan, rerankReport)
+      } else {
+        hits = first
+        planned = widened
+      }
+    }
+  }
+  const { plan, rewrite } = planned
   for (const h of hits) {
     if (isAuditedRead(p, context, h.path)) {
       void logAudit(p.spaceId, { userId: p.userId, name: p.name, action: 'read', path: h.path })

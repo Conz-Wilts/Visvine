@@ -23,7 +23,7 @@ import { compareAcrossSearches, type FusedResult, type Reranker } from './shared
 import { logger } from '@/lib/logger'
 import { decideMany, judgeConfigured, MAX_BATCH } from '@/lib/judge/client'
 import { noulOf } from '@/lib/judge/shared/types'
-import { SEARCH_QUESTIONS, SEARCH_RELEVANT_FLOOR, searchScore } from '@/lib/judge/shared/questions'
+import { CONFLICT_AT, CONFLICT_QUESTION, SEARCH_QUESTIONS, SEARCH_RELEVANT_FLOOR, searchScore } from '@/lib/judge/shared/questions'
 
 /** Candidates the judge reads: two batches, inside one search's patience. */
 const JUDGE_WINDOW = MAX_BATCH * 2
@@ -131,4 +131,35 @@ export function createReranker(report: RerankReport = {}): Reranker | undefined 
       }
     },
   }
+}
+
+/** Top hits compared for conflict: three hits is three pairs, one batch. */
+const CONFLICT_HEAD = 3
+const CONFLICT_DEADLINE_MS = 1_200
+
+/**
+ * Mark the leading hits that state conflicting facts about the same subject, so
+ * a caller is told the record disagrees with itself instead of acting on
+ * whichever hit it read first. Judged on what each hit SAYS — its claim, else
+ * its matched passage. Which one is current is the notes' lifecycle to say
+ * (`status`, `superseded_by`), not the judge's. No verdict marks nothing.
+ */
+export async function flagConflicts<T extends FusedResult>(hits: T[]): Promise<(T & { conflicts_with?: string[] })[]> {
+  const head = hits.slice(0, CONFLICT_HEAD).filter((h) => h.kind === 'note' && h.relevance !== undefined && (h.claim || h.passage))
+  if (head.length < 2 || !judgeConfigured()) return hits
+  const pairs: [T, T][] = []
+  for (let i = 0; i < head.length; i++) for (let j = i + 1; j < head.length; j++) pairs.push([head[i], head[j]])
+  const said = (h: T) => ({ title: h.title, statements: [h.claim, h.passage?.text].filter(Boolean) })
+  const answers = await decideMany(
+    pairs.map(([a, b]) => ({ state: { a: said(a), b: said(b) }, questions: { conflict: CONFLICT_QUESTION } })),
+    { deadlineMs: CONFLICT_DEADLINE_MS },
+  )
+  const against = new Map<string, string[]>()
+  pairs.forEach(([a, b], i) => {
+    const conflict = noulOf(answers[i], 'conflict')
+    if (conflict === undefined || conflict < CONFLICT_AT) return
+    against.set(a.path, [...(against.get(a.path) ?? []), b.path])
+    against.set(b.path, [...(against.get(b.path) ?? []), a.path])
+  })
+  return against.size ? hits.map((h) => (against.has(h.path) ? { ...h, conflicts_with: against.get(h.path) } : h)) : hits
 }
