@@ -44,7 +44,8 @@ import { nearPairs, type AutoFix, type Issue } from './review'
 const CAPS = { mentions: 150, picks: 40, stale: 150, pairs: 120 }
 /** How related two notes must be to be worth a judge's read. Below the mechanical floors on purpose. */
 const PAIR_MIN_SIM = 0.3
-const PAIR_NOTE_CAP = 1_500
+/** Notes the word-overlap fallback compares: ~1 s of CPU, where 1,000 notes is ~50. */
+const WORD_PAIR_NOTE_CAP = 150
 const NOTE_TEXT_CHARS = 1_200
 const MAX_PICK_CANDIDATES = 8
 /** Folders of machine-read notes — never a duplicate or a conflict of anything. */
@@ -66,6 +67,13 @@ export interface JudgedCleanInput {
   metas: NoteMeta[]
   fixes: AutoFix[]
   issues: Issue[]
+  /**
+   * Related-note pairs from the space's note vectors (lib/notes/cleanJudge.ts),
+   * when it has them. Absent, the planner finds its own by word overlap over
+   * the most recently changed notes only — that pass is O(n²) and a clean has a
+   * request's budget.
+   */
+  pairs?: readonly { a: string; b: string }[]
   /** Derived memories per note, when the space has them — the sharpest input for a conflict. */
   claimsByPath?: ReadonlyMap<string, readonly string[]>
   /** Which notes this clean may act on; a pair is read when either side is. */
@@ -133,14 +141,16 @@ export function planJudgedClean(input: JudgedCleanInput): JudgedCleanPlan {
     })
   }
 
-  // The similarity pass is the expensive part; a very large space compares its
-  // most recently changed notes, which is where new duplicates and conflicts are.
-  const comparable = input.metas
-    .filter((m) => !isIndexPath(m.path) && !CONFIG_FOLDERS.has(m.path.split('/')[0]) && !isRetired(m.frontmatter))
-    .sort((x, y) => y.mtime - x.mtime)
-    .slice(0, PAIR_NOTE_CAP)
-  const docs = comparable.map((m) => ({ path: m.path, title: m.title, body: bodyByPath.get(m.path) ?? '' }))
-  for (const pair of nearPairs(docs, PAIR_MIN_SIM, 3)) {
+  const comparable = input.metas.filter(
+    (m) => !isIndexPath(m.path) && !CONFIG_FOLDERS.has(m.path.split('/')[0]) && !isRetired(m.frontmatter),
+  )
+  const comparablePaths = new Set(comparable.map((m) => m.path))
+  const wordPairs = () => {
+    const recent = [...comparable].sort((x, y) => y.mtime - x.mtime).slice(0, WORD_PAIR_NOTE_CAP)
+    return nearPairs(recent.map((m) => ({ path: m.path, title: m.title, body: bodyByPath.get(m.path) ?? '' })), PAIR_MIN_SIM, 3)
+  }
+  const candidatePairs = input.pairs ? input.pairs.filter((p) => comparablePaths.has(p.a) && comparablePaths.has(p.b)) : wordPairs()
+  for (const pair of candidatePairs) {
     if (count.pairs >= CAPS.pairs) break
     if (!input.inScope(pair.a) && !input.inScope(pair.b)) continue
     const a = byPath.get(pair.a)!

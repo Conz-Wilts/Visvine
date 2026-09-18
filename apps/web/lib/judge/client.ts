@@ -70,13 +70,13 @@ async function one(req: JudgeRequest, signal: AbortSignal): Promise<JudgeAnswers
 /**
  * Ask several independent requests at once. The result is index-aligned with
  * the input; an entry is null where that request got no verdict. More than
- * MAX_BATCH requests are asked in consecutive batches.
+ * MAX_BATCH requests are asked in batches, each spending one allowance.
  */
 export async function decideMany(requests: JudgeRequest[], opts: JudgeOptions = {}): Promise<(JudgeAnswers | null)[]> {
   const out: (JudgeAnswers | null)[] = requests.map(() => null)
   if (!requests.length || !judgeConfigured()) return out
   const deadline = Date.now() + (opts.deadlineMs ?? DEFAULT_DEADLINE_MS)
-  for (let at = 0; at < requests.length; at += MAX_BATCH) {
+  const batch = async (at: number): Promise<boolean> => {
     let allowance = await takeToken('judge:batch', BATCH_LIMIT)
     while (!allowance.ok && opts.patient && Date.now() + allowance.retryAfterMs < deadline) {
       await new Promise((r) => setTimeout(r, allowance.retryAfterMs))
@@ -84,12 +84,12 @@ export async function decideMany(requests: JudgeRequest[], opts: JudgeOptions = 
     }
     const left = deadline - Date.now()
     if (!allowance.ok || left <= 0) {
-      logger.warn('judge.skipped', { reason: allowance.ok ? 'deadline' : 'rate', unanswered: requests.length - at })
-      return out
+      logger.warn('judge.skipped', { reason: allowance.ok ? 'deadline' : 'rate', unanswered: Math.min(MAX_BATCH, requests.length - at) })
+      return false
     }
     const signal = AbortSignal.timeout(left)
-    const batch = requests.slice(at, at + MAX_BATCH)
-    const settled = await Promise.allSettled(batch.map((r) => one(r, signal)))
+    const slice = requests.slice(at, at + MAX_BATCH)
+    const settled = await Promise.allSettled(slice.map((r) => one(r, signal)))
     let failed = 0
     settled.forEach((s, i) => {
       if (s.status === 'fulfilled') out[at + i] = s.value
@@ -97,8 +97,18 @@ export async function decideMany(requests: JudgeRequest[], opts: JudgeOptions = 
     })
     if (failed) {
       const first = settled.find((s): s is PromiseRejectedResult => s.status === 'rejected')
-      logger.warn('judge.failed', { failed, of: batch.length, err: first?.reason })
+      logger.warn('judge.failed', { failed, of: slice.length, err: first?.reason })
     }
+    return true
+  }
+  const starts = Array.from({ length: Math.ceil(requests.length / MAX_BATCH) }, (_, i) => i * MAX_BATCH)
+  // A caller someone is waiting on asks its batches at once — two dozen search
+  // candidates answer in the time of one. A patient pass goes batch by batch,
+  // so a long clean drains the shared allowance no faster than it refills.
+  if (opts.patient) {
+    for (const at of starts) if (!(await batch(at))) break
+  } else {
+    await Promise.all(starts.map(batch))
   }
   return out
 }
