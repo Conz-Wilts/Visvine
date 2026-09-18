@@ -285,8 +285,9 @@ export async function searchContext(
   }
 
   // The LLM rewrite is a recall aid that costs seconds. With a judge in the
-  // search it is only worth paying for when the query AS ASKED found nothing
-  // the judge rates well: search first, and widen only on a weak first pass.
+  // search it is only USED when the query as asked found nothing the judge
+  // rates well: the rewrite runs in parallel with the first pass, and the
+  // second pass runs on its phrasings only when the first was weak.
   // Without a judge (or with a plan handed in) the rewrite runs up front.
   const wantRewrite = opts.rewrite ?? true
   let rerankReport: RerankReport = {}
@@ -294,13 +295,18 @@ export async function searchContext(
   let planned = opts.plan ?? (await planSearch(query, now, { rewrite: wantRewrite && !judging }))
   let hits = opts.plan || !wantRewrite || !judging ? await run(planned.plan, rerankReport) : null
   if (!hits) {
+    // Started NOW, alongside the first pass, so a weak first pass does not also
+    // wait for the rewrite from zero. A strong one throws the answer away: the
+    // rewrite is paid for on every such query, in exchange for the slow case
+    // costing ~2s less. planSearch never rejects — a failed rewrite is 'error'.
+    const widening = planSearch(query, now, { rewrite: true })
     const first = await run(planned.plan, rerankReport)
     const strong = rerankReport.judged && first.some((h) => (h.relevance ?? 0) >= REWRITE_UNNEEDED_AT)
     if (strong) {
       hits = first
       planned = { plan: planned.plan, rewrite: 'skipped' }
     } else {
-      const widened = await planSearch(query, now, { rewrite: true })
+      const widened = await widening
       if (widened.rewrite === 'on') {
         rerankReport = {}
         planned = widened
