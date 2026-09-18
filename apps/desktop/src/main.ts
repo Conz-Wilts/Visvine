@@ -244,6 +244,13 @@ function createWindow(): BrowserWindow {
     if (persistTimer) clearTimeout(persistTimer);
     persist();
   });
+  // In full screen macOS hides the traffic lights in the menu bar's drop-down,
+  // so the page gives back the strip it kept for them.
+  const sendFullScreen = () => {
+    if (!win.webContents.isDestroyed()) win.webContents.send("window:fullscreen", win.isFullScreen());
+  };
+  win.on("enter-full-screen", sendFullScreen);
+  win.on("leave-full-screen", sendFullScreen);
 
   applyNavigationPolicy(win.webContents);
 
@@ -305,6 +312,7 @@ function registerWindowIpc() {
     windowControls = controls;
     win.setWindowButtonPosition(controls);
   });
+  ipcMain.handle("window:fullscreen", (event) => fromApp(event) && (BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false));
 }
 
 // ---------------------------------------------------------------------------

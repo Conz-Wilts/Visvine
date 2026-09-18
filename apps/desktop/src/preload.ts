@@ -20,6 +20,15 @@ contextBridge.exposeInMainWorld("visvineDesktop", {
   version,
   /** Stand the macOS traffic lights at (x, y) points from the window's corner. */
   setWindowControls: (position: { x: number; y: number }) => ipcRenderer.send("window:controls", position),
+  /** Whether the window is full screen now, and every change after. */
+  fullScreen: {
+    get: (): Promise<boolean> => ipcRenderer.invoke("window:fullscreen"),
+    onChange: (listener: (fullScreen: boolean) => void) => {
+      const wrapped = (_e: unknown, fullScreen: boolean) => listener(fullScreen);
+      ipcRenderer.on("window:fullscreen", wrapped);
+      return () => ipcRenderer.removeListener("window:fullscreen", wrapped);
+    },
+  },
   runtimes: {
     list: () => ipcRenderer.invoke("runtimes:list"),
     login: (id: string) => ipcRenderer.invoke("runtimes:login", id),

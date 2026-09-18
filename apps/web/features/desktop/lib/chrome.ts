@@ -15,6 +15,9 @@ import { COLLAPSED_W } from '@/features/shared/components/layout/railRow';
  * (railW / 2) sits under the middle light. The strip above the space is 40:
  * the lights' centre line is 21pt down, and 40 lands the space's tile 30pt
  * below it, the gap Slack leaves above its workspace tile.
+ *
+ * In full screen macOS hides the lights in the menu bar's drop-down, so the
+ * strip goes; the rail keeps its width, so nothing beside it moves sideways.
  */
 const MAC_TRAFFIC_LIGHT_INSET = 40;
 const MAC_LIGHTS = { x: 14, y: 14 };
@@ -30,6 +33,7 @@ type DesktopChrome = {
 
 const BROWSER: DesktopChrome = { inset: 0, railW: COLLAPSED_W };
 const MAC: DesktopChrome = { inset: MAC_TRAFFIC_LIGHT_INSET, railW: MAC_RAIL_W };
+const MAC_FULL_SCREEN: DesktopChrome = { inset: 0, railW: MAC_RAIL_W };
 
 /** The room the window's controls take — the browser's shell everywhere but the mac app. */
 export function useDesktopChrome(): DesktopChrome {
@@ -39,6 +43,13 @@ export function useDesktopChrome(): DesktopChrome {
     if (desktop?.platform !== 'darwin') return;
     desktop.setWindowControls?.(MAC_LIGHTS);
     setChrome(MAC);
+    const fullScreen = desktop.fullScreen;
+    if (!fullScreen) return;
+    let live = true;
+    const apply = (full: boolean) => { if (live) setChrome(full ? MAC_FULL_SCREEN : MAC); };
+    void fullScreen.get().then(apply);
+    const stop = fullScreen.onChange(apply);
+    return () => { live = false; stop(); };
   }, []);
   return chrome;
 }

@@ -37,6 +37,11 @@ interface DesktopBridge {
   version: string;
   /** Absent in a shell older than the page's say over the traffic lights. */
   setWindowControls?(position: { x: number; y: number }): void;
+  /** Absent in a shell older than full-screen reporting. */
+  fullScreen?: {
+    get(): Promise<boolean>;
+    onChange(listener: (fullScreen: boolean) => void): () => void;
+  };
   runtimes?: DesktopRuntimes;
 }
 
