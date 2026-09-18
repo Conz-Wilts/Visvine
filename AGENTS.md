@@ -477,6 +477,24 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   brief declaring a connector the space lacks; `activate_agent` refuses on a
   **hard** need (`hardNeeds`) and warns on a sign-in the runner owes.
   `AgentNeeds.tsx` shows the same list to a viewer.
+- **A run that only TALKED about its tools is a failure, not a success.** A model
+  that answers a tool-calling turn with the call written out as text —
+  `default_api.fetch_url(...)` in a fenced block, a plan, a JSON envelope —
+  made no call, so nothing ran. `lib/notes/shared/narratedToolCall.ts` (pure)
+  spots the shape when it names a tool the run actually has; `runToolLoop`
+  says so and hands the turn back twice, then ends `narrated`, which the runner
+  fails and counts. Recording it as success is what let a digest agent produce
+  nothing for days while its own plan went into `memory.md` as what it did.
+- **Switching an agent on is approval to run UNATTENDED, and nothing else.** A
+  person asking for one run now — Run, the box, `run_agent` — runs an INACTIVE
+  agent, as themselves, leaving the row untouched (`claimManualRun`'s
+  `allowInactive`, set only where a person stands; a chain and a Tool's
+  `agents.run` keep the gate). Trying an agent must not require turning it loose.
+- **With no model there is no engine, so `run_agent` hands the round back.** It
+  answers `ran: false` + a `stand_in` — preamble, brief, rules — and the caller
+  does it on its own subscription. Same shape as `rehearse_agent`, one rule
+  different: a rehearsal writes nothing, a stand-in writes through the ordinary
+  actions under the caller's name (`rehearsalPlan`'s `mode`).
 - **A brief is rehearsed before it is switched on.** `rehearse_agent` runs
   NOTHING: it returns the preamble, brief, model and `connectorReadiness` for
   the CALLER, and the asking model carries that one round itself, on its own

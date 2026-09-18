@@ -60,7 +60,9 @@ export async function summonAgent(input: {
   if (!(await canTriggerRun(principal, spaceId, name))) {
     return { ok: true, eventId: delivered.eventId, runId: null, dispatch: null, waiting: 'cannot_run' }
   }
-  const claimed = await claimManualRun(spaceId, name, principal.userId)
+  // A person said something to it: attended, as them, whether or not the agent
+  // is switched on for unattended runs.
+  const claimed = await claimManualRun(spaceId, name, principal.userId, new Date(), { allowInactive: true })
   if (!claimed.ok) {
     return { ok: true, eventId: delivered.eventId, runId: null, dispatch: null, waiting: claimed.code === 'busy' ? 'running' : 'claimed' }
   }

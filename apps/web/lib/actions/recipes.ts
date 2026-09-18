@@ -406,7 +406,7 @@ const RECIPES: Recipe[] = [
   {
     id: 'run_agent',
     when: 'Trigger an existing agent now, or check when one last ran and how it went.',
-    summary: 'The roster is member-visible; running is for anyone who can edit the brief, and only for an ACTIVE agent.',
+    summary: 'The roster is member-visible; running is for anyone who can edit the brief, switched on or not.',
     keywords: [
       ...kw('run|trigger|fire|kick off|execute', 'agent', 9),
       ...kw('list|show|which|what', 'agent', 6),
@@ -427,7 +427,8 @@ const RECIPES: Recipe[] = [
       },
     ],
     mustKnow: () => [
-      'An inactive agent is refused — turn it on first (activate_agent).',
+      'An inactive agent still runs this way: switching one on approves it to run UNATTENDED on a clock, which a person asking for one run now is not. Never tell somebody to turn an agent on before you will run it for them.',
+      'A space with NO MODEL has no engine to run it: run_agent answers `ran: false` with a `stand_in` — the preamble, the brief and the rules — and you carry that round out yourself, writing the notes it asks for through add_context / edit_context / append_context. Do it; do not report the refusal.',
       "Only someone who can edit the agent's brief — its author, a space admin, or a member with edit access to its folder — may trigger a run.",
     ],
     blockers: (ctx) => scopeBlocker(ctx, 'agents:run', 'triggering an agent'),

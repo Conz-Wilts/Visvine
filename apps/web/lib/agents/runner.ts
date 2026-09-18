@@ -105,7 +105,7 @@ async function release(
   name: string,
   outcome: { failed: boolean; countsAsFailure: boolean; deactivate: { reason: DeactivationReason; detail: string | null } | null },
 ): Promise<DeactivationReason | null> {
-  const state = await prisma.agentState.findUnique({ where: { id: stateId }, select: { consecutiveFailures: true, currentRunId: true } })
+  const state = await prisma.agentState.findUnique({ where: { id: stateId }, select: { active: true, consecutiveFailures: true, currentRunId: true } })
   if (!state || state.currentRunId !== runId) return null // reclaimed: not ours any more
   const failures = outcome.countsAsFailure ? state.consecutiveFailures + 1 : outcome.failed ? state.consecutiveFailures : 0
   const moved = await prisma.agentState.updateMany({
@@ -123,6 +123,10 @@ async function release(
   // `releaseMachineAfterRun` reports its own failures and answers false rather
   // than throwing, so there is nothing here to handle.
   if (!rearmed) await releaseMachineAfterRun(spaceId, name)
+  // Nothing to switch off when it is already off — a person trying an
+  // inactive agent (claimManualRun's `allowInactive`) must not stamp a
+  // deactivation reason and an audit line onto a row that never ran on a clock.
+  if (!state.active) return null
   if (outcome.deactivate) {
     await deactivateAgent(spaceId, name, outcome.deactivate.reason, outcome.deactivate.detail)
     return outcome.deactivate.reason
@@ -416,6 +420,18 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
           { ...common, countsAsFailure: false },
         )
       }
+      case 'narrated':
+        // The model wrote its calls out as text and never made one. Nothing
+        // ran, so this is a failure — recording it as a success is how a run
+        // that fetched nothing and wrote nothing came to look fine from the
+        // outside. It counts toward repeated_failure: a model that cannot
+        // call tools cannot be this agent's model.
+        return fail(
+          'narrated',
+          `The model described its tools instead of calling them (it wrote out \`${result.narratedTool}\` as text), so nothing ran. ` +
+            'It was told twice and kept doing it — this model is not calling tools on this endpoint.',
+          common,
+        )
       case 'aborted':
         return fail('timeout', `The run exceeded ${Math.round((opts.maxRunMs ?? MAX_RUN_MS) / 60_000)} minutes and was stopped.`, common)
       case 'error': {

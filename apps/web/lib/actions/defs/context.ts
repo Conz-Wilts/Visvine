@@ -1916,14 +1916,22 @@ export const CONTEXT_ACTIONS = [
       name: 'run_agent',
       scope: 'agents:run',
       summary:
-        'Run an active agent now, as you — optionally with a message saying what this run is for.',
+        'Run an agent now, as you — optionally with a message saying what this run is for. Switched off is fine.',
       description:
-        "Trigger a run of an ACTIVE agent now (see list_agents). Anyone who can edit the brief may — its author, a space admin, " +
-        'or a member with edit access to its folder; an inactive agent is refused. The run acts as YOU, the caller — a `mode: user` ' +
-        "connector spends your own linked account, not the author's. Shares the scheduler's claim path so it cannot double-fire, and " +
-        'does not advance the schedule. Returns the run id and, when the run finishes within a minute, its outcome; a longer run ' +
-        'answers `running: true` and carries on — watch it at the `watch` href rather than calling again. ' +
-        'Pass `message` to tell it what this run is for: the words reach the run as what triggered it, beside its brief.',
+        'Trigger a run of an agent now (see list_agents). Anyone who can edit the brief may — its author, a space admin, ' +
+        'or a member with edit access to its folder. IT NEED NOT BE SWITCHED ON: turning an agent on is approval for it to ' +
+        'run unattended on a clock, and a person asking for one run now is not that — so this is how an agent is tried ' +
+        'before it is trusted, and "it is inactive" is never a reason to refuse somebody who asked for a run. The run acts ' +
+        "as YOU, the caller — a `mode: user` connector spends your own linked account, not the author's. Shares the " +
+        "scheduler's claim path so it cannot double-fire, and does not advance the schedule. Returns the run id and, when " +
+        'the run finishes within a minute, its outcome; a longer run answers `running: true` and carries on — watch it at ' +
+        'the `watch` href rather than calling again. ' +
+        'Pass `message` to tell it what this run is for: the words reach the run as what triggered it, beside its brief. ' +
+        'IF THE SPACE HAS NO MODEL there is no engine here to run it, so nothing is claimed and nothing fails: the answer is ' +
+        '`ran: false` with a `stand_in` — the preamble, the brief and the rules — and YOU carry that round out yourself, on ' +
+        'your own subscription and with your own access, writing the notes the brief asks for through add_context / ' +
+        'edit_context / append_context. Do it rather than reporting the refusal, then say that adding a model is what would ' +
+        'let it run on its own.',
       input: {
         space_id: spaceArg,
         agent: z.string().describe("The agent's name, e.g. 'weekly-digest' for agents/weekly-digest/"),
@@ -1934,9 +1942,54 @@ export const CONTEXT_ACTIONS = [
           .describe('Something to say to it for this run — a question, an instruction, a thing to look at. Optional.'),
       },
       run: async (ctx, args) => {
-        const { principal } = await resolveTarget(ctx, args.space_id)
+        const { principal, context } = await resolveTarget(ctx, args.space_id)
         if (!(await canTriggerRun(principal, args.space_id, args.agent))) {
           throw new ActionError(403, 'Only someone who can edit this agent can run it')
+        }
+        // No model in the space is not a failed run — it is no run at all.
+        // Rather than claim one and fail it `config`, hand the round to the
+        // caller: they asked for the work, they have a model, and they are
+        // standing here. The brief and the rules go back; the notes it asks
+        // for are written by THEM, through the ordinary actions.
+        const agent = await describeAgent(principal, context, args.agent)
+        if (!agent) throw new ActionError(404, `No agent '${args.agent}' in this space`)
+        if (agent.invalid) throw new ActionError(409, `That brief does not parse: ${agent.invalid}`)
+        if (agent.modelProblem) {
+          const plan = rehearsalPlan({
+            name: agent.name,
+            title: agent.title,
+            mode: 'stand_in',
+            message: args.message ?? null,
+            modelEffective: agent.modelEffective,
+            modelNote: agent.modelNote,
+            modelProblem: agent.modelProblem,
+            connectors: agent.readiness.viewer,
+            tools: agent.tools,
+          })
+          const needs = await agentNeedsFor(principal, context, {
+            connectors: agent.connectors,
+            instructions: splitFrontmatter(agent.brief).body,
+            modelProblem: agent.modelProblem,
+          })
+          return {
+            agent: agent.name,
+            ran: false,
+            why: 'no_model',
+            model_problem: agent.modelProblem,
+            run_id: null,
+            out_of_reach: plan.out_of_reach,
+            needs: needs.needs,
+            plan: needs.plan,
+            stand_in: {
+              instruction: plan.instruction,
+              rules: plan.rules,
+              report: plan.report,
+              preamble: agentPreamble(agent.name),
+              brief: splitFrontmatter(agent.brief).body,
+            },
+            next: 'Carry out the round yourself now, following `stand_in`. Add a model under Settings → Models to have it run on its own.',
+            page: agentPageHref(agent.name, null, context.spaceId),
+          }
         }
         let runId: string
         let dispatch: Promise<DispatchResult> | null
@@ -1947,7 +2000,7 @@ export const CONTEXT_ACTIONS = [
           runId = summoned.runId
           dispatch = summoned.dispatch
         } else {
-          const claimed = await claimManualRun(args.space_id, args.agent, principal.userId)
+          const claimed = await claimManualRun(args.space_id, args.agent, principal.userId, new Date(), { allowInactive: true })
           if (!claimed.ok) throw new ActionError(claimed.code === 'unknown' ? 404 : 409, claimed.message)
           runId = claimed.runId
           dispatch = claimed.dispatch ?? null
@@ -1958,6 +2011,7 @@ export const CONTEXT_ACTIONS = [
         const result = dispatch ? await dispatchWithin(dispatch) : null
         return {
           run_id: runId,
+          ran: true,
           running: result === null,
           outcome: result?.ok ? result.outcome : null,
           error: result && !result.ok ? result.error : null,
@@ -2147,7 +2201,7 @@ export const CONTEXT_ACTIONS = [
           },
           then: agent.activation.active
             ? 'It is already on — run it for real with run_agent.'
-            : 'When the person is happy with it, turn it on with activate_agent. The brief is edited on its own page.',
+            : 'When the person is happy with it, run_agent does a real run now (it does not need to be on for that), and activate_agent is what puts it on a clock. The brief is edited on its own page.',
         }
       },
     }),

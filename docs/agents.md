@@ -83,9 +83,15 @@ Read this week's notes under updates/ and write a digest to reports/weekly.md �
   Never scheduled, never run by the server: Run in the desktop app fetches the prompt from
   `GET …/agents/<name>/local-runs`, the shell runs the vendor's binary, and `POST …/local-runs`
   records the run with tokens and no dollars. `LOCAL_RUNTIMES_OFF` switches a runtime off.
-- **Run now** shares the scheduler's compare-and-swap claim, requires the agent to be **active**,
-  does not advance the schedule, takes any waiting events with it, and is open to anyone who can
-  edit the brief.
+- **Run now** shares the scheduler's compare-and-swap claim, does not advance the schedule, takes
+  any waiting events with it, and is open to anyone who can edit the brief. **It does not require
+  the agent to be active**: switching one on approves it to run UNATTENDED, as its author, with
+  nobody reading the result, and a person asking for one run now — the Run button, the box on the
+  agent's page, `run_agent` — is not that. It is how an agent is tried before it is trusted, and
+  the row is untouched: an inactive agent that runs this way is still inactive afterwards, counts
+  no failures and is never re-deactivated. The waiver is `claimManualRun`'s `allowInactive`, set
+  only at a door a person stands at; everything unattended keeps the gate — a chained `run_agent`
+  from inside a run, and a Tool's `agents.run` (`lib/tools/bridge.ts`).
 - **An active agent needs at least one way to fire** — a `schedule`, an `every`, or an `on`
   trigger map. `schedule` and `every` are exclusive. A trigger-only agent has no clock:
   `next_run_at` is null until an event arrives.
@@ -225,6 +231,16 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   (`providers.ts#keyBudgetCentsFor`). No `budget_monthly:` = uncapped. Checked
   beside the agent's own cap before every run and between turns (`budget.ts#preRunStop` says which
   cap bound, so the failure message does too); reaching it pauses runs, never deactivates.
+- **A model that narrates its tools instead of calling them fails the run.** Some models answer a
+  tool-calling turn with the call written out as text — a plan, then
+  `default_api.fetch_url(...)` in a fenced block. No call is made, so the loop used to read it as
+  the final answer: the run ended after one turn having fetched nothing and written nothing, and
+  was recorded as a SUCCESS — and its plan then went into `memory.md` as what the last run did, so
+  the next run opened by discussing it and did the same again. `lib/notes/shared/narratedToolCall.ts`
+  (pure) spots the shape, but only when it names a tool this run actually has; `runToolLoop` tells
+  the model that nothing ran and gives the turn back, twice, and then ends `narrated` — a FAILURE,
+  counting toward `repeated_failure`, because a plan recorded as work is the one outcome nobody
+  catches. The preamble says the same thing up front.
 - Failure policy: 401/403 from the provider → `key_rejected`, deactivated; 429/402/5xx → wait for
   the next occurrence; ten consecutive failures → deactivated; budget reached → paused (not
   deactivated), resumes next month or when the cap is raised.
@@ -441,6 +457,15 @@ deadline, UTC) was already correct and was left untouched.
 - MCP: `list_agents` (`context:read`; includes `schedule`, `every` and `triggers` so a trigger-only
   agent does not read "No schedule"), `run_agent` (`agents:run`; optional `message`). Authoring is
   not an MCP tool.
+- **`run_agent` on a space with NO MODEL runs nothing and fails nothing.** There is no engine
+  there, so claiming a run only to fail it `config` spends a run row on a question already
+  answered. Instead it answers `ran: false`, `why: 'no_model'` and a **`stand_in`** — the
+  preamble, the brief, the rules and the report — and the CALLER carries that round out on its own
+  subscription. Same shape as `rehearse_agent`, one rule different: a rehearsal writes nothing,
+  because the brief is unproven; a stand-in WRITES, through `add_context` / `edit_context` /
+  `append_context`, under the caller's own name, because the person asked for the work rather than
+  a preview. `rehearsalPlan`'s `mode` is the whole difference (`lib/agents/shared/rehearsal.ts`,
+  pure).
 
 ## Code map
 

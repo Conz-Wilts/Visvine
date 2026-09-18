@@ -79,17 +79,30 @@ export async function reclaimStale(now: Date): Promise<number> {
 /**
  * Atomic claim. `scheduled` requires the row to be due and ADVANCES
  * next_run_at (never `+ interval`: always the next occurrence after now);
- * `manual` requires only active+idle; claimManualRun then resets next_run_at to
- * the clock (the mail it takes had pulled it forward). Returns true iff exactly one row moved.
+ * `manual` requires idle, and active only when the caller is not a person
+ * (see claimManualRun) — claimManualRun then resets next_run_at to the clock
+ * (the mail it takes had pulled it forward). Returns true iff exactly one row moved.
  */
-async function claim(stateId: string, mode: 'scheduled' | 'manual', now: Date, nextRunAt: Date | null, runId: string): Promise<boolean> {
+async function claim(
+  stateId: string,
+  mode: 'scheduled' | 'manual',
+  now: Date,
+  nextRunAt: Date | null,
+  runId: string,
+  opts: { requireActive?: boolean } = {},
+): Promise<boolean> {
   const changed =
     mode === 'scheduled'
       ? await prisma.$executeRaw`
           UPDATE "agent_state"
              SET "status" = 'running', "running_since" = ${now}, "current_run_id" = ${runId}, "last_run_at" = ${now}, "next_run_at" = ${nextRunAt}, "updated_at" = ${now}
            WHERE "id" = ${stateId} AND "status" = 'idle' AND "active" = true AND "next_run_at" IS NOT NULL AND "next_run_at" <= ${now}`
-      : await prisma.$executeRaw`
+      : opts.requireActive === false
+        ? await prisma.$executeRaw`
+          UPDATE "agent_state"
+             SET "status" = 'running', "running_since" = ${now}, "current_run_id" = ${runId}, "last_run_at" = ${now}, "updated_at" = ${now}
+           WHERE "id" = ${stateId} AND "status" = 'idle'`
+        : await prisma.$executeRaw`
           UPDATE "agent_state"
              SET "status" = 'running', "running_since" = ${now}, "current_run_id" = ${runId}, "last_run_at" = ${now}, "updated_at" = ${now}
            WHERE "id" = ${stateId} AND "status" = 'idle' AND "active" = true`
@@ -240,10 +253,21 @@ export type RunNowResult =
   | { ok: false; code: 'inactive' | 'busy' | 'unknown'; message: string }
 
 /**
- * "Run now": shares the claim path (same CAS), requires the agent to be
- * ACTIVE (a member may not execute a never-approved brief), does not advance
- * the schedule. Returns as soon as the run is claimed and dispatched — the
- * dispatch itself is awaited by the caller if it wants the outcome.
+ * "Run now": shares the claim path (same CAS), does not advance the schedule.
+ * Returns as soon as the run is claimed and dispatched — the dispatch itself
+ * is awaited by the caller if it wants the outcome.
+ *
+ * ACTIVE is required by DEFAULT, and waived only by a door a person is
+ * standing at (`allowInactive`): the Run button, `run_agent`, the box on the
+ * agent's page. Switching an agent on is approval for it to run UNATTENDED —
+ * at 3am, as its author, with nobody to read what it did — and that is the
+ * thing an inactive agent may not do. Somebody who can edit the brief asking
+ * for one run, now, as themselves, is not that: it is how you try an agent
+ * before you trust it, and refusing it was why a new agent could only be seen
+ * working by first turning it loose. Nothing about the row changes — an
+ * inactive agent that runs this way is still inactive when it finishes.
+ * Everything unattended keeps the gate: a chained `run_agent` from inside
+ * another run, and a Tool's `agents.run` (lib/tools/bridge.ts).
  */
 export async function claimManualRun(
   spaceId: string,
@@ -265,15 +289,27 @@ export async function claimManualRun(
      * cannot be theirs — it is the parent brief's, as its author.
      */
     runAs?: 'author'
+    /**
+     * A person is asking for this run, at a door they are standing at, so the
+     * agent need not be switched on. Never set from inside a run.
+     */
+    allowInactive?: boolean
   } = {},
 ): Promise<RunNowResult & { dispatch?: Promise<DispatchResult> }> {
   const row = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } } })
   if (!row) return { ok: false, code: 'unknown', message: 'No such agent.' }
-  if (!row.active) return { ok: false, code: 'inactive', message: 'The agent must be active before it can be run — ask a space admin to activate it.' }
+  // A chain is an agent starting an agent — unattended either way, so the
+  // waiver never applies to it however the caller asked.
+  const requireActive = !opts.allowInactive || Boolean(opts.chain)
+  if (requireActive && !row.active) {
+    return { ok: false, code: 'inactive', message: 'The agent must be active before it can be run — ask a space admin to activate it.' }
+  }
   if (row.status === 'running') return { ok: false, code: 'busy', message: 'The agent is already running.' }
   if (!opts.chain && (await busySpaces()).has(spaceId)) return { ok: false, code: 'busy', message: 'Another agent in this space is running; try again shortly.' }
   const runId = newRunId()
-  if (!(await claim(row.id, 'manual', now, null, runId))) return { ok: false, code: 'busy', message: 'The agent was just claimed by another run.' }
+  if (!(await claim(row.id, 'manual', now, null, runId, { requireActive }))) {
+    return { ok: false, code: 'busy', message: 'The agent was just claimed by another run.' }
+  }
   // A manual run takes any waiting mail too — otherwise "Run now" would do the
   // work and the debounce would fire a second run for the same events. The
   // events had pulled next_run_at forward; with them consumed, it goes back to

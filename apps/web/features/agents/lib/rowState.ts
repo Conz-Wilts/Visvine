@@ -48,6 +48,7 @@ const REASON_LABEL: Record<string, string> = {
 const TERMINAL_LABEL: Record<string, string> = {
   finished: 'finished',
   max_turns: 'hit the turn cap',
+  narrated: 'described its tools instead of using them',
   budget: 'monthly budget reached',
   run_cap: 'per-run cap reached',
   timeout: 'timed out',

@@ -10,8 +10,9 @@ export const maxDuration = 1560
 
 /**
  * "Run now" — anyone who can edit the brief (author, admin, or a member whose
- * grant reaches the agent's folder), ACTIVE agents only: an agent that is off
- * has no schedule or run-as to run under.
+ * grant reaches the agent's folder). The agent need not be switched on: a
+ * person pressing Run is attended and acts as themselves, and trying an agent
+ * before turning it loose is the point (see claimManualRun's `allowInactive`).
  * Shares the scheduler's claim path (same compare-and-swap) so it cannot
  * collide with a scheduled firing, and does not advance the schedule.
  *
@@ -32,7 +33,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ sp
   const { principal } = ctx
   if (!(await canTriggerRun(principal, spaceId, name))) return bad('Only someone who can edit this agent can run it.', 403)
 
-  const claimed = await claimManualRun(spaceId, name, principal.userId)
+  const claimed = await claimManualRun(spaceId, name, principal.userId, new Date(), { allowInactive: true })
   if (!claimed.ok) return bad(claimed.message, claimed.code === 'unknown' ? 404 : 409)
 
   const result = claimed.dispatch ? await dispatchWithin(claimed.dispatch) : null

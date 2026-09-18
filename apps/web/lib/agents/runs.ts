@@ -45,6 +45,7 @@ export type RunStatus = 'running' | 'succeeded' | 'failed'
 export type TerminalReason =
   | 'finished'
   | 'max_turns'
+  | 'narrated'
   | 'budget'
   | 'run_cap'
   | 'timeout'

@@ -16,6 +16,7 @@ import {
   type ChatWithToolsResult,
   type ToolSpec,
 } from './ai'
+import { MAX_NARRATION_NUDGES, narratedToolCall, narrationNudge } from './shared/narratedToolCall'
 
 export type ChatFn = (
   messages: AgentMessage[],
@@ -36,7 +37,7 @@ export type ToolLoopEvent =
   | { type: 'tool'; tool: string; detail: string }
   | { type: 'tool_result'; tool: string; text: string }
 
-type ToolLoopReason = 'finished' | 'max_turns' | 'stopped' | 'aborted' | 'error'
+type ToolLoopReason = 'finished' | 'max_turns' | 'stopped' | 'aborted' | 'error' | 'narrated'
 
 export interface ToolLoopOptions {
   /** Seed conversation — normally a system message and the user prompt. */
@@ -58,6 +59,8 @@ export interface ToolLoopResult {
   reason: ToolLoopReason
   /** The `beforeTurn` reason when `reason === 'stopped'`. */
   stopReason: string | null
+  /** The tool the model wrote out but never called, when `reason === 'narrated'`. */
+  narratedTool: string | null
   /** The model's final plain-text answer, when it gave one. */
   finalText: string | null
   turns: number
@@ -84,14 +87,17 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   const byName = new Map(opts.tools.map((t) => [t.spec.name, t]))
   const emit = opts.onEvent ?? (() => {})
   let usage: ChatUsage = { promptTokens: 0, completionTokens: 0 }
+  /** How often this run has written a call out as text instead of making it. */
+  let nudges = 0
 
   const done = (
     reason: ToolLoopReason,
     turns: number,
-    extra: Partial<Pick<ToolLoopResult, 'stopReason' | 'finalText' | 'error'>> = {},
+    extra: Partial<Pick<ToolLoopResult, 'stopReason' | 'finalText' | 'error' | 'narratedTool'>> = {},
   ): ToolLoopResult => ({
     reason,
     stopReason: extra.stopReason ?? null,
+    narratedTool: extra.narratedTool ?? null,
     finalText: extra.finalText ?? null,
     turns,
     usage,
@@ -113,6 +119,22 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
     usage = addUsage(usage, reply.usage)
 
     if (reply.toolCalls.length === 0) {
+      // A reply with no tool calls is normally the answer. It is not when the
+      // answer IS a call, written out as text (lib/notes/shared/narratedToolCall.ts):
+      // the model thinks it acted and nothing ran. Say so and give it the turn
+      // back; a model that keeps narrating ends the run as a FAILURE, because a
+      // plan recorded as a success is the one outcome nobody catches.
+      const narrated = narratedToolCall(reply.content, specs.map((s) => s.name))
+      if (narrated) {
+        if (reply.content?.trim()) emit({ type: 'assistant', text: reply.content.trim() })
+        if (nudges >= MAX_NARRATION_NUDGES) {
+          return done('narrated', turn + 1, { finalText: reply.content?.trim() || null, narratedTool: narrated })
+        }
+        nudges++
+        messages.push({ role: 'assistant', content: reply.content ?? '' })
+        messages.push({ role: 'user', content: narrationNudge(narrated) })
+        continue
+      }
       // The final answer is returned, not emitted — callers render it their way.
       return done('finished', turn + 1, { finalText: reply.content?.trim() || null })
     }
