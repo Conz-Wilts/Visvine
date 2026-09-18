@@ -659,7 +659,8 @@ the regression gate.
   only reorders; `off` runs neither. `pnpm eval:judge` is the live harness.
 - **The deployment's own AI is ONE key: `OPENROUTER_API_KEY`.** Chat
   (`lib/notes/ai.ts`, default `deepseek/deepseek-v4-flash-0731`, override
-  `OPENROUTER_MODEL`), the judge (`lib/judge/`, `JUDGE_MODEL`) and embeddings (`lib/notes/embeddings.ts`,
+  `OPENROUTER_MODEL`; the search rewrite alone runs on `OPENROUTER_REWRITE_MODEL`,
+  default `google/gemini-2.5-flash-lite`, because a person waits on it), the judge (`lib/judge/`, `JUDGE_MODEL`) and embeddings (`lib/notes/embeddings.ts`,
   `openai/text-embedding-3-small` at 768 dims, `EMBED_MODEL`) both go through
   OpenRouter. Without it the response reports `semantic: "no-key"` rather than
   degrading silently; after setting it run `pnpm db:embed` once. A space's

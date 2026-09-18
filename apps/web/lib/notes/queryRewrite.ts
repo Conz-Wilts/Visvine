@@ -16,6 +16,14 @@ import { logger } from '@/lib/logger'
 
 export type RewriteStatus = 'on' | 'off' | 'skipped' | 'error'
 
+/**
+ * The rewrite runs while a person or an agent waits, so it has its own model:
+ * the deployment's default chat model took 7–28 s here, Gemini 2.5 Flash-Lite
+ * ~1.4 s for the same phrasings at the same price (measured 2026-09-19).
+ * OPENROUTER_REWRITE_MODEL overrides it; every unattended pass keeps the default.
+ */
+const REWRITE_MODEL = process.env.OPENROUTER_REWRITE_MODEL ?? 'google/gemini-2.5-flash-lite'
+
 /** Queries with this many words or fewer are keywords, not questions. */
 const MIN_REWRITE_WORDS = 3
 
@@ -30,10 +38,13 @@ const SYSTEM =
 
 async function rewriteQuery(query: string, now: number): Promise<ReturnType<typeof coerceQueryRewrite>> {
   const today = new Date(now).toISOString().slice(0, 10)
-  const raw = await chat([
-    { role: 'system', content: SYSTEM },
-    { role: 'user', content: `Reference date: ${today}\nQuery: ${query}` },
-  ])
+  const raw = await chat(
+    [
+      { role: 'system', content: SYSTEM },
+      { role: 'user', content: `Reference date: ${today}\nQuery: ${query}` },
+    ],
+    { model: REWRITE_MODEL },
+  )
   return coerceQueryRewrite(extractJsonObject(raw), query)
 }
 

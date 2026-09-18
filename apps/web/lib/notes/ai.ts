@@ -110,7 +110,7 @@ export function aiModelName(): string {
 
 // One chat completion over the OpenAI-compatible REST API. Throws if unconfigured.
 // Exported for the other AI passes (enrichment in ./enrich.ts).
-export async function chat(messages: ChatMessage[]): Promise<string> {
+export async function chat(messages: ChatMessage[], opts: { model?: string } = {}): Promise<string> {
   const config = resolveConfig()
   if (!config) {
     throw new Error('AI is not configured: set OPENROUTER_API_KEY.')
@@ -119,7 +119,7 @@ export async function chat(messages: ChatMessage[]): Promise<string> {
   const res = await fetch(`${base}chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
-    body: JSON.stringify({ model: config.model, messages }),
+    body: JSON.stringify({ model: opts.model ?? config.model, messages }),
   })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
