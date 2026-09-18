@@ -544,11 +544,17 @@ export default function Sidebar() {
         >
           {/* The strip the window controls stand in, and the window's handle:
               dragging it moves the window, the way the title bar it replaced
-              did. Nothing in a browser — chromeInset is 0 there. */}
+              did. Its bottom edge is a band hairline like the rail's others,
+              holding the controls apart from the space under them. Nothing in
+              a browser — chromeInset is 0 there. */}
           {chromeInset > 0 && (
             <div
-              className="absolute inset-x-0 top-0"
-              style={{ height: chromeInset, WebkitAppRegion: "drag" } as React.CSSProperties}
+              className="absolute inset-x-0 top-0 border-b"
+              style={{
+                height: chromeInset,
+                borderBottomColor: "var(--shell-border, #e5e7eb)",
+                WebkitAppRegion: "drag",
+              } as React.CSSProperties}
             />
           )}
           {railInner}
