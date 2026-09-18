@@ -8,6 +8,7 @@ import {
   type SessionableUser,
 } from "@/lib/auth/bootstrap";
 import prisma from "@/lib/prisma";
+import { googleDisplayName } from "@/lib/auth/googleName";
 import { Prisma } from "@prisma/client";
 
 async function buildSessionResponse(
@@ -85,7 +86,7 @@ export async function GET(req: NextRequest) {
   }
 
   const googleId: string = googleUser.id;
-  const googleName: string = googleUser.name ?? googleUser.email;
+  const googleName = googleDisplayName(googleUser);
   const googlePicture: string = googleUser.picture ?? "";
 
   // Step 3: Look up by Google ID first (fastest path — handles returning users)

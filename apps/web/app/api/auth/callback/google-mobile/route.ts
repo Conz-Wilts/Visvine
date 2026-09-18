@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession } from "@/lib/session";
 import prisma from "@/lib/prisma";
+import { googleDisplayName } from "@/lib/auth/googleName";
 import { Prisma } from "@prisma/client";
 import { logger } from "@/lib/logger";
 import { ensureHomeNodeId, type SessionableUser } from "@/lib/auth/bootstrap";
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
   }
 
   const googleId: string = googleUser.id;
-  const googleName: string = googleUser.name ?? googleUser.email;
+  const googleName = googleDisplayName(googleUser);
   const googlePicture: string = googleUser.picture ?? "";
 
   // Step 3: Look up by Google ID first (fastest path — handles returning users)
