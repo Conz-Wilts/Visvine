@@ -217,6 +217,8 @@ const ALTERNATE_WEIGHT = 0.7
 const OVERFETCH = 3
 /** The most candidates a reranker is handed — it reads every one. */
 const RERANK_WINDOW = 30
+/** The least a dropping reranker reads, whatever k is. */
+const DROPPING_HEAD = 24
 /** Characters of a candidate a reranker sees. */
 const RERANK_TEXT_CHARS = 900
 
@@ -517,7 +519,11 @@ export async function fusedSearch(
   // it IS the answer. A reranker that drops sits such a plan out.
   const sitsOut = opts.rerank?.floor !== undefined && plan.intent === 'history'
   if (opts.rerank && ranked.length > 0 && !sitsOut) {
-    ranked = await rerankHead(ranked, Math.min(RERANK_WINDOW, k * OVERFETCH), plan.topic || query, opts.rerank, (key) => {
+    // A reranker that DROPS needs a deeper head than one that reorders: with
+    // k = 5 a head of 15 that loses ten leaves five, and the sixth-best by
+    // fusion — often the right note found by one stage only — was never read.
+    const head = opts.rerank.floor === undefined ? k * OVERFETCH : Math.max(k * OVERFETCH, DROPPING_HEAD)
+    ranked = await rerankHead(ranked, Math.min(RERANK_WINDOW, head), plan.topic || query, opts.rerank, (key) => {
       const r = toResult([key, 0])
       // What a reader would judge the hit by: what it is, what it says it is
       // about, and the part that matched. A match in the description or the
