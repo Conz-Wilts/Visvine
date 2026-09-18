@@ -13,8 +13,8 @@ import { COLLAPSED_W } from '@/features/shared/components/layout/railRow';
  * release draws its rail): 14pt in and 14pt down, and the group is 60pt
  * wide, so the rail is 14 + 60 + 14 = 88 and every glyph's centre
  * (railW / 2) sits under the middle light. The strip above the space is 40:
- * the lights' centre line is 21pt down, and 40 lands the space's tile 30pt
- * below it, the gap Slack leaves above its workspace tile.
+ * the lights' centre line is 21pt down, and its hairline sits clear under
+ * them. The space below that line is a square of the rail's width.
  *
  * In full screen macOS hides the lights in the menu bar's drop-down, so the
  * strip goes; the rail keeps its width, so nothing beside it moves sideways.

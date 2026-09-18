@@ -9,7 +9,7 @@ import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { SettingsIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { spaceMark } from '@/lib/spaces/subspaces';
-import { HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
+import { END_ROW_H, HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
 
 /**
  * The space band — the rail's first rows (Sidebar). The space sits at the head
@@ -147,9 +147,9 @@ export default function SpaceSelector() {
           className={`relative z-10 flex w-full items-center transition-colors duration-150 hover:bg-surface-3 ${
             switcherOpen ? 'bg-surface-3' : ''
           }`}
-          style={{ height: ROW_H }}
+          style={{ height: END_ROW_H }}
         >
-          <span className="flex shrink-0 items-center justify-center" style={{ width: HEAD_CELL_W, height: ROW_H }}>
+          <span className="flex shrink-0 items-center justify-center" style={{ width: HEAD_CELL_W, height: END_ROW_H }}>
             {currentSpace && mark ? (
               <SpaceAvatar name={mark.name} imageUrl={mark.imageUrl} size="md" rounded="rounded-[8px]" className="!w-10 !h-10 !text-sm" />
             ) : (

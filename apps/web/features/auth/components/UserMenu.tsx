@@ -185,6 +185,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
           expanded={expanded}
           reduced={reduced}
           label={user.name ?? "Account"}
+          square
           active={open}
           href={profileHref ?? undefined}
           onClick={profileHref ? undefined : () => { setPinned((v) => !v); setOpen(true); }}

@@ -23,7 +23,6 @@ import type { SpaceFeatureConfig } from "@/lib/types";
 import {
   EXPANDED_W,
   ITEM_GAP,
-  ROW_H,
   ROW_INSET,
   RAIL_CELL_VAR,
   Row,
@@ -72,11 +71,6 @@ const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full h
 // like every other row, so it sits in the screen's bottom-left corner rather
 // than floating a band's height above it.
 const RAIL_PAD_Y = 0;
-// paddingTop is its own number, because the head row is aligned to the shell's
-// top band rather than to the pane below it: the band is SHELL_TOP_BAR_H tall,
-// so the space avatar — 40px in a ROW_H-tall row — starts where its centre lands on
-// that band's centre line.
-const RAIL_PAD_TOP = Math.max(0, (SHELL_TOP_BAR_H - ROW_H) / 2);
 // A band boundary: the hairline sits ITEM_GAP below the last row and ITEM_GAP
 // above the next one, so the bands are held apart by the rhythm the rows
 // already have rather than by a number of their own.
@@ -522,13 +516,12 @@ export default function Sidebar() {
           className="relative flex shrink-0 flex-col overflow-hidden border-r"
           style={{
             background: "var(--shell-bg, #ffffff)",
-            // Under the window controls the seam is drawn below the strip
-            // instead, so the lights stand in one band with the page's top bar.
-            borderRightColor: chromeInset > 0 ? "transparent" : "var(--shell-border, #e5e7eb)",
+            borderRightColor: "var(--shell-border, #e5e7eb)",
             width: railW,
             // In the desktop shell the window has no title bar, so the rail
-            // starts below the traffic lights rather than under them.
-            paddingTop: RAIL_PAD_TOP + chromeInset,
+            // starts below the traffic lights rather than under them; the
+            // space's square begins on the strip's hairline.
+            paddingTop: chromeInset,
             paddingBottom: RAIL_PAD_Y,
             transition: reduced ? "none" : `width ${RAIL_MOTION}`,
           }}
@@ -559,21 +552,6 @@ export default function Sidebar() {
           )}
           {railInner}
         </div>
-        {/* The rail's seam in the desktop shell, begun below the window
-            controls (see the transparent border above), on the pixel the
-            border holds and travelling with the rail's edge. */}
-        {chromeInset > 0 && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute bottom-0 z-10 w-px"
-            style={{
-              top: chromeInset,
-              left: railW - 1,
-              background: "var(--shell-border, #e5e7eb)",
-              transition: reduced ? "none" : `left ${RAIL_MOTION}`,
-            }}
-          />
-        )}
 
         {/* The side panel, hosted inside this same card. Always mounted so the portal
             host stays stable and the column can transition its width open ↔ closed;
