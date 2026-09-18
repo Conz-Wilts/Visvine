@@ -154,6 +154,19 @@ export function linkFirstMention(body: string, title: string, targetPath: string
   return spliceLink(body, match.index, match[0].length, targetPath)
 }
 
+/**
+ * The passage around the mention `linkFirstMention` would link — what a reader
+ * (or a judge) needs to tell whether "Will" here is the person or the verb.
+ * Null when there is no eligible mention.
+ */
+export function firstMentionExcerpt(body: string, title: string): string | null {
+  if (title.trim().length < MIN_TITLE_LEN) return null
+  const re = new RegExp(`(?<![\\w])${escapeRegExp(title)}(?![\\w])`, 'i')
+  const match = re.exec(maskLinks(body))
+  if (!match) return null
+  return makeExcerpt(blockAround(body, match.index)).slice(0, MAX_TARGET_EXCERPT)
+}
+
 // Turn the mention at exactly `offset` (a body offset, as carried by
 // UnlinkedReference) into a link — so linking the reference the user clicked
 // doesn't silently link a different, earlier mention. Returns null when the

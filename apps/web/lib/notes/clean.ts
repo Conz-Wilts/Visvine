@@ -30,6 +30,8 @@ import {
   type WorklistGroup,
 } from './shared/clean'
 import { isLockedPath } from './shared/authz'
+import { judgeClean } from './cleanJudge'
+import type { JudgedCleanResult } from './shared/cleanJudge'
 import type { ContextPrincipal } from './shared/contextTypes'
 
 export interface CleanOptions {
@@ -48,6 +50,8 @@ export interface CleanAnalysis {
   safe_fixes: { count: number; sample: AutoFix[]; apply_with: string }
   worklist: WorklistGroup[]
   structure?: FolderStructure
+  /** What the judge changed, present when one ran: fixes it vetoed, pair issues it found or dismissed. */
+  judged?: JudgedCleanResult['judged']
   truncated?: boolean
   next_steps: string
 }
@@ -115,8 +119,18 @@ async function analyze(
     // back are exactly the ones this caller may apply.
     frozen: (path) => isLockedPath(p.access.locked, path) || !scope.inScope(path),
   })
-  const fixes = filterCleanFixes(report.autoFixes)
-  const issues = scopeIssues(report.issues, scope)
+  // The judged half: a judge may veto mention links and stale marks, and
+  // adds, confirms or dismisses pair issues by meaning (shared/cleanJudge.ts).
+  // No judge, or no verdict, and the mechanical report stands as it is.
+  const verdict = await judgeClean(context, {
+    raws: analyzedRaws,
+    metas: analyzedMetas,
+    fixes: filterCleanFixes(report.autoFixes),
+    issues: report.issues,
+    inScope: scope.inScope,
+  })
+  const fixes = verdict?.fixes ?? filterCleanFixes(report.autoFixes)
+  const issues = scopeIssues(verdict?.issues ?? report.issues, scope)
 
   const analysis: CleanAnalysis = {
     role: opts.role,
@@ -130,6 +144,7 @@ async function analyze(
       apply_with: "clean_context with action:'apply_fixes' applies all of these mechanically",
     },
     worklist: buildWorklist(issues, opts.limit),
+    ...(verdict ? { judged: verdict.judged } : {}),
     ...(truncated ? { truncated: true } : {}),
     next_steps:
       fixes.length || issues.length

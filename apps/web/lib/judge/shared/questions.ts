@@ -54,3 +54,45 @@ export const WAKE_QUESTION = noul(
 )
 /** Under this the save does not start a run. Low: a missed wake is worse than a wasted one. */
 export const WAKE_FLOOR = 0.2
+
+// ── Clean ───────────────────────────────────────────────────────────────────
+
+const score = (instructions: string, criteria: string[]): ScoreQuestion => ({ type: 'score', instructions, criteria })
+
+/** State: { passage, candidate: { title, type, description } }. */
+export const MENTION_QUESTION = noul(
+  'In the passage, does the name refer to the candidate?',
+  'The passage uses the name to mean this specific person, organisation or thing.',
+  'The passage uses the word in its ordinary sense, or means someone or something else with the same name.',
+)
+/** A mention under this is not auto-linked. */
+export const MENTION_VETO_BELOW = 0.3
+/** An ambiguous mention's suggested target is named only above this confidence. */
+export const MENTION_PICK_CONFIDENCE = 0.75
+
+/** State: { a: { title, text }, b: { title, text } }. Levels 0..2. */
+export const SAME_NOTE_QUESTION = score('How do these two notes relate?', [
+  'They are about different subjects, or different instances of the same kind of thing (two meetings, two people).',
+  'They are about the same subject but each says things the other does not.',
+  'They record the same thing: one could be deleted and almost nothing would be lost.',
+])
+/** At or over this position the pair is a duplicate; under DIFFERENT_BELOW a mechanical duplicate is dismissed. */
+export const DUPLICATE_AT = 1.6
+export const DIFFERENT_BELOW = 0.5
+
+/** State: { a: { title, statements }, b: { title, statements } }. */
+export const CONFLICT_QUESTION = noul(
+  'Do the two notes state conflicting facts about the same subject?',
+  'One note states something about a subject that the other note states differently: both cannot be true at once.',
+  'The notes agree, or are about different subjects, or one only adds detail the other lacks.',
+)
+export const CONFLICT_AT = 0.7
+
+/** State: { title, type, text }. Levels 0..2. */
+export const DURABILITY_QUESTION = score('How long does what this note records stay true and useful?', [
+  'Ephemeral: logistics, a status update, a to-do list, something about one moment.',
+  'Working knowledge: true for a while, expected to change.',
+  'Durable: a record of a person, a decision, a policy, a reference that does not age by being left alone.',
+])
+/** At or over this a note is not marked stale for being untouched. */
+export const DURABLE_AT = 1.4

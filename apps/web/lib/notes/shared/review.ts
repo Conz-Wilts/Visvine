@@ -62,6 +62,8 @@ export interface Issue {
   path: string
   kind: string
   detail: string
+  /** The second note of a pair issue (duplicate, contradiction) — what lets a later pass find the pair again. */
+  other?: string
 }
 
 export interface ReviewReport {
@@ -354,6 +356,7 @@ function checkDuplicates(pairs: NearPair[], titleOf: (p: string) => string, sim:
       path: p.a,
       kind: 'duplicate',
       detail: `possible duplicate of ${titleOf(p.b)} (${p.score.toFixed(2)}) — consider merging`,
+      other: p.b,
     }))
 }
 
@@ -525,6 +528,7 @@ export function checkContradictions(
       path: a.path,
       kind: 'contradiction',
       detail: `conflicts with ${b.title} (${b.path}) — ${found.slice(0, 2).join('; ')}`,
+      other: b.path,
     })
   }
   return out
