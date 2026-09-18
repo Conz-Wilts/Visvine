@@ -1,5 +1,5 @@
 // The single-note CRUD endpoint.
-//   GET    /api/notes/item?spaceId=&scope=&path=        → { content, path }
+//   GET    /api/notes/item?spaceId=&scope=&path=        → { content, path, held }
 //   POST   { spaceId, scope, path, content? }            → { note, movedTo? }  (create)
 //   PUT    { spaceId, scope, path, content, origin? }    → { ok, movedTo? }    (write + revision)
 //   PATCH  { spaceId, scope, from, to }                  → { path }   (rename/move)
@@ -32,6 +32,7 @@ import {
   createNote,
   deleteNote,
   getNoteCreatedBy,
+  heldKeysFor,
   listRaw,
 } from '@/lib/notes/store'
 import { buildNoteIndex } from '@/lib/notes/shared/context'
@@ -59,7 +60,10 @@ export async function GET(req: NextRequest) {
   const canonical = isFederatedPath(path) ? path : await canonicalEntityWritePath(context, path)
   const content = await readFederated(p, context, canonical)
   if (content === null) return fail(`Note not found: ${path}`, 404)
-  return NextResponse.json({ content, path: canonical })
+  // `held` names the frontmatter keys a write here cannot change — the
+  // record's, put back on every save — so the raw editor can draw them as such.
+  const held = isFederatedPath(path) ? [] : await heldKeysFor(context, canonical)
+  return NextResponse.json({ content, path: canonical, held })
 }
 
 export async function POST(req: NextRequest) {

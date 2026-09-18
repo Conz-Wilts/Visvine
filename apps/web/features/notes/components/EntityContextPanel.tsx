@@ -779,6 +779,7 @@ export function EntityContextPanel({
             meta={openMeta}
             notes={noteRefs}
             initialContent={shownRead?.status === 'ok' ? shownRead.content : stubContent}
+            heldKeys={shownRead?.status === 'ok' ? shownRead.held : undefined}
             canEdit={canWrite}
             aiConfigured={aiConfigured}
             mode={mode}

@@ -405,7 +405,7 @@ export function DraftContextPanel({
     invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
     // The note we just wrote IS the freshest read — priming it means the note
     // page paints its content on first render instead of flashing a skeleton.
-    primeContextCache(contextKeys.read(spaceId, path), { status: 'ok', content })
+    primeContextCache(contextKeys.read(spaceId, path), { status: 'ok', content, held: [] })
     sessionStorage.removeItem(STASH_KEY)
     router.replace(noteHref(path))
   }, [spaceId, title, tags, contextFolderTree.notePaths, router, customType, customConfig])
@@ -425,7 +425,7 @@ export function DraftContextPanel({
     })
     const { indexPath } = await notesApi.createFolder(spaceId, folderPath, content)
     invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
-    primeContextCache(contextKeys.read(spaceId, indexPath), { status: 'ok', content })
+    primeContextCache(contextKeys.read(spaceId, indexPath), { status: 'ok', content, held: [] })
     sessionStorage.removeItem(STASH_KEY)
     router.replace(noteHref(indexPath))
   }, [spaceId, title, tags, folderPaths, router, customType, customConfig])

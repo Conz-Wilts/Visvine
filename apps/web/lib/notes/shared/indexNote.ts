@@ -229,11 +229,7 @@ export function nextIndexTitle(
  * Returns `content` unchanged when it already conforms, so callers can apply
  * this unconditionally on every index-path write.
  */
-export function enforceIndexFrontmatter(
-  content: string,
-  folderPath: string,
-  entity?: { typeLabel: string; nodeId: string; name: string; acceptsType?: (declared: string) => boolean },
-): string {
+export function enforceIndexFrontmatter(content: string, folderPath: string, entity?: IndexEntity): string {
   const fm = parseFrontmatter(content) as Record<string, unknown>
   const declaredType = typeof fm.type === 'string' ? fm.type.trim() : ''
   const declaredTitle = typeof fm.title === 'string' ? fm.title.trim() : ''
@@ -244,9 +240,13 @@ export function enforceIndexFrontmatter(
       (!claimsShape && declaredType !== '' && (entity.acceptsType?.(declaredType) ?? false))
     : !claimsShape
   const nodeOk = !entity || declaredNode === entity.nodeId
+  const held = entity?.held ?? {}
+  const heldOk = Object.entries(held).every(([key, value]) =>
+    isAbsent(value) ? !(key in fm) : JSON.stringify(fm[key]) === JSON.stringify(value),
+  )
   const declaredDescription = typeof fm.description === 'string' ? fm.description.trim() : ''
   const reserved = declaredDescription ? undefined : RESERVED_FOLDER_DESCRIPTIONS[folderPath]
-  if (typeOk && nodeOk && declaredTitle && !reserved && sameKeyOrder(fm)) return content
+  if (typeOk && nodeOk && heldOk && declaredTitle && !reserved && sameKeyOrder(fm)) return content
 
   const { body } = splitFrontmatter(content)
   const segment = folderPath.split('/').pop() ?? folderPath
@@ -259,10 +259,48 @@ export function enforceIndexFrontmatter(
   if (entity) {
     next.type = typeOk ? declaredType : entity.typeLabel
     next.node = entity.nodeId
+    for (const [key, value] of Object.entries(held)) {
+      if (isAbsent(value)) delete next[key]
+      else next[key] = value
+    }
   } else if (claimsShape) {
     delete next.type
   }
   return joinFrontmatter(orderFrontmatter(next), body)
+}
+
+function isAbsent(value: unknown): boolean {
+  return value === null || value === undefined || value === ''
+}
+
+/**
+ * The entity an index note speaks for, as the contract needs it. `typeLabel`
+ * and `nodeId` are what `type:` and `node:` are held to; `held` is every
+ * OTHER key the record owns, value by key — `title:` when the record's name
+ * is the note's title, and the mirrored fields (an event's schedule, the
+ * space's tracked fields; lib/notes/context/mirroredFields.ts). A held key
+ * whose value is absent is removed from the note. `heldKeys` lists what the
+ * raw editor should draw as not the writer's (lib/notes/shared/heldKeys.ts).
+ */
+export interface IndexEntity {
+  typeLabel: string
+  nodeId: string
+  name: string
+  acceptsType?: (declared: string) => boolean
+  held?: Record<string, unknown>
+}
+
+/**
+ * The frontmatter keys the contract holds for `entity`: `node:` always, plus
+ * every key in `held`. `type:` is held too unless the entity is ADOPTED — an
+ * adopted note is an entity because of what it declares, so its `type:` is the
+ * declaration itself (retyping it retypes the node, dropping it drops the
+ * node), not a mirror of one.
+ */
+export function heldFrontmatterKeys(entity: IndexEntity, adopted = false): string[] {
+  const keys = adopted ? ['node'] : ['type', 'node']
+  for (const key of Object.keys(entity.held ?? {})) if (!keys.includes(key)) keys.push(key)
+  return keys
 }
 
 /**
@@ -279,7 +317,7 @@ export function normalizeIndexNote(
   content: string,
   folderPath: string,
   children: IndexChild[],
-  entity?: { typeLabel: string; nodeId: string; name: string; acceptsType?: (declared: string) => boolean },
+  entity?: IndexEntity,
 ): string {
   const withFrontmatter = enforceIndexFrontmatter(content, folderPath, entity)
   const { frontmatter, body } = splitFrontmatter(withFrontmatter)

@@ -481,6 +481,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         meta={openMeta}
         notes={noteRefs}
         initialContent={shownRead.content}
+        heldKeys={shownRead.held}
         canEdit={canWrite}
         aiConfigured={aiConfigured}
         mode={mode}

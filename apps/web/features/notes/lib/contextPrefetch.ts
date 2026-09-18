@@ -57,7 +57,9 @@ export const contextKeys = {
 }
 
 export type NoteRead =
-  | { status: 'ok'; content: string }
+  /** `held`: the frontmatter keys the record owns — the raw editor draws them
+   *  as not the writer's (lib/notes/shared/heldKeys.ts). */
+  | { status: 'ok'; content: string; held: string[] }
   | { status: 'missing' }
   | { status: 'error'; message: string }
 
@@ -76,8 +78,8 @@ async function readNoteWithStatus(spaceId: string, path: string): Promise<NoteRe
       const data = (await res.json().catch(() => ({}))) as { error?: string }
       return { status: 'error', message: data.error || `Request failed (${res.status})` }
     }
-    const { content } = (await res.json()) as { content: string }
-    return { status: 'ok', content }
+    const { content, held } = (await res.json()) as { content: string; held?: string[] }
+    return { status: 'ok', content, held: held ?? [] }
   } catch {
     return { status: 'error', message: 'Failed to load the context note' }
   }

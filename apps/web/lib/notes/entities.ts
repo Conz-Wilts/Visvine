@@ -728,6 +728,18 @@ const KIND_SPELLING_IS_FREE: ReadonlySet<EntityKind> = new Set([
  * the kind's own label and, for the directory kinds, any spelling that folds
  * onto the kind (`Company`, `Organisation` → space).
  */
+/**
+ * Is the note's `title:` the record's name — held to `node.name` on every
+ * write, and mirrored from the record when that is edited? True for the
+ * directory kinds, whose record is edited on its own page and in the
+ * Directory table. The config kinds (connector, agent, tool, model) are
+ * named by their note: the node follows the brief, never the other way.
+ */
+export function recordOwnsNoteTitle(nodeType: string): boolean {
+  const kind = entityKindOf(nodeType)
+  return kind !== null && KIND_SPELLING_IS_FREE.has(kind)
+}
+
 export function entityTypeNamesKind(declared: string, nodeType: string): boolean {
   const kind = entityKindOf(nodeType)
   if (!kind) return false

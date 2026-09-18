@@ -489,3 +489,32 @@ test('the Index label is shown, never stored: the contract still strips the spel
   assert.equal(declaresIndexType(written), false)
   assert.equal(displayTypeOf('growth/index.md', null), INDEX_DISPLAY_TYPE)
 })
+
+// What the RECORD owns in an entity index — its name as `title:`, an event's
+// schedule, the space's tracked fields — is held to the record's value on
+// every write, so a raw edit to one is put back rather than drifting the note.
+test('an entity folder index holds the keys its record owns', () => {
+  const launch = {
+    typeLabel: 'Event',
+    nodeId: 'event:launch',
+    name: 'Launch',
+    held: { title: 'Launch', start_at: '2026-10-01T09:00:00Z', capacity: 40, location: null, budget: null },
+  }
+  const ok = '---\ntype: Event\ntitle: Launch\nnode: event:launch\ntags: []\nstart_at: 2026-10-01T09:00:00Z\ncapacity: 40\n---\n\nbody\n'
+  assert.equal(enforceIndexFrontmatter(ok, 'events/launch', launch), ok)
+
+  // A raw edit that renames, reschedules or adds a mirrored key is put back.
+  const drifted = ok
+    .replace('title: Launch', 'title: Big Launch')
+    .replace('start_at: 2026-10-01T09:00:00Z', 'start_at: 2027-01-01T09:00:00Z\nbudget: 5000')
+  const fm = parseFrontmatter(enforceIndexFrontmatter(drifted, 'events/launch', launch))
+  assert.equal(fm.title, 'Launch')
+  assert.equal(fm.start_at, '2026-10-01T09:00:00Z')
+  assert.equal(fm.capacity, 40)
+  assert.equal('budget' in fm, false, 'a held key the record has no value for is removed')
+  assert.deepEqual(fm.tags, [], 'a free key rides through')
+
+  // Without a held title, the writer's stays — the config kinds name their node.
+  const brief = '---\ntype: agent\ntitle: Digest, daily\nnode: agent:digest\n---\n\nbody\n'
+  assert.equal(enforceIndexFrontmatter(brief, 'agents/digest', { typeLabel: 'agent', nodeId: 'agent:digest', name: 'digest' }), brief)
+})

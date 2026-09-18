@@ -20,6 +20,7 @@ import type {
 import { TRASH_RETENTION_DAYS } from './shared/types'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { ensureAgentNode, ensureToolNode, syncAdoptedNode, syncContextLinksBulk } from './entityLinks'
+import { mirroredFields } from './context/mirroredFields'
 import { agentNoteDeleted, agentNoteRenamed } from '@/lib/agents/hooks'
 import { toolNoteDeleted, toolNoteRenamed } from '@/lib/tools/hooks'
 // The write path's outbox. Every mutator below enqueues the rebuild its write
@@ -41,6 +42,7 @@ import {
   entityStub,
   entityTypeLabelOf,
   entityTypeNamesKind,
+  recordOwnsNoteTitle,
   isEntityFolderIndex,
   namespaceFolderDenial,
   parseEntityHref,
@@ -62,6 +64,8 @@ import {
   isIndexPath,
   newIndexContent,
   normalizeIndexNote,
+  heldFrontmatterKeys,
+  type IndexEntity,
   oneLineDescription,
   nextIndexTitle,
   humanizeFolderName,
@@ -992,7 +996,7 @@ async function nodeForEntityPath(
   if (!slug) return null
   const rows = await prisma.node.findMany({
     where: { spaceId, OR: [{ id: { endsWith: `:${slug}` } }, { id: slug }] },
-    select: { id: true, type: true, name: true, subtitle: true, metadata: true },
+    select: { id: true, type: true, name: true, subtitle: true, location: true, metadata: true },
   })
   for (const row of rows) {
     const node = { ...row, metadata: (row.metadata as Record<string, unknown> | null) ?? null }
@@ -1010,7 +1014,7 @@ async function adoptedNodeForIndex(
 ): Promise<(EntityNodeLike & { id: string; name: string | null }) | null> {
   const rows = await prisma.node.findMany({
     where: { spaceId, metadata: { path: ['notePath'], equals: indexPath } },
-    select: { id: true, type: true, name: true, subtitle: true, metadata: true },
+    select: { id: true, type: true, name: true, subtitle: true, location: true, metadata: true },
   })
   for (const row of rows) {
     const node = { ...row, metadata: (row.metadata as Record<string, unknown> | null) ?? null }
@@ -1093,7 +1097,7 @@ export async function ensureEntityFolder(
     const idx = await findLive(context, dest, tx)
     let content = idx?.content ?? ''
     if (idx) {
-      const next = normalizeIndexNote(idx.content, folder, [], entityContractOf(node))
+      const next = normalizeIndexNote(idx.content, folder, [], await entityContractOf(node, context.spaceId))
       if (next !== idx.content) {
         await tx.contextNote.update({ where: { id: idx.id }, data: { content: next } })
         content = next
@@ -1140,18 +1144,49 @@ export async function ensureEntityFolder(
   return dest
 }
 
-function entityContractOf(node: EntityNodeLike): {
-  typeLabel: string
-  nodeId: string
-  name: string
-  acceptsType: (declared: string) => boolean
-} {
+/**
+ * The index contract for `node`'s note (lib/notes/shared/indexNote.ts
+ * IndexEntity). Beyond the type and `node:` every entity index owes, `held`
+ * is what the RECORD owns in the note: `title:` when the record's name is the
+ * title (entities.ts recordOwnsNoteTitle), and the mirrored fields — an
+ * event's schedule, the space's tracked fields. An ADOPTED node is named by
+ * its note, so its title is not held; its tracked fields still are, since
+ * those are written on the record and mirrored down.
+ */
+async function entityContractOf(
+  node: EntityNodeLike & { location?: string | null },
+  spaceId: string,
+  adopted = false,
+): Promise<IndexEntity> {
+  const name = (node.name ?? node.id.split(':').pop() ?? node.id).trim()
+  const held = await mirroredFields({ ...node, spaceId })
+  if (!adopted && node.name?.trim() && recordOwnsNoteTitle(node.type)) held.title = node.name.trim()
   return {
     typeLabel: entityTypeLabelOf(node.type) ?? 'Note',
     nodeId: node.id,
-    name: (node.name ?? node.id.split(':').pop() ?? node.id).trim(),
+    name,
     acceptsType: (declared) => entityTypeNamesKind(declared, node.type),
+    held,
   }
+}
+
+/**
+ * The frontmatter keys a write at `path` cannot change — what the raw editor
+ * draws as the record's, not the writer's (lib/notes/shared/heldKeys.ts).
+ * Empty for a plain note, and for a path this context does not hold an
+ * entity behind: the same lookups enforceIndexContract makes, answered as a
+ * list instead of applied.
+ */
+export async function heldKeysFor(context: Context, path: string): Promise<string[]> {
+  const p = await canonicalEntityWritePath(context, path)
+  if (!isIndexPath(p)) return []
+  if (isEntityFolderIndex(p)) {
+    const node = await nodeForEntityPath(context.spaceId, p)
+    return node ? heldFrontmatterKeys(await entityContractOf(node, context.spaceId)) : []
+  }
+  if (context.ownerKey !== SHARED_OWNER_KEY) return []
+  const adopted = await adoptedNodeForIndex(context.spaceId, p)
+  return adopted ? heldFrontmatterKeys(await entityContractOf(adopted, context.spaceId, true), true) : []
 }
 
 function bustContextData(): void {
@@ -1240,7 +1275,12 @@ async function enforceIndexContract(context: Context, p: string, content: string
   if (!isEntityFolderIndex(p) && context.ownerKey === SHARED_OWNER_KEY) {
     await syncAdoptedNode(context.spaceId, p, content)
     const adopted = await adoptedNodeForIndex(context.spaceId, p)
-    if (adopted) return normalizeIndexNote(content, folder, children, entityContractOf(adopted))
+    if (adopted) {
+      return normalizeIndexNote(content, folder, children, await entityContractOf(adopted, context.spaceId, true))
+    }
+    // No longer adopted (the `type:` went, and its node with it): a `node:`
+    // still naming that node is a pointer to nothing, and stays out.
+    content = dropDanglingNode(content)
   }
   if (isEntityFolderIndex(p)) {
     let node = await nodeForEntityPath(context.spaceId, p)
@@ -1251,9 +1291,19 @@ async function enforceIndexContract(context: Context, p: string, content: string
     ) {
       node = await nodeForEntityPath(context.spaceId, p)
     }
-    if (node) return normalizeIndexNote(content, folder, children, entityContractOf(node))
+    if (node) return normalizeIndexNote(content, folder, children, await entityContractOf(node, context.spaceId))
   }
   return normalizeIndexNote(content, folder, children)
+}
+
+/** `content` without its `node:` line. Only for a note nothing is bound to:
+ *  a back-pointer with no node behind it is the one thing a `node:` may
+ *  never be, since every reader treats it as the entity it names. */
+function dropDanglingNode(content: string): string {
+  const fm = parseFrontmatter(content) as Record<string, unknown>
+  if (typeof fm.node !== 'string') return content
+  const { node: _node, ...rest } = fm
+  return joinFrontmatter(rest, splitFrontmatter(content).body)
 }
 
 /**

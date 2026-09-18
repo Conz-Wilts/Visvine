@@ -30,8 +30,8 @@ import { logger } from '../../logger'
 import { createNote, readNoteOrNull, writeNote, SHARED_OWNER_KEY, type Actor } from '../store'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '../shared/markdown'
 import { entityDraftContent, entityKindOf, entityNotePath } from '../entities'
-import { findNodeTypeConfig, spaceNodeId } from '../../types/context'
-import { readSpaceConfig } from '../../spaces/spaceConfig'
+import { spaceNodeId } from '../../types/context'
+import { mirroredFields, type EntityRecord } from './mirroredFields'
 import { upsertLink } from './links'
 
 /** The node `type` values this module knows how to place in the graph. */
@@ -234,45 +234,6 @@ export async function ensureEntityNote(
     return { notePath, noteError: null, created: false }
   }
   return { notePath, noteError: null, created: true }
-}
-
-/**
- * The record fields an entity's note mirrors in its frontmatter, beyond
- * `title:`. Two sources. The schedulable basics of an event — what the event
- * page edits, and what someone reading `events/<slug>.md` needs to know
- * without opening the page; event `status` is deliberately absent, it would
- * collide with the note lifecycle `status:`. And the fields the SPACE tracks
- * about the type (NodeTypeConfig.fields, lib/directory/table.ts): a value
- * typed into the Directory's table lands in the note under the same key, so
- * the note says what the record says and an agent reads it there. A field a
- * space stops tracking is left in the frontmatter as it was — removing the
- * column never rewrites notes.
- */
-async function mirroredFields(node: EntityRecord): Promise<Record<string, unknown>> {
-  const meta = node.metadata ?? {}
-  const out: Record<string, unknown> = {}
-  if (entityKindOf(node.type) === 'event') {
-    out.start_at = meta.start_at ?? null
-    out.end_at = meta.end_at ?? null
-    out.location = node.location ?? null
-    out.capacity = meta.capacity ?? null
-  }
-  const config = await readSpaceConfig(node.spaceId)
-  const type = findNodeTypeConfig(node.type, config?.nodeTypes ?? undefined)
-  for (const field of type?.fields ?? []) {
-    if (field.key in out) continue
-    out[field.key] = meta[field.key] ?? null
-  }
-  return out
-}
-
-type EntityRecord = {
-  id: string
-  type: string
-  spaceId: string
-  name?: string | null
-  location?: string | null
-  metadata?: Record<string, unknown> | null
 }
 
 /**

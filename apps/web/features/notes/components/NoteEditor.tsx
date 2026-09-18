@@ -37,6 +37,7 @@ import { EntityChip } from '../lib/entityChip'
 import { NotePicker, type PickerEntity } from './NotePicker'
 import { LinkedReferences } from './LinkedReferences'
 import { NoteModeToggle, type NoteMode } from './NoteModeToggle'
+import { RawNoteText } from './RawNoteText'
 import { parseEntityHref } from '@/lib/notes/entities'
 import { joinFrontmatter, splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
 import {
@@ -69,6 +70,10 @@ interface NoteEditorProps {
   meta: NoteMeta | null
   notes: NoteRef[]
   initialContent: string
+  /** Frontmatter keys the record owns, drawn as such in raw mode and closed
+   *  to input there (lib/notes/shared/heldKeys.ts). The store holds them on
+   *  every write either way; this is the surface saying so. */
+  heldKeys?: readonly string[]
   canEdit: boolean
   aiConfigured: boolean
   // Edit/Raw mode — lifted to the surface; the toolbar's NoteModeToggle drives
@@ -164,11 +169,14 @@ function titleFromContent(content: string, path: string): string {
   return fm || path.replace(/\.md$/i, '').split('/').pop() || path
 }
 
+const NO_HELD_KEYS: readonly string[] = []
+
 export function NoteEditor({
   path,
   meta,
   notes,
   initialContent,
+  heldKeys = NO_HELD_KEYS,
   canEdit,
   aiConfigured,
   mode,
@@ -425,7 +433,8 @@ export function NoteEditor({
     if (!editor || mode === prevModeRef.current) return
     if (mode === 'raw') {
       // Raw IS the source, child block and all — it's the one surface that shows
-      // the markers, and the one place they can be hand-edited.
+      // the markers. RawNoteText draws the block, and the record's keys, as
+      // held: the store regenerates them on write whatever was typed.
       setRawContent(composeContent(prefixRef.current, getMarkdown(editor), childrenBlockRef.current))
     } else {
       loadingRef.current = true
@@ -700,15 +709,13 @@ export function NoteEditor({
             )}
           </>
         ) : (
-          <textarea
-            ref={rawRef}
+          <RawNoteText
+            textareaRef={rawRef}
             value={rawContent}
-            onChange={(e) => onRawChange(e.target.value)}
+            onChange={onRawChange}
+            heldKeys={heldKeys}
             readOnly={!canEdit}
-            spellCheck={false}
-            className={`w-full resize-none overflow-hidden bg-transparent font-mono text-sm leading-relaxed text-text-primary focus:outline-none ${
-              embedded ? '' : 'h-full min-h-[55vh]'
-            }`}
+            className={embedded ? '' : 'h-full min-h-[55vh]'}
           />
         )}
       </div>

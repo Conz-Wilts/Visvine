@@ -178,3 +178,78 @@ test('a sub-note under a namespace with no entity behind it is refused', async (
     await teardown()
   }
 })
+
+// The record owns part of the index's frontmatter. A raw write that changes
+// `type:`, `title:` or a tracked field is held to the record; the GET says
+// which keys those are so the raw editor can draw them.
+test('a raw write cannot retype, rename or re-track an entity through its note', async (t) => {
+  const skip = await probe()
+  if (skip) return t.skip(skip)
+  await setup()
+  try {
+    const s = store!
+    const p = prisma!
+    await p.space.update({
+      where: { id: SPACE },
+      data: { nodeTypes: [{ name: 'Person', fields: [{ key: 'seniority', label: 'Seniority', kind: 'text' }] }] },
+    })
+    await p.node.update({ where: { id: 'person:jo' }, data: { metadata: { seniority: 'partner' } } })
+    await s.createNote(shared, 'people/jo.md', '---\ntitle: Jo\ntype: Person\nnode: person:jo\n---\n\nJo runs ops.\n', actor)
+    const held = await s.heldKeysFor(shared, 'people/jo/index.md')
+    assert.deepEqual([...held].sort(), ['node', 'seniority', 'title', 'type'])
+    // The flat alias answers the same.
+    assert.deepEqual([...(await s.heldKeysFor(shared, 'people/jo.md'))].sort(), [...held].sort())
+    assert.deepEqual(await s.heldKeysFor(shared, 'people/index.md'), [])
+
+    await s.writeNote(
+      shared,
+      'people/jo/index.md',
+      '---\ntype: Event\ntitle: Joanna\nnode: event:launch\nseniority: intern\nrole: ops\n---\n\nStill Jo.\n',
+      actor,
+    )
+    const fm = parseFrontmatter(await s.readNote(shared, 'people/jo/index.md'))
+    assert.equal(fm.type, 'Person')
+    assert.equal(fm.title, 'Jo')
+    assert.equal(fm.node, 'person:jo')
+    assert.equal(fm.seniority, 'partner')
+    assert.equal(fm.role, 'ops', 'a key the record does not own is the writer\'s')
+    const node = await p.node.findUniqueOrThrow({ where: { id: 'person:jo' } })
+    assert.equal(node.type, 'person')
+    assert.equal(node.name, 'Jo')
+  } finally {
+    await teardown()
+  }
+})
+
+// An adopted note is an entity because of what it declares: its `type:` is
+// the declaration, so it is not held — retyping it retypes the node, and
+// dropping it drops the node and the `node:` pointer with it.
+test('an adopted folder follows its declaration, and un-adopting leaves no dangling node pointer', async (t) => {
+  const skip = await probe()
+  if (skip) return t.skip(skip)
+  await setup()
+  try {
+    const s = store!
+    const p = prisma!
+    const path = 'teams/growth/index.md'
+    await s.writeNote(shared, path, '---\ntype: Space\ntitle: Growth\n---\n\nThe growth team.\n', actor)
+    let fm = parseFrontmatter(await s.readNote(shared, path))
+    assert.equal(typeof fm.node, 'string')
+    const nodeId = fm.node as string
+    const held = await s.heldKeysFor(shared, path)
+    assert.ok(held.includes('node') && !held.includes('type') && !held.includes('title'), `held: ${held}`)
+
+    await s.writeNote(shared, path, `---\ntype: Person\ntitle: Growth\nnode: ${nodeId}\n---\n\nNow a person.\n`, actor)
+    assert.equal((await p.node.findUniqueOrThrow({ where: { id: nodeId } })).type, 'person')
+    assert.equal(parseFrontmatter(await s.readNote(shared, path)).type, 'Person')
+
+    await s.writeNote(shared, path, `---\ntitle: Growth\nnode: ${nodeId}\n---\n\nJust a folder now.\n`, actor)
+    assert.equal(await p.node.findUnique({ where: { id: nodeId } }), null)
+    fm = parseFrontmatter(await s.readNote(shared, path))
+    assert.equal('node' in fm, false, 'the pointer goes with the node')
+    assert.equal(fm.title, 'Growth')
+    assert.deepEqual(await s.heldKeysFor(shared, path), [])
+  } finally {
+    await teardown()
+  }
+})
