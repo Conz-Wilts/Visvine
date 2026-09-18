@@ -8,11 +8,13 @@
 // of them looks saved and is then put back. Raw mode has to say which lines
 // those are, and the plain textarea cannot colour a line — so the text is
 // painted by a mirror `<pre>` underneath (same font, wrap and metrics) with
-// the held spans in the muted token, and the textarea over it types in
-// transparent ink with a visible caret. Input aimed at a held span is refused
-// before it lands; a change that reaches one anyway is dropped.
+// the held spans on a tinted band in the muted token, and the textarea over
+// it types in transparent ink with a visible caret. Input aimed at a held span
+// is refused before it lands, and the band turns red until the caret leaves
+// the held part, so the refusal is seen rather than felt as a dead key; a
+// change that reaches one anyway is dropped.
 
-import { useMemo, useRef, type ChangeEvent, type FormEvent, type RefObject } from 'react'
+import { useMemo, useRef, useState, type ChangeEvent, type FormEvent, type RefObject, type SyntheticEvent } from 'react'
 import { editTouchesHeld, heldSpans, heldText } from '@/lib/notes/shared/heldKeys'
 
 interface RawNoteTextProps {
@@ -26,11 +28,22 @@ interface RawNoteTextProps {
 }
 
 const TYPOGRAPHY = 'font-mono text-sm leading-relaxed whitespace-pre-wrap break-words'
+const HELD = 'rounded-sm bg-surface-3 text-text-muted [box-decoration-break:clone] [-webkit-box-decoration-break:clone] transition-colors duration-300'
+const REFUSED = 'rounded-sm bg-red-500/15 text-red-700 [box-decoration-break:clone] [-webkit-box-decoration-break:clone]'
 
 export function RawNoteText({ value, onChange, heldKeys, readOnly, className, textareaRef }: RawNoteTextProps) {
   const spans = useMemo(() => heldSpans(value, heldKeys), [value, heldKeys])
   const heldNow = useRef(heldText(value, heldKeys))
   heldNow.current = heldText(value, heldKeys)
+  const [refused, setRefused] = useState(false)
+  const refuse = () => setRefused(true)
+
+  // The red clears once the caret stands somewhere it can type.
+  const onSelect = (e: SyntheticEvent<HTMLTextAreaElement>) => {
+    if (!refused) return
+    const el = e.currentTarget
+    if (!editTouchesHeld(spans, el.selectionStart, el.selectionEnd)) setRefused(false)
+  }
 
   const onBeforeInput = (e: FormEvent<HTMLTextAreaElement>) => {
     if (spans.length === 0) return
@@ -42,7 +55,10 @@ export function RawNoteText({ value, onChange, heldKeys, readOnly, className, te
       if (native.inputType.includes('Forward')) to = from + 1
       else from = Math.max(0, from - 1)
     }
-    if (editTouchesHeld(spans, from, to)) e.preventDefault()
+    if (editTouchesHeld(spans, from, to)) {
+      e.preventDefault()
+      refuse()
+    }
   }
 
   const onInput = (e: ChangeEvent<HTMLTextAreaElement>) => {
@@ -51,6 +67,7 @@ export function RawNoteText({ value, onChange, heldKeys, readOnly, className, te
       // Reached a held span past the guard (a drop, an IME composition): the
       // change is not taken, and the textarea goes back to the note.
       e.target.value = value
+      refuse()
       return
     }
     onChange(next)
@@ -75,7 +92,7 @@ export function RawNoteText({ value, onChange, heldKeys, readOnly, className, te
       <pre aria-hidden className={`pointer-events-none absolute inset-0 m-0 overflow-hidden text-text-primary ${TYPOGRAPHY}`}>
         {painted.map((part, i) =>
           part.held ? (
-            <span key={i} className="text-text-muted">
+            <span key={i} className={refused ? REFUSED : HELD}>
               {part.text}
             </span>
           ) : (
@@ -89,6 +106,8 @@ export function RawNoteText({ value, onChange, heldKeys, readOnly, className, te
         value={value}
         onBeforeInput={onBeforeInput}
         onChange={onInput}
+        onSelect={onSelect}
+        onBlur={() => setRefused(false)}
         readOnly={readOnly}
         spellCheck={false}
         className={`relative block h-full w-full resize-none overflow-hidden bg-transparent text-transparent caret-text-primary focus:outline-none ${TYPOGRAPHY}`}
