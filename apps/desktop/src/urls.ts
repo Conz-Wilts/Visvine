@@ -4,6 +4,8 @@
  */
 
 export const DEEP_LINK_SCHEME = "visvine-desktop";
+/** The web app's session cookie (apps/web/lib/session.ts#COOKIE_NAME). */
+export const COOKIE_NAME = "auth_session";
 const DESKTOP_UA_TOKEN = "VisvineDesktop";
 
 /** Origins that the sign-in flow legitimately navigates through in-window. */
@@ -96,4 +98,38 @@ export function deepLinkToPath(link: string): string | null {
 export function appPathUrl(appUrl: string, path: string): string {
   const url = new URL(path, appUrl).toString();
   return isSameApp(url, appUrl) ? url : appUrl;
+}
+
+/**
+ * The press that hands the person to Google, as opposed to any other page of
+ * the app: the shell takes this one over and runs it in the system browser
+ * instead (src/auth.ts). Electron has no platform authenticator, so a passkey
+ * challenge in-window never resolves — the sign-in PAGE itself still draws
+ * here, it is only the hop to the provider that leaves.
+ */
+export function isAppSignInUrl(url: string, appUrl: string): boolean {
+  if (!isSameApp(url, appUrl)) return false;
+  const target = safeParse(url);
+  if (!target) return false;
+  return target.pathname === "/api/auth/signin/google";
+}
+
+/** The browser page that begins a desktop sign-in for this challenge. */
+export function signInStartUrl(appUrl: string, challenge: string): string {
+  const url = new URL(`${appUrl}/api/auth/desktop/start`);
+  url.searchParams.set("challenge", challenge);
+  return url.toString();
+}
+
+/**
+ * The handoff carried by `visvine-desktop://auth?handoff=…`, or null when the
+ * link is anything else. Read BEFORE `deepLinkToPath`, which would otherwise
+ * try to open `/auth` as a page of the app.
+ */
+export function authHandoffIn(link: string): string | null {
+  const target = safeParse(link);
+  if (!target || target.protocol !== `${DEEP_LINK_SCHEME}:`) return null;
+  if (target.hostname !== "auth") return null;
+  const handoff = target.searchParams.get("handoff");
+  return handoff && handoff.length > 0 && handoff.length < 4096 ? handoff : null;
 }

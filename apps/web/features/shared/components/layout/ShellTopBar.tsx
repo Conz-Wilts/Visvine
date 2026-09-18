@@ -28,19 +28,30 @@ export default function ShellTopBar() {
   return (
     // pl-8: the first tab's label starts on the same line as the page content
     // below it.
-    <div className="flex shrink-0 items-center gap-4 pl-8 pr-4" style={{ height: SHELL_TOP_BAR_H }}>
+    // In the desktop shell the band IS the title bar it replaced, so the bare
+    // parts of it drag the window; everything on it opts back out.
+    <div
+      className="flex shrink-0 items-center gap-4 pl-8 pr-4"
+      style={{ height: SHELL_TOP_BAR_H, WebkitAppRegion: "drag" } as React.CSSProperties}
+    >
       {/* The page's tab set (pane shell pages portal it in; empty elsewhere).
           It scrolls sideways before it ever pushes the actions out of the
           band. */}
-      <div ref={setShellTabsHost} className="flex min-w-0 shrink items-center overflow-x-auto" />
+      <div
+        ref={setShellTabsHost}
+        className="flex min-w-0 shrink items-center overflow-x-auto"
+        style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+      />
 
       {/* Centre: whatever the page hoists into the band (HeaderContext);
           empty on most surfaces — search lives in each page's own toolbar. */}
       <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
-        <div className="w-full max-w-3xl">{headerContent}</div>
+        <div className="w-full max-w-3xl" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+          {headerContent}
+        </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex shrink-0 items-center gap-3" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         {/* Trailing page actions — Raw, Connections, Share — portalled in by
             the pane shell. */}
         <div ref={setShellTrailHost} className="flex shrink-0 items-center" />

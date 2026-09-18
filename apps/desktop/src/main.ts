@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeTheme, net, screen, session, shell, type WebContents } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, screen, session, shell, type WebContents } from "electron";
 import path from "node:path";
 import { isDevMode, readSettings, resolveAppUrl } from "./config";
 import { buildMenu } from "./menu";
@@ -8,10 +8,12 @@ import {
   deepLinkToPath,
   DEEP_LINK_SCHEME,
   desktopUserAgent,
+  isAppSignInUrl,
   isAuthProviderUrl,
   isSameApp,
   navigationDecision,
 } from "./urls";
+import { beginSignIn, completeSignIn, restoreSession, watchSessionCookie } from "./auth";
 import { loadWindowState, saveWindowState } from "./window-state";
 import { cancelRun, isRuntimeId, listRuntimes, loginRuntime, startRun, type RunInput } from "./runtimes";
 
@@ -39,8 +41,18 @@ let offlinePoll: NodeJS.Timeout | null = null;
 // ---------------------------------------------------------------------------
 
 const deepLinkIn = (argv: string[]) => argv.find((a) => a.startsWith(`${DEEP_LINK_SCHEME}://`));
+const authLink = (link: string) => link.startsWith(`${DEEP_LINK_SCHEME}://auth`);
 
 function openDeepLink(link: string) {
+  // A sign-in coming back from the browser is not a page of the app; it is
+  // answered here and never navigated to (src/auth.ts).
+  void completeSignIn(link, appUrl, userData, mainWindow).then((result) => {
+    if (!result || result.ok) return;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      void dialog.showMessageBox(mainWindow, { type: "warning", message: "Sign-in did not finish", detail: result.error });
+    }
+  });
+  if (authLink(link)) return;
   const target = deepLinkToPath(link);
   if (!target) return;
   if (mainWindow) void mainWindow.loadURL(appPathUrl(appUrl, target));
@@ -131,6 +143,14 @@ function keepSessionOnDisk() {
  */
 function applyNavigationPolicy(contents: WebContents) {
   const guard = (event: Electron.Event, url: string) => {
+    // The app's own sign-in leaves for the system browser and comes back over
+    // the deep link: Electron has no platform authenticator, so a passkey
+    // challenge in-window never resolves.
+    if (isAppSignInUrl(url, appUrl)) {
+      event.preventDefault();
+      beginSignIn(appUrl);
+      return;
+    }
     const decision = navigationDecision(url, appUrl);
     if (decision === "allow") return;
     event.preventDefault();
@@ -139,6 +159,10 @@ function applyNavigationPolicy(contents: WebContents) {
   contents.on("will-navigate", guard);
   contents.on("will-redirect", guard);
   contents.setWindowOpenHandler(({ url }) => {
+    if (isAppSignInUrl(url, appUrl)) {
+      beginSignIn(appUrl);
+      return { action: "deny" };
+    }
     const decision = navigationDecision(url, appUrl);
     if (decision === "external") void shell.openExternal(url);
     else if (isSameApp(url, appUrl)) void contents.loadURL(url);
@@ -165,6 +189,17 @@ function createWindow(): BrowserWindow {
   const state = onScreen(saved) ? saved : { ...saved, x: undefined, y: undefined };
   const win = new BrowserWindow({
     title: APP_NAME,
+    // macOS: no title bar of its own. The app's own top band runs to the top
+    // of the window, so the frame draws neither the app's name nor a hairline
+    // across it — only the traffic lights, dropped into the rail's top strip
+    // (reserved by the web shell: features/desktop/lib/chrome.ts).
+    //
+    // 8/9 is where Slack stands them: the group is 60pt wide, so on the 76pt
+    // rail it lands with 8pt of air on either side, and its centre sits on the
+    // same line Slack's does.
+    ...(process.platform === "darwin"
+      ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 8, y: 9 } }
+      : {}),
     x: state.x,
     y: state.y,
     width: state.width,
@@ -299,6 +334,13 @@ if (!app.requestSingleInstanceLock()) {
     // The frame follows the app's theme, never the OS appearance: a dark
     // system setting must not put a dark title bar around a light page.
     nativeTheme.themeSource = WINDOW_THEME;
+    // macOS takes the Dock icon from the bundle, and ignores BrowserWindow's
+    // `icon` entirely. Packaged, that bundle is ours (electron-builder's
+    // icon.icns); run from source it is Electron's own, so the mark is set by
+    // hand — otherwise the Dock and Cmd-Tab show the default Electron atom.
+    if (process.platform === "darwin" && !app.isPackaged) {
+      app.dock?.setIcon(path.join(__dirname, "..", "assets", "icon-mac.png"));
+    }
     // Only the app itself may hold a permission; auth-provider pages and the
     // offline page get nothing. Checks and requests answer from the same list.
     const permitted = (permission: string, origin: string) =>
@@ -313,11 +355,19 @@ if (!app.requestSingleInstanceLock()) {
     Menu.setApplicationMenu(buildMenu({ appUrl, getWindow: () => mainWindow }));
     registerRuntimeIpc();
 
+    watchSessionCookie(appUrl, userData);
+
     const initialLink = deepLinkIn(process.argv);
-    if (initialLink) pendingDeepLink = deepLinkToPath(initialLink);
+    if (initialLink && !authLink(initialLink)) pendingDeepLink = deepLinkToPath(initialLink);
 
     mainWindow = createWindow();
-    void mainWindow.loadURL(startUrl());
+    // The session the app was last signed in with goes back into the jar before
+    // the first page asks for it — otherwise a cleared jar means signing in
+    // again, in a window that cannot run a passkey.
+    void restoreSession(appUrl, userData).finally(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) void mainWindow.loadURL(startUrl());
+      if (initialLink && authLink(initialLink)) openDeepLink(initialLink);
+    });
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {

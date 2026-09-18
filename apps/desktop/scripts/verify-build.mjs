@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-for (const required of ["dist/main.js", "dist/preload.js", "resources/offline.html", "assets/icon.png"]) {
+for (const required of ["dist/main.js", "dist/preload.js", "resources/offline.html", "assets/icon.png", "assets/icon-mac.png"]) {
   if (!fs.existsSync(path.join(root, required))) {
     console.error(`[desktop] missing build input: ${required}`);
     process.exit(1);

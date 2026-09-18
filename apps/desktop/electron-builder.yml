@@ -9,6 +9,7 @@ files:
   - "!dist/**/*.map"
   - resources/**
   - assets/icon.png
+  - assets/icon-mac.png
   - package.json
 asar: true
 npmRebuild: false
@@ -35,7 +36,10 @@ mac:
   target:
     - dmg
     - zip
-  icon: assets/icon.png
+  # The padded copy: macOS scales the whole canvas, so the mark needs Apple's
+  # clear air around it or it reads larger than every icon beside it in the
+  # Dock (scripts/build-mac-icon.mjs).
+  icon: assets/icon-mac.png
   hardenedRuntime: true
   gatekeeperAssess: false
 linux:

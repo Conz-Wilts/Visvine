@@ -8,6 +8,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/verify-build.mjs",
+    "icons": "node scripts/build-mac-icon.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "electron .",
     "dev": "pnpm build && cross-env-shell VISVINE_DESKTOP_DEV=1 electron .",
@@ -15,6 +16,7 @@
     "test": "pnpm build && node --test tests/*.test.mjs",
     "e2e": "pnpm build && node e2e/run.mjs",
     "pack:dir": "pnpm build && electron-builder --dir",
+    "install:mac": "pnpm pack:dir && node scripts/install-mac.mjs",
     "dist": "pnpm build && electron-builder",
     "clean": "rm -rf dist release"
   },

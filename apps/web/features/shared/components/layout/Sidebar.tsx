@@ -13,6 +13,7 @@ import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { CompassIcon } from "@/features/shared/icons";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
+import { useDesktopChromeInset } from "@/features/desktop/lib/chrome";
 import Modal from "@/components/ui/Modal";
 import UserMenu from "@/features/auth/components/UserMenu";
 import CreatePanel from "@/features/create/components/CreatePanel";
@@ -103,6 +104,8 @@ export default function Sidebar() {
   // on them: a pointer crossing the rail on its way into a panel must not
   // swap or shut what it is heading for.
   const intent = useHoverIntent();
+  // The desktop shell's window controls stand in the rail's top strip.
+  const chromeInset = useDesktopChromeInset();
 
   const ease = DOCK_EASE;
 
@@ -517,7 +520,9 @@ export default function Sidebar() {
             background: "var(--shell-bg, #ffffff)",
             borderRightColor: "var(--shell-border, #e5e7eb)",
             width: railW,
-            paddingTop: RAIL_PAD_TOP,
+            // In the desktop shell the window has no title bar, so the rail
+            // starts below the traffic lights rather than under them.
+            paddingTop: RAIL_PAD_TOP + chromeInset,
             paddingBottom: RAIL_PAD_Y,
             transition: reduced ? "none" : `width ${RAIL_MOTION}`,
           }}
@@ -531,6 +536,15 @@ export default function Sidebar() {
             setHovered(false);
           }}
         >
+          {/* The strip the window controls stand in, and the window's handle:
+              dragging it moves the window, the way the title bar it replaced
+              did. Nothing in a browser — chromeInset is 0 there. */}
+          {chromeInset > 0 && (
+            <div
+              className="absolute inset-x-0 top-0"
+              style={{ height: chromeInset, WebkitAppRegion: "drag" } as React.CSSProperties}
+            />
+          )}
           {railInner}
         </div>
 

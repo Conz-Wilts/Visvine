@@ -29,6 +29,7 @@
     "desktop:e2e": "pnpm --filter @visvine/desktop e2e",
     "desktop:pack": "pnpm --filter @visvine/desktop pack:dir",
     "desktop:dist": "pnpm --filter @visvine/desktop dist",
+    "desktop:install": "pnpm --filter @visvine/desktop install:mac",
     "edge:typecheck": "pnpm --filter @visvine/agent-edge typecheck",
     "edge:check": "pnpm --filter @visvine/agent-edge check",
     "edge:deploy": "pnpm --filter @visvine/agent-edge run deploy",

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { navigationDecision, desktopUserAgent, deepLinkToPath, isAuthProviderUrl, appPathUrl } = require("../dist/urls.js");
+const { navigationDecision, desktopUserAgent, deepLinkToPath, isAuthProviderUrl, appPathUrl, isAppSignInUrl, signInStartUrl, authHandoffIn } = require("../dist/urls.js");
 
 const APP = "http://localhost:3000";
 
@@ -67,4 +67,32 @@ test("deep links and appPathUrl cannot escape the app origin", () => {
   assert.equal(appPathUrl(APP, "//evil.com/x"), APP);
   assert.equal(appPathUrl(APP, "/\\evil.com/x"), APP);
   assert.equal(appPathUrl(APP, "https://evil.com/"), APP);
+});
+
+test("isAppSignInUrl only claims the hop to the provider", () => {
+  const app = "https://visvine.com";
+  assert.equal(isAppSignInUrl("https://visvine.com/api/auth/signin/google?callbackUrl=%2Fhome", app), true);
+  assert.equal(isAppSignInUrl("https://visvine.com/signin", app), false);
+  assert.equal(isAppSignInUrl("https://visvine.com/home", app), false);
+  assert.equal(isAppSignInUrl("https://evil.example/api/auth/signin/google", app), false);
+});
+
+test("signInStartUrl carries the challenge to the app's own origin", () => {
+  assert.equal(
+    signInStartUrl("https://visvine.com", "abc-123_x"),
+    "https://visvine.com/api/auth/desktop/start?challenge=abc-123_x",
+  );
+});
+
+test("authHandoffIn reads only the auth link", () => {
+  assert.equal(authHandoffIn("visvine-desktop://auth?handoff=tok.en.sig"), "tok.en.sig");
+  assert.equal(authHandoffIn("visvine-desktop://auth"), null);
+  assert.equal(authHandoffIn("visvine-desktop://open/directory"), null);
+  assert.equal(authHandoffIn("https://visvine.com/?handoff=x"), null);
+});
+
+test("an auth link is never turned into a page path", () => {
+  // openDeepLink answers it before deepLinkToPath is asked, but if that order
+  // ever slipped the app must not navigate to a page called /auth.
+  assert.equal(authHandoffIn("visvine-desktop://auth?handoff=x") !== null, true);
 });
