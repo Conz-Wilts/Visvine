@@ -194,11 +194,12 @@ function createWindow(): BrowserWindow {
     // across it — only the traffic lights, dropped into the rail's top strip
     // (reserved by the web shell: features/desktop/lib/chrome.ts).
     //
-    // 8/9 is where Slack stands them: the group is 60pt wide, so on the 76pt
-    // rail it lands with 8pt of air on either side, and its centre sits on the
-    // same line Slack's does.
+    // 16/16 puts the first light's centre 23pt in from both edges, where
+    // macOS 26 stands its own (System Settings, Finder) clear of the window's
+    // rounded corner. The group is 60pt wide, so it ends on the 76pt rail's
+    // edge — the rail's hairline starts below the strip, as Slack's does.
     ...(process.platform === "darwin"
-      ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 8, y: 9 } }
+      ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 16, y: 16 } }
       : {}),
     x: state.x,
     y: state.y,

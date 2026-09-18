@@ -508,7 +508,7 @@ export default function Sidebar() {
           starts below a page's pinned tab bar, so a full-height rectangle or
           edge here would cut through the bar's band. The rail carries the
           card's left seam; the column carries its own right edge. */}
-      <div className="flex overflow-hidden" style={{ height: RAIL_H }}>
+      <div className="relative flex overflow-hidden" style={{ height: RAIL_H }}>
         {/* Icon rail column — the only width that animates, and only on the
             hover. Its border-r is the card's constant vertical seam: the closed
             card's right edge, the rail/panel divider when a panel is docked, and
@@ -518,7 +518,10 @@ export default function Sidebar() {
           className="relative flex shrink-0 flex-col overflow-hidden border-r"
           style={{
             background: "var(--shell-bg, #ffffff)",
-            borderRightColor: "var(--shell-border, #e5e7eb)",
+            // Under the window controls the seam is drawn by the strip below
+            // instead: the lights reach the rail's edge, and a line through
+            // them would cut the group off from the band it stands in.
+            borderRightColor: chromeInset > 0 ? "transparent" : "var(--shell-border, #e5e7eb)",
             width: railW,
             // In the desktop shell the window has no title bar, so the rail
             // starts below the traffic lights rather than under them.
@@ -547,6 +550,21 @@ export default function Sidebar() {
           )}
           {railInner}
         </div>
+        {/* The rail's seam in the desktop shell, begun below the window
+            controls (see the transparent border above), on the pixel the
+            border holds and travelling with the rail's edge. */}
+        {chromeInset > 0 && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute bottom-0 z-10 w-px"
+            style={{
+              top: chromeInset,
+              left: railW - 1,
+              background: "var(--shell-border, #e5e7eb)",
+              transition: reduced ? "none" : `left ${RAIL_MOTION}`,
+            }}
+          />
+        )}
 
         {/* The side panel, hosted inside this same card. Always mounted so the portal
             host stays stable and the column can transition its width open ↔ closed;
