@@ -57,8 +57,9 @@ export interface PaneChromeConfig {
   attachedOpen: boolean;
   /** Show the Raw editor-mode toggle in the bar's trailing chrome (beside
    *  Connections). Clicks dispatch select('raw'); the on state is read off the
-   *  surface's mode, so the registrant owns the actual toggle. */
-  rawToggle?: boolean;
+   *  surface's mode, so the registrant owns the actual toggle. A page that
+   *  draws its own body (`surface: null`) passes `'on'` to light it. */
+  rawToggle?: boolean | 'on';
   ariaLabel?: string;
   surface: PaneSurface;
 }

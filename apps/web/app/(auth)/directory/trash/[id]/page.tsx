@@ -16,11 +16,8 @@ import { useParams } from 'next/navigation';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 
-// The same two sections every context note has. They ARE the mode.
-const TRASH_TABS: PaneTabItem[] = [
-  { id: 'context', label: 'Context' },
-  { id: 'raw', label: 'Raw' },
-];
+// The one section every context note has; Raw is the bar's trailing toggle.
+const TRASH_TABS: PaneTabItem[] = [{ id: 'context', label: 'Context' }];
 
 const TrashPreviewPanel = dynamic(
   () => import('@/features/notes/components/TrashPreviewPanel').then((m) => m.TrashPreviewPanel),
@@ -35,9 +32,12 @@ function TrashViewerRoute() {
   const params = useParams();
   const raw = params.id;
   const id = decodeURIComponent(String(Array.isArray(raw) ? raw[0] : (raw ?? '')));
-  const [tab, setTab] = useState<'context' | 'raw'>('context');
-  const handleSelect = useCallback((next: string) => setTab(next === 'raw' ? 'raw' : 'context'), []);
-  const mode: NoteMode = tab === 'raw' ? 'raw' : 'wysiwyg';
+  const [mode, setMode] = useState<NoteMode>('wysiwyg');
+  const handleSelect = useCallback((next: string) => {
+    // The bar's trailing Raw toggle, not a tab: flip the editor mode.
+    if (next === 'raw') setMode((prev) => (prev === 'raw' ? 'wysiwyg' : 'raw'));
+    else setMode('wysiwyg');
+  }, []);
 
   // `surface: null` — this page draws its own body (the panel below) rather
   // than pointing the shell's note surface at a path, because a trashed note
@@ -47,9 +47,10 @@ function TrashViewerRoute() {
   // editor is read-only, so there is no toolbar to hang there.
   usePaneChrome({
     tabs: TRASH_TABS,
-    activeId: tab,
+    activeId: 'context',
     onSelect: handleSelect,
     attachedOpen: false,
+    rawToggle: mode === 'raw' ? 'on' : true,
     ariaLabel: 'Note sections',
     surface: null,
   });

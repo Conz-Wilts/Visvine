@@ -26,12 +26,10 @@ const DraftContextPanel = dynamic(
 // for at the moment of creating (the destination popup), not browsed for while
 // typing. The surface gets the full card width.
 
-// Pre-commit the bar matches the standalone note view's — Context and Raw, no
-// phantom Profile tab. Until a type is picked this genuinely is a note.
-const DRAFT_TABS: PaneTabItem[] = [
-  { id: 'context', label: 'Context' },
-  { id: 'raw', label: 'Raw' },
-];
+// Pre-commit the bar matches the standalone note view's — one Context tab with
+// the trailing Raw toggle, no phantom Profile tab. Until a type is picked this
+// genuinely is a note.
+const DRAFT_TABS: PaneTabItem[] = [{ id: 'context', label: 'Context' }];
 
 function DraftRoute() {
   const params = useSearchParams();
@@ -54,21 +52,23 @@ function DraftRoute() {
   // no tab bar either. Until a type is picked this genuinely is a note, and a
   // custom type narrows one, so both of those keep the pair.
   const hasProse = draftHasProse(initialType);
-  const activeTab = mode === 'raw' ? 'raw' : 'context';
-
   const handleSelect = useCallback((id: string) => {
-    setMode(id === 'raw' ? 'raw' : 'wysiwyg');
+    // The bar's trailing Raw toggle, not a tab: flip the editor mode.
+    if (id === 'raw') setMode((prev) => (prev === 'raw' ? 'wysiwyg' : 'raw'));
+    else setMode('wysiwyg');
   }, []);
 
   // The bar is the shell's; this page registers its tab set and renders its own
   // draft surface, whose panel portals a toolbar into the shell's host.
   usePaneChrome({
     tabs: hasProse ? DRAFT_TABS : null,
-    activeId: activeTab,
+    activeId: 'context',
     onSelect: handleSelect,
     // Only wysiwyg portals a toolbar into the attached region; Raw is a plain
     // textarea, so the bar stays one row tall there.
-    attachedOpen: hasProse && activeTab === 'context',
+    attachedOpen: hasProse && mode === 'wysiwyg',
+    // No shell surface here, so the toggle's on state is said outright.
+    rawToggle: hasProse && (mode === 'raw' ? 'on' : true),
     ariaLabel: 'Note sections',
     surface: null,
   });

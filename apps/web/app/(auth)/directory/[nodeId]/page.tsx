@@ -85,7 +85,8 @@ function useContextTabAvailable(node: NBNode | null): boolean {
 // Tab state lives in the URL (?tab=context / ?tab=raw) so tree/context/backlink
 // deep links land directly on an entity's context. Default tab = bare URL.
 // Context and Raw are the same note behind the same availability gate — Raw is
-// just the editor in raw mode, promoted to a tab of its own.
+// the editor in raw mode, a state of the Context tab flipped by the bar's
+// trailing Raw toggle (PaneTabBar, `rawToggle`), not a tab of its own.
 function useProfileTabParam(): [ProfileTab | null, (tab: ProfileTab) => void] {
   const router = useSpaceRouter();
   const pathname = usePathname();
@@ -107,12 +108,15 @@ function useProfileTabParam(): [ProfileTab | null, (tab: ProfileTab) => void] {
   return [wantedTab, setTabParam];
 }
 
-// Both note-backed tabs; the tab IS the editor mode, so no lifted mode state.
+// Both note-backed states; the tab IS the editor mode, so no lifted mode state.
 const isNoteTab = (tab: ProfileTab) => tab === 'context' || tab === 'raw';
 const modeForTab = (tab: ProfileTab): NoteMode => (tab === 'raw' ? 'raw' : 'wysiwyg');
+// Raw is a mode, not a tab: the Context tab stays underlined while it is on.
+const barTabOf = (tab: ProfileTab): ProfileTab => (tab === 'raw' ? 'context' : tab);
+// A press on the bar's Raw toggle: raw ⇄ context, from wherever the page stood.
+const rawPressed = (tab: ProfileTab): ProfileTab => (tab === 'raw' ? 'context' : 'raw');
 
 const CONTEXT_TAB: PaneTabItem = { id: 'context', label: 'Context' };
-const RAW_TAB: PaneTabItem = { id: 'raw', label: 'Raw' };
 
 // ── Tool tabs ────────────────────────────────────────────────────────────────
 //
@@ -206,8 +210,8 @@ function useEntityChrome(args: {
   // context either there is nothing left to show, so the bar goes away.
   const base = hasContext
     ? firstTab
-      ? [firstTab, CONTEXT_TAB, RAW_TAB]
-      : [CONTEXT_TAB, RAW_TAB]
+      ? [firstTab, CONTEXT_TAB]
+      : [CONTEXT_TAB]
     : firstTab
       ? [firstTab]
       : null;
@@ -215,9 +219,11 @@ function useEntityChrome(args: {
 
   usePaneChrome({
     tabs: error ? null : tabs,
-    activeId: error ? null : activeTab,
+    activeId: error ? null : barTabOf(activeTab),
     onSelect: args.onSelect,
     attachedOpen: !error && activeTab === 'context' && (loading || contextAvailable),
+    // The Raw toggle rides the bar only while the note editor is the surface.
+    rawToggle: !error && noteTab && hasContext,
     ariaLabel: args.ariaLabel,
     surface:
       error || !noteTab
@@ -235,7 +241,6 @@ function useEntityChrome(args: {
 const PERSON_TABS: PaneTabItem[] = [
   { id: 'about', label: 'Profile' },
   CONTEXT_TAB,
-  RAW_TAB,
 ];
 
 // Every person node has a Profile tab, connected to a member or not. A node
@@ -351,17 +356,18 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
         return;
       }
       setToolTab(null);
-      setTabParam(id as ProfileTab);
+      setTabParam(id === 'raw' ? rawPressed(activeTab) : (id as ProfileTab));
     },
-    [setTabParam],
+    [setTabParam, activeTab],
   );
 
   const barVisible = contextAvailable || stillResolving;
   usePaneChrome({
     tabs: barVisible ? withToolTabs(PERSON_TABS, toolOwners) : null,
-    activeId: barTab,
+    activeId: barTabOf(barTab),
     onSelect: handleSelect,
     attachedOpen: barVisible && barTab === 'context',
+    rawToggle: barVisible && isNoteTab(barTab),
     ariaLabel: 'Profile sections',
     surface: !noteSurface
       ? null
@@ -444,7 +450,10 @@ function NodePage({ nodeId, firstTab, ariaLabel, notFoundTitle, renderBody }: {
     },
     [setTabParam],
   );
-  const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
+  const handleSelect = useCallback(
+    (id: string) => changeTab(id === 'raw' ? rawPressed(activeTab) : (id as ProfileTab)),
+    [changeTab, activeTab],
+  );
 
   // A link to ?tab=context from INSIDE the first tab — an agent's "edit the
   // brief" link, a Tool's source files — is a same-route navigation: this
@@ -546,7 +555,10 @@ function ContextOnlyPage({ nodeId, ariaLabel, notFoundTitle }: {
     },
     [setTabParam],
   );
-  const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
+  const handleSelect = useCallback(
+    (id: string) => changeTab(id === 'raw' ? rawPressed(activeTab) : (id as ProfileTab)),
+    [changeTab, activeTab],
+  );
 
   // A link to ?tab=context/raw from INSIDE this page's own body — no first tab
   // here, but a Tool tab's body can still hold one — is a same-route
@@ -638,7 +650,10 @@ function NoteOnlyPage({ nodeId, firstTab, href, ariaLabel, notFoundTitle }: {
     },
     [router, href, setTabParam],
   );
-  const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
+  const handleSelect = useCallback(
+    (id: string) => changeTab(id === 'raw' ? rawPressed(activeTab) : (id as ProfileTab)),
+    [changeTab, activeTab],
+  );
 
   // A link to ?tab=context/raw from INSIDE the first tab is a same-route
   // navigation: this component does not remount, so local state has to follow
@@ -662,10 +677,11 @@ function NoteOnlyPage({ nodeId, firstTab, href, ariaLabel, notFoundTitle }: {
   const errorState = !loadingState && (!!error || !data);
 
   usePaneChrome({
-    tabs: errorState ? null : [firstTab, CONTEXT_TAB, RAW_TAB],
-    activeId: errorState ? null : activeTab,
+    tabs: errorState ? null : [firstTab, CONTEXT_TAB],
+    activeId: errorState ? null : barTabOf(activeTab),
     onSelect: handleSelect,
     attachedOpen: !errorState && activeTab === 'context',
+    rawToggle: !errorState && noteSurface,
     ariaLabel,
     surface: errorState
       ? null
@@ -708,7 +724,10 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
     },
     [setTabParam],
   );
-  const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
+  const handleSelect = useCallback(
+    (id: string) => changeTab(id === 'raw' ? rawPressed(activeTab) : (id as ProfileTab)),
+    [changeTab, activeTab],
+  );
 
   // A link to ?tab=context/raw from INSIDE the first tab (a resource's preview)
   // is a same-route navigation: this component does not remount, so local

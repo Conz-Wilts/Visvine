@@ -101,8 +101,9 @@ function PaneTabBarInner({
   const surfaceKind = chrome.surface?.kind;
   const showConnections = surfaceKind === 'note' || surfaceKind === 'entity';
   const rawOn =
-    (chrome.surface?.kind === 'note' || chrome.surface?.kind === 'entity') &&
-    chrome.surface.mode === 'raw';
+    chrome.rawToggle === 'on' ||
+    ((chrome.surface?.kind === 'note' || chrome.surface?.kind === 'entity') &&
+      chrome.surface.mode === 'raw');
   const trayInset = useContextTreeVisible() && !!surfaceKind ? CONTEXT_PANEL_W : 0;
   const trayInsetRight = useConnectionsRailVisible() ? CONNECTIONS_RAIL_W : 0;
   // The Connections rail toggle rides the bar's right edge whenever a note or
