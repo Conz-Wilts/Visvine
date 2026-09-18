@@ -500,9 +500,10 @@ Rules the seam keeps, so callers do not have to:
   it**: `relevance` and `answerable` on the search result, the audit line for a
   declined wake, `judged` on the clean analysis, a step on the run.
 
-**A space's switch.** `embed_enabled` (Console → General → Nightly) already means
-"no note text goes to a model at query time", so it covers the judge: a space
-with it off is not judged in search, in the clean, or before a write.
+**Not behind the embed switch.** `embed_enabled` (Console → General → Nightly)
+switches vectors off and nothing else. A keyword-only search is the noisier
+one, so it is judged the same way; the clean pairs notes by word overlap when
+there are no vectors; the check before a write searches by keyword.
 
 **Measuring.** `pnpm eval:retrieval` grades the deterministic stack and never
 moves unless the code does. `pnpm eval:judge` runs the same graded queries with
@@ -518,7 +519,8 @@ missing: a harness with live vector stages, which is what item 10 waits on.
 - **Privacy.** Note text goes through OpenRouter to TypeSafe — the same first
   hop the embeddings and the chat model already take, and one more processor
   behind it. TypeSafe does not train on requests; zero retention is
-  enterprise-only. `embed_enabled` off keeps a space out entirely.
+  enterprise-only. No per-space switch keeps a space out; `JUDGE=off` turns
+  the judge off for the deployment.
 - **A filter can delete the right answer.** Reordering is forgiving; dropping is
   not. Start with a low floor, return the judge's score with each hit, and log
   what was dropped so a bad threshold can be found from real queries.

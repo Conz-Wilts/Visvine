@@ -3,7 +3,6 @@
 // derived memories (context_memories) are the statements a conflict is judged
 // on, when the space has them. Patient — a clean is not a request a person is
 // waiting on — and bounded, so a clean inside the MCP route's budget still ends.
-// A space with its semantic half off is not judged.
 
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
@@ -12,12 +11,6 @@ import type { Context } from './store'
 import { applyJudgedClean, planJudgedClean, type JudgedCleanInput, type JudgedCleanResult } from './shared/cleanJudge'
 
 const CLEAN_JUDGE_DEADLINE_MS = 25_000
-
-async function judgingAllowed(spaceId: string): Promise<boolean> {
-  if (!judgeConfigured()) return false
-  const row = await prisma.contextCleanSchedule.findUnique({ where: { spaceId }, select: { embedEnabled: true } })
-  return row?.embedEnabled !== false
-}
 
 /** Notes whose nearest neighbours are read: where new duplicates and conflicts are. */
 const RECENT_NOTES = 200
@@ -59,7 +52,7 @@ async function vectorPairs(context: Context): Promise<{ a: string; b: string }[]
 }
 
 export async function judgeClean(context: Context, input: Omit<JudgedCleanInput, 'claimsByPath' | 'pairs'>): Promise<JudgedCleanResult | null> {
-  if (!(await judgingAllowed(context.spaceId))) return null
+  if (!judgeConfigured()) return null
   const rows = await prisma.contextMemory.findMany({
     where: { spaceId: context.spaceId, ownerKey: context.ownerKey, text: { not: '' } },
     select: { path: true, text: true, mtime: true },

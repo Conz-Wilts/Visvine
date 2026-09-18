@@ -238,8 +238,8 @@ export async function searchContext(
 
   const now = Date.now()
   // A space that switched embedding off (the Console's General → Nightly) gets
-  // no semantic half at all — not the query embed, not the lazy catch-up, not
-  // the judge — and says so the way a missing key does.
+  // no semantic half — not the query embed, not the lazy catch-up — and says
+  // so the way a missing key does. The judge reads the keyword hits either way.
   const report: SemanticReport = {}
   const keyed = semanticConfigured()
   const enabled = keyed && (await embeddingEnabledFor(context.spaceId))
@@ -269,7 +269,7 @@ export async function searchContext(
     // Claims and chunks rank only for the visible notes at their CURRENT mtime.
     memories: createMemoryStage(context, mtimes, queryVectors, report),
     chunks: createChunkStage(context, mtimes, queryVectors, report),
-    rerank: opts.judge === false || !enabled ? undefined : createReranker(rerankReport),
+    rerank: opts.judge === false ? undefined : createReranker(rerankReport),
   })
   for (const h of hits) {
     if (isAuditedRead(p, context, h.path)) {

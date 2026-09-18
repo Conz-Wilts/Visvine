@@ -10,7 +10,7 @@
 import type { ActionCaller } from '@/lib/actions/types'
 import { listMySpaces, resolveTarget } from '@/lib/actions/resolve'
 import { searchFederated } from '@/lib/notes/federation'
-import { compareAcrossSearches, type SearchFilters } from '@/lib/notes/shared/retrieval'
+import type { SearchFilters } from '@/lib/notes/shared/retrieval'
 import { judgeHits } from '@/lib/notes/rerank'
 import type { BrainSearchResult, SearchOptions } from '@/lib/notes/contextService'
 import { planQuery } from '@/lib/notes/shared/queryPlan'
@@ -59,17 +59,11 @@ export async function searchEverywhere(
     runs.map((r) => ({ space: r.space, hits: r.result?.hits ?? [] })),
     spaces.map((s) => s.id),
   )
-  // A space that switched its semantic half off sends no note text to a model
-  // at query time; its hits ride along unjudged, after the judged ones.
-  const closed = new Set(runs.filter((r) => r.result?.semantic === 'off').map((r) => r.space.id))
-  const open = folded.filter((h) => !closed.has(h.space.id))
   const topic = plan.topic || query
-  const verdict =
-    opts.judge === false || plan.temporalOnly || plan.intent === 'history' ? { hits: open, judged: false } : await judgeHits(topic, open, k)
-  const judged = {
-    judged: verdict.judged,
-    hits: [...verdict.hits, ...folded.filter((h) => closed.has(h.space.id))].sort(compareAcrossSearches).slice(0, k),
-  }
+  const judged =
+    opts.judge === false || plan.temporalOnly || plan.intent === 'history'
+      ? { hits: folded.slice(0, k), judged: false }
+      : await judgeHits(topic, folded, k)
   return {
     hits: judged.hits,
     ...(judged.judged ? { answerable: judged.hits.length > 0 } : {}),

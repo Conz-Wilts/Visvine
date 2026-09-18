@@ -684,8 +684,10 @@ use measured. The invariants:
   literal: a question is a plain statement with criteria that agree with it. It
   is weak at dates, numbers and intent, so which note is newer, what a query's
   time words mean and whether a run wrote anything are read in code.
-- **`embed_enabled` off covers it**: a space that sends no note text to a model
-  at query time is not judged in search, the clean, or before a write.
+- **The judge does not need embeddings.** With `embed_enabled` off a search is
+  keyword-only and the judge still reads its head; the clean and the check
+  before a write run without vectors too. `embed_enabled` is a cost switch
+  over vectors, never a privacy one.
 - Where it sits: search (above); the wake gate at the tick
   (`lib/agents/wakeGate.ts` — a `note_written` event the brief would do nothing
   about is declined and audited, `on.wake: always` opts out); the clean
