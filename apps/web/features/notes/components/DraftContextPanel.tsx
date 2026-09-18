@@ -643,26 +643,24 @@ export function DraftContextPanel({
           {tag}
         </Chip>
       ))}
-      {addingTag ? (
-        <TagCombobox
-          suggestions={allTags.filter((t) => !tagsLower.has(t.toLowerCase()))}
-          existing={tagsLower}
-          registry={tagColors}
-          accentBase={theme.base}
-          onAdd={addTag}
-          onCreate={createTag}
-          onClose={() => setAddingTag(false)}
-        />
-      ) : (
+      <TagCombobox
+        open={addingTag}
+        suggestions={allTags.filter((t) => !tagsLower.has(t.toLowerCase()))}
+        existing={tagsLower}
+        registry={tagColors}
+        onAdd={addTag}
+        onCreate={createTag}
+        onClose={() => setAddingTag(false)}
+      >
         <button
           type="button"
-          onClick={() => setAddingTag(true)}
+          onClick={() => setAddingTag((v) => !v)}
           className={chipClass({ tone: 'dashed', size: 'lg', className: CHIP_ACCENT_HOVER })}
           style={{ ['--accent' as string]: theme.dark }}
         >
           + Add tag
         </button>
-      )}
+      </TagCombobox>
     </div>
   )
 

@@ -1,16 +1,27 @@
 'use client'
 
-// Inline tag picker for the context-note header: a text field with a dropdown of
-// the space's existing tags (each shown in its own colour) plus a "Create"
-// flow where you pick the new tag's colour from a swatch palette. Selecting an
-// existing tag calls onAdd; creating calls onCreate with the chosen colour.
-// blur / Escape / empty-selection calls onClose.
+// Tag picker for the context-note header, drawn as the Grid bar's TagMenu so
+// the two read as one family: the "+ Add tag" chip stays where it is and a
+// menu floats under it — a search box, then every tag the space knows as its
+// own chip, then "Create" with a colour swatch row when the text names a tag
+// that does not exist yet. Picking an existing tag calls onAdd; creating calls
+// onCreate with the chosen colour. A click outside or Escape calls onClose.
 
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState, useMemo, type ReactNode } from 'react'
+import { clsx } from 'clsx'
 import Chip from '@/components/ui/Chip'
+import SearchInput from '@/components/ui/SearchInput'
+import { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown'
+import { useClickOutside } from '@/features/shared/hooks/useClickOutside'
 import { TAG_SWATCHES, resolveTagBase, tagKey, tagPalette } from '@/lib/tagColors'
 
+const MAX_TAG_LENGTH = 40
+
 interface TagComboboxProps {
+  /** Whether the menu is showing. The trigger (children) is drawn either way. */
+  open: boolean
+  /** The "+ Add tag" chip the menu hangs from. */
+  children: ReactNode
   /** Space tags in use and not already on this entity, sorted. Merged with
    *  the registry below, so a caller need not chase down every source. */
   suggestions: string[]
@@ -18,20 +29,39 @@ interface TagComboboxProps {
   existing: Set<string>
   /** Space tag → base-colour registry, for colouring suggestions. */
   registry: Record<string, string>
-  /** Entity accent (input focus ring). */
-  accentBase: string
   onAdd: (tag: string) => void
   onCreate: (tag: string, color: string) => void
   onClose: () => void
 }
 
 export function TagCombobox({
-  suggestions, existing, registry, accentBase, onAdd, onCreate, onClose,
+  open, children, suggestions, existing, registry, onAdd, onCreate, onClose,
 }: TagComboboxProps) {
+  const ref = useRef<HTMLDivElement>(null)
+  useClickOutside(ref, () => { if (open) onClose() })
+
+  return (
+    <div ref={ref} className="relative">
+      {children}
+      {open && (
+        <TagMenu
+          suggestions={suggestions}
+          existing={existing}
+          registry={registry}
+          onAdd={onAdd}
+          onCreate={onCreate}
+          onClose={onClose}
+        />
+      )}
+    </div>
+  )
+}
+
+function TagMenu({
+  suggestions, existing, registry, onAdd, onCreate, onClose,
+}: Omit<TagComboboxProps, 'open' | 'children'>) {
   const [draft, setDraft] = useState('')
   const [highlight, setHighlight] = useState(0)
-  // Ignore the blur that immediately follows a mousedown-driven selection.
-  const selecting = useRef(false)
 
   const query = draft.trim().toLowerCase()
 
@@ -78,78 +108,72 @@ export function TagCombobox({
   }
 
   return (
-    <div className="relative">
-      <input
-        autoFocus
-        value={draft}
-        onChange={(e) => { setDraft(e.target.value); setHighlight(0) }}
-        onMouseDown={() => { selecting.current = false }}
-        onBlur={() => { if (!selecting.current) onClose() }}
+    <div className={clsx(DROPDOWN_MENU_CLASS, 'w-[300px]')}>
+      <div
+        className="border-b border-border-subtle p-2"
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') { e.preventDefault(); setHighlight((h) => Math.min(h + 1, rows.length - 1)) }
           else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlight((h) => Math.max(h - 1, 0)) }
           else if (e.key === 'Enter') {
             e.preventDefault()
             if (rows.length) commit(rows[active])
-            else if (trimmed) { onCreate(trimmed, resolveTagBase(trimmed, registry)); onClose() }
             else onClose()
           } else if (e.key === 'Escape') { e.preventDefault(); onClose() }
         }}
-        placeholder="Search or create…"
-        maxLength={40}
-        className="h-8 w-44 rounded-full border border-border-default bg-surface-1 px-3 text-[13px] text-text-primary outline-none focus:border-[color:var(--accent)]"
-        style={{ ['--accent' as string]: accentBase }}
-      />
+      >
+        <SearchInput
+          value={draft}
+          onChange={(v) => { setDraft(v.slice(0, MAX_TAG_LENGTH)); setHighlight(0) }}
+          placeholder="Search or create…"
+          size="md"
+          autoFocus
+        />
+      </div>
 
-      {(rows.length > 0 || showCreate) && (
-        <div className="absolute left-0 top-[34px] z-20 w-56 overflow-hidden rounded-xl border border-border-subtle bg-surface-1 shadow-float">
-          <ul role="listbox" className="max-h-52 overflow-auto py-1">
-            {rows.map((row, i) => {
-              const pal = row.kind === 'tag' ? tagPalette(row.value, registry) : null
-              return (
-                <li key={`${row.kind}:${row.value}`} role="option" aria-selected={i === active}>
-                  <button
-                    type="button"
-                    onMouseDown={() => { selecting.current = true }}
-                    onMouseEnter={() => setHighlight(i)}
-                    onClick={() => commit(row)}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[13px] transition ${
-                      i === active ? 'bg-surface-2' : ''
-                    }`}
-                  >
-                    {row.kind === 'create' ? (
-                      <>
-                        <span className="text-text-muted">+</span>
-                        <span className="text-text-secondary">Create</span>
-                        <span className="ml-1 truncate font-medium text-text-primary">“{row.value}”</span>
-                      </>
-                    ) : (
-                      <Chip size="md" color={pal!.base} className="truncate">{row.value}</Chip>
-                    )}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+      {rows.length > 0 && (
+        <ul role="listbox" className="max-h-[320px] overflow-y-auto overscroll-contain py-1 custom-scrollbar">
+          {rows.map((row, i) => (
+            <li key={`${row.kind}:${row.value}`} role="option" aria-selected={i === active}>
+              <button
+                type="button"
+                onMouseEnter={() => setHighlight(i)}
+                onClick={() => commit(row)}
+                className={clsx(
+                  'flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm transition-colors',
+                  i === active && 'bg-surface-2',
+                )}
+              >
+                {row.kind === 'create' ? (
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="text-text-muted">+</span>
+                    <span className="text-text-secondary">Create</span>
+                    <span className="truncate font-medium text-text-primary">“{row.value}”</span>
+                  </span>
+                ) : (
+                  <span className="min-w-0 flex-1">
+                    <Chip size="md" color={tagPalette(row.value, registry).base}>
+                      <span className="truncate">{row.value}</span>
+                    </Chip>
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
-          {showCreate && (
-            <div className="border-t border-border-subtle px-3 py-2">
-              <div className="mb-1.5 text-[11px] font-medium text-text-muted">Pick a colour</div>
-              <div className="flex flex-wrap gap-1.5">
-                {TAG_SWATCHES.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    aria-label={`Create “${trimmed}” in this colour`}
-                    onMouseDown={() => { selecting.current = true }}
-                    onClick={() => { onCreate(trimmed, color); onClose() }}
-                    className="h-5 w-5 rounded-full border border-black/10 transition hover:scale-110"
-                    style={{ background: color }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+      {showCreate && (
+        <div className="flex flex-wrap gap-1.5 border-t border-border-subtle px-4 py-2.5">
+          {TAG_SWATCHES.map((color) => (
+            <button
+              key={color}
+              type="button"
+              aria-label={`Create “${trimmed}” in this colour`}
+              onClick={() => { onCreate(trimmed, color); onClose() }}
+              className="h-5 w-5 rounded-full border border-black/10 transition hover:scale-110"
+              style={{ background: color }}
+            />
+          ))}
         </div>
       )}
     </div>

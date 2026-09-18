@@ -680,23 +680,23 @@ export function EntityContextPanel({
               </Chip>
             ))}
 
-            {canEditTags && (addingTag ? (
+            {canEditTags && (
               <TagCombobox
+                open={addingTag}
                 suggestions={tagSuggestions}
                 existing={tagsLower}
                 registry={tagColors}
-                accentBase={theme.base}
                 onAdd={addTag}
                 onCreate={createTag}
                 onClose={() => setAddingTag(false)}
-              />
-            ) : (
-              <button type="button" onClick={() => setAddingTag(true)} disabled={tagSaving}
-                      className={chipClass({ tone: 'dashed', size: 'xl', className: CHIP_ACCENT_HOVER })}
-                      style={{ ['--accent' as string]: theme.dark }}>
-              + Add tag
-            </button>
-          ))}
+              >
+                <button type="button" onClick={() => setAddingTag((v) => !v)} disabled={tagSaving}
+                        className={chipClass({ tone: 'dashed', size: 'xl', className: CHIP_ACCENT_HOVER })}
+                        style={{ ['--accent' as string]: theme.dark }}>
+                  + Add tag
+                </button>
+              </TagCombobox>
+            )}
           </div>
         ) : null}
       />

@@ -179,23 +179,23 @@ export function NoteMetaRows({
                 {tag}
               </Chip>
             ))}
-            {editable && (addingTag ? (
+            {editable && (
               <TagCombobox
+                open={addingTag}
                 suggestions={tagSuggestions.filter((tag) => !tagsLower.has(tag.toLowerCase()))}
                 existing={tagsLower}
                 registry={colors}
-                accentBase={typeConfig?.color ?? '#2f8d72'}
                 onAdd={addTag}
                 onCreate={createTag}
                 onClose={() => setAddingTag(false)}
-              />
-            ) : (
-              <button type="button" onClick={() => setAddingTag(true)}
-                      className={chipClass({ tone: 'dashed', size: 'xl', className: CHIP_ACCENT_HOVER })}
-                      style={{ ['--accent' as string]: typeConfig?.color ?? '#2f8d72' }}>
-                + Add tag
-              </button>
-            ))}
+              >
+                <button type="button" onClick={() => setAddingTag((v) => !v)}
+                        className={chipClass({ tone: 'dashed', size: 'xl', className: CHIP_ACCENT_HOVER })}
+                        style={{ ['--accent' as string]: typeConfig?.color ?? '#2f8d72' }}>
+                  + Add tag
+                </button>
+              </TagCombobox>
+            )}
           </div>
         </div>
       )}

@@ -8,7 +8,7 @@
 // drew it as plain black text in a system menu, so the one thing that tells two
 // types apart was gone at the moment you were choosing between them.
 //
-// Mirrors TagCombobox's float (same border, surface and shadow) because they
+// Floats like TagCombobox (same surface and shadow) because they
 // sit one above the other in the same header, and a type and a tag are the same
 // object to a reader.
 
