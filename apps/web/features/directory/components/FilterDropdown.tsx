@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
 import {
   DROPDOWN_TRIGGER_CLASS,
-  DROPDOWN_MENU_CLASS,
   DROPDOWN_TRIGGER_ACTIVE_STYLE,
   DROPDOWN_TRIGGER_IDLE_STYLE,
 } from '@/components/ui/Dropdown';
 import Chip from '@/components/ui/Chip';
+import { SEARCH_MENU_PANEL, SearchMenuEmpty, SearchMenuInput, SearchMenuList } from '@/components/ui/SearchMenu';
 
 // ── Multi-select filter dropdown ──────────────────────────────────────────────
 interface SubOption {
@@ -133,29 +133,15 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
       </button>
 
       {open && (
-        <div className={`${DROPDOWN_MENU_CLASS} w-[268px]`}>
-          <div className="flex items-center gap-2 px-3 py-2">
-            <div className="flex flex-1 min-w-0 items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
-              <svg className="h-3 w-3 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-              </svg>
-              <input
-                ref={searchRef}
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder={`Search ${label.toLowerCase()}…`}
-                className="flex-1 min-w-0 bg-transparent text-xs text-text-primary placeholder:text-text-muted outline-none"
-              />
-              {search && (
-                <button type="button" onClick={() => setSearch('')} className="text-text-muted hover:text-text-secondary transition-colors">
-                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-            {isActive && !singleSelect && (
+        <div className={`${SEARCH_MENU_PANEL} absolute left-0 top-full mt-1.5 w-[268px]`}>
+          <SearchMenuInput
+            ref={searchRef}
+            value={search}
+            onChange={setSearch}
+            onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
+            placeholder={`Search ${label.toLowerCase()}…`}
+            autoFocus={false}
+            trailing={isActive && !singleSelect ? (
               <button
                 type="button"
                 onClick={() => { onChange(new Set()); onChangeSub?.(new Set()); }}
@@ -163,13 +149,11 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
               >
                 Clear
               </button>
-            )}
-          </div>
+            ) : undefined}
+          />
 
-          <div className="max-h-[320px] overflow-y-auto overflow-x-hidden overscroll-contain custom-scrollbar">
-          {filteredOptions.length === 0 && (
-            <p className="px-4 py-3 text-xs text-text-muted">No matches</p>
-          )}
+          <SearchMenuList>
+          {filteredOptions.length === 0 && <SearchMenuEmpty />}
 
           {filteredOptions.map(opt => {
             const checked = selected.has(opt.value);
@@ -273,7 +257,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
               </div>
             );
           })}
-          </div>
+          </SearchMenuList>
         </div>
       )}
     </div>

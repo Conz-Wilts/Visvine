@@ -26,6 +26,7 @@ import {
   type PickerLeaf,
   type PickerRow,
 } from '@/lib/notes/shared/pickerTree'
+import { SEARCH_MENU_PANEL, SearchMenuEmpty, SearchMenuInput, SearchMenuList, searchMenuRowState } from '@/components/ui/SearchMenu'
 import { TreeFileIcon, TreeFolderIcon, TreeGuide, TreeStem } from '@/components/ui/TreeChrome'
 
 interface NoteRef {
@@ -83,7 +84,6 @@ export function NotePicker({
   const [opened, setOpened] = useState<{ q: string; paths: Set<string> }>(() => ({ q: '', paths: new Set() }))
   const inputRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
   useEffect(() => {
@@ -131,10 +131,6 @@ export function NotePicker({
     // Only a new query re-aims; opening a folder must not move the cursor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q])
-
-  useEffect(() => {
-    listRef.current?.querySelector<HTMLElement>(`[data-row="${active}"]`)?.scrollIntoView({ block: 'nearest' })
-  }, [active])
 
   // Anchored variant: place the dropdown just below the caret, then clamp it to the
   // viewport (slide left if it would overflow the right edge, flip above if it would
@@ -210,22 +206,16 @@ export function NotePicker({
 
   const body = (
     <>
-      <input
+      <SearchMenuInput
         ref={inputRef}
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={setQuery}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
-        className={`w-full border-b border-border-subtle bg-transparent px-4 text-text-primary placeholder:text-text-muted focus:outline-none ${
-          anchor ? 'py-2.5 text-sm' : 'py-3 text-base'
-        }`}
       />
-      <div
-        ref={listRef}
-        className={`overflow-y-auto overscroll-contain py-1 custom-scrollbar ${anchor ? 'max-h-80' : 'max-h-[50vh]'}`}
-      >
+      <SearchMenuList active={active} className={anchor ? undefined : 'max-h-[50vh]'}>
         {rows.length === 0 ? (
-          <div className="px-4 py-6 text-center text-sm text-text-muted">No matches</div>
+          <SearchMenuEmpty />
         ) : (
           rows.map((row, i) => (
             <PickerTreeRow
@@ -239,7 +229,7 @@ export function NotePicker({
             />
           ))
         )}
-      </div>
+      </SearchMenuList>
     </>
   )
 
@@ -252,7 +242,7 @@ export function NotePicker({
         <div className="fixed inset-0 z-40" onMouseDown={onClose} />
         <div
           ref={panelRef}
-          className="fixed z-50 w-[340px] overflow-hidden rounded-xl border border-border-subtle bg-surface-1 shadow-float"
+          className={clsx(SEARCH_MENU_PANEL, 'fixed w-[340px]')}
           style={
             pos
               ? { left: pos.left, top: pos.top }
@@ -306,9 +296,9 @@ function PickerTreeRow({
   const title = titleOf(node)
   return (
     <div
-      data-row={index}
+      data-menu-row={index}
       onMouseEnter={onHover}
-      className={clsx('flex items-stretch pr-3 pl-2 transition-colors', active ? 'bg-surface-2' : '')}
+      className={clsx('flex items-stretch pr-3 pl-2 text-sm transition-colors', searchMenuRowState(active))}
     >
       {/* Each level sits 26px in from the one above — a 12px guide cell and
           14px to the next — so a child's guide lands under its folder glyph. */}
@@ -345,7 +335,7 @@ function PickerTreeRow({
         tabIndex={-1}
         onMouseDown={(e) => e.preventDefault()}
         onClick={onChoose}
-        className="flex min-w-0 flex-1 items-center py-1.5 text-left text-[14px]"
+        className="flex min-w-0 flex-1 items-center py-1.5 text-left"
       >
         <span className={clsx('truncate', node.kind === 'folder' ? 'font-medium text-text-secondary' : 'text-text-primary')}>
           {title}

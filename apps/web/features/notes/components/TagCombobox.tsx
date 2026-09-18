@@ -1,17 +1,23 @@
 'use client'
 
-// Tag picker for the context-note header, drawn as the Grid bar's TagMenu so
-// the two read as one family: the "+ Add tag" chip stays where it is and a
-// menu floats under it — a search box, then every tag the space knows as its
-// own chip, then "Create" with a colour swatch row when the text names a tag
-// that does not exist yet. Picking an existing tag calls onAdd; creating calls
+// Tag picker for the context-note header, drawn as the shared search menu
+// (components/ui/SearchMenu) like every other list you choose from: the
+// "+ Add tag" chip stays where it is and a menu floats under it — a search
+// field, then every tag the space knows as its own chip, then "Create" with a
+// colour swatch row when the text names a tag that does not exist yet. Picking an existing tag calls onAdd; creating calls
 // onCreate with the chosen colour. A click outside or Escape calls onClose.
 
 import { useRef, useState, useMemo, type ReactNode } from 'react'
 import { clsx } from 'clsx'
 import Chip from '@/components/ui/Chip'
-import SearchInput from '@/components/ui/SearchInput'
-import { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown'
+import {
+  SEARCH_MENU_PANEL,
+  SEARCH_MENU_ROW,
+  SearchMenuInput,
+  SearchMenuList,
+  searchMenuRowState,
+  useSearchMenuCursor,
+} from '@/components/ui/SearchMenu'
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside'
 import { TAG_SWATCHES, resolveTagBase, tagKey, tagPalette } from '@/lib/tagColors'
 
@@ -61,7 +67,6 @@ function TagMenu({
   suggestions, existing, registry, onAdd, onCreate, onClose,
 }: Omit<TagComboboxProps, 'open' | 'children'>) {
   const [draft, setDraft] = useState('')
-  const [highlight, setHighlight] = useState(0)
 
   const query = draft.trim().toLowerCase()
 
@@ -98,68 +103,49 @@ function TagMenu({
     ...matches.map((value) => ({ kind: 'tag' as const, value })),
     ...(showCreate ? [{ kind: 'create' as const, value: trimmed }] : []),
   ]
-  const active = Math.min(highlight, rows.length - 1)
-
   const commit = (row: { kind: 'tag' | 'create'; value: string } | undefined) => {
     if (!row) { onClose(); return }
     if (row.kind === 'create') onCreate(row.value, resolveTagBase(row.value, registry))
     else onAdd(row.value)
     onClose()
   }
+  const cursor = useSearchMenuCursor({ count: rows.length, resetKey: query, onChoose: (i) => commit(rows[i]), onClose })
 
   return (
-    <div className={clsx(DROPDOWN_MENU_CLASS, 'w-[300px]')}>
-      <div
-        className="border-b border-border-subtle p-2"
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown') { e.preventDefault(); setHighlight((h) => Math.min(h + 1, rows.length - 1)) }
-          else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlight((h) => Math.max(h - 1, 0)) }
-          else if (e.key === 'Enter') {
-            e.preventDefault()
-            if (rows.length) commit(rows[active])
-            else onClose()
-          } else if (e.key === 'Escape') { e.preventDefault(); onClose() }
-        }}
-      >
-        <SearchInput
-          value={draft}
-          onChange={(v) => { setDraft(v.slice(0, MAX_TAG_LENGTH)); setHighlight(0) }}
-          placeholder="Search or create…"
-          size="md"
-          autoFocus
-        />
-      </div>
+    <div className={clsx(SEARCH_MENU_PANEL, 'absolute left-0 top-full mt-1.5 w-72')}>
+      <SearchMenuInput
+        value={draft}
+        onChange={setDraft}
+        onKeyDown={cursor.onKeyDown}
+        placeholder="Search or create…"
+        maxLength={MAX_TAG_LENGTH}
+      />
 
       {rows.length > 0 && (
-        <ul role="listbox" className="max-h-[320px] overflow-y-auto overscroll-contain py-1 custom-scrollbar">
+        <SearchMenuList active={cursor.active}>
           {rows.map((row, i) => (
-            <li key={`${row.kind}:${row.value}`} role="option" aria-selected={i === active}>
-              <button
-                type="button"
-                onMouseEnter={() => setHighlight(i)}
-                onClick={() => commit(row)}
-                className={clsx(
-                  'flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm transition-colors',
-                  i === active && 'bg-surface-2',
-                )}
-              >
-                {row.kind === 'create' ? (
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <span className="text-text-muted">+</span>
-                    <span className="text-text-secondary">Create</span>
-                    <span className="truncate font-medium text-text-primary">“{row.value}”</span>
-                  </span>
-                ) : (
-                  <span className="min-w-0 flex-1">
-                    <Chip size="md" color={tagPalette(row.value, registry).base}>
-                      <span className="truncate">{row.value}</span>
-                    </Chip>
-                  </span>
-                )}
-              </button>
-            </li>
+            <button
+              key={`${row.kind}:${row.value}`}
+              type="button"
+              data-menu-row={i}
+              onMouseEnter={() => cursor.setActive(i)}
+              onClick={() => commit(row)}
+              className={clsx(SEARCH_MENU_ROW, searchMenuRowState(i === cursor.active))}
+            >
+              {row.kind === 'create' ? (
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="text-text-muted">+</span>
+                  <span className="text-text-secondary">Create</span>
+                  <span className="truncate font-medium text-text-primary">“{row.value}”</span>
+                </span>
+              ) : (
+                <Chip size="md" color={tagPalette(row.value, registry).base}>
+                  <span className="truncate">{row.value}</span>
+                </Chip>
+              )}
+            </button>
           ))}
-        </ul>
+        </SearchMenuList>
       )}
 
       {showCreate && (

@@ -13,13 +13,22 @@
 // short and the table is wide: a rail spent 212px of every screen saying one
 // thing the bar can say in a word. The trigger stretches to the height of
 // the search input beside it, so the bar reads as two controls of
-// one family rather than a box and a word floating on the page.
+// one family rather than a box and a word floating on the page. The menu is
+// the shared search menu (components/ui/SearchMenu), as the Tags beside it.
 
 import { useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
-import { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown';
 import Chip from '@/components/ui/Chip';
+import {
+  SEARCH_MENU_PANEL,
+  SEARCH_MENU_ROW,
+  SearchMenuEmpty,
+  SearchMenuInput,
+  SearchMenuList,
+  searchMenuRowState,
+  useSearchMenuCursor,
+} from '@/components/ui/SearchMenu';
 import { ChevronDownIcon } from '@/features/shared/icons';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
 import { pluralTypeName } from '@/lib/types/plural';
@@ -89,9 +98,22 @@ export default function TypeMenu({ types, activeKey, activeAlias, nodeTypes, onC
   onChange: (id: string, alias: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const ref = useRef<HTMLDivElement>(null);
-  const close = () => setOpen(false);
+  const close = () => { setOpen(false); setQuery(''); };
   useClickOutside(ref, close);
+
+  // The search reads the row's own words, so "peo" finds People.
+  const q = query.trim().toLowerCase();
+  const shown = q ? types.filter((t) => t.id !== 'all' && label(t, nodeTypes).toLowerCase().includes(q)) : types;
+  // Picking a type clears any alias narrowing it.
+  const pick = (id: string) => { onChange(id, null); close(); };
+  const cursor = useSearchMenuCursor({
+    count: shown.length,
+    resetKey: q,
+    onChoose: (i) => { if (shown[i]) pick(shown[i].id); },
+    onClose: close,
+  });
 
   const active = types.find((t) => t.id === activeKey) ?? types[0];
   if (!active) return null;
@@ -107,9 +129,6 @@ export default function TypeMenu({ types, activeKey, activeAlias, nodeTypes, onC
   const fill = pickedAlias?.color ?? (active.id === 'all' ? undefined : getTypeColor(active.name, nodeTypes));
   const triggerLabel = pickedAlias?.name ?? (active.id === 'all' ? 'All Types' : label(active, nodeTypes));
   const triggerCount = pickedAlias?.count ?? active.count;
-
-  // Picking a type clears any alias narrowing it.
-  const pick = (id: string) => { onChange(id, null); close(); };
 
   return (
     <div ref={ref} className="relative flex self-stretch">
@@ -137,9 +156,11 @@ export default function TypeMenu({ types, activeKey, activeAlias, nodeTypes, onC
       </button>
 
       {open && (
-        <div className={clsx(DROPDOWN_MENU_CLASS, 'w-[300px]')} role="menu" onKeyDown={(e) => { if (e.key === 'Escape') close(); }}>
-          <div className="max-h-[440px] overflow-y-auto overscroll-contain py-1 custom-scrollbar">
-            {types.map((type) => {
+        <div className={clsx(SEARCH_MENU_PANEL, 'absolute left-0 top-full mt-1.5 w-[300px]')} role="menu">
+          <SearchMenuInput value={query} onChange={setQuery} onKeyDown={cursor.onKeyDown} placeholder="Search types…" />
+          <SearchMenuList active={cursor.active} className="max-h-[440px]">
+            {shown.length === 0 && <SearchMenuEmpty />}
+            {shown.map((type, i) => {
               const picked = type.id === active.id && !pickedAlias;
               return (
                 <button
@@ -147,8 +168,10 @@ export default function TypeMenu({ types, activeKey, activeAlias, nodeTypes, onC
                   type="button"
                   role="menuitemradio"
                   aria-checked={picked}
+                  data-menu-row={i}
+                  onMouseEnter={() => cursor.setActive(i)}
                   onClick={() => pick(type.id)}
-                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition-colors hover:bg-surface-2"
+                  className={clsx(SEARCH_MENU_ROW, searchMenuRowState(i === cursor.active))}
                 >
                   <span className="min-w-0 flex-1 text-left">
                     {type.id === 'all' ? (
@@ -167,7 +190,7 @@ export default function TypeMenu({ types, activeKey, activeAlias, nodeTypes, onC
                 </button>
               );
             })}
-          </div>
+          </SearchMenuList>
         </div>
       )}
     </div>

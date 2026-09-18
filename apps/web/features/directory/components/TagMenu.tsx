@@ -7,15 +7,22 @@
 //
 // Unlike the type, tags stack — a row toggles and the menu stays open, so
 // several can be picked in one visit; the chip row under the bar restates
-// them. A search box heads the list, since a space's tags outgrow reading
-// down; it narrows the rows only, never the selection.
+// them. The menu is the shared search menu (components/ui/SearchMenu), since
+// a space's tags outgrow reading down; the search narrows the rows only,
+// never the selection.
 
 import { useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
-import { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown';
 import Chip from '@/components/ui/Chip';
-import SearchInput from '@/components/ui/SearchInput';
+import {
+  SEARCH_MENU_PANEL,
+  SEARCH_MENU_ROW,
+  SearchMenuInput,
+  SearchMenuList,
+  searchMenuRowState,
+  useSearchMenuCursor,
+} from '@/components/ui/SearchMenu';
 import { ChevronDownIcon } from '@/features/shared/icons';
 
 export interface MenuTag {
@@ -37,8 +44,6 @@ export default function TagMenu({ tags, selected, total, getColor, onChange }: {
   const close = () => { setOpen(false); setQuery(''); };
   useClickOutside(ref, close);
 
-  if (tags.length === 0) return null;
-
   const q = query.trim().toLowerCase();
   const shown = q ? tags.filter((t) => t.name.toLowerCase().includes(q)) : tags;
 
@@ -54,6 +59,22 @@ export default function TagMenu({ tags, selected, total, getColor, onChange }: {
     else next.add(name);
     onChange(next);
   };
+
+  // All heads the list until a search narrows it; then only tags are rows.
+  const rows: Array<{ kind: 'all' } | { kind: 'tag'; tag: MenuTag }> = [
+    ...(q ? [] : [{ kind: 'all' as const }]),
+    ...shown.map((tag) => ({ kind: 'tag' as const, tag })),
+  ];
+  // A tag toggles and the menu stays open; All clears and closes.
+  const choose = (i: number) => {
+    const row = rows[i];
+    if (!row) return;
+    if (row.kind === 'all') { onChange(new Set()); close(); }
+    else toggle(row.tag.name);
+  };
+  const cursor = useSearchMenuCursor({ count: rows.length, resetKey: q, onChoose: choose, onClose: close });
+
+  if (tags.length === 0) return null;
 
   return (
     <div ref={ref} className="relative flex self-stretch">
@@ -81,60 +102,47 @@ export default function TagMenu({ tags, selected, total, getColor, onChange }: {
       </button>
 
       {open && (
-        <div className={clsx(DROPDOWN_MENU_CLASS, 'w-[300px]')} role="menu">
-          <div
-            className="border-b border-border-subtle p-2"
-            onKeyDown={(e) => {
-              // Enter toggles the first tag left standing; the menu stays open.
-              if (e.key === 'Enter' && q && shown[0]) { e.preventDefault(); toggle(shown[0].name); }
-              if (e.key === 'Escape') close();
-            }}
-          >
-            <SearchInput value={query} onChange={setQuery} placeholder="Search tags…" size="md" autoFocus />
-          </div>
-          <div className="max-h-[440px] overflow-y-auto overscroll-contain py-1 custom-scrollbar">
+        <div className={clsx(SEARCH_MENU_PANEL, 'absolute left-0 top-full mt-1.5 w-[300px]')} role="menu">
+          <SearchMenuInput value={query} onChange={setQuery} onKeyDown={cursor.onKeyDown} placeholder="Search tags…" />
+          <SearchMenuList active={cursor.active} className="max-h-[440px]">
             {q && shown.length === 0 && (
               <p className="px-4 py-3 text-[13px] text-text-muted">Nothing matches “{query.trim()}”</p>
             )}
-            {!q && <button
-              type="button"
-              role="menuitemradio"
-              aria-checked={picked.length === 0}
-              onClick={() => { onChange(new Set()); close(); }}
-              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition-colors hover:bg-surface-2"
-            >
-              <span className="min-w-0 flex-1 text-left">
-                <span className={clsx('px-2 text-[12px] font-semibold', picked.length === 0 ? 'text-text-primary' : 'text-text-secondary')}>
-                  All
-                </span>
-              </span>
-              <span className="shrink-0 text-[11px] leading-4 tabular-nums text-text-muted">{total}</span>
-            </button>}
-            {shown.map((tag) => {
-              const on = selected.has(tag.name);
+            {rows.map((row, i) => {
+              const on = row.kind === 'all' ? picked.length === 0 : selected.has(row.tag.name);
               return (
                 <button
-                  key={tag.name}
+                  key={row.kind === 'all' ? ':all:' : row.tag.name}
                   type="button"
-                  role="menuitemcheckbox"
+                  role={row.kind === 'all' ? 'menuitemradio' : 'menuitemcheckbox'}
                   aria-checked={on}
-                  onClick={() => toggle(tag.name)}
-                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition-colors hover:bg-surface-2"
+                  data-menu-row={i}
+                  onMouseEnter={() => cursor.setActive(i)}
+                  onClick={() => choose(i)}
+                  className={clsx(SEARCH_MENU_ROW, searchMenuRowState(i === cursor.active))}
                 >
                   <span className="min-w-0 flex-1 text-left">
-                    <Chip
-                      color={getColor(tag.name)}
-                      size="md"
-                      className={clsx(on && 'ring-2 ring-border-default ring-offset-1 ring-offset-surface-1')}
-                    >
-                      <span className="truncate">{tag.name}</span>
-                    </Chip>
+                    {row.kind === 'all' ? (
+                      <span className={clsx('px-2 text-[12px] font-semibold', on ? 'text-text-primary' : 'text-text-secondary')}>
+                        All
+                      </span>
+                    ) : (
+                      <Chip
+                        color={getColor(row.tag.name)}
+                        size="md"
+                        className={clsx(on && 'ring-2 ring-border-default ring-offset-1 ring-offset-surface-1')}
+                      >
+                        <span className="truncate">{row.tag.name}</span>
+                      </Chip>
+                    )}
                   </span>
-                  <span className="shrink-0 text-[11px] leading-4 tabular-nums text-text-muted">{tag.count}</span>
+                  <span className="shrink-0 text-[11px] leading-4 tabular-nums text-text-muted">
+                    {row.kind === 'all' ? total : row.tag.count}
+                  </span>
                 </button>
               );
             })}
-          </div>
+          </SearchMenuList>
         </div>
       )}
     </div>
