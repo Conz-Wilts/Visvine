@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("visvineDesktop", {
   isDesktop: true,
   platform: process.platform,
   version,
+  /** Stand the macOS traffic lights at (x, y) points from the window's corner. */
+  setWindowControls: (position: { x: number; y: number }) => ipcRenderer.send("window:controls", position),
   runtimes: {
     list: () => ipcRenderer.invoke("runtimes:list"),
     login: (id: string) => ipcRenderer.invoke("runtimes:login", id),

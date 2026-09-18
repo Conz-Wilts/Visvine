@@ -14,7 +14,7 @@ import {
   navigationDecision,
 } from "./urls";
 import { beginSignIn, completeSignIn, restoreSession, watchSessionCookie } from "./auth";
-import { loadWindowState, saveWindowState } from "./window-state";
+import { loadWindowState, parseWindowControls, saveWindowState, type WindowControls } from "./window-state";
 import { cancelRun, isRuntimeId, listRuntimes, loginRuntime, startRun, type RunInput } from "./runtimes";
 
 const APP_NAME = "Visvine";
@@ -184,21 +184,27 @@ function onScreen(state: { x?: number; y?: number; width: number; height: number
   return visibleX && visibleY;
 }
 
+/**
+ * Where the traffic lights stand. A page that never says (an older web
+ * release, the offline page) gets the spot centred over its 76pt rail.
+ */
+const DEFAULT_WINDOW_CONTROLS: WindowControls = { x: 8, y: 9 };
+let windowControls: WindowControls = DEFAULT_WINDOW_CONTROLS;
+
 function createWindow(): BrowserWindow {
   const saved = loadWindowState(userData);
+  windowControls = saved.controls ?? DEFAULT_WINDOW_CONTROLS;
   const state = onScreen(saved) ? saved : { ...saved, x: undefined, y: undefined };
   const win = new BrowserWindow({
     title: APP_NAME,
     // macOS: no title bar of its own. The app's own top band runs to the top
     // of the window, so the frame draws neither the app's name nor a hairline
-    // across it — only the traffic lights, dropped into the rail's top strip
-    // (reserved by the web shell: features/desktop/lib/chrome.ts).
-    //
-    // 14/14 stands the group Slack's way: 14pt of air above and either side
-    // of it, over a rail the web shell widens to 14 + 60 + 14 = 88 so every
-    // glyph's centre falls under the middle light.
+    // across it — only the traffic lights, dropped into the rail's top strip.
+    // WHERE in that strip is the page's to say (window:controls below), since
+    // the rail they are centred over is drawn by whichever web release is
+    // loaded; the window opens where the page last put them.
     ...(process.platform === "darwin"
-      ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 14, y: 14 } }
+      ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: windowControls }
       : {}),
     x: state.x,
     y: state.y,
@@ -224,7 +230,7 @@ function createWindow(): BrowserWindow {
   win.once("ready-to-show", () => win.show());
 
   const persist = () => {
-    if (!win.isDestroyed()) saveWindowState(userData, { ...win.getNormalBounds(), isMaximized: win.isMaximized() });
+    if (!win.isDestroyed()) saveWindowState(userData, { ...win.getNormalBounds(), isMaximized: win.isMaximized(), controls: windowControls });
   };
   // resize/move fire per pixel — coalesce; close persists synchronously.
   let persistTimer: NodeJS.Timeout | null = null;
@@ -263,7 +269,7 @@ function createWindow(): BrowserWindow {
  * provider page, the offline page — is refused before it is looked at, so
  * nothing loaded in the shell but Visvine can spawn a process here.
  */
-function fromApp(event: Electron.IpcMainInvokeEvent): boolean {
+function fromApp(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent): boolean {
   return isSameApp(event.senderFrame?.url ?? event.sender.getURL(), appUrl);
 }
 
@@ -288,6 +294,17 @@ function registerRuntimeIpc() {
     return "error" in started ? { error: started.error } : { runId: started.runId };
   });
   ipcMain.handle("runtimes:cancel", (event, runId: unknown) => fromApp(event) && typeof runId === "string" && cancelRun(runId));
+}
+
+/** The page puts the traffic lights over the rail it draws (features/desktop/lib/chrome.ts). */
+function registerWindowIpc() {
+  ipcMain.on("window:controls", (event, raw: unknown) => {
+    const controls = parseWindowControls(raw);
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (process.platform !== "darwin" || !fromApp(event) || !controls || !win) return;
+    windowControls = controls;
+    win.setWindowButtonPosition(controls);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -354,6 +371,7 @@ if (!app.requestSingleInstanceLock()) {
 
     Menu.setApplicationMenu(buildMenu({ appUrl, getWindow: () => mainWindow }));
     registerRuntimeIpc();
+    registerWindowIpc();
 
     watchSessionCookie(appUrl, userData);
 

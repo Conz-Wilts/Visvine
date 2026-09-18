@@ -35,6 +35,8 @@ interface DesktopBridge {
   isDesktop: true;
   platform: string;
   version: string;
+  /** Absent in a shell older than the page's say over the traffic lights. */
+  setWindowControls?(position: { x: number; y: number }): void;
   runtimes?: DesktopRuntimes;
 }
 

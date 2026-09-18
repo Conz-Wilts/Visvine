@@ -9,14 +9,17 @@ import { COLLAPSED_W } from '@/features/shared/components/layout/railRow';
  * rail, the way Slack's do — the group centred over the rail's column of
  * glyphs, with the same air either side of it.
  *
- * The lights stand 14pt in and 14pt down, and the group is 60pt wide, so the
- * rail is 14 + 60 + 14 = 88 wide and every glyph's centre (railW / 2) sits
- * under the middle light. The strip above the space is 40: the lights' centre
- * line is 21pt down, and 40 lands the space's tile 30pt below it, the gap
- * Slack leaves above its workspace tile.
+ * The page says where the lights stand (the shell has no idea how wide this
+ * release draws its rail): 14pt in and 14pt down, and the group is 60pt
+ * wide, so the rail is 14 + 60 + 14 = 88 and every glyph's centre
+ * (railW / 2) sits under the middle light. The strip above the space is 40:
+ * the lights' centre line is 21pt down, and 40 lands the space's tile 30pt
+ * below it, the gap Slack leaves above its workspace tile.
  */
 const MAC_TRAFFIC_LIGHT_INSET = 40;
-const MAC_RAIL_W = 88;
+const MAC_LIGHTS = { x: 14, y: 14 };
+const MAC_LIGHTS_W = 60;
+const MAC_RAIL_W = MAC_LIGHTS.x * 2 + MAC_LIGHTS_W;
 
 type DesktopChrome = {
   /** The strip the window's controls take at the top of the rail. */
@@ -32,7 +35,10 @@ const MAC: DesktopChrome = { inset: MAC_TRAFFIC_LIGHT_INSET, railW: MAC_RAIL_W }
 export function useDesktopChrome(): DesktopChrome {
   const [chrome, setChrome] = useState(BROWSER);
   useEffect(() => {
-    if (window.visvineDesktop?.platform === 'darwin') setChrome(MAC);
+    const desktop = window.visvineDesktop;
+    if (desktop?.platform !== 'darwin') return;
+    desktop.setWindowControls?.(MAC_LIGHTS);
+    setChrome(MAC);
   }, []);
   return chrome;
 }
