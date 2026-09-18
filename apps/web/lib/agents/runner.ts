@@ -30,6 +30,7 @@ import { parseAgentBrief, type AgentBrief } from './config'
 import { findAgentBrief } from './briefs'
 import { eventsForRun, rearmIfPending, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, type DeactivationReason, copyStillAllowed } from './hooks'
+import { checkRun } from './runCheck'
 import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS } from './limits'
 import { releaseMachineAfterRun } from '@/lib/vm/lease'
 import { principalForUser } from './principal'
@@ -386,6 +387,18 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       case 'max_turns': {
         if (result.finalText) events.push({ at: Date.now(), type: 'assistant', text: clipEventText(result.finalText) })
         if (result.reason === 'max_turns') events.push({ at: Date.now(), type: 'system', text: `Stopped at the turn cap (${brief.maxTurns}).` })
+        // What the run SAID it did, held against what it did (shared/runCheck.ts).
+        // A claim the trace does not back is said on the run's own line, and
+        // below it keeps the summary out of the memory note.
+        const check = await checkRun(result.finalText, {
+          writes: writes.length,
+          tools: events.flatMap((e) => (e.type === 'tool' ? [e.tool] : [])),
+        }).catch(() => ({ unbacked: [] as string[], outcome: null }))
+        for (const line of check.unbacked) events.push({ at: Date.now(), type: 'system', text: `Unverified — ${line}` })
+        if (check.outcome && check.outcome !== 'done') {
+          const said = { partial: 'only part of it was done', blocked: 'it could not do what it was asked', nothing: 'there was nothing to do' }[check.outcome]
+          events.push({ at: Date.now(), type: 'system', text: `The run ended saying ${said}.` })
+        }
         await finishRun(runId, {
           status: 'succeeded',
           terminalReason: result.reason,
@@ -406,7 +419,10 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
           const forName = run.runAsUserId && run.runAsUserId !== state.runAsUserId ? principal.name : null
           // Read again: `remember` may have added lines since the run began.
           const current = await readVisible(principal, context, memoryPath(name)).catch(() => null)
-          const next = setLastRun(current, name, { date: now.toISOString().slice(0, 10), trigger: run.trigger, summary: result.finalText, forName })
+          // Tomorrow's run reads this as fact, so a summary the trace does not
+          // back is not what goes in it.
+          const summary = check.unbacked.length ? `Unverified. ${check.unbacked.join(' ')}` : result.finalText
+          const next = setLastRun(current, name, { date: now.toISOString().slice(0, 10), trigger: run.trigger, summary, forName })
           await writeGated(principal, context, memoryPath(name), next, 'agent', `agent:${name}`).catch(() => undefined)
         }
         const deactivated = await release(state.id, runId, spaceId, name, { failed: false, countsAsFailure: false, deactivate: null })

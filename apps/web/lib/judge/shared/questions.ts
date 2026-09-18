@@ -139,3 +139,32 @@ export const filingQuestion = (what: 'type' | 'folder', options: Record<string, 
   instructions: what === 'type' ? 'Which kind of note is this?' : 'Which folder does this note belong in?',
   criteria: { ...options, none: what === 'type' ? 'None of these kinds fits.' : 'None of these folders fits.' },
 })
+
+// ── Runs ────────────────────────────────────────────────────────────────────
+
+/** State: the run's final message. What it CLAIMS; what it DID is the trace, read in code. */
+export const RUN_CLAIM_QUESTIONS = {
+  wrote: noul(
+    'Does the message say the agent created, edited, updated or saved a note or record?',
+    'The message says a note, record or file was written, updated or saved by the agent.',
+    'The message reports findings or plans, or says nothing was written.',
+  ),
+  reached: noul(
+    'Does the message say the agent sent something or acted in an outside service?',
+    'The message says the agent sent an email or message, posted somewhere, or created or changed something in an external service.',
+    'The message only reports what the agent read or found, or says nothing about acting outside.',
+  ),
+}
+export const RUN_CLAIM_AT = 0.8
+
+export const RUN_OUTCOME_QUESTION: ChoiceQuestion = {
+  type: 'choice',
+  instructions: 'How did this agent run end, according to its final message?',
+  criteria: {
+    done: 'The agent did what it was asked.',
+    partial: 'The agent did part of it and says what is left or what went wrong with the rest.',
+    blocked: 'The agent could not do it: something was missing, refused, unreachable or failed.',
+    nothing: 'There was nothing to do this time.',
+  },
+}
+export const RUN_OUTCOME_CONFIDENCE = 0.6
