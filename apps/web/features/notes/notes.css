@@ -93,6 +93,15 @@
   margin: 0 auto;
   padding: 4px 28px 56px;
 }
+/* A hairline between the note and what points at it, across the text column,
+ * so where the note ends is never a guess. */
+.notes-references::before {
+  content: '';
+  display: block;
+  height: 1px;
+  margin-bottom: 20px;
+  background: var(--color-border-subtle);
+}
 /* The filter narrows both groups at once. Quiet field, no border at rest —
  * it sits under the note body, not over it. */
 .notes-ref-toolbar {
