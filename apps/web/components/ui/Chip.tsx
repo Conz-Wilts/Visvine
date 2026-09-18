@@ -24,7 +24,7 @@ import { XIcon } from '@/features/shared/icons';
 import type { CSSProperties, ReactNode } from 'react';
 
 export type ChipTone = 'solid' | 'muted' | 'dashed';
-export type ChipSize = 'xs' | 'sm' | 'md' | 'lg';
+export type ChipSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
 const BASE =
   'inline-flex max-w-full items-center rounded-lg font-semibold leading-normal whitespace-nowrap';
@@ -34,6 +34,7 @@ const SIZE_CLASS: Record<ChipSize, string> = {
   sm: 'h-[22px] gap-1 px-2 text-[11px]',
   md: 'h-6 gap-1 px-2 text-[12px]',
   lg: 'h-7 gap-1.5 px-2.5 text-[13px]',
+  xl: 'h-8 gap-1.5 px-3 text-sm',
 };
 
 /** Room for the remove button, which brings its own right-hand padding. */
@@ -42,6 +43,7 @@ const REMOVABLE_PAD: Record<ChipSize, string> = {
   sm: 'pr-0.5',
   md: 'pr-1',
   lg: 'pr-1',
+  xl: 'pr-1.5',
 };
 
 const ICON_CLASS: Record<ChipSize, string> = {
@@ -49,6 +51,7 @@ const ICON_CLASS: Record<ChipSize, string> = {
   sm: 'h-3 w-3',
   md: 'h-3 w-3',
   lg: 'h-3.5 w-3.5',
+  xl: 'h-3.5 w-3.5',
 };
 
 const TONE_CLASS: Record<ChipTone, string> = {

@@ -186,12 +186,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
               )}
               {profile.pronouns && <span className="text-sm text-text-muted">{profile.pronouns}</span>}
               {aliasName && (
-                <Chip
-                  tone="solid"
-                  size="lg"
-                  color={aliasColor}
-                  className="h-8 rounded-lg px-3 text-sm leading-normal"
-                >
+                <Chip tone="solid" size="xl" color={aliasColor}>
                   {aliasName}
                 </Chip>
               )}

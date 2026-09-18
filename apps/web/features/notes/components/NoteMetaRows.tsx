@@ -134,7 +134,7 @@ export function NoteMetaRows({
               // options come back as the chips they will become.
               <span ref={typeAnchor} className="relative">
                 <Chip
-                  size="lg"
+                  size="xl"
                   // Nothing declared and no shape to stand in for it: the empty
                   // slot, drawn like "+ Add tag" one row below.
                   tone={typeConfig || shapeConfig ? 'solid' : 'dashed'}
@@ -160,11 +160,11 @@ export function NoteMetaRows({
                 )}
               </span>
             ) : typeConfig ? (
-              <Chip size="lg" color={aliasConfig?.color ?? typeConfig.color}>
+              <Chip size="xl" color={aliasConfig?.color ?? typeConfig.color}>
                 {nodeTypeLabel(trimmedType, alias, aliases, nodeTypes)}
               </Chip>
             ) : shape ? (
-              <Chip size="lg" color={shapeConfig?.color}>{shape}</Chip>
+              <Chip size="xl" color={shapeConfig?.color}>{shape}</Chip>
             ) : null}
           </span>
         </div>
@@ -175,7 +175,7 @@ export function NoteMetaRows({
           <span className={LABEL_CLASS}>Tags</span>
           <div className="flex flex-wrap gap-1.5">
             {tags.map((tag) => (
-              <Chip key={tag} size="lg" color={tagPalette(tag, colors).base}>
+              <Chip key={tag} size="xl" color={tagPalette(tag, colors).base}>
                 {tag}
               </Chip>
             ))}
@@ -191,7 +191,7 @@ export function NoteMetaRows({
               />
             ) : (
               <button type="button" onClick={() => setAddingTag(true)}
-                      className={chipClass({ tone: 'dashed', size: 'lg', className: CHIP_ACCENT_HOVER })}
+                      className={chipClass({ tone: 'dashed', size: 'xl', className: CHIP_ACCENT_HOVER })}
                       style={{ ['--accent' as string]: typeConfig?.color ?? '#2f8d72' }}>
                 + Add tag
               </button>

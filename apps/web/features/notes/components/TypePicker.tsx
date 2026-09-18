@@ -57,7 +57,7 @@ export function TypePicker({ options, current, clearLabel, onPick, anchorRef, on
   return (
     <div
       ref={ref}
-      className="absolute left-0 top-[34px] z-20 w-64 rounded-xl border border-border-subtle bg-surface-1 p-2 shadow-float"
+      className="absolute left-0 top-[38px] z-20 w-64 rounded-xl border border-border-subtle bg-surface-1 p-2 shadow-float"
     >
       <div className="flex max-h-60 flex-wrap gap-1.5 overflow-auto">
         {options.map((option) => {
@@ -65,7 +65,7 @@ export function TypePicker({ options, current, clearLabel, onPick, anchorRef, on
           return (
             <Chip
               key={option.name}
-              size="lg"
+              size="xl"
               color={option.color}
               onClick={() => { onPick(option.name); onClose() }}
               className={picked ? 'ring-2 ring-border-default ring-offset-1 ring-offset-surface-1' : ''}

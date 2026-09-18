@@ -97,7 +97,7 @@ export function TagCombobox({
         }}
         placeholder="Search or create…"
         maxLength={40}
-        className="h-[30px] w-44 rounded-full border border-border-default bg-surface-1 px-3 text-[13px] text-text-primary outline-none focus:border-[color:var(--accent)]"
+        className="h-8 w-44 rounded-full border border-border-default bg-surface-1 px-3 text-[13px] text-text-primary outline-none focus:border-[color:var(--accent)]"
         style={{ ['--accent' as string]: accentBase }}
       />
 

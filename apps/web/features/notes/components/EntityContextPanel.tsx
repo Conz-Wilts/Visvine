@@ -665,14 +665,14 @@ export function EntityContextPanel({
         values={{}}
         accent={theme.dark}
         typeRow={
-          <Chip size="lg" color={theme.base}>
+          <Chip size="xl" color={theme.base}>
             {nodeTypeLabel(node.type, node.alias, currentSpace?.aliases, currentSpace?.nodeTypes)}
           </Chip>
         }
         tagsRow={(tags.length > 0 || canEditTags) ? (
           <div className="flex flex-wrap items-center gap-1.5">
             {tags.map((tag) => (
-              <Chip key={tag} size="lg" color={tagPalette(tag, tagColors).base}
+              <Chip key={tag} size="xl" color={tagPalette(tag, tagColors).base}
                     removeDisabled={tagSaving}
                     onRemove={canEditTags ? () => removeTag(tag) : undefined}
                     removeLabel={`Remove ${tag}`}>
@@ -692,7 +692,7 @@ export function EntityContextPanel({
               />
             ) : (
               <button type="button" onClick={() => setAddingTag(true)} disabled={tagSaving}
-                      className={chipClass({ tone: 'dashed', size: 'lg', className: CHIP_ACCENT_HOVER })}
+                      className={chipClass({ tone: 'dashed', size: 'xl', className: CHIP_ACCENT_HOVER })}
                       style={{ ['--accent' as string]: theme.dark }}>
               + Add tag
             </button>
