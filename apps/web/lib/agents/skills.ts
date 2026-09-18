@@ -10,6 +10,7 @@
  */
 import prisma from '@/lib/prisma'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { pickByMeaning, ROUTE_CONFIDENCE } from '@/lib/judge/route'
 import { parseSkill, selectSkills, skillStepsPath, type SkillDoc } from '@/lib/agents/shared/skills'
 
 const SHARED = 'shared'
@@ -50,7 +51,18 @@ export async function skillsForRun(
   request: string,
   limit = 3,
 ): Promise<ChosenSkill[]> {
-  const chosen = selectSkills(request, await loadSkills(spaceId, agent), limit)
+  // Keywords pick what the author predicted a request would say; the judge
+  // picks the skill the request MEANS, in whatever words. Only approved skills
+  // are candidates for either, and the judged pick leads.
+  const all = await loadSkills(spaceId, agent)
+  const approved = all.filter((skill) => skill.status === 'approved')
+  const picked = await pickByMeaning(
+    request,
+    approved.map((skill) => ({ id: skill.path, about: `${skill.title} — ${skill.description}` })),
+    'Which skill, if any, is a procedure for what this run is asked to do?',
+  )
+  const judged = picked?.id && picked.confidence >= ROUTE_CONFIDENCE ? approved.filter((skill) => skill.path === picked.id) : []
+  const chosen = [...judged, ...selectSkills(request, all, limit).filter((skill) => skill.path !== judged[0]?.path)].slice(0, limit)
   if (chosen.length === 0) return []
 
   const steps = await prisma.contextNote.findMany({

@@ -21,6 +21,7 @@ import { allActions, actionByName } from '@/lib/actions/registry'
 import { readActionNotes, readRecipeNotes, readActionNote, readGuideNote } from '@/lib/actions/notes'
 import { GUIDES, guideById } from '@/lib/actions/shared/guides'
 import { scoreCandidates, confidenceOf } from '@/lib/actions/shared/match'
+import { pickByMeaning, ROUTE_CONFIDENCE } from '@/lib/judge/route'
 import { paramsOf, renderContract, proseOutsideContract } from '@/lib/actions/shared/contract'
 import { spaceFactsFor } from '@/lib/actions/spaceFacts'
 import type { ActionCaller, ActionDef } from '@/lib/actions/types'
@@ -122,9 +123,19 @@ export async function buildGuide(req: PlanRequest): Promise<string> {
     const trimmed = req.request.length > 300 ? `${req.request.slice(0, 300)}…` : req.request
     out.push('## What you asked for', '', `> ${trimmed}`, '')
 
+    // By meaning first, by keywords when the judge gives no verdict. A judge
+    // that says "none of these" is believed unless the keywords are decisive.
     const matches = scoreCandidates(req.request, recipes)
-    const confidence = confidenceOf(matches)
-    const chosen = confidence === 'low' ? null : recipes.find((r) => r.id === matches[0]?.id) ?? null
+    const byKeyword = confidenceOf(matches)
+    const picked = await pickByMeaning(
+      req.request,
+      recipes.map((r) => ({ id: r.id, about: `${r.title} — ${r.when}` })),
+      'Which recipe is what the request is asking to do?',
+    )
+    const trusted = picked && picked.confidence >= ROUTE_CONFIDENCE ? picked : null
+    const chosenId = trusted ? (trusted.id ?? (byKeyword === 'high' ? matches[0]?.id : null)) : byKeyword === 'low' ? null : matches[0]?.id
+    const chosen = recipes.find((r) => r.id === chosenId) ?? null
+    const confidence = trusted?.id && trusted.id === chosenId ? (trusted.confidence >= 0.85 ? 'high' : 'medium') : byKeyword
 
     if (chosen) {
       // `chosen.when` is not repeated here: the note opens with it, and a
