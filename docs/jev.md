@@ -1,9 +1,76 @@
 # Jev in Visvine — where a fast judge changes the product
 
-A review of every place in the app that makes a judgement, what Jev (TypeSafe's
-System One model) would change there, ranked by impact, plus the new things a
-cheap judge makes possible. Researched 2026-09-19 against Jev 1.13 and the code
-as it stands.
+Every place in the app that makes a judgement, what Jev (TypeSafe's System One
+model) does there, ranked by impact. Researched 2026-09-19 against Jev 1.13;
+sections 1–4 are the case as it was made, **Status** is what was built.
+
+## Status
+
+Built on OpenRouter's Decisions endpoint (`POST /api/alpha/decisions`, model
+`typesafe/jev-1.13`) with the deployment's existing `OPENROUTER_API_KEY` — no
+second vendor, key or SDK. The seam is `lib/judge/`; every question and floor is
+in `lib/judge/shared/questions.ts`. Each question below was checked against the
+live model before its floor was set. `pnpm eval:judge` is the live search
+harness.
+
+| # | Change | | Where |
+| --- | --- | --- | --- |
+| 1 | Relevance filter after fusion, `answerable: false` | ✅ | `lib/notes/rerank.ts`, `shared/retrieval.ts#rerankHead` |
+| 2 | Wake gate | ✅ | `lib/agents/wakeGate.ts`, in `schedule.ts#tick`; `on.wake: always` opts out |
+| 3 | Duplicates and contradictions by meaning, nightly | ✅ | `lib/notes/shared/cleanJudge.ts`, `lib/notes/cleanJudge.ts` |
+| 4 | Check before write | ✅ | `lib/notes/beforeWrite.ts`; `edit_context` answers `similar`, takes `check_only` |
+| 5 | Memories verified; unchanged edits not re-extracted | ✅ | `lib/notes/memorySweep.ts` |
+| 6 | Truth maintenance | ✅ | nightly: a conflict names the newer note and the `supersedes:` to add; query time: `conflicts_with` on `search_context` hits (`rerank.ts#flagConflicts`) |
+| 7 | Mention veto, and a pick for ambiguous ones | ✅ | `shared/cleanJudge.ts` |
+| 8 | Recipes and skills by meaning | ✅ | `lib/judge/route.ts`, `lib/actions/guide.ts`, `lib/agents/skills.ts` |
+| 9 | Said it did vs did it | ✅ | `lib/agents/shared/runCheck.ts`, `lib/agents/runCheck.ts`, in `runner.ts` |
+| 10 | Loosen recall upstream | ◐ | a dropping reranker reads at least 24 candidates whatever `k` is. The cosine floors and stage weights are **unchanged**: they need a live-vector eval against a database, which was not available |
+| 11 | One scale across spaces | ✅ | `retrieval.ts#compareAcrossSearches`; the all-spaces search judges once, after the fold |
+| 12 | Durability instead of a blanket 180 days | ◐ | a durable note is never marked stale (veto on `setStale`). Ephemeral notes do not go stale sooner — that needs a stored score |
+| 13 | Trim what an agent reads | ✅ | `lib/judge/find.ts`; `find` on the agent's `fetch_url` and `read_context` |
+| 14 | Injection signal | ✅ | `lib/judge/risk.ts`; fetched pages and notes read from a room. A warning and a trace line, never a gate |
+| 15 | Filing suggestions | ✅ | `beforeWrite.ts`: `suggested.type` / `suggested.folder`, only from what the space already uses |
+| 16 | Tracked select fields from prose | ✅ | `POST /api/nodes/<id>/suggest`; an empty select cell marks the suggested option |
+| 17 | Same-name identities | ✗ | decided against — see below |
+| 18 | Implied needs | ✅ | `lib/agents/needs.ts#impliedServices`; soft, and silent when the space already has a service of that kind |
+| 19 | MCP tool defaults | ✅ | `suggested` per tool on the permissions screen; the group and the saved permission are untouched |
+| 20 | Rewrite gate; link-reason gate | ✅ | the rewrite now waits for a weak first pass (`contextService.searchContext`); `linkReasons.ts` asks the judge first |
+| 21 | Run outcome | ✅ | one line on the run when it ended partial, blocked or with nothing to do |
+
+**What the live checks changed.**
+
+- *Search.* On the graded set the judge kept 19 of 20 relevant notes, dropped
+  half the noise, and returned nothing for all three unanswerable queries (17
+  hits before). Getting there took two fixes: the judge has to see a note's
+  type, description and tags (a match in the description is invisible in a body
+  snippet), and it sits out history questions — "why did we stop charging per
+  company" reads, literally, as unrelated to the note that says "we charge per
+  company". The one note still lost is a link-neighbour that never matched the
+  query; that is the filter working.
+- *The rewrite gate as designed did not work.* Asked whether a query could be
+  reworded, Jev rated `INV-2026-0042 invoice status` at 0.81. It cannot judge a
+  query in the abstract. The gate became the other design: search as asked,
+  and pay for the LLM rewrite only when the judge found nothing strong.
+- *Routing.* Against the twelve shipped recipes the judge fixed two requests the
+  keywords got wrong — one of them confidently wrong ("email me a digest every
+  morning" → `create_entity`) — and was unsure (0.30) on an off-topic request,
+  which falls back.
+- *An agent brief reads as a prompt injection* (0.97), because it is
+  instructions addressed to an AI. The signal is therefore applied only to text
+  from outside the space, never to the space's own notes or the house's shared
+  briefs.
+- *Item 17 was not built.* Identities span tenants, and the only thing a judge
+  could add over the existing rules is note text — which would put one tenant's
+  notes beside another's in one request. The structured fields (email, company,
+  location) are already decided by `lib/identity/match.ts`, and family ties have
+  no suggestion surface to attach a ranking to.
+
+**Not yet verified.** Nothing here was run against a database or in a browser:
+the local Postgres was not up. The pure halves are unit-tested, every question
+was checked against the live model, and the full suite passes, but the wake gate
+at a real tick, the clean on a real space, the memory sweep and the table cell
+have not been exercised end to end. After deploying, run `db:actions:sync` so
+the `search_context` and `edit_context` manuals pick up the new fields.
 
 ## 1. What Jev is, in the terms that matter here
 
@@ -403,67 +470,53 @@ than a missed one.
 - **Whole notes as state.** Accuracy drops with noise; feed it the chunk, the
   claim or the block, which we already have.
 
-## 5. How to build it
+## 5. How it is built
 
-**One seam: `lib/judge/`.** An interface with `noul`, `choice` and `score`, and
-three drivers picked by env, the way `lib/gcs.ts` picks storage:
-
-- `jev` — `fetch` to the TypeSafe endpoint, `TYPESAFE_API_KEY`.
-- `chat` — the same questions asked of the OpenRouter chat model as structured
-  JSON. Slower and uncalibrated, but it means nothing depends on a vendor in
-  early access, and it is the honest baseline for the eval.
-- `none` — every caller behaves exactly as today.
+**One seam: `lib/judge/`.** `client.ts` is `decide` / `decideMany` over
+OpenRouter's Decisions endpoint on `OPENROUTER_API_KEY`; `shared/types.ts` is the
+wire shape and `coerceAnswers`, which treats an answer as untrusted;
+`shared/questions.ts` holds every question and floor; `route.ts`, `find.ts` and
+`risk.ts` are the three reusable shapes (pick one of a list, find lines in a
+text, read a text for instructions). `JUDGE=off` switches it all off;
+`JUDGE_MODEL` overrides the model.
 
 Rules the seam keeps, so callers do not have to:
 
-- **Every call is bounded and fails open.** A deadline per use (about 1.5 s on
-  the search path, longer in the nightly), and any error returns "no verdict",
-  which every caller must treat as today's behaviour. `logger.warn`, not
-  `error`: a judge being down is the app working as designed.
-- **The rate limit is a row**, not a Map (`lib/rateLimit/`): ten instances
-  share one 1,200-a-minute allowance. The nightly passes take a fraction of it
-  so a big clean cannot starve search.
-- **Questions and thresholds live in one pure file**, `lib/judge/shared/`, each
-  question a named constant with its criteria and its floor. Thresholds are
-  corpus-specific by TypeSafe's own account; they are tuned against the eval,
-  not guessed and scattered.
-- **State is built from the smallest unit that answers the question** — claim,
-  chunk, block — and treated as untrusted on the way back (the `coerce*`
-  pattern).
+- **Every call is bounded and fails open.** A deadline per use (1.5–2 s on the
+  search path, up to 25 s in a clean), and any failure returns no verdict, which
+  every caller treats as today's behaviour. `logger.warn`, never `error`.
+- **The rate limit is a row** (`lib/rateLimit`), spent per BATCH of at most 12
+  requests — ten instances share the provider's 1,200 a minute, and a search
+  that judges two dozen candidates costs two bucket writes, not twenty-four.
+  Nightly passes are `patient`: they wait for allowance instead of going without.
+- **A verdict never widens what happens.** It drops a result, skips a run,
+  vetoes a fix, or attaches a suggestion a person accepts. To the clean's
+  auto-fixes it can only REMOVE.
+- **State is the smallest unit that answers the question** — claim, chunk,
+  block — and dates and numbers stay in code.
 - **Every verdict that changes an outcome is recorded where a person can see
-  it**: on the search result, the event row, the clean run, the run trace.
+  it**: `relevance` and `answerable` on the search result, the audit line for a
+  declined wake, `judged` on the clean analysis, a step on the run.
 
-**Configuration.** One deployment key. Because the judge sends note text to a
-second vendor, a space needs a switch — the natural home is beside
-`embed_enabled` on the Nightly row, where "off means off everywhere" is already
-the rule for the semantic half. The line in `AGENTS.md` that the deployment's
-own AI is one key becomes two.
+**A space's switch.** `embed_enabled` (Console → General → Nightly) already means
+"no note text goes to a model at query time", so it covers the judge: a space
+with it off is not judged in search, in the clean, or before a write.
 
-**Measure before and after.** `pnpm eval:retrieval` deliberately grades the
-stack without its semantic half, so it cannot see this change. It needs a
-second, slower harness with live stages, and graded queries that include the
-two cases that matter most here: a query the corpus **cannot** answer (expects
-nothing back) and a query whose best lexical match is wrong. Grade with human
-labels or the chat judge — grading Jev's filter with Jev is circular.
-
-**Order.**
-
-1. `lib/judge/` with the three drivers, the row limiter, the live eval harness.
-2. Change 1 behind the existing `Reranker` seam. Ship only if the eval moves.
-3. Change 2. Measure skipped wakes against runs that would have done nothing.
-4. Changes 7 and 5 — both make existing unattended writes safer.
-5. Changes 3 and 4, then 6 on top of them.
-6. The rest as they come up.
+**Measuring.** `pnpm eval:retrieval` grades the deterministic stack and never
+moves unless the code does. `pnpm eval:judge` runs the same graded queries with
+the live judge in the rerank seat, plus queries the corpus cannot answer. Still
+missing: a harness with live vector stages, which is what item 10 waits on.
 
 ## 6. Risks
 
-- **Early access, one vendor.** Rate limits "adjust dynamically", the model is
-  at 1.13, pricing is an introductory number. The `chat` driver and fail-open
-  are what make that tolerable. Nothing may be built that only works with Jev.
-- **Privacy.** Tenant text leaves for a second processor. No training on
-  requests; zero retention is enterprise-only. Private spaces are the hard case
-  and the reason for the per-space switch. Read the DPA before any of this
-  ships to production.
+- **Early access, an alpha endpoint.** OpenRouter serves Decisions from
+  `/api/alpha/`, which may move; rate limits "adjust dynamically"; the model is
+  at 1.13. Fail-open is what makes that tolerable: with the judge gone the app
+  is exactly what it was. Nothing may be built that only works with it.
+- **Privacy.** Note text goes through OpenRouter to TypeSafe — the same first
+  hop the embeddings and the chat model already take, and one more processor
+  behind it. TypeSafe does not train on requests; zero retention is
+  enterprise-only. `embed_enabled` off keeps a space out entirely.
 - **A filter can delete the right answer.** Reordering is forgiving; dropping is
   not. Start with a low floor, return the judge's score with each hit, and log
   what was dropped so a bad threshold can be found from real queries.

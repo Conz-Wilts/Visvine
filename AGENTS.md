@@ -645,17 +645,64 @@ the regression gate.
   stage at weight 0.7, plus a date range only if the parser found none. The
   rewrite is untrusted (`coerceQueryRewrite`) and can only add. A caller's
   explicit bound disables inference. Every result reports its `plan`.
-- Optional rerank of the over-fetched head (3×k, max 30) sits after fusion
-  behind the injected `Reranker`; `lib/notes/rerank.ts` is a listwise LLM judge,
-  on only with `CONTEXT_RERANK=llm`.
+- **The head of the ranking is judged, and what is not about the query is
+  dropped** (`lib/notes/rerank.ts`, behind the injected `Reranker`; the judge is
+  below). A `Reranker` with a `floor` drops; one without only reorders. So a
+  search may return fewer than `k` hits, each with `relevance`, and
+  `answerable: false` means nothing the caller can read is about the query. It
+  sits out history and temporal-only plans, and the web search route (a person
+  scanning rows) unless asked. With a judge in the search the LLM rewrite runs
+  only after a weak first pass. Hits from different searches — a house and its
+  rooms, several spaces — order by `relevance` (`compareAcrossSearches`), the
+  one number that compares across corpora; the all-spaces search judges once,
+  after the fold. `CONTEXT_RERANK=llm` swaps in a listwise chat rerank that
+  only reorders; `off` runs neither. `pnpm eval:judge` is the live harness.
 - **The deployment's own AI is ONE key: `OPENROUTER_API_KEY`.** Chat
   (`lib/notes/ai.ts`, default `deepseek/deepseek-v4-flash-0731`, override
-  `OPENROUTER_MODEL`) and embeddings (`lib/notes/embeddings.ts`,
+  `OPENROUTER_MODEL`), the judge (`lib/judge/`, `JUDGE_MODEL`) and embeddings (`lib/notes/embeddings.ts`,
   `openai/text-embedding-3-small` at 768 dims, `EMBED_MODEL`) both go through
   OpenRouter. Without it the response reports `semantic: "no-key"` rather than
   degrading silently; after setting it run `pnpm db:embed` once. A space's
   AGENTS never touch this key — they run on the space's `models/` notes and
   `MODEL_KEY_<PROVIDER>` secrets. Directory search is fuzzy/keyword only.
+
+## The judge
+
+`lib/judge/` asks TypeSafe's Jev — a model that answers typed questions with a
+probability and writes no text — through OpenRouter's Decisions endpoint, on
+`OPENROUTER_API_KEY`. `docs/jev.md` is the reference and the record of what each
+use measured. The invariants:
+
+- **Every call is bounded and fails open.** `decide` / `decideMany` return null
+  for no key, `JUDGE=off`, a rate limit, a timeout or an upstream error, and
+  every caller then behaves as if no judge existed. `warn`, never `error`. The
+  allowance is a row spent per batch of at most `MAX_BATCH`; nightly passes are
+  `patient`.
+- **A verdict never widens what happens.** It drops a search hit, declines a
+  wake, vetoes an auto-fix, or attaches a suggestion a person accepts. No
+  permission, scope, perimeter or write gate reads one. To the clean's
+  auto-fixes it can only REMOVE (`shared/cleanJudge.ts`).
+- **Every question and floor lives in `lib/judge/shared/questions.ts`**, each
+  checked against the live model before its floor was set. The model is
+  literal: a question is a plain statement with criteria that agree with it. It
+  is weak at dates, numbers and intent, so which note is newer, what a query's
+  time words mean and whether a run wrote anything are read in code.
+- **`embed_enabled` off covers it**: a space that sends no note text to a model
+  at query time is not judged in search, the clean, or before a write.
+- Where it sits: search (above); the wake gate at the tick
+  (`lib/agents/wakeGate.ts` — a `note_written` event the brief would do nothing
+  about is declined and audited, `on.wake: always` opts out); the clean
+  (mention and stale vetoes, duplicates and conflicts by meaning, in `light`
+  mode so the nightly sees them); the memory sweep (claims checked against
+  their note, an edit that changed no fact restamped instead of re-extracted);
+  `edit_context` on a new path (`similar`, `suggested`, `check_only` —
+  `lib/notes/beforeWrite.ts`); recipe and skill routing (`lib/judge/route.ts`,
+  keywords the fallback); a finished run's claims against its trace
+  (`lib/agents/shared/runCheck.ts` — unbacked keeps the summary out of
+  `memory.md`); `find` on the agent's `fetch_url` / `read_context`; an injection
+  SIGNAL on fetched pages and room notes (`lib/judge/risk.ts`, never on the
+  space's own notes — a brief reads as one); implied services in `needs`;
+  `suggested` on MCP tools and on an empty select cell.
 
 ## Actions, and the one MCP tool
 

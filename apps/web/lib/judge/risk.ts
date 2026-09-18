@@ -14,7 +14,7 @@ const WINDOW_CHARS = 6_000
 const RISK_DEADLINE_MS = 2_000
 
 /** The highest injection reading over the start, middle and end of the text, or null for no verdict. */
-export async function injectionRisk(text: string): Promise<number | null> {
+async function injectionRisk(text: string): Promise<number | null> {
   if (text.length < 80) return null
   const starts = text.length <= WINDOW_CHARS ? [0] : [0, Math.floor((text.length - WINDOW_CHARS) / 2), text.length - WINDOW_CHARS]
   const answers = await decideMany(
