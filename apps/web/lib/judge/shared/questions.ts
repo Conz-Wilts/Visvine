@@ -96,3 +96,32 @@ export const DURABILITY_QUESTION = score('How long does what this note records s
 ])
 /** At or over this a note is not marked stale for being untouched. */
 export const DURABLE_AT = 1.4
+
+// ── Derived memories ────────────────────────────────────────────────────────
+
+/** State: { note, statement }. One request per extracted claim. */
+export const CLAIM_QUESTIONS = {
+  stated: noul(
+    'Does the note state what the statement says?',
+    'The note says this, in these or other words.',
+    'The note does not say this: it is absent from the note, or changed, or inferred beyond it.',
+  ),
+  standalone: noul(
+    'Can the statement be understood by someone who has not read the note?',
+    'The statement names who or what it is about.',
+    'The statement depends on the note for its subject: it says "he", "she", "it", "they", "this" or "the company" without naming them.',
+  ),
+}
+/** A claim the note does not state is dropped. */
+export const CLAIM_STATED_FLOOR = 0.4
+export const CLAIM_STANDALONE_FLOOR = 0.25
+
+/** State: { note, statements }. Asked of an EDITED note, about the claims stored from its previous save. */
+export const CLAIMS_COVER_QUESTION = noul(
+  'Does the note state any fact that none of the statements cover?',
+  'The note states a fact — a name, a decision, a detail — that no statement in the list records.',
+  'Every fact the note states is recorded by some statement in the list.',
+)
+/** The stored claims stand when each is still stated at or over this, and the note adds nothing over COVER_BELOW. */
+export const CLAIM_STILL_STATED = 0.7
+export const CLAIMS_COVER_BELOW = 0.6

@@ -12,6 +12,15 @@
 // first. Embedding is separate from extraction and separately keyed: claims
 // stored without a vector (no OPENROUTER_API_KEY at the time) still rank by full
 // text, and a later run with a key embeds them without re-extracting.
+//
+// A judge stands on both sides of the chat call (lib/judge). BEFORE: a note
+// that changed is first asked whether it still states every stored claim and
+// adds no fact beyond them — a typo fix does, and its rows are restamped to the
+// new mtime instead of spending an extraction. AFTER: every extracted claim is
+// checked against the note — one the note does not state (the model inferred or
+// invented it) or that cannot be read without the note ("they signed in March")
+// is dropped before it is stored, because a claim is handed to agents as the
+// answer. No verdict changes nothing: the note is extracted, the claim is kept.
 
 import prisma from '@/lib/prisma'
 import type { Context } from '@/lib/notes/store'
@@ -22,12 +31,25 @@ import { embedTexts, embeddingsConfig } from '@/lib/notes/embeddings'
 import { vectorLiteral } from '@/lib/notes/vectorStage'
 import { coerceClaims, MAX_CLAIMS_PER_NOTE, yieldsMemories } from '@/lib/notes/shared/memories'
 import { logger } from '@/lib/logger'
+import { decide, decideMany } from '@/lib/judge/client'
+import { noulOf } from '@/lib/judge/shared/types'
+import {
+  CLAIM_QUESTIONS,
+  CLAIM_STANDALONE_FLOOR,
+  CLAIM_STATED_FLOOR,
+  CLAIM_STILL_STATED,
+  CLAIMS_COVER_BELOW,
+  CLAIMS_COVER_QUESTION,
+} from '@/lib/judge/shared/questions'
 
 /** Chat calls per run. */
 const MAX_NOTES_PER_RUN = 50
 /** Characters of a note the extractor reads. */
 const EXTRACT_CHARS = 8000
 const EMBED_BATCH = 64
+/** Edited notes one run asks the judge about before extracting. */
+const MAX_COVER_CHECKS_PER_RUN = 300
+const JUDGE_DEADLINE_MS = 8_000
 
 const SYSTEM =
   'You extract durable facts from one markdown note in a shared knowledge base about people, companies, decisions, meetings and events. ' +
@@ -47,6 +69,10 @@ export interface MemorySweepResult {
   claims: number
   /** Claims given a vector this run (including earlier claims stored without one). */
   embedded: number
+  /** Edited notes whose stored claims still stood — restamped, not re-extracted. */
+  unchanged: number
+  /** Extracted claims the judge found the note does not state, or that do not stand alone. */
+  rejected: number
   /** Notes still stale when the per-run bound was reached. */
   remaining: number
   pruned: number
@@ -63,10 +89,38 @@ async function extractClaims(title: string, path: string, type: string | undefin
   return coerceClaims(extractJsonObject(raw))
 }
 
+/** Do the claims stored from a note's previous save still say everything the note says? */
+async function claimsStillStand(body: string, stored: string[]): Promise<boolean> {
+  if (stored.length === 0) return false
+  const questions = Object.fromEntries([
+    ['cover', CLAIMS_COVER_QUESTION] as const,
+    ...stored.map((text, i) => [`s${i}`, { ...CLAIM_QUESTIONS.stated, instructions: `Does the note state this: "${text}"` }] as const),
+  ])
+  const answers = await decide({ note: body.slice(0, EXTRACT_CHARS), statements: stored }, questions, { deadlineMs: JUDGE_DEADLINE_MS, patient: true })
+  const cover = noulOf(answers, 'cover')
+  if (cover === undefined || cover >= CLAIMS_COVER_BELOW) return false
+  return stored.every((_, i) => (noulOf(answers, `s${i}`) ?? 0) >= CLAIM_STILL_STATED)
+}
+
+/** The extracted claims the note actually states and that stand alone. Unjudged claims are kept. */
+async function verifiedClaims(body: string, claims: string[]): Promise<string[]> {
+  if (claims.length === 0) return claims
+  const note = body.slice(0, EXTRACT_CHARS)
+  const answers = await decideMany(
+    claims.map((statement) => ({ state: { note, statement }, questions: CLAIM_QUESTIONS })),
+    { deadlineMs: JUDGE_DEADLINE_MS, patient: true },
+  )
+  return claims.filter((_, i) => {
+    const stated = noulOf(answers[i], 'stated')
+    const standalone = noulOf(answers[i], 'standalone')
+    return (stated === undefined || stated >= CLAIM_STATED_FLOOR) && (standalone === undefined || standalone >= CLAIM_STANDALONE_FLOOR)
+  })
+}
+
 /** Extract and embed memories for one space or all. */
 export async function memorySweep(spaceId?: string): Promise<MemorySweepResult> {
   const pruned = await pruneOrphanMemories(spaceId)
-  if (!aiConfigured()) return { configured: false, notes: 0, claims: 0, embedded: 0, remaining: 0, pruned }
+  if (!aiConfigured()) return { configured: false, notes: 0, claims: 0, embedded: 0, unchanged: 0, rejected: 0, remaining: 0, pruned }
   const where = spaceId ? { spaceId } : {}
   const model = aiModelName()
 
@@ -79,6 +133,9 @@ export async function memorySweep(spaceId?: string): Promise<MemorySweepResult> 
   let notes = 0
   let claims = 0
   let remaining = 0
+  let unchanged = 0
+  let rejected = 0
+  let coverChecks = MAX_COVER_CHECKS_PER_RUN
   let budget = MAX_NOTES_PER_RUN
   for (const context of contexts) {
     const { raws, metas } = await getVault(context)
@@ -95,6 +152,24 @@ export async function memorySweep(spaceId?: string): Promise<MemorySweepResult> 
       .sort((a, b) => b.mtime - a.mtime)
 
     for (const m of stale) {
+      const body = bodyByPath.get(m.path) ?? ''
+      // An edit that changed no fact keeps its claims: restamp, spend nothing.
+      if (storedMtime.has(m.path) && coverChecks > 0) {
+        coverChecks -= 1
+        const previous = await prisma.contextMemory.findMany({
+          where: { spaceId: context.spaceId, ownerKey: context.ownerKey, path: m.path, text: { not: '' } },
+          select: { text: true },
+          orderBy: { seq: 'asc' },
+        })
+        if (await claimsStillStand(body, previous.map((r) => r.text))) {
+          await prisma.contextMemory.updateMany({
+            where: { spaceId: context.spaceId, ownerKey: context.ownerKey, path: m.path },
+            data: { mtime: BigInt(m.mtime) },
+          })
+          unchanged += 1
+          continue
+        }
+      }
       if (budget <= 0) {
         remaining += 1
         continue
@@ -102,7 +177,9 @@ export async function memorySweep(spaceId?: string): Promise<MemorySweepResult> 
       budget -= 1
       let extracted: string[]
       try {
-        extracted = await extractClaims(m.title, m.path, m.frontmatter.type, bodyByPath.get(m.path) ?? '')
+        const raw = await extractClaims(m.title, m.path, m.frontmatter.type, body)
+        extracted = await verifiedClaims(body, raw)
+        rejected += raw.length - extracted.length
       } catch (err) {
         // One unreadable note must not end the run; it stays stale for next time.
         logger.warn('notes.memories.extract_failed', { err, path: m.path })
@@ -132,7 +209,7 @@ export async function memorySweep(spaceId?: string): Promise<MemorySweepResult> 
   }
 
   const embedded = await embedMemories(spaceId)
-  return { configured: true, notes, claims, embedded, remaining, pruned }
+  return { configured: true, notes, claims, embedded, unchanged, rejected, remaining, pruned }
 }
 
 /** Give a vector to every claim stored without one on the current model. */
