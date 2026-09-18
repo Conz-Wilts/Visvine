@@ -181,3 +181,18 @@ test('only a need no runner can get past is hard — the switch refuses those an
     ['needs_connection', 'not_in_space'],
   )
 })
+
+test('an implied service is a soft need, worded as a reading — and not when the space already has one of its kind', () => {
+  const catalog = [
+    { id: 'slack', name: 'Slack', category: 'messengers', connects: 'key' as const, perMember: false },
+    { id: 'discord', name: 'Discord', category: 'messengers', connects: 'key' as const, perMember: false },
+  ]
+  const base = { declared: [], instructions: 'Post the summary to the team channel.', modelProblem: null, catalog }
+  const implied = agentNeeds({ ...base, spaceConnectors: [], implied: ['slack'] })
+  assert.equal(implied.needs.length, 1)
+  assert.equal(implied.needs[0].status, 'not_in_space')
+  assert.match(implied.needs[0].why, /read as needing Slack, without naming it/)
+  assert.deepEqual(hardNeeds(implied), [])
+  const hasDiscord = agentNeeds({ ...base, spaceConnectors: [{ name: 'discord', recipe: 'discord' }], implied: ['slack'] })
+  assert.deepEqual(hasDiscord.needs, [])
+})

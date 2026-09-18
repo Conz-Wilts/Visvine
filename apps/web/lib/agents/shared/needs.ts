@@ -21,6 +21,8 @@ import type { RehearsalConnector } from '@/lib/agents/shared/rehearsal'
 
 /** A catalogue entry, narrowed to what a need's wording reads. */
 export interface NeedsCatalogEntry {
+  /** The catalogue category — two services in one category do the same job (Slack, Discord). */
+  category?: string
   id: string
   name: string
   /** How a person connects it: `one-click` | `sign-in` | `key` | `password`. */
@@ -44,6 +46,12 @@ export interface NeedsInput {
   modelProblem: string | null
   catalog: readonly NeedsCatalogEntry[]
   spaceConnectors: readonly NeedsSpaceConnector[]
+  /**
+   * Catalogue ids the instructions IMPLY without naming ("post it to the team
+   * channel"), as a judge read them (lib/agents/needs.ts). Treated like a named
+   * service, and worded as the reading it is.
+   */
+  implied?: readonly string[]
 }
 
 type NeedStatus =
@@ -176,10 +184,21 @@ function undeclaredNeeds(input: NeedsInput): AgentNeed[] {
     const key = entry.name.toLowerCase()
     byName.set(key, [...(byName.get(key) ?? []), entry])
   }
+  const implied = new Set((input.implied ?? []).map((id) => id.toLowerCase()))
+  const heldCategories = new Set(
+    input.spaceConnectors
+      .map((c) => input.catalog.find((e) => e.id === (c.recipe ?? c.name).toLowerCase())?.category)
+      .filter((c): c is string => Boolean(c)),
+  )
   const out: AgentNeed[] = []
   for (const entries of byName.values()) {
     const entry = entries[0]
-    if (!mentions(input.instructions, entry.name)) continue
+    const named = mentions(input.instructions, entry.name)
+    if (!named && !entries.some((e) => implied.has(e.id.toLowerCase()))) continue
+    // "Post it to the team channel" implies A messenger, not Slack: a space
+    // that already holds one service of the kind is not told it needs another.
+    if (!named && entry.category && heldCategories.has(entry.category)) continue
+    const reads = named ? `The instructions mention ${entry.name}` : `The instructions read as needing ${entry.name}, without naming it`
     const ids = new Set(entries.map((e) => e.id))
     if ([...ids].some((id) => declared.has(id) || declaredRecipes.has(id))) continue
     const held = input.spaceConnectors.filter(
@@ -190,7 +209,7 @@ function undeclaredNeeds(input: NeedsInput): AgentNeed[] {
       out.push({
         need: held[0].name,
         status: 'undeclared',
-        why: `The instructions mention ${entry.name}, but the brief's connectors do not include it — a run cannot reach a service it did not declare.`,
+        why: `${reads}, but the brief's connectors do not include it — a run cannot reach a service it did not declare.`,
         fix: `Add ${names} to the brief's \`connectors:\` on the agent's page.`,
         href: null,
         who: 'member',
@@ -199,7 +218,7 @@ function undeclaredNeeds(input: NeedsInput): AgentNeed[] {
       out.push({
         need: entry.id,
         status: 'not_in_space',
-        why: `The instructions mention ${entry.name}, and this space has no connector to it.`,
+        why: `${reads}, and this space has no connector to it.`,
         fix: `${addLine(entry)} Then add it to the brief's \`connectors:\`.`,
         href: CONSOLE,
         who: 'admin',

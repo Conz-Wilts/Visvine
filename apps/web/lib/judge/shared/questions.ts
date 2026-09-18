@@ -178,3 +178,12 @@ export const INJECTION_QUESTION = noul(
   'The text is ordinary content for human readers, including documentation that describes AI systems without addressing one.',
 )
 export const INJECTION_AT = 0.7
+
+/** State: the brief's instructions. One noul per catalogue service, in one request. */
+export const impliedServiceQuestion = (service: string, about: string): NoulQuestion =>
+  noul(
+    `Would carrying out these instructions require using ${service}?`,
+    `The instructions ask for something that is done in ${service} (${about}), whether or not they name it.`,
+    `Nothing in the instructions needs ${service}.`,
+  )
+export const IMPLIED_SERVICE_AT = 0.8
