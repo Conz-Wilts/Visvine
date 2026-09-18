@@ -27,6 +27,7 @@ import {
   zonedWallToInstant,
   copyRooms,
   ungovernedCopyRooms,
+  parseTriggers,
 } from '@/lib/agents/config'
 import { parseModelRef } from '@/lib/agents/registry'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
@@ -424,4 +425,12 @@ test('scheduleHash covers every / on / debounce; withActivation round-trips trig
   assert.ok(weeklyBack.ok && weeklyBack.activation.schedule?.kind === 'weekly' && weeklyBack.activation.schedule.weekday === 5 && weeklyBack.activation.on?.context[0] === 'people/**', weeklyMd)
   assert.equal(describeTriggers(base.activation.on), 'when people/** changes · webhook hubspot')
   assert.equal(describeSchedule({ kind: 'interval', minutes: 15 }, null), 'Every 15 minutes')
+})
+
+test('on.wake: `always` is kept, `relevant` is the silent default, anything else is refused', () => {
+  const always = parseTriggers({ context: ['people/**'], wake: 'always' })
+  assert.deepEqual(always, { ok: true, triggers: { context: ['people/**'], webhook: null, wake: 'always' } })
+  const relevant = parseTriggers({ context: ['people/**'], wake: 'relevant' })
+  assert.deepEqual(relevant, { ok: true, triggers: { context: ['people/**'], webhook: null } })
+  assert.equal(parseTriggers({ context: ['people/**'], wake: 'sometimes' }).ok, false)
 })

@@ -43,3 +43,14 @@ export const REWRITE_QUESTION = noul(
   'The query is a name, an identifier, a quoted phrase or a literal keyword with no useful paraphrase.',
 )
 export const REWRITE_FLOOR = 0.4
+
+// ── Agents ──────────────────────────────────────────────────────────────────
+
+/** State: { agent_instructions, saved_note: { path, title, text } }. */
+export const WAKE_QUESTION = noul(
+  'Does the saved note give this agent something to do, according to its instructions?',
+  'The note is the kind of thing the instructions tell the agent to act on, check, summarise or react to.',
+  'The note is unrelated to what the instructions describe, or is a change the agent would do nothing about.',
+)
+/** Under this the save does not start a run. Low: a missed wake is worse than a wasted one. */
+export const WAKE_FLOOR = 0.2

@@ -28,6 +28,7 @@
  *   on:                               # a MAP declares event triggers
  *     context: ["people/**"]          #   note created/saved/renamed-to under a glob
  *     webhook: hubspot                #   connector whose inbound hook feeds this agent
+ *     wake: always                    #   optional: run on EVERY matching save, unjudged
  *     weekday: monday                 #   only with schedule: weekly (the bare string, moved here)
  *   debounce: 2m                      # coalesce window: Ns | Nm, default 60s, max 30m
  *   timezone: Pacific/Auckland        # required with a clock; UTC only for legacy notes
@@ -347,6 +348,12 @@ export interface AgentTriggers {
   context: string[]
   /** Connector name whose inbound webhook feeds this agent. */
   webhook: string | null
+  /**
+   * `wake: always` — every matching save starts a run. Absent, a save is first
+   * judged against the brief and one that gives the agent nothing to do is
+   * declined (lib/agents/wakeGate.ts).
+   */
+  wake?: 'always'
 }
 
 export interface AgentActivation {
@@ -574,7 +581,7 @@ export function parseDebounce(raw: unknown): number | null {
 /** The `on:` map. */
 export function parseTriggers(raw: Record<string, unknown>): { ok: true; triggers: AgentTriggers } | { ok: false; error: string } {
   for (const key of Object.keys(raw)) {
-    if (key !== 'context' && key !== 'webhook' && key !== 'weekday') {
+    if (key !== 'context' && key !== 'webhook' && key !== 'weekday' && key !== 'wake') {
       return { ok: false, error: `\`on.${key}\` is not a trigger — use \`context\` (note globs) or \`webhook\` (connector name)` }
     }
   }
@@ -592,7 +599,11 @@ export function parseTriggers(raw: Record<string, unknown>): { ok: true; trigger
     webhook = raw.webhook.trim()
   }
   if (globs.list.length === 0 && !webhook) return { ok: false, error: '`on` must declare `context` globs and/or a `webhook` connector' }
-  return { ok: true, triggers: { context: globs.list, webhook } }
+  const wake = typeof raw.wake === 'string' ? raw.wake.trim().toLowerCase() : raw.wake
+  if (wake !== undefined && wake !== null && wake !== '' && wake !== 'always' && wake !== 'relevant') {
+    return { ok: false, error: '`on.wake` must be `relevant` (the default) or `always`' }
+  }
+  return { ok: true, triggers: { context: globs.list, webhook, ...(wake === 'always' ? { wake: 'always' as const } : {}) } }
 }
 
 /** A stable fingerprint of what dispatch derives from — the note is authoritative. */

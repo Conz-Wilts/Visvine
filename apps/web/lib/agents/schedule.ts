@@ -16,7 +16,8 @@
 import crypto from 'node:crypto'
 import prisma from '@/lib/prisma'
 import { nextOccurrence, scheduleHash } from './config'
-import { findAgentActivation } from './briefs'
+import { findAgentActivation, findAgentBrief } from './briefs'
+import { gateWake } from './wakeGate'
 import { dispatchRun, type DispatchResult } from './dispatch'
 import { claimEvents, eventDepthOf, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, syncAgentState } from './hooks'
@@ -185,14 +186,25 @@ export async function tick(now = new Date()): Promise<TickReport> {
 
     // The claim is ours: take the mail with it. What the run is FOR is named by
     // what woke it — events if any arrived, else the clock that was due.
-    const events = await claimEvents(row.spaceId, row.name, runId)
+    const mail = await claimEvents(row.spaceId, row.name, runId)
+    // Saves the brief would do nothing about are declined before they cost a
+    // run (wakeGate.ts). `on.wake: always` opts out.
+    const source = parsed.activation.on?.wake === 'always' ? null : await findAgentBrief(row.spaceId, row.name)
+    const events = source
+      ? await gateWake({ spaceId: row.spaceId, agentName: row.name, runId, briefPath: source.path, briefContent: source.content, events: mail })
+      : mail
+    // Was the CLOCK due, or only the mail? A scheduled agent woken early by a
+    // save that was then declined has nothing to run for yet; its clock stands.
+    const clockDue = schedule ? nextOccurrence(schedule, row.lastRunAt ?? new Date(0), tz) <= now : false
     // A trigger-only agent whose mail was taken by a manual run in between (or
-    // whose event pull-forward outlived its events) is due for nothing: give
-    // the claim straight back — no run row, no paid model call about nothing.
-    if (!schedule && events.length === 0) {
+    // whose event pull-forward outlived its events, or whose every save was
+    // declined) is due for nothing: give the claim straight back — no run row,
+    // no paid model call about nothing.
+    const allDeclined = mail.length > 0 && events.length === 0
+    if (events.length === 0 && (!schedule || (allDeclined && !clockDue))) {
       await prisma.agentState.updateMany({
         where: { id: row.id, currentRunId: runId },
-        data: { status: 'idle', runningSince: null, currentRunId: null, nextRunAt: null, lastRunAt: row.lastRunAt },
+        data: { status: 'idle', runningSince: null, currentRunId: null, nextRunAt: next, lastRunAt: row.lastRunAt },
       })
       continue
     }
