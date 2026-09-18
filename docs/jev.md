@@ -34,7 +34,7 @@ harness.
 | 17 | Same-name identities | ✗ | decided against — see below |
 | 18 | Implied needs | ✅ | `lib/agents/needs.ts#impliedServices`; soft, and silent when the space already has a service of that kind |
 | 19 | MCP tool defaults | ✅ | `suggested` per tool on the permissions screen; the group and the saved permission are untouched |
-| 20 | Rewrite gate; link-reason gate | ✅ | the rewrite now waits for a weak first pass (`contextService.searchContext`); `linkReasons.ts` asks the judge first |
+| 20 | Rewrite gate; link-reason gate | ✅ | the rewrite starts alongside the first pass and is used only when it was weak (`contextService.searchContext`), on its own model (`OPENROUTER_REWRITE_MODEL`, default Gemini 2.5 Flash-Lite, ~1.4 s against DeepSeek's 7–28 s); `linkReasons.ts` asks the judge first |
 | 21 | Run outcome | ✅ | one line on the run when it ended partial, blocked or with nothing to do |
 
 **What the live checks changed.**
@@ -50,7 +50,7 @@ harness.
 - *The rewrite gate as designed did not work.* Asked whether a query could be
   reworded, Jev rated `INV-2026-0042 invoice status` at 0.81. It cannot judge a
   query in the abstract. The gate became the other design: search as asked,
-  and pay for the LLM rewrite only when the judge found nothing strong.
+  and use the LLM rewrite only when the judge found nothing strong.
 - *Routing.* Against the twelve shipped recipes the judge fixed two requests the
   keywords got wrong — one of them confidently wrong ("email me a digest every
   morning" → `create_entity`) — and was unsure (0.30) on an off-topic request,

@@ -1,6 +1,6 @@
-// The rerank stage of the fused search. Two judges:
+// The rerank stage of the fused search, one of two kinds (`rerankMode`):
 //
-// The JUDGE (default when the deployment has a key): Jev scores each candidate
+// `judge` (the default with a key): Jev scores each candidate
 // against the query on its own, in parallel — is it about the query, does it
 // state something that answers it. The score is an absolute relevance, so this
 // reranker carries a `floor` and the search DROPS what falls under it: a query
@@ -9,7 +9,7 @@
 // relevant" from "nothing found". It reads the first JUDGE_WINDOW candidates;
 // one it could not score is kept.
 //
-// The LISTWISE model (CONTEXT_RERANK=llm): a chat model sees the query and every
+// `llm` (CONTEXT_RERANK=llm): a chat model sees the query and every
 // candidate together and returns a score per key. It only reorders. It costs one
 // model round-trip per search. CONTEXT_RERANK=off runs neither. Any
 // failure returns [] and the fused order stands (shared/retrieval.ts#rerankHead).
@@ -28,6 +28,20 @@ import { CONFLICT_AT, CONFLICT_QUESTION, SEARCH_QUESTIONS, SEARCH_RELEVANT_FLOOR
 /** Candidates the judge reads: two batches, inside one search's patience. */
 const JUDGE_WINDOW = MAX_BATCH * 2
 const JUDGE_DEADLINE_MS = 2_000
+const JUDGE_TEXT_CHARS = 900
+
+export type RerankMode = 'judge' | 'llm' | 'off'
+
+/** Which rerank the deployment runs: CONTEXT_RERANK, else the judge when it is configured. */
+export function rerankMode(): RerankMode {
+  const mode = process.env.CONTEXT_RERANK?.trim().toLowerCase()
+  if (mode === 'off' || mode === 'llm') return mode
+  return judgeConfigured() ? 'judge' : 'off'
+}
+
+/** What a judge reads of an already-gathered hit: its title, the claim that matched, and the passage or snippet. */
+const judgeText = (h: FusedResult): string =>
+  `${h.title}\n${[h.claim, h.passage?.text ?? h.snippet].filter(Boolean).join('\n')}`.slice(0, JUDGE_TEXT_CHARS)
 
 export interface RerankReport {
   /** True when the judge answered for at least one candidate. */
@@ -80,14 +94,9 @@ const SYSTEM =
  */
 export async function judgeHits<T extends FusedResult>(query: string, hits: T[], k: number): Promise<{ hits: T[]; judged: boolean }> {
   const report: RerankReport = {}
-  if (process.env.CONTEXT_RERANK?.trim().toLowerCase() === 'off' || !judgeConfigured() || !hits.length) {
-    return { hits: hits.slice(0, k), judged: false }
-  }
+  if (rerankMode() !== 'judge' || !hits.length) return { hits: hits.slice(0, k), judged: false }
   const head = hits.slice(0, JUDGE_WINDOW)
-  const scored = await judgeReranker(report).rerank(
-    query,
-    head.map((h, i) => ({ key: String(i), text: `${h.title}\n${[h.claim, h.passage?.text ?? h.snippet].filter(Boolean).join('\n')}`.slice(0, 900) })),
-  )
+  const scored = await judgeReranker(report).rerank(query, head.map((h, i) => ({ key: String(i), text: judgeText(h) })))
   if (!report.judged) return { hits: hits.slice(0, k), judged: false }
   const byIndex = new Map(scored.map((s) => [Number(s.key), s.score]))
   const kept: T[] = []
@@ -101,10 +110,9 @@ export async function judgeHits<T extends FusedResult>(query: string, hits: T[],
 }
 
 export function createReranker(report: RerankReport = {}): Reranker | undefined {
-  const mode = process.env.CONTEXT_RERANK?.trim().toLowerCase()
-  if (mode === 'off') return undefined
-  if (mode !== 'llm') return judgeConfigured() ? judgeReranker(report) : undefined
-  if (!aiConfigured()) return undefined
+  const mode = rerankMode()
+  if (mode === 'judge') return judgeReranker(report)
+  if (mode === 'off' || !aiConfigured()) return undefined
   return {
     async rerank(query, candidates) {
       try {

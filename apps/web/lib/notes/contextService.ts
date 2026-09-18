@@ -22,7 +22,7 @@ import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { rewriteLinks } from './shared/linkRewrite'
 import { fusedSearch, type FusedResult, type SearchFilters } from './shared/retrieval'
 import { planSearch, type RewriteStatus } from './queryRewrite'
-import { createReranker, type RerankReport } from './rerank'
+import { createReranker, rerankMode, type RerankReport } from './rerank'
 import { REWRITE_UNNEEDED_AT } from '@/lib/judge/shared/questions'
 import type { QueryPlan } from './shared/queryPlan'
 import { computeReferences, redactReferences } from './shared/references'
@@ -284,36 +284,28 @@ export async function searchContext(
     })
   }
 
-  // The LLM rewrite is a recall aid that costs seconds. With a judge in the
-  // search it is only USED when the query as asked found nothing the judge
-  // rates well: the rewrite runs in parallel with the first pass, and the
-  // second pass runs on its phrasings only when the first was weak.
-  // Without a judge (or with a plan handed in) the rewrite runs up front.
+  // The LLM rewrite is a recall aid a caller waits on. With a judge in the
+  // search it starts alongside the first pass and is USED only when that pass
+  // found nothing the judge rates well — then the search runs again on its
+  // phrasings. A strong first pass discards it. Without a judge, or with a plan
+  // handed in, the plan is made up front as before.
   const wantRewrite = opts.rewrite ?? true
+  const judging = opts.judge !== false && enabled && rerankMode() === 'judge'
   let rerankReport: RerankReport = {}
-  const judging = opts.judge !== false && enabled && createReranker()?.floor !== undefined
   let planned = opts.plan ?? (await planSearch(query, now, { rewrite: wantRewrite && !judging }))
-  let hits = opts.plan || !wantRewrite || !judging ? await run(planned.plan, rerankReport) : null
-  if (!hits) {
-    // Started NOW, alongside the first pass, so a weak first pass does not also
-    // wait for the rewrite from zero. A strong one throws the answer away: the
-    // rewrite is paid for on every such query, in exchange for the slow case
-    // costing ~2s less. planSearch never rejects — a failed rewrite is 'error'.
-    const widening = planSearch(query, now, { rewrite: true })
-    const first = await run(planned.plan, rerankReport)
-    const strong = rerankReport.judged && first.some((h) => (h.relevance ?? 0) >= REWRITE_UNNEEDED_AT)
-    if (strong) {
-      hits = first
-      planned = { plan: planned.plan, rewrite: 'skipped' }
+  let hits: FusedResult[]
+  if (opts.plan || !wantRewrite || !judging) {
+    hits = await run(planned.plan, rerankReport)
+  } else {
+    const widening = planSearch(query, now, { rewrite: true }) // never rejects: a failure is 'error'
+    hits = await run(planned.plan, rerankReport)
+    if (rerankReport.judged && hits.some((h) => (h.relevance ?? 0) >= REWRITE_UNNEEDED_AT)) {
+      planned = { ...planned, rewrite: 'skipped' }
     } else {
-      const widened = await widening
-      if (widened.rewrite === 'on') {
+      planned = await widening
+      if (planned.rewrite === 'on') {
         rerankReport = {}
-        planned = widened
-        hits = await run(widened.plan, rerankReport)
-      } else {
-        hits = first
-        planned = widened
+        hits = await run(planned.plan, rerankReport)
       }
     }
   }
