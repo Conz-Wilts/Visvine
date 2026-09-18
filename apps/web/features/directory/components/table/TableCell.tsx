@@ -28,6 +28,8 @@ interface TableCellProps {
   tagColors?: Record<string, string> | null;
   /** Absent when the viewer can't edit here (a global record, say). */
   onSave?: (value: unknown) => Promise<void>;
+  /** For an empty select cell: the option the row's note suggests, marked in the menu for the person to pick. */
+  suggest?: () => Promise<string | null>;
   /** Open in the editor rather than waiting for a click (the name cell's rename). */
   autoEdit?: boolean;
   /** The editor closed — by a save or an escape. */
@@ -40,10 +42,11 @@ interface TableCellProps {
 const INPUT_CLASS =
   'h-full w-full bg-surface-1 px-4 text-sm text-text-primary outline-none ring-1 ring-inset ring-[var(--color-brand-green)]';
 
-export default function TableCell({ column, value, aliasColor, typeLabel, tagColors, onSave, autoEdit = false, onDone }: TableCellProps) {
+export default function TableCell({ column, value, aliasColor, typeLabel, tagColors, onSave, suggest, autoEdit = false, onDone }: TableCellProps) {
   const [draft, setDraft] = useState<string | null>(autoEdit ? editValue(value, column) : null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [suggested, setSuggested] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
   const editable = column.editable && !!onSave;
 
@@ -55,6 +58,9 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
     if (!editable || saving) return;
     setError(null);
     setDraft(editValue(value, column));
+    if (column.kind === 'select' && suggest && !editValue(value, column)) {
+      void suggest().then(setSuggested, () => undefined);
+    }
   };
 
   const cancel = () => {
@@ -140,7 +146,7 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
           >
             <option value="">—</option>
             {(column.options ?? []).map((o) => (
-              <option key={o} value={o}>{o}</option>
+              <option key={o} value={o}>{o === suggested ? `${o} · suggested` : o}</option>
             ))}
           </select>
         ) : (

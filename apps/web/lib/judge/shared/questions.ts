@@ -212,3 +212,16 @@ export const LINK_REASON_QUESTION = noul(
 )
 /** Under this there is no reason to write, and the chat call is not made. */
 export const LINK_REASON_FLOOR = 0.2
+
+// ── Tracked fields ──────────────────────────────────────────────────────────
+
+/** State: { name, about, note }. Which option of a select field the note supports — a suggestion a person accepts. */
+export const fieldValueQuestion = (label: string, options: readonly string[]): ChoiceQuestion => ({
+  type: 'choice',
+  instructions: `According to the note, what is the "${label}" of this record?`,
+  criteria: {
+    ...Object.fromEntries(options.map((o, i) => [`o${i}`, o])),
+    none: 'The note does not say, or says something that fits none of these.',
+  },
+})
+export const FIELD_VALUE_CONFIDENCE = 0.75

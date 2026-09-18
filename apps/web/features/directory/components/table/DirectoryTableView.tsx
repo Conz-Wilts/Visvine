@@ -130,6 +130,19 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const spaceId = space?.id ?? null;
+  const suggestCell = useCallback(
+    async (item: DirectoryItem, column: TableColumn): Promise<string | null> => {
+      if (!spaceId || !column.options?.length) return null;
+      const res = await fetchJsonBody<{ suggested: string | null }>(
+        `/api/nodes/${encodeURIComponent(item.id)}/suggest`,
+        'POST',
+        { spaceId, label: column.label, options: column.options },
+      ).catch(() => null);
+      return res?.suggested ?? null;
+    },
+    [spaceId],
+  );
+
   const saveCell = useCallback(
     async (item: DirectoryItem, column: TableColumn, value: unknown) => {
       const patch = cellPatch(column, value);
@@ -235,6 +248,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
           onHideColumn={table.toggle}
           onOpen={handleItemClick}
           onSaveCell={spaceId ? saveCell : undefined}
+          onSuggestCell={spaceId ? suggestCell : undefined}
         />
         )}
       </div>

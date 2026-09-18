@@ -81,6 +81,8 @@ interface DirectoryTableProps {
   onOpen: (item: DirectoryItem) => void;
   /** Absent when nothing here may be edited. */
   onSaveCell?: (item: DirectoryItem, column: TableColumn, value: unknown) => Promise<void>;
+  /** What a row's note suggests for one of its select columns. */
+  onSuggestCell?: (item: DirectoryItem, column: TableColumn) => Promise<string | null>;
 }
 
 /** The narrowest the "Add column" cell gets. It is the table's last column,
@@ -214,7 +216,7 @@ const tableComponents = { Scroller, Table, TableHead, TableBody, TableFoot, Tabl
 export default function DirectoryTable({
   items, columns, hiddenColumns, typeName, sort, widths, loading = false,
   nodeTypes, aliases, tagColors, fields,
-  onSortChange, onResize, onReorder, onShowColumn, onHideColumn, onOpen, onSaveCell,
+  onSortChange, onResize, onReorder, onShowColumn, onHideColumn, onOpen, onSaveCell, onSuggestCell,
 }: DirectoryTableProps) {
   // ── filling the pane: spare width goes to the columns nobody has sized ──
   // A table narrower than its pane would leave a blank strip past the last
@@ -599,6 +601,7 @@ export default function DirectoryTable({
                           typeLabel={typeLabel}
                           tagColors={tagColors}
                           onSave={onSaveCell && column.editable ? (v) => onSaveCell(item, column, v) : undefined}
+                          suggest={onSuggestCell && column.kind === 'select' && column.editable ? () => onSuggestCell(item, column) : undefined}
                         />
                       </td>
                     );
