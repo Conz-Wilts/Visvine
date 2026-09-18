@@ -9,7 +9,8 @@ import ShellTopBar from "@/features/shared/components/layout/ShellTopBar";
 import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
 import { SpaceProvider, useSpace } from "@/features/shared/contexts/SpaceContext";
 import { FEATURES, canAccessFeature, defaultLandingHref } from "@/features/shared/lib/features";
-import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/railRow";
+import { EXPANDED_W } from "@/features/shared/components/layout/railRow";
+import { useDesktopChrome } from "@/features/desktop/lib/chrome";
 import type { SpaceFeatureConfig } from "@/lib/types";
 import { SpaceDesignProvider } from "@/features/shared/contexts/SpaceDesignContext";
 import { ProfileProvider } from "@/features/shared/contexts/ProfileContext";
@@ -86,7 +87,8 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   // bounce down and visibly unstick. Killing the bounce keeps every page's
   // sticky top bar welded to the top of the surface.
 
-  const railW = expanded ? EXPANDED_W : COLLAPSED_W;
+  const { railW: collapsedW } = useDesktopChrome();
+  const railW = expanded ? EXPANDED_W : collapsedW;
 
   const mainInner = fullBleed ? (
     <div className="h-full">{children}</div>

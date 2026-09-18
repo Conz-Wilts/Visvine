@@ -15,9 +15,12 @@ export const COLLAPSED_W = 76;
 export const EXPANDED_W = 272;
 export const ROW_INSET = 0;   // row ↔ rail edge: none, a row runs edge to edge
 // The glyph column is the same width open or closed, and it is the CLOSED
-// rail's full inner width — so a glyph's centre lands on COLLAPSED_W / 2 in
-// both states and nothing about it moves when the rail opens.
-const GLYPH_CELL_W = COLLAPSED_W - ROW_INSET * 2;
+// rail's full inner width — so a glyph's centre lands on the closed width / 2
+// in both states and nothing about it moves when the rail opens. The rail
+// sets the variable (the desktop shell's is wider — features/desktop/lib/chrome.ts);
+// COLLAPSED_W is the browser's.
+export const RAIL_CELL_VAR = "--rail-cell-w";
+const GLYPH_CELL_W = `var(${RAIL_CELL_VAR}, ${COLLAPSED_W - ROW_INSET * 2}px)`;
 // A row is a little taller than the glyph column is wide, so the hover block
 // under a shut row is the full width of the rail — the whole cell is the
 // target, not just the glyph. The rail's panels — the space list, the Create list —

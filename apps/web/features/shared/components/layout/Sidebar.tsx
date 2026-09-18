@@ -13,7 +13,7 @@ import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { CompassIcon } from "@/features/shared/icons";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
-import { useDesktopChromeInset } from "@/features/desktop/lib/chrome";
+import { useDesktopChrome } from "@/features/desktop/lib/chrome";
 import Modal from "@/components/ui/Modal";
 import UserMenu from "@/features/auth/components/UserMenu";
 import CreatePanel from "@/features/create/components/CreatePanel";
@@ -21,11 +21,11 @@ import SpaceSelector from "@/features/spaces/components/SpaceSelector";
 import SpaceSwitcherPanel from "@/features/spaces/components/SpaceSwitcherPanel";
 import type { SpaceFeatureConfig } from "@/lib/types";
 import {
-  COLLAPSED_W,
   EXPANDED_W,
   ITEM_GAP,
   ROW_H,
   ROW_INSET,
+  RAIL_CELL_VAR,
   Row,
 } from "@/features/shared/components/layout/railRow";
 
@@ -49,7 +49,8 @@ import {
  *  │ (you)                            │  account: your avatar and its menu
  *  └──────────────────────────────────┘
  *
- *  Every row is the same shape: a 76px glyph cell on one column, then a label
+ *  Every row is the same shape: a glyph cell the closed rail's width (76px;
+ *  88 in the mac app, centred under the window's controls), then a label
  *  the collapsed rail clips away with overflow-hidden. Shut, the rail is a
  *  column of glyphs and nothing else. Only the container's width animates —
  *  nothing flips.
@@ -104,8 +105,9 @@ export default function Sidebar() {
   // on them: a pointer crossing the rail on its way into a panel must not
   // swap or shut what it is heading for.
   const intent = useHoverIntent();
-  // The desktop shell's window controls stand in the rail's top strip.
-  const chromeInset = useDesktopChromeInset();
+  // The desktop shell's window controls stand in the rail's top strip, and
+  // the closed rail is as wide as centres its glyphs under them.
+  const { inset: chromeInset, railW: collapsedW } = useDesktopChrome();
 
   const ease = DOCK_EASE;
 
@@ -184,7 +186,7 @@ export default function Sidebar() {
   // motion — glides left with it, so the pair settles at a column of glyphs
   // and one list rather than two full columns side by side.
   const railPanelOpen = switcherOpen || createOpen;
-  const railW = expanded ? EXPANDED_W : COLLAPSED_W;
+  const railW = expanded ? EXPANDED_W : collapsedW;
   // Create new is open only while the pointer is on its row or in the panel:
   // pointing at any other row of the rail puts it away. The switcher is not
   // put away by pointing: it goes when another row is PRESSED (pressRailRow),
@@ -494,6 +496,8 @@ export default function Sidebar() {
     <aside
       ref={asideRef}
       className="fixed left-0 top-0 z-40"
+      // Every row's glyph cell (railRow) is the closed rail's inner width.
+      style={{ [RAIL_CELL_VAR]: `${collapsedW - ROW_INSET * 2}px` } as React.CSSProperties}
       // The rail's panels open under the pointer (the space row, the
       // Create new row), so they shut when the pointer leaves the whole card —
       // rail and panel both. A Create form being filled in is the exception:
@@ -518,9 +522,8 @@ export default function Sidebar() {
           className="relative flex shrink-0 flex-col overflow-hidden border-r"
           style={{
             background: "var(--shell-bg, #ffffff)",
-            // Under the window controls the seam is drawn by the strip below
-            // instead: the lights reach the rail's edge, and a line through
-            // them would cut the group off from the band it stands in.
+            // Under the window controls the seam is drawn below the strip
+            // instead, so the lights stand in one band with the page's top bar.
             borderRightColor: chromeInset > 0 ? "transparent" : "var(--shell-border, #e5e7eb)",
             width: railW,
             // In the desktop shell the window has no title bar, so the rail
