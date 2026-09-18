@@ -543,6 +543,9 @@ export const CONTEXT_ACTIONS = [
         '("what happened yesterday") returns that period newest-first. A history question ("why did we stop…", ' +
         '"what did we use to…") ranks retired notes at full weight. The `plan` field reports all of this — ' +
         'the phrasings searched, the date range read, and whether the query rewrite ran. ' +
+        'When a judge has read the candidates, hits that are not about the query are dropped — so fewer than `k` ' +
+        'may come back, each with a `relevance` (0–1) — and `answerable: false` means nothing you can read here ' +
+        'is about the query: say so, or try different words, rather than answering from nothing. ' +
         'Omit `space_id` to search EVERY space you can act in at once; each hit then says which `space` it was ' +
         'read in, and `spaces` lists what was searched. When results span more than one space, say which ' +
         'space each came from, and never carry what one space says into a write in another unless the ' +
@@ -595,7 +598,7 @@ export const CONTEXT_ACTIONS = [
               return { ...r, hits: r.hits.map((h) => ({ ...h, space })), searched: [space], skipped: 0 }
             })()
           : null
-        const { hits, semantic, plan, searched, skipped } = (everywhere ?? one)!
+        const { hits, semantic, plan, searched, skipped, answerable } = (everywhere ?? one)!
         const spaceById = new Map(searched.map((s) => [s.id, s]))
 
         const entities = (
@@ -637,6 +640,9 @@ export const CONTEXT_ACTIONS = [
           // many did not fit, so the caller can name one to reach it.
           spaces: { searched, skipped },
           semantic,
+          // Present when a judge read the candidates: false means nothing the
+          // caller can read is about the query, which is an answer, not a miss.
+          ...(answerable === undefined ? {} : { answerable }),
           plan: {
             queries: plan.queries,
             date_range: plan.dateRange
@@ -657,6 +663,7 @@ export const CONTEXT_ACTIONS = [
             title: h.title,
             snippet: h.snippet ?? null,
             ...(h.claim ? { claim: h.claim } : {}),
+            ...(h.relevance !== undefined ? { relevance: h.relevance } : {}),
             // Present only when the note is not current — see shared/lifecycle.ts.
             ...(h.status ? { status: h.status } : {}),
             ...(h.kind === 'source'

@@ -12,11 +12,12 @@
  *   note reached through its house's `subspaces/<id>/` graft is a duplicate
  *   and is dropped. A room the caller is NOT in has no direct search, so the
  *   house's hop into it is the only read and is kept.
- * - Scores from different spaces are not calibrated against each other, so
- *   the fold sorts by score and stops there — no space is favoured, and the
- *   caller's filters (`type`, `folder`, dates) are the lever, not the order.
+ * - Fused scores from different spaces are not calibrated against each other;
+ *   a judged `relevance` is (`compareAcrossSearches`), so the fold orders by it
+ *   where the judge ran and by score where it did not. No space is favoured,
+ *   and the caller's filters (`type`, `folder`, dates) remain the lever.
  */
-import type { FusedResult } from '@/lib/notes/shared/retrieval'
+import { compareAcrossSearches, type FusedResult } from '@/lib/notes/shared/retrieval'
 import { parseSubspacePath } from '@/lib/spaces/subspaces'
 
 /** How many spaces one search fans out over. The rest are reported skipped. */
@@ -55,6 +56,6 @@ export function fuseAcrossSpaces(runs: SpaceSearchRun[], memberIds: Iterable<str
       out.push({ ...h, space: run.space })
     }
   }
-  out.sort((a, b) => b.score - a.score)
+  out.sort(compareAcrossSearches)
   return k ? out.slice(0, k) : out
 }

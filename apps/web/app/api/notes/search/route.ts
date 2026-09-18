@@ -35,13 +35,16 @@ export async function POST(req: NextRequest) {
   const p = await principalOf(context)
   try {
     const rewrite = typeof body.rewrite === 'boolean' ? body.rewrite : undefined
-    const { hits, semantic, plan } = await searchFederated(p, context, query, parseFilters(body.filters), k, {
+    const { hits, semantic, plan, answerable } = await searchFederated(p, context, query, parseFilters(body.filters), k, {
       rewrite,
+      // A person scanning rows as they type wants them now; a caller that
+      // wants only what is about the query asks for the judge.
+      judge: body.judge === true,
     })
     // `semantic` says whether the embedding stages actually ran — 'no-key' means
     // these results are keyword + link context only; `plan` says what the query
     // was read as (phrasings, date range, history intent).
-    return NextResponse.json({ results: hits, semantic, plan })
+    return NextResponse.json({ results: hits, semantic, plan, ...(answerable === undefined ? {} : { answerable }) })
   } catch (err) {
     return failFromError(err)
   }

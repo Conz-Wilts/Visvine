@@ -256,10 +256,17 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
         if (!query) return 'error: query is required'
         const limit = Math.min(SEARCH_CAP, Math.max(1, Number(a.limit) || 10))
         const result = await searchFederated(principal, context, query, {}, limit)
-        if (result.hits.length === 0) return 'no matches'
+        if (result.hits.length === 0) {
+          return result.answerable === false
+            ? 'no matches — nothing you can read here is about that. Try other words, or say it is not recorded.'
+            : 'no matches'
+        }
         return result.hits
           .slice(0, limit)
-          .map((h) => `- ${h.path} — ${h.title}${h.snippet ? `\n  ${h.snippet.replace(/\s+/g, ' ').slice(0, 300)}` : ''}`)
+          .map((h) => {
+            const preview = (h.claim ?? h.snippet ?? '').replace(/\s+/g, ' ').slice(0, 300)
+            return `- ${h.path} — ${h.title}${preview ? `\n  ${preview}` : ''}`
+          })
           .join('\n')
       },
     },

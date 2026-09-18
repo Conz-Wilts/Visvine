@@ -12,7 +12,8 @@
 import type { ActionCaller } from '@/lib/actions/types'
 import { listMySpaces, resolveTarget } from '@/lib/actions/resolve'
 import { searchFederated } from '@/lib/notes/federation'
-import type { SearchFilters } from '@/lib/notes/shared/retrieval'
+import { compareAcrossSearches, type SearchFilters } from '@/lib/notes/shared/retrieval'
+import { judgeHits } from '@/lib/notes/rerank'
 import type { BrainSearchResult, SearchOptions } from '@/lib/notes/contextService'
 import { planSearch } from '@/lib/notes/queryRewrite'
 import { fuseAcrossSpaces, searchFanout, type SearchedSpace, type SpaceHit } from '@/lib/actions/shared/everywhere'
@@ -23,6 +24,7 @@ export interface EverywhereResult {
   hits: SpaceHit[]
   semantic: BrainSearchResult['semantic']
   plan: BrainSearchResult['plan']
+  answerable?: boolean
   searched: SearchedSpace[]
   skipped: number
 }
@@ -43,7 +45,8 @@ export async function searchEverywhere(
     spaces.map(async (space) => {
       try {
         const { principal, context } = await resolveTarget(ctx, space.id)
-        const r = await searchFederated(principal, context, query, filters, k, { ...opts, plan: planned })
+        // Judged once, after the fold (below), so no space spends a window of its own.
+        const r = await searchFederated(principal, context, query, filters, k, { ...opts, plan: planned, judge: false })
         return { space, result: r }
       } catch (err) {
         // One space failing (membership just revoked, a stage erroring) narrows
@@ -54,12 +57,24 @@ export async function searchEverywhere(
     }),
   )
   const first = runs.find((r) => r.result)?.result
+  const folded = fuseAcrossSpaces(
+    runs.map((r) => ({ space: r.space, hits: r.result?.hits ?? [] })),
+    spaces.map((s) => s.id),
+  )
+  // A space that switched its semantic half off sends no note text to a model
+  // at query time; its hits ride along unjudged, after the judged ones.
+  const closed = new Set(runs.filter((r) => r.result?.semantic === 'off').map((r) => r.space.id))
+  const open = folded.filter((h) => !closed.has(h.space.id))
+  const topic = planned.plan.topic || query
+  const verdict =
+    opts.judge === false || planned.plan.temporalOnly || planned.plan.intent === 'history' ? { hits: open, judged: false } : await judgeHits(topic, open, k)
+  const judged = {
+    judged: verdict.judged,
+    hits: [...verdict.hits, ...folded.filter((h) => closed.has(h.space.id))].sort(compareAcrossSearches).slice(0, k),
+  }
   return {
-    hits: fuseAcrossSpaces(
-      runs.map((r) => ({ space: r.space, hits: r.result?.hits ?? [] })),
-      spaces.map((s) => s.id),
-      k,
-    ),
+    hits: judged.hits,
+    ...(judged.judged ? { answerable: judged.hits.length > 0 } : {}),
     semantic: first?.semantic ?? 'no-key',
     plan: first?.plan ?? { ...planned.plan, rewrite: planned.rewrite },
     searched: spaces,

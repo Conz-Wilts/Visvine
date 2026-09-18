@@ -62,11 +62,30 @@ export interface FusedResult {
    */
   passage?: { heading: string; text: string }
   /**
+   * How relevant a judging reranker found the hit to the query, 0..1 — present
+   * only when one ran and answered for this hit.
+   */
+  relevance?: number
+  /**
    * The note's memory lifecycle state, present only when it is NOT `active` —
    * so a caller (and an agent) is told when a hit is superseded, expired or
    * stale, and never has to assume a result is current. Sources have none.
    */
   status?: NoteStatus
+}
+
+/**
+ * The order for hits that came from DIFFERENT searches — a house and its rooms,
+ * or several spaces. A fused score is a rank inside one corpus and means nothing
+ * next to another corpus's; a judged `relevance` is the same question asked of
+ * every hit, so it is the one number that compares. Judged hits lead, by
+ * relevance; the rest follow by score, as before.
+ */
+export function compareAcrossSearches(a: FusedResult, b: FusedResult): number {
+  if (a.relevance !== undefined && b.relevance !== undefined) return b.relevance - a.relevance || b.score - a.score
+  if (a.relevance !== undefined) return -1
+  if (b.relevance !== undefined) return 1
+  return b.score - a.score
 }
 
 /** One ranked context-source chunk from the injected source stage. */
@@ -152,9 +171,17 @@ export interface VectorStage {
  * stages; a stage that returns [] (or throws inside, on the server) leaves the
  * fused order as it was. Keys it does not score keep their fused position
  * below the ones it did.
+ *
+ * A reranker whose score is an absolute relevance (a calibrated judge, not a
+ * listwise ordering) may set `floor`: a scored key under it is DROPPED, and so
+ * is everything past the head it read — a search may then return fewer than k
+ * hits, or none, which is the honest answer when nothing in reach is about the
+ * query. A key in the head it failed to score is kept: no verdict is never a
+ * reason to lose a result.
  */
 export interface Reranker {
   rerank(query: string, candidates: { key: string; text: string }[]): Promise<{ key: string; score: number }[]>
+  floor?: number
 }
 
 export interface FuseOptions {
@@ -191,7 +218,7 @@ const OVERFETCH = 3
 /** The most candidates a reranker is handed — it reads every one. */
 const RERANK_WINDOW = 30
 /** Characters of a candidate a reranker sees. */
-const RERANK_TEXT_CHARS = 600
+const RERANK_TEXT_CHARS = 900
 
 /**
  * Per-stage fusion weights. Plain RRF treats every stage as equally good
@@ -484,17 +511,35 @@ export async function fusedSearch(
     }
   }
 
-  if (opts.rerank && ranked.length > 1) {
-    ranked = await rerankHead(ranked, Math.min(RERANK_WINDOW, k * OVERFETCH), query, opts.rerank, (key) => {
+  const relevance = new Map<string, number>()
+  // A history question ("why did we stop…") is about a note that no longer
+  // says what the query says — a judge reading literally finds it off-topic, and
+  // it IS the answer. A reranker that drops sits such a plan out.
+  const sitsOut = opts.rerank?.floor !== undefined && plan.intent === 'history'
+  if (opts.rerank && ranked.length > 0 && !sitsOut) {
+    ranked = await rerankHead(ranked, Math.min(RERANK_WINDOW, k * OVERFETCH), plan.topic || query, opts.rerank, (key) => {
       const r = toResult([key, 0])
-      return `${r.title}\n${r.claim ?? r.snippet ?? ''}`.slice(0, RERANK_TEXT_CHARS)
+      // What a reader would judge the hit by: what it is, what it says it is
+      // about, and the part that matched. A match in the description or the
+      // tags is invisible in a body snippet.
+      const meta = byPath.get(key)?.meta
+      const about = [
+        typeof meta?.frontmatter.type === 'string' ? `Type: ${meta.frontmatter.type}` : '',
+        typeof meta?.frontmatter.description === 'string' ? meta.frontmatter.description : '',
+        meta?.tags.length ? `Tags: ${meta.tags.join(', ')}` : '',
+      ].filter(Boolean)
+      const text = [...about, r.claim, r.passage?.text ?? r.snippet].filter(Boolean).join('\n')
+      return `${r.title}\n${text}`.slice(0, RERANK_TEXT_CHARS)
     }, (key) => {
       const note = byPath.get(key)
       return note ? lifecycle(note.meta) : 1
-    })
+    }, relevance)
   }
 
-  return ranked.slice(0, k).map(toResult)
+  return ranked.slice(0, k).map((entry) => {
+    const rel = relevance.get(entry[0])
+    return rel === undefined ? toResult(entry) : { ...toResult(entry), relevance: Math.round(rel * 100) / 100 }
+  })
 }
 
 /**
@@ -540,15 +585,20 @@ async function rerankHead(
   reranker: Reranker,
   textOf: (key: string) => string,
   weightOf: (key: string) => number,
+  relevance: Map<string, number>,
 ): Promise<[string, number][]> {
   const head = ranked.slice(0, window)
   const scored = await reranker.rerank(query, head.map(([key]) => ({ key, text: textOf(key) })))
   if (!scored.length) return ranked
-  const byKey = new Map(scored.map((s) => [s.key, s.score * weightOf(s.key)]))
+  const raw = new Map(scored.map((s) => [s.key, s.score]))
+  const floor = reranker.floor
   const reranked = head
-    .filter(([key]) => byKey.has(key))
-    .map(([key]): [string, number] => [key, byKey.get(key)!])
+    .filter(([key]) => raw.has(key) && (floor === undefined || raw.get(key)! >= floor))
+    .map(([key]): [string, number] => [key, raw.get(key)! * weightOf(key)])
     .sort((a, b) => b[1] - a[1])
-  const rest = ranked.filter(([key]) => !byKey.has(key))
+  if (floor !== undefined) for (const [key] of reranked) relevance.set(key, raw.get(key)!)
+  // With a floor the head is all that was read, so it is all that may come
+  // back; without one the unread tail keeps its fused order below the head.
+  const rest = (floor === undefined ? ranked : head).filter(([key]) => !raw.has(key))
   return [...reranked, ...rest]
 }

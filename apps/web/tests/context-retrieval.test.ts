@@ -427,3 +427,31 @@ test('fusedSearch: the reranker reorders the head; unscored and failed stay fuse
   assert.equal(one[0].path, plain[2].path)
   assert.deepEqual(one.slice(1).map((h) => h.path), plain.filter((h) => h.path !== plain[2].path).map((h) => h.path))
 })
+
+test('fusedSearch: a reranker with a floor drops what falls under it, keeps the unscored, and can return nothing', async () => {
+  const notes = toRetrieval([
+    note('a.md', '---\ntitle: Alpha seats\n---\nseats seats seats', 1),
+    note('b.md', '---\ntitle: Beta\n---\nseats', 1),
+    note('c.md', '---\ntitle: Gamma\n---\nseats once', 1),
+  ])
+  const plain = await fusedSearch(notes, 'seats', {}, { k: 3 })
+  // The judge likes the last fused hit, rejects the first, and says nothing of the middle.
+  const judge = {
+    floor: 0.35,
+    rerank: async (_q: string, c: { key: string }[]) => [
+      { key: c[0].key, score: 0.1 },
+      { key: c[2].key, score: 0.9 },
+    ],
+  }
+  const hits = await fusedSearch(notes, 'seats', {}, { rerank: judge, k: 3 })
+  assert.deepEqual(hits.map((h) => h.path), [plain[2].path, plain[1].path])
+  assert.equal(hits[0].relevance, 0.9)
+  assert.equal(hits[1].relevance, undefined)
+
+  const none = { floor: 0.35, rerank: async (_q: string, c: { key: string }[]) => c.map((x) => ({ key: x.key, score: 0 })) }
+  assert.deepEqual(await fusedSearch(notes, 'seats', {}, { rerank: none, k: 3 }), [])
+
+  // No verdict at all is never a reason to lose results.
+  const down = { floor: 0.35, rerank: async () => [] }
+  assert.deepEqual((await fusedSearch(notes, 'seats', {}, { rerank: down, k: 3 })).map((h) => h.path), plain.map((h) => h.path))
+})

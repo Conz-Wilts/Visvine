@@ -36,7 +36,7 @@ import { parseFrontmatter } from './shared/markdown'
 import { connectorNameOfPath, isConnectorNoteAt } from './shared/configKinds'
 import type { ContextPrincipal } from './shared/contextTypes'
 import type { NoteMeta, TreeNode } from './shared/types'
-import type { FusedResult, SearchFilters } from './shared/retrieval'
+import { compareAcrossSearches, type FusedResult, type SearchFilters } from './shared/retrieval'
 import { isAdmin, membershipStatus } from '@/lib/auth'
 import { flowingSubspace, flowingSubspacesOf, parentOfSubspace } from '@/lib/spaces/subspaceAccess'
 import {
@@ -396,8 +396,10 @@ export async function searchFederated(
   readers.forEach((reader, i) => {
     for (const h of subs[i].hits) hits.push({ ...h, path: rebasePath(reader.space.id, h.path) })
   })
-  hits.sort((a, b) => b.score - a.score)
-  return { ...own, hits: k ? hits.slice(0, k) : hits }
+  hits.sort(compareAcrossSearches)
+  const merged = k ? hits.slice(0, k) : hits
+  // The house's own search may have found nothing while a room did.
+  return { ...own, hits: merged, ...(own.answerable === undefined ? {} : { answerable: merged.length > 0 }) }
 }
 
 /**

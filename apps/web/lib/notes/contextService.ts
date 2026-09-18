@@ -22,7 +22,7 @@ import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { rewriteLinks } from './shared/linkRewrite'
 import { fusedSearch, type FusedResult, type SearchFilters } from './shared/retrieval'
 import { planSearch, type RewriteStatus } from './queryRewrite'
-import { createReranker } from './rerank'
+import { createReranker, type RerankReport } from './rerank'
 import type { QueryPlan } from './shared/queryPlan'
 import { computeReferences, redactReferences } from './shared/references'
 import { pathVisibleTo } from './shared/visibility'
@@ -189,6 +189,12 @@ export interface BrainSearchResult {
    */
   semantic: SemanticStatus
   /**
+   * False when a judge read the candidates and found none of them about the
+   * query: nothing the caller can read answers it. Absent when no judge ran —
+   * an empty `hits` then only means nothing matched.
+   */
+  answerable?: boolean
+  /**
    * What the search decided the query was asking — the phrasings it ran, the
    * date range it read out of the words, whether it answered by recency alone,
    * and whether it treated the ask as a history question. Reported so a caller
@@ -207,6 +213,12 @@ export interface SearchOptions {
    * phrasings, so no space is searched on narrower words than another.
    */
   plan?: { plan: QueryPlan; rewrite: RewriteStatus }
+  /**
+   * Judge the head of the ranking and drop what is not about the query
+   * (lib/notes/rerank.ts). Default true; a person scanning a result list as
+   * they type passes false — they want it now, and can skip a weak row.
+   */
+  judge?: boolean
 }
 
 /**
@@ -259,6 +271,7 @@ export async function searchContext(
     }
   }
 
+  const rerankReport: RerankReport = {}
   const hits = await fusedSearch(notes, query, filters, {
     k,
     plan,
@@ -268,7 +281,9 @@ export async function searchContext(
     // Claims rank only for the visible notes at their CURRENT mtime.
     memories: createMemoryStage(context, new Map(metas.map((m) => [m.path, m.mtime])), queryVectors, report),
     chunks: createChunkStage(context, new Map(metas.map((m) => [m.path, m.mtime])), queryVectors, report),
-    rerank: createReranker(),
+    // A space that switched the semantic half off sends no note text to a
+    // model at query time, and that covers the judge.
+    rerank: opts.judge === false || !enabled ? undefined : createReranker(rerankReport),
   })
   for (const h of hits) {
     if (isAuditedRead(p, context, h.path)) {
@@ -276,7 +291,7 @@ export async function searchContext(
     }
   }
   const semantic: SemanticStatus = !keyed ? 'no-key' : !enabled ? 'off' : report.error ? 'error' : 'on'
-  return { hits, semantic, plan: { ...plan, rewrite } }
+  return { hits, semantic, ...(rerankReport.judged ? { answerable: hits.length > 0 } : {}), plan: { ...plan, rewrite } }
 }
 
 // write gate

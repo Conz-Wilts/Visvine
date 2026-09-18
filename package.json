@@ -19,6 +19,7 @@
     "typecheck": "pnpm --filter @visvine/web typecheck",
     "test": "pnpm --filter @visvine/web test",
     "eval:retrieval": "pnpm --filter @visvine/web eval:retrieval",
+    "eval:judge": "pnpm --filter @visvine/web eval:judge",
     "db:projections:rebuild": "pnpm --filter @visvine/web db:projections:rebuild",
     "db:resources:reindex": "pnpm --filter @visvine/web db:resources:reindex",
     "db:gc:objects": "pnpm --filter @visvine/web db:gc:objects",

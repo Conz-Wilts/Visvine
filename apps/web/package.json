@@ -16,6 +16,7 @@
     "knip": "knip --no-progress",
     "test": "node --import tsx --test tests/*.test.ts",
     "eval:retrieval": "tsx scripts/eval-retrieval.ts",
+    "eval:judge": "tsx scripts/eval-judge.ts",
     "db:projections:rebuild": "tsx scripts/rebuild-projections.ts",
     "db:resources:reindex": "tsx scripts/reindex-resources.ts",
     "db:resources:link": "tsx scripts/link-resource-files.ts",
