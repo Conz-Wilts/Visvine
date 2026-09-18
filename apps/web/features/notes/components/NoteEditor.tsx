@@ -831,7 +831,7 @@ export function NoteEditor({
           notes={notes}
           entities={entities}
           anchor={linkAnchor}
-          placeholder="Link to a note, person, or company…"
+          placeholder="Link to context…"
           onPick={insertLink}
           onPickEntity={async (entity) => {
             if (!onEnsureEntityNote) {
