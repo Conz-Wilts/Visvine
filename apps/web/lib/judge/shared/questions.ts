@@ -201,3 +201,14 @@ export const TOOL_EFFECT_QUESTION: ChoiceQuestion = {
   },
 }
 export const TOOL_EFFECT_CONFIDENCE = 0.7
+
+// ── Link reasons ────────────────────────────────────────────────────────────
+
+/** State: { a, b, passages }. Asked before the chat model is, which writes the reason. */
+export const LINK_REASON_QUESTION = noul(
+  'Do the passages say why or how the two are connected?',
+  'The passages state a relationship: they worked together, one hired, funded, introduced, met or reports to the other, they share a project or an event.',
+  'The passages only mention them near each other, or list them, without saying how they are connected.',
+)
+/** Under this there is no reason to write, and the chat call is not made. */
+export const LINK_REASON_FLOOR = 0.2

@@ -15,6 +15,9 @@ import { revalidateTag } from 'next/cache'
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { aiConfigured, aiModelName, chat, extractJsonObject } from '@/lib/notes/ai'
+import { decideMany } from '@/lib/judge/client'
+import { noulOf } from '@/lib/judge/shared/types'
+import { LINK_REASON_FLOOR, LINK_REASON_QUESTION } from '@/lib/judge/shared/questions'
 import {
   combinedExcerptHash,
   mergeContextMeta,
@@ -117,9 +120,31 @@ export async function generateLinkReasons(
     })
   }
 
+  // A mention that says nothing about WHY is most mentions. A judge reads the
+  // passages first; a link it finds no reason in gets its hash stamped with no
+  // reason — the answer the model would have given — and is never sent to it.
+  const verdicts = await decideMany(
+    candidates.map((c) => ({
+      state: { a: c.sourceLabel, b: c.targetLabel, passages: Object.values(c.context.excerpts).map((e) => e.text) },
+      questions: { reason: LINK_REASON_QUESTION },
+    })),
+    { deadlineMs: 15_000, patient: true },
+  )
+  const worth: Candidate[] = []
+  const reasonless: Candidate[] = []
+  candidates.forEach((c, i) => {
+    const has = noulOf(verdicts[i], 'reason')
+    ;(has !== undefined && has < LINK_REASON_FLOOR ? reasonless : worth).push(c)
+  })
+
   let updated = 0
-  for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
-    const batch = candidates.slice(i, i + BATCH_SIZE)
+  for (const candidate of reasonless) {
+    const context: LinkContextMeta = { ...candidate.context, reason: undefined, reasonHash: candidate.hash, updatedAt: new Date().toISOString() }
+    await prisma.link.update({ where: { id: candidate.id }, data: { metadata: mergeContextMeta(candidate.metadata, context) as object } })
+    updated += 1
+  }
+  for (let i = 0; i < worth.length; i += BATCH_SIZE) {
+    const batch = worth.slice(i, i + BATCH_SIZE)
     let reasons: Map<string, string>
     try {
       reasons = coerceReasons(
