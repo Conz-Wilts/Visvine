@@ -10,7 +10,7 @@ import { SHELL_PANE_TOP } from "@/features/shared/contexts/ThemeContext";
 import { SpaceProvider, useSpace } from "@/features/shared/contexts/SpaceContext";
 import { FEATURES, canAccessFeature, defaultLandingHref } from "@/features/shared/lib/features";
 import { EXPANDED_W } from "@/features/shared/components/layout/railRow";
-import { FRAME_BG, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
+import { FRAME_BG, FRAME_LINE, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
 import type { SpaceFeatureConfig } from "@/lib/types";
 import { SpaceDesignProvider } from "@/features/shared/contexts/SpaceDesignContext";
 import { ProfileProvider } from "@/features/shared/contexts/ProfileContext";
@@ -87,7 +87,7 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   // bounce down and visibly unstick. Killing the bounce keeps every page's
   // sticky top bar welded to the top of the surface.
 
-  const { railW: collapsedW, framed, bandH } = useDesktopChrome();
+  const { railW: collapsedW, bandH } = useDesktopChrome();
   const railW = expanded ? EXPANDED_W : collapsedW;
 
   const mainInner = fullBleed ? (
@@ -103,13 +103,12 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="flex h-screen flex-col overflow-hidden"
-      style={framed ? { background: FRAME_BG } : undefined}
+      style={{ background: FRAME_BG }}
     >
-      {/* The mac app draws the window's frame (features/desktop/lib/chrome.ts):
-          the band runs the window's full width on the frame, level with the
-          traffic lights, and the rail hangs under it — so the page's tabs and
-          actions sit in the window's top edge, not on the sheet below. */}
-      {framed && <ShellTopBar leftInset={railW} />}
+      {/* The shell is a frame (features/desktop/lib/chrome.ts): the band runs
+          the window's full width, the rail hangs under it, and the page's tabs
+          and actions sit in the band rather than on the sheet below. */}
+      <ShellTopBar leftInset={railW} />
       {/* The sidebar is the shell's only chrome: it runs the full height of the
           viewport, fixed over the content's left edge. */}
       <Sidebar />
@@ -123,21 +122,15 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
         style={{
           marginLeft: railW,
           transition: `margin-left ${railMotion}`,
-          // Framed, the content is a sheet set into the frame: its own
-          // surface, rounded where it meets the band and the rail.
-          ...(framed ? {
-            background: "var(--color-surface-1)",
-            borderTopLeftRadius: FRAME_RADIUS,
-            overflow: "hidden",
-          } : {}),
+          // The content is a sheet set into the frame: one hairline along the
+          // band and the rail, rounded where they meet.
+          background: "var(--color-surface-1)",
+          borderTop: FRAME_LINE,
+          borderLeft: FRAME_LINE,
+          borderTopLeftRadius: FRAME_RADIUS,
+          overflow: "hidden",
         }}
       >
-        {/* The shell's band: the rail's switch, the page's search, and you.
-            It is a row of the surface, not an overlay — <main> starts below it,
-            so a page's own pinned bar (the Directory's tabs, the console's
-            sections) pins under it without either knowing about the other. */}
-        {!framed && <ShellTopBar />}
-
         <main
           className={fullBleed ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 pb-6 scroll-pt-32 overflow-y-auto overscroll-y-none"}
           style={{

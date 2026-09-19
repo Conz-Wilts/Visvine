@@ -5,33 +5,28 @@ import { COLLAPSED_W } from '@/features/shared/components/layout/railRow';
 import { SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
 
 /**
- * The desktop shell draws no title bar on macOS (apps/desktop/src/main.ts):
- * the page runs to the top of the window and draws the window's frame itself,
- * the way Slack does — one tinted frame holding the traffic lights, the band
- * across the top and the rail down the left, with the content surface set into
- * it as a rounded sheet.
+ * The shell is a frame with the content set into it, the way Slack draws its
+ * window: the band across the top and the rail down the left on the frame, and
+ * the content a sheet held apart from them by one hairline with a rounded
+ * corner where they meet (AuthLayoutClient).
  *
- * The page says where the lights stand (the shell has no idea how wide this
- * release draws its rail): 14pt in and 14pt down, and the group is 60pt
- * wide, so the rail is 14 + 60 + 14 = 88 and every glyph's centre
- * (railW / 2) sits under the middle light. The band is 40: the lights' centre
- * line is 20pt down, the band's own middle, so the page's tabs and actions on
- * it stand level with them.
+ * The mac app draws no title bar (apps/desktop/src/main.ts), so the traffic
+ * lights stand in the band's left end, over the rail. The page says where
+ * (the shell has no idea how wide this release draws its rail): 14pt in, and
+ * down so their centre line is the band's middle; the group is 60pt wide, so
+ * the rail is 14 + 60 + 14 = 88 and every glyph's centre (railW / 2) sits
+ * under the middle light.
  *
  * In full screen macOS hides the lights in the menu bar's drop-down; the band
  * stays, because it carries the page's tabs and actions, and the rail keeps its
  * width, so nothing beside it moves sideways.
  */
-const MAC_BAND_H = 40;
-const MAC_LIGHTS = { x: 14, y: 14 };
+const MAC_LIGHTS = { x: 14, y: SHELL_TOP_BAR_H / 2 - 7 };
 const MAC_LIGHTS_W = 60;
 const MAC_RAIL_W = MAC_LIGHTS.x * 2 + MAC_LIGHTS_W;
 
-export type DesktopChrome = {
-  /** The page draws the window's frame: band and rail on the frame tint, the
-   *  content a rounded sheet set into it. */
-  framed: boolean;
-  /** The strip the window's controls take at the top of the rail. */
+type DesktopChrome = {
+  /** The part of the band the window's controls stand in. */
   inset: number;
   /** The shell's top band — ShellTopBar's height. <main> starts below it. */
   bandH: number;
@@ -39,8 +34,8 @@ export type DesktopChrome = {
   railW: number;
 };
 
-const BROWSER: DesktopChrome = { framed: false, inset: 0, bandH: SHELL_TOP_BAR_H, railW: COLLAPSED_W };
-const MAC: DesktopChrome = { framed: true, inset: MAC_BAND_H, bandH: MAC_BAND_H, railW: MAC_RAIL_W };
+const BROWSER: DesktopChrome = { inset: 0, bandH: SHELL_TOP_BAR_H, railW: COLLAPSED_W };
+const MAC: DesktopChrome = { inset: SHELL_TOP_BAR_H, bandH: SHELL_TOP_BAR_H, railW: MAC_RAIL_W };
 const MAC_FULL_SCREEN: DesktopChrome = { ...MAC, inset: 0 };
 
 // One read of the shell for every component that measures against it.
@@ -79,8 +74,9 @@ export function useDesktopChrome(): DesktopChrome {
   return useSyncExternalStore(subscribe, () => chrome, () => BROWSER);
 }
 
-/** The frame's tint: the ink laid thinly over the surface, so it follows the
- *  theme — light and dark — without a colour of its own. */
-export const FRAME_BG = 'color-mix(in srgb, var(--color-text-primary) 6%, var(--color-surface-1))';
-/** The content sheet's corner where it meets the frame. */
+/** The frame: the surface itself, so the sheet is told apart by its line. */
+export const FRAME_BG = 'var(--color-surface-1)';
+/** The hairline between the frame and the sheet. */
+export const FRAME_LINE = '1px solid var(--shell-border, #e5e7eb)';
+/** The sheet's corner where the band and the rail meet. */
 export const FRAME_RADIUS = 12;

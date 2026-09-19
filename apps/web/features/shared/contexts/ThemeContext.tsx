@@ -20,11 +20,12 @@ export const SHELL_FRAME_RADIUS = 0;   // corner radius of the content region
  *  mask — measures from here. */
 export const SHELL_PANE_TOP = 24;
 
-/** The shell's top band (ShellTopBar): the rail's switch, the page's search,
- *  and the account button. <main> starts below it, so anything positioned
- *  against the VIEWPORT rather than against <main> — the docked panel, the
- *  connections rail, the scrollbar mask — offsets by this. */
-export const SHELL_TOP_BAR_H = 64;
+/** The shell's top band (ShellTopBar), running the window's full width above
+ *  the content sheet: exactly a tab's height (PaneTabBar's h-12), so the tabs'
+ *  underline sits on the sheet's top edge. <main> starts below it, so anything
+ *  positioned against the VIEWPORT — the docked panel, the connections rail,
+ *  the scrollbar mask — offsets by this. */
+export const SHELL_TOP_BAR_H = 48;
 
 // Shell chrome vars — the sidebar rail, which is the shell's only chrome.
 // Consumed via var(--shell-*) in Sidebar. The list is what the unmount cleanup

@@ -13,7 +13,7 @@ import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { CompassIcon } from "@/features/shared/icons";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
-import { FRAME_BG, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
+import { FRAME_BG, FRAME_LINE, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
 import Modal from "@/components/ui/Modal";
 import UserMenu from "@/features/auth/components/UserMenu";
 import CreatePanel from "@/features/create/components/CreatePanel";
@@ -101,7 +101,7 @@ export default function Sidebar() {
   const intent = useHoverIntent();
   // The desktop shell's window controls stand in the rail's top strip, and
   // the closed rail is as wide as centres its glyphs under them.
-  const { inset: chromeInset, railW: collapsedW, framed, bandH } = useDesktopChrome();
+  const { inset: chromeInset, railW: collapsedW, bandH } = useDesktopChrome();
 
   const ease = DOCK_EASE;
 
@@ -508,21 +508,18 @@ export default function Sidebar() {
           card's left seam; the column carries its own right edge. */}
       <div className="relative flex overflow-hidden" style={{ height: RAIL_H }}>
         {/* Icon rail column — the only width that animates, and only on the
-            hover. Its border-r is the card's constant vertical seam: the closed
-            card's right edge, the rail/panel divider when a panel is docked, and
-            the line beside the pane tab bar (which starts one pixel in —
-            PaneTabBar's -ml-[23px] — so this stays visible). */}
+            hover. It draws no seam: the content sheet's hairline beside it is
+            the divide. */}
         <div
-          className={`relative flex shrink-0 flex-col overflow-hidden ${framed ? "" : "border-r"}`}
+          className="relative flex shrink-0 flex-col overflow-hidden"
           style={{
-            // Framed (the mac app), the rail is the frame's: no seam of its
-            // own, the content sheet's rounded edge is the divide.
-            background: framed ? FRAME_BG : "var(--shell-bg, #ffffff)",
-            borderRightColor: "var(--shell-border, #e5e7eb)",
+            // The rail is the frame's: no seam of its own, the content
+            // sheet's hairline is the divide.
+            background: FRAME_BG,
             width: railW,
-            // In the desktop shell the window has no title bar, so the rail
-            // starts below the band the traffic lights stand in.
-            paddingTop: framed ? bandH : chromeInset,
+            // The rail hangs under the band (which, in the mac app, is where
+            // the traffic lights stand).
+            paddingTop: bandH,
             paddingBottom: RAIL_PAD_Y,
             transition: reduced ? "none" : `width ${RAIL_MOTION}`,
           }}
@@ -576,11 +573,12 @@ export default function Sidebar() {
             // Rail is railW wide (no +1 border column), so the full GAP closes
             // the distance to the card's left edge.
             marginLeft: SHELL_FRAME_GAP,
-            // Framed, the column is the sheet's left edge, so it is the
-            // sheet's surface and takes its rounded corner where it reaches
-            // the band.
-            ...(framed ? { background: "var(--color-surface-1)" } : {}),
-            borderTopLeftRadius: framed && dockTopInset === 0 ? FRAME_RADIUS : SHELL_FRAME_RADIUS,
+            // The column is the sheet's left edge, so it carries the sheet's
+            // hairline, and its rounded corner where it reaches the band.
+            background: "var(--color-surface-1)",
+            borderLeft: FRAME_LINE,
+            borderTop: dockTopInset === 0 ? FRAME_LINE : undefined,
+            borderTopLeftRadius: dockTopInset === 0 ? FRAME_RADIUS : SHELL_FRAME_RADIUS,
             borderBottomLeftRadius: SHELL_FRAME_RADIUS,
             transition: `width ${dur} ${ease}, margin-top ${dur} ${ease}`,
           }}
