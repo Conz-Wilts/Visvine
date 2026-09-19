@@ -40,7 +40,7 @@ export const HEAD_CELL_W = GLYPH_CELL_W;
 // The rail's two ends — the space at its head, you at its foot — are each a
 // band of one row, held between hairlines, and each is as tall as every other
 // row, so the column keeps one rhythm from head to foot.
-export const END_ROW_H = `${ROW_H}px`;
+export const END_ROW_H = GLYPH_CELL_W;
 // Every mark in the column sits in one 36px optical box — the space's square,
 // the Create disc, the avatar — centred in a ROW_H row, so each has the same
 // 8px of air above and below and the pitch is one steady 52px (Discord's 48 +
@@ -51,7 +51,7 @@ export const MARK_PX = 36;
 // as far from the line as they sit from the rail's sides: (cell − row) / 2 on
 // top of the row's own air. The ends then read as squares and every band has
 // the same margin all round, whatever width the rail is drawn at.
-export const BAND_PAD = `calc((${GLYPH_CELL_W} - ${ROW_H}px) / 2)`;
+export const BAND_PAD = "0px";
 // The nav icons ship at h-5 w-5 from the feature registry (they are also drawn
 // on the launcher cards at that size); the rail draws them larger, so each cell
 // scales its own svg rather than the registry carrying a second set.
@@ -73,7 +73,7 @@ export const ROW_CLASS =
 // the hairlines, so an edge-to-edge strip would float between them with a gap
 // above and below. An inset tile is a shape on its own and needs no line.
 const RAIL_TILE =
-  "before:absolute before:inset-x-2 before:inset-y-0.5 before:-z-10 before:rounded-[12px] before:transition-colors before:duration-150";
+  "before:absolute before:inset-1 before:-z-10 before:rounded-[12px] before:transition-colors before:duration-150";
 export const RAIL_ROW_CLASS = `relative z-10 flex w-full items-center transition-colors duration-150 ${RAIL_TILE} hover:before:bg-surface-3`;
 const ROW_DANGER_CLASS = `relative z-10 flex w-full items-center transition-colors duration-150 ${RAIL_TILE} hover:before:bg-red-50 hover:text-red-600`;
 export const ROW_TEXT = "text-[15px] whitespace-nowrap";
@@ -112,7 +112,6 @@ export function Row({
   active = false,
   badge,
   danger = false,
-  square = false,
   expanded,
   reduced,
   ...aria
@@ -125,15 +124,14 @@ export function Row({
   /** The row undoes something — it goes red under the pointer (Sign out). */
   danger?: boolean;
   badge?: ReactNode;
-  /** One of the rail's ends — the row is END_ROW_H tall. */
-  square?: boolean;
   expanded: boolean;
   /** prefers-reduced-motion — no fade, the name is simply there or not. */
   reduced: boolean;
   "aria-expanded"?: boolean;
   "aria-haspopup"?: "dialog" | "menu";
 }) {
-  const height = square ? END_ROW_H : ROW_H;
+  // Every rail row is a square cell, as tall as the rail is wide.
+  const height = END_ROW_H;
   const inner = (
     <>
       {/* Icon: the one glyph column, identical open or closed */}
