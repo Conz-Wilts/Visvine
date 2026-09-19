@@ -351,7 +351,7 @@ export default function Sidebar() {
               active={pathname === "/discover" || pathname.startsWith("/discover/")}
               // Drawn at the Create disc's size rather than a glyph's: the two
               // rows of the top group are a pair, and read as one.
-              icon={<CompassIcon className="!h-8 !w-8" strokeWidth={1.5} />}
+              icon={<CompassIcon className="!h-9 !w-9" strokeWidth={1.5} />}
             />
           </div>
           {!noSpace && (
@@ -378,10 +378,10 @@ export default function Sidebar() {
                 // you come here to press reads first. The glyph cell is a fixed
                 // width, so the disc grows inside it without moving the name.
                 <span
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-white"
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-white"
                   style={{ background: "var(--theme-accent-color, #78d870)" }}
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" viewBox="0 0 24 24">
+                  <svg className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" viewBox="0 0 24 24">
                     <path d="M12 5v14M5 12h14" />
                   </svg>
                 </span>
