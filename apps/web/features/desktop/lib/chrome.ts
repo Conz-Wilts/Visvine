@@ -13,17 +13,15 @@ import { SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
  * The mac app draws no title bar (apps/desktop/src/main.ts), so the traffic
  * lights stand in the band's left end, over the rail. The page says where
  * (the shell has no idea how wide this release draws its rail): 14pt in, and
- * down so their centre line is the band's middle; the group is 60pt wide, so
- * the rail is 14 + 60 + 14 = 88 and every glyph's centre (railW / 2) sits
- * under the middle light.
+ * down so their centre line is the band's middle. The group is 60pt wide and
+ * ends at 74, so a 72pt rail is the narrowest that still clears it.
  *
  * In full screen macOS hides the lights in the menu bar's drop-down; the band
  * stays, because it carries the page's tabs and actions, and the rail keeps its
  * width, so nothing beside it moves sideways.
  */
 const MAC_LIGHTS = { x: 14, y: SHELL_TOP_BAR_H / 2 - 7 };
-const MAC_LIGHTS_W = 60;
-const MAC_RAIL_W = MAC_LIGHTS.x * 2 + MAC_LIGHTS_W;
+const MAC_RAIL_W = 72;
 
 type DesktopChrome = {
   /** The part of the band the window's controls stand in. */
