@@ -31,15 +31,15 @@ export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
   const { bandH } = useDesktopChrome();
 
   return (
-    // paddingLeft 32: the first tab's label starts on the same line as the page content
-    // below it.
+    // paddingLeft: the first tab starts at the sheet's edge, its own px-4
+    // holding the label off it; the actions run to the window's right edge.
     // In the desktop shell the band IS the title bar it replaced, so the bare
     // parts of it drag the window; everything on it opts back out.
     <div
-      className="flex shrink-0 items-center gap-4 pr-4"
+      className="flex shrink-0 items-center gap-4 pr-1"
       style={{
         height: bandH,
-        paddingLeft: leftInset + 32,
+        paddingLeft: leftInset,
         transition: "padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
         WebkitAppRegion: "drag",
       } as React.CSSProperties}

@@ -52,7 +52,8 @@ export default function PaneTopScrollbarMask({
   // covers the clearance above the bar as well as the bar itself, and the track
   // runs through both.
   const { bandH } = useDesktopChrome();
-  const top = bandH + SHELL_FRAME_GAP;
+  // +1: below the sheet's top hairline (FRAME_LINE), which it would paint over.
+  const top = bandH + SHELL_FRAME_GAP + 1;
   const resolvedHeight = bottom != null ? Math.max(0, bottom - top) : height + SHELL_PANE_TOP;
 
   // Set on <main> itself so Chromium re-resolves the scrollbar style when it
