@@ -55,15 +55,13 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   const isPersonalSpace = spaceId?.startsWith(PERSONAL_ID_PREFIX) ?? false
   const { entities, entityByPath } = useDirectoryEntities()
 
-  const [aiConfigured, setAiConfigured] = useState(false)
   const [access, setAccess] = useState<PathAccessResponse | null>(null)
   // Which note each answer is FOR, rather than a bare "answered" flag. The panel
-  // still holds one skeleton until note + access + config are all in on first
+  // still holds one skeleton until note + access are both in on first
   // load (same paint-once contract as EntityContextPanel), but on a switch it
   // needs to distinguish "answered for the note being left" from "answered for
   // the note being opened" — see `shown`.
   const [accessPath, setAccessPath] = useState<string | null>(null)
-  const [configDone, setConfigDone] = useState(false)
   // The note currently ON SCREEN. It deliberately lags `path` while the next note
   // loads instead of being cleared: NoteEditor portals its format toolbar up into
   // the tab bar (TabBarSlotContext), so dropping to a skeleton unmounts the editor,
@@ -91,15 +89,6 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   const loadSeq = useRef(0)
 
   const gatedOut = !isPersonalSpace && access !== null && access.gated
-
-  // swrFetch delivers a cached value synchronously, so on a re-open these
-  // "done" gates flip in the same render pass and the skeleton never flashes.
-  useEffect(() => {
-    swrFetch(contextKeys.config(), () => notesApi.config(), (c) => {
-      setAiConfigured(c.aiConfigured)
-      setConfigDone(true)
-    }).catch(() => setConfigDone(true))
-  }, [])
 
   // Access is held across a note switch for the same reason `shown` is: canWrite
   // gates the toolbar's format controls, so clearing it mid-switch would blank
@@ -309,7 +298,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   // Everything answered FOR THE PATH BEING OPENED. `shown` may still be the note
   // being left when this is false; that lag is what keeps the toolbar up.
   const shownFresh = shown?.path === path && shown?.spaceId === spaceId
-  const dataReady = shownFresh && (isPersonalSpace || accessPath === path) && configDone
+  const dataReady = shownFresh && (isPersonalSpace || accessPath === path)
 
   // "Nothing left to wait for" — the note being opened has fully landed, or we've
   // reached a terminal branch (gated out) that renders its own final surface. The
@@ -483,7 +472,6 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         initialContent={shownRead.content}
         heldKeys={shownRead.held}
         canEdit={canWrite}
-        aiConfigured={aiConfigured}
         mode={mode}
         onModeChange={onModeChange}
         references={shownReferences}

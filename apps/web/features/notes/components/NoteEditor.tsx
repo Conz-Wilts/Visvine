@@ -27,7 +27,6 @@ import {
   ItalicIcon,
   ListIcon,
   ListOrderedIcon,
-  SparklesIcon,
   TableIcon,
   TextQuoteIcon,
   XIcon,
@@ -49,7 +48,6 @@ import {
   stripDuplicateTitleHeading,
   type IndexChild,
 } from '@/lib/notes/shared/indexNote'
-import { notesApi } from '../lib/notesApi'
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext'
 import { TAB_MOTION_MS } from '@/components/ui/tabMotion'
 import type { NoteFrontmatter, NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
@@ -75,7 +73,6 @@ interface NoteEditorProps {
    *  every write either way; this is the surface saying so. */
   heldKeys?: readonly string[]
   canEdit: boolean
-  aiConfigured: boolean
   // Edit/Raw mode — lifted to the surface; the toolbar's NoteModeToggle drives
   // it through onModeChange.
   mode: 'wysiwyg' | 'raw'
@@ -178,7 +175,6 @@ export function NoteEditor({
   initialContent,
   heldKeys = NO_HELD_KEYS,
   canEdit,
-  aiConfigured,
   mode,
   onModeChange,
   references,
@@ -204,7 +200,6 @@ export function NoteEditor({
   // Viewport rect of the caret when `[[` opened the picker, so it can dock just
   // below where the user is typing rather than as a centered modal.
   const [linkAnchor, setLinkAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null)
-  const [refactoring, setRefactoring] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Embedded only: the tab bar's attached region is our toolbar's home, and it
   // opened when the tab did (see TabBarSlotContext).
@@ -562,25 +557,6 @@ export function NoteEditor({
     flush()
   }, [editor, canEdit, queueSave, flush])
 
-  const refactor = useCallback(async () => {
-    if (!editor || refactoring) return
-    setError(null)
-    setRefactoring(true)
-    try {
-      // `{ result }`, not a bare string — concatenating the envelope used to put
-      // "[object Object]" through the editor and into the save.
-      const { result } = await notesApi.refactor('note', getMarkdown(editor))
-      editor.commands.setContent(result)
-      pendingRef.current = composeContent(prefixRef.current, result, childrenBlockRef.current)
-      originRef.current = 'ai-refactor'
-      flush()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setRefactoring(false)
-    }
-  }, [editor, refactoring, flush])
-
   // The title shown above the body: index meta, else the note's own frontmatter
   // (parsed from content — so notes outside this context's index still title).
   // Entity context notes normally never open here (the workspace routes them to
@@ -635,31 +611,11 @@ export function NoteEditor({
         </ToolbarButton>
       </>
     ) : null
-  // Refactor is a filled button pushed to the far right, matching the reference
-  // layout. Same rule as formatControls: no `editor` in the presence test.
-  const refactorButton =
-    canEdit && trayMode === 'wysiwyg' && aiConfigured ? (
-      <button
-        type="button"
-        onClick={refactor}
-        disabled={refactoring || !editor}
-        className="flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-dark-green px-2.5 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-      >
-        <SparklesIcon className="h-3.5 w-3.5" />
-        {refactoring ? 'Refactoring…' : 'Refactor'}
-      </button>
-    ) : null
   // Floating (workspace) layout wraps the controls in a hairline tray; the
   // embedded profile bar renders them flat, attached under the tabs.
   const formatPill = formatControls ? (
     <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-border-subtle bg-surface-1 px-1.5 py-1">
       {formatControls}
-      {refactorButton && (
-        <>
-          <Divider />
-          {refactorButton}
-        </>
-      )}
     </div>
   ) : null
 
@@ -748,7 +704,7 @@ export function NoteEditor({
 
           No host means no toolbar: `embedded` is only used by EntityContextPanel
           under the profile pages, which provide one. */}
-      {embedded && toolbarHost && (formatControls || refactorButton || onModeChange || toolbarTrailSlot) && createPortal(
+      {embedded && toolbarHost && (formatControls || onModeChange || toolbarTrailSlot) && createPortal(
         /* One content-width card, centred by the host and floating clear of the
            nav line: a rounded rectangle on all four sides with its own border
            and shadow, separated from the tab row by the mt-4 gap the host's
@@ -758,14 +714,13 @@ export function NoteEditor({
            than growing it. */
         <div className="relative mt-4 flex h-11 max-w-full items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-3 shadow-strip">
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto">{formatControls}</div>
-          {/* Trailing group: Refactor + the Editor/Raw toggle + Share. The
+          {/* Trailing group: the Editor/Raw toggle + Share. The
               toggle renders regardless of canEdit/mode (unlike formatControls,
               null in raw) so raw mode can always switch back and read-only
               viewers can peek raw. */}
-          {(refactorButton || onModeChange || toolbarTrailSlot) && formatControls && <Divider />}
-          {(refactorButton || onModeChange || toolbarTrailSlot) && (
+          {(onModeChange || toolbarTrailSlot) && formatControls && <Divider />}
+          {(onModeChange || toolbarTrailSlot) && (
             <div className="flex shrink-0 items-center gap-2">
-              {refactorButton}
               {onModeChange && <NoteModeToggle value={mode} onChange={onModeChange} size="sm" />}
               {toolbarTrailSlot}
             </div>

@@ -124,12 +124,10 @@ export function EntityContextPanel({
   // Relative to the folder ('sams-comms.md'); null on the entity's own note.
   const subPath = path && folder && path !== entityPath ? path.slice(folder.length + 1) : null
 
-  const [aiConfigured, setAiConfigured] = useState(false)
   const [access, setAccess] = useState<PathAccessResponse | null>(null)
   // The toolbar and the note text are one visual unit, but they read different
   // fetches: the text needs only the note, while the format controls need
-  // `canWrite` (per-path access) and the Refactor button needs `aiConfigured`
-  // (config). Whichever lands second used to pop in after the other. These track
+  // `canWrite` (per-path access). Whichever lands second used to pop in after the other. These track
   // "answered" — NOT "answered with a value" — so the panel can hold one skeleton
   // until all of it is in and paint once. A failed fetch resolves them too, or
   // the skeleton would hang forever on the error path (both effects swallow into
@@ -138,7 +136,6 @@ export function EntityContextPanel({
   // the panel has to tell "answered for the note being left" apart from "answered
   // for the note being opened". See `shown`.
   const [accessPath, setAccessPath] = useState<string | null>(null)
-  const [configDone, setConfigDone] = useState(false)
   // The note currently ON SCREEN, which lags `path` while the next one loads rather
   // than being cleared. NoteEditor portals its format toolbar up into the tab bar
   // (TabBarSlotContext), so tearing the editor down for the length of a fetch
@@ -180,15 +177,6 @@ export function EntityContextPanel({
   // never fires for an entity that simply has no note yet — that case keeps its
   // "no context yet" empty state.
   const deniedPath = !isPersonalSpace && access !== null && !access.gated && !access.canRead
-
-  // swrFetch delivers a cached value synchronously, so on a re-open these
-  // "done" gates flip in the same render pass and the skeleton never flashes.
-  useEffect(() => {
-    swrFetch(contextKeys.config(), () => notesApi.config(), (c) => {
-      setAiConfigured(c.aiConfigured)
-      setConfigDone(true)
-    }).catch(() => setConfigDone(true))
-  }, [])
 
   // Access is held across a switch for the same reason `shown` is: canWrite gates
   // the toolbar's format controls, so clearing it would blank those buttons even
@@ -516,13 +504,12 @@ export function EntityContextPanel({
 
   // Every answer the editor's first paint depends on: the note itself, the
   // per-path access behind canWrite (skipped in personal spaces, which are
-  // always writable), and the config behind the Refactor button. They're
-  // separate requests, so gating the whole surface on all three is what keeps
-  // the text, the toolbar and the tags from landing on three different commits.
+  // always writable). They're separate requests, so gating the whole surface on
+  // both is what keeps the text and the toolbar from landing on different commits.
   // Everything answered FOR THE PATH BEING OPENED. `shown` may still be the note
   // being left when this is false; that lag is what keeps the toolbar up.
   const shownFresh = shown?.path === path && shown?.spaceId === spaceId
-  const dataReady = shownFresh && (isPersonalSpace || accessPath === path) && configDone
+  const dataReady = shownFresh && (isPersonalSpace || accessPath === path)
 
   // "Nothing left to wait for": the note being opened has landed, or we've reached
   // a terminal branch that renders its own final surface (gated/denied, or a node
@@ -781,7 +768,6 @@ export function EntityContextPanel({
             initialContent={shownRead?.status === 'ok' ? shownRead.content : stubContent}
             heldKeys={shownRead?.status === 'ok' ? shownRead.held : undefined}
             canEdit={canWrite}
-            aiConfigured={aiConfigured}
             mode={mode}
             onModeChange={onModeChange}
             references={shownFresh ? references : null}

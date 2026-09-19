@@ -207,7 +207,6 @@ export function TrashPreviewPanel({ id, mode = 'wysiwyg' }: { id: string; mode?:
         notes={[]}
         initialContent={note.content}
         canEdit={false}
-        aiConfigured={false}
         mode={mode}
         references={null}
         onSave={noop}

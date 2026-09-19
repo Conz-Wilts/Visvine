@@ -44,7 +44,6 @@ export const primeContextCache = primeRequestCache
 // Shared key builders — the panel and the prefetch must agree exactly, or they
 // fetch twice and the cache is pure overhead.
 export const contextKeys = {
-  config: () => 'notes:config',
   access: (c: string, path: string) => `notes:access:${c}:${path}`,
   read: (c: string, path: string) => `notes:read:${c}:${path}`,
   list: (c: string) => `notes:list:${c}`,
@@ -103,7 +102,6 @@ export function readNote(spaceId: string, path: string): Promise<NoteRead> {
  *  panel mounts, and swrFetch serves them synchronously on that first paint —
  *  no skeleton between the tree click and the note. */
 export function prefetchNoteContext(spaceId: string, path: string) {
-  void cachedFetch(contextKeys.config(), () => notesApi.config()).catch(() => {})
   void cachedFetch(contextKeys.access(spaceId, path), () => notesApi.getAccess(spaceId, path)).catch(() => {})
   void cachedFetch(contextKeys.list(spaceId), () => notesApi.list(spaceId)).catch(() => {})
   void cachedFetch(contextKeys.tree(spaceId), () => notesApi.tree(spaceId)).catch(() => {})

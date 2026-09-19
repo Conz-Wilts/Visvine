@@ -781,7 +781,6 @@ export function DraftContextPanel({
           notes={[]}
           initialContent={bodyRef.current}
           canEdit
-          aiConfigured={false}
           mode={mode}
           references={null}
           entities={entities}

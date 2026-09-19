@@ -126,7 +126,6 @@ const sendJson = <T,>(url: string, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', 
   fetchJsonBody<T>(url, method, body)
 
 export const notesApi = {
-  config: () => getJson<{ aiConfigured: boolean }>('/api/notes/config'),
 
   /** Context display settings — currently the context's display name. */
   getContextSettings: (c: string) =>
@@ -218,8 +217,6 @@ export const notesApi = {
   emptyTrash: (c: string) =>
     sendJson<{ ok: true }>('/api/notes/trash/empty', 'POST', { spaceId: c }),
 
-  refactor: (mode: 'note' | 'selection', text: string, instruction?: string) =>
-    sendJson<{ result: string }>('/api/notes/ai/refactor', 'POST', { mode, text, instruction }),
   reorganize: (c: string) =>
     sendJson<{ plan: ReorganizePlan }>('/api/notes/ai/reorganize', 'POST', {
       spaceId: c,
