@@ -42,6 +42,18 @@ export const HEAD_CELL_W = GLYPH_CELL_W;
 // as the rail is wide inside its right seam. The rail's own border takes a
 // pixel of its width, hence the one off.
 export const END_ROW_H = `calc(${GLYPH_CELL_W} - 1px)`;
+// The space's square at the rail's head, as a share of the rail's width —
+// Slack's workspace icon is ~54% of its rail: 42 in the browser, 48 in the
+// mac app's wider rail.
+const HEAD_SQUARE_SHARE = 0.55;
+export function headSquareSize(railW: number): number {
+  return Math.round(railW * HEAD_SQUARE_SHARE);
+}
+/** The room the head cell leaves above its square (the square is centred in
+ *  an END_ROW_H-tall cell, so the rail can place the square's top exactly). */
+export function headSquareInset(railW: number): number {
+  return (railW - 1 - headSquareSize(railW)) / 2;
+}
 // The nav icons ship at h-5 w-5 from the feature registry (they are also drawn
 // on the launcher cards at that size); the rail draws them larger, so each cell
 // scales its own svg rather than the registry carrying a second set.

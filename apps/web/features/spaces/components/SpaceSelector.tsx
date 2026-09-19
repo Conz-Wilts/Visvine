@@ -8,8 +8,9 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { SettingsIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
+import { useDesktopChrome } from '@/features/desktop/lib/chrome';
 import { spaceMark } from '@/lib/spaces/subspaces';
-import { END_ROW_H, HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
+import { END_ROW_H, HEAD_CELL_W, headSquareSize, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
 
 /**
  * The space band — the rail's first rows (Sidebar). The space sits at the head
@@ -34,6 +35,7 @@ import { END_ROW_H, HEAD_CELL_W, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/featu
 export default function SpaceSelector() {
   const { currentSpace, spaces, isAdmin } = useSpace();
   const { expanded, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
+  const square = headSquareSize(useDesktopChrome().railW);
   // The switcher and Create new share the rail's edge, one at a time.
   const { close: closeCreate } = useCreateModal();
   const { session } = useAuth();
@@ -151,9 +153,11 @@ export default function SpaceSelector() {
         >
           <span className="flex shrink-0 items-center justify-center" style={{ width: HEAD_CELL_W, height: END_ROW_H }}>
             {currentSpace && mark ? (
-              <SpaceAvatar name={mark.name} imageUrl={mark.imageUrl} size="md" rounded="rounded-[8px]" className="!w-10 !h-10 !text-sm" />
+              <span className="flex shrink-0" style={{ width: square, height: square }}>
+                <SpaceAvatar name={mark.name} imageUrl={mark.imageUrl} size="md" rounded="rounded-[10px]" className="!w-full !h-full w-full h-full !text-base" />
+              </span>
             ) : (
-              <div className="w-10 h-10 rounded-[8px] bg-surface-3 flex-shrink-0" />
+              <div className="rounded-[10px] bg-surface-3 flex-shrink-0" style={{ width: square, height: square }} />
             )}
           </span>
           {/* The name stays mounted so it can FADE with the rail's other labels
