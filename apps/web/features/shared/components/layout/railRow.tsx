@@ -58,12 +58,9 @@ export function headSquareInset(railW: number): number {
 // on the launcher cards at that size); the rail draws them larger, so each cell
 // scales its own svg rather than the registry carrying a second set.
 //
-// 31px, not 22: the two rows of the top group are drawn at 40 (the Create disc,
-// and the compass sized to match it), and a 22px glyph under them read as a
-// different, smaller family rather than the same column continuing. This sits
-// close enough to belong to them while staying plainly subordinate — the row
-// you come here to press is still the one drawn largest.
-const GLYPH = "[&>svg]:h-[31px] [&>svg]:w-[31px]";
+// 40px: the same size as the Create disc, the compass, the space square at the
+// head and the avatar at the foot, so the whole column reads as one family.
+const GLYPH = "[&>svg]:h-10 [&>svg]:w-10";
 // One row shape for every entry — Create, each tool, More, each account action.
 // At rest a row is bare: no border, no fill, just the glyph (and the label once
 // the rail is open). The block appears under the pointer only — square-cornered,
