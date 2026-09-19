@@ -42,7 +42,6 @@ const SHARED_OWNER_KEY = 'shared'
 import {
   agentActivationPath,
   agentBriefPath,
-  nextOccurrence,
   scheduleHash,
   withActiveFalse,
   type AgentActivation,
@@ -52,6 +51,7 @@ import {
   type AgentBrief,
 } from './config'
 import { findAgentActivation, findAgentBrief, findOwnAgentBrief } from './briefs'
+import { nextFire } from './shared/fanout'
 
 import { fireNoteTriggers, hasPendingEvents } from './events'
 
@@ -152,7 +152,11 @@ export async function syncAgentState(
   // Active = the note says so AND it has some way to fire (a clock or a trigger).
   const active = !!(activation?.active && (activation.schedule || activation.on) && brief)
   const tz = await effectiveTimezone(spaceId, activation?.timezone ?? null)
-  let nextRunAt = active && activation?.schedule ? nextOccurrence(activation.schedule, now, tz) : null
+  // Who it runs for is the brief's `for:` block; people with a time of their
+  // own pull the next fire forward to theirs (shared/fanout.ts).
+  const parsedBrief = brief ? parseAgentBrief(parseFrontmatter(brief.content), splitFrontmatter(brief.content).body) : null
+  const runsFor = parsedBrief?.ok && !existing?.sharedFrom ? parsedBrief.brief.runsFor : []
+  let nextRunAt = active && activation?.schedule ? nextFire(activation.schedule, tz, runsFor, now) : null
   // Mail already waiting (arrived while inactive, or just before this
   // re-derive) keeps its debounce deadline rather than being pushed out to the
   // next clock occurrence.
@@ -160,7 +164,7 @@ export async function syncAgentState(
     const soon = new Date(now.getTime() + activation.debounceMs)
     if (!nextRunAt || soon < nextRunAt) nextRunAt = soon
   }
-  const hash = activation ? scheduleHash(activation, tz) : null
+  const hash = activation ? scheduleHash(activation, tz, runsFor) : null
   const triggersJson = activation?.on ? { context: activation.on.context, webhook: activation.on.webhook } : Prisma.DbNull
   const debounceMs = activation?.debounceMs ?? DEFAULT_DEBOUNCE_MS
 
@@ -201,10 +205,20 @@ export async function syncAgentState(
   // A house brief fans out to its run-in copies; a copy fans out to nothing
   // (a room holds no rooms, so this finds none and costs one query).
   if (!existing?.sharedFrom) {
-    const parsed = brief ? parseAgentBrief(parseFrontmatter(brief.content), splitFrontmatter(brief.content).body) : null
-    await syncSharedCopies(spaceId, name, parsed?.ok ? parsed.brief : null)
+    await syncSharedCopies(spaceId, name, parsedBrief?.ok ? parsedBrief.brief : null)
+    // `agent_subscriptions` is an index of the `for:` block — what the roster
+    // and account deletion query. An unreadable brief leaves it as it was.
+    if (!brief || parsedBrief?.ok) await indexRunsFor(spaceId, name, runsFor.map((e) => e.userId))
   }
   return { active, nextRunAt, invalid }
+}
+
+/** Make the subscription rows say what the brief's `for:` block says. */
+async function indexRunsFor(spaceId: string, name: string, userIds: string[]): Promise<void> {
+  await prisma.agentSubscription.deleteMany({ where: { spaceId, name, userId: { notIn: userIds } } })
+  if (userIds.length > 0) {
+    await prisma.agentSubscription.createMany({ data: userIds.map((userId) => ({ spaceId, name, userId })), skipDuplicates: true })
+  }
 }
 
 /**

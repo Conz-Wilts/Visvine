@@ -8,12 +8,18 @@ import { Alert, Skeleton } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson } from '@/lib/fetchJson';
+import { useAuth } from '@/features/auth/contexts/AuthContext';
+import { SharePanel } from '@/features/notes/components/SharePanel';
+import { useShareAction } from '@/features/notes/components/useShareAction';
+import { cachedFetch } from '@/features/shared/lib/requestCache';
+import { agentBriefPath } from '@/lib/agents/config';
 import type { AgentReadiness, AgentSubscriber, AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ActivateAgentDialog from '@/features/agents/components/ActivateAgentDialog';
 import AgentSettingsDialog, { type SettingsTab } from '@/features/agents/components/AgentSettingsDialog';
-import AgentSetupBar from '@/features/agents/components/AgentSetupBar';
-import AgentSidebar from '@/features/agents/components/AgentSidebar';
-import MessageAgent from '@/features/agents/components/MessageAgent';
+import AgentNeeds from '@/features/agents/components/AgentNeeds';
+import ConnectorReadinessNotices from '@/features/agents/components/ConnectorReadinessNotices';
+import RunPicker from '@/features/agents/components/RunPicker';
+import RunsForSection from '@/features/agents/components/RunsForSection';
 import RunPane from '@/features/agents/components/RunPane';
 import StatusDot from '@/features/agents/components/StatusDot';
 import LocalRunPane from '@/features/agents/components/LocalRunPane';
@@ -24,15 +30,15 @@ import { LOCAL_RUNTIMES, localRuntimeOf } from '@/lib/agents/local';
 /**
  * The first tab of an agent's node page: what the note alone can't say.
  *
- * A header and two columns, one subject. The header is the agent in a
- * glance: its name and what it does on the left, what it runs on and reaches
- * on the right as marks, and under them one line for how it is with the
- * switch and Run beside it. The wide column is THE RUN — the steps the agent
- * walked, live or read back — because that is what a person opens this page
- * to see. The narrow one is when it fires, who it fires for, and what it did
- * before. Everything you configure or look into rather than watch — model,
- * tools, connectors, the cap, memory, skills, the machine's own screen — is
- * behind the gear in the header, so the page stays the run.
+ * One column, one subject. The name with its switch, Run, Share and the gear;
+ * one line for how it is; then THE RUN — a short list of what the agent set
+ * out to do, each opening onto the calls it made — because that is what a
+ * person opens this page to see. Which run it is, and the way to an older
+ * one, is the word at the end of the run's own line.
+ *
+ * Who it runs for is part of sharing it, so it lives in Share. Everything you
+ * configure or look into rather than watch — model, tools, connectors, the
+ * cap, memory, skills, the machine's own screen — is behind the gear.
  *
  * The brief itself is the note, on the Context and Raw tabs beside this one.
  */
@@ -71,6 +77,10 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   // A run on the member's own plan, in flight on this machine — keyed by the
   // press that started it, so each Run is its own pane.
   const [localRun, setLocalRun] = useState<number | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [models, setModels] = useState<{ ref: string; label: string }[]>([]);
+  const { session } = useAuth();
+  const share = useShareAction({ onOpen: () => setSharing(true), title: 'Who it is shared with, and runs for' });
 
   // The run being watched rides the URL beside `?tab=`, so a `watch` href from
   // an action or a teammate opens exactly the run it names, and
@@ -117,6 +127,24 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     return () => clearInterval(t);
   }, [data, reload]);
 
+  // The models a person may pick for their own runs: read when Share opens.
+  useEffect(() => {
+    if (!sharing || !spaceId) return;
+    let live = true;
+    void cachedFetch<{ models: { ref: string | null; label: string; problem: string | null }[] }>(`agents:options:${spaceId}`, () => fetchJson(`/api/spaces/${spaceId}/agents/options`))
+      .then((o) => {
+        if (!live) return;
+        setModels([
+          ...o.models.filter((m) => m.ref && !m.problem).map((m) => ({ ref: m.ref!, label: m.label })),
+          ...LOCAL_RUNTIMES.map((r) => ({ ref: `local/${r.id}`, label: r.label })),
+        ]);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [sharing, spaceId]);
+
   if (spaceLoading || loading) return <Skeleton className="h-40 w-full rounded-lg" />;
   if (error || !data) return <Alert>{error ?? 'Not found'}</Alert>;
 
@@ -133,11 +161,10 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const desktop = localRuntime ? desktopRuntimes() : null;
   const runnable = localRuntime
     ? canManage && !agent.invalid && desktop !== null && localRun === null
-    : canManage && agent.activation.active && agent.state.status !== 'running' && !agent.invalid;
+    : canManage && agent.state.status !== 'running' && !agent.invalid;
   // What the run column shows: the run in flight, else the one the URL names,
   // else the latest. A live run always wins — watching it is why you are here.
   const shownRun = liveRun ?? runs.find((r) => r.id === runParam) ?? runs[0] ?? null;
-  const maxTurns = /^max_turns:\s*(\d+)/m.exec(agent.brief)?.[1];
   const editBrief = () => router.replace(`/directory/${encodeURIComponent(nodeId)}?tab=context`);
 
   const patchActive = async (active: boolean) => {
@@ -152,23 +179,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
       await reload();
     } catch (e) {
       setNotice(e instanceof Error ? e.message : 'Could not turn off');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const subscribe = async (subscribed: boolean, userId?: string) => {
-    if (!spaceId) return;
-    setBusy(true);
-    setNotice(null);
-    try {
-      await fetchJson(`/api/spaces/${spaceId}/agents/${encodeURIComponent(name)}/subscribers`, {
-        method: subscribed ? 'POST' : 'DELETE',
-        ...(userId ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userId }) } : {}),
-      });
-      await reload();
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : 'Could not update who it runs for');
     } finally {
       setBusy(false);
     }
@@ -211,81 +221,76 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     }
   };
 
+  // Who a run acted for, when it was not the agent's own identity.
+  const nameOf = new Map(agent.subscribers.map((sub) => [sub.userId, sub.name]));
+  const whoOf = (r: SerializedRun) => (r.runAsUserId && r.runAsUserId !== agent.readiness.runAsUserId ? (nameOf.get(r.runAsUserId) ?? null) : null);
+  const others = agent.subscribers.filter((sub) => sub.userId !== agent.readiness.runAsUserId).length;
+  const needs = { ...agent.readiness.needs, needs: agent.readiness.needs.needs.filter((n) => n.status !== 'no_model') };
+  const statusText = [line.text, others > 0 ? `runs for ${others + 1}` : null].filter(Boolean).join(' · ');
+  const iconButton =
+    'grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted hover:bg-surface-2 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40';
+
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 pb-16">
-      {/* The agent in a glance: name and purpose on the left, what it runs on
-          and reaches on the right, then one line for how it is with the two
-          controls that change that. */}
-      <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-[20px] font-semibold leading-tight text-text-primary">{agent.title || agent.name}</h1>
-            {agent.description && <p className="mt-1 text-[13px] text-text-muted">{agent.description}</p>}
-          </div>
-          <div className="flex items-center gap-2">
-            <AgentSetupBar agent={agent} />
-            <button
-              type="button"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border-subtle bg-surface-1 text-text-muted hover:bg-surface-2 hover:text-text-primary"
-              aria-label="Settings"
-              title="Settings"
-              onClick={() => setPanel(canManage ? 'settings' : 'memory')}
-            >
-              <SettingsIcon className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <StatusDot tone={line.tone} />
-          <p
-            className={`min-w-0 flex-1 truncate text-[13px] ${line.problem ? (line.tone === 'bad' ? 'text-red-600' : 'text-amber-700') : 'text-text-secondary'}`}
-          >
-            {line.text}
-          </p>
-          {!localRuntime && <Toggle
-            checked={agent.activation.active}
-            disabled={!canManage || busy || !!agent.invalid}
-            aria-label={canManage ? (agent.activation.active ? 'Turn off' : 'Turn on') : 'Someone who can edit the brief turns it on'}
-            onChange={(next) => (next ? setActivating(true) : patchActive(false))}
-          />}
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 pb-16">
+      {share.slot}
+      <header className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <h1 className="min-w-0 flex-1 truncate text-[20px] font-semibold leading-tight text-text-primary">{agent.title || agent.name}</h1>
+          {!localRuntime && (
+            <Toggle
+              checked={agent.activation.active}
+              disabled={!canManage || busy || !!agent.invalid}
+              aria-label={agent.activation.active ? 'Turn off' : 'Turn on'}
+              onChange={(next) => (next ? setActivating(true) : patchActive(false))}
+            />
+          )}
           {canManage && (
-            <button
-              type="button"
-              className="inline-flex items-center gap-1.5 rounded-md border border-border-subtle px-2.5 py-1 text-[12px] font-semibold text-text-secondary hover:bg-surface-2 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={!runnable || busy}
-              onClick={runNow}
-              title={localRuntime ? (desktop ? 'Run on your plan, from this machine' : 'Runs from the desktop app') : agent.activation.active ? 'Run now' : 'Turn it on first'}
-            >
-              <PlayIcon className="h-3 w-3" /> Run
+            <button type="button" className={iconButton} disabled={!runnable || busy} onClick={runNow} aria-label="Run" title="Run">
+              <PlayIcon className="h-4 w-4" />
             </button>
           )}
+          {share.fallback}
+          <button type="button" className={iconButton} aria-label="Settings" title="Settings" onClick={() => setPanel(canManage ? 'settings' : 'memory')}>
+            <SettingsIcon className="h-4 w-4" />
+          </button>
         </div>
-        {localRuntime && (
-          <p className="pl-5 text-[13px] text-text-muted">
-            Runs on {localLabel}, from this machine, when you press Run. Usage counts against that plan, not the space’s key.
-            {!desktop && ' Open Visvine in the desktop app to run it.'}
-          </p>
-        )}
+        <div className="flex items-center gap-2.5">
+          <StatusDot tone={line.tone} />
+          {canManage && !localRuntime && !line.problem ? (
+            <button type="button" className="min-w-0 truncate text-left text-[13px] text-text-secondary hover:text-text-primary" onClick={() => setActivating(true)}>
+              {statusText}
+            </button>
+          ) : (
+            <p className={`min-w-0 truncate text-[13px] ${line.problem ? (line.tone === 'bad' ? 'text-red-600' : 'text-amber-700') : 'text-text-secondary'}`} title={line.text}>
+              {statusText}
+            </p>
+          )}
+        </div>
+        {blocker && <p className="pl-[18px] text-[13px] text-amber-700">{blocker.text}</p>}
+        <div className="pl-[18px] empty:hidden">
+          <AgentNeeds needs={needs} isAdmin={isAdmin} onEditSettings={() => setPanel('settings')} />
+          {agent.readiness.runAs && <ConnectorReadinessNotices items={agent.readiness.runAs} mine={false} who={agent.readiness.runAsName} isAdmin={isAdmin} />}
+        </div>
         {notice && (
-          <Alert inline variant="warning" className="ml-5">
+          <Alert inline variant="warning" className="ml-[18px]">
             {notice}
           </Alert>
         )}
         {agent.invalid && (
-          <Alert inline className="ml-5">
+          <Alert inline className="ml-[18px]">
             {agent.invalid}
           </Alert>
         )}
         {agent.activation.invalid && (
-          <Alert inline className="ml-5">
+          <Alert inline className="ml-[18px]">
             {agent.activation.invalid}
           </Alert>
         )}
       </header>
 
-      <div className="grid gap-8 border-t border-border-subtle pt-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
-        <main className="min-w-0">
-          {localRun !== null && spaceId ? (
+      {(localRun !== null || shownRun) && spaceId && (
+        <main className="min-w-0 border-t border-border-subtle pt-5">
+          {localRun !== null ? (
             <LocalRunPane
               key={localRun}
               spaceId={spaceId}
@@ -301,61 +306,44 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
                 void reload();
               }}
             />
-          ) : shownRun && spaceId ? (
+          ) : shownRun ? (
             <RunPane
               key={shownRun.id}
               spaceId={spaceId}
               agentName={name}
               runId={shownRun.id}
-              maxTurns={maxTurns ? Number(maxTurns) : null}
+              who={whoOf(shownRun)}
+              picker={<RunPicker runs={runs} shownRunId={shownRun.id} whoOf={whoOf} onSelect={(id) => selectRun(id === liveRun?.id ? null : id)} />}
               onFinished={() => void reload()}
-              onEditBrief={canManage ? editBrief : undefined}
             />
-          ) : (
-            <p className="text-[13px] text-text-muted">
-              No runs yet.{' '}
-              {runnable
-                ? 'Press Run, or ask it something below.'
-                : localRuntime
-                  ? 'Its runs appear here.'
-                  : agent.activation.active
-                  ? 'The first one appears here when it fires.'
-                  : 'Turn it on and its runs appear here.'}
-            </p>
-          )}
-
-          {/* The inline door. Under the line, because what you say starts a
-              run that appears right above it — and its answer is the run's
-              summary. Not for a brief on a member's own plan: that runs
-              from the desktop app. */}
-          {spaceId && !localRuntime && canManage && (
-            <div className="mt-6">
-              <MessageAgent
-                spaceId={spaceId}
-                agentName={name}
-                disabled={!agent.activation.active || !!agent.invalid}
-                onStarted={selectRun}
-                onSettled={() => void reload()}
-              />
-            </div>
-          )}
+          ) : null}
         </main>
+      )}
 
-        <AgentSidebar
-          agent={agent}
-          runs={runs}
-          shownRunId={shownRun?.id ?? null}
-          isAdmin={isAdmin}
-          canManage={canManage}
-          busy={busy}
-          blocker={blocker}
-          onSelectRun={(id) => selectRun(id === liveRun?.id ? null : id)}
-          onSchedule={() => setActivating(true)}
-          onSubscribe={subscribe}
-          onOpenSettings={() => setPanel('settings')}
-          onEditBrief={editBrief}
+      {sharing && spaceId && (
+        <SharePanel
+          spaceId={spaceId}
+          path={agentBriefPath(name)}
+          kind="note"
+          title={agent.title || agent.name}
+          onClose={() => setSharing(false)}
+          extra={
+            <RunsForSection
+              spaceId={spaceId}
+              agentName={name}
+              people={agent.subscribers.filter((sub) => sub.userId !== agent.readiness.runAsUserId)}
+              viewerId={session?.user.id ?? ''}
+              viewerName={session?.user.name ?? 'You'}
+              viewerImage={session?.user.image ?? null}
+              viewerIsAuthor={agent.readiness.viewerIsRunAs}
+              canManage={canManage}
+              models={models}
+              daily={agent.activation.schedule?.kind === 'daily' || agent.activation.schedule?.kind === 'weekly'}
+              onChanged={() => void reload()}
+            />
+          }
         />
-      </div>
+      )}
 
       {panel && spaceId && (
         <AgentSettingsDialog

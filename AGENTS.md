@@ -460,15 +460,26 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   connector's perimeter; the machine never holds plaintext at all. The
   preamble says the ladder — `fetch_url`, then `run_connector`, then
   `run_command`, then `open_page` — cheapest door that does the job.
-- **One agent can run FOR many people.** Identity is per RUN
-  (`agent_runs.run_as_user_id`). A scheduled fire runs as the brief's author (or
-  `runs_as`), then once per **subscriber** (`agent_subscriptions`, self-service
-  for anyone who can read the brief, capped by `MAX_FANOUT_SUBSCRIBERS`), each
-  under that person's principal — so a `mode: user` connector spends THEIR
-  account. A manual run acts as whoever pressed Run. Event payloads ride only
-  the author's run. `connectorReadiness` (`lib/connectors/service.ts`) surfaces
-  per-person readiness before a 3am run discovers it. Bare `user_id`, so
-  `deleteAccount` clears it.
+- **One agent can run FOR many people, and who is in the brief.** Identity is
+  per RUN (`agent_runs.run_as_user_id`). The brief's **`for:` block** lists the
+  people (`lib/agents/shared/runsFor.ts`, pure): `user`, and optionally their
+  own `at`, `timezone` and `model`. A fire runs as the brief's author (or
+  `runs_as`), then once per person under THEIR principal — so a `mode: user`
+  connector spends their account, on their model (`modelFor`, read by the
+  runner and the preflight). A person with their own time on a daily/weekly
+  agent fires then: `next_run_at` is the earliest of everyone's next occurrence
+  and a fire runs only those whose time came round; an event-woken fire is for
+  everyone (`shared/fanout.ts#nextFire` / `dueIdentities`, pure). A `local/*`
+  person is never fired by the tick. **An entry is a principal, so it is the
+  person's own to add**: `contextService#briefRunsForDenial` lets a writer
+  remove anyone and add or change only themselves (an admin anyone); a reader
+  adds themselves through `POST …/subscribers`, which writes that one entry
+  for them. `agent_subscriptions` is a derived index of the block
+  (`hooks.ts#indexRunsFor`) for the roster and `deleteAccount`, which also
+  strips the note entry (`dropRunsFor`). Capped by `MAX_FANOUT_SUBSCRIBERS`.
+  A manual run acts as whoever pressed Run. Event payloads ride only the first
+  run. `connectorReadiness` surfaces per-person readiness before a 3am run
+  discovers it. `db:agents:runs-for` wrote pre-block rows into their briefs.
 - **A brief says what it still needs.** `create_agent` and `rehearse_agent`
   answer with `needs` and `plan` (`lib/agents/shared/needs.ts`, pure;
   `lib/agents/needs.ts` gathers inputs): no model in the space, a declared
@@ -507,15 +518,22 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   Directory's Agents table** (`/directory?view=table&type=agent` →
   `AgentsRoster.tsx`) with **the clock** over it: the next 24 hours, the nightly
   clean, and what is running with its current step
-  (`lib/agents/shared/roster.ts` pure, `runs.ts#currentStepOf`). The tab shows
-  the status line and switch, when it runs, then THE RUN as ONE LINE of steps
-  (`RunSteps`) with the machine's record nested under each `run_command` /
-  `open_page` (`trace.ts#attachMachine` joins `agent_vm_events` by run id), plus
-  the live screen and terminal for admins. **Under the line, the box** — say
-  something and a run starts now, as you (`lib/agents/summon.ts`; when already
-  running the words wait in the mailbox). `run_agent` takes the same `message`.
-  A gear opens one dialog: Settings · Memory · Skills · Machine. Actions return
-  `watch` hrefs (`config.ts#agentPageHref`). Polling, never a stream.
+  (`lib/agents/shared/roster.ts` pure, `runs.ts#currentStepOf`). The tab is ONE
+  COLUMN: the name with the switch, Run, Share and the gear; one status line
+  (pressing it opens the schedule); then THE RUN as a short numbered list —
+  **a step per turn, titled in the model's own first sentence, opening onto the
+  calls it made** (`trace.ts#groupSteps`, pure; `RunSteps`), each call opening
+  onto its result or the machine's record (`trace.ts#attachMachine` joins
+  `agent_vm_events` by run id). The model's narration is never on the page,
+  only inside an opened step. **Which run it is, is the word at the end of the
+  run line** (`RunPicker`) — there is no history list. **Who it runs for is part
+  of sharing it**: Share on the tab row opens the brief's `SharePanel` with a
+  Runs for section (`RunsForSection`) — your own switch, time and model.
+  There is no box on the page: a person starts a run with Run; `run_agent`
+  still takes a `message` and `send_to_agent` still fills the mailbox
+  (`lib/agents/summon.ts`). A gear opens one dialog: Settings · Memory ·
+  Skills · Machine. Actions return `watch` hrefs (`config.ts#agentPageHref`).
+  Polling, never a stream.
 
 ## The Directory
 

@@ -358,10 +358,12 @@ interface SharePanelProps {
   kind: 'note' | 'folder'
   /** Overrides the derived display name (e.g. the admin-set context name for path ''). */
   title?: string
+  /** One more section under the people — what sharing THIS thing also decides (an agent: who it runs for). */
+  extra?: React.ReactNode
   onClose: () => void
 }
 
-export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelProps) {
+export function SharePanel({ spaceId, path, kind, title, extra, onClose }: SharePanelProps) {
   const { joinedSpaces } = useSpace()
   const isPersonalSpace = spaceId.startsWith(PERSONAL_ID_PREFIX)
   const spaceName = joinedSpaces.find((c) => c.id === spaceId)?.name ?? 'the space'
@@ -900,7 +902,10 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
             ) : adding ? (
               addStep
             ) : (
-              browseStep
+              <>
+                {browseStep}
+                {extra}
+              </>
             )}
           </div>
 

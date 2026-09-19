@@ -100,3 +100,116 @@ export function attachMachine(steps: Step[], events: MachineEvent[]): Step[] {
   }
   return steps
 }
+
+/** The verb a tool reads as, and the noun a count of its calls takes. */
+export const TOOL_VERB: Readonly<Record<string, { verb: string; one: string; many: string }>> = {
+  list_context: { verb: 'Listed', one: 'folder', many: 'folders' },
+  search_context: { verb: 'Searched', one: 'time', many: 'times' },
+  read_context: { verb: 'Read', one: 'note', many: 'notes' },
+  write_context: { verb: 'Wrote', one: 'note', many: 'notes' },
+  append_context: { verb: 'Appended to', one: 'note', many: 'notes' },
+  run_connector: { verb: 'Called', one: 'connector', many: 'connectors' },
+  fetch_url: { verb: 'Fetched', one: 'page', many: 'pages' },
+  run_command: { verb: 'Ran', one: 'command', many: 'commands' },
+  open_page: { verb: 'Opened', one: 'page', many: 'pages' },
+  run_agent: { verb: 'Started', one: 'agent', many: 'agents' },
+  create_node: { verb: 'Created', one: 'record', many: 'records' },
+  link_nodes: { verb: 'Linked', one: 'record', many: 'records' },
+}
+
+/** A result that begins with "error" is a refusal the model had to work around. */
+export function stepFailed(step: Step): boolean {
+  return step.kind === 'tool' && typeof step.result === 'string' && /^error\b/i.test(step.result.trimStart())
+}
+
+/**
+ * One thing the run set out to do: what the model said it was about to do, and
+ * the tool calls it then made. The page lists groups; a group opens onto its
+ * subtasks.
+ */
+export interface StepGroup {
+  title: string
+  /** Everything the model said at the head of this group; shown once it is open. */
+  text: string | null
+  /** The executor's asides that fell inside this group. */
+  notes: string[]
+  subtasks: Step[]
+  state: 'running' | 'failed' | 'done'
+  at: number
+  endedAt: number | null
+}
+
+const TITLE_MAX = 64
+
+/** The openers a model puts before the thing it is actually about to do. */
+const LEAD_IN = /^(?:(?:ok(?:ay)?|now|first|next|then|great|alright|finally)[,:.!]?\s+)*(?:i(?:'|’)ll|i will|i(?:'|’)m going to|i am going to|let me|let(?:'|’)s|i need to|i(?:'|’)ll now|now i(?:'|’)ll)\s+/i
+
+/** A thought's first sentence as a title: no lead-in, no markdown, one line, clipped. */
+export function titleOfThought(text: string): string {
+  const line = text
+    .split('\n')
+    .map((l) => l.replace(/^[#>*\-\s]+/, '').trim())
+    .find((l) => l.length > 0)
+  if (!line) return ''
+  const sentence = (/^(.+?[.!?:])(?:\s|$)/.exec(line)?.[1] ?? line).replace(/[.:!]+$/, '')
+  const bare = sentence.replace(LEAD_IN, '').replace(/[*_`]/g, '').trim()
+  if (!bare) return ''
+  const titled = bare[0].toUpperCase() + bare.slice(1)
+  return titled.length > TITLE_MAX ? `${titled.slice(0, TITLE_MAX - 1).trimEnd()}…` : titled
+}
+
+/** A title made of the calls alone: "Read people/ana/index.md", "Fetched 6 pages", "Read 2 notes · Wrote 1 note". */
+function titleOfSubtasks(subtasks: Step[]): string {
+  if (subtasks.length === 1 && subtasks[0].detail) {
+    return `${TOOL_VERB[subtasks[0].tool ?? '']?.verb ?? subtasks[0].tool ?? 'Did'} ${subtasks[0].detail}`
+  }
+  const counts = new Map<string, number>()
+  for (const s of subtasks) counts.set(s.tool ?? '', (counts.get(s.tool ?? '') ?? 0) + 1)
+  return [...counts]
+    .slice(0, 2)
+    .map(([tool, n]) => {
+      const v = TOOL_VERB[tool]
+      return v ? `${v.verb} ${n} ${n === 1 ? v.one : v.many}` : `${tool || 'Worked'}${n > 1 ? ` × ${n}` : ''}`
+    })
+    .join(' · ')
+}
+
+/**
+ * Fold steps into groups by TURN: a thought opens a group and the tool calls
+ * that follow are its subtasks, until the model speaks again. Calls made before
+ * it said anything form a leading group; the executor's notes join the group
+ * they fell in (the first one, when they came before any). Nothing is dropped.
+ */
+export function groupSteps(steps: Step[]): StepGroup[] {
+  type Draft = { text: string | null; notes: string[]; subtasks: Step[]; at: number }
+  const drafts: Draft[] = []
+  let current: Draft | null = null
+  let early: string[] = []
+  const open = (at: number, text: string | null): Draft => {
+    const d: Draft = { text, notes: early, subtasks: [], at }
+    early = []
+    drafts.push(d)
+    return d
+  }
+  for (const step of steps) {
+    if (step.kind === 'thought') current = open(step.at, step.text ?? '')
+    else if (step.kind === 'tool') (current ??= open(step.at, null)).subtasks.push(step)
+    else if (current) current.notes.push(step.text ?? '')
+    else early.push(step.text ?? '')
+  }
+  if (early.length > 0) open(steps[0]?.at ?? 0, null)
+
+  return drafts.map((d) => {
+    const last = d.subtasks[d.subtasks.length - 1]
+    const running = d.subtasks.some((s) => s.result === undefined)
+    return {
+      title: (d.text ? titleOfThought(d.text) : '') || titleOfSubtasks(d.subtasks) || d.notes[0] || 'Thought',
+      text: d.text && d.text.trim() ? d.text.trim() : null,
+      notes: d.notes,
+      subtasks: d.subtasks,
+      state: running ? 'running' : d.subtasks.some(stepFailed) ? 'failed' : 'done',
+      at: d.at,
+      endedAt: running ? null : (last?.endedAt ?? d.at),
+    }
+  })
+}

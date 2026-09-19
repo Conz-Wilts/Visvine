@@ -86,8 +86,8 @@ Read this week's notes under updates/ and write a digest to reports/weekly.md �
 - **Run now** shares the scheduler's compare-and-swap claim, does not advance the schedule, takes
   any waiting events with it, and is open to anyone who can edit the brief. **It does not require
   the agent to be active**: switching one on approves it to run UNATTENDED, as its author, with
-  nobody reading the result, and a person asking for one run now — the Run button, the box on the
-  agent's page, `run_agent` — is not that. It is how an agent is tried before it is trusted, and
+  nobody reading the result, and a person asking for one run now — the Run button, `run_agent` —
+  is not that. It is how an agent is tried before it is trusted, and
   the row is untouched: an inactive agent that runs this way is still inactive afterwards, counts
   no failures and is never re-deactivated. The waiver is `claimManualRun`'s `allowInactive`, set
   only at a door a person stands at; everything unattended keeps the gate — a chained `run_agent`
@@ -318,8 +318,7 @@ needs:
   ticket good for sixty seconds and that machine alone. Every event is stored
   (`agent_vm_events`) whether or not anyone was watching, so a run nobody saw is
   still reviewable, and refusals from the egress boundary appear beside it.
-- **Channels.** An agent can be messaged from inside the app (the box on its
-  page), by email at `<agent>@<space>.<domain>` (`AGENT_EMAIL_DOMAIN` +
+- **Channels.** An agent can be messaged through `run_agent`'s `message`, by email at `<agent>@<space>.<domain>` (`AGENT_EMAIL_DOMAIN` +
   `EMAIL_INBOUND_SECRET`, `POST /api/internal/channels/email`), or by another
   agent through the `send_to_agent` action. All three land in the same mailbox
   and are read by the same run as a schedule — there is one loop behind them.
@@ -397,21 +396,44 @@ deadline, UTC) was already correct and was left untouched.
   beside Context and Raw (`features/profile/components/AgentPageContent.tsx`). It shows up on an
   `agent:` node and nowhere else, the way Profile shows up on a person: an agent is a note under
   `agents/` in the Context, so there is no agents tool — no rail row, no feature key, nothing to
-  switch on or off. The tab carries the status line with Run and the switch, when it runs (and
-  what stands in the way while it is off), then **the line**: the run in flight — or the one the
-  URL names, `?run=<id>` — as steps with the machine's record nested under each `run_command` /
-  `open_page` (`RunPane` + `RunSteps` over the pure fold `lib/agents/shared/trace.ts#attachMachine`),
-  and for an admin the machine itself beside it (`MachinePane`: the screen, the terminal, Watch
-  live — opened automatically while a run is on — and Take control). **Under the line, the box**
-  (`MessageAgent`): say something and a run starts now, as you, and the line follows it —
-  `lib/agents/summon.ts` is the same delivery every channel uses (`deliverMessage`) followed by
-  the same manual claim (`claimManualRun`), so nothing about the run is special; when the agent is
-  already running the words wait in its mailbox. Its answer is the run's summary, and "Adjust the
-  brief" sits under a finished run. The sidebar is when it runs, who it runs for, memory at a
-  glance (the open threads, and a link to the note), the history — each row selecting a run in
-  place — and setup (settings, skills, machine). `run_agent`, `vm_browse` and `create_agent` return
-  a `watch` / `page` href into it (`lib/agents/config.ts#agentPageHref(name, runId?)`). Polling
-  throughout, never a stream: quick while anything runs, a slow walk otherwise.
+  switch on or off. The tab is one column: the name with the switch, Run, Share and the gear;
+  one status line (pressing it opens the schedule); then **the run** — the one in flight, or the
+  one the URL names, `?run=<id>` — as a short numbered list. **A step is a turn**: what the model
+  said it was about to do, titled by its first sentence (or by its calls, `Fetched 6 pages`, when
+  it said nothing), opening onto the calls it made; a call opens onto its result, or the machine's
+  record for `run_command` / `open_page` (`RunPane` + `RunSteps` over the pure folds
+  `lib/agents/shared/trace.ts#groupSteps` and `#attachMachine`). The model's narration is never on
+  the page, only inside an opened step; the executor's notes sit there too. **Which run this is,
+  is the word at the end of the run line** (`RunPicker`, the last 25) — there is no history list.
+  Under the steps: what was refused at the boundary, and what changed. **Who it runs for is part
+  of sharing it**: Share, on the tab row, opens the brief's `SharePanel` with a Runs for section
+  (`RunsForSection`) — your own switch, then your own time and model — which writes your entry in
+  the brief's `for:` block (below). There is no box on the page: a person starts a run with Run,
+  and `lib/agents/summon.ts` still serves `run_agent`'s `message`. Everything configured rather
+  than watched — settings, memory, skills, and for an admin the machine (`MachinePane`) — is
+  behind the gear. `run_agent`, `vm_browse` and `create_agent` return a `watch` / `page` href into
+  it (`lib/agents/config.ts#agentPageHref(name, runId?)`). Polling throughout, never a stream:
+  quick while anything runs, a slow walk otherwise.
+- **Who it runs for is the brief's `for:` block** (`lib/agents/shared/runsFor.ts`, pure):
+
+  ```yaml
+  for:
+    - user: <userId>              # the agent's own time and model
+    - user: <userId>
+      at: "07:30"
+      timezone: Pacific/Auckland
+      model: local/claude
+  ```
+
+  Each fire runs as the author, then once per person under their own principal, on their own
+  model (`modelFor`). A person's own `at` / `timezone` means something on a daily or weekly
+  agent: the row's `next_run_at` is the earliest of everyone's next occurrence, and a fire runs
+  only the people whose time came round since the last one — everyone, when events woke it
+  (`lib/agents/shared/fanout.ts`, pure). A `local/*` person is never fired; their runs start from
+  the desktop app. An entry is a principal, so the write gate (`briefRunsForDenial`) lets a writer
+  remove anyone and add or change only themselves, an admin anyone; a member who can only READ the
+  brief adds themselves through `POST …/agents/<name>/subscribers`, and the platform writes that
+  one entry. `agent_subscriptions` is an index of the block, rebuilt on every brief write.
 - **The roster is the Directory's Agents table** — `/directory?view=table&type=agent`. The
   Table view renders `features/agents/components/AgentsRoster.tsx` for that type instead of the
   cell grid, because every column of an agent is live state rather than a record. Over the list

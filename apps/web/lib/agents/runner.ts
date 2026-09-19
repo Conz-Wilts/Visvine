@@ -35,6 +35,8 @@ import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_M
 import { releaseMachineAfterRun } from '@/lib/vm/lease'
 import { principalForUser } from './principal'
 import { resolveAgentChatConfig } from './providers'
+import { dropRunsFor } from './service'
+import { modelFor } from './shared/runsFor'
 import { clipEventText, finishRun, flushRunEvents, ledgerSpendForMonth, recordRunInput, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
 import { memoryForPrompt, memoryPath, setLastRun } from './shared/memory'
 import { agentPreamble } from './shared/prompt'
@@ -221,16 +223,14 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     const briefContext: Context = briefSpaceId === spaceId ? context : { spaceId: briefSpaceId, ownerKey: SHARED_OWNER_KEY }
     if (!principal || !briefPrincipal || (await readVisible(briefPrincipal, briefContext, briefRow.path)) === null) {
       if (run.runAsUserId && run.runAsUserId !== state.runAsUserId) {
-        await prisma.agentSubscription
-          .deleteMany({ where: { spaceId, name, userId: run.runAsUserId } })
-          .catch(() => undefined)
+        await dropRunsFor(spaceId, name, run.runAsUserId).catch(() => undefined)
         return fail('config', 'The person this run acts for can no longer read the brief in this space.', { countsAsFailure: false })
       }
       return fail('author_gone', "The brief's author can no longer read the brief.", { deactivate: { reason: 'author_gone', detail: null } })
     }
 
     // 3. The model, on the space's key.
-    const resolved = await resolveAgentChatConfig(spaceId, brief.model)
+    const resolved = await resolveAgentChatConfig(spaceId, modelFor(brief, run.runAsUserId))
     if (!resolved.ok) {
       // Only faults in the BRIEF or the SPACE deactivate (`no_key`, `no_endpoint`
       // — an admin has to act). `invalid_model` is a stale brief the author

@@ -3,6 +3,7 @@ import { ApiError } from '@/lib/api/route'
 import { assertMembersCanLeave } from '@/lib/notes/aliases'
 import { findMemberNode } from '@/lib/identity/connection'
 import { logger } from '@/lib/logger'
+import { dropRunsFor } from '@/lib/agents/service'
 import {
   purgeNodeObjects,
   purgePersonalContextObjects,
@@ -86,6 +87,11 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     where: { personalOwnerId: userId },
     select: { id: true },
   })
+
+  // The agents that run FOR this person say so in their brief's `for:` block;
+  // the subscription rows are the index of it. Read before anything is
+  // deleted, taken out of the notes once the account is gone.
+  const runsFor = await prisma.agentSubscription.findMany({ where: { userId }, select: { spaceId: true, name: true } })
 
   // Guard before we delete anything: a space must not be left unmanageable.
   // A personal space is exempt — it is being deleted outright, and its owner
@@ -221,6 +227,10 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
       objects,
     }
   })
+
+  for (const sub of runsFor) {
+    await dropRunsFor(sub.spaceId, sub.name, userId).catch((err) => logger.warn('account.runs_for_not_dropped', { err, ...sub }))
+  }
 
   logger.info('account.deleted', { userId, ...result })
   return result

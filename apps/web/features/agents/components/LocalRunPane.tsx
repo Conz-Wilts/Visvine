@@ -36,7 +36,6 @@ export default function LocalRunPane({
   const [events, setEvents] = useState<AgentRunEvent[]>([]);
   const [phase, setPhase] = useState<'preparing' | 'running' | 'recording'>('preparing');
   const [runtime, setRuntime] = useState<LocalRuntimeId | null>(null);
-  const [startedAt] = useState(() => Date.now());
   const runIdRef = useRef<string | null>(null);
   const eventsRef = useRef<AgentRunEvent[]>([]);
 
@@ -134,11 +133,7 @@ export default function LocalRunPane({
       </div>
       <RunSteps
         events={events}
-        machine={[]}
         live
-        startedAt={startedAt}
-        trigger={{ kind: 'manual', label: 'Run, from the desktop app', events: null }}
-        end={null}
         emptyText={phase === 'running' ? 'Starting…' : 'Preparing…'}
       />
     </div>

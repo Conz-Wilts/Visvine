@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { attachMachine, stepsOf, type MachineEvent } from '../lib/agents/shared/trace'
+import { attachMachine, groupSteps, stepsOf, titleOfThought, type MachineEvent } from '../lib/agents/shared/trace'
 import type { AgentRunEvent } from '../lib/agents/runs'
 
 const ev = (seq: number, kind: string, payload: Record<string, unknown> = {}): MachineEvent => ({
@@ -70,5 +70,64 @@ describe('attachMachine', () => {
   it('leaves a run with no machine steps untouched', () => {
     const steps = attachMachine(stepsOf(run.slice(2, 4)), [ev(1, 'exec')])
     assert.equal(steps[0].machine, undefined)
+  })
+})
+
+describe('groupSteps', () => {
+  const run: AgentRunEvent[] = [
+    { at: 1, type: 'system', text: 'Dry run: writes are captured, not applied.' },
+    { at: 2, type: 'assistant', text: "I'll gather AI stories from Hacker News.\n\nFirst, the timestamp:\n- now" },
+    { at: 3, type: 'tool', tool: 'fetch_url', detail: 'https://a' },
+    { at: 4, type: 'tool_result', tool: 'fetch_url', text: 'ok' },
+    { at: 5, type: 'tool', tool: 'fetch_url', detail: 'https://b' },
+    { at: 6, type: 'tool_result', tool: 'fetch_url', text: 'error: refused' },
+    { at: 7, type: 'assistant', text: '' },
+    { at: 8, type: 'tool', tool: 'write_context', detail: 'digests/x.md' },
+  ]
+
+  it('opens a group at each thought and files the calls under it', () => {
+    const groups = groupSteps(stepsOf(run))
+    assert.deepEqual(
+      groups.map((g) => [g.title, g.subtasks.length, g.state]),
+      [
+        ['Gather AI stories from Hacker News', 2, 'failed'],
+        ['Wrote digests/x.md', 1, 'running'],
+      ],
+    )
+    assert.deepEqual(groups[0].notes, ['Dry run: writes are captured, not applied.'])
+    assert.equal(groups[0].endedAt, 6)
+    assert.equal(groups[1].endedAt, null)
+  })
+
+  it('groups calls made before the model said anything, and keeps a lone note', () => {
+    const groups = groupSteps(
+      stepsOf([
+        { at: 1, type: 'tool', tool: 'read_context', detail: 'a.md' },
+        { at: 2, type: 'tool_result', tool: 'read_context', text: 'a' },
+        { at: 3, type: 'tool', tool: 'read_context', detail: 'b.md' },
+        { at: 4, type: 'tool_result', tool: 'read_context', text: 'b' },
+      ]),
+    )
+    assert.deepEqual(groups.map((g) => g.title), ['Read 2 notes'])
+    assert.deepEqual(groupSteps(stepsOf([{ at: 1, type: 'system', text: 'Stopped at the turn cap (6).' }])).map((g) => g.title), [
+      'Stopped at the turn cap (6).',
+    ])
+  })
+
+  it('keeps the machine record on a grouped subtask', () => {
+    const steps = attachMachine(
+      stepsOf([
+        { at: 1, type: 'assistant', text: 'Let me run it.' },
+        { at: 2, type: 'tool', tool: 'run_command', detail: 'ls' },
+      ]),
+      [ev(1, 'exec', { cmd: ['ls'] })],
+    )
+    assert.equal(groupSteps(steps)[0].subtasks[0].machine?.length, 1)
+  })
+
+  it('titles a thought by what it is about to do', () => {
+    assert.equal(titleOfThought('Now let me **rank** the stories. Then write.'), 'Rank the stories')
+    assert.equal(titleOfThought('## Plan\nmore'), 'Plan')
+    assert.equal(titleOfThought('   '), '')
   })
 })

@@ -624,11 +624,10 @@ test('a fire fans out: one run per subscriber, each acting as that person', asyn
     })
     await prisma!.contextNote.createMany({
       data: [
-        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/fan/index.md', content: '---\ntype: agent\nmodel: openai/gpt-4o-mini\n---\nSummarise.\n', createdBy: AUTHOR },
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/fan/index.md', content: `---\ntype: agent\nmodel: openai/gpt-4o-mini\nfor:\n  - user: ${MEMBER}\n---\nSummarise.\n`, createdBy: AUTHOR },
         { spaceId: SPACE, ownerKey: 'shared', path: 'agents/fan/activation.md', content: activationNote, createdBy: ADMIN },
       ],
     })
-    await prisma!.agentSubscription.create({ data: { spaceId: SPACE, name: 'fan', userId: MEMBER } })
     // An undecryptable model key: the inline runs then fail `bad_key` — a
     // platform fault that neither deactivates nor calls a provider — so the
     // group keeps claiming, which is the behaviour under test.
@@ -649,7 +648,7 @@ test('a fire fans out: one run per subscriber, each acting as that person', asyn
     if (otherDue > 0) return t.skip(`${otherDue} other due agent(s) in the local DB — not running the global tick`)
 
     const report = await tick(later)
-    assert.equal(report.dispatched.length, 2, 'the author run, then one per subscriber')
+    assert.equal(report.dispatched.length, 2, 'the author run, then one per person in `for:`')
     const runs = await Promise.all(report.dispatched.map((d) => run(d.runId)))
     assert.equal(runs[0].runAsUserId, null, 'the first run is the state row identity (the author)')
     assert.equal(runs[1].runAsUserId, MEMBER, 'the fan-out run acts as the subscriber')

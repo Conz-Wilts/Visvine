@@ -45,6 +45,7 @@
     "db:agents:folders": "tsx scripts/migrate-agent-folders.ts",
     "db:agents:activation": "tsx scripts/fold-agent-activation.ts",
     "db:agents:stamp": "tsx scripts/stamp-agent-briefs.ts",
+    "db:agents:runs-for": "tsx scripts/agents-runs-for.ts",
     "db:models:migrate": "tsx scripts/migrate-model-notes.ts",
     "db:rename:spaces": "tsx scripts/rename-community-to-space.ts",
     "db:actions:sync": "tsx scripts/sync-action-notes.ts",

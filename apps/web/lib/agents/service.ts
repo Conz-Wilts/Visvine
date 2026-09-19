@@ -4,7 +4,7 @@
  * nothing else reads the tables directly.
  */
 import prisma from '@/lib/prisma'
-import { defaultModelOf, noModelReason, spaceModels, type SpaceModel } from './spaceModels'
+import { defaultModelOf, noModelReason, runnableModels, spaceModels, type SpaceModel } from './spaceModels'
 import { connectorReadiness, listConnectors, type ConnectorReadiness } from '@/lib/connectors/service'
 import { agentNeeds, hardNeeds, type AgentNeeds } from './shared/needs'
 import { needsCatalog } from './needs'
@@ -38,7 +38,10 @@ import {
   type AgentSchedule,
   type AgentTriggers,
 } from './config'
-import { findAgentActivation, findAgentBrief } from './briefs'
+import { findAgentActivation, findAgentBrief, findOwnAgentBrief } from './briefs'
+import { setRunsFor } from './briefEdit'
+import { modelFor, parseRunsFor, runsForFrontmatter, type RunsForEntry } from './shared/runsFor'
+import * as store from '@/lib/notes/store'
 import { deactivateAgent, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
@@ -338,6 +341,10 @@ export interface AgentSubscriber {
   userId: string
   name: string | null
   image: string | null
+  /** Their own time, zone and model, as the brief's `for:` block says them. */
+  at: string | null
+  timezone: string | null
+  model: string | null
 }
 
 /**
@@ -391,11 +398,8 @@ export async function describeAgent(
     models: await spaceModels(context.spaceId),
   })
 
-  const subRows = await prisma.agentSubscription.findMany({
-    where: { spaceId: context.spaceId, name },
-    orderBy: { createdAt: 'asc' },
-    select: { userId: true },
-  })
+  const forRows = runsForFrontmatter(parseRunsForOf(content)) ?? []
+  const subRows = forRows.map((r) => ({ userId: r.user, at: r.at ?? null, timezone: r.timezone ?? null, model: r.model ?? null }))
   const runAsUserId = summary.runAsUserId
   const userIds = [...new Set([...subRows.map((s) => s.userId), ...(runAsUserId ? [runAsUserId] : [])])]
   const users = userIds.length
@@ -423,7 +427,7 @@ export async function describeAgent(
     brief: content,
     memory,
     heartbeatAt: heartbeatAt?.toISOString() ?? null,
-    subscribers: subRows.map((s) => ({ userId: s.userId, name: nameOf.get(s.userId) ?? null, image: imageOf.get(s.userId) ?? null })),
+    subscribers: subRows.map((s) => ({ ...s, name: nameOf.get(s.userId) ?? null, image: imageOf.get(s.userId) ?? null })),
     viewerSubscribed: subRows.some((s) => s.userId === p.userId),
     readiness: {
       viewer,
@@ -437,33 +441,46 @@ export async function describeAgent(
   }
 }
 
+/** What a person may set for their own runs; all optional. */
+export interface RunsForSettings {
+  /** "HH:MM", their own time of day on a daily or weekly agent. */
+  at?: string | null
+  timezone?: string | null
+  /** A model of the space's, or a `local/*` runtime. */
+  model?: string | null
+}
+
 /**
  * Put your own name down: each fire of this agent then runs once FOR you, as
- * your principal, so a `mode: user` connector spends YOUR linked account.
- * Anyone who can READ the brief may subscribe THEMSELVES — the run reaches
- * only what they can already reach, so there is nothing here to approve.
+ * your principal, so a `mode: user` connector spends YOUR linked account —
+ * at your own time and on your own model when you say so. The entry is
+ * written into the brief's `for:` block, which is the record
+ * (shared/runsFor.ts). Anyone who can READ the brief may add THEMSELVES — the
+ * run reaches only what they can already reach, so there is nothing here to
+ * approve — which is why the write is the platform's, not the reader's.
  */
-export async function subscribeToAgent(p: ContextPrincipal, context: Context, name: string): Promise<ActivateResult> {
+export async function subscribeToAgent(p: ContextPrincipal, context: Context, name: string, settings: RunsForSettings = {}): Promise<ActivateResult> {
   if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
-  const row = await findAgentBrief(context.spaceId, name)
+  const row = await findOwnAgentBrief(context.spaceId, name)
   const content = row ? await readVisible(p, context, row.path) : null
   if (!row || content === null) return { ok: false, status: 404, error: 'No such agent.' }
-  await prisma.agentSubscription.upsert({
-    where: { agent_subscription_identity: { spaceId: context.spaceId, name, userId: p.userId } },
-    create: { spaceId: context.spaceId, name, userId: p.userId },
-    update: {},
-  })
-  await logAudit(context.spaceId, {
-    userId: p.userId,
-    name: p.name,
-    action: 'agent',
-    path: row.path,
-    detail: 'subscribed to runs',
-  })
+
+  const parsed = parseRunsFor([{ user: p.userId, at: settings.at ?? undefined, timezone: settings.timezone ?? undefined, model: settings.model ?? undefined }])
+  if (!parsed.ok) return { ok: false, status: 400, error: parsed.error }
+  const [{ userId: _userId, ...entry }] = parsed.entries
+  if (entry.model && !localRuntimeOf(entry.model)) {
+    const runnable = runnableModels(await spaceModels(context.spaceId)).some((m) => m.ref === entry.model)
+    if (!runnable) return { ok: false, status: 400, error: 'That model is not one of this space’s.' }
+  }
+  const next = setRunsFor(content, p.userId, entry)
+  const check = parseAgentBrief(parseFrontmatter(next), splitFrontmatter(next).body)
+  if (!check.ok) return { ok: false, status: 400, error: check.error }
+  await store.writeNote(context, row.path, next, { id: p.userId, name: p.name }, 'edit')
+  await logAudit(context.spaceId, { userId: p.userId, name: p.name, action: 'agent', path: row.path, detail: 'runs for them' })
   return { ok: true, warning: null }
 }
 
-/** Take a name off the list: your own, or anyone's if you are a space admin. */
+/** Take a name off the list: your own, or anyone's if you can edit the brief. */
 export async function unsubscribeFromAgent(
   p: ContextPrincipal,
   context: Context,
@@ -471,13 +488,24 @@ export async function unsubscribeFromAgent(
   userId: string,
 ): Promise<ActivateResult> {
   if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
-  if (userId !== p.userId && !principalIsSuperAdmin(p)) {
-    return { ok: false, status: 403, error: 'Only a space admin can remove someone else.' }
+  if (userId !== p.userId && agentManageDenial(p, context, name)) {
+    return { ok: false, status: 403, error: 'Only someone who can edit the agent can remove someone else.' }
   }
-  await prisma.agentSubscription
-    .delete({ where: { agent_subscription_identity: { spaceId: context.spaceId, name, userId } } })
-    .catch(() => undefined)
+  await dropRunsFor(context.spaceId, name, userId)
   return { ok: true, warning: null }
+}
+
+/** Take one person out of the brief's `for:` block — theirs to ask, the platform's to write. */
+export async function dropRunsFor(spaceId: string, name: string, userId: string): Promise<void> {
+  const context: Context = { spaceId, ownerKey: SHARED_OWNER_KEY }
+  const row = await findOwnAgentBrief(spaceId, name)
+  if (!row || !parseRunsForOf(row.content).some((e) => e.userId === userId)) return
+  await store.writeNote(context, row.path, setRunsFor(row.content, userId, null), { id: 'system', name: 'Visvine' }, 'maintenance', 'agents')
+}
+
+function parseRunsForOf(content: string): RunsForEntry[] {
+  const parsed = parseRunsFor(parseFrontmatter(content).for)
+  return parsed.ok ? parsed.entries : []
 }
 
 export type ActivateResult =
@@ -558,7 +586,7 @@ export async function activateAgent(
   }
   const unsigned = needs.needs.filter((n) => n.status === 'needs_connection' || n.status === 'broken')
 
-  const resolved = await resolveAgentChatConfig(context.spaceId, parsed.brief.model)
+  const resolved = await resolveAgentChatConfig(context.spaceId, modelFor(parsed.brief, p.userId))
   if (!resolved.ok) return { ok: false, status: 400, error: resolved.message }
   const probe = await probeModelKey(resolved.config, resolved.ref.provider)
   if (!probe.ok && probe.kind === 'auth') return { ok: false, status: 400, error: probe.message }

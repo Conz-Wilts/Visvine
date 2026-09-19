@@ -62,6 +62,7 @@ import { parentAdministers, reachesRoom, shareTargets } from '@/lib/spaces/subsp
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { parseModelRef, type ModelRef } from './registry'
+import { parseRunsFor, type RunsForEntry } from './shared/runsFor'
 
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 const AGENT_TYPE = 'agent'
@@ -186,6 +187,8 @@ export interface AgentBrief {
   tags: string[]
   /** The system-prompt body (markdown after the frontmatter), trimmed. */
   body: string
+  /** Who it runs for besides its author — the `for:` block (shared/runsFor.ts). */
+  runsFor: RunsForEntry[]
 }
 
 export type ParseBriefResult = { ok: true; brief: AgentBrief } | { ok: false; error: string }
@@ -292,6 +295,12 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
     if (share === 'none') return { ok: false, error: '`share_as` needs a `share` to apply to' }
   }
 
+  const runsFor = parseRunsFor(fm.for)
+  if (!runsFor.ok) return runsFor
+  for (const entry of runsFor.entries) {
+    if (entry.model && !parseModelRef(entry.model).ok) return { ok: false, error: `the model for ${entry.userId} in \`for\` is not valid` }
+  }
+
   let dryRun = false
   if (fm.dry_run !== undefined && fm.dry_run !== null && fm.dry_run !== '') {
     const raw = typeof fm.dry_run === 'string' ? fm.dry_run.trim().toLowerCase() : fm.dry_run
@@ -323,6 +332,7 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
       agents: agents.list,
       share,
       shareAs,
+      runsFor: runsFor.entries,
       dryRun,
       maxTurns,
       tags: [...new Set(tags.list.map((t) => t.trim()).filter(Boolean))],
@@ -607,11 +617,14 @@ export function parseTriggers(raw: Record<string, unknown>): { ok: true; trigger
 }
 
 /** A stable fingerprint of what dispatch derives from — the note is authoritative. */
-export function scheduleHash(activation: AgentActivation, effectiveTz: string): string {
+export function scheduleHash(activation: AgentActivation, effectiveTz: string, runsFor: RunsForEntry[] = []): string {
   // `runsAs` is deliberately absent: it changes whose credentials a run spends,
   // not when the run happens, and folding it in would reschedule every agent
   // whenever somebody repointed one.
-  return JSON.stringify([activation.active, activation.schedule, effectiveTz, activation.every, activation.on, activation.debounceMs])
+  // People's own times move the next fire, so they are part of it; with none
+  // the fingerprint is what it always was.
+  const own = runsFor.filter((e) => e.at || e.timezone).map((e) => [e.userId, e.at, e.timezone])
+  return JSON.stringify([activation.active, activation.schedule, effectiveTz, activation.every, activation.on, activation.debounceMs, ...(own.length ? [own] : [])])
 }
 
 // ── Globs ────────────────────────────────────────────────────────────────────

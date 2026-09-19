@@ -15,8 +15,11 @@
  */
 import crypto from 'node:crypto'
 import prisma from '@/lib/prisma'
-import { nextOccurrence, scheduleHash } from './config'
-import { findAgentActivation, findAgentBrief } from './briefs'
+import { parseAgentBrief, scheduleHash } from './config'
+import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
+import { dueIdentities, nextFire } from './shared/fanout'
+import type { RunsForEntry } from './shared/runsFor'
+import { findAgentActivation, findAgentBrief, findOwnAgentBrief } from './briefs'
 import { gateWake } from './wakeGate'
 import { dispatchRun, type DispatchResult } from './dispatch'
 import { claimEvents, eventDepthOf, type ClaimedEvent } from './events'
@@ -115,7 +118,16 @@ async function nextClockOccurrence(spaceId: string, name: string, now: Date): Pr
   const parsed = (await findAgentActivation(spaceId, name)).parsed
   if (!parsed?.ok || !parsed.activation.schedule) return null
   const tz = await effectiveTimezone(spaceId, parsed.activation.timezone)
-  return nextOccurrence(parsed.activation.schedule, now, tz)
+  return nextFire(parsed.activation.schedule, tz, await runsForOf(spaceId, name), now)
+}
+
+/** The brief's `for:` block — who the agent runs for besides its own identity. */
+async function runsForOf(spaceId: string, name: string): Promise<RunsForEntry[]> {
+  // The space's OWN brief: a run-in copy runs for nobody but the house brief's author.
+  const row = await findOwnAgentBrief(spaceId, name)
+  if (!row) return []
+  const parsed = parseAgentBrief(parseFrontmatter(row.content), splitFrontmatter(row.content).body)
+  return parsed.ok ? parsed.brief.runsFor : []
 }
 
 /** The run id is minted BEFORE the claim so the claim can name it (release is a CAS on it). */
@@ -153,7 +165,8 @@ export async function tick(now = new Date()): Promise<TickReport> {
     stateId: string
     spaceId: string
     name: string
-    runAsUserId: string | null
+    /** Everyone else this fire runs for, after the first run. */
+    others: string[]
     trigger: RunTrigger
     input: RunInput | null
   }[] = []
@@ -171,7 +184,8 @@ export async function tick(now = new Date()): Promise<TickReport> {
       continue
     }
     const tz = await effectiveTimezone(row.spaceId, parsed.activation.timezone)
-    const hash = scheduleHash(parsed.activation, tz)
+    const runsFor = await runsForOf(row.spaceId, row.name)
+    const hash = scheduleHash(parsed.activation, tz, runsFor)
     if (hash !== row.scheduleHash) {
       const fresh = await syncAgentState(row.spaceId, row.name, { activation: parsed.activation, now })
       if (!fresh.active || !fresh.nextRunAt || fresh.nextRunAt > now) continue
@@ -180,7 +194,7 @@ export async function tick(now = new Date()): Promise<TickReport> {
     // next event pulls it forward (or release re-arms it for mail that arrived
     // mid-run).
     const schedule = parsed.activation.schedule
-    const next = schedule ? nextOccurrence(schedule, now, tz) : null
+    const next = schedule ? nextFire(schedule, tz, runsFor, now) : null
     const runId = newRunId()
     if (!(await claim(row.id, 'scheduled', now, next, runId))) continue
 
@@ -195,7 +209,7 @@ export async function tick(now = new Date()): Promise<TickReport> {
       : mail
     // Was the CLOCK due, or only the mail? A scheduled agent woken early by a
     // save that was then declined has nothing to run for yet; its clock stands.
-    const clockDue = schedule ? nextOccurrence(schedule, row.lastRunAt ?? new Date(0), tz) <= now : false
+    const clockDue = schedule ? nextFire(schedule, tz, runsFor, row.lastRunAt ?? new Date(0)) <= now : false
     // A trigger-only agent whose mail was taken by a manual run in between (or
     // whose event pull-forward outlived its events, or whose every save was
     // declined) is due for nothing: give the claim straight back — no run row,
@@ -216,28 +230,43 @@ export async function tick(now = new Date()): Promise<TickReport> {
         ? 'interval'
         : 'scheduled'
     const input = runInputOf(events)
-    const run = await createRun({ id: runId, stateId: row.id, spaceId: row.spaceId, name: row.name, trigger, eventCount: events.length, input })
-    claimed.push({ runId: run.id, stateId: row.id, spaceId: row.spaceId, name: row.name, runAsUserId: row.runAsUserId, trigger, input })
+    // Who this fire is for: the agent's own identity and everyone riding its
+    // clock when that came round, each person keeping their own time when
+    // theirs did — and everyone when events woke it (shared/fanout.ts).
+    const who = dueIdentities({
+      schedule,
+      tz,
+      runsFor,
+      authorId: row.runAsUserId,
+      lastRunAt: row.lastRunAt,
+      now,
+      woken: events.length > 0,
+    })
+    // Nobody's time has come (the row drifted ahead of the note): hand the
+    // claim back rather than run the author off-schedule.
+    if (who.length === 0) {
+      await prisma.agentState.updateMany({
+        where: { id: row.id, currentRunId: runId },
+        data: { status: 'idle', runningSince: null, currentRunId: null, nextRunAt: next, lastRunAt: row.lastRunAt },
+      })
+      continue
+    }
+    const [first = null, ...others] = who
+    const run = await createRun({ id: runId, stateId: row.id, spaceId: row.spaceId, name: row.name, trigger, eventCount: events.length, input, runAsUserId: first })
+    claimed.push({ runId: run.id, stateId: row.id, spaceId: row.spaceId, name: row.name, others: others.filter((id): id is string => id !== null), trigger, input })
     busy.add(row.spaceId)
   }
 
-  // One fire runs once per identity: the author's run first, then one run per
-  // SUBSCRIBER — a member who put their name down to have the agent run for
-  // them — each under that person's principal, so a `mode: user` connector
-  // resolves THEIR linked account. Sequential, each through the same claim CAS
-  // (a deactivation mid-group stops it). Event PAYLOADS ride only the first
-  // run — it claimed the mail; subscriber runs carry the summaries via `input`.
+  // One fire runs once per identity, each under that person's principal, so a
+  // `mode: user` connector resolves THEIR linked account. Sequential, each
+  // through the same claim CAS (a deactivation mid-group stops it). Event
+  // PAYLOADS ride only the first run — it claimed the mail; the rest carry the
+  // summaries via `input`.
   const dispatched = (
     await Promise.all(
       claimed.map(async (c) => {
         const results = [{ runId: c.runId, result: await dispatchRun(c.runId) }]
-        const subscribers = await prisma.agentSubscription.findMany({
-          where: { spaceId: c.spaceId, name: c.name, userId: { not: c.runAsUserId ?? '' } },
-          orderBy: { createdAt: 'asc' },
-          select: { userId: true },
-          take: MAX_FANOUT_SUBSCRIBERS,
-        })
-        for (const sub of subscribers) {
+        for (const userId of c.others.slice(0, MAX_FANOUT_SUBSCRIBERS)) {
           const subRunId = newRunId()
           // 'manual' mode: the row is no longer due (the scheduled claim
           // advanced next_run_at), it just has to be active and idle.
@@ -248,7 +277,7 @@ export async function tick(now = new Date()): Promise<TickReport> {
             spaceId: c.spaceId,
             name: c.name,
             trigger: c.trigger,
-            runAsUserId: sub.userId,
+            runAsUserId: userId,
             input: c.input,
           })
           results.push({ runId: run.id, result: await dispatchRun(run.id) })
@@ -270,8 +299,7 @@ export type RunNowResult =
  * is awaited by the caller if it wants the outcome.
  *
  * ACTIVE is required by DEFAULT, and waived only by a door a person is
- * standing at (`allowInactive`): the Run button, `run_agent`, the box on the
- * agent's page. Switching an agent on is approval for it to run UNATTENDED —
+ * standing at (`allowInactive`): the Run button and `run_agent`. Switching an agent on is approval for it to run UNATTENDED —
  * at 3am, as its author, with nobody to read what it did — and that is the
  * thing an inactive agent may not do. Somebody who can edit the brief asking
  * for one run, now, as themselves, is not that: it is how you try an agent

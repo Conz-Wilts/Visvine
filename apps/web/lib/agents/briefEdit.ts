@@ -14,6 +14,7 @@ import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from '@/lib/notes
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { AGENT_TOOL_EXTRAS, type AgentToolExtra } from './config'
 import { shareTargets } from '@/lib/spaces/subspaces'
+import { parseRunsFor, runsForFrontmatter, withRunsFor, type RunsForEntry } from './shared/runsFor'
 
 export interface BriefSettings {
   model: string
@@ -101,5 +102,16 @@ export function updateBriefSettings(content: string, patch: BriefSettingsPatch):
     if (mode === 'run-in' && fm.share !== undefined) fm.share_as = 'run-in'
     else delete fm.share_as
   }
+  return joinFrontmatter(fm, body)
+}
+
+/** The brief with one person's `for:` entry set — or, with null, taken out. Everything else untouched. */
+export function setRunsFor(content: string, userId: string, entry: Omit<RunsForEntry, 'userId'> | null): string {
+  const { body } = splitFrontmatter(content)
+  const fm: NoteFrontmatter = { ...parseFrontmatter(content) }
+  const current = parseRunsFor(fm.for)
+  const next = runsForFrontmatter(withRunsFor(current.ok ? current.entries : [], userId, entry))
+  if (next) fm.for = next
+  else delete fm.for
   return joinFrontmatter(fm, body)
 }
