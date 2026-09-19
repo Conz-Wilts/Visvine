@@ -186,15 +186,20 @@ export default function Sidebar() {
   const railPanelOpen = switcherOpen || createOpen;
   const railW = expanded ? EXPANDED_W : collapsedW;
   // Where a rail panel stands: the content sheet's box, below the band.
-  const railPanelBox: React.CSSProperties = {
+  const railPanelBox = (open: boolean): React.CSSProperties => ({
     top: bandH + SHELL_FRAME_GAP,
     bottom: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN,
     left: railW + SHELL_FRAME_GAP,
     width: railPanelW,
+    // The sheet's hairline, drawn by the panel where it covers the sheet's edge.
+    // Only while out: a parked box must leave no line behind.
+    borderTop: open ? FRAME_LINE : undefined,
+    borderLeft: open ? FRAME_LINE : undefined,
+    borderBottom: open ? FRAME_LINE : undefined,
     borderTopLeftRadius: FRAME_RADIUS,
     borderBottomLeftRadius: SHELL_FRAME_RADIUS,
     transition: reduced ? "none" : `left ${RAIL_MOTION}`,
-  };
+  });
   // Create new is open only while the pointer is on its row or in the panel:
   // pointing at any other row of the rail puts it away. The switcher is not
   // put away by pointing: it goes when another row is PRESSED (pressRailRow),
@@ -639,13 +644,13 @@ export default function Sidebar() {
           close the other), so they share the edge without a stack. */}
       <div
         className={`absolute z-20 overflow-hidden ${switcherOpen ? '' : 'pointer-events-none'}`}
-        style={railPanelBox}
+        style={railPanelBox(switcherOpen)}
       >
         <SpaceSwitcherPanel />
       </div>
       <div
         className={`absolute z-20 overflow-hidden ${createOpen ? '' : 'pointer-events-none'}`}
-        style={railPanelBox}
+        style={railPanelBox(createOpen)}
       >
         <CreatePanel />
       </div>
