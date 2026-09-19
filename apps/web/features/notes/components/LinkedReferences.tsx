@@ -5,11 +5,10 @@
 // excerpt). Typographic, not boxed: the references read as a continuation of
 // the note.
 //
-// Long lists are the normal case on a well-connected note, so each group is a
-// disclosure, not a dump: closed it is one line, and opening it reveals its own
-// filter (by source title or excerpt text) above the first few rows. Linked
-// opens by default; unlinked — speculative name matches — stays shut until
-// wanted.
+// One search sits above both groups and filters them together (by source title
+// or excerpt text). Each group is a disclosure: linked opens by default,
+// unlinked — speculative name matches — stays shut until wanted, and a search
+// opens whichever group it finds something in.
 
 import { useMemo, useState, type ReactNode } from 'react'
 import { ChevronRightIcon, LockIcon, SearchIcon } from '@/features/shared/icons'
@@ -25,8 +24,6 @@ import { formatDate } from '@/lib/date'
 
 /** Rows shown before "Show all" — enough to see what kind of thing links here. */
 const PREVIEW_COUNT = 5
-/** Below this many references there is nothing to hunt through, so no filter. */
-const FILTER_MIN = 6
 
 interface Props {
   references: References | null
@@ -228,6 +225,7 @@ function RefGroup({
   items,
   locked,
   defaultOpen,
+  terms,
   renderItem,
   renderLocked,
 }: {
@@ -235,14 +233,12 @@ function RefGroup({
   items: (LinkedReference | UnlinkedReference)[]
   locked: RestrictedReference[]
   defaultOpen: boolean
+  terms: string[]
   renderItem: (ref: LinkedReference | UnlinkedReference, terms: string[], i: number) => ReactNode
   renderLocked: (ref: RestrictedReference) => ReactNode
 }) {
-  const [open, setOpen] = useState(defaultOpen)
+  const [toggled, setToggled] = useState<boolean | null>(null)
   const [showAll, setShowAll] = useState(false)
-  const [query, setQuery] = useState('')
-
-  const terms = useMemo(() => query.trim().toLowerCase().split(/\s+/).filter(Boolean), [query])
   const filtering = terms.length > 0
   // Every term must appear in the source title or the excerpt, so adding a word
   // narrows rather than widens.
@@ -268,6 +264,8 @@ function RefGroup({
   const cappedStubs =
     filtering || showAll ? stubs : stubs.slice(0, Math.max(0, PREVIEW_COUNT - capped.length))
   const hidden = total - (capped.length + cappedStubs.length)
+  // A search opens a group it found something in; a press always wins.
+  const open = toggled ?? (filtering ? shown > 0 : defaultOpen)
 
   return (
     <section className="notes-ref-group">
@@ -275,7 +273,7 @@ function RefGroup({
         <button
           type="button"
           className="notes-ref-head-btn"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => setToggled(!open)}
           aria-expanded={open}
         >
           <ChevronRightIcon
@@ -289,29 +287,12 @@ function RefGroup({
       </h3>
       {open && (
         <>
-          {total >= FILTER_MIN && (
-            <div className="notes-ref-toolbar">
-              <SearchInput
-                value={query}
-                onChange={setQuery}
-                placeholder={`Filter ${label.toLowerCase()}…`}
-                icon={<SearchIcon className="notes-ref-search-icon" strokeWidth={1.75} />}
-                className="notes-ref-search"
-              />
-            </div>
-          )}
-          {filtering && shown === 0 ? (
-            <p className="notes-ref-empty">No reference matches “{query.trim()}”.</p>
-          ) : (
-            <>
-              {capped.map((ref, i) => renderItem(ref, terms, i))}
-              {cappedStubs.map(renderLocked)}
-              {hidden > 0 && !filtering && (
-                <button type="button" className="notes-ref-more" onClick={() => setShowAll(true)}>
-                  Show {hidden} more
-                </button>
-              )}
-            </>
+          {capped.map((ref, i) => renderItem(ref, terms, i))}
+          {cappedStubs.map(renderLocked)}
+          {hidden > 0 && !filtering && (
+            <button type="button" className="notes-ref-more" onClick={() => setShowAll(true)}>
+              Show {hidden} more
+            </button>
           )}
         </>
       )}
@@ -327,6 +308,8 @@ export function LinkedReferences({
   onRequestReferenceAccess,
   showUnlinked = true,
 }: Props) {
+  const [query, setQuery] = useState('')
+  const terms = useMemo(() => query.trim().toLowerCase().split(/\s+/).filter(Boolean), [query])
   const groups = useMemo(() => {
     // Most recent source note first within each group.
     const linked = [...(references?.linked ?? [])].sort((a, b) => b.date - a.date)
@@ -355,6 +338,15 @@ export function LinkedReferences({
 
   return (
     <div className="notes-references">
+      <div className="notes-ref-toolbar">
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search references…"
+          icon={<SearchIcon className="notes-ref-search-icon" strokeWidth={1.75} />}
+          className="notes-ref-search"
+        />
+      </div>
       {totalLinked > 0 && (
         <RefGroup
           label="Linked references"
@@ -363,6 +355,7 @@ export function LinkedReferences({
           // Linked answers "who points at this" and is the reason the section
           // exists, so it opens; unlinked is a suggestion list and stays shut.
           defaultOpen
+          terms={terms}
           renderLocked={lockedRow}
           renderItem={(ref, terms, i) => (
             <Reference key={`l-${i}`} refItem={ref} title={title} terms={terms} onOpenNote={onOpenNote} />
@@ -376,6 +369,7 @@ export function LinkedReferences({
           items={groups.unlinked}
           locked={groups.lockedUnlinked}
           defaultOpen={false}
+          terms={terms}
           renderLocked={lockedRow}
           renderItem={(ref, terms) => {
             const unlinkedRef = ref as UnlinkedReference

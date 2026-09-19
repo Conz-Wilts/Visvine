@@ -120,11 +120,6 @@
   flex-shrink: 0;
   color: var(--color-text-muted, #4b5563);
 }
-.notes-ref-empty {
-  margin: 16px 0 0;
-  font-size: 14px;
-  color: var(--color-text-muted, #4b5563);
-}
 .notes-ref-group {
   margin-top: 28px;
 }
@@ -356,7 +351,7 @@
 /* Internal note links — plain styled links; `[[` is only the typing shortcut
  * that opens the picker, never shown around rendered links. */
 .notes-editor a.note-link {
-  color: var(--color-brand-dark-green, #2f7a3e);
+  color: var(--color-link);
   text-decoration: none;
   font-weight: 500;
   cursor: pointer;
@@ -396,7 +391,7 @@
   color: inherit;
 }
 .notes-editor .entity-link {
-  color: var(--color-brand-dark-green, #2f7a3e);
+  color: var(--color-link);
   font-weight: 500;
   cursor: pointer;
 }
@@ -406,7 +401,7 @@
 
 .notes-editor a[href^='http'],
 .notes-editor a[href^='mailto'] {
-  color: var(--color-brand-dark-green, #2f7a3e);
+  color: var(--color-link);
 }
 
 /* Inline Roam-style #hashtag pills (decoration-only; text stays plain markdown). */
