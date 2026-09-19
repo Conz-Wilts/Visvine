@@ -694,14 +694,14 @@ export default function TypesPanel() {
   // The Directory is not a tool a type comes from — every type, custom ones
   // included, is browsed there — so the types it owns are headed as what they
   // are: the ones the platform ships, set against the ones a member made.
+  const PLATFORM_TYPES = 'Platform types';
   const sectionLabel = (f: (typeof FEATURES)[number]) =>
-    f.key === 'directory' ? 'General types' : f.label;
+    f.key === 'directory' ? PLATFORM_TYPES : f.label;
   const toolLabels = new Map(FEATURES.map(f => [f.key, sectionLabel(f)]));
   // One bucket per tool, in the tool order the sidebar uses — the heading IS the
   // provenance, so a type never repeats its tool's name down the right edge.
   const byTool = new Map<string, NodeTypeConfig[]>();
   const customTypes: NodeTypeConfig[] = [];
-  const systemTypes: NodeTypeConfig[] = [];
   // Search reaches a type's aliases as well as its name: an alias is the word a
   // member actually has in mind ("Founder"), and the type it hangs off
   // ("Person") is what they're looking for. Person's live on the permission
@@ -718,9 +718,10 @@ export default function TypesPanel() {
   };
   for (const type of listedTypes) {
     if (!matches(type)) continue;
-    if (isSystemNodeType(type.name)) { systemTypes.push(type); continue; }
     const key = nodeTypeToolKey(type.name);
-    const label = key ? toolLabels.get(key) : undefined;
+    const label = isSystemNodeType(type.name)
+      ? PLATFORM_TYPES
+      : key ? toolLabels.get(key) : undefined;
     if (label) byTool.set(label, [...(byTool.get(label) ?? []), type]);
     else customTypes.push(type);
   }
@@ -730,7 +731,7 @@ export default function TypesPanel() {
     .filter((label, i, all) => all.indexOf(label) === i)
     .map(label => ({ label, types: byTool.get(label) ?? [] }))
     .filter(section => section.types.length > 0);
-  const anyTypes = toolSections.length + customTypes.length + systemTypes.length > 0;
+  const anyTypes = toolSections.length + customTypes.length > 0;
 
   // One type at a time: a list where every row can be open at once is a list
   // you scroll rather than one you read.
@@ -857,18 +858,6 @@ export default function TypesPanel() {
           </h3>
           <div className="divide-y divide-border-subtle">
             {customTypes.map(renderRow)}
-          </div>
-        </section>
-      )}
-
-      {/* The built-ins the platform runs on, last. */}
-      {systemTypes.length > 0 && (
-        <section>
-          <h3 className="border-b border-border-default pb-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-            System types
-          </h3>
-          <div className="divide-y divide-border-subtle">
-            {systemTypes.map(renderRow)}
           </div>
         </section>
       )}
