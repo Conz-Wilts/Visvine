@@ -517,9 +517,11 @@ export default function Sidebar() {
             // sheet's hairline is the divide.
             background: FRAME_BG,
             width: railW,
-            // The rail hangs under the band (which, in the mac app, is where
-            // the traffic lights stand).
-            paddingTop: bandH,
+            // The rail runs to the window's top, beside the band — except in
+            // the mac app's window, where the traffic lights take the band's
+            // left end and the rail starts under them. In full screen they are
+            // in the menu bar's drop-down, so the space moves back up.
+            paddingTop: chromeInset,
             paddingBottom: RAIL_PAD_Y,
             transition: reduced ? "none" : `width ${RAIL_MOTION}`,
           }}
