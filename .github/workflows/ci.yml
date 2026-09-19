@@ -3,10 +3,17 @@ name: CI
 # Quality + security gates. deploy.yml handles release; this runs the checks the
 # AGENTS.md verification section describes on every PR and push to main so
 # regressions can't merge silently.
+# A change to docs or markdown alone cannot break a check, so it runs none.
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -15,6 +22,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     # A real Postgres, with pgvector, because a meaningful slice of this app is
     # rows racing each other — the agent tick's claim/reclaim CAS, the schema
@@ -47,12 +55,13 @@ jobs:
       - name: Reject committed .env files
         run: node scripts/check-no-env-committed.mjs
 
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@10.30.2 --activate
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
-
-      - name: Enable pnpm
-        run: corepack enable && corepack prepare pnpm@10.30.2 --activate
+          cache: pnpm
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -87,15 +96,17 @@ jobs:
   # without this job it ships on nothing but local discipline.
   desktop:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@10.30.2 --activate
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
-
-      - name: Enable pnpm
-        run: corepack enable && corepack prepare pnpm@10.30.2 --activate
+          cache: pnpm
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -110,15 +121,17 @@ jobs:
   # than hiding at the end of a job that already passed everything else.
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@10.30.2 --activate
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
-
-      - name: Enable pnpm
-        run: corepack enable && corepack prepare pnpm@10.30.2 --activate
+          cache: pnpm
 
       - name: Install
         run: pnpm install --frozen-lockfile

@@ -3,6 +3,10 @@ name: Deploy to Cloud Run
 on:
   push:
     branches: [main]
+    # Docs and markdown never reach the image.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   # Manual re-run of the exact same pipeline against the current main. The way
   # to redeploy after changing a secret or an env var — which Cloud Run resolves
   # at revision-creation time, so a secret rotated in Secret Manager does not
@@ -34,6 +38,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Names the target so the deploy is recorded against it and gets the
     # environment's secrets and variables. Deployment protection rules (required
     # reviewers, wait timers) need a paid plan for a private repo and are not
@@ -92,14 +97,20 @@ jobs:
       # while production is still entirely untouched. A build that fails here
       # costs a red check; a build that failed after the migration would leave
       # the schema ahead of the code that is still serving.
-      - name: Build image
-        run: |
-          docker build -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - name: Push image
-        run: |
-          docker push ${{ env.IMAGE }}:${{ github.sha }}
-          docker push ${{ env.IMAGE }}:latest
+      # Layers are cached in the Actions cache, so a push that leaves the
+      # lockfile alone skips the dependency install inside the image.
+      - name: Build and push image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       # ── Production changes start here ────────────────────────────────────────
 
