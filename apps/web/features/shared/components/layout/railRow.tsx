@@ -68,12 +68,10 @@ export const ROW_CLASS =
 // pointer: the same red the danger buttons use, on the row's own hover block.
 // It carries no colour at rest — a red row in the band would read as an alert
 // rather than as the last thing you do.
-// On the rail itself the block is a rounded tile inset from the rail's edges,
-// the way Slack, Linear and Material's rail draw it: a band pads its rows off
-// the hairlines, so an edge-to-edge strip would float between them with a gap
-// above and below. An inset tile is a shape on its own and needs no line.
+// On the rail the block fills the row's square cell edge to edge, so shut it
+// is a square tile of the rail, flush against the hairlines either side.
 const RAIL_TILE =
-  "before:absolute before:inset-1 before:-z-10 before:rounded-[12px] before:transition-colors before:duration-150";
+  "before:absolute before:inset-0 before:-z-10 before:transition-colors before:duration-150";
 export const RAIL_ROW_CLASS = `relative z-10 flex w-full items-center transition-colors duration-150 ${RAIL_TILE} hover:before:bg-surface-3`;
 const ROW_DANGER_CLASS = `relative z-10 flex w-full items-center transition-colors duration-150 ${RAIL_TILE} hover:before:bg-red-50 hover:text-red-600`;
 export const ROW_TEXT = "text-[15px] whitespace-nowrap";
