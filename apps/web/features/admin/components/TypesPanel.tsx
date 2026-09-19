@@ -241,7 +241,7 @@ function LabelAliases({ typeName, typeColor, aliases, allAliases, newOpen, onNew
         <AliasRow
           key={`${alias.nodeType}:${alias.name}`}
           nested={i === aliases.length - 1 ? 'last' : 'mid'}
-          label={<AliasLabel name={alias.name} color={alias.color} muted />}
+          label={<AliasLabel name={alias.name} color={alias.color} />}
           meta=""
           action={null}
           onOpen={() => openAlias(alias)}

@@ -100,30 +100,18 @@ export function NewAliasRow({ nested, onClick }: { nested?: TreeGuideKind; onCli
  * swatch, then the word. A chip is a tag on a card; this is a line of a list,
  * and the list already reads down the swatches.
  */
-export function AliasLabel({ name, color, muted, size = 'alias' }: {
+export function AliasLabel({ name, color }: {
   name: string;
   color?: string;
-  /** The word in the secondary weight — an alias under the type it belongs to. */
-  muted?: boolean;
-  /** `type` matches the line above it; `alias` is deliberately a size down, so
-      a glance says these are the things the type can wear, not more types. */
-  size?: 'type' | 'alias';
 }) {
-  const type = size === 'type';
   return (
-    <span className={`inline-flex min-w-0 items-center ${type ? 'gap-3.5' : 'gap-3'}`}>
+    <span className="inline-flex min-w-0 items-center gap-3.5">
       <span
-        className={`${type ? 'h-5 w-5' : 'h-4 w-4'} shrink-0 rounded`}
+        className="h-5 w-5 shrink-0 rounded"
         style={{ background: color ?? 'var(--color-text-muted)' }}
         aria-hidden
       />
-      <span
-        className={`truncate text-base ${
-          muted ? 'font-medium text-text-secondary' : 'font-semibold text-text-primary'
-        }`}
-      >
-        {name}
-      </span>
+      <span className="truncate text-base font-semibold text-text-primary">{name}</span>
     </span>
   );
 }
@@ -276,7 +264,7 @@ export default function AliasList({ mode, typeColor, newOpen, onNewStart, onNewD
           itself, so the guides hang off that instead. */}
       {mode === 'permissions' && (
         <AliasRow
-          label={<AliasLabel name="Person" color={typeColor} size="type" />}
+          label={<AliasLabel name="Person" color={typeColor} />}
           meta={`${peopleCount(data.members.length)} · ${grantCount(everyoneGrants)}`}
           onOpen={() => setOpen({ kind: 'everyone' })}
         />
@@ -290,7 +278,7 @@ export default function AliasList({ mode, typeColor, newOpen, onNewStart, onNewD
           <AliasRow
             key={alias.id}
             nested={i === aliases.length - 1 ? 'last' : 'mid'}
-            label={<AliasLabel name={alias.name} color={alias.color} muted />}
+            label={<AliasLabel name={alias.name} color={alias.color} />}
             meta={mode === 'permissions'
               ? `${peopleCount(alias.holders.length)} · ${grantCount(grantsByAlias.get(alias.id) ?? 0)}`
               : ''}
