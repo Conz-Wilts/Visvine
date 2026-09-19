@@ -55,8 +55,8 @@ export function SpaceListRow({
   onToggle?: () => void;
 }) {
   const check = (
-    <svg className="h-6 w-6 shrink-0 text-brand-green" fill="currentColor" viewBox="0 0 20 20">
-      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+    <svg className="h-6 w-6 shrink-0 text-brand-green" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
     </svg>
   );
   return (
@@ -135,8 +135,8 @@ export function SubspaceRow({
       <TreeSpineJoin kind={nested} />
       <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`}>{space.name}</span>
       {current && (
-        <svg className="h-6 w-6 shrink-0 text-brand-green" fill="currentColor" viewBox="0 0 20 20">
-          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+        <svg className="h-6 w-6 shrink-0 text-brand-green" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+          <path d="M5 12.5l4.5 4.5L19 7.5" />
         </svg>
       )}
     </button>
