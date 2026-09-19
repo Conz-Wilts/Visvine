@@ -40,6 +40,7 @@ import {
   entityIndexPathOf,
   entityOwnerPathOf,
   entityStub,
+  entityKindOf,
   entityTypeLabelOf,
   entityTypeNamesKind,
   recordOwnsNoteTitle,
@@ -1267,6 +1268,7 @@ async function ensureParentFolderNote(
 async function enforceIndexContract(context: Context, p: string, content: string): Promise<string> {
   const folder = folderOfIndexPath(p)
   const children = await directChildrenOf(context, folder)
+  if (p === INDEX_BASENAME) content = await dropSubspaceRootType(context, content)
   // A folder about an entity owes the entity contract wherever it sits: an
   // index declaring `type: Person` outside the namespaces is adopted here —
   // before the frontmatter is decided, for the same reason a Tool's is — so it
@@ -1294,6 +1296,21 @@ async function enforceIndexContract(context: Context, p: string, content: string
     if (node) return normalizeIndexNote(content, folder, children, await entityContractOf(node, context.spaceId))
   }
   return normalizeIndexNote(content, folder, children)
+}
+
+/**
+ * A sub-space's root index is the sub-space's context, never a record of a
+ * space: a `type: Space` (or any spelling of it) there would adopt the room as
+ * a Space record inside itself. Dropped on every write.
+ */
+async function dropSubspaceRootType(context: Context, content: string): Promise<string> {
+  if (context.ownerKey !== SHARED_OWNER_KEY) return content
+  const fm = parseFrontmatter(content) as Record<string, unknown>
+  if (typeof fm.type !== 'string' || entityKindOf(fm.type) !== 'space') return content
+  const space = await prisma.space.findUnique({ where: { id: context.spaceId }, select: { parentId: true } })
+  if (!space?.parentId) return content
+  const { type: _type, ...rest } = fm
+  return joinFrontmatter(rest, splitFrontmatter(content).body)
 }
 
 /** `content` without its `node:` line. Only for a note nothing is bound to:
