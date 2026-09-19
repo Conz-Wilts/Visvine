@@ -359,13 +359,6 @@ if (!app.requestSingleInstanceLock()) {
     // The frame follows the app's theme, never the OS appearance: a dark
     // system setting must not put a dark title bar around a light page.
     nativeTheme.themeSource = WINDOW_THEME;
-    // macOS takes the Dock icon from the bundle, and ignores BrowserWindow's
-    // `icon` entirely. Packaged, that bundle is ours (electron-builder's
-    // icon.icns); run from source it is Electron's own, so the mark is set by
-    // hand — otherwise the Dock and Cmd-Tab show the default Electron atom.
-    if (process.platform === "darwin" && !app.isPackaged) {
-      app.dock?.setIcon(path.join(__dirname, "..", "assets", "icon-mac.png"));
-    }
     // Only the app itself may hold a permission; auth-provider pages and the
     // offline page get nothing. Checks and requests answer from the same list.
     const permitted = (permission: string, origin: string) =>
