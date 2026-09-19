@@ -3,27 +3,27 @@
 import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
-import { PlayIcon, SettingsIcon } from '@/features/shared/icons';
+import { PlayIcon } from '@/features/shared/icons';
 import { Alert, Skeleton } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson } from '@/lib/fetchJson';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { SharePanel } from '@/features/notes/components/SharePanel';
-import { useShareAction } from '@/features/notes/components/useShareAction';
 import { cachedFetch } from '@/features/shared/lib/requestCache';
 import { agentBriefPath } from '@/lib/agents/config';
 import type { AgentReadiness, AgentSubscriber, AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ActivateAgentDialog from '@/features/agents/components/ActivateAgentDialog';
-import AgentSettingsDialog, { type SettingsTab } from '@/features/agents/components/AgentSettingsDialog';
+import AgentConfig from '@/features/agents/components/AgentConfig';
+import AgentHistory from '@/features/agents/components/AgentHistory';
+import AgentTrail, { type AgentView } from '@/features/agents/components/AgentTrail';
 import AgentNeeds from '@/features/agents/components/AgentNeeds';
 import ConnectorReadinessNotices from '@/features/agents/components/ConnectorReadinessNotices';
-import RunPicker from '@/features/agents/components/RunPicker';
 import RunsForSection from '@/features/agents/components/RunsForSection';
 import RunPane from '@/features/agents/components/RunPane';
 import StatusDot from '@/features/agents/components/StatusDot';
 import LocalRunPane from '@/features/agents/components/LocalRunPane';
-import { setupBlocker, statusLine, terminalLabel } from '@/features/agents/lib/rowState';
+import { fmtAgo, setupBlocker, statusLine, terminalLabel } from '@/features/agents/lib/rowState';
 import { desktopRuntimes } from '@/features/desktop/lib/desktop';
 import { LOCAL_RUNTIMES, localRuntimeOf } from '@/lib/agents/local';
 
@@ -64,6 +64,8 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const runParam = params.get('run');
+  const viewParam = params.get('view');
+  const view: AgentView = viewParam === 'config' || viewParam === 'history' ? viewParam : 'run';
   const { currentSpace, loading: spaceLoading } = useSpace();
   const spaceId = currentSpace?.id;
 
@@ -71,7 +73,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState(false);
-  const [panel, setPanel] = useState<SettingsTab | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   // A run on the member's own plan, in flight on this machine — keyed by the
@@ -80,7 +81,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const [sharing, setSharing] = useState(false);
   const [models, setModels] = useState<{ ref: string; label: string }[]>([]);
   const { session } = useAuth();
-  const share = useShareAction({ onOpen: () => setSharing(true), title: 'Who it is shared with, and runs for' });
 
   // The run being watched rides the URL beside `?tab=`, so a `watch` href from
   // an action or a teammate opens exactly the run it names, and
@@ -90,6 +90,23 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
       const next = new URLSearchParams(params.toString());
       if (runId) next.set('run', runId);
       else next.delete('run');
+      const q = next.toString();
+      router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+    },
+    [params, pathname, router],
+  );
+
+  // Which of the page's three screens is up rides the URL too; choosing a run
+  // from History lands back on the run.
+  const go = useCallback(
+    (nextView: AgentView, runId?: string | null) => {
+      const next = new URLSearchParams(params.toString());
+      if (nextView === 'run') next.delete('view');
+      else next.set('view', nextView);
+      if (runId !== undefined) {
+        if (runId) next.set('run', runId);
+        else next.delete('run');
+      }
       const q = next.toString();
       router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
     },
@@ -165,7 +182,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   // What the run column shows: the run in flight, else the one the URL names,
   // else the latest. A live run always wins — watching it is why you are here.
   const shownRun = liveRun ?? runs.find((r) => r.id === runParam) ?? runs[0] ?? null;
-  const editBrief = () => router.replace(`/directory/${encodeURIComponent(nodeId)}?tab=context`);
 
   const patchActive = async (active: boolean) => {
     if (!spaceId) return;
@@ -232,7 +248,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 pb-16">
-      {share.slot}
+      <AgentTrail view={view} onView={go} onShare={() => setSharing(true)} />
       <header className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <h1 className="min-w-0 flex-1 truncate text-[20px] font-semibold leading-tight text-text-primary">{agent.title || agent.name}</h1>
@@ -249,10 +265,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
               <PlayIcon className="h-4 w-4" />
             </button>
           )}
-          {share.fallback}
-          <button type="button" className={iconButton} aria-label="Settings" title="Settings" onClick={() => setPanel(canManage ? 'settings' : 'memory')}>
-            <SettingsIcon className="h-4 w-4" />
-          </button>
         </div>
         <div className="flex items-center gap-2.5">
           <StatusDot tone={line.tone} />
@@ -268,7 +280,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         </div>
         {blocker && <p className="pl-[18px] text-[13px] text-amber-700">{blocker.text}</p>}
         <div className="pl-[18px] empty:hidden">
-          <AgentNeeds needs={needs} isAdmin={isAdmin} onEditSettings={() => setPanel('settings')} />
+          <AgentNeeds needs={needs} isAdmin={isAdmin} onEditSettings={() => go('config')} />
           {agent.readiness.runAs && <ConnectorReadinessNotices items={agent.readiness.runAs} mine={false} who={agent.readiness.runAsName} isAdmin={isAdmin} />}
         </div>
         {notice && (
@@ -288,7 +300,34 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         )}
       </header>
 
-      {(localRun !== null || shownRun) && spaceId && (
+      {spaceId && view === 'config' && (
+        <main className="min-w-0 border-t border-border-subtle pt-3">
+          <AgentConfig
+            spaceId={spaceId}
+            agent={agent}
+            isAdmin={isAdmin}
+            canManage={canManage}
+            liveRun={!!liveRun}
+            onSchedule={() => setActivating(true)}
+            onSaved={() => void reload()}
+          />
+        </main>
+      )}
+
+      {view === 'history' && (
+        <main className="min-w-0 border-t border-border-subtle pt-5">
+          <AgentHistory
+            agentName={name}
+            runs={runs}
+            memory={agent.memory}
+            shownRunId={shownRun?.id ?? null}
+            whoOf={whoOf}
+            onSelect={(id) => go('run', id === liveRun?.id ? null : id)}
+          />
+        </main>
+      )}
+
+      {view === 'run' && (localRun !== null || shownRun) && spaceId && (
         <main className="min-w-0 border-t border-border-subtle pt-5">
           {localRun !== null ? (
             <LocalRunPane
@@ -313,7 +352,11 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
               agentName={name}
               runId={shownRun.id}
               who={whoOf(shownRun)}
-              picker={<RunPicker runs={runs} shownRunId={shownRun.id} whoOf={whoOf} onSelect={(id) => selectRun(id === liveRun?.id ? null : id)} />}
+              picker={
+                <button type="button" className="shrink-0 rounded-md px-1.5 py-1 text-[12px] text-text-muted hover:bg-surface-2 hover:text-text-primary" onClick={() => go('history')}>
+                  {fmtAgo(shownRun.startedAt)}
+                </button>
+              }
               onFinished={() => void reload()}
             />
           ) : null}
@@ -342,23 +385,6 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
               onChanged={() => void reload()}
             />
           }
-        />
-      )}
-
-      {panel && spaceId && (
-        <AgentSettingsDialog
-          spaceId={spaceId}
-          agent={agent}
-          isAdmin={isAdmin}
-          canManage={canManage}
-          liveRun={!!liveRun}
-          initialTab={panel}
-          onClose={() => setPanel(null)}
-          onSaved={() => void reload()}
-          onEditBrief={() => {
-            setPanel(null);
-            editBrief();
-          }}
         />
       )}
 

@@ -396,22 +396,26 @@ deadline, UTC) was already correct and was left untouched.
   beside Context and Raw (`features/profile/components/AgentPageContent.tsx`). It shows up on an
   `agent:` node and nowhere else, the way Profile shows up on a person: an agent is a note under
   `agents/` in the Context, so there is no agents tool — no rail row, no feature key, nothing to
-  switch on or off. The tab is one column: the name with the switch, Run, Share and the gear;
+  switch on or off. The tab is one column, with **Config · History · Share** at the right end of the tab row
+  (`AgentTrail`, the screen rides `?view=`): the name with the switch and Run;
   one status line (pressing it opens the schedule); then **the run** — the one in flight, or the
   one the URL names, `?run=<id>` — as a short numbered list. **A step is a turn**: what the model
   said it was about to do, titled by its first sentence (or by its calls, `Fetched 6 pages`, when
   it said nothing), opening onto the calls it made; a call opens onto its result, or the machine's
   record for `run_command` / `open_page` (`RunPane` + `RunSteps` over the pure folds
   `lib/agents/shared/trace.ts#groupSteps` and `#attachMachine`). The model's narration is never on
-  the page, only inside an opened step; the executor's notes sit there too. **Which run this is,
-  is the word at the end of the run line** (`RunPicker`, the last 25) — there is no history list.
+  the page, only inside an opened step; the executor's notes sit there too. **History** (`AgentHistory`) is
+  the last 25 runs — a row opens that run — over the memory note, read a section at a time
+  (`memory.ts#memorySections`); the note is where a person corrects it. **Config** (`AgentConfig`)
+  is one row per brief key — when, model, tools, connectors, group, and the admin's cap — each
+  saved as it is changed through the notes API, with the machine (`MachinePane`) under it for
+  admins. What has no row — description, sub-space share, dry run, turn cap, skills — is edited in
+  the note.
   Under the steps: what was refused at the boundary, and what changed. **Who it runs for is part
   of sharing it**: Share, on the tab row, opens the brief's `SharePanel` with a Runs for section
   (`RunsForSection`) — your own switch, then your own time and model — which writes your entry in
   the brief's `for:` block (below). There is no box on the page: a person starts a run with Run,
-  and `lib/agents/summon.ts` still serves `run_agent`'s `message`. Everything configured rather
-  than watched — settings, memory, skills, and for an admin the machine (`MachinePane`) — is
-  behind the gear. `run_agent`, `vm_browse` and `create_agent` return a `watch` / `page` href into
+  and `lib/agents/summon.ts` still serves `run_agent`'s `message`. `run_agent`, `vm_browse` and `create_agent` return a `watch` / `page` href into
   it (`lib/agents/config.ts#agentPageHref(name, runId?)`). Polling throughout, never a stream:
   quick while anything runs, a slow walk otherwise.
 - **Who it runs for is the brief's `for:` block** (`lib/agents/shared/runsFor.ts`, pure):
@@ -458,17 +462,12 @@ deadline, UTC) was already correct and was left untouched.
   providers + `keyStored`, connectors, sibling agents, `defaultModel` = the first provider with a
   key). The body is the brief; Create writes `agents/<name>/index.md` through `newAgentNote` (which
   stamps `active: false` — a new agent is off until someone turns it on) and lands on the agent's page. An explicit `?type=` always wins over a draft stashed by an earlier visit.
-- `/directory/agent:<name>` — Agent tab beside the Context/Raw note tabs: the status line with its
-  switch (the activation dialog's "Also run when…" section sets `on.context` globs, the `on.webhook`
-  connector, `every` and `debounce`), Run now (author/admin), scheduler banner; while the agent is **off**, the setup checklist (`AgentSetupChecklist`: brief parses →
-  model key stored → when it runs → Turn on, each line naming who does what next); while **on**,
-  when it fires with a Change control (the activation dialog);
-  **Settings** (`AgentSettingsPanel`, author or admin) — the same fields as the draft plus dry run
-  and the turn cap, saved by rewriting only those frontmatter keys (`lib/agents/briefEdit.ts`) and
-  writing the note through the ordinary notes API — the same note the activation lives in, so a save
-  keeps the schedule it already had; the monthly cap (admins); the latest runs, each a
-  link into the window. The note page is the agent as a thing to configure; the window is the
-  agent at work.
+- `/directory/agent:<name>` — the Agent tab beside the Context/Raw note tabs, described above:
+  the run, with Config, History and Share on the tab row. The activation dialog (opened from the
+  status line, the switch, or Config → When) sets the clock, `on.context` globs, the `on.webhook`
+  connector, `every` and `debounce`. Config rewrites only the frontmatter keys it shows
+  (`lib/agents/briefEdit.ts`) through the ordinary notes API — the same note the activation lives
+  in, so a save keeps the schedule it already had.
 - Console → Agents: **gone.** Everything it held now lives on the agent: the run timezone is part of
   the brief (required to turn a scheduled agent on), models and keys are connectors, and
   activation was always per agent, on the agent's page.

@@ -125,13 +125,13 @@ export function memoryForPrompt(content: string | null): string | null {
   return body.length > MEMORY_PROMPT_CAP_CHARS ? body.slice(0, MEMORY_PROMPT_CAP_CHARS) + '\n…[memory truncated]' : body
 }
 
-/** The note at a glance, for the agent's page: how many lines each section holds and the open threads. */
-export function memorySummary(content: string | null): { total: number; counts: { section: MemorySection; count: number }[]; open: string[] } {
+/** What the agent carries between runs, a section at a time — dates and bullets stripped, empty sections left out. */
+export function memorySections(content: string | null): { section: MemorySection; lines: string[] }[] {
   const p = parse(content ?? '')
-  const linesOf = (title: MemorySection) =>
-    (p.sections.find((s) => s.title.toLowerCase() === title.toLowerCase())?.lines ?? [])
+  return REMEMBER_SECTIONS.map((section) => ({
+    section,
+    lines: (p.sections.find((s) => s.title.toLowerCase() === section.toLowerCase())?.lines ?? [])
       .map((l) => l.replace(/^-\s*/, '').replace(/^\d{4}-\d{2}-\d{2} — /, '').trim())
-      .filter(Boolean)
-  const counts = REMEMBER_SECTIONS.map((section) => ({ section, count: linesOf(section).length }))
-  return { total: counts.reduce((n, c) => n + c.count, 0), counts, open: linesOf('Open threads').slice(-3) }
+      .filter(Boolean),
+  })).filter((s) => s.lines.length > 0)
 }

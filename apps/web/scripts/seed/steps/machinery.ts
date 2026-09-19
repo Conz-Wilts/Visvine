@@ -125,6 +125,28 @@ data/retention.md. Numbers first, then the one thing that went wrong, then
 what we are hiring for. Plain sentences; no adjectives about growth.
 `
 
+const DIGEST_MEMORY = `---
+title: Memory
+agent: ${DIGEST}
+---
+
+## What I know
+- 2026-09-18 — last digest covered everything saved up to yesterday 09:00
+- 2026-09-16 — the CRM is ahead of the deal notes by about a day
+- 2026-09-12 — Quarterdeck Partners is at proposal; Ana owns it
+
+## Decisions
+- 2026-09-16 — a trial with a login in the last 3 days is quiet, not stalled
+- 2026-09-10 — closed-lost deals get one line, never a section
+
+## Open threads
+- 2026-09-18 — Harbour Labs has asked about SSO twice; nobody has answered
+- 2026-09-17 — Fernhill: 9 days without a login in the notes, 2 in the CRM
+
+## Last run
+- 2026-09-19 — scheduled — one stage change, one loss, Juniper renewed
+`
+
 export async function seedAgents(): Promise<{ agents: number; runs: number }> {
   const context = { spaceId: SPACE_ID, ownerKey: SHARED }
   const actor = anchorActor(ADMIN)
@@ -143,6 +165,7 @@ export async function seedAgents(): Promise<{ agents: number; runs: number }> {
 
   await putNote(context, `agents/${DIGEST}/index.md`, DIGEST_BRIEF, actor)
   await putNote(context, `agents/${DRAFTER}/index.md`, DRAFTER_BRIEF, actor)
+  await putNote(context, `agents/${DIGEST}/memory.md`, DIGEST_MEMORY, actor)
 
   const digest = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId: SPACE_ID, name: DIGEST } } })
   const drafter = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId: SPACE_ID, name: DRAFTER } } })

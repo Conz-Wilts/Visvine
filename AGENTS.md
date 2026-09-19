@@ -519,20 +519,25 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   `AgentsRoster.tsx`) with **the clock** over it: the next 24 hours, the nightly
   clean, and what is running with its current step
   (`lib/agents/shared/roster.ts` pure, `runs.ts#currentStepOf`). The tab is ONE
-  COLUMN: the name with the switch, Run, Share and the gear; one status line
+  COLUMN with three doors at the right end of the tab row — **Config · History ·
+  Share** (`AgentTrail`, `?view=`): the name with the switch and Run; one status line
   (pressing it opens the schedule); then THE RUN as a short numbered list —
   **a step per turn, titled in the model's own first sentence, opening onto the
   calls it made** (`trace.ts#groupSteps`, pure; `RunSteps`), each call opening
   onto its result or the machine's record (`trace.ts#attachMachine` joins
   `agent_vm_events` by run id). The model's narration is never on the page,
-  only inside an opened step. **Which run it is, is the word at the end of the
-  run line** (`RunPicker`) — there is no history list. **Who it runs for is part
+  only inside an opened step. **History is its own screen** (`AgentHistory`): the runs, a row opening
+  one, over the memory note read a section at a time
+  (`memory.ts#memorySections`). **Config is its own screen** (`AgentConfig`):
+  one row per brief key — when, model, tools, connectors, group, the admin's
+  cap — saved as it is changed, with the machine under it for admins. Anything
+  else about an agent (description, sub-space share, dry run, turn cap, skills)
+  is edited in the note; there is no settings dialog and no Skills surface. **Who it runs for is part
   of sharing it**: Share on the tab row opens the brief's `SharePanel` with a
   Runs for section (`RunsForSection`) — your own switch, time and model.
   There is no box on the page: a person starts a run with Run; `run_agent`
   still takes a `message` and `send_to_agent` still fills the mailbox
-  (`lib/agents/summon.ts`). A gear opens one dialog: Settings · Memory ·
-  Skills · Machine. Actions return `watch` hrefs (`config.ts#agentPageHref`).
+  (`lib/agents/summon.ts`). Actions return `watch` hrefs (`config.ts#agentPageHref`).
   Polling, never a stream.
 
 ## The Directory
