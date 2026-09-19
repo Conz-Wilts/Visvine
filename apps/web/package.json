@@ -33,7 +33,6 @@
     "db:notes-vault": "node scripts/import-notes-vault.mjs",
     "db:context-links:backfill": "tsx scripts/backfill-context-links.ts",
     "db:link-reasons": "tsx scripts/backfill-context-links.ts --reasons",
-    "db:subspaces:root-type": "tsx scripts/subspace-root-type.ts",
     "db:index-notes:rebuild": "tsx scripts/rebuild-index-notes.ts",
     "db:index-notes:strip-type": "tsx scripts/strip-index-type.ts",
     "db:settings:drop": "tsx scripts/drop-settings-notes.ts",
