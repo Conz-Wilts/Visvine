@@ -20,6 +20,7 @@
  * correct call cannot drift from the code; the half that explains WHEN to make
  * it can be improved by a person, in the app, without a deploy.
  */
+import { humanizeFolderName } from '@/lib/notes/shared/indexNote'
 import { logger } from '@/lib/logger'
 import { ensureGlobalSpace, GLOBAL_SPACE_ID, GLOBAL_SPACE_NAME } from '@/lib/spaces/globalSpace'
 import { readNoteOrNull, writeNote, type Actor, type Context } from '@/lib/notes/store'
@@ -69,7 +70,7 @@ export async function syncActionNotes(): Promise<SyncReport> {
       path,
       joinFrontmatter(
         {
-          title: def.name,
+          title: humanizeFolderName(def.name),
           description: def.summary,
           action: def.name,
           scope: def.scope,
@@ -89,7 +90,7 @@ export async function syncActionNotes(): Promise<SyncReport> {
       recipeNotePath(recipe.id),
       joinFrontmatter(
         {
-          title: recipe.id,
+          title: humanizeFolderName(recipe.id),
           description: recipe.when,
           recipe: recipe.id,
           when: recipe.when,

@@ -13,7 +13,7 @@
 // ABOUT, exactly like every other row: a person's context folder sits under
 // People beside the flat person notes, because it is a person note that grew a
 // folder. Only a folder that claims no subject falls into its own "Folders"
-// group, pinned to the top above the notes that live inside them.
+// group, labelled Index, pinned to the top above the notes that live inside them.
 //
 // Each group is painted in its type's configured colour — the same colour the
 // directory grid and the profile rails use — because the grouping IS the
@@ -23,7 +23,7 @@
 
 import { useMemo, useState, type CSSProperties } from 'react';
 import { ChevronDownIcon, ChevronRightIcon } from '@/features/shared/icons';
-import { isIndexPath } from '@/lib/notes/shared/indexNote';
+import { INDEX_DISPLAY_TYPE, isIndexPath } from '@/lib/notes/shared/indexNote';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { findAlias, getNodeTypeConfig } from '@/lib/types';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
@@ -155,7 +155,7 @@ export default function ContextLinksPanel({
         // A folder about nothing in particular. Typed folders never reach here:
         // they group under their subject with everything else of that type.
         key = FOLDER;
-        label = 'Folders';
+        label = INDEX_DISPLAY_TYPE;
         color = NEUTRAL;
       } else if (!rawType) {
         key = UNTYPED;

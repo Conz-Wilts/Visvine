@@ -24,6 +24,7 @@
  * `resolveContext`, deliberately: the catalogue is product documentation, not
  * tenant data, and every authenticated caller is entitled to all of it.
  */
+import { humanizeFolderName } from '@/lib/notes/shared/indexNote'
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { GLOBAL_SPACE_ID } from '@/lib/spaces/globalSpace'
@@ -149,7 +150,7 @@ export async function readActionNotes(): Promise<Map<string, ActionNote>> {
 function shippedRecipes(): RecipeNote[] {
   return [...allRecipes(), orientRecipe()].map((r) => ({
     id: r.id,
-    title: r.id,
+    title: humanizeFolderName(r.id),
     when: r.when,
     keywords: r.keywords,
     body: renderRecipeBody(r),
@@ -172,7 +173,7 @@ export async function readRecipeNotes(): Promise<RecipeNote[]> {
     const { body } = splitFrontmatter(row.content)
     out.push({
       id,
-      title: typeof fm.title === 'string' ? fm.title : id,
+      title: typeof fm.title === 'string' ? fm.title : humanizeFolderName(id),
       when: typeof fm.when === 'string' ? fm.when : '',
       keywords: keywordsFrom(fm.keywords),
       body: body.trim(),
