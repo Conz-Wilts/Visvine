@@ -109,7 +109,6 @@ export function Row({
   active = false,
   badge,
   danger = false,
-  square = false,
   expanded,
   reduced,
   ...aria
@@ -122,15 +121,15 @@ export function Row({
   /** The row undoes something — it goes red under the pointer (Sign out). */
   danger?: boolean;
   badge?: ReactNode;
-  /** One of the rail's ends — the row is END_ROW_H tall, a square. */
-  square?: boolean;
   expanded: boolean;
   /** prefers-reduced-motion — no fade, the name is simply there or not. */
   reduced: boolean;
   "aria-expanded"?: boolean;
   "aria-haspopup"?: "dialog" | "menu";
 }) {
-  const height = square ? END_ROW_H : ROW_H;
+  // Every rail row is the ends' square, so the column keeps one rhythm from
+  // the space at its head to the avatar at its foot.
+  const height = END_ROW_H;
   const inner = (
     <>
       {/* Icon: the one glyph column, identical open or closed */}

@@ -9,7 +9,7 @@ import { useAuth } from "@/features/auth/contexts/AuthContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
 import { selfProfileHref } from "@/features/profile/lib/selfView";
 import { CONNECTORS_PARAM, settingsHrefFor } from "@/features/settings/components/SettingsConnectors";
-import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
+import { END_ROW_H, ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
 
 /**
  * The account band — the rail's last rows (Sidebar). You sit at the foot of the
@@ -127,7 +127,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   // The stack's open height: the rows, the gaps between them, and one more gap
   // holding the last of them off the avatar. Same rhythm as every other band,
   // so the rows land where rail rows land rather than in a menu's own spacing.
-  const stackH = actions.length * ROW_H + actions.length * ITEM_GAP;
+  const stackH = `calc(${actions.length} * ${END_ROW_H} + ${actions.length * ITEM_GAP}px)`;
   const dur = reduced ? "0s" : "260ms";
 
   return (
@@ -185,7 +185,6 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
           expanded={expanded}
           reduced={reduced}
           label={user.name ?? "Account"}
-          square
           active={open}
           href={profileHref ?? undefined}
           onClick={profileHref ? undefined : () => { setPinned((v) => !v); setOpen(true); }}
