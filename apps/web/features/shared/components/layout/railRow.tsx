@@ -38,10 +38,9 @@ export const ITEM_GAP = 0;
 // column and its hover block is the same square as every row below it.
 export const HEAD_CELL_W = GLYPH_CELL_W;
 // The rail's two ends — the space at its head, you at its foot — are each a
-// band of one row, held between hairlines, and each is drawn square: as tall
-// as the rail is wide inside its right seam. The rail's own border takes a
-// pixel of its width, hence the one off.
-export const END_ROW_H = `calc(${GLYPH_CELL_W} - 1px)`;
+// band of one row, held between hairlines, and each is as tall as every other
+// row, so the column keeps one rhythm from head to foot.
+export const END_ROW_H = `${ROW_H}px`;
 // The space's square at the rail's head, as a share of the rail's width —
 // Slack's workspace icon is ~54% of its rail: 42 in the browser, 48 in the
 // mac app's wider rail.
@@ -52,7 +51,7 @@ export function headSquareSize(railW: number): number {
 /** The room the head cell leaves above its square (the square is centred in
  *  an END_ROW_H-tall cell, so the rail can place the square's top exactly). */
 export function headSquareInset(railW: number): number {
-  return (railW - 1 - headSquareSize(railW)) / 2;
+  return (ROW_H - headSquareSize(railW)) / 2;
 }
 // The nav icons ship at h-5 w-5 from the feature registry (they are also drawn
 // on the launcher cards at that size); the rail draws them larger, so each cell
@@ -125,7 +124,7 @@ export function Row({
   /** The row undoes something — it goes red under the pointer (Sign out). */
   danger?: boolean;
   badge?: ReactNode;
-  /** One of the rail's ends — the row is END_ROW_H tall, a square. */
+  /** One of the rail's ends — the row is END_ROW_H tall. */
   square?: boolean;
   expanded: boolean;
   /** prefers-reduced-motion — no fade, the name is simply there or not. */
