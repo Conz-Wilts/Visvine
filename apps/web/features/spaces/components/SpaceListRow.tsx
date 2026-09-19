@@ -65,7 +65,7 @@ export function SpaceListRow({
         type="button"
         onClick={onSelect}
         tabIndex={tabbable ? 0 : -1}
-        className={`${ROW_CLASS} min-w-0 text-left ${current ? 'bg-surface-3 font-semibold' : 'font-normal'}`}
+        className={`${ROW_CLASS} min-w-0 text-left ${current ? 'font-semibold' : 'font-normal'}`}
         style={{
           height: END_ROW_H,
           paddingRight: 16,
@@ -126,7 +126,7 @@ export function SubspaceRow({
       tabIndex={tabbable ? 0 : -1}
       // The band runs the panel's full width, from under the spine's indent
       // out to the edge (TREE_ROW_BLEED); z-0 keeps it under the spine's line.
-      className={`${ROW_CLASS} !z-0 !w-[calc(100%+999px)] ${TREE_ROW_BLEED} min-w-0 gap-3 pr-4 text-left ${current ? 'bg-surface-3 font-semibold' : 'font-normal'}`}
+      className={`${ROW_CLASS} !z-0 !w-[calc(100%+999px)] ${TREE_ROW_BLEED} min-w-0 gap-3 pr-4 text-left ${current ? 'font-semibold' : 'font-normal'}`}
       style={{
         height: SUBSPACE_ROW_H,
         color: current ? 'var(--shell-fg-strong, #111827)' : 'var(--shell-fg-muted, #111827)',
