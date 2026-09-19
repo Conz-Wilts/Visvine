@@ -979,13 +979,19 @@ function SpaceRoute({ nodeId }: { nodeId: string }) {
   const liveId = liveSpaceId(node, nodeId);
   const { spaces, joinedSpaces } = useSpace();
   const isSubspace = !!liveId && [...joinedSpaces, ...spaces].some((s) => s.id === liveId && s.parentId);
+  // The space you are in is reached two ways: its own row atop the tree opens
+  // its Page (`spacePageHref`, `page=1` riding every tab switch), while `Main`
+  // and the Context rail open the same note as context alone.
+  const searchParams = useSearchParams();
+  const own = !!node && isOwnSpaceNode({ id: node.id ?? nodeId, spaceId: node.space_id ?? null });
+  const contextOnly = own && !!searchParams.get('tab') && searchParams.get('page') !== '1';
 
   // A node that can't be read has no page; the index lists every space the
   // viewer can reach, which beats a dead end.
   if (error) return <PageRedirect href="/spaces" />;
   if (!node) return <PageRedirect href={null} />;
-  // A sub-space is its context: no Page tab.
-  if (isSubspace) {
+  // A sub-space is its context: no Page tab. Nor is the space reached as Main.
+  if (isSubspace || contextOnly) {
     return <ContextOnlyPage nodeId={nodeId} ariaLabel="Space sections" notFoundTitle="Couldn't load this space." />;
   }
   return (

@@ -184,7 +184,9 @@ interface NoteSidebarProps {
   tree: TreeNode
   selectedPath: string | null
   canEdit: boolean
-  onSelect: (path: string) => void
+  /** `page` is set when the space's own row is pressed: that opens the space's
+   *  Page, where `Main` (the same note) opens its context alone. */
+  onSelect: (path: string, opts?: { page?: boolean }) => void
   onDeleteNote: (path: string) => void
   /** Access badges keyed by FULL path â€” folders AND privately-restricted notes
    *  (shared scope only). */
@@ -508,6 +510,7 @@ export function NoteSidebar({
               node={shownTree}
               label={root.label}
               icon={root.icon ?? null}
+              spaceRow
               openPaths={openPaths}
               onToggleFolder={toggleFolder}
               onOpenFolder={openFolder}
@@ -915,12 +918,14 @@ function FolderRow(props: {
   label?: string
   /** Overrides the folder glyph; explicit null renders no glyph (the root row). */
   icon?: React.ReactNode | null
+  /** The space's own row: its name opens the space's Page. */
+  spaceRow?: boolean
   openPaths: Set<string>
   onToggleFolder: (path: string, isOpen: boolean) => void
   onOpenFolder: (path: string) => void
   selectedPath: string | null
   canEdit: boolean
-  onSelect: (path: string) => void
+  onSelect: (path: string, opts?: { page?: boolean }) => void
   onDeleteNote: (path: string) => void
   folderBadges?: Map<string, FolderBadge>
   onFolderAccess?: (folderId: string) => void
@@ -938,7 +943,7 @@ function FolderRow(props: {
   // Grants live at any depth now, so every folder row can carry a badge and a
   // Share affordance (keyed by the folder's full path).
   const badge = props.folderBadges?.get(props.node.path)
-  const openPath = (path: string) => props.onSelect(path)
+  const openPath = (path: string) => props.onSelect(path, props.spaceRow ? { page: true } : undefined)
   // Another space's context — a sub-space's, or what the parent shares — is
   // never SHARED from here: who sees it is that space's admins' act, made
   // there. It is moved and deleted here only by someone who stands in the

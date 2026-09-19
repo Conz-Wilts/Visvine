@@ -418,6 +418,13 @@ export function entityContextHref(nodeId: string, subPath: string | null = null)
   return `/directory/${encodeURIComponent(nodeId)}?tab=context${note}`
 }
 
+/** The space's own node on its Page tab. `page=1` keeps the Page tab on the
+ *  bar while its Context tab is open; the same node reached as `Main` (plain
+ *  `?tab=context`) is its context alone. */
+export function spacePageHref(nodeId: string): string {
+  return `/directory/${encodeURIComponent(nodeId)}?page=1`
+}
+
 /**
  * Where a note path opens in the app: an entity note or a sub-note → the owning
  * node's Context tab (profile chrome), anything else → the standalone note view.

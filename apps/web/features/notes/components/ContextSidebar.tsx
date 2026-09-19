@@ -16,7 +16,7 @@ import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { usePaneChromeState } from '@/features/shared/contexts/PaneShellContext'
 import { TRAY_ROW_H } from '@/features/shared/components/pane/PaneTabBar'
-import { entityContextHref, noteHref, resolveEntityOwner, trashHref } from '@/lib/notes/entities'
+import { entityContextHref, noteHref, spacePageHref, resolveEntityOwner, trashHref } from '@/lib/notes/entities'
 import { prefetchNoteContext } from '../lib/contextPrefetch'
 import { useContextTree } from '../lib/useContextTree'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
@@ -97,9 +97,9 @@ export function ContextSidebar({
   // Entity notes open their profile Context tab; everything else (folder
   // indexes, sectors, deals…) opens the standalone note view.
   const handleSelect = useCallback(
-    (path: string) => {
+    (path: string, opts?: { page?: boolean }) => {
       setSelectedPath(path)
-      if (path === currentPath) return
+      if (path === currentPath && !opts?.page) return
       // An entity note (either form) or a sub-note in an entity folder opens
       // under the entity's chrome; everything else is a plain note.
       const owner = resolveEntityOwner(path, entityByPath)
@@ -112,7 +112,13 @@ export function ContextSidebar({
         if (owner) void import('./EntityContextPanel').catch(() => {})
         else void import('./NoteContextPanel').catch(() => {})
       }
-      router.push(owner ? entityContextHref(owner.id, owner.subPath) : noteHref(path))
+      router.push(
+        owner && opts?.page
+          ? spacePageHref(owner.id)
+          : owner
+            ? entityContextHref(owner.id, owner.subPath)
+            : noteHref(path),
+      )
     },
     [entityByPath, router, currentPath, spaceId],
   )
