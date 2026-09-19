@@ -71,6 +71,8 @@ const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full h
 // like every other row, so it sits in the screen's bottom-left corner rather
 // than floating a band's height above it.
 const RAIL_PAD_Y = 0;
+// The room the head cell (SpaceSelector) leaves above the space's square.
+const HEAD_SQUARE_INSET = 18;
 // A band boundary: the hairline sits ITEM_GAP below the last row and ITEM_GAP
 // above the next one, so the bands are held apart by the rhythm the rows
 // already have rather than by a number of their own.
@@ -517,11 +519,10 @@ export default function Sidebar() {
             // sheet's hairline is the divide.
             background: FRAME_BG,
             width: railW,
-            // The rail runs to the window's top, beside the band — except in
-            // the mac app's window, where the traffic lights take the band's
-            // left end and the rail starts under them. In full screen they are
-            // in the menu bar's drop-down, so the space moves back up.
-            paddingTop: chromeInset,
+            // The space's square stands with its top on the band's line, the
+            // sheet's top edge, the way Slack's workspace icon does: the rail
+            // is pulled up by the room the head cell leaves above its square.
+            paddingTop: bandH - HEAD_SQUARE_INSET,
             paddingBottom: RAIL_PAD_Y,
             transition: reduced ? "none" : `width ${RAIL_MOTION}`,
           }}
