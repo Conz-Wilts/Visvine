@@ -9,7 +9,7 @@ import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { SettingsIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { spaceMark } from '@/lib/spaces/subspaces';
-import { END_ROW_H, HEAD_CELL_W, MARK_PX, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
+import { BAND_PAD, END_ROW_H, HEAD_CELL_W, MARK_PX, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
 
 /**
  * The space band — the rail's first rows (Sidebar). The space sits at the head
@@ -108,8 +108,8 @@ export default function SpaceSelector() {
   // and Create — with the hairline along its bottom edge, which is the line
   // between the two. Open, it grows by the rows, a gap above each and one
   // below, and that same line is what travels down over the rows it covers.
-  const shutH = ITEM_GAP;
-  const openH = shutH + actions.length * ROW_H + (actions.length + 1) * ITEM_GAP;
+  const shutH = BAND_PAD;
+  const openH = `calc(${BAND_PAD} + ${actions.length * ROW_H + (actions.length + 1) * ITEM_GAP}px)`;
   const dur = reduced ? '0s' : '260ms';
 
   return (

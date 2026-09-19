@@ -47,6 +47,11 @@ export const END_ROW_H = `${ROW_H}px`;
 // 8 rhythm, Material's 56 rail item). Outline glyphs are drawn smaller than
 // the box because a stroke reads larger than a filled shape of the same size.
 export const MARK_PX = 40;
+// Each band between hairlines is padded so the marks at its top and bottom sit
+// as far from the line as they sit from the rail's sides: (cell − row) / 2 on
+// top of the row's own air. The ends then read as squares and every band has
+// the same margin all round, whatever width the rail is drawn at.
+export const BAND_PAD = `calc((${GLYPH_CELL_W} - ${ROW_H}px) / 2)`;
 // The nav icons ship at h-5 w-5 from the feature registry (they are also drawn
 // on the launcher cards at that size); the rail draws them larger, so each cell
 // scales its own svg rather than the registry carrying a second set.

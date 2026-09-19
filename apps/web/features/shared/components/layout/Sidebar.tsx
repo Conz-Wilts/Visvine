@@ -22,6 +22,7 @@ import SpaceSwitcherPanel from "@/features/spaces/components/SpaceSwitcherPanel"
 import type { SpaceFeatureConfig } from "@/lib/types";
 import {
   EXPANDED_W,
+  BAND_PAD,
   ITEM_GAP,
   ROW_INSET,
   RAIL_CELL_VAR,
@@ -67,14 +68,12 @@ const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync wit
 const RAIL_PANEL_W = 280;
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full height
-// paddingBottom on the rail column: none. The account row runs edge to edge
-// like every other row, so it sits in the screen's bottom-left corner rather
-// than floating a band's height above it.
-const RAIL_PAD_Y = 0;
-// A band boundary: the hairline sits ITEM_GAP below the last row and ITEM_GAP
-// above the next one, so the bands are held apart by the rhythm the rows
-// already have rather than by a number of their own.
-const BAND_TOP = ITEM_GAP;
+// paddingBottom on the rail column: the band margin, so the avatar sits as far
+// from the window's foot as from the rail's sides.
+const RAIL_PAD_Y = BAND_PAD;
+// A band boundary: the hairline sits BAND_PAD below the last row and BAND_PAD
+// above the next one, so every band has the same margin as the rail's sides.
+const BAND_TOP = BAND_PAD;
 // The rail's width, opening and closing — and the motion of anything that
 // must stay glued to its edge.
 const RAIL_MOTION_MS = 300;
@@ -329,7 +328,7 @@ export default function Sidebar() {
           className="flex flex-col border-t"
           style={{
             gap: ITEM_GAP,
-            paddingTop: ITEM_GAP,
+            paddingTop: BAND_PAD,
             paddingLeft: ROW_INSET,
             paddingRight: ROW_INSET,
             // The line under the space is drawn by the space's own sheet
@@ -352,7 +351,7 @@ export default function Sidebar() {
               active={pathname === "/discover" || pathname.startsWith("/discover/")}
               // Drawn at the Create disc's size rather than a glyph's: the two
               // rows of the top group are a pair, and read as one.
-              icon={<CompassIcon className="!h-[34px] !w-[34px]" strokeWidth={1.5} />}
+              icon={<CompassIcon className="!h-9 !w-9" strokeWidth={1.5} />}
             />
           </div>
           {!noSpace && (
@@ -402,8 +401,8 @@ export default function Sidebar() {
         style={{
           paddingLeft: ROW_INSET,
           paddingRight: ROW_INSET,
-          paddingTop: ITEM_GAP,
-          paddingBottom: ITEM_GAP,
+          paddingTop: BAND_PAD,
+          paddingBottom: 0,
           marginTop: BAND_TOP,
           // The one hairline between the surfaces that are yours and the ones
           // the space switched on — the same seam the foot uses.
@@ -450,7 +449,7 @@ export default function Sidebar() {
           style={{
             gap: ITEM_GAP,
             marginTop: BAND_TOP,
-            paddingTop: ITEM_GAP,
+            paddingTop: BAND_PAD,
             paddingLeft: ROW_INSET,
             paddingRight: ROW_INSET,
             borderTopColor: "var(--shell-border, #e5e7eb)",
@@ -486,7 +485,7 @@ export default function Sidebar() {
         onClickCapture={pressRailRow}
         style={{
           marginTop: BAND_TOP,
-          paddingTop: ITEM_GAP,
+          paddingTop: BAND_PAD,
           paddingLeft: ROW_INSET,
           paddingRight: ROW_INSET,
           borderTopColor: "var(--shell-border, #e5e7eb)",
@@ -532,7 +531,7 @@ export default function Sidebar() {
             // sheet's hairline is the divide.
             background: FRAME_BG,
             width: railW,
-            paddingTop: bandH,
+            paddingTop: `calc(${bandH}px + ${BAND_PAD})`,
             paddingBottom: RAIL_PAD_Y,
             transition: reduced ? "none" : `width ${RAIL_MOTION}`,
           }}
