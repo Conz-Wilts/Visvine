@@ -111,9 +111,81 @@ export default function SpaceSwitcherPanel() {
       .map(({ space }) => ({ space, children: [], locked: [] as typeof lockedSubspaces }));
   }, [joinedSpaces, lockedSubspaces, query]);
 
+  // The branch holding the space you are in — itself, or its parent when you
+  // stand in a sub-space. A search ranks everything as one list instead.
+  const inHere = (r: (typeof rows)[number]) =>
+    r.space.id === currentSpace?.id || r.children.some((c) => c.id === currentSpace?.id);
+  const here = query.trim() ? [] : rows.filter(inHere);
+  const elsewhere = query.trim() ? rows : rows.filter((r) => !inHere(r));
+
   const select = (spaceId: string) => {
     setCurrentSpace(spaceId);
     close();
+  };
+
+  const renderRow = ({ space, children, locked }: (typeof rows)[number]) => {
+          // An admin's own space opens whether or not it has sub-spaces
+          // yet: the branch is where they are read, so it is where the
+          // first one is made. Spaces nest one level, so a sub-space
+          // never offers it.
+          const canAddSub = !space.parentId && manages(space.id);
+          // A locked sub-space is a branch too: it is drawn precisely so
+          // the chevron opens on a space whose only sub-spaces are ones
+          // you are not in yet.
+          const branches = children.length + locked.length + (canAddSub ? 1 : 0);
+          const open = branches > 0 && expanded.has(space.id);
+          return (
+            <div key={space.id}>
+              <SpaceListRow
+                space={space}
+                current={currentSpace?.id === space.id}
+                hasChildren={branches > 0}
+                open={open}
+                tabbable={isOpen}
+                onSelect={() => select(space.id)}
+                onToggle={() => toggle(space.id)}
+              />
+              {open && (
+                // The spine sits under the centre of the parent's avatar,
+                // not TreeSpine's default 14px, and its stem climbs from
+                // the branch's top to the avatar's bottom edge.
+                <div style={{ marginLeft: LIST_AVATAR_CENTER - SPINE_DEFAULT_ML }}>
+                  <TreeSpine animate={!reduced} stem={railW / 2 - LIST_AVATAR_PX / 2}>
+                    {canAddSub && (
+                      <NewSubspaceRow
+                        parentName={space.name}
+                        nested={children.length === 0 ? 'last' : 'mid'}
+                        tabbable={isOpen}
+                        onClick={() => setCreating({ id: space.id, name: space.name })}
+                      />
+                    )}
+                    {children.map((child, i) => (
+                      <SubspaceRow
+                        key={child.id}
+                        space={child}
+                        current={currentSpace?.id === child.id}
+                        nested={i === children.length - 1 && locked.length === 0 ? 'last' : 'mid'}
+                        tabbable={isOpen}
+                        onSelect={() => select(child.id)}
+                      />
+                    ))}
+                    {/* The ones you cannot open, after the ones you can:
+                        the branch reads as what is yours first, then what
+                        is there to ask for. */}
+                    {locked.map((child, i) => (
+                      <LockedSubspaceRow
+                        key={child.id}
+                        space={child}
+                        nested={i === locked.length - 1 ? 'last' : 'mid'}
+                        tabbable={isOpen}
+                        onSelect={() => setAsking({ space: child, parentName: space.name })}
+                      />
+                    ))}
+                  </TreeSpine>
+                </div>
+              )}
+            </div>
+          );
   };
 
   return (
@@ -151,72 +223,20 @@ export default function SpaceSwitcherPanel() {
           {rows.length === 0 ? (
             <div className="p-4 text-center text-sm text-text-muted">No spaces found</div>
           ) : (
-            <div className="flex flex-col" style={{ gap: ITEM_GAP }}>
-              {rows.map(({ space, children, locked }) => {
-                // An admin's own space opens whether or not it has sub-spaces
-                // yet: the branch is where they are read, so it is where the
-                // first one is made. Spaces nest one level, so a sub-space
-                // never offers it.
-                const canAddSub = !space.parentId && manages(space.id);
-                // A locked sub-space is a branch too: it is drawn precisely so
-                // the chevron opens on a space whose only sub-spaces are ones
-                // you are not in yet.
-                const branches = children.length + locked.length + (canAddSub ? 1 : 0);
-                const open = branches > 0 && expanded.has(space.id);
-                return (
-                  <div key={space.id}>
-                    <SpaceListRow
-                      space={space}
-                      current={currentSpace?.id === space.id}
-                      hasChildren={branches > 0}
-                      open={open}
-                      tabbable={isOpen}
-                      onSelect={() => select(space.id)}
-                      onToggle={() => toggle(space.id)}
-                    />
-                    {open && (
-                      // The spine sits under the centre of the parent's avatar,
-                      // not TreeSpine's default 14px, and its stem climbs from
-                      // the branch's top to the avatar's bottom edge.
-                      <div style={{ marginLeft: LIST_AVATAR_CENTER - SPINE_DEFAULT_ML }}>
-                        <TreeSpine animate={!reduced} stem={railW / 2 - LIST_AVATAR_PX / 2}>
-                          {canAddSub && (
-                            <NewSubspaceRow
-                              parentName={space.name}
-                              nested={children.length === 0 ? 'last' : 'mid'}
-                              tabbable={isOpen}
-                              onClick={() => setCreating({ id: space.id, name: space.name })}
-                            />
-                          )}
-                          {children.map((child, i) => (
-                            <SubspaceRow
-                              key={child.id}
-                              space={child}
-                              current={currentSpace?.id === child.id}
-                              nested={i === children.length - 1 && locked.length === 0 ? 'last' : 'mid'}
-                              tabbable={isOpen}
-                              onSelect={() => select(child.id)}
-                            />
-                          ))}
-                          {/* The ones you cannot open, after the ones you can:
-                              the branch reads as what is yours first, then what
-                              is there to ask for. */}
-                          {locked.map((child, i) => (
-                            <LockedSubspaceRow
-                              key={child.id}
-                              space={child}
-                              nested={i === locked.length - 1 ? 'last' : 'mid'}
-                              tabbable={isOpen}
-                              onSelect={() => setAsking({ space: child, parentName: space.name })}
-                            />
-                          ))}
-                        </TreeSpine>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <>
+              {/* The space you are in stands alone under New space, held off
+                  the rest by the rail's hairline, so where you are reads first
+                  and the others read as where you could go. */}
+              {here.length > 0 && <div className="flex flex-col" style={{ gap: ITEM_GAP }}>{here.map(renderRow)}</div>}
+              {elsewhere.length > 0 && (
+                <div
+                  className={`flex flex-col ${here.length > 0 ? 'border-t' : ''}`}
+                  style={{ gap: ITEM_GAP, borderTopColor: 'var(--shell-border, #e5e7eb)' }}
+                >
+                  {elsewhere.map(renderRow)}
+                </div>
+              )}
+            </>
           )}
         </div>
         {asking && (
