@@ -9,7 +9,8 @@ import { useAuth } from "@/features/auth/contexts/AuthContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
 import { selfProfileHref } from "@/features/profile/lib/selfView";
 import { CONNECTORS_PARAM, settingsHrefFor } from "@/features/settings/components/SettingsConnectors";
-import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
+import { useDesktopChrome } from "@/features/desktop/lib/chrome";
+import { headSquareSize, ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
 
 /**
  * The account band — the rail's last rows (Sidebar). You sit at the foot of the
@@ -36,6 +37,8 @@ import { ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRo
  */
 export default function UserMenu({ expanded, reduced }: { expanded: boolean; reduced: boolean }) {
   const { session, isLoading: isPending } = useAuth();
+  // The same square as the space at the rail's head, so the two ends match.
+  const avatarPx = headSquareSize(useDesktopChrome().railW);
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const bandRef = useRef<HTMLDivElement>(null);
@@ -78,7 +81,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   }, [expanded]);
 
   if (isPending) {
-    return <div className="h-10 w-10 rounded-[8px] bg-surface-3 animate-pulse" style={{ marginLeft: (ROW_H - 40) / 2 }} />;
+    return <div className="rounded-[10px] bg-surface-3 animate-pulse" style={{ width: avatarPx, height: avatarPx, marginLeft: (ROW_H - avatarPx) / 2 }} />;
   }
 
   if (!session) return null;
@@ -190,9 +193,9 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
           href={profileHref ?? undefined}
           onClick={profileHref ? undefined : () => { setPinned((v) => !v); setOpen(true); }}
           icon={
-            <span className="h-10 w-10 overflow-hidden rounded-[8px] border-2 border-brand-green">
+            <span className="overflow-hidden rounded-[10px] border-2 border-brand-green" style={{ width: avatarPx, height: avatarPx }}>
               {user.image ? (
-                <Image src={user.image} alt="" width={40} height={40} className="h-full w-full object-cover" />
+                <Image src={user.image} alt="" width={avatarPx} height={avatarPx} className="h-full w-full object-cover" />
               ) : (
                 <PersonSilhouette />
               )}
