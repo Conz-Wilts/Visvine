@@ -21,13 +21,10 @@ export const ROW_INSET = 0;   // row ↔ rail edge: none, a row runs edge to edg
 // COLLAPSED_W is the browser's.
 export const RAIL_CELL_VAR = "--rail-cell-w";
 const GLYPH_CELL_W = `var(${RAIL_CELL_VAR}, ${COLLAPSED_W - ROW_INSET * 2}px)`;
-// A row is a little taller than the glyph column is wide, so the hover block
-// under a shut row is the full width of the rail — the whole cell is the
-// target, not just the glyph. The rail's panels — the space list, the Create list —
-// draw their rows on this same square: ROW_H tall, the mark centred in a cell
-// ROW_H wide, the name LABEL_ML beyond it, so the list beside the rail reads
-// as more of the rail.
-export const ROW_H = 52;
+// A row is a square of the glyph column (END_ROW_H), so the hover block under
+// a shut row is the whole cell, not just the glyph. The rail's panels — the
+// space list, the Create list — draw their rows at the same height, the name
+// LABEL_ML beyond the mark, so the list beside the rail reads as more of it.
 export const LABEL_ML = 8;    // glyph cell → label, on the open row
 // Row ↔ row, and row ↔ hairline. None: the tiles stack flush, and a band's
 // line sits directly against the tile on either side of it. The same open or

@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { rowKey, rowLabel, type CreateRow, type CreateRowList } from '@/lib/create/rows';
 import type { SpaceAlias } from '@/lib/types';
-import { ITEM_GAP, LABEL_ML, ROW_CLASS, ROW_H, ROW_INSET } from '@/features/shared/components/layout/railRow';
+import { END_ROW_H, ITEM_GAP, LABEL_ML, ROW_CLASS, ROW_INSET } from '@/features/shared/components/layout/railRow';
+import { useDesktopChrome } from '@/features/desktop/lib/chrome';
 import { ChevronRightIcon } from '@/features/shared/icons';
 import { TREE_ROW_BLEED, TreeSpine, TreeSpineJoin } from '@/components/ui/TreeChrome';
 import { useSidebar } from '@/features/shared/contexts/SidebarContext';
@@ -68,6 +69,8 @@ export default function TypeList({
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const { reduced } = useSidebar();
+  // Rows are the rail's square cells, so the spine's stem is half a cell.
+  const { railW } = useDesktopChrome();
   // Keep the highlighted row in view while arrowing through a long list.
   const [lastActive, setLastActive] = useState(active);
   useEffect(() => {
@@ -109,9 +112,9 @@ export default function TypeList({
                 onMouseMove={() => onHover(i)}
                 onClick={() => onPick(row)}
                 className={`${ROW_CLASS} text-left ${i === active ? 'bg-surface-3' : ''}`}
-                style={{ height: ROW_H, paddingRight: 16, color: 'var(--shell-fg-muted, #111827)' }}
+                style={{ height: END_ROW_H, paddingRight: 16, color: 'var(--shell-fg-muted, #111827)' }}
               >
-                <span className="flex shrink-0 items-center justify-end" style={{ width: CELL_W, height: ROW_H, paddingRight: MARK_GAP }}>
+                <span className="flex shrink-0 items-center justify-end" style={{ width: CELL_W, height: END_ROW_H, paddingRight: MARK_GAP }}>
                   <Mark row={row} size={MARK_PX} />
                 </span>
                 <span className={`${LIST_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: LABEL_ML }}>
@@ -134,7 +137,7 @@ export default function TypeList({
                   aria-expanded={expanded}
                   onClick={(e) => { e.stopPropagation(); toggle(key); }}
                   className="absolute left-0 top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-4 [&>svg]:w-4"
-                  style={{ width: CHEVRON_W, height: ROW_H }}
+                  style={{ width: CHEVRON_W, height: END_ROW_H }}
                 >
                   <span className="flex transition-transform duration-150" style={{ transform: expanded ? 'rotate(90deg)' : 'none' }}>
                     <ChevronRightIcon />
@@ -147,7 +150,7 @@ export default function TypeList({
               // TreeSpine's default 14px, and its stem climbs from the branch's
               // top to the mark's bottom edge.
               <div style={{ marginLeft: MARK_CENTER - SPINE_DEFAULT_ML }}>
-                <TreeSpine animate={!reduced} stem={ROW_H / 2 - MARK_PX / 2}>
+                <TreeSpine animate={!reduced} stem={railW / 2 - MARK_PX / 2}>
                   {canAdd && (
                     <AliasRow
                       // "New alias" leads the list for the same reason "New
