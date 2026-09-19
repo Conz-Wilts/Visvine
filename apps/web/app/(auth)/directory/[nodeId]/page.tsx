@@ -34,6 +34,7 @@ import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/Pane
 import ProfilePageContent from '@/features/profile/components/ProfilePageContent';
 import { isSelfView } from '@/features/profile/lib/selfView';
 import OrgPageContent from '@/features/profile/components/OrgPageContent';
+import SpaceOverview from '@/features/spaces/components/SpaceOverview';
 import SpacePageContent from '@/features/profile/components/SpacePageContent';
 import ResourcePreviewContent from '@/features/profile/components/ResourcePreviewContent';
 import ResourceFile from '@/features/resources/components/ResourceFile';
@@ -960,54 +961,36 @@ function liveSpaceId(node: NBNode | null, nodeId: string): string | null {
   return typeof ref === 'string' && ref.trim() ? ref.trim() : null;
 }
 
-// Every `space:` node gets a space page — the type is the page, whether
-// the space runs here or is only recorded here for CRM. What differs is
-// where the page comes from:
+// Every `space:` node gets a space page under the Page · Context tabs — the
+// type is the page, whether the space runs here or is only recorded here for
+// CRM. What differs is where the Page tab's body comes from:
 //
-//  * A live space (its own node, or a record pointing at one via
-//    `spaceRef`) has a workspace, members and events, so it redirects to
-//    /spaces/<id> and that page renders from the overview API.
-//  * A record has none of those, so it renders here from the node itself —
+//  * A live space (its own node, or a record pointing at one via `spaceRef`)
+//    has a workspace, members and events, so the body is SpaceOverview, the
+//    same component /spaces/<id> renders, over the overview API.
+//  * A record has none of those, so it renders from the node itself —
 //    SpacePageContent, same visual language, minus the parts that need a
-//    membership. Redirecting it would throw the reader out of the space
-//    they were browsing and into a workspace that doesn't exist.
+//    membership.
 //
 // Both need the node before they can decide, which is why this waits for it.
 function SpaceRoute({ nodeId }: { nodeId: string }) {
-  const [wantedTab] = useProfileTabParam();
   const { data, error } = useNodeProfile(nodeId);
   const node = data?.node ?? null;
   const liveId = liveSpaceId(node, nodeId);
-  const href = liveId ? `/spaces/${encodeURIComponent(liveId)}` : null;
 
-  // Null while the node is still loading: hold the redirect branch's skeleton
-  // rather than flashing a page shell we may not want.
-  if (node && !liveId) {
-    return (
-      <NodePage
-        nodeId={nodeId}
-        firstTab={SPACE_FIRST_TAB}
-        ariaLabel="Space sections"
-        notFoundTitle="Couldn't load this space."
-        renderBody={(id) => <SpacePageContent nodeId={id} />}
-      />
-    );
-  }
-
-  if (wantedTab) {
-    return (
-      <NoteOnlyPage
-        nodeId={nodeId}
-        firstTab={SPACE_FIRST_TAB}
-        href={href ?? '/spaces'}
-        ariaLabel="Space sections"
-        notFoundTitle="Couldn't load this space."
-      />
-    );
-  }
-  // A node that can't be read has no space to send us to; the index lists
-  // every space the viewer can reach, which beats a dead end.
-  return <PageRedirect href={error ? '/spaces' : href} />;
+  // A node that can't be read has no page; the index lists every space the
+  // viewer can reach, which beats a dead end.
+  if (error) return <PageRedirect href="/spaces" />;
+  if (!node) return <PageRedirect href={null} />;
+  return (
+    <NodePage
+      nodeId={nodeId}
+      firstTab={SPACE_FIRST_TAB}
+      ariaLabel="Space sections"
+      notFoundTitle="Couldn't load this space."
+      renderBody={(id) => (liveId ? <SpaceOverview spaceId={liveId} /> : <SpacePageContent nodeId={id} />)}
+    />
+  );
 }
 
 // A dedicated page lives outside the pane shell. Register empty chrome while the
