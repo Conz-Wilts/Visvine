@@ -37,6 +37,7 @@ import { CONNECTOR_DEMOS, connectorDemo } from '../connectors'
 import { ADMIN_USER, MEMBER_USER, SPACE_ID, SPACE_TIMEZONE } from '../space'
 import { anchorActor } from './base'
 import { putNote, putNotes } from '../write'
+import { digestDemoRuns } from './agentDemoRuns'
 
 const SHARED = SHARED_OWNER_KEY
 const ADMIN = ADMIN_USER
@@ -87,6 +88,9 @@ timezone: ${SPACE_TIMEZONE}
 on:
   context: ["deals/**", "spaces/**"]
 debounce: 2m
+for:
+  - user: ${MEMBER_USER}
+    at: "07:30"
 ---
 
 You keep the team's picture of the pipeline honest.
@@ -252,7 +256,17 @@ export async function seedAgents(): Promise<{ agents: number; runs: number }> {
       events: [{ type: 'tool', tool: 'search_context', at: ago(2).getTime(), detail: 'accounts health' }],
     },
   ]
-  for (const run of runs) {
+  // Runs long enough to show what a run looks like: turns, calls under them, a
+  // refusal, a run for somebody else, one that ran out of turns.
+  const demo = digestDemoRuns(ago, DIGEST, MEMBER, ADMIN).map((r) => ({
+    ...r,
+    state: digest,
+    promptTokens: 21_000,
+    completionTokens: 1_400,
+    costMicros: BigInt(80_000),
+    input: { events: [], writes: r.writes },
+  }))
+  for (const run of [...runs.map((r) => ({ ...r, runAsUserId: null as string | null })), ...demo]) {
     await prisma.agentRun.create({
       data: {
         id: run.id,
@@ -264,6 +278,7 @@ export async function seedAgents(): Promise<{ agents: number; runs: number }> {
         startedAt: run.startedAt,
         endedAt: run.endedAt,
         startedBy: run.startedBy,
+        runAsUserId: run.runAsUserId,
         model: 'claude-sonnet-5',
         promptTokens: run.promptTokens,
         completionTokens: run.completionTokens,
@@ -325,7 +340,7 @@ export async function seedAgents(): Promise<{ agents: number; runs: number }> {
     ],
   })
 
-  return { agents: 2, runs: runs.length }
+  return { agents: 2, runs: runs.length + demo.length }
 }
 
 // ---- what living in a space leaves behind -------------------------------------
