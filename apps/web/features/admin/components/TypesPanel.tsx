@@ -73,6 +73,7 @@ function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabl
       <div className="relative">
         <button
           type="button"
+          data-color-trigger
           onClick={() => setShowPicker(p => !p)}
           className="w-7 h-7 rounded-lg border-2 border-border-default shrink-0 transition-transform hover:scale-110"
           style={{ background: color }}
@@ -184,6 +185,7 @@ function LabelAliases({ typeName, typeColor, aliases, allAliases, newOpen, onNew
             <div className="relative shrink-0">
               <button
                 type="button"
+                data-color-trigger
                 onClick={() => setPicking(p => !p)}
                 className="block h-7 w-7 rounded-lg border-2 border-border-default transition-transform hover:scale-110"
                 style={{ background: showing.color }}
@@ -424,6 +426,7 @@ function TypeRow({ typeName, typeColor, expanded, onOpen, onUpdateColor }: {
       <span className="relative shrink-0" onClick={e => e.stopPropagation()}>
         <button
           type="button"
+          data-color-trigger
           onClick={() => setShowColorPicker(p => !p)}
           className="block h-5 w-5 rounded transition-transform hover:scale-110"
           style={{ background: typeColor }}

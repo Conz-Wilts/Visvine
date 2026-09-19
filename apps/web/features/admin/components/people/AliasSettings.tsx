@@ -187,6 +187,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run, half }: Setting
             <button
               type="button"
               disabled={alias.system || busy}
+              data-color-trigger
               onClick={() => setPicking((o) => !o)}
               title={alias.system ? `${alias.name} is built in` : 'Change colour'}
               className="block h-7 w-7 rounded-lg border-2 border-border-default transition-transform hover:scale-110 disabled:cursor-default disabled:hover:scale-100"
@@ -393,6 +394,7 @@ export function NewAliasForm({ spaceId, taken, busy, run, onDone }: {
         <div className="relative shrink-0">
           <button
             type="button"
+            data-color-trigger
             onClick={() => setPicking((p) => !p)}
             className="h-8 w-8 rounded-lg border-2 border-border-default transition-transform hover:scale-110"
             style={{ background: color }}

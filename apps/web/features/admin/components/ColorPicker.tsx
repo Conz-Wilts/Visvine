@@ -5,7 +5,7 @@
 // Console → Types, and Person aliases on Console → Aliases.
 //
 // `onChange` fires live as the user drags, so callers that persist should do it
-// on `onClose` (the Done button) rather than on every frame.
+// on `onClose` (a press outside, Escape or Enter) rather than on every frame.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -52,86 +52,114 @@ export default function ColorPicker({ color, onChange, onClose }: {
   const [lit, setLit] = useState(l);
   const [hexInput, setHexInput] = useState(safeHex);
 
+  const rootRef = useRef<HTMLDivElement>(null);
   const gradientRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
+  const hueRef = useRef<HTMLDivElement>(null);
+  const current = hslToHex(hue, sat, lit);
 
   // Sync hex input whenever sliders change
   useEffect(() => {
-    const next = hslToHex(hue, sat, lit);
-    setHexInput(next);
-    onChange(next);
+    setHexInput(current);
+    onChange(current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hue, sat, lit]);
+  }, [current]);
 
-  const pickFromGradient = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    const el = gradientRef.current;
+  // A press anywhere outside, or Escape, closes — which is the save for callers
+  // that persist on close.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      if (!rootRef.current || rootRef.current.contains(e.target as Node)) return;
+      closeRef.current();
+      // The press that closed it must not reopen it through its own swatch.
+      if ((e.target as Element).closest?.('[data-color-trigger]')) {
+        const swallow = (ev: MouseEvent) => { ev.stopPropagation(); ev.preventDefault(); };
+        document.addEventListener('click', swallow, { capture: true, once: true });
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' || e.key === 'Enter') closeRef.current(); };
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
+  // Drags follow the pointer past the control's edge until release.
+  const drag = useCallback((el: HTMLElement | null, pick: (x: number, y: number) => void) => (e: React.PointerEvent) => {
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-    // x = saturation 0→100, y = lightness 100→0 (top=bright, bottom=dark)
-    setSat(Math.round(x * 100));
-    setLit(Math.round((1 - y) * 100));
+    e.preventDefault();
+    const at = (ev: { clientX: number; clientY: number }) => {
+      const r = el.getBoundingClientRect();
+      pick(
+        Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)),
+        Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height)),
+      );
+    };
+    at(e);
+    const move = (ev: PointerEvent) => at(ev);
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
   }, []);
 
   return (
     <div
-      className="bg-surface-1 border border-border-subtle rounded-xl p-3 shadow-float flex flex-col gap-3 w-52"
+      ref={rootRef}
+      className="flex w-56 flex-col gap-3 rounded-xl border border-border-subtle bg-surface-1 p-3 shadow-float"
       onClick={e => e.stopPropagation()}
     >
-      {/* Saturation / lightness gradient box */}
       <div
         ref={gradientRef}
-        className="w-full h-32 rounded-lg cursor-crosshair relative select-none"
+        className="relative h-36 w-full cursor-crosshair touch-none select-none rounded-lg"
         style={{
           background: `
             linear-gradient(to bottom, transparent, black),
             linear-gradient(to right, white, hsl(${hue}, 100%, 50%))
           `,
         }}
-        onMouseDown={e => { dragging.current = true; pickFromGradient(e); }}
-        onMouseMove={e => { if (dragging.current) pickFromGradient(e); }}
-        onMouseUp={() => { dragging.current = false; }}
-        onMouseLeave={() => { dragging.current = false; }}
+        onPointerDown={e => drag(gradientRef.current, (x, y) => {
+          setSat(Math.round(x * 100));
+          setLit(Math.round((1 - y) * 100));
+        })(e)}
       >
-        {/* Crosshair */}
         <div
-          className="absolute w-3 h-3 rounded-full border-2 border-white shadow -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-          style={{
-            left: `${sat}%`,
-            top: `${100 - lit}%`,
-            background: hslToHex(hue, sat, lit),
-          }}
+          className="pointer-events-none absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
+          style={{ left: `${sat}%`, top: `${100 - lit}%`, background: current }}
         />
       </div>
 
-      {/* Hue rainbow slider */}
-      <div className="flex items-center gap-2">
+      <div
+        ref={hueRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="Hue"
+        aria-valuemin={0}
+        aria-valuemax={360}
+        aria-valuenow={hue}
+        className="relative h-3 w-full cursor-pointer touch-none select-none rounded-full"
+        style={{ background: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}
+        onPointerDown={e => drag(hueRef.current, x => setHue(Math.round(x * 360)))(e)}
+        onKeyDown={e => {
+          if (e.key === 'ArrowLeft') setHue(v => Math.max(0, v - 5));
+          if (e.key === 'ArrowRight') setHue(v => Math.min(360, v + 5));
+        }}
+      >
         <div
-          className="h-3 rounded-full flex-1"
-          style={{ background: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}
-        >
-          <input
-            type="range"
-            min={0} max={360}
-            value={hue}
-            onChange={e => setHue(Number(e.target.value))}
-            className="w-full h-3 opacity-0 cursor-pointer"
-            style={{ marginTop: '-0.75rem' }}
-            aria-label="Hue"
-          />
-        </div>
-        {/* Current colour preview */}
-        <div className="w-6 h-6 rounded-md border border-border-default shrink-0" style={{ background: hslToHex(hue, sat, lit) }} />
+          className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow"
+          style={{ left: `${(hue / 360) * 100}%`, background: `hsl(${hue}, 100%, 50%)` }}
+        />
       </div>
 
-      {/* Hex input */}
-      <div className="flex items-center gap-2 border-t border-border-subtle pt-2">
-        <span className="text-xs text-text-muted font-mono">HEX</span>
+      <div className="flex items-center gap-2">
+        <span className="h-7 w-7 shrink-0 rounded-md border border-border-default" style={{ background: current }} />
         <input
-          className="flex-1 px-2 py-1 rounded-md border border-border-default bg-surface-2 text-xs font-mono text-text-primary focus:outline-none focus:ring-1 focus:ring-brand-green/40"
+          className="min-w-0 flex-1 rounded-md border border-border-default bg-surface-2 px-2 py-1.5 font-mono text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-brand-green/40"
           value={hexInput}
           onChange={e => {
             setHexInput(e.target.value);
@@ -144,13 +172,6 @@ export default function ColorPicker({ color, onChange, onClose }: {
           spellCheck={false}
           aria-label="Hex colour"
         />
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-xs text-text-muted hover:text-text-primary px-1.5 py-1 rounded hover:bg-surface-3 transition-colors"
-        >
-          Done
-        </button>
       </div>
     </div>
   );
