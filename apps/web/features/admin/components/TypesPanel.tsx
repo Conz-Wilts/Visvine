@@ -13,6 +13,7 @@ import { useState, useEffect, type ReactNode } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import {
   DEFAULT_NODE_TYPES,
+  isHiddenNodeType,
   aliasesForType,
   mergeNodeTypeList,
   normalizeTypePlural,
@@ -678,7 +679,10 @@ export default function TypesPanel() {
   const byLower = new Map<string, NodeTypeConfig>();
   for (const t of DEFAULT_NODE_TYPES) byLower.set(t.name.toLowerCase(), t);
   for (const t of types) byLower.set(t.name.toLowerCase(), t);
+  // Only what the Grid holds is managed here; the built-ins that label a
+  // place or a tool's config are in every space and carry no aliases.
   const listedTypes = Array.from(byLower.values())
+    .filter(t => !isHiddenNodeType(t.name))
     .filter(t => isNodeTypeEnabled(currentSpace.featureConfig ?? null, t.name))
     .sort((a, b) => a.name.localeCompare(b.name));
 

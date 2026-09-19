@@ -95,6 +95,10 @@ export function declaresIndexType(content: string): boolean {
  */
 export const INDEX_DISPLAY_TYPE = 'Index'
 
+/** The word a sub-space's root shows in its house's context — display only, like Index. */
+export const SUBSPACE_DISPLAY_TYPE = 'Subspace'
+const SUBSPACE_ROOT_INDEX = /^subspaces\/[^/]+\/index\.md$/
+
 /**
  * The type a note shows: what it DECLARES when it declares one — a person's
  * context folder is a Person, not an Index — else `Index` for a folder, whose
@@ -103,6 +107,7 @@ export const INDEX_DISPLAY_TYPE = 'Index'
 export function displayTypeOf(path: string, declaredType?: string | null): string | null {
   const declared = declaredType?.trim()
   if (declared) return declared
+  if (SUBSPACE_ROOT_INDEX.test(path)) return SUBSPACE_DISPLAY_TYPE
   return isIndexPath(path) ? INDEX_DISPLAY_TYPE : null
 }
 
@@ -114,7 +119,7 @@ export function displayTypeOf(path: string, declaredType?: string | null): strin
  */
 function isShapeType(declared: string): boolean {
   const t = declared.trim().toLowerCase()
-  return t === 'index' || t === 'note'
+  return t === 'index' || t === 'note' || t === 'subspace'
 }
 
 // The frontmatter keys every index leads with, in this order; anything else the

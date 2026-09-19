@@ -30,6 +30,14 @@ export interface NodeTypeConfig {
    */
   plural?: string;
   /**
+   * A type every space has by default that is not a directory record: it
+   * labels a place or a tool's config (a folder, a room, an agent), never
+   * something the Grid shows, and carries no aliases. Console → Types does not
+   * list it. Only the built-ins set it, so ask {@link isHiddenNodeType} rather
+   * than a stored row, which may predate the flag.
+   */
+  hidden?: true;
+  /**
    * What this type TRACKS, beyond the rows every entity of it already carries
    * (lib/create/typeFields.ts): the columns the Directory's table shows for
    * it, and the properties an agent can read off its entity note. Each
@@ -260,20 +268,20 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // the graph, so nothing syncs a `note:`/`file:` node for them. Section was
   // called Space before the rename freed that name for the org type; stored
   // rows are migrated by scripts/rename-community-to-space.ts.
-  { name: 'Section',   color: '#0ea5e9', shape: 'square'    },
-  { name: 'Channel',   color: '#ec4899', shape: 'rectangle' },
+  { name: 'Section',   color: '#0ea5e9', shape: 'square', hidden: true },
+  { name: 'Channel',   color: '#ec4899', shape: 'rectangle', hidden: true },
   // A connector is a space's gateway to an external API or database, kept
   // as a note under connectors/. Rectangle like the other document types — the
   // indigo tint and the plug glyph are what set it apart.
-  { name: 'Connector', color: '#4f46e5', shape: 'rectangle' },
+  { name: 'Connector', color: '#4f46e5', shape: 'rectangle', hidden: true },
   // An agent is a scheduled worker authored as a note under agents/ (lib/agents).
   // Teal, the one saturated hue no other document type uses.
-  { name: 'Agent',     color: '#0d9488', shape: 'rectangle' },
+  { name: 'Agent',     color: '#0d9488', shape: 'rectangle', hidden: true },
   // A Tool is a member-built app authored as an entity folder under tools/
   // (lib/tools) — its index is the config, its sub-notes the source. Square
   // because a Tool is a container of its own surfaces, not a document; purple,
   // kept lighter than Connector's indigo so the two never read as one.
-  { name: 'Tool',      color: '#a855f7', shape: 'square'    },
+  { name: 'Tool',      color: '#a855f7', shape: 'square', hidden: true },
   // A model is what agents run on, kept as a note under models/ (lib/models).
   // Without a row here it fell through to the unknown-type grey and the Type
   // filter showed the raw lowercase `models`. Amber-brown, a hue no other
@@ -289,8 +297,22 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // `scope: 'note'` is the honest one: it labels a NOTE and never a node —
   // nothing syncs an `index:` node — so it belongs with the vocabulary the
   // directory's type filter skips rather than with the types a card can wear.
-  { name: 'Index',     color: '#eab308', shape: 'square', scope: 'note' },
+  { name: 'Index',     color: '#eab308', shape: 'square', scope: 'note', hidden: true },
+  // A sub-space's root as it is drawn in its house's context — the
+  // `subspaces/<id>/` folder (lib/notes/federation.ts). Like Index it labels a
+  // PATH and never a node: a room is a tenant, not a directory record.
+  { name: 'Subspace',  color: '#65a30d', shape: 'square', scope: 'note', hidden: true },
 ];
+
+/**
+ * Is this one of the built-in types that is in every space and never a Grid
+ * record ({@link NodeTypeConfig.hidden})? Read from the built-ins, not the
+ * space's stored row, so a vocabulary saved before the flag existed agrees.
+ */
+export function isHiddenNodeType(name: string | null | undefined): boolean {
+  const key = (name ?? '').trim().toLowerCase();
+  return DEFAULT_NODE_TYPES.some((t) => t.hidden && t.name.toLowerCase() === key);
+}
 
 // Aliases are entirely space-configured — there is no built-in list for any
 // type, Connector included. A connector's `alias: http` frontmatter picks its
@@ -321,6 +343,7 @@ export const STRUCTURAL_NODE_TYPES: readonly string[] = [
   'note',
   'file',
   'index',
+  'subspace',
   'connector',
   'agent',
   'tool',

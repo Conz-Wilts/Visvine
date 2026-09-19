@@ -38,7 +38,7 @@ const MAX_NAME = 32;
  * ordinary note — unlike Connector and Agent, whose types nothing outside their
  * own namespace acts on.
  */
-const RESERVED = ['note', 'file', 'index', 'tool', 'tools'];
+const RESERVED = ['note', 'file', 'index', 'subspace', 'tool', 'tools'];
 
 /**
  * Is this name one no space may create a type for? Surfaces that OFFER
