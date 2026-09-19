@@ -9,8 +9,7 @@ import { useAuth } from "@/features/auth/contexts/AuthContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
 import { selfProfileHref } from "@/features/profile/lib/selfView";
 import { CONNECTORS_PARAM, settingsHrefFor } from "@/features/settings/components/SettingsConnectors";
-import { useDesktopChrome } from "@/features/desktop/lib/chrome";
-import { headSquareSize, ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
+import { MARK_PX, ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
 
 /**
  * The account band — the rail's last rows (Sidebar). You sit at the foot of the
@@ -38,7 +37,7 @@ import { headSquareSize, ITEM_GAP, ROW_H, Row } from "@/features/shared/componen
 export default function UserMenu({ expanded, reduced }: { expanded: boolean; reduced: boolean }) {
   const { session, isLoading: isPending } = useAuth();
   // The same square as the space at the rail's head, so the two ends match.
-  const avatarPx = headSquareSize(useDesktopChrome().railW);
+  const avatarPx = MARK_PX;
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const bandRef = useRef<HTMLDivElement>(null);

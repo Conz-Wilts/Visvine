@@ -8,9 +8,8 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { SettingsIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
-import { useDesktopChrome } from '@/features/desktop/lib/chrome';
 import { spaceMark } from '@/lib/spaces/subspaces';
-import { END_ROW_H, HEAD_CELL_W, headSquareSize, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
+import { END_ROW_H, HEAD_CELL_W, MARK_PX, ITEM_GAP, ROW_H, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
 
 /**
  * The space band — the rail's first rows (Sidebar). The space sits at the head
@@ -35,7 +34,7 @@ import { END_ROW_H, HEAD_CELL_W, headSquareSize, ITEM_GAP, ROW_H, ROW_INSET, Row
 export default function SpaceSelector() {
   const { currentSpace, spaces, isAdmin } = useSpace();
   const { expanded, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
-  const square = headSquareSize(useDesktopChrome().railW);
+  const square = MARK_PX;
   // The switcher and Create new share the rail's edge, one at a time.
   const { close: closeCreate } = useCreateModal();
   const { session } = useAuth();

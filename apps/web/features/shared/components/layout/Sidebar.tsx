@@ -26,7 +26,6 @@ import {
   ROW_INSET,
   RAIL_CELL_VAR,
   Row,
-  headSquareInset,
 } from "@/features/shared/components/layout/railRow";
 
 /*
@@ -72,9 +71,6 @@ const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full h
 // like every other row, so it sits in the screen's bottom-left corner rather
 // than floating a band's height above it.
 const RAIL_PAD_Y = 0;
-// The space's square stands this far below the band's line, as Slack's
-// workspace icon does below its sheet's top edge.
-const HEAD_SQUARE_DROP = 8;
 // A band boundary: the hairline sits ITEM_GAP below the last row and ITEM_GAP
 // above the next one, so the bands are held apart by the rhythm the rows
 // already have rather than by a number of their own.
@@ -356,7 +352,7 @@ export default function Sidebar() {
               active={pathname === "/discover" || pathname.startsWith("/discover/")}
               // Drawn at the Create disc's size rather than a glyph's: the two
               // rows of the top group are a pair, and read as one.
-              icon={<CompassIcon className="!h-10 !w-10" strokeWidth={1.4} />}
+              icon={<CompassIcon className="!h-[34px] !w-[34px]" strokeWidth={1.5} />}
             />
           </div>
           {!noSpace && (
@@ -536,10 +532,7 @@ export default function Sidebar() {
             // sheet's hairline is the divide.
             background: FRAME_BG,
             width: railW,
-            // The space's square stands just under the band's line, the
-            // sheet's top edge, the way Slack's workspace icon does: the rail
-            // is pulled up by the room the head cell leaves above its square.
-            paddingTop: bandH + HEAD_SQUARE_DROP - headSquareInset(collapsedW),
+            paddingTop: bandH,
             paddingBottom: RAIL_PAD_Y,
             transition: reduced ? "none" : `width ${RAIL_MOTION}`,
           }}

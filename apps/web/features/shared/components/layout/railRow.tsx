@@ -27,7 +27,7 @@ const GLYPH_CELL_W = `var(${RAIL_CELL_VAR}, ${COLLAPSED_W - ROW_INSET * 2}px)`;
 // draw their rows on this same square: ROW_H tall, the mark centred in a cell
 // ROW_H wide, the name LABEL_ML beyond it, so the list beside the rail reads
 // as more of the rail.
-export const ROW_H = 62;
+export const ROW_H = 58;
 export const LABEL_ML = 8;    // glyph cell → label, on the open row
 // Row ↔ row, and row ↔ hairline. None: the tiles stack flush, and a band's
 // line sits directly against the tile on either side of it. The same open or
@@ -41,28 +41,18 @@ export const HEAD_CELL_W = GLYPH_CELL_W;
 // band of one row, held between hairlines, and each is as tall as every other
 // row, so the column keeps one rhythm from head to foot.
 export const END_ROW_H = `${ROW_H}px`;
-// The space's square at the rail's head, as a share of the rail's width —
-// Slack's workspace icon is ~54% of its rail: 42 in the browser, 48 in the
-// mac app's wider rail.
-const HEAD_SQUARE_SHARE = 0.55;
-export function headSquareSize(railW: number): number {
-  return Math.round(railW * HEAD_SQUARE_SHARE);
-}
-/** The room the head cell leaves above its square (the square is centred in
- *  an END_ROW_H-tall cell, so the rail can place the square's top exactly). */
-export function headSquareInset(railW: number): number {
-  return (ROW_H - headSquareSize(railW)) / 2;
-}
+// Every mark in the column sits in one 40px optical box — the space's square,
+// the Create disc, the avatar — centred in a ROW_H row, so each has the same
+// 9px of air above and below and the pitch is one steady 58px (Discord's 48 +
+// 8 rhythm, Material's 56 rail item). Outline glyphs are drawn smaller than
+// the box because a stroke reads larger than a filled shape of the same size.
+export const MARK_PX = 40;
 // The nav icons ship at h-5 w-5 from the feature registry (they are also drawn
 // on the launcher cards at that size); the rail draws them larger, so each cell
 // scales its own svg rather than the registry carrying a second set.
 //
-// 31px, not 22: the two rows of the top group are drawn at 40 (the Create disc,
-// and the compass sized to match it), and a 22px glyph under them read as a
-// different, smaller family rather than the same column continuing. This sits
-// close enough to belong to them while staying plainly subordinate — the row
-// you come here to press is still the one drawn largest.
-const GLYPH = "[&>svg]:h-[31px] [&>svg]:w-[31px]";
+// Outline glyphs at 28: optically level with the 40px filled marks.
+const GLYPH = "[&>svg]:h-7 [&>svg]:w-7";
 // One row shape for every entry — Create, each tool, More, each account action.
 // At rest a row is bare: no border, no fill, just the glyph (and the label once
 // the rail is open). The block appears under the pointer only — square-cornered,
