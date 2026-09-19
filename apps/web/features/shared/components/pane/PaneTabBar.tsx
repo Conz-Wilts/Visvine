@@ -285,7 +285,7 @@ function PaneTabBarInner({
       {/* Animated green underline indicator. During a tab-set change it
           slows to the FLIP's duration so it travels with the sliding word. */}
       <div
-        className={`absolute bottom-0 h-[3px] bg-brand-green ${motion}`}
+        className={`absolute bottom-0 h-[3px] rounded-full bg-brand-green ${motion}`}
         style={{
           left: indicatorStyle.left,
           width: indicatorStyle.width,
@@ -315,7 +315,7 @@ function PaneTabBarInner({
             </svg>
             Raw
             {rawOn && (
-              <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] bg-brand-green" />
+              <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-brand-green" />
             )}
           </button>
         )}
@@ -330,7 +330,7 @@ function PaneTabBarInner({
             <WaypointsIcon className="h-4 w-4" />
             Connections
             {connectionsOpen && (
-              <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] bg-brand-green" />
+              <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-brand-green" />
             )}
           </button>
         )}
