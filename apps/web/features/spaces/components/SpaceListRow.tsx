@@ -2,7 +2,7 @@
 
 import type { Space } from '@/lib/types';
 import type { LockedSubspace } from '@/lib/spaces/subspaceAccess';
-import { LABEL_ML, ROW_CLASS, ROW_H, ROW_TEXT } from '@/features/shared/components/layout/railRow';
+import { END_ROW_H, LABEL_ML, ROW_CLASS, ROW_TEXT } from '@/features/shared/components/layout/railRow';
 import { ChevronRightIcon, LockIcon, PlusIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { TREE_ROW_BLEED, TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
@@ -67,12 +67,12 @@ export function SpaceListRow({
         tabIndex={tabbable ? 0 : -1}
         className={`${ROW_CLASS} min-w-0 text-left ${current ? 'bg-surface-3 font-semibold' : 'font-normal'}`}
         style={{
-          height: ROW_H,
+          height: END_ROW_H,
           paddingRight: 16,
           color: current ? 'var(--shell-fg-strong, #111827)' : 'var(--shell-fg-muted, #111827)',
         }}
       >
-        <span className="flex shrink-0 items-center justify-end" style={{ width: LIST_CELL_W, height: ROW_H, paddingRight: AVATAR_GAP }}>
+        <span className="flex shrink-0 items-center justify-end" style={{ width: LIST_CELL_W, height: END_ROW_H, paddingRight: AVATAR_GAP }}>
           {/* The same avatar the space wears at the rail's head — 36px on
               8px corners — so the list reads as more of that row. */}
           <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" rounded="rounded-[8px]" className="!w-9 !h-9 !text-sm" />
@@ -88,7 +88,7 @@ export function SpaceListRow({
           tabIndex={tabbable ? 0 : -1}
           onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
           className="absolute top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-4 [&>svg]:w-4"
-          style={{ left: 0, width: CHEVRON_W, height: ROW_H }}
+          style={{ left: 0, width: CHEVRON_W, height: END_ROW_H }}
         >
           <span className="flex transition-transform duration-150" style={{ transform: open ? 'rotate(90deg)' : 'none' }}>
             <ChevronRightIcon />
@@ -201,9 +201,9 @@ export function NewSpaceRow({ tabbable, onClick }: { tabbable: boolean; onClick:
       onClick={onClick}
       tabIndex={tabbable ? 0 : -1}
       className={`${ROW_CLASS} min-w-0 text-left font-normal`}
-      style={{ height: ROW_H, paddingRight: 16, color: 'var(--shell-fg-muted, #111827)' }}
+      style={{ height: END_ROW_H, paddingRight: 16, color: 'var(--shell-fg-muted, #111827)' }}
     >
-      <span className="flex shrink-0 items-center justify-end" style={{ width: LIST_CELL_W, height: ROW_H, paddingRight: AVATAR_GAP }}>
+      <span className="flex shrink-0 items-center justify-end" style={{ width: LIST_CELL_W, height: END_ROW_H, paddingRight: AVATAR_GAP }}>
         <span
           className="flex items-center justify-center rounded-[8px] border border-dashed border-border-default text-text-muted [&>svg]:h-4 [&>svg]:w-4"
           style={{ width: AVATAR_PX, height: AVATAR_PX }}

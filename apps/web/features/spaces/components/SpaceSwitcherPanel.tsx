@@ -6,7 +6,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { ITEM_GAP, ROW_H, ROW_INSET } from '@/features/shared/components/layout/railRow';
+import { useDesktopChrome } from '@/features/desktop/lib/chrome';
+import { ITEM_GAP, ROW_INSET } from '@/features/shared/components/layout/railRow';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
 import { LIST_AVATAR_CENTER, LIST_AVATAR_PX, LockedSubspaceRow, NewSpaceRow, NewSubspaceRow, SpaceListRow, SubspaceRow } from '@/features/spaces/components/SpaceListRow';
 import NewSpaceDialog from '@/features/spaces/components/NewSpaceDialog';
@@ -47,6 +48,8 @@ export default function SpaceSwitcherPanel() {
   const { switcherOpen: isOpen, setSwitcherOpen, reduced } = useSidebar();
   const { currentSpace, joinedSpaces, lockedSubspaces, setCurrentSpace, manages } = useSpace();
   const pathname = usePathname();
+  // Rows are the rail's square cells, so the spine's stem is half a cell.
+  const { railW } = useDesktopChrome();
   const [query, setQuery] = useState('');
   // What is being made: a top-level space, or a sub-space of the row whose
   // branch offered it. One dialog either way (NewSpaceDialog).
@@ -176,7 +179,7 @@ export default function SpaceSwitcherPanel() {
                       // not TreeSpine's default 14px, and its stem climbs from
                       // the branch's top to the avatar's bottom edge.
                       <div style={{ marginLeft: LIST_AVATAR_CENTER - SPINE_DEFAULT_ML }}>
-                        <TreeSpine animate={!reduced} stem={ROW_H / 2 - LIST_AVATAR_PX / 2}>
+                        <TreeSpine animate={!reduced} stem={railW / 2 - LIST_AVATAR_PX / 2}>
                           {canAddSub && (
                             <NewSubspaceRow
                               parentName={space.name}
