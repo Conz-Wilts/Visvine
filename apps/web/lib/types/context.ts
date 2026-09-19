@@ -38,6 +38,12 @@ export interface NodeTypeConfig {
    */
   hidden?: true;
   /**
+   * A built-in the platform itself runs on — a folder, a room, a connector, a
+   * model, a space. Listed last on Console → Types, under System types. Ask
+   * {@link isSystemNodeType}, for the same reason as `hidden`.
+   */
+  system?: true;
+  /**
    * What this type TRACKS, beyond the rows every entity of it already carries
    * (lib/create/typeFields.ts): the columns the Directory's table shows for
    * it, and the properties an agent can read off its entity note. Each
@@ -259,7 +265,7 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // `metadata.spaceRef`, unclaimed until somebody runs it (lib/spaces/
   // stub.ts). isOwnSpaceNode below tells the space you're IN apart from
   // the organisations recorded inside it.
-  { name: 'Space',     color: '#78d870', shape: 'square'    },
+  { name: 'Space',     color: '#78d870', shape: 'square', system: true },
   { name: 'Event',     color: '#ef4444', shape: 'rectangle' },
   { name: 'Resource',  color: '#f97316', shape: 'rectangle' },
   // Structural types — the container kinds. Colours match the Create panel's
@@ -273,7 +279,7 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // A connector is a space's gateway to an external API or database, kept
   // as a note under connectors/. Rectangle like the other document types — the
   // indigo tint and the plug glyph are what set it apart.
-  { name: 'Connector', color: '#4f46e5', shape: 'rectangle', hidden: true },
+  { name: 'Connector', color: '#4f46e5', shape: 'rectangle', system: true },
   // An agent is a scheduled worker authored as a note under agents/ (lib/agents).
   // Teal, the one saturated hue no other document type uses.
   { name: 'Agent',     color: '#0d9488', shape: 'rectangle', hidden: true },
@@ -286,7 +292,7 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // Without a row here it fell through to the unknown-type grey and the Type
   // filter showed the raw lowercase `models`. Amber-brown, a hue no other
   // document type uses.
-  { name: 'Model',     color: '#b45309', shape: 'rectangle' },
+  { name: 'Model',     color: '#b45309', shape: 'rectangle', system: true },
   // A folder, which is its `index.md` (lib/notes/shared/indexNote.ts). It is
   // here so the word a folder shows has a colour and a spelling the console
   // owns like every other type — not so anything can be typed `Index`: the name
@@ -297,11 +303,11 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // `scope: 'note'` is the honest one: it labels a NOTE and never a node —
   // nothing syncs an `index:` node — so it belongs with the vocabulary the
   // directory's type filter skips rather than with the types a card can wear.
-  { name: 'Index',     color: '#eab308', shape: 'square', scope: 'note', hidden: true },
+  { name: 'Index',     color: '#eab308', shape: 'square', scope: 'note', system: true },
   // A sub-space's root as it is drawn in its house's context — the
   // `subspaces/<id>/` folder (lib/notes/federation.ts). Like Index it labels a
   // PATH and never a node: a room is a tenant, not a directory record.
-  { name: 'Subspace',  color: '#65a30d', shape: 'square', scope: 'note', hidden: true },
+  { name: 'Subspace',  color: '#65a30d', shape: 'square', scope: 'note', system: true },
 ];
 
 /**
@@ -312,6 +318,12 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
 export function isHiddenNodeType(name: string | null | undefined): boolean {
   const key = (name ?? '').trim().toLowerCase();
   return DEFAULT_NODE_TYPES.some((t) => t.hidden && t.name.toLowerCase() === key);
+}
+
+/** Is this a built-in the platform runs on ({@link NodeTypeConfig.system})? */
+export function isSystemNodeType(name: string | null | undefined): boolean {
+  const key = (name ?? '').trim().toLowerCase();
+  return DEFAULT_NODE_TYPES.some((t) => t.system && t.name.toLowerCase() === key);
 }
 
 // Aliases are entirely space-configured — there is no built-in list for any
