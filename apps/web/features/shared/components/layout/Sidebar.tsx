@@ -185,6 +185,16 @@ export default function Sidebar() {
   // and one list rather than two full columns side by side.
   const railPanelOpen = switcherOpen || createOpen;
   const railW = expanded ? EXPANDED_W : collapsedW;
+  // Where a rail panel stands: the content sheet's box, below the band.
+  const railPanelBox: React.CSSProperties = {
+    top: bandH + SHELL_FRAME_GAP,
+    bottom: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN,
+    left: railW + SHELL_FRAME_GAP,
+    width: railPanelW,
+    borderTopLeftRadius: FRAME_RADIUS,
+    borderBottomLeftRadius: SHELL_FRAME_RADIUS,
+    transition: reduced ? "none" : `left ${RAIL_MOTION}`,
+  };
   // Create new is open only while the pointer is on its row or in the panel:
   // pointing at any other row of the rail puts it away. The switcher is not
   // put away by pointing: it goes when another row is PRESSED (pressRailRow),
@@ -614,30 +624,28 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* The rail's own panels — the space switcher and Create new — are
-          layers against the rail's edge running the card's full height,
-          so their search is at the very top beside the space, not below the
-          shell's band the way the page's panel column is. Each slides out
-          from under the rail; parked, it is clipped by its box. They hang off
-          the aside rather than the card's overflow-hidden box above, because
-          that box is only as wide as the rail and would scroll itself sideways
-          to show a focused search. Each box's left edge IS the rail's edge,
-          on the rail's own motion: a panel opened while the rail is still
-          widening, or shut before it has finished, travels with that edge
-          rather than sliding towards a place the rail has not reached yet —
-          and when the pointer crosses into a panel and the rail shuts under
-          it, the panel glides left to the glyph column's edge. One shows at a
-          time (the rows that open them close the other), so they share the
-          edge without a stack. */}
+      {/* The rail's own panels — the space switcher and Create new — open in
+          the content area: below the shell's band, over the sheet's left edge,
+          with the sheet's margins and rounded corner, so the band stays whole
+          above them. Each slides out from under the rail; parked, it is
+          clipped by its box. They hang off the aside rather than the card's
+          overflow-hidden box above, because that box is only as wide as the
+          rail and would scroll itself sideways to show a focused search. Each
+          box's left edge follows the rail's edge, on the rail's own motion: a
+          panel opened while the rail is still widening, or shut before it has
+          finished, travels with that edge — and when the pointer crosses into
+          a panel and the rail shuts under it, the panel glides left to the
+          glyph column's edge. One shows at a time (the rows that open them
+          close the other), so they share the edge without a stack. */}
       <div
-        className={`absolute top-0 bottom-0 z-20 overflow-hidden ${switcherOpen ? '' : 'pointer-events-none'}`}
-        style={{ left: railW, width: railPanelW, transition: reduced ? "none" : `left ${RAIL_MOTION}` }}
+        className={`absolute z-20 overflow-hidden ${switcherOpen ? '' : 'pointer-events-none'}`}
+        style={railPanelBox}
       >
         <SpaceSwitcherPanel />
       </div>
       <div
-        className={`absolute top-0 bottom-0 z-20 overflow-hidden ${createOpen ? '' : 'pointer-events-none'}`}
-        style={{ left: railW, width: railPanelW, transition: reduced ? "none" : `left ${RAIL_MOTION}` }}
+        className={`absolute z-20 overflow-hidden ${createOpen ? '' : 'pointer-events-none'}`}
+        style={railPanelBox}
       >
         <CreatePanel />
       </div>
