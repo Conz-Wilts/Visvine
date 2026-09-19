@@ -65,7 +65,7 @@ const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync wit
 // the rail, which shuts to its glyph column as the pointer crosses into them,
 // so the panel's width is its own: wide enough for a space's name beside its
 // chevron and check, or a kind's name beside its mark, without clipping.
-const RAIL_PANEL_W = 280;
+const RAIL_PANEL_W = 340;
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full height
 // paddingBottom on the rail column: the band margin, so the avatar sits as far

@@ -6,7 +6,7 @@ import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { DOCK_EASE, DOCK_MS, useSidebar } from '@/features/shared/contexts/SidebarContext';
-import { ROW_H } from '@/features/shared/components/layout/railRow';
+import PanelSearch from '@/features/shared/components/layout/PanelSearch';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
 import { createRows, firstPickIndex, flowFor, type CreateKind, type CreateRow } from '@/lib/create/rows';
 import { aliasesForType, type SpaceAlias, type SpaceFeatureConfig } from '@/lib/types';
@@ -120,22 +120,7 @@ export default function CreatePanel() {
     >
       {/* The search. One rail row tall and level with the rail's head, because
           this is the rail continuing — the rows below line up with the rail's. */}
-      <div className="flex flex-shrink-0 items-center px-3" style={{ height: ROW_H }}>
-        <div className="flex h-10 w-full items-center gap-2 rounded-lg border border-border-default bg-surface-1 px-3 transition-colors focus-within:border-brand-green">
-          <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search or name a type…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={onKeyDown}
-            tabIndex={isOpen ? 0 : -1}
-            className="min-w-0 flex-1 bg-transparent text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none"
-          />
-        </div>
-      </div>
+      <PanelSearch placeholder="Search or name a type…" value={query} onChange={setQuery} onKeyDown={onKeyDown} tabbable={isOpen} />
 
       <div className="custom-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto pb-3">
         <TypeList
