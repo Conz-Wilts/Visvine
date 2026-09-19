@@ -121,9 +121,30 @@ export function useContextTreeState(
   )
 
   const [suppressedPaths, setSuppressedPaths] = useState<Set<string>>(() => new Set())
+
+  // A reveal that MOVES (the user opened another note) keeps what the last one
+  // had open: those folders were on screen, and only the user shuts a folder.
+  // Without this, opening a room from a note in Main snapped Main shut, since
+  // a room's chain never passes through it. A reveal that CLEARS still snaps
+  // back to the hand-opened set.
+  const lastRevealRef = useRef<{ paths: Set<string> | null; suppressed: Set<string> }>({
+    paths: revealedPaths,
+    suppressed: suppressedPaths,
+  })
   useEffect(() => {
-    setSuppressedPaths((prev) => (prev.size === 0 ? prev : new Set()))
-  }, [revealPath])
+    const { paths: prev, suppressed } = lastRevealRef.current
+    lastRevealRef.current = { paths: revealedPaths, suppressed: new Set() }
+    if (prev && revealedPaths) {
+      setOpenPaths((open) => {
+        const keep = [...prev].filter((p) => !suppressed.has(p) && !open.has(p))
+        return keep.length ? new Set([...open, ...keep]) : open
+      })
+    }
+    setSuppressedPaths((s) => (s.size === 0 ? s : new Set()))
+  }, [revealedPaths])
+  useEffect(() => {
+    lastRevealRef.current.suppressed = suppressedPaths
+  }, [suppressedPaths])
 
   const effectiveOpenPaths = useMemo(() => {
     const overlay = forceOpen?.size ? forceOpen : null
