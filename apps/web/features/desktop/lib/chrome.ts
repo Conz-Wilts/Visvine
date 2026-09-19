@@ -26,14 +26,12 @@ const MAC_RAIL_W = 72;
 type DesktopChrome = {
   /** The part of the band the window's controls stand in. */
   inset: number;
-  /** The shell's top band — ShellTopBar's height. <main> starts below it. */
-  bandH: number;
   /** The closed rail's width, centred on the window's controls. */
   railW: number;
 };
 
-const BROWSER: DesktopChrome = { inset: 0, bandH: SHELL_TOP_BAR_H, railW: COLLAPSED_W };
-const MAC: DesktopChrome = { inset: SHELL_TOP_BAR_H, bandH: SHELL_TOP_BAR_H, railW: MAC_RAIL_W };
+const BROWSER: DesktopChrome = { inset: 0, railW: COLLAPSED_W };
+const MAC: DesktopChrome = { inset: SHELL_TOP_BAR_H, railW: MAC_RAIL_W };
 const MAC_FULL_SCREEN: DesktopChrome = { ...MAC, inset: 0 };
 
 // One read of the shell for every component that measures against it.

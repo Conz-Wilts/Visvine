@@ -41,22 +41,15 @@ export const HEAD_CELL_W = GLYPH_CELL_W;
 // band of one row, held between hairlines, and each is as tall as every other
 // row, so the column keeps one rhythm from head to foot.
 export const END_ROW_H = GLYPH_CELL_W;
-// Every mark in the column sits in one 40px optical box — the space's square,
-// the Create disc, the avatar — centred in a ROW_H row, so each has the same
-// 8px of air above and below and the pitch is one steady 52px (Discord's 48 +
-// 8 rhythm, Material's 56 rail item). Outline glyphs are drawn smaller than
-// the box because a stroke reads larger than a filled shape of the same size.
+// The rail's two filled marks — the space's square and your avatar — are one
+// size, centred in their cells. Outline glyphs are drawn smaller because a
+// stroke reads larger than a filled shape of the same size.
 export const MARK_PX = 44;
-// Each band between hairlines is padded so the marks at its top and bottom sit
-// as far from the line as they sit from the rail's sides: (cell − row) / 2 on
-// top of the row's own air. The ends then read as squares and every band has
-// the same margin all round, whatever width the rail is drawn at.
-export const BAND_PAD = "0px";
 // The nav icons ship at h-5 w-5 from the feature registry (they are also drawn
 // on the launcher cards at that size); the rail draws them larger, so each cell
 // scales its own svg rather than the registry carrying a second set.
 //
-// Outline glyphs at 28: optically level with the 40px filled marks.
+// Outline glyphs at 28: optically level with the filled marks.
 const GLYPH = "[&>svg]:h-7 [&>svg]:w-7";
 // One row shape for every entry — Create, each tool, More, each account action.
 // At rest a row is bare: no border, no fill, just the glyph (and the label once

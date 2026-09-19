@@ -2,7 +2,8 @@
 
 import { useHeader } from "@/features/shared/contexts/HeaderContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
-import { FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
+import { SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
+import { FRAME_RADIUS } from "@/features/desktop/lib/chrome";
 
 /*
  * The band across the top of the content surface — the shell's chrome AND the
@@ -20,15 +21,14 @@ import { FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
  * beside a note, the channel list on /channels — keeps it open. The panel is
  * the page's spine, not an option.
  *
- * In the mac app the band leaves the content surface and becomes the window's
- * top edge, running its full width on the frame (AuthLayoutClient) — so it is
- * handed the rail's width, and its tabs still start on the page content's line.
+ * The band is the window's top edge, running its full width on the frame
+ * (AuthLayoutClient) — so it is handed the rail's width, and its tabs start
+ * just past the sheet's corner.
  */
 
 export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
   const { setShellTabsHost, setShellTrailHost } = useContextPanel();
   const { headerContent, headerRight } = useHeader();
-  const { bandH } = useDesktopChrome();
 
   return (
     // paddingLeft: the first tab starts just past the sheet's rounded corner,
@@ -38,7 +38,7 @@ export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
     <div
       className="flex shrink-0 items-center gap-4 pr-1"
       style={{
-        height: bandH,
+        height: SHELL_TOP_BAR_H,
         paddingLeft: leftInset + FRAME_RADIUS + 4,
         transition: "padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
         WebkitAppRegion: "drag",

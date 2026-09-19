@@ -26,6 +26,13 @@ const LIST_CELL_W = CHEVRON_W + AVATAR_PX + AVATAR_GAP;
 export const LIST_AVATAR_CENTER = CHEVRON_W + AVATAR_PX / 2;
 export { AVATAR_PX as LIST_AVATAR_PX };
 
+/** The mark on the space you are in — a row and a sub-space row wear the same one. */
+const CURRENT_CHECK = (
+  <svg className="h-6 w-6 shrink-0 text-brand-green" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </svg>
+);
+
 /**
  * One space in the switcher's list. A rail row: the avatar centred in the
  * rail's glyph cell, the name beside it at the rail's size, so the list reads
@@ -54,11 +61,6 @@ export function SpaceListRow({
   onSelect: () => void;
   onToggle?: () => void;
 }) {
-  const check = (
-    <svg className="h-6 w-6 shrink-0 text-brand-green" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-      <path d="M5 12.5l4.5 4.5L19 7.5" />
-    </svg>
-  );
   return (
     <div className="relative">
       <button
@@ -78,7 +80,7 @@ export function SpaceListRow({
           <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" rounded="rounded-[8px]" className="!w-9 !h-9 !text-sm" />
         </span>
         <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`} style={{ marginLeft: LABEL_ML }}>{space.name}</span>
-        {current && check}
+        {current && CURRENT_CHECK}
       </button>
       {hasChildren && (
         <button
@@ -134,11 +136,7 @@ export function SubspaceRow({
     >
       <TreeSpineJoin kind={nested} />
       <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`}>{space.name}</span>
-      {current && (
-        <svg className="h-6 w-6 shrink-0 text-brand-green" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
-          <path d="M5 12.5l4.5 4.5L19 7.5" />
-        </svg>
-      )}
+      {current && CURRENT_CHECK}
     </button>
   );
 }

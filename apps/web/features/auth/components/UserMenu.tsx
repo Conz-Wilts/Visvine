@@ -9,7 +9,7 @@ import { useAuth } from "@/features/auth/contexts/AuthContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
 import { selfProfileHref } from "@/features/profile/lib/selfView";
 import { CONNECTORS_PARAM, settingsHrefFor } from "@/features/settings/components/SettingsConnectors";
-import { END_ROW_H, MARK_PX, ITEM_GAP, ROW_H, Row } from "@/features/shared/components/layout/railRow";
+import { END_ROW_H, HEAD_CELL_W, ITEM_GAP, MARK_PX, Row } from "@/features/shared/components/layout/railRow";
 
 /**
  * The account band — the rail's last rows (Sidebar). You sit at the foot of the
@@ -36,8 +36,6 @@ import { END_ROW_H, MARK_PX, ITEM_GAP, ROW_H, Row } from "@/features/shared/comp
  */
 export default function UserMenu({ expanded, reduced }: { expanded: boolean; reduced: boolean }) {
   const { session, isLoading: isPending } = useAuth();
-  // The same square as the space at the rail's head, so the two ends match.
-  const avatarPx = MARK_PX;
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const bandRef = useRef<HTMLDivElement>(null);
@@ -80,7 +78,11 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   }, [expanded]);
 
   if (isPending) {
-    return <div className="rounded-[10px] bg-surface-3 animate-pulse" style={{ width: avatarPx, height: avatarPx, marginLeft: (ROW_H - avatarPx) / 2 }} />;
+    return (
+      <div className="flex items-center justify-center" style={{ width: HEAD_CELL_W, height: END_ROW_H }}>
+        <div className="rounded-[10px] bg-surface-3 animate-pulse" style={{ width: MARK_PX, height: MARK_PX }} />
+      </div>
+    );
   }
 
   if (!session) return null;
@@ -191,9 +193,10 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
           href={profileHref ?? undefined}
           onClick={profileHref ? undefined : () => { setPinned((v) => !v); setOpen(true); }}
           icon={
-            <span className="overflow-hidden rounded-[10px] border-2 border-brand-green" style={{ width: avatarPx, height: avatarPx }}>
+            // MARK_PX: the same square as the space at the rail's head.
+            <span className="overflow-hidden rounded-[10px] border-2 border-brand-green" style={{ width: MARK_PX, height: MARK_PX }}>
               {user.image ? (
-                <Image src={user.image} alt="" width={avatarPx} height={avatarPx} className="h-full w-full object-cover" />
+                <Image src={user.image} alt="" width={MARK_PX} height={MARK_PX} className="h-full w-full object-cover" />
               ) : (
                 <PersonSilhouette />
               )}

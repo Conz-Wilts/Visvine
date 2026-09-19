@@ -9,7 +9,7 @@ import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { SettingsIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { spaceMark } from '@/lib/spaces/subspaces';
-import { BAND_PAD, RAIL_ROW_CLASS, END_ROW_H, HEAD_CELL_W, MARK_PX, ITEM_GAP, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
+import { RAIL_ROW_CLASS, END_ROW_H, HEAD_CELL_W, MARK_PX, ITEM_GAP, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
 
 /**
  * The space band — the rail's first rows (Sidebar). The space sits at the head
@@ -34,7 +34,6 @@ import { BAND_PAD, RAIL_ROW_CLASS, END_ROW_H, HEAD_CELL_W, MARK_PX, ITEM_GAP, RO
 export default function SpaceSelector() {
   const { currentSpace, spaces, isAdmin } = useSpace();
   const { expanded, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
-  const square = MARK_PX;
   // The switcher and Create new share the rail's edge, one at a time.
   const { close: closeCreate } = useCreateModal();
   const { session } = useAuth();
@@ -108,8 +107,8 @@ export default function SpaceSelector() {
   // and Create — with the hairline along its bottom edge, which is the line
   // between the two. Open, it grows by the rows, a gap above each and one
   // below, and that same line is what travels down over the rows it covers.
-  const shutH = BAND_PAD;
-  const openH = `calc(${BAND_PAD} + ${(actions.length + 1) * ITEM_GAP}px + ${actions.length} * ${END_ROW_H})`;
+  const shutH = ITEM_GAP;
+  const openH = `calc(${(actions.length + 1) * ITEM_GAP}px + ${actions.length} * ${END_ROW_H})`;
   const dur = reduced ? '0s' : '260ms';
 
   return (
@@ -150,11 +149,11 @@ export default function SpaceSelector() {
         >
           <span className="flex shrink-0 items-center justify-center" style={{ width: HEAD_CELL_W, height: END_ROW_H }}>
             {currentSpace && mark ? (
-              <span className="flex shrink-0" style={{ width: square, height: square }}>
-                <SpaceAvatar name={mark.name} imageUrl={mark.imageUrl} size="md" rounded="rounded-[10px]" className="!w-full !h-full w-full h-full !text-base" />
+              <span className="flex shrink-0" style={{ width: MARK_PX, height: MARK_PX }}>
+                <SpaceAvatar name={mark.name} imageUrl={mark.imageUrl} size="md" rounded="rounded-[10px]" className="!w-full !h-full !text-base" />
               </span>
             ) : (
-              <div className="rounded-[10px] bg-surface-3 flex-shrink-0" style={{ width: square, height: square }} />
+              <div className="rounded-[10px] bg-surface-3 flex-shrink-0" style={{ width: MARK_PX, height: MARK_PX }} />
             )}
           </span>
           {/* The name stays mounted so it can FADE with the rail's other labels

@@ -7,7 +7,7 @@ import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/Cre
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { useSpace } from "@/features/shared/contexts/SpaceContext";
-import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from "@/features/shared/contexts/ThemeContext";
+import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { CompassIcon } from "@/features/shared/icons";
@@ -22,7 +22,6 @@ import SpaceSwitcherPanel from "@/features/spaces/components/SpaceSwitcherPanel"
 import type { SpaceFeatureConfig } from "@/lib/types";
 import {
   EXPANDED_W,
-  BAND_PAD,
   ITEM_GAP,
   ROW_INSET,
   RAIL_CELL_VAR,
@@ -68,12 +67,6 @@ const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync wit
 const RAIL_PANEL_W = 340;
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full height
-// paddingBottom on the rail column: the band margin, so the avatar sits as far
-// from the window's foot as from the rail's sides.
-const RAIL_PAD_Y = BAND_PAD;
-// A band boundary: the hairline sits BAND_PAD below the last row and BAND_PAD
-// above the next one, so every band has the same margin as the rail's sides.
-const BAND_TOP = BAND_PAD;
 // The rail's width, opening and closing — and the motion of anything that
 // must stay glued to its edge.
 const RAIL_MOTION_MS = 300;
@@ -98,9 +91,9 @@ export default function Sidebar() {
   // on them: a pointer crossing the rail on its way into a panel must not
   // swap or shut what it is heading for.
   const intent = useHoverIntent();
-  // The desktop shell's window controls stand in the rail's top strip, and
-  // the closed rail is as wide as centres its glyphs under them.
-  const { inset: chromeInset, railW: collapsedW, bandH } = useDesktopChrome();
+  // The desktop shell's window controls stand in the band's left end, over
+  // the rail, and the closed rail is wide enough to clear them.
+  const { inset: chromeInset, railW: collapsedW } = useDesktopChrome();
 
   const ease = DOCK_EASE;
 
@@ -182,7 +175,7 @@ export default function Sidebar() {
   const railW = expanded ? EXPANDED_W : collapsedW;
   // Where a rail panel stands: the content sheet's box, below the band.
   const railPanelBox = (open: boolean): React.CSSProperties => ({
-    top: bandH + SHELL_FRAME_GAP,
+    top: SHELL_TOP_BAR_H + SHELL_FRAME_GAP,
     bottom: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN,
     left: railW + SHELL_FRAME_GAP,
     width: railPanelW,
@@ -328,7 +321,6 @@ export default function Sidebar() {
           className="flex flex-col border-t"
           style={{
             gap: ITEM_GAP,
-            paddingTop: BAND_PAD,
             paddingLeft: ROW_INSET,
             paddingRight: ROW_INSET,
             // The line under the space is drawn by the space's own sheet
@@ -401,9 +393,6 @@ export default function Sidebar() {
         style={{
           paddingLeft: ROW_INSET,
           paddingRight: ROW_INSET,
-          paddingTop: BAND_PAD,
-          paddingBottom: 0,
-          marginTop: BAND_TOP,
           // The one hairline between the surfaces that are yours and the ones
           // the space switched on — the same seam the foot uses.
           borderTopColor: "var(--shell-border, #e5e7eb)",
@@ -448,8 +437,6 @@ export default function Sidebar() {
           onClickCapture={pressRailRow}
           style={{
             gap: ITEM_GAP,
-            marginTop: BAND_TOP,
-            paddingTop: BAND_PAD,
             paddingLeft: ROW_INSET,
             paddingRight: ROW_INSET,
             borderTopColor: "var(--shell-border, #e5e7eb)",
@@ -484,8 +471,6 @@ export default function Sidebar() {
         {...intent(leaveRailPanels)}
         onClickCapture={pressRailRow}
         style={{
-          marginTop: BAND_TOP,
-          paddingTop: BAND_PAD,
           paddingLeft: ROW_INSET,
           paddingRight: ROW_INSET,
           borderTopColor: "var(--shell-border, #e5e7eb)",
@@ -531,8 +516,7 @@ export default function Sidebar() {
             // sheet's hairline is the divide.
             background: FRAME_BG,
             width: railW,
-            paddingTop: `calc(${bandH}px + ${BAND_PAD})`,
-            paddingBottom: RAIL_PAD_Y,
+            paddingTop: SHELL_TOP_BAR_H,
             transition: reduced ? "none" : `width ${RAIL_MOTION}`,
           }}
           // Coming back before a shutting panel has released the rail keeps it
@@ -580,7 +564,7 @@ export default function Sidebar() {
             width: columnW,
             // dockTopInset is measured from <main>'s top; this column hangs in
             // the full-height aside, so it clears the shell's band as well.
-            marginTop: bandH + dockTopInset + SHELL_FRAME_GAP,
+            marginTop: SHELL_TOP_BAR_H + dockTopInset + SHELL_FRAME_GAP,
             marginBottom: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN,
             // Rail is railW wide (no +1 border column), so the full GAP closes
             // the distance to the card's left edge.
