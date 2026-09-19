@@ -15,6 +15,7 @@ import {
   DEFAULT_NODE_TYPES,
   isHiddenNodeType,
   isSystemNodeType,
+  isAliaslessNodeType,
   aliasesForType,
   mergeNodeTypeList,
   normalizeTypePlural,
@@ -476,7 +477,7 @@ function TypeRow({ typeName, typeColor, previewChips, expanded, onOpen, onUpdate
  * brought in — the way to take it back out of the vocabulary. Its colour is
  * not here: the swatch on the row is the whole control.
  */
-function TypeSettings({ typeName, typeColor, plural, pageOwner, aliases, allAliases, isPerson, noteScoped, newOpen, onNewStart, onNewDone, onAddAlias, onRemoveAlias, onRenameAlias, onUpdateAliasColor, onDelete, saving }: {
+function TypeSettings({ typeName, typeColor, plural, pageOwner, aliases, allAliases, isPerson, aliasless, noteScoped, newOpen, onNewStart, onNewDone, onAddAlias, onRemoveAlias, onRenameAlias, onUpdateAliasColor, onDelete, saving }: {
   typeName: string;
   typeColor: string;
   /** The word for a set of these, when the derived one is wrong. */
@@ -487,6 +488,8 @@ function TypeSettings({ typeName, typeColor, plural, pageOwner, aliases, allAlia
   allAliases: SpaceAlias[];
   /** Person's aliases are the permission model, so it renders its own list. */
   isPerson?: boolean;
+  /** A built-in that can hold no aliases (Index, Connector, Model, Subspace). */
+  aliasless?: boolean;
   /** A type a member invented: it labels context notes, so it has no aliases. */
   noteScoped?: boolean;
   /** The create form, opened by "New alias" at the head of this panel. */
@@ -504,7 +507,7 @@ function TypeSettings({ typeName, typeColor, plural, pageOwner, aliases, allAlia
 }) {
   return (
     <div className="space-y-5">
-      {isPerson ? (
+      {aliasless ? null : isPerson ? (
         <PersonAliases
           typeColor={typeColor}
           newOpen={newOpen}
@@ -696,7 +699,7 @@ export default function TypesPanel() {
   // are: the ones the platform ships, set against the ones a member made.
   const PLATFORM_TYPES = 'Platform types';
   const sectionLabel = (f: (typeof FEATURES)[number]) =>
-    f.key === 'directory' ? PLATFORM_TYPES : f.label;
+    f.key === 'directory' ? PLATFORM_TYPES : `${f.label.replace(/s$/, '')} types`;
   const toolLabels = new Map(FEATURES.map(f => [f.key, sectionLabel(f)]));
   // One bucket per tool, in the tool order the sidebar uses — the heading IS the
   // provenance, so a type never repeats its tool's name down the right edge.
@@ -803,6 +806,7 @@ export default function TypesPanel() {
               aliases={typeAliases}
               allAliases={aliases}
               isPerson={isPerson}
+              aliasless={isAliaslessNodeType(liveType.name)}
               onAddAlias={handleAddAlias}
               onRemoveAlias={handleRemoveAlias}
               onRenameAlias={handleRenameAlias}

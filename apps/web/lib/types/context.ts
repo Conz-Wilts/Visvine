@@ -44,6 +44,11 @@ export interface NodeTypeConfig {
    */
   system?: true;
   /**
+   * A built-in that can never hold aliases: it labels a path or a config note,
+   * not a record anyone narrows. Ask {@link isAliaslessNodeType}.
+   */
+  noAliases?: true;
+  /**
    * What this type TRACKS, beyond the rows every entity of it already carries
    * (lib/create/typeFields.ts): the columns the Directory's table shows for
    * it, and the properties an agent can read off its entity note. Each
@@ -274,15 +279,15 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // the graph, so nothing syncs a `note:`/`file:` node for them. Section was
   // called Space before the rename freed that name for the org type; stored
   // rows are migrated by scripts/rename-community-to-space.ts.
-  { name: 'Section',   color: '#0ea5e9', shape: 'square', hidden: true },
-  { name: 'Channel',   color: '#ec4899', shape: 'rectangle', hidden: true },
+  { name: 'Section',   color: '#0ea5e9', shape: 'square' },
+  { name: 'Channel',   color: '#ec4899', shape: 'rectangle' },
   // A connector is a space's gateway to an external API or database, kept
   // as a note under connectors/. Rectangle like the other document types — the
   // indigo tint and the plug glyph are what set it apart.
-  { name: 'Connector', color: '#4f46e5', shape: 'rectangle', system: true },
+  { name: 'Connector', color: '#4f46e5', shape: 'rectangle', system: true, noAliases: true },
   // An agent is a scheduled worker authored as a note under agents/ (lib/agents).
   // Teal, the one saturated hue no other document type uses.
-  { name: 'Agent',     color: '#0d9488', shape: 'rectangle', hidden: true },
+  { name: 'Agent',     color: '#0d9488', shape: 'rectangle', system: true },
   // A Tool is a member-built app authored as an entity folder under tools/
   // (lib/tools) — its index is the config, its sub-notes the source. Square
   // because a Tool is a container of its own surfaces, not a document; purple,
@@ -292,7 +297,7 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // Without a row here it fell through to the unknown-type grey and the Type
   // filter showed the raw lowercase `models`. Amber-brown, a hue no other
   // document type uses.
-  { name: 'Model',     color: '#b45309', shape: 'rectangle', system: true },
+  { name: 'Model',     color: '#b45309', shape: 'rectangle', system: true, noAliases: true },
   // A folder, which is its `index.md` (lib/notes/shared/indexNote.ts). It is
   // here so the word a folder shows has a colour and a spelling the console
   // owns like every other type — not so anything can be typed `Index`: the name
@@ -303,11 +308,11 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // `scope: 'note'` is the honest one: it labels a NOTE and never a node —
   // nothing syncs an `index:` node — so it belongs with the vocabulary the
   // directory's type filter skips rather than with the types a card can wear.
-  { name: 'Index',     color: '#eab308', shape: 'square', scope: 'note', system: true },
+  { name: 'Index',     color: '#eab308', shape: 'square', scope: 'note', system: true, noAliases: true },
   // A sub-space's root as it is drawn in its house's context — the
   // `subspaces/<id>/` folder (lib/notes/federation.ts). Like Index it labels a
   // PATH and never a node: a room is a tenant, not a directory record.
-  { name: 'Subspace',  color: '#65a30d', shape: 'square', scope: 'note', system: true },
+  { name: 'Subspace',  color: '#65a30d', shape: 'square', scope: 'note', system: true, noAliases: true },
 ];
 
 /**
@@ -318,6 +323,12 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
 export function isHiddenNodeType(name: string | null | undefined): boolean {
   const key = (name ?? '').trim().toLowerCase();
   return DEFAULT_NODE_TYPES.some((t) => t.hidden && t.name.toLowerCase() === key);
+}
+
+/** Is this a built-in that can hold no aliases ({@link NodeTypeConfig.noAliases})? */
+export function isAliaslessNodeType(name: string | null | undefined): boolean {
+  const key = (name ?? '').trim().toLowerCase();
+  return DEFAULT_NODE_TYPES.some((t) => t.noAliases && t.name.toLowerCase() === key);
 }
 
 /** Is this a built-in the platform runs on ({@link NodeTypeConfig.system})? */

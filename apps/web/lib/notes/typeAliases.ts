@@ -26,6 +26,7 @@ import {
   canonicalNodeType,
   findAliasByRef,
   findNodeTypeConfig,
+  isAliaslessNodeType,
   nodeTypeSpellings,
   personAliases,
   type NodeTypeConfig,
@@ -203,6 +204,7 @@ export async function createTypeAlias(
   color: string | undefined,
   actor: Actor,
 ): Promise<TypeAliasInfo> {
+  if (isAliaslessNodeType(nodeType)) throw new Error(`${nodeType} carries no aliases.`)
   const type = resolveAliasType(await loadState(spaceId), nodeType)
   // A colour is required by the Person path and by every chip that renders one;
   // defaulting to the type's own colour is what the console's add row does.
