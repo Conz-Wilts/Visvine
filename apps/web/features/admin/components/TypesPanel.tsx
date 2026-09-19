@@ -13,7 +13,6 @@ import { useState, useEffect, type ReactNode } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import {
   DEFAULT_NODE_TYPES,
-  isHiddenNodeType,
   isSystemNodeType,
   isAliaslessNodeType,
   aliasesForType,
@@ -488,7 +487,7 @@ function TypeSettings({ typeName, typeColor, plural, pageOwner, aliases, allAlia
   allAliases: SpaceAlias[];
   /** Person's aliases are the permission model, so it renders its own list. */
   isPerson?: boolean;
-  /** A built-in that can hold no aliases (Index, Connector, Model, Subspace). */
+  /** A built-in that can hold no aliases (Index, Connector, Model, Subspace, Tool). */
   aliasless?: boolean;
   /** A type a member invented: it labels context notes, so it has no aliases. */
   noteScoped?: boolean;
@@ -683,10 +682,7 @@ export default function TypesPanel() {
   const byLower = new Map<string, NodeTypeConfig>();
   for (const t of DEFAULT_NODE_TYPES) byLower.set(t.name.toLowerCase(), t);
   for (const t of types) byLower.set(t.name.toLowerCase(), t);
-  // Only what the Grid holds is managed here; the built-ins that label a
-  // place or a tool's config are in every space and carry no aliases.
   const listedTypes = Array.from(byLower.values())
-    .filter(t => !isHiddenNodeType(t.name))
     .filter(t => isNodeTypeEnabled(currentSpace.featureConfig ?? null, t.name))
     .sort((a, b) => a.name.localeCompare(b.name));
 

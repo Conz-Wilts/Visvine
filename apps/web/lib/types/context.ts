@@ -30,17 +30,9 @@ export interface NodeTypeConfig {
    */
   plural?: string;
   /**
-   * A type every space has by default that is not a directory record: it
-   * labels a place or a tool's config (a folder, a room, an agent), never
-   * something the Grid shows, and carries no aliases. Console → Types does not
-   * list it. Only the built-ins set it, so ask {@link isHiddenNodeType} rather
-   * than a stored row, which may predate the flag.
-   */
-  hidden?: true;
-  /**
    * A built-in the platform itself runs on — a folder, a room, a connector, a
    * model, a space. Listed last on Console → Types, under System types. Ask
-   * {@link isSystemNodeType}, for the same reason as `hidden`.
+   * {@link isSystemNodeType}: a space's stored row may predate the flag.
    */
   system?: true;
   /**
@@ -292,7 +284,7 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // (lib/tools) — its index is the config, its sub-notes the source. Square
   // because a Tool is a container of its own surfaces, not a document; purple,
   // kept lighter than Connector's indigo so the two never read as one.
-  { name: 'Tool',      color: '#a855f7', shape: 'square', hidden: true },
+  { name: 'Tool',      color: '#a855f7', shape: 'square', system: true, noAliases: true },
   // A model is what agents run on, kept as a note under models/ (lib/models).
   // Without a row here it fell through to the unknown-type grey and the Type
   // filter showed the raw lowercase `models`. Amber-brown, a hue no other
@@ -314,16 +306,6 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // PATH and never a node: a room is a tenant, not a directory record.
   { name: 'Subspace',  color: '#65a30d', shape: 'square', scope: 'note', system: true, noAliases: true },
 ];
-
-/**
- * Is this one of the built-in types that is in every space and never a Grid
- * record ({@link NodeTypeConfig.hidden})? Read from the built-ins, not the
- * space's stored row, so a vocabulary saved before the flag existed agrees.
- */
-export function isHiddenNodeType(name: string | null | undefined): boolean {
-  const key = (name ?? '').trim().toLowerCase();
-  return DEFAULT_NODE_TYPES.some((t) => t.hidden && t.name.toLowerCase() === key);
-}
 
 /** Is this a built-in that can hold no aliases ({@link NodeTypeConfig.noAliases})? */
 export function isAliaslessNodeType(name: string | null | undefined): boolean {
