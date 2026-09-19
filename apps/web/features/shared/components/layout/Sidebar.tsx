@@ -7,13 +7,13 @@ import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/Cre
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { useSpace } from "@/features/shared/contexts/SpaceContext";
-import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
+import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from "@/features/shared/contexts/ThemeContext";
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { CompassIcon } from "@/features/shared/icons";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
-import { useDesktopChrome } from "@/features/desktop/lib/chrome";
+import { FRAME_BG, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
 import Modal from "@/components/ui/Modal";
 import UserMenu from "@/features/auth/components/UserMenu";
 import CreatePanel from "@/features/create/components/CreatePanel";
@@ -101,7 +101,7 @@ export default function Sidebar() {
   const intent = useHoverIntent();
   // The desktop shell's window controls stand in the rail's top strip, and
   // the closed rail is as wide as centres its glyphs under them.
-  const { inset: chromeInset, railW: collapsedW } = useDesktopChrome();
+  const { inset: chromeInset, railW: collapsedW, framed, bandH } = useDesktopChrome();
 
   const ease = DOCK_EASE;
 
@@ -513,15 +513,16 @@ export default function Sidebar() {
             the line beside the pane tab bar (which starts one pixel in —
             PaneTabBar's -ml-[23px] — so this stays visible). */}
         <div
-          className="relative flex shrink-0 flex-col overflow-hidden border-r"
+          className={`relative flex shrink-0 flex-col overflow-hidden ${framed ? "" : "border-r"}`}
           style={{
-            background: "var(--shell-bg, #ffffff)",
+            // Framed (the mac app), the rail is the frame's: no seam of its
+            // own, the content sheet's rounded edge is the divide.
+            background: framed ? FRAME_BG : "var(--shell-bg, #ffffff)",
             borderRightColor: "var(--shell-border, #e5e7eb)",
             width: railW,
             // In the desktop shell the window has no title bar, so the rail
-            // starts below the traffic lights rather than under them; the
-            // space's square begins on the strip's hairline.
-            paddingTop: chromeInset,
+            // starts below the band the traffic lights stand in.
+            paddingTop: framed ? bandH : chromeInset,
             paddingBottom: RAIL_PAD_Y,
             transition: reduced ? "none" : `width ${RAIL_MOTION}`,
           }}
@@ -537,15 +538,12 @@ export default function Sidebar() {
         >
           {/* The strip the window controls stand in, and the window's handle:
               dragging it moves the window, the way the title bar it replaced
-              did. Its bottom edge is a band hairline like the rail's others,
-              holding the controls apart from the space under them. Nothing in
-              a browser — chromeInset is 0 there. */}
+              did. Nothing in a browser — chromeInset is 0 there. */}
           {chromeInset > 0 && (
             <div
-              className="absolute inset-x-0 top-0 border-b"
+              className="absolute inset-x-0 top-0"
               style={{
                 height: chromeInset,
-                borderBottomColor: "var(--shell-border, #e5e7eb)",
                 WebkitAppRegion: "drag",
               } as React.CSSProperties}
             />
@@ -573,12 +571,16 @@ export default function Sidebar() {
             width: columnW,
             // dockTopInset is measured from <main>'s top; this column hangs in
             // the full-height aside, so it clears the shell's band as well.
-            marginTop: SHELL_TOP_BAR_H + dockTopInset + SHELL_FRAME_GAP,
+            marginTop: bandH + dockTopInset + SHELL_FRAME_GAP,
             marginBottom: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN,
             // Rail is railW wide (no +1 border column), so the full GAP closes
             // the distance to the card's left edge.
             marginLeft: SHELL_FRAME_GAP,
-            borderTopLeftRadius: SHELL_FRAME_RADIUS,
+            // Framed, the column is the sheet's left edge, so it is the
+            // sheet's surface and takes its rounded corner where it reaches
+            // the band.
+            ...(framed ? { background: "var(--color-surface-1)" } : {}),
+            borderTopLeftRadius: framed && dockTopInset === 0 ? FRAME_RADIUS : SHELL_FRAME_RADIUS,
             borderBottomLeftRadius: SHELL_FRAME_RADIUS,
             transition: `width ${dur} ${ease}, margin-top ${dur} ${ease}`,
           }}

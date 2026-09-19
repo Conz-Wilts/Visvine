@@ -2,7 +2,7 @@
 
 import { useHeader } from "@/features/shared/contexts/HeaderContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
-import { SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
+import { useDesktopChrome } from "@/features/desktop/lib/chrome";
 
 /*
  * The band across the top of the content surface — the shell's chrome AND the
@@ -19,20 +19,30 @@ import { SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
  * There is no side-panel switch: a surface that has a panel — the context tree
  * beside a note, the channel list on /channels — keeps it open. The panel is
  * the page's spine, not an option.
+ *
+ * In the mac app the band leaves the content surface and becomes the window's
+ * top edge, running its full width on the frame (AuthLayoutClient) — so it is
+ * handed the rail's width, and its tabs still start on the page content's line.
  */
 
-export default function ShellTopBar() {
+export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
   const { setShellTabsHost, setShellTrailHost } = useContextPanel();
   const { headerContent, headerRight } = useHeader();
+  const { bandH } = useDesktopChrome();
 
   return (
-    // pl-8: the first tab's label starts on the same line as the page content
+    // paddingLeft 32: the first tab's label starts on the same line as the page content
     // below it.
     // In the desktop shell the band IS the title bar it replaced, so the bare
     // parts of it drag the window; everything on it opts back out.
     <div
-      className="flex shrink-0 items-center gap-4 pl-8 pr-4"
-      style={{ height: SHELL_TOP_BAR_H, WebkitAppRegion: "drag" } as React.CSSProperties}
+      className="flex shrink-0 items-center gap-4 pr-4"
+      style={{
+        height: bandH,
+        paddingLeft: leftInset + 32,
+        transition: "padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
+        WebkitAppRegion: "drag",
+      } as React.CSSProperties}
     >
       {/* The page's tab set (pane shell pages portal it in; empty elsewhere).
           It scrolls sideways before it ever pushes the actions out of the

@@ -25,7 +25,8 @@ import SearchInput from '@/components/ui/SearchInput'
 import { NoteSidebar } from './NoteSidebar'
 import { SharePanel } from './SharePanel'
 import { MoveAccessDialog } from './MoveAccessDialog'
-import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext'
+import { SHELL_PANE_TOP } from '@/features/shared/contexts/ThemeContext'
+import { useDesktopChrome } from '@/features/desktop/lib/chrome'
 
 /** Width of the tree column. The pane tab bars inset their toolbar tray by the
  *  same amount so the tray centres over the note, not the whole pane. */
@@ -73,6 +74,7 @@ export function ContextSidebar({
   // The toolbar tray only centres over the note column, so the tree climbs
   // past it to sit flush under the tab row whenever it's open.
   const trayOpen = !!usePaneChromeState().chrome?.attachedOpen
+  const { bandH } = useDesktopChrome()
   const spaceId = currentSpace?.id ?? null
 
   const { entityByPath } = useDirectoryEntities()
@@ -141,7 +143,7 @@ export function ContextSidebar({
       style={{
         width: CONTEXT_PANEL_W,
         top: 0,
-        height: `calc(100dvh - ${SHELL_TOP_BAR_H + SHELL_PANE_TOP}px)`,
+        height: `calc(100dvh - ${bandH + SHELL_PANE_TOP}px)`,
         marginTop: trayOpen ? -TRAY_ROW_H : 0,
         marginBottom: -MAIN_PAD_B,
         transition: 'margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
