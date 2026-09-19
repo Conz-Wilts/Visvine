@@ -24,7 +24,7 @@ import type { SpaceAlias, Space, NodeTypeConfig } from '@/lib/types';
 import { isNodeTypeEnabled, nodeTypeToolKey } from '@/lib/featureAccess';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { FEATURES } from '@/features/shared/lib/features';
-import { Alert, Button, Chip, ConfirmDialog, Input, SearchInput } from '@/components/ui';
+import { Alert, Button, ConfirmDialog, Input, SearchInput } from '@/components/ui';
 import ColorPicker from './ColorPicker';
 import { ChevronDownIcon, Trash2Icon } from '@/features/shared/icons';
 import Select from '@/components/ui/Select';
@@ -386,17 +386,15 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * One type, as a line you read: its colour, its name, the aliases it can wear,
- * and the chevron that drops everything you can change about it open in place.
+ * One type, as a line you read: its colour, its name, and the chevron that drops everything you can change about it open in place.
  *
  * The row says nothing about which tool the type came in with, because the
  * section it sits under is that tool — provenance is a heading, not a column
  * repeated down every line.
  */
-function TypeRow({ typeName, typeColor, previewChips, expanded, onOpen, onUpdateColor }: {
+function TypeRow({ typeName, typeColor, expanded, onOpen, onUpdateColor }: {
   typeName: string;
   typeColor: string;
-  previewChips: { name: string; color: string }[];
   /** Open right here, under the row — there is no second window over this one. */
   expanded: boolean;
   onOpen: () => void;
@@ -445,27 +443,6 @@ function TypeRow({ typeName, typeColor, previewChips, expanded, onOpen, onUpdate
       <span className="min-w-0 flex-1 truncate text-base font-semibold text-text-primary">
         {typeName}
       </span>
-
-      {/* The chips are the collapsed view of what's underneath, so they go when
-          the list they preview is on screen — faded out rather than cut, since
-          the list is growing in at the same moment. They keep their space so
-          the row's other parts never jump. */}
-      {previewChips.length > 0 && (
-        <span
-          aria-hidden={expanded}
-          className={`flex shrink-0 items-center gap-1.5 transition-opacity duration-200 ${
-            expanded ? 'pointer-events-none opacity-0' : 'opacity-100'
-          }`}
-        >
-          {previewChips.slice(0, 3).map(a => (
-            <Chip key={a.name} size="sm" color={a.color}>{a.name}</Chip>
-          ))}
-          {previewChips.length > 3 && (
-            <span className="text-xs text-text-muted">+{previewChips.length - 3}</span>
-          )}
-        </span>
-      )}
-
     </div>
   );
 }
@@ -760,7 +737,6 @@ export default function TypesPanel() {
           // Person's preview comes from the live permission snapshot, which
           // already grafts in the built-in Admin; every other type's from the
           // space record it saves to.
-          previewChips={isPerson ? (data?.aliases ?? []) : typeAliases}
           expanded={expanded}
           onOpen={() => {
             setCreatingFor(null);
