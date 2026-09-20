@@ -25,7 +25,7 @@ export interface RunTrace {
 /** Tools through which a run can write a note or record. */
 const WRITING_TOOLS = new Set(['write_context', 'append_context', 'remember', 'create_node', 'link_nodes', 'run_action', 'run_agent'])
 /** Tools through which a run can act outside the space. */
-const REACHING_TOOLS = new Set(['run_connector', 'run_command', 'open_page', 'sign_in', 'run_action', 'run_agent', 'fetch_url'])
+const REACHING_TOOLS = new Set(['run_connector', 'run_command', 'open_page', 'page_act', 'browse_task', 'sign_in', 'run_action', 'run_agent', 'fetch_url'])
 
 export type RunOutcome = 'done' | 'partial' | 'blocked' | 'nothing'
 

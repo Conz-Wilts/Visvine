@@ -357,7 +357,7 @@ const RECIPES: Recipe[] = [
       {
         n: 3,
         tool: 'create_agent',
-        why: "Writes the brief. `instructions` IS the agent's system prompt, so write a standing instruction — what to read, what to produce and its shape (headings, a table, links to the people involved), where to write it (its own folder agents/<name>/ by default) — not a description of the agent. The answer's `needs` and `plan` say what still stands between the brief and a working run: read them back as the next steps.",
+        why: "Writes the brief. `instructions` IS the agent's system prompt, so write a standing instruction — what to read, what to produce and its shape (headings, a table, links to the people involved), where to write it (its own folder agents/<name>/ by default) — not a description of the agent. Two things make it FAST, and both run on the platform's judge rather than the space's model, so name them in the instructions where they fit: sorting, routing or classifying a list is one `decide` call over the whole list, never a turn per item; and working a website is `browse_task` with the goal on the page and the values to type, never a click per turn. The answer's `needs` and `plan` say what still stands between the brief and a working run: read them back as the next steps.",
         args: {
           space_id: spaceId(ctx),
           name: '<slug>',

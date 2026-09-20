@@ -62,6 +62,25 @@ describe('attachMachine', () => {
     assert.deepEqual(steps[2].machine?.map((e) => e.kind), ['exec', 'egress_denied'])
   })
 
+  it('keeps a browse_task\'s whole loop — and a wake\'s script install — under its one step', () => {
+    const page = (json: string) => ({ cmd: ['node', '/tmp/vv-page-abc.mjs', json] })
+    const browsing: AgentRunEvent[] = [
+      { at: 1, type: 'tool', tool: 'browse_task', detail: 'search Lisbon' },
+      { at: 2, type: 'tool_result', tool: 'browse_task', text: 'done' },
+      { at: 3, type: 'tool', tool: 'page_act', detail: '3' },
+      { at: 4, type: 'tool_result', tool: 'page_act', text: 'did' },
+    ]
+    const steps = attachMachine(stepsOf(browsing), [
+      ev(1, 'exec', page('{"task":true}')),
+      ev(2, 'exec', { cmd: ['node', '-e', 'write', '/tmp/vv-page-abc.mjs', 'script'] }),
+      ev(3, 'exec', page('{"task":true}')),
+      ev(4, 'exec', page('{"task":true,"act":{"kind":"click"}}')),
+      ev(5, 'exec', page('{"act":{"kind":"click"}}')),
+    ])
+    assert.equal(steps[0].machine?.length, 4)
+    assert.equal(steps[1].machine?.length, 1)
+  })
+
   it('never invents a step: extra execs pile onto the last machine step', () => {
     const steps = attachMachine(stepsOf(run.slice(0, 2)), [ev(1, 'exec'), ev(2, 'exit'), ev(3, 'exec'), ev(4, 'exit')])
     assert.equal(steps[0].machine?.length, 4)

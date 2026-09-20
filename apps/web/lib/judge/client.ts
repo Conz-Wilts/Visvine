@@ -26,6 +26,15 @@ const MAX_STATE_CHARS = 24_000
 /** Requests one batch may hold — with BATCH_LIMIT, under the provider's 1,200 a minute. */
 export const MAX_BATCH = 12
 const BATCH_LIMIT: RateLimitConfig = { capacity: 20, refillPerSec: 1.5 }
+/**
+ * A browser task asks one request per step for as long as it runs, so it
+ * spends its own allowance: a long task never starves a search of its judge,
+ * and a burst of searches never stalls a page mid-form.
+ */
+const BUCKETS = {
+  batch: { key: 'judge:batch', limit: BATCH_LIMIT },
+  browse: { key: 'judge:browse', limit: { capacity: 40, refillPerSec: 2 } satisfies RateLimitConfig },
+} as const
 const DEFAULT_DEADLINE_MS = 1_500
 
 export function judgeConfigured(): boolean {
@@ -42,6 +51,8 @@ export interface JudgeOptions {
   deadlineMs?: number
   /** A nightly pass waits for allowance instead of going without. */
   patient?: boolean
+  /** Which allowance this spends. `browse` is the browser loop's own. */
+  bucket?: keyof typeof BUCKETS
 }
 
 function clipState(state: JudgeState): JudgeState {
@@ -76,11 +87,12 @@ export async function decideMany(requests: JudgeRequest[], opts: JudgeOptions = 
   const out: (JudgeAnswers | null)[] = requests.map(() => null)
   if (!requests.length || !judgeConfigured()) return out
   const deadline = Date.now() + (opts.deadlineMs ?? DEFAULT_DEADLINE_MS)
+  const bucket = BUCKETS[opts.bucket ?? 'batch']
   const batch = async (at: number): Promise<boolean> => {
-    let allowance = await takeToken('judge:batch', BATCH_LIMIT)
+    let allowance = await takeToken(bucket.key, bucket.limit)
     while (!allowance.ok && opts.patient && Date.now() + allowance.retryAfterMs < deadline) {
       await new Promise((r) => setTimeout(r, allowance.retryAfterMs))
-      allowance = await takeToken('judge:batch', BATCH_LIMIT)
+      allowance = await takeToken(bucket.key, bucket.limit)
     }
     const left = deadline - Date.now()
     if (!allowance.ok || left <= 0) {
@@ -116,4 +128,15 @@ export async function decideMany(requests: JudgeRequest[], opts: JudgeOptions = 
 /** One request. Null means no verdict — behave as if there were no judge. */
 export async function decide(state: JudgeState, questions: JudgeQuestions, opts: JudgeOptions = {}): Promise<JudgeAnswers | null> {
   return (await decideMany([{ state, questions }], opts))[0]
+}
+
+/**
+ * A space's own allowance for the questions its AGENTS ask (the `decide`
+ * tool). Everything else the judge does is the platform's work at the
+ * platform's pace; this is a tenant spending the deployment's key, so it is
+ * metered per tenant — one token per batch, like the shared allowance.
+ */
+const SPACE_LIMIT: RateLimitConfig = { capacity: 20, refillPerSec: 0.1 }
+export async function takeSpaceJudgeAllowance(spaceId: string): Promise<{ ok: boolean; retryAfterMs: number }> {
+  return takeToken(`judge:space:${spaceId}`, SPACE_LIMIT)
 }

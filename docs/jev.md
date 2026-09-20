@@ -36,6 +36,8 @@ harness.
 | 19 | MCP tool defaults | ✅ | `suggested` per tool on the permissions screen; the group and the saved permission are untouched |
 | 20 | Rewrite gate; link-reason gate | ✅ | the query rewrite is gone — the caller searching rephrases itself, and a person paid ~1.4 s on every longer query for it; `linkReasons.ts` asks the judge first |
 | 21 | Run outcome | ✅ | one line on the run when it ended partial, blocked or with nothing to do |
+| 22 | The browser, driven by the judge | ✅ | `browse_task` — `lib/agents/browseTask.ts`, `shared/pageTable.ts`, `lib/vm/shared/pageScript.ts`; see *The browser* below |
+| 23 | The judge, asked by an agent | ✅ | `decide` in `lib/agents/tools.ts`; shapes in `questions.ts#askedQuestion`; per-space allowance `takeSpaceJudgeAllowance` |
 
 **What the live checks changed.**
 
@@ -457,6 +459,62 @@ than a missed one.
   blocked / nothing to do — for the roster and for `MAX_CONSECUTIVE_FAILURES`,
   which today counts only hard failures.
 
+## The browser (22) and `decide` (23)
+
+**The one place a judge's answer causes something.** Everywhere else in this
+document a verdict can only remove. `browse_task` is the exception, made on
+purpose (2026-09-20): pressing through a form is a dozen decisions of the shape
+"which of these rows", each of which cost the space a full turn of its own
+model — seconds and tokens — plus a hand-written Playwright script per step.
+The pattern is browser-use's [jev-ultrafast](https://github.com/browser-use/jev-ultrafast)
+(MIT): read the page as a numbered table of controls instead of a screenshot,
+ask ONE request whose heads are *which operation* and, per operation, *which
+target*, and check a guard on the target immediately before input.
+
+What keeps it inside the rule's intent — the judge still grants no reach:
+
+- It picks a **row of a table code built** from the live page. Never a
+  selector, a URL or a string. A third head picks **which of the caller's
+  `inputs`** to type; the judge cannot write, so no helper model is needed and
+  nothing typed was invented. With no matching input it answers `NEED_INPUT`
+  and the agent's model supplies one.
+- Password, file and hidden inputs are never rows. `sign_in` stays the only
+  path a credential takes to a page.
+- The browser's reach is the brief's `connectors:` hosts, as for every other
+  machine command. Jev is not injection-resistant; a page that talks it into
+  the wrong click has clicked something inside a perimeter the run already had.
+- Under `BROWSE_OPERATION_FLOOR` / `BROWSE_TARGET_FLOOR` nothing is pressed:
+  the page goes back to the agent's model, which carries on with `page_act`
+  over the same table. No judge at all is the same ending (`no_judge`).
+- It ends on its own: 40 steps, 240 s, or three actions that changed nothing.
+  `DONE` is a claim — the tool result is the final page, and the prompt tells
+  the model to check it.
+- It spends its own allowance (`bucket: 'browse'`), so a long task and a burst
+  of searches never starve each other.
+
+One step is one machine command (act, settle, re-read — `lib/vm/page.ts`) and
+one judge request. Measured locally against a real Chromium and the live
+model: a six-action hotel search (two fields, a dropdown, a checkbox — leaving
+an already-ticked one alone — Search, open the result) in 6.1 s with 7
+requests; Wikipedia search → suggestion → article in 3.6 s; "open the comments
+of the top story" on Hacker News in 2.1 s; a goal naming a city with no such
+input ended `needs_input` in one request. Median judge latency through
+OpenRouter ~350 ms. Not yet run on a deployed machine, where each command adds
+an edge round trip.
+
+`page_snapshot` / `page_act` are the same table with the agent's own model
+choosing the row — the fallback, and what replaced "write a CDP script to read
+the page".
+
+**`decide`** gives an agent the judge directly: its own yes/no, choice and
+scale questions over up to 48 items a call, numbers back. It exists so that
+triage — which of forty emails need a reply — is one call on the platform's
+key rather than forty turns on the space's. It reads and answers; it writes,
+grants and gates nothing. Because it is a tenant spending the deployment's
+key, it is metered per space (one token per batch of 12). Checked live: all
+three shapes answer (a bare `noul` needs no criteria), three items × three
+questions in 1.1 s.
+
 ## 4. Where not to use it
 
 - **Dates and numbers.** `queryPlan.ts` parses time deterministically and must
@@ -465,7 +523,8 @@ than a missed one.
 - **Authority.** No permission, scope, perimeter, write gate or tool policy
   verdict may depend on a judge's answer. A judge removes noise; it never grants
   reach. Anywhere its answer would widen what happens, it is a suggestion a
-  person accepts.
+  person accepts. (`browse_task` chooses among clicks; it does not widen where
+  they can land.)
 - **Writing.** Claims, reasons, summaries, memory lines, notes.
 - **Multi-hop questions.** "Who manages the person who ran the Acme event" is
   the agent's job across several searches.
@@ -536,4 +595,5 @@ missing: a harness with live vector stages, which is what item 10 waits on.
 
 - TypeSafe docs: [models](https://docs.typesafe.ai/models), [API](https://docs.typesafe.ai/api), [Jev 1.13 jaggedness](https://docs.typesafe.ai/model-jaggedness/jev-1.13), [confidence](https://docs.typesafe.ai/confidence), [legal](https://docs.typesafe.ai/legal)
 - Cookbooks: [classifying RAG passages](https://docs.typesafe.ai/cookbooks/classifying_rag_passages), [re-ranking](https://docs.typesafe.ai/cookbooks/rerank_typesafe), [entity alignment](https://docs.typesafe.ai/cookbooks/entity_alignment), [skill suggestion](https://docs.typesafe.ai/cookbooks/skill_suggestion), [function calling](https://docs.typesafe.ai/cookbooks/function_calling), [citation check](https://docs.typesafe.ai/cookbooks/citation_check), [line-by-line search](https://docs.typesafe.ai/cookbooks/semantic_find), [SDE cascade](https://docs.typesafe.ai/cookbooks/sde_cascade), [guardrails](https://docs.typesafe.ai/cookbooks/llm_guardrails)
+- [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast) — the table-and-heads browser loop
 - [awesome-jev-by-typesafe](https://github.com/Anil-matcha/awesome-jev-by-typesafe)

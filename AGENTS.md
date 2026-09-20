@@ -459,7 +459,9 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   one**: the isolate hands connector JS the plaintext of its env inside one
   connector's perimeter; the machine never holds plaintext at all. The
   preamble says the ladder — `fetch_url`, then `run_connector`, then
-  `run_command`, then `open_page` — cheapest door that does the job.
+  `run_command`, then `open_page` — cheapest door that does the job. An open
+  page is read with `page_snapshot` and worked with `page_act` or
+  `browse_task`, never a hand-written script (`docs/machines.md`).
 - **One agent can run FOR many people, and who is in the brief.** Identity is
   per RUN (`agent_runs.run_as_user_id`). The brief's **`for:` block** lists the
   people (`lib/agents/shared/runsFor.ts`, pure): `user`, and optionally their
@@ -698,10 +700,24 @@ use measured. The invariants:
   every caller then behaves as if no judge existed. `warn`, never `error`. The
   allowance is a row spent per batch of at most `MAX_BATCH`; nightly passes are
   `patient`.
-- **A verdict never widens what happens.** It drops a search hit, declines a
+- **A verdict never widens REACH.** It drops a search hit, declines a
   wake, vetoes an auto-fix, or attaches a suggestion a person accepts. No
   permission, scope, perimeter or write gate reads one. To the clean's
-  auto-fixes it can only REMOVE (`shared/cleanJudge.ts`).
+  auto-fixes it can only REMOVE (`shared/cleanJudge.ts`). **The one place it
+  CAUSES something is `browse_task`** (`lib/agents/browseTask.ts`): in the
+  machine's browser the judge picks the next operation and the row it lands
+  on, a step a second, instead of the agent's model spending a turn per click.
+  It picks a row of a table code built (`lib/vm/shared/pageScript.ts`,
+  `shared/pageTable.ts`) — never a selector, a URL or text: what is typed is one
+  of the `inputs` the model supplied, a password field is never a row, the
+  browser reaches only the brief's connectors' hosts, an answer under the floor
+  presses nothing and hands the page back, and DONE is a claim the model checks.
+  `page_snapshot` / `page_act` are the same table driven by the agent's own
+  model, and the fallback when there is no judge.
+- **An agent may ask the judge itself** — `decide`: its own yes/no, choice and
+  scale questions over a list, numbers back. It writes, grants and gates
+  nothing, and is metered per space (`takeSpaceJudgeAllowance`) because it is a
+  tenant spending the deployment's key.
 - **Every question and floor lives in `lib/judge/shared/questions.ts`**, each
   checked against the live model before its floor was set. The model is
   literal: a question is a plain statement with criteria that agree with it. It
@@ -721,7 +737,8 @@ use measured. The invariants:
   `lib/notes/beforeWrite.ts`); recipe and skill routing (`lib/judge/route.ts`,
   keywords the fallback); a finished run's claims against its trace
   (`lib/agents/shared/runCheck.ts` — unbacked keeps the summary out of
-  `memory.md`); `find` on the agent's `fetch_url` / `read_context`; an injection
+  `memory.md`); `find` on the agent's `fetch_url` / `read_context`; `browse_task` and
+  `decide` (above); an injection
   SIGNAL on fetched pages and room notes (`lib/judge/risk.ts`, never on the
   space's own notes — a brief reads as one); implied services in `needs`;
   `suggested` on MCP tools and on an empty select cell.

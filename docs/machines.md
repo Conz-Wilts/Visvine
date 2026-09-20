@@ -312,7 +312,23 @@ re-registers its HTTPS routes, because they are per host and a host allowed
 since boot would otherwise have no route at all. The port is loopback and never
 routed: `PLATFORM_DENY` refuses `localhost` before any allow rule, so the
 egress boundary is untouched by it, and nothing outside the container can reach
-it. `open_page`'s tool description carries the three-line script.
+it.
+
+**A page is read as a table, not with a script.** `page_snapshot` and
+`page_act` (and `browse_task`, the judge pressing through a whole goal —
+`docs/jev.md` § The browser) all run ONE command, `lib/vm/page.ts`: attach over
+CDP to the tab in front, perform the action handed in (if any), let the page
+settle, and print the page as data — visible text plus a row per control in
+the viewport, each with a node id minted in the page (`window.__vvPage`) and a
+guard hash. An action presents the guard its snapshot gave; a mismatch, or a
+target that is covered, hidden or disabled, presses nothing and answers
+`stale` with the page as it is now. Nothing a model says is evaluated — it
+names a row. Password, file and hidden inputs are never rows. The script is a
+file on the machine (`/tmp/vv-page-<hash>.mjs`), written by the first page
+command of a wake, because the timeline records every command line and 9 KB
+forty times a task is unreadable; it cannot ride the command's env, which the
+edge scrubs prefix-by-prefix out of the output. Shadow roots, iframes and
+canvas are not read: those are still a CDP script from `run_command`.
 
 **Frames go to whoever is watching and nowhere else.** Chromium runs headful
 on the machine's own Xvfb display; a screen service inside the container

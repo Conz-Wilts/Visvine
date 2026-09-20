@@ -14,6 +14,7 @@
  * test fixes the fold so a reordered flush cannot silently detach output from
  * its command.
  */
+import { isPageInstall, isTaskPageCommand } from '@/lib/vm/shared/pageScript'
 import type { AgentRunEvent } from '../runs'
 
 export interface Step {
@@ -42,7 +43,7 @@ export interface MachineEvent {
 }
 
 /** The run tools that drive the agent's machine; their steps carry `machine`. */
-const MACHINE_TOOLS: ReadonlySet<string> = new Set(['run_command', 'open_page'])
+const MACHINE_TOOLS: ReadonlySet<string> = new Set(['run_command', 'open_page', 'page_snapshot', 'page_act', 'browse_task'])
 
 /** Fold the flat trace into steps: a tool event opens one, its result closes it. */
 export function stepsOf(events: AgentRunEvent[]): Step[] {
@@ -90,8 +91,16 @@ export function attachMachine(steps: Step[], events: MachineEvent[]): Step[] {
   // joins whichever step is open.
   let index = 0
   let opened = false
+  let retried = false
   for (const event of ordered) {
-    const opens = event.kind === 'exec' || event.kind === 'browse'
+    // A browse_task is one step made of many commands: once it has its first,
+    // the rest of its loop stays with it. And the first page command of a wake
+    // is three — the try, the script being installed, the retry — for one step.
+    const cmd = event.payload.cmd
+    const install = isPageInstall(cmd)
+    const continues = opened && (install || retried || (machineSteps[index].tool === 'browse_task' && isTaskPageCommand(cmd)))
+    if (event.kind === 'exec') retried = install
+    const opens = !continues && (event.kind === 'exec' || event.kind === 'browse')
     if (opens) {
       if (opened) index = Math.min(index + 1, machineSteps.length - 1)
       opened = true
@@ -112,6 +121,10 @@ export const TOOL_VERB: Readonly<Record<string, { verb: string; one: string; man
   fetch_url: { verb: 'Fetched', one: 'page', many: 'pages' },
   run_command: { verb: 'Ran', one: 'command', many: 'commands' },
   open_page: { verb: 'Opened', one: 'page', many: 'pages' },
+  page_snapshot: { verb: 'Read', one: 'page', many: 'pages' },
+  page_act: { verb: 'Pressed', one: 'control', many: 'controls' },
+  browse_task: { verb: 'Browsed', one: 'goal', many: 'goals' },
+  decide: { verb: 'Judged', one: 'list', many: 'lists' },
   run_agent: { verb: 'Started', one: 'agent', many: 'agents' },
   create_node: { verb: 'Created', one: 'record', many: 'records' },
   link_nodes: { verb: 'Linked', one: 'record', many: 'records' },

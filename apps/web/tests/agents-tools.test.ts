@@ -9,6 +9,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import type { PageCommand, PageResult, PageState } from '@/lib/vm/shared/pageScript'
 import { agentTools, MAX_CHAIN_DEPTH, type AgentToolContext, type AgentToolDeps } from '@/lib/agents/tools'
 import type { AgentBrief } from '@/lib/agents/config'
 import { parseModelRef } from '@/lib/agents/registry'
@@ -52,6 +53,11 @@ interface Fakes {
   commands: { cmd: string[]; runId: string | null; taskAllow: string[] | undefined }[]
   pages: { url: string; taskAllow: string[] | undefined }[]
   signIns: { connector: string; taskAllow: string[] | undefined }[]
+  pageCommands: { command: PageCommand; runId: string | null | undefined; taskAllow: string[] | undefined }[]
+  browsed: { goal: string; inputs: Record<string, string> }[]
+  judged: { items: number; questions: string[] }[]
+  /** What the next page command answers; a snapshot of PAGE by default. */
+  nextPage: PageResult | null
 }
 
 function fakes(): Fakes {
@@ -64,6 +70,10 @@ function fakes(): Fakes {
     commands: [],
     pages: [],
     signIns: [],
+    pageCommands: [],
+    browsed: [],
+    judged: [],
+    nextPage: null,
     deps: {
       writeGated: (async (_p, _c, path: string, content: string) => {
         f.writes.push({ path, content })
@@ -103,6 +113,36 @@ function fakes(): Fakes {
           ? { ok: true, url: 'https://crm.example.com/home', title: 'Home', user: 'ops@acme.com' }
           : { ok: false, reason: 'no_login', message: `${input.connectorName} holds no website login` }
       }) as AgentToolDeps['signInOnMachine'],
+      pageOnMachine: async (_space, _agent, command, opts) => {
+        f.pageCommands.push({ command, runId: opts?.runId, taskAllow: opts?.taskAllow ? [...opts.taskAllow] : undefined })
+        const answer = f.nextPage ?? { ok: true as const, acted: !!command.act, state: PAGE }
+        f.nextPage = null
+        return answer
+      },
+      browseTaskOnMachine: async (_space, _agent, input) => {
+        f.browsed.push({ goal: input.goal, inputs: { ...input.inputs } })
+        return {
+          status: 'done',
+          steps: [{ operation: 'TYPE_TEXT', label: 'City', text: 'Lisbon', page_changed: true }, { operation: 'CLICK', label: 'Search', page_changed: true }],
+          page: PAGE,
+          judgeCalls: 3,
+          elapsedMs: 2_400,
+        }
+      },
+      // Off unless a test asks: the base surface is what a deployment with no judge offers.
+      judgeAvailable: () => false,
+      decideMany: async (requests) => {
+        f.judged.push({ items: requests.length, questions: Object.keys(requests[0]?.questions ?? {}) })
+        return requests.map((r, i) =>
+          i === 1
+            ? null
+            : {
+                urgent: { type: 'noul' as const, noul: String(r.state).includes('NOW') ? 0.93 : 0.04 },
+                kind: { type: 'choice' as const, choice: 'invoice', probabilities: { invoice: 0.8, other: 0.2 }, confidence: 0.77 },
+              },
+        )
+      },
+      takeSpaceJudgeAllowance: async () => ({ ok: true, retryAfterMs: 0 }),
     },
   }
   return f
@@ -142,8 +182,13 @@ test('the surface: always-on tools, and extras only when the brief asks', () => 
     'remember',
     'run_command',
     'open_page',
+    'page_snapshot',
+    'page_act',
     'run_agent',
   ])
+  const judged = names(agentTools(ctx(f, { deps: { ...f.deps, judgeAvailable: () => true } })))
+  assert.ok(judged.includes('decide') && judged.includes('browse_task'), 'a judge adds decide and browse_task')
+  assert.ok(!base.includes('decide') && !base.includes('browse_task'), 'and without one neither is offered')
   const full = names(
     agentTools(ctx(f, { brief: brief({ tools: ['web', 'directory', 'actions'], agents: ['other'], connectors: ['hubspot'] }) })),
   )
@@ -321,4 +366,89 @@ test('the machine comes with the space: run_command and open_page, stamped with 
   assert.match(await tool(dry, 'open_page').run({ url: 'https://x.example/' }), /^DRY RUN/)
   assert.equal(f.commands.length, 1)
   assert.equal(f.pages.length, 1)
+})
+
+const PAGE: PageState = {
+  url: 'https://crm.example.com/stays',
+  title: 'Stays',
+  text: 'Find a stay',
+  scroll: { y: 0, height: 1600 },
+  actions: [
+    { id: 'e1', kind: 'fill', node: 11, role: 'textbox', label: 'City', value: '' },
+    { id: 'e2', kind: 'select', node: 12, role: 'combobox', label: 'Style → Design', value: 'design', current_value: 'Any' },
+    { id: 'e3', kind: 'select', node: 12, role: 'combobox', label: 'Style → Budget', value: 'budget', current_value: 'Any' },
+    { id: 'e4', kind: 'click', node: 13, role: 'button', label: 'Search' },
+    { id: 'scroll_down', kind: 'scroll', label: 'Scroll down', delta: 560 },
+    { id: 'wait', kind: 'wait', label: 'Wait for the page to update' },
+  ],
+  guards: { '11': 'g11', '12': 'g12', '13': 'g13' },
+  fingerprint: 'fp1',
+  omitted: 0,
+}
+
+test('the page is a table: a snapshot lists rows, an act names one and presents its guard, and a moved page presses nothing', async () => {
+  const f = fakes()
+  const tools = agentTools(ctx(f, { machineAllow: ['crm.example.com'] }))
+  assert.match(await tool(tools, 'page_act').run({ target: '3' }), /page_snapshot first/, 'a target is a row of a page that was read')
+
+  const seen = await tool(tools, 'page_snapshot').run({})
+  assert.match(seen, /\[1\] textbox "City" empty — fill, click/)
+  assert.match(seen, /\[2:1\] Design/)
+  assert.match(seen, /\[3\] button "Search" — click/)
+  assert.deepEqual(f.pageCommands[0], { command: {}, runId: 'run-root', taskAllow: ['crm.example.com'] })
+
+  await tool(tools, 'page_act').run({ target: '1', text: 'Lisbon' })
+  assert.deepEqual(f.pageCommands[1].command.act, { kind: 'fill', node: 11, guard: 'g11', value: undefined, text: 'Lisbon', delta: undefined })
+  await tool(tools, 'page_act').run({ target: '2:2' })
+  assert.deepEqual(f.pageCommands[2].command.act, { kind: 'select', node: 12, guard: 'g12', value: 'budget', text: undefined, delta: undefined })
+  await tool(tools, 'page_act').run({ target: 'scroll_down' })
+  assert.equal(f.pageCommands[3].command.act?.kind, 'scroll')
+  assert.match(await tool(tools, 'page_act').run({ target: '3', text: 'x' }), /not a field that takes text/)
+  assert.match(await tool(tools, 'page_act').run({ target: '9' }), /no element 9/)
+  assert.equal(f.pageCommands.length, 4, 'a row that is not there never reaches the machine')
+
+  f.nextPage = { ok: false, reason: 'stale', state: { ...PAGE, title: 'Moved' } }
+  assert.match(await tool(tools, 'page_act').run({ target: '3' }), /^NOT DONE[\s\S]*Moved/)
+
+  const dry = agentTools(ctx(f, { brief: brief({ dryRun: true }) }))
+  await tool(dry, 'page_snapshot').run({})
+  const before = f.pageCommands.length
+  assert.match(await tool(dry, 'page_act').run({ target: '3' }), /^DRY RUN/)
+  assert.equal(f.pageCommands.length, before, 'a rehearsal reads the page and presses nothing')
+})
+
+test('browse_task hands the judge a goal and only the values the model supplied, and gives the page back', async () => {
+  const f = fakes()
+  const tools = agentTools(ctx(f, { deps: { ...f.deps, judgeAvailable: () => true } }))
+  const out = await tool(tools, 'browse_task').run({ goal: 'Search stays in Lisbon', inputs: { city: 'Lisbon', bad: 7, '': 'x' } })
+  assert.deepEqual(f.browsed, [{ goal: 'Search stays in Lisbon', inputs: { city: 'Lisbon' } }])
+  assert.match(out, /^done — by its own account/)
+  assert.match(out, /1\. type_text City ← Lisbon\n2\. click Search/)
+  assert.match(out, /\[3\] button "Search"/, 'the page it ended on comes back for the model to check')
+  // The table it ended on is the one page_act now acts on.
+  await tool(tools, 'page_act').run({ target: '3' })
+  assert.equal(f.pageCommands.at(-1)?.command.act?.guard, 'g13')
+  assert.match(await tool(tools, 'browse_task').run({ goal: ' ' }), /^error/)
+})
+
+test('decide puts an agent\'s own questions to the judge, per item, on the space\'s allowance', async () => {
+  const f = fakes()
+  const on = { ...f.deps, judgeAvailable: () => true }
+  const tools = agentTools(ctx(f, { deps: on }))
+  const questions = [
+    { id: 'urgent', ask: 'The email asks for something today.' },
+    { id: 'kind', ask: 'What is this email?', type: 'choice', options: ['invoice', 'other'] },
+  ]
+  const out = await tool(tools, 'decide').run({ items: ['pay NOW', 'hello', 'newsletter'], questions })
+  assert.deepEqual(f.judged, [{ items: 3, questions: ['urgent', 'kind'] }])
+  assert.match(out, /^2 of 3 judged/)
+  assert.match(out, /1\. urgent=0\.93 · kind=invoice \(0\.77\)/)
+  assert.match(out, /2\. \(no answer\)/)
+  assert.match(out, /3\. urgent=0\.04/)
+
+  assert.match(await tool(tools, 'decide').run({ items: ['x'], questions: [{ id: 'k', ask: 'which', type: 'choice', options: ['one'] }] }), /2–40/)
+  assert.match(await tool(tools, 'decide').run({ items: [], questions }), /^error/)
+  const spent = agentTools(ctx(f, { deps: { ...on, takeSpaceJudgeAllowance: async () => ({ ok: false, retryAfterMs: 9_000 }) } }))
+  assert.match(await tool(spent, 'decide').run({ items: ['x'], questions }), /try again in 9s/)
+  assert.equal(f.judged.length, 1, 'out of allowance asks nothing')
 })
