@@ -48,6 +48,8 @@ export interface MenuType {
   count: number;
   /** The type's aliases that some row holds, in the space's order. */
   aliases?: MenuAlias[];
+  /** Listed with no rows too — a table whose empty state is where one is asked for. */
+  always?: boolean;
 }
 
 /** The menu's entries: every type with rows, built-ins first in their
@@ -67,7 +69,7 @@ export function menuTypes(
     const i = DEFAULT_NODE_TYPES.findIndex((t) => t.name.toLowerCase() === name.toLowerCase());
     return i === -1 ? DEFAULT_NODE_TYPES.length : i;
   };
-  const typed = [...presentTypes]
+  const typed: MenuType[] = [...presentTypes]
     .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
     .map((name) => {
       const id = name.toLowerCase();
@@ -77,7 +79,7 @@ export function menuTypes(
         .filter((a) => a.count > 0);
       return { id, name, count: rows.length, aliases };
     });
-  const withRows = [...typed, ...extra].filter((t) => t.count > 0);
+  const withRows = [...typed, ...extra].filter((t) => t.count > 0 || t.always);
   return withRows.length > 1 ? [{ id: 'all', name: 'All', count: nodes.length }, ...withRows] : withRows;
 }
 

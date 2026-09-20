@@ -227,10 +227,10 @@ export function defaultModelOf(models: readonly SpaceModel[]): SpaceModel | null
 export function noModelReason(models: readonly SpaceModel[]): string | null {
   if (defaultModelOf(models)) return null
   if (models.length === 0) {
-    return 'This space has no model. Add one under Models in the account menu, and agents can run on it.'
+    return 'This space has no model. Add one in the Space Console under Models, and agents can run on it.'
   }
   const listed = models.map((m) => `${m.name} (${m.problem})`).join('; ')
-  return `This space has no model that can run: ${listed}. Fix one under Models in the account menu.`
+  return `This space has no model that can run: ${listed}. Fix one in the Space Console under Models.`
 }
 
 /**

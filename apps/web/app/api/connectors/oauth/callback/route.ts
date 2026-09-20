@@ -22,6 +22,8 @@ import { platformClientRef, resolvePlatformClient } from '@/lib/connectors/platf
 import { saveConnection } from '@/lib/connectors/connections';
 import { ConnectorError } from '@/lib/connectors/config';
 import { PENDING_COOKIE, readPending } from '@/lib/connectors/pending';
+import { accountAuth, saveAccount } from '@/lib/connectors/accounts';
+import type { ConnectorAuth } from '@/lib/connectors/auth';
 import { logger } from '@/lib/logger';
 
 function page(message: string, status = 200): NextResponse {
@@ -87,17 +89,28 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const resolved = await resolveContext(session, pending.viaSpaceId ?? pending.spaceId);
-    if (resolved instanceof Response) return page('Space not found.', 404);
-    const principal = await principalOf(resolved);
+    const recipe = pending.accountRecipe;
+    let auth: ConnectorAuth;
+    if (recipe) {
+      // A person's own account: the recipe is the note.
+      if (pending.mode !== 'user') return page('The connection could not be verified. Start it again.', 400);
+      const mine = accountAuth(recipe, pending.connector);
+      if (!mine || mine.provider !== pending.provider) return page('That service is no longer offered. Start again.', 409);
+      auth = mine;
+    } else {
+      const resolved = await resolveContext(session, pending.viaSpaceId ?? pending.spaceId);
+      if (resolved instanceof Response) return page('Space not found.', 404);
+      const principal = await principalOf(resolved);
 
-    // Re-read the note rather than trusting the cookie's copy: the connector may
-    // have been edited, or the caller's access revoked — or the parent may
-    // have stopped sharing it — while the browser was away at the provider.
-    const detail = await describeConnector(principal, resolved, pending.connector);
-    const auth = detail?.perimeter?.auth;
-    if (!auth || auth.provider !== pending.provider || auth.mode !== pending.mode || detail.ownerSpaceId !== pending.spaceId) {
-      return page('That connector changed while you were connecting. Start again.', 409);
+      // Re-read the note rather than trusting the cookie's copy: the connector may
+      // have been edited, or the caller's access revoked — or the parent may
+      // have stopped sharing it — while the browser was away at the provider.
+      const detail = await describeConnector(principal, resolved, pending.connector);
+      const theirs = detail?.perimeter?.auth;
+      if (!theirs || theirs.provider !== pending.provider || theirs.mode !== pending.mode || detail.ownerSpaceId !== pending.spaceId) {
+        return page('That connector changed while you were connecting. Start again.', 409);
+      }
+      auth = theirs;
     }
 
     const endpoints = await resolveEndpoints(auth);
@@ -113,15 +126,19 @@ export async function GET(req: NextRequest) {
       clientId = platform.clientId;
       clientSecret = platform.clientSecret;
     } else {
-      const client = await prisma.connectorOAuthClient.findUnique({
-        where: {
-          oauth_client_identity: {
-            spaceId: pending.spaceId,
-            provider: pending.provider,
-            issuer: endpoints.issuer,
-          },
-        },
-      });
+      const client = recipe
+        ? await prisma.connectorAccountClient.findUnique({
+            where: { account_client_identity: { userId: session.userId, recipe, issuer: endpoints.issuer } },
+          })
+        : await prisma.connectorOAuthClient.findUnique({
+            where: {
+              oauth_client_identity: {
+                spaceId: pending.spaceId,
+                provider: pending.provider,
+                issuer: endpoints.issuer,
+              },
+            },
+          });
       if (!client) return done(pending, false, 'The client registration is missing. Start again.');
       clientId = client.clientId;
       clientSecret = client.clientSecret ? decryptSecret(client.clientSecret) : null;
@@ -137,6 +154,11 @@ export async function GET(req: NextRequest) {
       scopes: pending.scopes,
       resource: auth.discovery.kind === 'discover' ? auth.discovery.url : null,
     });
+
+    if (recipe) {
+      await saveAccount({ userId: session.userId, name: pending.connector, recipe, tokens });
+      return done(pending, true, `Connected ${tokens.accountLabel ?? 'your account'}.`);
+    }
 
     await saveConnection({
       spaceId: pending.spaceId,

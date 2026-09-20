@@ -97,19 +97,19 @@ interface BuiltIn {
 // Display order when nothing is searched: the things a directory is made of,
 // then context, then the tools' containers, then what admins wire up.
 const BUILT_INS: readonly BuiltIn[] = [
-  { id: 'person', label: 'Person', configName: 'Person', color: '#2563eb' },
-  { id: 'space', label: 'Space', configName: 'Space', color: '#78d870' },
-  { id: 'event', label: 'Event', configName: 'Event', color: '#ef4444' },
-  { id: 'resource', label: 'Resource', configName: 'Resource', color: '#f97316' },
+  { id: 'person', label: 'Person', configName: 'Person', color: '#60a5fa' },
+  { id: 'space', label: 'Space', configName: 'Space', color: '#4ade80' },
+  { id: 'event', label: 'Event', configName: 'Event', color: '#f87171' },
+  { id: 'resource', label: 'Resource', configName: 'Resource', color: '#fb923c' },
   { id: 'context', label: 'Note', configName: null, color: NOTE_COLOR },
-  { id: 'folder', label: 'Folder', configName: null, color: '#eab308' },
-  { id: 'file', label: 'File', configName: null, color: '#0ea5e9' },
-  { id: 'channel', label: 'Channel', configName: 'Channel', color: '#ec4899' },
-  { id: 'section', label: 'Section', configName: 'Section', color: '#0ea5e9' },
-  { id: 'agent', label: 'Agent', configName: 'Agent', color: '#0d9488' },
-  { id: 'tool', label: 'Tool', configName: 'Tool', color: '#a855f7' },
-  { id: 'connector', label: 'Connector', configName: 'Connector', color: '#4f46e5' },
-  { id: 'model', label: 'Model', configName: 'Model', color: '#b45309' },
+  { id: 'folder', label: 'Folder', configName: null, color: '#facc15' },
+  { id: 'file', label: 'File', configName: null, color: '#38bdf8' },
+  { id: 'channel', label: 'Channel', configName: 'Channel', color: '#f472b6' },
+  { id: 'section', label: 'Section', configName: 'Section', color: '#38bdf8' },
+  { id: 'agent', label: 'Agent', configName: 'Agent', color: '#2dd4bf' },
+  { id: 'tool', label: 'Tool', configName: 'Tool', color: '#c084fc' },
+  { id: 'connector', label: 'Connector', configName: 'Connector', color: '#818cf8' },
+  { id: 'model', label: 'Model', configName: 'Model', color: '#a78bfa' },
 ]
 
 export interface CreateRowsInput extends CreatePermissions {
@@ -307,9 +307,9 @@ export function flowFor(row: CreateRow, ctx: FlowContext): CreateFlow {
     // The catalogue is the create UI: one press, a sign-in, or the form.
     case 'connector':
       return { kind: 'route', href: '/admin?section=connectors' }
-    // Models is a section of Settings.
+    // Models is a section of the Space Console.
     case 'model':
-      return { kind: 'route', href: '/settings?section=models' }
+      return { kind: 'route', href: '/admin?section=models' }
     default: {
       const kind = DRAFT_KIND_OF[row.id]
       // Every remaining row is a draft kind; the fallback keeps a kind added

@@ -1,7 +1,7 @@
 // A member's ask that the space connect a service it does not have yet
 // (table `connector_requests`).
 //
-// The account menu's All connectors list offers every recipe in the catalogue,
+// The Directory's Connectors table offers every recipe in the catalogue,
 // but adding one is an admin's act — the note it writes decides what agents
 // reach and whose credentials they spend. So a member asks, and the request
 // surfaces in the console's Connectors section, where Add runs the recipe and

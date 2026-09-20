@@ -19,6 +19,8 @@ import TableToolbar from './TableToolbar';
 import TypeMenu, { menuTypes } from '@/features/directory/components/TypeMenu';
 import DirectoryTable from './DirectoryTable';
 import AgentsRoster from '@/features/agents/components/AgentsRoster';
+import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
+import { useConnectorCount } from '@/features/connectors/hooks/useConnectorCount';
 import { useAgentsRoster } from '@/features/agents/lib/useAgentsRoster';
 import { useTableView } from '@/features/directory/hooks/useTableView';
 import { useTrackedFields } from '@/features/directory/hooks/useTrackedFields';
@@ -52,14 +54,23 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   // from the agents route. Followed live only while it is the table shown.
   const isAgents = type?.toLowerCase() === 'agent';
   const roster = useAgentsRoster(space?.id ?? null, isAgents);
+  // Connectors likewise: the space's gateways, as each person meets them —
+  // sign in, ask for access, ask for a service. The console's own panel,
+  // which already knows an admin from a member.
+  const isConnectors = type?.toLowerCase() === 'connector';
+  const connectorCount = useConnectorCount(space?.id ?? null);
+  const [connectorView, setConnectorView] = useState<'mine' | 'catalog'>('mine');
   const types = useMemo(
     () => menuTypes(
       presentTypes,
       nodes,
-      [{ id: 'agent', name: 'Agent', count: roster.data?.agents.length ?? 0 }],
+      [
+        { id: 'agent', name: 'Agent', count: roster.data?.agents.length ?? 0 },
+        { id: 'connector', name: 'Connector', count: connectorCount, always: true },
+      ],
       space?.aliases as SpaceAlias[] | undefined,
     ),
-    [presentTypes, nodes, roster.data, space?.aliases],
+    [presentTypes, nodes, roster.data, connectorCount, space?.aliases],
   );
 
   // The `?type=` is usually a type's own name, but crossing from a context note
@@ -227,6 +238,23 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
         {isAgents && spaceId ? (
           <div className="h-full border-t border-l border-border-subtle">
             <AgentsRoster data={roster.data} error={roster.error} now={roster.now} search={browse.searchTerm} tags={browse.filterTags} onNavigate={(href) => router.push(href)} />
+          </div>
+        ) : isConnectors && spaceId ? (
+          <div className="h-full overflow-y-auto border-t border-border-subtle px-4 py-3">
+            <div className="mx-auto max-w-2xl">
+              {connectorView === 'catalog' && (
+                <button type="button" className="mb-2 text-[13px] text-text-secondary hover:text-text-primary" onClick={() => setConnectorView('mine')}>
+                  ← In this space
+                </button>
+              )}
+              <ConnectorsPanel
+                key={spaceId}
+                space={spaceId}
+                view={connectorView}
+                returnTo="/directory?view=table&type=connector"
+                onAdd={() => setConnectorView('catalog')}
+              />
+            </div>
           </div>
         ) : (
         <DirectoryTable

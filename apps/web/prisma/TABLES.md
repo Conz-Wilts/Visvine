@@ -48,6 +48,8 @@ in the shared context of a personal Space, so any other value is legacy.)
 
 | Table | Controls |
 | --- | --- |
+| `connector_accounts` | A person's OWN account at a service (Gmail, a vetted MCP server), connected once in Settings → Accounts and spent in every space they act in — only ever by a run acting as them. No note: the perimeter is the catalogue recipe's. `off_spaces` is the person's list of spaces it stays out of. |
+| `connector_account_clients` | The dynamically registered OAuth client such an account signs in through. A platform client lives in env and has no row. |
 | `connector_requests` | "Please connect X for this space" — a member asks for a catalog service the space has no connector for; an admin adds it (the note it wrote is stamped on the row) or dismisses it. |
 | `connector_secrets` | Named, encrypted secrets a connector note refers to as `{{secret:NAME}}`. Only decrypted server-side while a connector runs — the API lists names, never values. The connector itself is a note, so it lives in `context_notes`. |
 

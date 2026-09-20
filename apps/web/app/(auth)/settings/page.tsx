@@ -8,7 +8,7 @@ import LoadingText from '@/components/ui/LoadingText';
 import { SettingsSection } from '@/components/ui';
 import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePanel';
 import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPanel';
-import { ConnectorsSection, ModelsSection } from '@/features/settings/components/SettingsConnectors';
+import AccountsPanel from '@/features/connectors/components/AccountsPanel';
 
 /**
  * Personal settings. Same shell as the Space Console — a pane-top tab bar
@@ -21,12 +21,12 @@ import { ConnectorsSection, ModelsSection } from '@/features/settings/components
 
 // Only the tabs that do something. General holds everything about you that is
 // not about a space: theme, the MCP address, deleting your account.
-// Connectors and Models are about the space you are in, from where you stand
-// in it (SettingsConnectors).
+// Accounts are the services you sign in to yourself and spend in every space
+// (AccountsPanel). Nothing here is about a space: a space's connectors are in
+// its Directory and console, its models in its console.
 const SECTIONS: ConsoleSection[] = [
   { id: 'general', label: 'General', width: 'form' },
-  { id: 'connectors', label: 'Connectors', width: 'form' },
-  { id: 'models', label: 'Models', width: 'form' },
+  { id: 'accounts', label: 'Accounts', width: 'form' },
 ];
 
 // ─── Swatches ─────────────────────────────────────────────────────────────────
@@ -91,10 +91,8 @@ function renderSection(id: string) {
   switch (id) {
     case 'general':
       return <GeneralSection />;
-    case 'connectors':
-      return <ConnectorsSection />;
-    case 'models':
-      return <ModelsSection />;
+    case 'accounts':
+      return <AccountsPanel />;
     default:
       return null;
   }

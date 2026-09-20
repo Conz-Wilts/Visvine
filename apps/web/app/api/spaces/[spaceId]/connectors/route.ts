@@ -10,7 +10,7 @@ import { availablePlatformClients } from '@/lib/connectors/platformClients';
 /**
  * The space's connectors — the parsed state of every connectors/*.md note
  * (alias, allowlist, referenced secret names, parse errors) for the console
- * panel and the account menu's dialog. Secrets themselves live in ../secrets.
+ * panel and the Directory's Connectors table. Secrets themselves live in ../secrets.
  *
  * Any member of the space may read it: the list is what the notes they can
  * already open say about themselves (visibility is the principal's, in

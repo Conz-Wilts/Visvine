@@ -20,8 +20,13 @@ export const PENDING_TTL_SECONDS = 600
 const TYP = 'connector_oauth_pending'
 
 export interface PendingAuthorization {
-  /** The space the connection lands in — the connector note's own. */
+  /** The space the connection lands in — the connector note's own. '' for an account. */
   spaceId: string
+  /**
+   * Set when this is a person's own account (./accounts.ts) rather than a
+   * space's connection: the recipe it signs in to. `connector` is its name.
+   */
+  accountRecipe?: string
   /**
    * The space the flow was started FROM, when it is not `spaceId`: a sub-space
    * linking an account behind a connector its parent shares. The callback
@@ -83,6 +88,7 @@ export async function readPending(raw: string | undefined): Promise<PendingAutho
       // Spread rather than an explicit undefined: the pending record is
       // compared whole, and a key that is present-but-undefined is a different
       // object from one that was never set.
+      ...(typeof payload.accountRecipe === 'string' ? { accountRecipe: payload.accountRecipe } : {}),
       ...(typeof payload.returnTo === 'string' ? { returnTo: payload.returnTo } : {}),
     }
   } catch {

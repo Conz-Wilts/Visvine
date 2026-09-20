@@ -40,9 +40,12 @@ import { connectorCryptoCapabilities } from './hostCrypto'
 import { connectorStateCapabilities } from './hostState'
 import { acquireConnectorRun, takeConnectorRun } from './quota'
 import { identitySecretName, type ResolvedIdentity } from './identity'
-import { connectionOwner } from './auth'
-import { resolveConnection } from './connections'
-import { connectorConnectUrl } from './connectUrl'
+import { connectionOwner, type ConnectorAuth } from './auth'
+import { resolveConnection, type ResolvedConnection } from './connections'
+import { appOrigin, connectorConnectUrl } from './connectUrl'
+import { accountNoteFor, accountNotesIn, resolveAccountConnection } from './accounts'
+import { accountConnectPath, accountRecipe, accountStatePath } from './accountRecipes'
+import { availablePlatformClients } from './platformClients'
 import { runInIsolate, type IsolateRunResult } from './isolate'
 import { mcpAllTools, type McpToolInfo } from './hostMcp'
 import { MAX_DENIALS } from './perimeter'
@@ -62,10 +65,11 @@ const DOCS_CAP_CHARS = 4_000
  * Where a connector name resolved to — and therefore whose secrets, whose
  * linked account, whose run budget and whose audit trail the run uses.
  *
- * Three places are searched, in this order: the space the caller is in, then
- * — for a sub-space — what its PARENT shares with it (`share: subspaces` on
- * the parent's note, docs/sub-spaces.md), then the caller's OWN personal
- * space. The parent's note runs with the parent's secrets and accounts, under
+ * The places searched, in this order: the space the caller is in, then — for
+ * a sub-space — what its PARENT shares with it (`share: subspaces` on the
+ * parent's note, docs/sub-spaces.md), then the caller's OWN account at the
+ * service (./accounts.ts — no note, the recipe's perimeter, run here on this
+ * space's quota), then a note in their personal space. The parent's note runs with the parent's secrets and accounts, under
  * the parent's quota and on the parent's audit trail, exactly as a personal
  * one runs with the person's: `spaceId` says whose it is, and every executor
  * reads that rather than the caller's space. The third look is what makes a
@@ -91,8 +95,15 @@ interface ConnectorSource {
   spaceId: string
   /** The principal those reads and that audit happen as. */
   principal: ContextPrincipal
-  /** True when the note came from the caller's personal space. */
+  /** True when this is the caller's OWN connector rather than a space's. */
   personal: boolean
+  /**
+   * Set when it is one of the person's accounts (./accounts.ts): there is no
+   * note, the content is the recipe's, and the token is theirs. It runs in the
+   * space the caller is in — that space's quota and audit trail — and opens
+   * none of its secrets, because an account recipe binds none.
+   */
+  account: { userId: string; recipe: string } | null
   /** True when the note is the parent space's, shared with this sub-space. */
   shared: boolean
   /** Which space shared it, when `shared`. */
@@ -157,7 +168,7 @@ async function readConnectorNote(
   const path = await connectorNotePathIn(context, name)
   const here = path === null ? null : await readVisible(p, context, path)
   if (here !== null && path !== null) {
-    return { content: here, path, spaceId: context.spaceId, principal: p, personal: false, shared: false, sharedFrom: null }
+    return { content: here, path, spaceId: context.spaceId, principal: p, personal: false, account: null, shared: false, sharedFrom: null }
   }
   if (opts.shared !== false) {
     // The parent's flag is the whole grant (lib/notes/federation.ts): no
@@ -172,13 +183,30 @@ async function readConnectorNote(
         spaceId: owner.id,
         principal: { ...p, spaceId: owner.id, spaceAdmin: false },
         personal: false,
+        account: null,
         shared: true,
         sharedFrom: owner,
       }
     }
   }
   if (opts.personal === false || p.system) return null
-  const lens = personalLens(opts.personalFor ?? p.userId, context)
+  // The person's own account at the service. The principal stays the caller,
+  // in this space: the run is theirs and happens here.
+  const forUserId = opts.personalFor ?? p.userId
+  const account = await accountNoteFor(forUserId, name, context.spaceId)
+  if (account) {
+    return {
+      content: account.content,
+      path: `connectors/${name}.md`,
+      spaceId: context.spaceId,
+      principal: p,
+      personal: true,
+      account: { userId: forUserId, recipe: account.recipe },
+      shared: false,
+      sharedFrom: null,
+    }
+  }
+  const lens = personalLens(forUserId, context)
   if (!lens) return null
   const minePath = await connectorNotePathIn(lens.context, name)
   const mine = minePath === null ? null : await readVisible(lens.principal, lens.context, minePath)
@@ -187,7 +215,7 @@ async function readConnectorNote(
   // the audit line and any identity assertion still say who ran it.
   const principal =
     lens.principal.userId === p.userId ? { ...lens.principal, email: p.email, name: p.name } : lens.principal
-  return { content: mine, path: minePath, spaceId: lens.context.spaceId, principal, personal: true, shared: false, sharedFrom: null }
+  return { content: mine, path: minePath, spaceId: lens.context.spaceId, principal, personal: true, account: null, shared: false, sharedFrom: null }
 }
 
 export interface ConnectorSummary {
@@ -422,6 +450,15 @@ export async function listConnectors(
       }
     }
   }
+  if (opts.personal === true && !p.system) {
+    for (const mine of await accountNotesIn(p.userId, context.spaceId)) {
+      if (taken.has(mine.name)) continue
+      const summary = summariseNote(`connectors/${mine.name}.md`, mine.content)
+      if (!summary) continue
+      own.push({ ...summary, personal: true })
+      taken.add(mine.name)
+    }
+  }
   const lens = opts.personal === true && !p.system ? personalLens(p.userId, context) : null
   if (lens) {
     for (const mine of await listConnectorsIn(lens.principal, lens.context)) {
@@ -543,6 +580,8 @@ export interface LoadedConnector {
   principal: ContextPrincipal
   /** True when this is the caller's own connector, reached from another space. */
   personal: boolean
+  /** The person's account this is, when it is one ({@link ConnectorSource}). */
+  account: { userId: string; recipe: string } | null
   /** True when this is the parent space's connector, shared with this sub-space. */
   shared: boolean
   sharedFrom: { id: string; name: string } | null
@@ -589,6 +628,7 @@ export async function loadConnector(
     spaceId: source.spaceId,
     principal: source.principal,
     personal: source.personal,
+    account: source.account,
     shared: source.shared,
     sharedFrom: source.sharedFrom,
   }
@@ -598,6 +638,8 @@ type ConnectorReadinessStatus = 'ok' | 'missing' | 'disabled' | 'invalid' | 'nee
 
 /** One declared connector, judged for ONE person's runs. */
 export interface ConnectorReadiness {
+  /** On `missing`: the service's name when it is one each person connects themselves. */
+  accountService?: string | null
   connector: string
   status: ConnectorReadinessStatus
   /** Set for an `auth:` connector — which provider, and whether each person connects their own account. */
@@ -632,8 +674,13 @@ export async function connectorReadiness(
       // Judged for ONE person, so their own connectors count: what a run would
       // actually resolve is what readiness must ask about.
       const source = await readConnectorNote(p, context, name, { personalFor: forUserId })
-      if (source === null) return { connector: name, status: 'missing', ...none }
-      const { content, spaceId: ownerSpaceId, personal, shared } = source
+      if (source === null) {
+        // A service a person connects for themselves is not the space's to
+        // lack: what is missing is that person's sign-in.
+        const service = accountRecipe(name.replace(/-\d+$/, ''), availablePlatformClients())
+        return { connector: name, status: 'missing', ...none, accountService: service?.name ?? null }
+      }
+      const { content, spaceId: ownerSpaceId, personal, shared, account } = source
       const fm = parseFrontmatter(content)
       if (!isConnectorNote(fm)) return { connector: name, status: 'invalid', ...none, detail: 'the note is not a connector' }
       if (!isConnectorEnabled(fm)) return { connector: name, status: 'disabled', ...none, personal, shared }
@@ -641,6 +688,18 @@ export async function connectorReadiness(
       if (!parsed.ok) return { connector: name, status: 'invalid', ...none, personal, shared, detail: parsed.error }
       const auth = parsed.perimeter.auth
       if (!auth) return { connector: name, status: 'ok', ...none, personal, shared }
+      if (account) {
+        // The row is what made the lookup answer, so the only question left is
+        // whether it still works.
+        const mine = await prisma.connectorAccount.findUnique({
+          where: { account_identity: { userId: account.userId, name } },
+          select: { accountLabel: true, brokenAt: true, brokenReason: true },
+        })
+        const info = { provider: auth.provider, mode: auth.mode, accountLabel: mine?.accountLabel ?? null }
+        return mine?.brokenAt
+          ? { connector: name, status: 'broken', auth: info, connectUrl: appOrigin() + accountConnectPath({ name }), detail: mine.brokenReason, personal, shared }
+          : { connector: name, status: 'ok', auth: info, connectUrl: null, detail: null, personal, shared }
+      }
       const connectUrl = connectorConnectUrl(ownerSpaceId, name)
       const row = await prisma.connectorConnection.findUnique({
         where: {
@@ -690,6 +749,27 @@ export async function connectorReachFor(
     }),
   ])
   return { actions, hosts }
+}
+
+/**
+ * The stored connection a loaded connector spends: the person's own account,
+ * or the row its space holds. An account is only ever resolved for the person
+ * it belongs to — the principal the run acts as.
+ */
+function connectionFor(loaded: LoadedConnector, auth: ConnectorAuth): Promise<ResolvedConnection> {
+  const name = connectorName(loaded.path)
+  if (loaded.account) {
+    if (loaded.account.userId !== loaded.principal.userId) {
+      throw new ConnectorError('config', `${name} is another person's account.`)
+    }
+    return resolveAccountConnection({ userId: loaded.account.userId, name, recipe: loaded.account.recipe, auth })
+  }
+  return resolveConnection({
+    spaceId: loaded.spaceId,
+    auth,
+    userId: loaded.principal.userId,
+    connectUrl: connectorConnectUrl(loaded.spaceId, name),
+  })
 }
 
 /** Decrypt the named secrets for a space; every name must exist. */
@@ -887,12 +967,7 @@ export async function executeConnectorScript(
     const auth = loaded.perimeter.auth
     const bearer = auth
       ? await (async () => {
-          const connection = await resolveConnection({
-            spaceId,
-            auth,
-            userId: p.userId,
-            connectUrl: connectorConnectUrl(spaceId, connectorName(loaded.path)),
-          })
+          const connection = await connectionFor(loaded, auth)
           return { token: connection.accessToken, hosts: auth.hosts }
         })()
       : null
@@ -912,7 +987,10 @@ export async function executeConnectorScript(
         // and `visvine.state.*` (this connector's memory between runs).
         capabilities: {
           ...connectorCryptoCapabilities(env),
-          ...connectorStateCapabilities({ spaceId, path: loaded.path }),
+          ...connectorStateCapabilities({
+            spaceId,
+            path: loaded.account ? accountStatePath(loaded.account.userId, connectorName(loaded.path)) : loaded.path,
+          }),
         },
         globals,
       },
@@ -995,12 +1073,7 @@ export async function listConnectorTools(loaded: LoadedConnector): Promise<Conne
   const auth = loaded.perimeter.auth
   const bearer = auth
     ? await (async () => {
-        const connection = await resolveConnection({
-          spaceId,
-          auth,
-          userId: p.userId,
-          connectUrl: connectorConnectUrl(spaceId, connectorName(loaded.path)),
-        })
+        const connection = await connectionFor(loaded, auth)
         return { token: connection.accessToken, hosts: auth.hosts }
       })()
     : null

@@ -20,11 +20,11 @@
  *     signs the person in ({@link mcpServer}). Every server on the list has
  *     been checked to publish that metadata and to offer dynamic registration.
  *
- * The whole catalogue is the SPACE's to connect from — its console, and the
- * admin's view of the account menu's dialog. A member sees the same list as
- * All connectors and asks for what the space has not connected
- * (lib/connectors/requests.ts); what they sign in to for themselves is their
- * own account behind a connector the space already has.
+ * The catalogue is the SPACE's to connect from — its console, and the
+ * Directory's Connectors table, where a member asks for what the space has not
+ * connected (lib/connectors/requests.ts). The exception is a service that asks
+ * the space for nothing: that one is each person's own ACCOUNT, connected once
+ * for every space (./accountRecipes.ts).
  *
  * A recipe is not a slot. A space may connect one service several times — the
  * team's Drive beside your own, two Slack workspaces — so a connector's NAME

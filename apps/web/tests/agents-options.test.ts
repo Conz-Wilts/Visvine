@@ -77,7 +77,7 @@ test('agentOptions: the models a space has, its default, connectors and agents',
     // Nothing configured: no models, and a sentence saying to go and add one.
     // Emphatically NOT a provider list — offering one the space has no key for
     // is what wrote `gemini` into briefs nobody could run.
-    const empty = await agentOptions(SPACE)
+    const empty = await agentOptions(SPACE, '')
     assert.deepEqual(empty.models, [])
     assert.equal(empty.spaceModel, null)
     assert.match(empty.noModels ?? '', /no model/i)
@@ -94,7 +94,7 @@ test('agentOptions: the models a space has, its default, connectors and agents',
     await note('agents/sync/index.md', '---\ntype: agent\n---\nBrief.\n')
     await note('agents/digest/report.md', '---\ntitle: A report\n---\nWritten by a run.\n')
 
-    const keyless = await agentOptions(SPACE)
+    const keyless = await agentOptions(SPACE, '')
     assert.deepEqual(
       keyless.models.map((m) => ({ ref: m.ref, name: m.name, ok: m.problem === null })),
       [{ ref: 'anthropic/claude-sonnet-5', name: 'anthropic', ok: false }],
@@ -104,7 +104,7 @@ test('agentOptions: the models a space has, its default, connectors and agents',
     assert.match(keyless.noModels ?? '', /no model that can run/i)
 
     await prisma!.connectorSecret.create({ data: { spaceId: SPACE, name: 'MODEL_KEY_ANTHROPIC', ciphertext: 'x' } })
-    const o = await agentOptions(SPACE)
+    const o = await agentOptions(SPACE, '')
     assert.equal(o.noModels, null)
     assert.deepEqual(o.spaceModel, {
       ref: 'anthropic/claude-sonnet-5',
@@ -126,7 +126,7 @@ test('agentOptions: the models a space has, its default, connectors and agents',
     // admin can act on. `anthropic` sorts before `openai`.
     await prisma!.connectorSecret.create({ data: { spaceId: SPACE, name: 'MODEL_KEY_OPENAI', ciphertext: 'x' } })
     await note('models/openai.md', '---\ntype: model\nprovider: openai\nmodel: gpt-4.1\n---\n')
-    const two = await agentOptions(SPACE)
+    const two = await agentOptions(SPACE, '')
     assert.equal(two.models.length, 2)
     assert.equal(two.spaceModel?.name, 'anthropic')
 
@@ -135,7 +135,7 @@ test('agentOptions: the models a space has, its default, connectors and agents',
     // models/ existed (a `kind: model` connector) is still read until
     // db:models:migrate moves it.
     await note('connectors/gemini.md', '---\ntype: connector\nkind: model\nprovider: gemini\n---\n')
-    const legacy = await agentOptions(SPACE)
+    const legacy = await agentOptions(SPACE, '')
     assert.equal(legacy.models.find((m) => m.name === 'gemini')?.ref, 'gemini/gemma-4-31b-it')
     // …but it is not a connector the brief may declare.
     assert.ok(!legacy.connectors.some((c) => c.name === 'gemini'))

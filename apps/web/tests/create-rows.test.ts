@@ -90,7 +90,7 @@ test('every row resolves to a flow, and everything but a surface of its own is a
   // The three that already own a create UI.
   assert.deepEqual(kind('event'), { kind: 'route', href: '/events/new' })
   assert.deepEqual(kind('connector'), { kind: 'route', href: '/admin?section=connectors' })
-  assert.deepEqual(kind('model'), { kind: 'route', href: '/settings?section=models' })
+  assert.deepEqual(kind('model'), { kind: 'route', href: '/admin?section=models' })
   // Everything else is made on the draft — nothing is filled in beside the rail.
   assert.deepEqual(kind('context'), { kind: 'draft', href: '/directory/new?type=note&folder=deals' })
   assert.deepEqual(kind('person'), { kind: 'draft', href: '/directory/new?type=person&folder=deals' })

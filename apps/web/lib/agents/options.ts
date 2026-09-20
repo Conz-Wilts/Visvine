@@ -17,6 +17,7 @@ import prisma from '@/lib/prisma'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { isConnectorEnabled } from '@/lib/connectors/config'
 import { connectorNoteRows } from '@/lib/connectors/locate'
+import { accountNotesIn } from '@/lib/connectors/accounts'
 import { isAgentBriefPath, agentNameOfPath } from '@/lib/notes/entities'
 import { AGENT_TOOL_OPTIONS } from './config'
 import { defaultModelOf, noModelReason, spaceModels } from './spaceModels'
@@ -62,7 +63,7 @@ export interface AgentOptions {
   tools: typeof AGENT_TOOL_OPTIONS
 }
 
-export async function agentOptions(spaceId: string): Promise<AgentOptions> {
+export async function agentOptions(spaceId: string, viewerId: string): Promise<AgentOptions> {
   const [models, connectorNotes, notes, sharedAgents] = await Promise.all([
     spaceModels(spaceId),
     // Wherever the space filed them (lib/connectors/locate.ts).
@@ -79,6 +80,12 @@ export async function agentOptions(spaceId: string): Promise<AgentOptions> {
     name: row.name,
     enabled: isConnectorEnabled(parseFrontmatter(row.content)),
   }))
+  // The viewer's own accounts that are on here (lib/connectors/accounts.ts): a
+  // brief may declare one, and each person it runs for spends their own. The
+  // space's own note wins the name.
+  for (const mine of await accountNotesIn(viewerId, spaceId)) {
+    if (!connectors.some((c) => c.name === mine.name)) connectors.push({ name: mine.name, enabled: true })
+  }
   const agents: string[] = []
   for (const row of notes) {
     if (isAgentBriefPath(row.path)) {

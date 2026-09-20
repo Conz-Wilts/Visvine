@@ -89,6 +89,18 @@ export interface AgentNeeds {
 /** The Space Console's Connectors section; the console is always the current space's. */
 const CONSOLE = '/admin?section=connectors'
 
+/** Settings → Accounts: where a person connects a service of their own. */
+const ACCOUNTS = '/settings?section=accounts'
+
+/**
+ * A service each person connects for themselves, once, for every space
+ * (lib/connectors/accountRecipes.ts) — so a space lacking it is nobody's
+ * omission, and an admin has nothing to add.
+ */
+function isAccount(entry: NeedsCatalogEntry | null): boolean {
+  return entry !== null && entry.connects === 'one-click' && entry.perMember
+}
+
 /** Catalogue names too generic to read as a service the brief is asking for. */
 const GENERIC_NAMES = new Set(['mcp server', 'website login', 'http', 'custom'])
 
@@ -113,11 +125,23 @@ function addLine(entry: NeedsCatalogEntry): string {
 }
 
 function declaredNeed(c: RehearsalConnector, catalog: readonly NeedsCatalogEntry[]): AgentNeed | null {
-  const entry = catalog.find((e) => e.id === c.connector.toLowerCase()) ?? null
+  // `gmail-2` is a second account to `gmail`.
+  const id = c.connector.toLowerCase()
+  const entry = catalog.find((e) => e.id === id) ?? catalog.find((e) => e.id === id.replace(/-\d+$/, '')) ?? null
   switch (c.status) {
     case 'ok':
       return null
     case 'missing':
+      if (entry && isAccount(entry)) {
+        return {
+          need: c.connector,
+          status: 'needs_connection',
+          why: `\`${c.connector}\` is an account each person connects themselves, and the person this runs as has not.`,
+          fix: `Connect ${entry.name} in Settings → Accounts — once, and it works in every space.`,
+          href: ACCOUNTS,
+          who: 'member',
+        }
+      }
       return {
         need: c.connector,
         status: 'missing',
@@ -151,7 +175,7 @@ function declaredNeed(c: RehearsalConnector, catalog: readonly NeedsCatalogEntry
         need: c.connector,
         status: 'needs_connection',
         why: `\`${c.connector}\` is not signed in to, so its runs would fail at the first call.`,
-        fix: c.connectUrl ? `Sign in: ${c.connectUrl}` : 'Sign in to it from the Connectors dialog on the account menu.',
+        fix: c.connectUrl ? `Sign in: ${c.connectUrl}` : 'Sign in to it from the Directory’s Connectors table.',
         href: c.connectUrl ?? CONSOLE,
         who: 'member',
       }
@@ -160,7 +184,7 @@ function declaredNeed(c: RehearsalConnector, catalog: readonly NeedsCatalogEntry
         need: c.connector,
         status: 'broken',
         why: `\`${c.connector}\`'s sign-in has stopped working${c.detail ? ` (${c.detail})` : ''}.`,
-        fix: c.connectUrl ? `Sign in again: ${c.connectUrl}` : 'Sign in again from the Connectors dialog on the account menu.',
+        fix: c.connectUrl ? `Sign in again: ${c.connectUrl}` : 'Sign in again from the Directory’s Connectors table.',
         href: c.connectUrl ?? CONSOLE,
         who: 'member',
       }
@@ -214,6 +238,15 @@ function undeclaredNeeds(input: NeedsInput): AgentNeed[] {
         href: null,
         who: 'member',
       })
+    } else if (isAccount(entry)) {
+      out.push({
+        need: entry.id,
+        status: 'undeclared',
+        why: `${reads}, but the brief's connectors do not include it — a run cannot reach a service it did not declare.`,
+        fix: `Add \`${entry.id}\` to the brief's \`connectors:\`. Each person it runs for connects their own ${entry.name} in Settings → Accounts.`,
+        href: null,
+        who: 'member',
+      })
     } else {
       out.push({
         need: entry.id,
@@ -235,7 +268,7 @@ export function agentNeeds(input: NeedsInput): AgentNeeds {
       need: 'model',
       status: 'no_model',
       why: input.modelProblem,
-      fix: 'Add a model from Models on the account menu — it writes models/<name>.md and stores the provider key. The agent runs on it with no edit to the brief.',
+      fix: 'Add a model in the Space Console under Models — it writes models/<name>.md and stores the provider key. The agent runs on it with no edit to the brief.',
       href: null,
       who: 'admin',
     })

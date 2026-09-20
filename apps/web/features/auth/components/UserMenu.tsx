@@ -1,6 +1,5 @@
 "use client";
 
-import { stripSpacePrefix } from "@/lib/spaces/shared/spaceUrl";
 import { useEffect, useRef, useState } from "react";
 import { useSpaceRouter } from "@/features/shared/hooks/useSpaceRouter";
 import Image from "next/image";
@@ -8,7 +7,6 @@ import { signOut } from "@/features/auth/lib/auth-client";
 import { useAuth } from "@/features/auth/contexts/AuthContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
 import { selfProfileHref } from "@/features/profile/lib/selfView";
-import { CONNECTORS_PARAM, settingsHrefFor } from "@/features/settings/components/SettingsConnectors";
 import { END_ROW_H, HEAD_CELL_W, ITEM_GAP, MARK_PX, Row } from "@/features/shared/components/layout/railRow";
 
 /**
@@ -40,20 +38,6 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   const [pinned, setPinned] = useState(false);
   const bandRef = useRef<HTMLDivElement>(null);
   const router = useSpaceRouter();
-
-  // `?connectors=` anywhere but Settings goes on to Settings, keeping whatever
-  // else the URL carried (a sign-in's outcome). Read off `location` rather than
-  // useSearchParams — the account band is shell chrome on every page, and a
-  // hook that forces a Suspense boundary there would be paid by all of them.
-  useEffect(() => {
-    if (typeof window === "undefined" || stripSpacePrefix(window.location.pathname) === "/settings") return;
-    const params = new URLSearchParams(window.location.search);
-    const href = settingsHrefFor(params.get(CONNECTORS_PARAM));
-    if (!href) return;
-    params.delete(CONNECTORS_PARAM);
-    const rest = params.toString();
-    router.replace(rest ? `${href}&${rest}` : href);
-  }, [router]);
 
   // A pinned band closes on the next click outside it, the way the rail's own
   // popups do. Hover-opened bands need nothing: the pointer leaving closes them.

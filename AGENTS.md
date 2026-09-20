@@ -886,19 +886,39 @@ secret to `/api/spaces/<space>/secrets`. Manage offers Disable, Edit,
 Delete; the row itself goes to the connector's page, because the note IS the
 connector.
 
-- **The space's admins decide what is connected; a member connects themselves.**
-  Members get **Settings → Connectors** (`/settings?section=connectors`) — the
-  console's own panel pinned to a view (`ConnectorsPanel view=`,
-  `SettingsConnectors.tsx`). The OAuth round trip returns there with
-  `?connectors=<tab>`; a `?connectors=` on any other page is sent on to it by
-  the account band (`UserMenu`). **Connected** is what works for you now
-  (`worksForCaller`). **Not connected** is the rest, including rows no grant
-  reaches (`service.ts#listHiddenConnectors` exposes name, title and recipe —
-  never hosts, secrets or body) which offer **Request access**, a
-  `ContextAccessRequest` answered on Members → Waiting. **All connectors** is the
-  catalogue, where a service the space lacks offers **Request**
-  (`connector_requests`, `lib/connectors/requests.ts`), shown in the console as a
-  **Requested** strip. A request names a catalogue id, never free text.
+- **A connector is a space's or a person's, and what decides is whether
+  connecting it asks the space for anything**
+  (`lib/connectors/accountRecipes.ts#isAccountRecipe`, pure): a service signed
+  into with one press — a platform OAuth client, or an MCP server that registers
+  Visvine itself — is each person's own **account**; everything else (a key, a
+  login, an OAuth app the space registered) is the space's connector.
+- **An account is connected once, in Settings → Accounts, and spent in every
+  space the person acts in** (`AccountsPanel`, `GET /api/account/connectors`,
+  `connector_accounts`). It has NO note: the perimeter is the catalogue
+  recipe's, rendered at load (`accountNoteContent`), so nothing anyone writes
+  can widen it, and it binds no secret. It is the third look of
+  `readConnectorNote` — the space's own note, then the parent's shared one,
+  then the caller's account — so a space's `gmail` still wins its name. It runs
+  in the space the caller is in (that space's quota and audit line), only ever
+  for the principal it belongs to (`service.ts#connectionFor`), with
+  `visvine.state` keyed per person (`accountStatePath`). Never for a Tool or a
+  system pass (`personal: false`). The person keeps it out of a space with
+  `off_spaces`; `<recipe>-2` is a second account. The sign-in is
+  `/api/connectors/oauth/start?account=<recipe>` — same cookie, same callback,
+  landing in `saveAccount`. The token lifecycle is written once
+  (`connections.ts#resolveStored`) over a `TokenStore`, which both tables
+  implement. A brief declaring an account service nobody here has added is not
+  a hard need: `needs` words it as the runner's sign-in.
+- **A member meets the space's connectors in the Directory**
+  (`/directory?view=table&type=connector` — `ConnectorsPanel` pinned to a
+  view): Sign in where a connector holds an account per member, **Request
+  access** on rows no grant reaches (`service.ts#listHiddenConnectors` exposes
+  name, title and recipe — never hosts, secrets or body), a
+  `ContextAccessRequest` answered on Members → Waiting, and the catalogue's
+  **Request** for a service the space lacks (`connector_requests`,
+  `lib/connectors/requests.ts`), shown in the console as a **Requested** strip.
+  A request names a catalogue id, never free text. An account service's
+  catalogue row signs the PERSON in, admin or member alike.
 - **Connecting an OAuth service is one press.** A catalog row whose fields are
   all optional and `advanced:`, riding a platform client
   (`clientId: platform:google`, `lib/connectors/platformClients.ts`), skips the
@@ -958,8 +978,9 @@ connector.
   stamped into the note — a miss is a plug, and no behaviour hangs off it. Logos
   in `public/images/connectors/`. `tests/connector-catalog.test.ts` runs every
   recipe through the real parsers.
-- The runtime reads a note in the caller's own space (`me:<userId>`) when the
-  current space has none of that name (`readConnectorNote`, off with
+- After the caller's accounts, the runtime still reads a note in the caller's
+  own space (`me:<userId>`) when the current space has none of that name
+  (`readConnectorNote`, off with
   `{ personal: false }` for the Tools bridge and the console's test run) — a
   space's own note always wins its name, and `LoadedConnector` carries the space
   it came from so secrets, account and budget are the owner's. Nothing writes
@@ -1024,11 +1045,11 @@ sweep.
   paid, not the space. `LOCAL_RUNTIMES_OFF=claude,codex` is the kill switch,
   surfaced by `GET …/models`; the vendors changed position on this four times in
   2026, so it stays env rather than a release.
-- **Models is its own section of Settings** (`/settings?section=models`),
-  beside Connectors — `ModelsPanel` with a `+` offering
-  `lib/models/catalog.ts`'s five providers. Not a section of the connectors list
-  and not a console section: what agents run on is one decision a space makes
-  once.
+- **Models is its own section of the Space Console**
+  (`/admin?section=models`), beside Connectors — `ModelsPanel` with a `+`
+  offering `lib/models/catalog.ts`'s five providers. Not a section of the
+  connectors list, and not in Settings: Settings holds only what follows the
+  person, and a model is the space's.
 
 ### The isolate
 

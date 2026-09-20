@@ -130,6 +130,81 @@ function stepUp(auth: ConnectorAuth, connectUrl: string, why: string): Connector
   return new ConnectorError('config', `${why} ${whose}: ${connectUrl}`)
 }
 
+/** The columns a stored token row has, whichever table holds it. */
+interface TokenRow {
+  id: string
+  userId: string
+  accountLabel: string | null
+  accessToken: string
+  refreshToken: string | null
+  expiresAt: Date | null
+  scopes: string[]
+  brokenAt: Date | null
+  brokenReason: string | null
+  updatedAt: Date
+}
+
+/** What a refresh writes back. */
+interface TokenRowPatch {
+  accessToken: string
+  refreshToken: string | null
+  expiresAt: Date | null
+  scopes: string[]
+  accountLabel: string | null
+  brokenAt: null
+  brokenReason: null
+}
+
+/**
+ * Where a connection's row lives. A space's connections and a person's own
+ * accounts (./accounts.ts) are two tables with one lifecycle, so the lifecycle
+ * is written once against this.
+ */
+export interface TokenStore {
+  read(): Promise<TokenRow | null>
+  markBroken(id: string, reason: string): Promise<void>
+  /** Compare-and-swap on `updatedAt`; the number of rows written. */
+  swap(row: TokenRow, data: TokenRowPatch): Promise<number>
+  /** The registered client for a non-platform `auth`, or null. */
+  client(issuer: string): Promise<{ clientId: string; clientSecret: string | null } | null>
+  /** Refuse a row the note no longer describes. Null to accept. */
+  mismatch?(row: TokenRow): string | null
+}
+
+function spaceStore(spaceId: string, auth: ConnectorAuth, owner: string): TokenStore {
+  let storedMode: string | null = null
+  return {
+    async read() {
+      const row = await prisma.connectorConnection.findUnique({
+        where: { connection_identity: { spaceId, provider: auth.provider, userId: owner } },
+      })
+      storedMode = row?.mode ?? null
+      return row
+    },
+    markBroken,
+    async swap(row, data) {
+      const written = await prisma.connectorConnection.updateMany({
+        where: { id: row.id, updatedAt: row.updatedAt },
+        data,
+      })
+      return written.count
+    },
+    async client() {
+      const client = await prisma.connectorOAuthClient.findFirst({ where: { spaceId, provider: auth.provider } })
+      if (!client) return null
+      return { clientId: client.clientId, clientSecret: client.clientSecret ? decryptSecret(client.clientSecret) : null }
+    },
+    // The note changed mode after the connection was made. Using a space token
+    // where the note now says per-user would hand one person's access to
+    // everybody, so refuse rather than guess.
+    mismatch() {
+      return storedMode !== null && storedMode !== auth.mode
+        ? `The ${auth.provider} connector changed to mode "${auth.mode}" since this was connected.`
+        : null
+    },
+  }
+}
+
 /**
  * Resolve the bearer for this run, refreshing if needed.
  *
@@ -143,52 +218,47 @@ export async function resolveConnection(args: {
   userId: string
   connectUrl: string
 }): Promise<ResolvedConnection> {
-  const { auth, spaceId } = args
-  const owner = connectionOwner(auth, args.userId)
-
-  const row = await prisma.connectorConnection.findUnique({
-    where: { connection_identity: { spaceId, provider: auth.provider, userId: owner } },
+  const owner = connectionOwner(args.auth, args.userId)
+  return resolveStored(spaceStore(args.spaceId, args.auth, owner), args.auth, args.connectUrl, {
+    none:
+      args.auth.mode === 'user'
+        ? `No ${args.auth.provider} account is connected for you.`
+        : `No ${args.auth.provider} account is connected for this space.`,
   })
+}
 
-  if (!row) {
-    throw stepUp(
-      auth,
-      args.connectUrl,
-      auth.mode === 'user'
-        ? `No ${auth.provider} account is connected for you.`
-        : `No ${auth.provider} account is connected for this space.`,
-    )
-  }
+/** The lifecycle over any store: read, refuse what is dead, renew what is stale. */
+export async function resolveStored(
+  store: TokenStore,
+  auth: ConnectorAuth,
+  connectUrl: string,
+  words: { none: string },
+): Promise<ResolvedConnection> {
+  const row = await store.read()
+  if (!row) throw stepUp(auth, connectUrl, words.none)
   if (row.brokenAt) {
     throw stepUp(
       auth,
-      args.connectUrl,
+      connectUrl,
       `The ${auth.provider} connection stopped working (${row.brokenReason ?? 'reason unknown'}).`,
     )
   }
-  // The note changed mode after the connection was made. Using a space token
-  // where the note now says per-user would hand one person's access to
-  // everybody, so refuse rather than guess.
-  if (row.mode !== auth.mode) {
-    throw stepUp(
-      auth,
-      args.connectUrl,
-      `The ${auth.provider} connector changed to mode "${auth.mode}" since this was connected.`,
-    )
-  }
+  const mismatch = store.mismatch?.(row) ?? null
+  if (mismatch) throw stepUp(auth, connectUrl, mismatch)
 
   const stillFresh = !row.expiresAt || row.expiresAt.getTime() - REFRESH_MARGIN_MS > Date.now()
-  if (stillFresh) {
-    return {
-      provider: auth.provider,
-      accessToken: decryptSecret(row.accessToken),
-      userId: row.userId,
-      mode: auth.mode,
-      accountLabel: row.accountLabel,
-    }
-  }
+  if (stillFresh) return resolved(auth, row, decryptSecret(row.accessToken))
+  return renew(store, row, auth, connectUrl)
+}
 
-  return renew(row.id, auth, spaceId, args.connectUrl)
+function resolved(auth: ConnectorAuth, row: TokenRow, accessToken: string, label?: string | null): ResolvedConnection {
+  return {
+    provider: auth.provider,
+    accessToken,
+    userId: row.userId,
+    mode: auth.mode,
+    accountLabel: label ?? row.accountLabel,
+  }
 }
 
 /**
@@ -202,42 +272,41 @@ export async function resolveConnection(args: {
  * provider has by then very likely retired.
  */
 async function renew(
-  rowId: string,
+  store: TokenStore,
+  row: TokenRow,
   auth: ConnectorAuth,
-  spaceId: string,
   connectUrl: string,
 ): Promise<ResolvedConnection> {
-  const row = await prisma.connectorConnection.findUnique({ where: { id: rowId } })
-  if (!row) throw stepUp(auth, connectUrl, `The ${auth.provider} connection was removed.`)
   if (!row.refreshToken) {
-    await markBroken(row.id, 'the access token expired and the provider issued no refresh token')
+    await store.markBroken(row.id, 'the access token expired and the provider issued no refresh token')
     throw stepUp(auth, connectUrl, `The ${auth.provider} connection expired.`)
   }
 
-  // A platform client's credentials live in env, not in connector_oauth_clients
-  // — this is the path an unattended agent renews a member's Google token on.
+  const endpoints = await resolveEndpoints(auth)
+
+  // A platform client's credentials live in env, not in a client row — this is
+  // the path an unattended agent renews a member's Google token on.
   const platformRef = platformClientRef(auth.clientId)
   let clientId: string
   let clientSecret: string | null
   if (platformRef) {
     const platform = resolvePlatformClient(platformRef)
     if (!platform) {
-      await markBroken(row.id, 'the platform OAuth client is not configured on this deployment')
+      await store.markBroken(row.id, 'the platform OAuth client is not configured on this deployment')
       throw stepUp(auth, connectUrl, `The ${auth.provider} platform client is missing.`)
     }
     clientId = platform.clientId
     clientSecret = platform.clientSecret
   } else {
-    const client = await prisma.connectorOAuthClient.findFirst({ where: { spaceId, provider: auth.provider } })
+    const client = await store.client(endpoints.issuer)
     if (!client) {
-      await markBroken(row.id, 'the registered OAuth client is missing')
+      await store.markBroken(row.id, 'the registered OAuth client is missing')
       throw stepUp(auth, connectUrl, `The ${auth.provider} client registration is missing.`)
     }
     clientId = client.clientId
-    clientSecret = client.clientSecret ? decryptSecret(client.clientSecret) : null
+    clientSecret = client.clientSecret
   }
 
-  const endpoints = await resolveEndpoints(auth)
   let tokens: TokenSet
   try {
     tokens = await refreshTokens({
@@ -252,47 +321,29 @@ async function renew(
     // password, or left. Record it so somebody can be told, rather than
     // retrying forever against a token the provider has retired.
     const reason = e instanceof Error ? e.message : String(e)
-    await markBroken(row.id, reason)
+    await store.markBroken(row.id, reason)
     throw stepUp(auth, connectUrl, `The ${auth.provider} connection could not be renewed.`)
   }
 
-  const written = await prisma.connectorConnection.updateMany({
-    // The compare-and-swap: only if nobody else has touched this row.
-    where: { id: row.id, updatedAt: row.updatedAt },
-    data: {
-      accessToken: encryptSecret(tokens.accessToken),
-      // ALWAYS persist: rotated refresh tokens are the norm, and keeping the old
-      // one is how connections mysteriously die three days later.
-      refreshToken: tokens.refreshToken ? encryptSecret(tokens.refreshToken) : null,
-      expiresAt: tokens.expiresAt,
-      scopes: tokens.scopes.length > 0 ? tokens.scopes : row.scopes,
-      accountLabel: tokens.accountLabel ?? row.accountLabel,
-      brokenAt: null,
-      brokenReason: null,
-    },
+  const written = await store.swap(row, {
+    accessToken: encryptSecret(tokens.accessToken),
+    // ALWAYS persist: rotated refresh tokens are the norm, and keeping the old
+    // one is how connections mysteriously die three days later.
+    refreshToken: tokens.refreshToken ? encryptSecret(tokens.refreshToken) : null,
+    expiresAt: tokens.expiresAt,
+    scopes: tokens.scopes.length > 0 ? tokens.scopes : row.scopes,
+    accountLabel: tokens.accountLabel ?? row.accountLabel,
+    brokenAt: null,
+    brokenReason: null,
   })
 
-  if (written.count === 0) {
+  if (written === 0) {
     // Lost the race. Whoever won wrote a token minted after this one, so theirs
     // is the one the provider still honours.
-    const fresh = await prisma.connectorConnection.findUnique({ where: { id: row.id } })
-    if (fresh && !fresh.brokenAt) {
-      return {
-        provider: auth.provider,
-        accessToken: decryptSecret(fresh.accessToken),
-        userId: fresh.userId,
-        mode: auth.mode,
-        accountLabel: fresh.accountLabel,
-      }
-    }
+    const fresh = await store.read()
+    if (fresh && !fresh.brokenAt) return resolved(auth, fresh, decryptSecret(fresh.accessToken))
     throw stepUp(auth, connectUrl, `The ${auth.provider} connection stopped working.`)
   }
 
-  return {
-    provider: auth.provider,
-    accessToken: tokens.accessToken,
-    userId: row.userId,
-    mode: auth.mode,
-    accountLabel: tokens.accountLabel ?? row.accountLabel,
-  }
+  return resolved(auth, row, tokens.accessToken, tokens.accountLabel ?? row.accountLabel)
 }

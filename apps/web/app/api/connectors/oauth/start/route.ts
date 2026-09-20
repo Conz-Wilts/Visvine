@@ -1,5 +1,9 @@
 /**
  * GET /api/connectors/oauth/start?space=…&connector=…
+ * GET /api/connectors/oauth/start?account=<recipe> | account_name=<name>
+ *
+ * The second form signs a person in to an account of their OWN
+ * (lib/connectors/accounts.ts): no space, no note, the recipe's `auth:`.
  *
  * The link a step-up error hands someone. Loads the connector note, works out
  * which authorization server it points at, registers a client if this is the
@@ -21,6 +25,9 @@ import { authorizeUrl, createPkce, randomState, registerClient, resolveEndpoints
 import { oauthRedirectUri, safeReturnTo } from '@/lib/connectors/connectUrl';
 import { ConnectorError, findSecretRefs } from '@/lib/connectors/config';
 import { signPending, PENDING_COOKIE, PENDING_TTL_SECONDS } from '@/lib/connectors/pending';
+import { accountAuth, accountTarget } from '@/lib/connectors/accounts';
+import { ACCOUNTS_SETTINGS_PATH } from '@/lib/connectors/accountRecipes';
+import type { ConnectorAuth } from '@/lib/connectors/auth';
 import { logger } from '@/lib/logger';
 
 function fail(message: string, status = 400): NextResponse {
@@ -30,6 +37,15 @@ function fail(message: string, status = 400): NextResponse {
 export async function GET(req: NextRequest) {
   const session = await requireSession();
   if (session instanceof Response) return session;
+
+  const accountRecipe = req.nextUrl.searchParams.get('account')?.trim() ?? '';
+  const accountName = req.nextUrl.searchParams.get('account_name')?.trim() ?? '';
+  if (accountRecipe || accountName) {
+    const target = await accountTarget(session.userId, accountName ? { name: accountName } : { recipe: accountRecipe });
+    const auth = target ? accountAuth(target.recipe, target.name) : null;
+    if (!target || !auth) return fail('That service is not one you connect as an account here.', 404);
+    return begin(req, session.userId, auth, { spaceId: '', connector: target.name, accountRecipe: target.recipe });
+  }
 
   const viaSpaceId = req.nextUrl.searchParams.get('space')?.trim() ?? '';
   const connector = req.nextUrl.searchParams.get('connector')?.trim() ?? '';
@@ -60,8 +76,24 @@ export async function GET(req: NextRequest) {
   if (detail.shared && auth.mode === 'space') {
     return fail(`This connector belongs to ${detail.sharedFrom?.name ?? 'the parent space'}; connect its shared account there.`, 403);
   }
-  const spaceId = detail.ownerSpaceId;
+  return begin(req, session.userId, auth, {
+    spaceId: detail.ownerSpaceId,
+    viaSpaceId: detail.ownerSpaceId === viaSpaceId ? undefined : viaSpaceId,
+    connector,
+  });
+}
 
+/** Whose connection this becomes — a space's, or (with `accountRecipe`) the person's own. */
+interface Landing {
+  spaceId: string;
+  viaSpaceId?: string;
+  connector: string;
+  accountRecipe?: string;
+}
+
+async function begin(req: NextRequest, userId: string, auth: ConnectorAuth, landing: Landing): Promise<NextResponse> {
+  const { spaceId } = landing;
+  const recipe = landing.accountRecipe;
   try {
     const endpoints = await resolveEndpoints(auth);
     const redirectUri = oauthRedirectUri();
@@ -85,15 +117,21 @@ export async function GET(req: NextRequest) {
       // Reuse the client registered for this (space, provider, issuer), or make
       // one. Dynamic registration is what makes adding an MCP server a URL rather
       // than a developer-account signup.
-      let record = await prisma.connectorOAuthClient.findUnique({
-        where: { oauth_client_identity: { spaceId, provider: auth.provider, issuer: endpoints.issuer } },
-      });
+      let record: { clientId: string } | null = recipe
+        ? await prisma.connectorAccountClient.findUnique({
+            where: { account_client_identity: { userId, recipe, issuer: endpoints.issuer } },
+          })
+        : await prisma.connectorOAuthClient.findUnique({
+            where: { oauth_client_identity: { spaceId, provider: auth.provider, issuer: endpoints.issuer } },
+          });
 
       if (!record) {
         let registeredId: string;
         let clientSecret: string | null = null;
 
-        if (auth.clientId) {
+        // An account recipe never names a client of its own: it is a platform
+        // client (handled above) or a server that registers one.
+        if (auth.clientId && !recipe) {
           // A hand-registered client. Both fields may be secret references, since
           // a client secret must never be legible in a note.
           const refs = [...findSecretRefs(auth.clientId), ...(auth.clientSecret ? findSecretRefs(auth.clientSecret) : [])];
@@ -114,15 +152,14 @@ export async function GET(req: NextRequest) {
           clientSecret = registered.clientSecret;
         }
 
-        record = await prisma.connectorOAuthClient.create({
-          data: {
-            spaceId,
-            provider: auth.provider,
-            issuer: endpoints.issuer,
-            clientId: registeredId,
-            clientSecret: clientSecret ? encryptSecret(clientSecret) : null,
-          },
-        });
+        const registered = {
+          issuer: endpoints.issuer,
+          clientId: registeredId,
+          clientSecret: clientSecret ? encryptSecret(clientSecret) : null,
+        };
+        record = recipe
+          ? await prisma.connectorAccountClient.create({ data: { userId, recipe, ...registered } })
+          : await prisma.connectorOAuthClient.create({ data: { spaceId, provider: auth.provider, ...registered } });
       }
       clientId = record.clientId;
     }
@@ -147,15 +184,16 @@ export async function GET(req: NextRequest) {
     // parameter is only the echo we compare against it.
     response.cookies.set(PENDING_COOKIE, await signPending({
       spaceId,
-      viaSpaceId: spaceId === viaSpaceId ? undefined : viaSpaceId,
-      connector,
+      viaSpaceId: landing.viaSpaceId,
+      connector: landing.connector,
+      accountRecipe: recipe,
       provider: auth.provider,
       mode: auth.mode,
-      userId: connectionOwner(auth, session.userId),
+      userId: connectionOwner(auth, userId),
       verifier,
       state,
       scopes: auth.scopes,
-      returnTo: safeReturnTo(req.nextUrl.searchParams.get('return')) ?? undefined,
+      returnTo: safeReturnTo(req.nextUrl.searchParams.get('return')) ?? (recipe ? ACCOUNTS_SETTINGS_PATH : undefined),
     }), {
       httpOnly: true,
       sameSite: 'lax',

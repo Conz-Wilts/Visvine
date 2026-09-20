@@ -11,6 +11,8 @@
  *   connector_secrets.ciphertext
  *   connector_connections.access_token, .refresh_token
  *   connector_oauth_clients.client_secret
+ *   connector_accounts.access_token, .refresh_token
+ *   connector_account_clients.client_secret
  *
  * Idempotent: a row that already decrypts under the primary key is skipped, so
  * an interrupted run resumes and a second run is a no-op. Each row is written
@@ -94,6 +96,27 @@ async function main() {
     if (!dryRun) {
       await prisma.connectorOAuthClient.update({ where: { id: row.id }, data: { clientSecret: next } })
     }
+  }
+
+  for (const row of await prisma.connectorAccount.findMany({
+    select: { id: true, userId: true, name: true, accessToken: true, refreshToken: true },
+  })) {
+    const label = `connector_accounts ${row.userId}/${row.name}`
+    const access = reencrypt(`${label} access_token`, row.accessToken)
+    const refresh = reencrypt(`${label} refresh_token`, row.refreshToken)
+    const data: { accessToken?: string; refreshToken?: string } = {}
+    if (access !== 'unchanged' && access !== null) data.accessToken = access
+    if (refresh !== 'unchanged' && refresh !== null) data.refreshToken = refresh
+    if (Object.keys(data).length === 0) continue
+    if (!dryRun) await prisma.connectorAccount.update({ where: { id: row.id }, data })
+  }
+
+  for (const row of await prisma.connectorAccountClient.findMany({
+    select: { id: true, userId: true, recipe: true, clientSecret: true },
+  })) {
+    const next = reencrypt(`connector_account_clients ${row.userId}/${row.recipe} client_secret`, row.clientSecret)
+    if (next === 'unchanged' || next === null) continue
+    if (!dryRun) await prisma.connectorAccountClient.update({ where: { id: row.id }, data: { clientSecret: next } })
   }
 
   console.log(

@@ -11,5 +11,5 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
   const { spaceId } = await params
   const ctx = await requireAgentsAccess(spaceId)
   if (ctx instanceof Response) return ctx
-  return NextResponse.json(await agentOptions(spaceId))
+  return NextResponse.json(await agentOptions(spaceId, ctx.principal.userId))
 }

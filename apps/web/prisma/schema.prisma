@@ -341,6 +341,53 @@ model ConnectorConnection {
   @@map("connector_connections")
 }
 
+/// A person's OWN account at a service, connected once in Settings → Accounts
+/// and spent in every space they act in (lib/connectors/accounts.ts). There is
+/// no note: the perimeter is the catalogue recipe's, rendered at load, so
+/// nothing a space or a person writes can widen it. `name` is what a brief
+/// declares — the recipe's id, then `<recipe>-2` for a second account.
+/// `offSpaces` is the person's own list of spaces this account stays out of.
+model ConnectorAccount {
+  id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId       String    @map("user_id")
+  name         String
+  recipe       String
+  accountLabel String?   @map("account_label")
+  /// aes256gcm$iv$tag$cipher
+  accessToken  String    @map("access_token")
+  /// aes256gcm$iv$tag$cipher. Absent when the provider issues no refresh token.
+  refreshToken String?   @map("refresh_token")
+  expiresAt    DateTime? @map("expires_at")
+  scopes       String[]  @default([])
+  brokenAt     DateTime? @map("broken_at")
+  brokenReason String?   @map("broken_reason")
+  offSpaces    String[]  @default([]) @map("off_spaces")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name], name: "account_identity")
+  @@map("connector_accounts")
+}
+
+/// The OAuth client a person's account signs in through, where the server
+/// registers one dynamically (an MCP server). A platform client lives in env
+/// and has no row here.
+model ConnectorAccountClient {
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId       String   @map("user_id")
+  recipe       String
+  issuer       String
+  clientId     String   @map("client_id")
+  /// aes256gcm$iv$tag$cipher, or null for a public client.
+  clientSecret String?  @map("client_secret")
+  createdAt    DateTime @default(now()) @map("created_at")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recipe, issuer], name: "account_client_identity")
+  @@map("connector_account_clients")
+}
+
 /// A member's ask that the space CONNECT a service it does not have yet — filed
 /// from the account menu's All connectors list, where a recipe the space holds
 /// no connector for offers Request instead of Connect. `recipe` is the catalog
@@ -1312,6 +1359,8 @@ model User {
   aliasesHeld             UserAlias[]
   accessRequests          ContextAccessRequest[]
   connectorRequests       ConnectorRequest[]
+  connectorAccounts       ConnectorAccount[]
+  connectorAccountClients ConnectorAccountClient[]
   identity                Identity?
   oauthAuthCodes          OAuthAuthCode[]
   profileSections         ProfileSection[]

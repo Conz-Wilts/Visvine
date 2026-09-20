@@ -16,6 +16,8 @@ import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contex
 import { fetchJson } from '@/lib/fetchJson';
 import { connectorSlug } from '@/lib/create/noteSlug';
 import { connectorConnectPath } from '@/lib/connectors/connectUrl';
+import { accountConnectPath, isAccountRecipe } from '@/lib/connectors/accountRecipes';
+import { inflightFetch } from '@/features/shared/lib/requestCache';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 import { timeAgo } from '@/lib/date';
 import type { ConnectorRequest } from '@/lib/connectors/requests';
@@ -61,10 +63,11 @@ import {
  * behind it. Writing one is still the draft surface's job — this section
  * lists and connects, it does not author prose.
  *
- * The same panel serves the account menu's dialog, where a MEMBER opens it on
- * the space they are in, pinned to one view (`view`) — the three lists. (What
- * a space's agents run on is not a service among forty: models have their own
- * dialog, features/models/components/ModelsPanel.tsx.) The list route says
+ * The same panel is the Directory's Connectors table, where a MEMBER meets the
+ * space's connectors, pinned to one view (`view`). (What a space's agents run
+ * on is not a service among forty: models have their own console section,
+ * features/models/components/ModelsPanel.tsx. What a person signs in to for
+ * themselves, for every space, is an account — AccountsPanel.) The list route says
  * whether they can manage (`canManage`), and when they cannot the panel
  * offers no Manage and no Connect — what it offers is the asks:
  *
@@ -252,11 +255,9 @@ function ManageConnections({ spaceId, name, returnTo }: { spaceId: string; name:
 // A row's action is a column, not a label: Connect, Sign in, Add another and
 // Manage all sit in the same slot, so a list of rows offering different things
 // still reads down one edge.
-const ACTION_SLOT = 'w-28 shrink-0 text-center';
+const ACTION_SLOT = 'shrink-0 whitespace-nowrap text-center';
 
 // The console's own tab bar: what the space has, and what it can add.
-// Connected is not a console question — it is per person — so it is reached
-// only as a pinned view from the account menu's dialog.
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'mine', label: 'In this space' },
   { id: 'catalog', label: 'Add a connector' },
@@ -333,6 +334,15 @@ export default function ConnectorsPanel({
   // The OAuth services this deployment can complete without the space
   // registering its own app — what makes a Connect button one click.
   const [platformClients, setPlatformClients] = useState<string[]>([]);
+  // The recipes this person already holds an account to (Settings → Accounts).
+  const [myAccounts, setMyAccounts] = useState<string[]>([]);
+  useEffect(() => {
+    let live = true;
+    inflightFetch('account:connectors', () => fetchJson<{ accounts: Array<{ recipe: string }> }>('/api/account/connectors'))
+      .then((body) => { if (live) setMyAccounts(body.accounts.map((row) => row.recipe)); })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, []);
   // Whether the caller may change what this space has. A member sees the list
   // — the connectors their agents can use, and which one they still have to
   // sign in to — and none of the acts: those are an admin's, and each write
@@ -810,8 +820,8 @@ export default function ConnectorsPanel({
               const service = CONNECTOR_CATALOG.find((e) => e.id === r.recipe) ?? null;
               const busy = connecting === r.recipe || asking === r.id;
               return (
-                <li key={r.id} className="py-1">
-                  <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5">
+                <li key={r.id} className="py-0.5">
+                  <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
                     {service ? <ConnectorLogo entry={service} /> : <Avatar name={r.requesterName ?? '?'} size="sm" />}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-text-primary">
@@ -902,7 +912,7 @@ export default function ConnectorsPanel({
               "New type" have at the head of theirs — and opens the catalogue. */}
           <ul className="divide-y divide-border-subtle">
             {!readOnly && (view === undefined || onAdd) && (
-              <li className="py-1">
+              <li className="py-0.5">
                 <NewRow
                   label="Add a connector"
                   onClick={() => { setQuery(''); if (view === undefined) setTab('catalog'); else onAdd?.(); }}
@@ -913,13 +923,13 @@ export default function ConnectorsPanel({
               const status = statusOf(c);
               const service = serviceOf(c);
               return (
-                <li key={c.path} className="py-1">
-                  <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
+                <li key={c.path} className="py-0.5">
+                  <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5 transition-colors hover:bg-surface-2">
                     <button
                       onClick={() => openConnector(c.name)}
                       className="flex min-w-0 flex-1 items-center gap-4 text-left"
                     >
-                      <ConnectorLogo name={c.name} recipe={c.recipe} />
+                      <ConnectorLogo name={c.name} recipe={c.recipe} size="sm" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-text-primary">
                           {c.title ?? c.name}
@@ -969,21 +979,20 @@ export default function ConnectorsPanel({
             {(tab === 'mine' || tab === 'disconnected') && mineHidden.map((h) => {
               const service = catalogEntryFor(h.name, h.recipe);
               return (
-                <li key={h.path} className="py-1">
-                  <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5">
-                    <ConnectorLogo name={h.name} recipe={h.recipe} />
+                <li key={h.path} className="py-0.5">
+                  <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
+                    <ConnectorLogo name={h.name} recipe={h.recipe} size="sm" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-text-primary">{h.title ?? h.name}</p>
                       <p className="truncate text-xs text-text-muted">
                         {service ? `${service.name} · ${h.name}` : h.name}
                       </p>
                     </div>
-                    <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES.muted}`}>No access</span>
                     {h.accessRequested ? (
                       <span className={`${ACTION_SLOT} text-xs text-text-muted`}>Requested</span>
                     ) : (
                       <Button
-                        variant="neutral"
+                        variant="brand"
                         size="sm"
                         className={ACTION_SLOT}
                         disabled={asking === h.path}
@@ -1018,14 +1027,43 @@ export default function ConnectorsPanel({
               const style = catalogConnectStyle(e, platformClients);
               const busy = connecting === e.id || asking === e.id;
               const isRequested = requested.includes(e.id);
+              // A service each person connects for themselves is nobody's to
+              // add to a space: the row signs THIS person in, admin or member,
+              // and the account then works in every space they act in.
+              if (rows.length === 0 && isAccountRecipe(e, platformClients)) {
+                return (
+                  <li key={e.id} className="py-0.5">
+                    <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
+                      <ConnectorLogo entry={e} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-text-primary">{catalogRowLabel(e)}</p>
+                        <p className="truncate text-xs text-text-muted">{e.description}</p>
+                      </div>
+                      <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES.muted}`}>Your account</span>
+                      {myAccounts.includes(e.id) ? (
+                        <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES.ok}`}>Connected</span>
+                      ) : (
+                        <Button
+                          variant="brand"
+                          size="sm"
+                          className={ACTION_SLOT}
+                          onClick={() => { window.location.href = accountConnectPath({ recipe: e.id }, returnTo); }}
+                        >
+                          Connect
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                );
+              }
               // A member's row is an ask, or a pointer at what the space has:
               // the whole catalogue is offered, and what the space has not
               // connected is requested rather than connected.
               if (readOnly) {
                 return (
-                  <li key={e.id} className="py-1">
-                    <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5">
-                      <ConnectorLogo entry={e} />
+                  <li key={e.id} className="py-0.5">
+                    <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
+                      <ConnectorLogo entry={e} size="sm" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-text-primary">{catalogRowLabel(e)}</p>
                         <p className="truncate text-xs text-text-muted">{e.description}</p>
@@ -1052,8 +1090,8 @@ export default function ConnectorsPanel({
                 );
               }
               return (
-                <li key={e.id} className="py-1">
-                  <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-surface-2">
+                <li key={e.id} className="py-0.5">
+                  <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5 transition-colors hover:bg-surface-2">
                     <button
                       // The whole row does what its button does — there is one
                       // thing to do with a service, and no second surface
@@ -1065,7 +1103,7 @@ export default function ConnectorsPanel({
                       }
                       className="flex min-w-0 flex-1 items-center gap-4 text-left"
                     >
-                      <ConnectorLogo entry={e} />
+                      <ConnectorLogo entry={e} size="sm" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-text-primary">{catalogRowLabel(e)}</p>
                         <p className="truncate text-xs text-text-muted">{e.description}</p>
