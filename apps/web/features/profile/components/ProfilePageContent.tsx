@@ -27,11 +27,10 @@ import EditAboutModal from './edit/EditAboutModal';
 import EditContactModal from './edit/EditContactModal';
 import SpacesModal, { type ProfileSpace } from './SpacesModal';
 import type { FullProfile } from '@/lib/types/profile';
-import ExperienceTimeline from './ExperienceTimeline';
 import ContactInfoModal from './ContactInfoModal';
 import MutualsRow from './MutualsRow';
+import ProfileSections from './sections/ProfileSections';
 import MutualsModal from './MutualsModal';
-import EducationSection from './EducationSection';
 import { useFollow } from '@/features/profile/hooks/useFollow';
 
 type ModalState = 'basicInfo' | 'about' | 'contact' | 'contactInfo' | 'spaces' | 'mutuals' | null;
@@ -330,14 +329,9 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
             : <p className="text-base text-text-muted">No bio yet.</p>}
         </SectionCard>
 
-        {/* Experience — their time on Visvine */}
-        <SectionCard id="experience" title="Experience" size="lg" card scrollMargin={sectionScrollMargin}>
-          <ExperienceTimeline accountCreatedAt={profile.createdAt ?? null} />
-        </SectionCard>
-
-        {/* Education — rows of `profile_education`, the member's own to keep */}
-        <EducationSection nodeId={nodeId} isOwner={isOwner}
-                          scrollMargin={sectionScrollMargin} accent={theme.dark} />
+        {/* The sections they built themselves */}
+        <ProfileSections nodeId={nodeId} isOwner={isOwner}
+                         scrollMargin={sectionScrollMargin} accent={theme.dark} />
       </div>
 
       {/* Modals */}

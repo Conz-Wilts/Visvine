@@ -112,6 +112,7 @@ model Space {
   cleanSchedule   ContextCleanSchedule?
   cleanRuns       ContextCleanRun[]
   noteChunks      ContextNoteChunk[]
+  profileEntries  ProfileSectionEntry[]
 
   @@index([personalOwnerId])
   @@index([parentId])
@@ -1313,7 +1314,7 @@ model User {
   connectorRequests       ConnectorRequest[]
   identity                Identity?
   oauthAuthCodes          OAuthAuthCode[]
-  education               ProfileEducation[]
+  profileSections         ProfileSection[]
   following               Follow[]               @relation("FollowsGiven")
   followers               Follow[]               @relation("FollowsReceived")
 
@@ -1845,25 +1846,49 @@ model Follow {
   @@map("follows")
 }
 
-/// A school on a member's profile. Profile facts a person lists about
-/// themselves are rows, not note frontmatter: they are queried as a table,
-/// sorted and edited one at a time.
-model ProfileEducation {
-  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  userId      String   @map("user_id")
-  school      String
-  degree      String?
-  field       String?
-  /// 'YYYY' — a school year, not a date.
-  startYear   String?  @map("start_year")
-  endYear     String?  @map("end_year")
-  description String?
-  imageUrl    String?  @map("image_url")
-  position    Int      @default(0)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+/// A section a member adds to their own profile: what it is called, what
+/// shape it holds, and where it sits among the others. `body` is the whole of
+/// a `text` section; every other kind holds entries. The vocabulary of kinds
+/// is `lib/profile/shared/sections.ts` — the column is a plain string so a new
+/// kind is a row in that table, not a migration.
+model ProfileSection {
+  id        String                @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId    String                @map("user_id")
+  title     String
+  kind      String
+  body      String?
+  position  Int                   @default(0)
+  createdAt DateTime              @default(now()) @map("created_at")
+  updatedAt DateTime              @updatedAt @map("updated_at")
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries   ProfileSectionEntry[]
 
-  @@index([userId])
-  @@map("profile_education")
+  @@index([userId, position])
+  @@map("profile_sections")
+}
+
+/// One row of a section. Every kind reads the columns it uses and leaves the
+/// rest null — the kind says which those are, never the row. A row may point
+/// at a space its owner belongs to, which draws that space and opens it; the
+/// row keeps its own title, so it still reads once the space is gone.
+model ProfileSectionEntry {
+  id          String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  sectionId   String         @map("section_id")
+  title       String?
+  subtitle    String?
+  description String?
+  url         String?
+  /// 'YYYY' — a year, not a date.
+  startYear   String?        @map("start_year")
+  endYear     String?        @map("end_year")
+  imageUrl    String?        @map("image_url")
+  spaceId     String?        @map("space_id")
+  position    Int            @default(0)
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  section     ProfileSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  space       Space?         @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+
+  @@index([sectionId, position])
+  @@map("profile_section_entries")
 }

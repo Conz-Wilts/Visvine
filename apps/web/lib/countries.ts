@@ -260,9 +260,3 @@ export function matchCountryInLocation(location?: string | null): Country | unde
   return undefined;
 }
 
-/** Flag emoji for a free-text location, or empty string when undetectable. */
-export function locationFlag(location?: string | null): string {
-  const country = matchCountryInLocation(location);
-  return country ? countryCodeToFlag(country.code) : '';
-}
-
