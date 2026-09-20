@@ -4,7 +4,7 @@ import Link from '@/features/shared/components/SpaceLink';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useCardTilt } from '@/features/directory/hooks/useCardTilt';
 import { Chip, CountryFlagIcon } from '@/components/ui';
-import { getInitials } from '@/lib/avatarUtils';
+import TypeSilhouette from '@/components/ui/TypeSilhouette';
 import { getNodeTypeConfig } from '@/lib/types';
 import { tagPalette } from '@/lib/tagColors';
 import { spaceCountryCode } from '@/lib/discover/filters';
@@ -86,9 +86,8 @@ export default function SpaceTile({
             className="h-full w-full object-cover object-center transition-transform duration-300 group-hover:scale-[1.03]"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center transition-all group-hover:brightness-105" style={{ background: SPACE_COLOR }}>
-            <span className={`${compact ? 'text-2xl' : 'text-4xl'} font-bold text-white drop-shadow-sm`}>{getInitials(mark.name)}</span>
-          </div>
+          <TypeSilhouette glyph="space" color={SPACE_COLOR}
+                          className="transition-all group-hover:brightness-105" />
         )}
       </div>
 

@@ -36,7 +36,7 @@ import {
 import { RegistrationField } from '@/features/events/components/RegistrationField';
 import type { NBEvent, RSVPResponse } from '@/lib/types';
 import { useMapLink } from '../hooks/useMapLink';
-import { BlocksIcon, CalendarPlusIcon, CheckIcon, CircleQuestionMarkIcon, ClipboardListIcon, ClockIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
+import { CalendarPlusIcon, CheckIcon, CircleQuestionMarkIcon, ClipboardListIcon, ClockIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, SquareIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
 import Select from '@/components/ui/Select';
 import PageError from '@/components/ui/PageError';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
@@ -253,7 +253,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
             {readOnly && (
               <InfoCard>
                 <p className="flex items-start gap-2 text-sm text-text-secondary">
-                  <BlocksIcon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: theme.dark }} />
+                  <SquareIcon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: theme.dark }} />
                   <span>
                     From <span className="font-medium text-text-primary">{ownerSpace?.name ?? 'a sub-space'}</span>
                     {ownerParent ? <>, a sub-space of <span className="font-medium text-text-primary">{ownerParent.name}</span></> : null}

@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
-import { BlocksIcon, RadioIcon, XIcon } from '@/features/shared/icons';
+import { RadioIcon, SquareIcon, XIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { entityNotePath, entityStub, hrefForNotePath, noteHref } from '@/lib/notes/entities'
 import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
@@ -426,7 +426,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
       />
       {access?.parent && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
-          <BlocksIcon className="h-4 w-4 shrink-0 text-brand-green" />
+          <SquareIcon className="h-4 w-4 shrink-0 text-brand-green" />
           <span>
             Shared from <span className="font-medium">{access.parent.name}</span>, the space this one sits inside — read-only here.
           </span>

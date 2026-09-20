@@ -19,11 +19,20 @@ export const PERSON_SILHOUETTE_PATH =
   'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.42 0-8 2.69-8 6v2h16v-2c0-3.31-3.58-6-8-6Z';
 
 /**
- * SVG path for the space/container avatar fallback (24×24 viewBox): an
- * isometric cube — a space is a volume things live inside, not a building.
- * Three faces split by thin gaps so it reads as solid at avatar size. The glyph
- * key stays 'group' (see getNodeGlyph). Filled (non-zero winding), so it fills
- * white the same way the person glyph does.
+ * SVG path for a space (24×24 viewBox): one rounded square. A space is ONE of
+ * the things the Directory holds four of — the Directory's own mark is the
+ * grid of four, so a space is a single square and the two never read alike.
+ * Every surface that stands for a space draws this, whether as a silhouette or
+ * as the `square` icon (see `getNodeGlyph`, `Avatar`'s `space` fallback).
+ */
+const SPACE_SILHOUETTE_PATH =
+  'M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Z' +
+  'M6 5.4a.6.6 0 0 0-.6.6v12a.6.6 0 0 0 .6.6h12a.6.6 0 0 0 .6-.6V6a.6.6 0 0 0-.6-.6Z';
+
+/**
+ * The container glyph a section or a channel draws: the isometric cube spaces
+ * used to wear. Three faces split by thin gaps so it reads as solid at avatar
+ * size, filled by the non-zero winding rule like the person glyph.
  */
 const GROUP_SILHOUETTE_PATH =
   'M12 2.2 20.4 6.9 12 11.6 3.6 6.9Z M2.8 8.6 11.1 13.2V22L2.8 17.3Z M21.2 8.6 12.9 13.2V22L21.2 17.3Z';
@@ -78,6 +87,7 @@ const CUSTOM_SILHOUETTE_PATH =
 
 export const NODE_GLYPH_PATHS = {
   person: PERSON_SILHOUETTE_PATH,
+  space: SPACE_SILHOUETTE_PATH,
   group: GROUP_SILHOUETTE_PATH,
   event: EVENT_SILHOUETTE_PATH,
   resource: RESOURCE_SILHOUETTE_PATH,
@@ -92,6 +102,9 @@ export type NodeGlyph = keyof typeof NODE_GLYPH_PATHS;
 
 /** Glyphs whose holes are drawn by the even-odd rule rather than reversed winding. */
 export const NODE_GLYPH_FILL_RULE: Partial<Record<NodeGlyph, 'evenodd'>> = {
+  // The square is drawn as an outline, the way the `square` icon draws it —
+  // a solid block reads as a missing image, not as a space.
+  space: 'evenodd',
   event: 'evenodd',
 };
 

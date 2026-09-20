@@ -507,24 +507,25 @@ export function getNodeTypeConfig(
 
 /**
  * The avatar-fallback glyph a node type should draw when it has no image. People
- * get the person silhouette; spaces and the other containers a cube;
+ * get the person silhouette; a space one square, its inner containers a cube;
  * events a calendar; resources a document. Tools and models retain recognisable
  * marks when their authored/provider icon is absent, and custom types use a
  * neutral tag mark. A clean SVG-glyph system, not emoji.
  */
 export function getNodeGlyph(
   type: string | null | undefined
-): 'person' | 'group' | 'event' | 'resource' | 'connector' | 'agent' | 'tool' | 'model' | 'custom' | null {
+): 'person' | 'space' | 'group' | 'event' | 'resource' | 'connector' | 'agent' | 'tool' | 'model' | 'custom' | null {
   if (!type) return null;
   const normalized = type.toLowerCase();
   const canonical = TYPE_SYNONYMS[normalized] ?? normalized;
   if (canonical === 'person' || canonical === 'people') return 'person';
   if (canonical === 'event' || canonical === 'events') return 'event';
   if (canonical === 'resource' || canonical === 'resources') return 'resource';
-  // Containers reuse the existing glyphs rather than inventing new ones: a
-  // space/section/channel reads as a cube. The glyph key is still called
-  // 'group' — it is the shape's name, not a node type.
-  if (canonical === 'space' || canonical === 'section' || canonical === 'channel') return 'group';
+  // A space is one square — the single thing the Directory's four-square mark
+  // holds many of. A section or a channel is a container inside one, and keeps
+  // the cube; the key is still called 'group', which is the shape's name.
+  if (canonical === 'space') return 'space';
+  if (canonical === 'section' || canonical === 'channel') return 'group';
   if (canonical === 'connector') return 'connector';
   // An agent brief is not a document: it is the thing that runs. Its own glyph
   // is what separates it from the notes it reads and writes.
