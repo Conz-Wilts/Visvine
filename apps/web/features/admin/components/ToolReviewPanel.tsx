@@ -467,13 +467,7 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
       <ConfirmDialog
         open={confirmingDelete}
         title={`Delete ${version?.title ?? ''} v${version?.version ?? ''}?`}
-        body={
-          <>
-            This removes the version from the registry for good — it leaves the marketplace and can never
-            be installed again. It is refused while any space still runs it. The author&rsquo;s working copy
-            in their space is untouched.
-          </>
-        }
+        body="It can never be installed again. The author’s working copy stays."
         confirmLabel="Delete version"
         destructive
         onConfirm={removeVersion}

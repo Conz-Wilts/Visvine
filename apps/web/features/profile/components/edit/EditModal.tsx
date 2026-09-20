@@ -12,7 +12,7 @@ interface EditModalProps {
 }
 
 /** Thin wrapper over the generic ui/Modal, kept for the profile edit dialogs. */
-export default function EditModal({ title, open, onClose, children, size = 'md' }: EditModalProps) {
+export default function EditModal({ title, open, onClose, children, size = 'sm' }: EditModalProps) {
   return (
     <Modal title={title} open={open} onClose={onClose} size={size}>
       {children}

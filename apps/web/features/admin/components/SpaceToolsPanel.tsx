@@ -753,9 +753,8 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
       <Modal
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        title="Add a tool"
+        title="Add tool"
         size="sm"
-        panelClassName="bg-surface-1 rounded-2xl shadow-float flex flex-col max-h-[80vh]"
       >
         <div className="space-y-3 p-4">
           {availableFeatures.length > 0 && (
@@ -786,7 +785,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
                       }
                       if (availableFeatures.length <= 1) setPickerOpen(false);
                     }}
-                    className="flex w-full items-start gap-3 rounded-xl p-2.5 text-left transition-colors hover:bg-surface-2"
+                    className="flex w-full items-start gap-3 rounded-lg p-2.5 text-left transition-colors hover:bg-surface-2"
                   >
                     <span className="shrink-0 text-text-secondary">
                       {feature.icon}
@@ -794,11 +793,6 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium text-text-primary">{feature.label}</span>
                       <span className="mt-0.5 block text-xs text-text-muted">{feature.description}</span>
-                      {typeNamesPhrase(feature.key) && (
-                        <span className="mt-1 block text-xs text-text-muted">
-                          Adds {typeNamesPhrase(feature.key)}.
-                        </span>
-                      )}
                     </span>
                     <span className="mt-0.5 shrink-0 text-text-muted">
                       <PlusIcon />
@@ -824,23 +818,16 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
           confirmInstall ? (
             confirmAuthoredName ? (
               <>
-                It&rsquo;s uninstalled from this space and its working copy under{' '}
-                <code className="font-mono text-[13px]">tools/{confirmAuthoredName}</code> is deleted.
-                Versions already published to the marketplace stay.
+                Its working copy, <code className="font-mono text-[13px]">tools/{confirmAuthoredName}</code>, is
+                deleted. Published versions stay.
               </>
             ) : (
-              <>
-                Its sidebar row and anything it stored for itself go with it. The marketplace listing stays —
-                install it again any time.
-              </>
+              <>Anything it stored goes with it.</>
             )
           ) : confirmFeature && typeNamesPhrase(confirmFeature.key) ? (
-            <>
-              Its pages and {typeNamesPhrase(confirmFeature.key)} disappear for everyone. Nothing is deleted —
-              add it back any time.
-            </>
+            <>Its pages and {typeNamesPhrase(confirmFeature.key)} are hidden for everyone. Nothing is deleted.</>
           ) : (
-            <>Its pages disappear for everyone. Nothing is deleted — add it back any time.</>
+            <>Its pages are hidden for everyone. Nothing is deleted.</>
           )
         }
         confirmLabel={confirmInstall ? (confirmAuthoredName ? 'Delete tool' : 'Uninstall') : 'Remove'}

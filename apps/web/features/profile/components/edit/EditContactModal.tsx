@@ -48,14 +48,14 @@ export default function EditContactModal({ open, onClose, profile, onSave }: Pro
   };
 
   return (
-    <EditModal title="Edit contact info" open={open} onClose={onClose}>
+    <EditModal title="Contact info" open={open} onClose={onClose}>
       <form onSubmit={handleSubmit} className="p-6 space-y-4">
         {[
           { label: 'Email', value: email, set: setEmail, type: 'email', placeholder: 'your@email.com' },
           { label: 'Phone', value: phone, set: setPhone, type: 'tel', placeholder: '+1 555 000 0000' },
           { label: 'Website', value: website, set: setWebsite, type: 'url', placeholder: 'https://yoursite.com' },
-          { label: 'LinkedIn URL', value: linkedinUrl, set: setLinkedinUrl, type: 'url', placeholder: 'https://linkedin.com/in/you' },
-          { label: 'Twitter / X URL', value: twitterUrl, set: setTwitterUrl, type: 'url', placeholder: 'https://x.com/you' },
+          { label: 'LinkedIn', value: linkedinUrl, set: setLinkedinUrl, type: 'url', placeholder: 'https://linkedin.com/in/you' },
+          { label: 'X', value: twitterUrl, set: setTwitterUrl, type: 'url', placeholder: 'https://x.com/you' },
         ].map(({ label, value, set, type, placeholder }) => (
           <div key={label}>
             <label className="block text-xs font-medium text-brand-grey mb-1">{label}</label>

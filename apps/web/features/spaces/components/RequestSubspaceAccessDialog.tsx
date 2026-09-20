@@ -3,10 +3,10 @@
 // The door on a locked sub-space — what a member of the parent gets when they
 // press a row they cannot open.
 //
-// It says three things and offers one act: this space is private, this many
-// people are in it, and here is how in. Nothing about what is inside is here
-// to say — no context, no member list, no tool rail — because none of it
-// crossed the boundary to get here (lib/spaces/subspaceAccess.ts).
+// A lock, one sentence and one act. Nothing about what is inside is here to
+// say — no context, no member list, no tool rail — because none of it crossed
+// the boundary to get here (lib/spaces/subspaceAccess.ts). Asking swaps the
+// panel for its confirmation.
 //
 // Two doors, decided by the sub-space's own admins (its house door):
 //
@@ -18,7 +18,7 @@
 
 import { useState } from 'react';
 import { Modal, Button } from '@/components/ui';
-import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
+import { CheckIcon, LockIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { invalidateRequestCache } from '@/features/shared/lib/requestCache';
 import type { LockedSubspace } from '@/lib/spaces/subspaceAccess';
@@ -71,52 +71,45 @@ export default function RequestSubspaceAccessDialog({
     }
   };
 
+  const sent = asked && !open;
+
   return (
-    <Modal onClose={onClose} title={space.name} size="sm">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <SpaceAvatar name={space.name} imageUrl={space.imageUrl ?? undefined} size="md" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-text-primary">{space.name}</div>
-            <div className="truncate text-xs text-text-muted">
-              Private sub-space of {parentName} · {space.memberCount}{' '}
-              {space.memberCount === 1 ? 'member' : 'members'}
-            </div>
-          </div>
-        </div>
+    <Modal onClose={onClose} maxWidth="max-w-xs" ariaLabel={space.name}>
+      <div className="flex flex-col items-center gap-4 p-6 text-center">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-3 text-text-secondary">
+          {sent ? <CheckIcon className="h-5 w-5" /> : <LockIcon className="h-5 w-5" />}
+        </span>
 
-        {space.description && <p className="text-sm text-text-secondary">{space.description}</p>}
-
-        <p className="text-sm text-text-muted">
-          {open
-            ? 'This space is open to everyone in ' + parentName + '. Join it and it becomes one of your spaces.'
-            : inviteOnly
-              ? 'You can see that this space exists because you’re in ' + parentName + '. It is invite only — an admin here has to add you.'
-            : asked
-              ? 'Your request is with this space’s admins. You’ll be able to open it once one of them approves.'
-              : 'You can see that this space exists because you’re in ' +
-                parentName +
-                '. Its context, members and tools stay closed until an admin here lets you in.'}
-        </p>
-
-        {error && <div className="border-l-2 border-red-500 py-1 pl-3 text-sm text-red-700">{error}</div>}
-
-        <div className="flex justify-end gap-2">
-          <Button variant="neutral" onClick={onClose}>
-            {asked && !open ? 'Done' : 'Cancel'}
-          </Button>
-          {open ? (
-            <Button variant="brand" onClick={() => void join()} disabled={asking}>
-              {asking ? 'Joining…' : 'Join'}
-            </Button>
-          ) : (
-            !asked && !inviteOnly && (
-              <Button variant="brand" onClick={() => void ask()} disabled={asking}>
-                {asking ? 'Sending…' : 'Request access'}
-              </Button>
-            )
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">
+            {sent
+              ? 'Request sent'
+              : open
+                ? `Join ${space.name}?`
+                : `You don’t have access to ${space.name}`}
+          </h2>
+          {(open || (inviteOnly && !sent)) && (
+            <p className="mt-1 text-sm text-text-muted">{open ? `Open to ${parentName}` : 'Invite only'}</p>
           )}
         </div>
+
+        {error && <p className="text-sm text-red-700">{error}</p>}
+
+        {sent || inviteOnly ? (
+          <Button variant="neutral" className="w-full" onClick={onClose}>
+            Done
+          </Button>
+        ) : (
+          <Button
+            variant="brand"
+            className="w-full"
+            onClick={() => void (open ? join() : ask())}
+            loading={asking}
+            loadingText={open ? 'Joining…' : 'Sending…'}
+          >
+            {open ? 'Join' : 'Request access'}
+          </Button>
+        )}
       </div>
     </Modal>
   );

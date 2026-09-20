@@ -800,18 +800,7 @@ export function DraftContextPanel({
         open={destOpen}
         onClose={() => setDestOpen(false)}
         size="sm"
-        title={type === 'folder' ? 'Drop it in a folder' : 'Drop the note in a folder'}
-        footer={
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => setDestOpen(false)}
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary transition hover:bg-surface-2"
-            >
-              Cancel
-            </button>
-          </div>
-        }
+        title="Choose a folder"
       >
         <FolderDropBoard
           folders={contextFolderTree.folders}

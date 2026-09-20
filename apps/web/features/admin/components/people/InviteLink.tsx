@@ -85,8 +85,8 @@ export default function InviteLink({ spaceId }: { spaceId: string }) {
 
       <ConfirmDialog
         open={confirmRegenerate}
-        title="Regenerate invite link"
-        body="The current link will stop working immediately. Anyone holding the old link won't be able to join with it."
+        title="Regenerate invite link?"
+        body="The current link stops working."
         confirmLabel="Regenerate"
         onConfirm={regenerate}
         onClose={() => setConfirmRegenerate(false)}

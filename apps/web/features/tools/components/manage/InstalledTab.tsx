@@ -100,12 +100,7 @@ export default function InstalledTab({
       <ConfirmDialog
         open={removing !== null}
         title={`Uninstall ${removing?.title ?? ''}?`}
-        body={
-          <>
-            Its sidebar row goes with it, and so does anything the tool stored for itself. Context notes it
-            wrote are this space&rsquo;s and stay. You can install it again later.
-          </>
-        }
+        body="Anything it stored goes with it. Notes it wrote stay."
         confirmLabel="Uninstall"
         destructive
         onConfirm={async () => {

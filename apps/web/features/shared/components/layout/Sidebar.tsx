@@ -639,9 +639,7 @@ export default function Sidebar() {
         <Modal
           onClose={() => setMoreOpen(false)}
           ariaLabel="More tools"
-          overlayClassName="items-center justify-center p-4"
-          overlayStyle={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
-          maxWidth="max-w-sm"
+          maxWidth="max-w-xs"
           panelClassName="relative rounded-xl bg-surface-1 shadow-float"
           panelStyle={{ animation: "moreModalIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both" }}
         >

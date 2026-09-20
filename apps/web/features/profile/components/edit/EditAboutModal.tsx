@@ -30,19 +30,18 @@ export default function EditAboutModal({ open, onClose, bio, onSave }: Props) {
   };
 
   return (
-    <EditModal title="Edit about" open={open} onClose={onClose}>
+    <EditModal title="About" open={open} onClose={onClose} size="md">
       <form onSubmit={handleSubmit} className="p-6 space-y-4">
         <div>
-          <label className="block text-xs font-medium text-brand-grey mb-1">About / Bio</label>
           <textarea
+            aria-label="About"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             rows={8}
             maxLength={2600}
-            placeholder="Tell your network what you're working on, your background, and what you're passionate about."
+            placeholder="About you"
             className="w-full min-h-[max(10rem,32vh)] px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30 resize-y"
           />
-          <p className="text-xs text-brand-grey mt-1">{value.length}/2600</p>
         </div>
         <ModalFooter onCancel={onClose} saving={saving} />
       </form>

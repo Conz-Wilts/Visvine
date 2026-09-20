@@ -786,7 +786,7 @@ export default function ConnectorsPanel({
         <ConfirmDialog
           open={confirmDelete !== null}
           title={`Delete ${confirmDelete?.title ?? confirmDelete?.name ?? 'connector'}?`}
-          body="Removes the connector note. Its stored secrets stay in the space until an admin deletes them."
+          body="Its stored secrets stay."
           confirmLabel="Delete"
           destructive
           error={deleteError}
@@ -1123,7 +1123,7 @@ export default function ConnectorsPanel({
       <ConfirmDialog
         open={confirmDelete !== null}
         title={`Delete ${confirmDelete?.title ?? confirmDelete?.name ?? 'connector'}?`}
-        body="Removes the connector note. Its stored secrets stay in the space until an admin deletes them."
+        body="Its stored secrets stay."
         confirmLabel="Delete"
         destructive
         error={deleteError}

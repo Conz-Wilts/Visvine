@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Avatar, Alert, SearchInput, Chip, Modal } from '@/components/ui';
+import { Avatar, Button, SearchInput, Modal } from '@/components/ui';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -133,30 +133,30 @@ export default function AddMembersModal({
     <Modal
       onClose={onClose}
       closeOnEscape={false}
-      overlayClassName="items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-4"
-      maxWidth="sm:max-w-lg"
-      panelClassName="flex h-[90dvh] flex-col overflow-hidden rounded-t-3xl bg-surface-1 shadow-float sm:h-auto sm:max-h-[85dvh] sm:rounded-2xl"
-    >
-        {/* Modal header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4">
-          <div>
-            <h2 className="text-lg font-bold text-text-primary">Add members</h2>
-            <p className="mt-0.5 text-xs text-text-muted">Invite people to this channel</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-3 text-text-muted hover:bg-gray-200 transition-colors"
+      title="Add members"
+      size="sm"
+      footer={
+        <div className="flex items-center justify-end gap-2 border-t border-border-subtle px-6 py-3">
+          {error && <p className="mr-auto min-w-0 truncate text-sm text-red-700">{error}</p>}
+          <Button variant="neutral" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="brand"
+            onClick={() => void handleSubmit()}
+            disabled={selectedMembers.size === 0}
+            loading={submitting}
+            loadingText="Adding…"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+            Add
+          </Button>
         </div>
-
+      }
+    >
+      <div className="pt-4">
         {/* Selected members chips */}
         {selectedUserObjects.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 px-5 pb-3">
+          <div className="flex flex-wrap gap-1.5 px-6 pb-3">
             {selectedUserObjects.map((user) => (
               <div key={user.id} className="flex items-center gap-1.5 rounded-full bg-brand-green/10 border border-brand-green/20 pl-1.5 pr-2 py-1">
                 <Avatar name={user.name} size="chip" />
@@ -176,7 +176,7 @@ export default function AddMembersModal({
         )}
 
         {/* Search input */}
-        <div className="px-5 pb-3">
+        <div className="px-6 pb-3">
           <SearchInput
             value={query}
             onChange={setQuery}
@@ -186,7 +186,7 @@ export default function AddMembersModal({
         </div>
 
         {/* User list */}
-        <div className="flex-1 overflow-y-auto px-3">
+        <div className="px-3 pb-3">
           {loading && (
             <div className="section-y-1 py-2">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -202,25 +202,12 @@ export default function AddMembersModal({
           )}
 
           {!loading && eligibleUsers.length === 0 && directoryPeople.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-3">
-                <svg className="h-6 w-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-              <p className="text-sm text-text-muted">{query ? `No results for "${query}"` : 'No users found'}</p>
-            </div>
+            <p className="py-10 text-center text-sm text-text-muted">No one found</p>
           )}
 
           {/* ── Active platform users ── */}
           {!loading && eligibleUsers.length > 0 && (
             <div className="py-1">
-              {/* Section label — only shown when directory section is also visible */}
-              {directoryPeople.length > 0 && (
-                <p className="px-3 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                  Active members
-                </p>
-              )}
               {eligibleUsers.map((user) => {
                 const isSelected = selectedMembers.has(user.id);
 
@@ -229,8 +216,8 @@ export default function AddMembersModal({
                     key={user.id}
                     type="button"
                     onClick={() => handleToggleMember(user.id)}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150 ${
-                      isSelected ? 'bg-brand-green/8 ring-1 ring-brand-green/20' : 'hover:bg-surface-2'
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                      isSelected ? 'bg-surface-3' : 'hover:bg-surface-2'
                     }`}
                   >
                     <div className="relative shrink-0">
@@ -244,12 +231,9 @@ export default function AddMembersModal({
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className={`text-sm font-medium ${isSelected ? 'text-brand-green' : 'text-text-primary'}`}>{user.name}</p>
+                      <p className="text-sm font-medium text-text-primary">{user.name}</p>
                       <p className="truncate text-xs text-text-muted">{user.email}</p>
                     </div>
-                    <span className={`shrink-0 text-xs font-medium ${isSelected ? 'text-brand-green' : 'text-text-muted'}`}>
-                      {isSelected ? 'Selected' : 'Select'}
-                    </span>
                   </button>
                 );
               })}
@@ -259,28 +243,23 @@ export default function AddMembersModal({
           {/* ── Directory people (no active account) ── */}
           {!loading && directoryPeople.length > 0 && (
             <div className="pb-2">
-              <div className="flex items-center gap-2 px-3 pb-1.5 pt-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                  From directory
-                </p>
-                <Chip tone="muted" size="xs">Not yet on platform</Chip>
-              </div>
+              <p className="mt-2 border-t border-border-subtle px-3 pb-1.5 pt-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                Not on Visvine
+              </p>
               {directoryPeople.map((person) => {
                 const isCopied = copiedId === person.id;
                 return (
                   <div
                     key={person.id}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2.5"
+                    className="flex items-center gap-3 rounded-lg px-3 py-2"
                   >
                     <div className="relative shrink-0">
                       <Avatar name={person.name} imageUrl={person.imageUrl} />
-                      {/* Offline / not-active indicator */}
-                      <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-gray-300" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-text-secondary">{person.name}</p>
                       <p className="truncate text-xs text-text-muted">
-                        {person.subtitle ?? person.spaceName ?? 'Directory member'}
+                        {person.subtitle ?? person.spaceName ?? ''}
                       </p>
                     </div>
                     {/* Invite button — copies contact info to clipboard */}
@@ -298,7 +277,7 @@ export default function AddMembersModal({
                           <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                           </svg>
-                          Copied!
+                          Copied
                         </>
                       ) : (
                         <>
@@ -315,28 +294,7 @@ export default function AddMembersModal({
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="border-t border-border-subtle px-5 py-4">
-          {error && <Alert variant="error" inline className="mb-3">{error}</Alert>}
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 rounded-xl border border-border-default py-2.5 text-sm font-semibold text-text-muted hover:bg-surface-2 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleSubmit()}
-              disabled={submitting || selectedMembers.size === 0}
-              className="flex-1 rounded-xl bg-brand-green py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 active:scale-[0.98]"
-            >
-              {submitting ? 'Saving…' : 'Add members'}
-            </button>
-          </div>
-        </div>
+      </div>
     </Modal>
   );
 }

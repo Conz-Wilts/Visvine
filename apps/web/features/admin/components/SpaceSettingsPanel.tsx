@@ -285,10 +285,9 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
         title="Make this space public?"
         body={
           <>
-            Anyone will be able to find <span className="font-semibold">{space.name}</span> in
-            Discover and join it without an invite.
+            Anyone can find <span className="font-semibold">{space.name}</span> in Discover and join.
             {isSubspace && (
-              <> Its context will also show in <span className="font-semibold">{parent?.name ?? 'the parent space'}</span>, read-only, to everyone there.</>
+              <> Its context shows in <span className="font-semibold">{parent?.name ?? 'the parent space'}</span>, read-only.</>
             )}
           </>
         }
@@ -302,14 +301,14 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
 
       <ConfirmDialog
         open={confirmDelete}
-        title="Delete space"
+        title={`Delete ${space.name}?`}
         body={
           <>
-            This permanently deletes <span className="font-semibold">{space.name}</span> — every
-            record, connection, note, post and membership in it
+            Everything in it
             {subspaceCount > 0 && (
-              <>, and its {subspaceCount === 1 ? 'sub-space' : `${subspaceCount} sub-spaces`} with everything in {subspaceCount === 1 ? 'it' : 'them'}</>
-            )}. This cannot be undone.
+              <> and its {subspaceCount === 1 ? 'sub-space' : `${subspaceCount} sub-spaces`}</>
+            )}{' '}
+            is deleted. This cannot be undone.
           </>
         }
         confirmLabel="Delete space"

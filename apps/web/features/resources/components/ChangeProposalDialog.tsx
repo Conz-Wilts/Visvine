@@ -1,8 +1,7 @@
 'use client';
 import { useState } from 'react';
-import Modal from '@/components/ui/Modal';
+import { Button, Input, Modal, Textarea } from '@/components/ui';
 import { fetchJsonBody } from '@/lib/fetchJson';
-import { XIcon } from '@/features/shared/icons';
 
 export default function ChangeProposalDialog({
   resourceId,
@@ -43,41 +42,35 @@ export default function ChangeProposalDialog({
       onClose={onClose}
       closeOnBackdrop={false}
       closeOnEscape={false}
-      overlayClassName="items-center justify-center bg-black/40"
+      title={`Propose change · ${cellRef}`}
       maxWidth="max-w-sm"
-      panelClassName="bg-surface-1 rounded-xl shadow-float p-6"
     >
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold">Propose Change — {cellRef}</h2>
-          <button onClick={onClose} aria-label="Close" className="text-text-muted hover:text-text-primary">
-            <XIcon className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="space-y-3">
+        <div className="space-y-3 p-6">
           <div>
-            <label className="text-xs text-text-muted block mb-1">Your name</label>
-            <input className="w-full border border-border-default rounded px-2 py-1 text-sm" value={proposedBy} onChange={e => setProposedBy(e.target.value)} />
+            <label className="text-xs text-text-muted block mb-1">Name</label>
+            <Input value={proposedBy} onChange={e => setProposedBy(e.target.value)} />
           </div>
           <div>
-            <label className="text-xs text-text-muted block mb-1">Current value</label>
-            <p className="text-sm bg-surface-2 rounded px-2 py-1 border border-border-subtle">{originalValue || '(empty)'}</p>
+            <label className="text-xs text-text-muted block mb-1">Current</label>
+            <p className="text-sm text-text-secondary">{originalValue || '—'}</p>
           </div>
           <div>
-            <label className="text-xs text-text-muted block mb-1">Proposed value</label>
-            <input className="w-full border border-border-default rounded px-2 py-1 text-sm" value={proposedValue} onChange={e => setProposedValue(e.target.value)} />
+            <label className="text-xs text-text-muted block mb-1">Proposed</label>
+            <Input value={proposedValue} onChange={e => setProposedValue(e.target.value)} />
           </div>
           <div>
-            <label className="text-xs text-text-muted block mb-1">Reason (optional)</label>
-            <textarea className="w-full border border-border-default rounded px-2 py-1 text-sm resize-none" rows={2} value={reason} onChange={e => setReason(e.target.value)} />
+            <label className="text-xs text-text-muted block mb-1">Reason</label>
+            <Textarea rows={2} value={reason} onChange={e => setReason(e.target.value)} />
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
-          <button
-            onClick={submit}
-            disabled={submitting}
-            className="w-full bg-blue-600 text-white rounded py-2 text-sm hover:bg-blue-700 disabled:opacity-50"
-          >
-            {submitting ? 'Submitting...' : 'Propose Change'}
-          </button>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="neutral" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button variant="brand" onClick={submit} loading={submitting} loadingText="Sending…">
+              Propose
+            </Button>
+          </div>
         </div>
     </Modal>
   );

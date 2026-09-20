@@ -7,8 +7,6 @@ import EditModal from './EditModal';
 import ModalFooter from './ModalFooter';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
-import { matchCountryInLocation } from '@/lib/countries';
-import CountryFlag from '../CountryFlag';
 import type { FullProfile } from '@/lib/types/profile';
 
 interface Props {
@@ -56,7 +54,6 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
     }
   };
 
-  const detectedCountry = matchCountryInLocation(location);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +72,7 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
   };
 
   return (
-    <EditModal title="Edit intro" open={open} onClose={onClose}>
+    <EditModal title="Intro" open={open} onClose={onClose}>
       <form onSubmit={handleSubmit} className="p-6 space-y-4">
         {/* Photo */}
         <div className="flex items-center gap-4">
@@ -95,16 +92,12 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
               {uploading ? <LoaderCircleIcon className="w-5 h-5 animate-spin" /> : <CameraIcon className="w-5 h-5" />}
             </span>
           </button>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-brand-black">Profile photo</p>
-            <p className="text-xs text-brand-grey mt-0.5">JPG, PNG or WebP — up to 10MB.</p>
-            {uploadError && <p className="text-xs text-red-500 mt-1">{uploadError}</p>}
-          </div>
+          {uploadError && <p className="min-w-0 text-xs text-red-500">{uploadError}</p>}
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-brand-grey mb-1">Name *</label>
+          <label className="block text-xs font-medium text-brand-grey mb-1">Name</label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -117,11 +110,10 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
           <input
             value={subtitle}
             onChange={(e) => setSubtitle(e.target.value)}
-            placeholder="e.g. Founder & CEO at Acme Corp"
+            placeholder="Founder at Acme"
             maxLength={220}
             className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
           />
-          <p className="text-xs text-brand-grey mt-1">{subtitle.length}/220</p>
         </div>
         <div>
           <label className="block text-xs font-medium text-brand-grey mb-1">Location</label>
@@ -131,11 +123,6 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
             placeholder="City, Country"
             className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
           />
-          <p className="text-xs text-brand-grey mt-1">
-            {detectedCountry
-              ? <><CountryFlag location={location} className="align-[-2px] mr-1" />{detectedCountry.name} detected — the flag shows next to your location.</>
-              : 'End with a country (e.g. “Auckland, New Zealand”) to show a flag.'}
-          </p>
         </div>
         <ModalFooter onCancel={onClose} saving={saving} />
       </form>

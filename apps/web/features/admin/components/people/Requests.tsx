@@ -73,12 +73,7 @@ export default function Requests() {
 
       <ConfirmDialog
         open={deny !== null}
-        title="Deny join request"
-        body={
-          <>
-            Deny <span className="font-semibold">{deny?.name}</span>&apos;s request to join?
-          </>
-        }
+        title={`Deny ${deny?.name ?? 'this request'}?`}
         confirmLabel="Deny"
         destructive
         onConfirm={async () => {

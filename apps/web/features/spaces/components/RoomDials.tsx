@@ -252,13 +252,7 @@ export default function RoomDials({ space, parentName, save }: Props) {
       <ConfirmDialog
         open={confirmWorld}
         title="List this room to everyone?"
-        body={
-          <>
-            Anyone will be able to find <span className="font-semibold">{space.name}</span> in Discover and, through its world door, ask to join or walk in.
-            {flowContext && <> Its context keeps showing in <span className="font-semibold">{parentName}</span>, read-only, to everyone there.</>}
-            {' '}Its name has to be free among public spaces.
-          </>
-        }
+        body={<>Anyone will find <span className="font-semibold">{space.name}</span> in Discover.</>}
         confirmLabel="List to everyone"
         onConfirm={() => {
           setConfirmWorld(false);

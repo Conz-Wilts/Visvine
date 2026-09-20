@@ -59,9 +59,9 @@ export default function EditEventPage({ params }: { params: Promise<{ eventId: s
       />
       <ConfirmDialog
         open={confirmingDelete}
-        title="Delete Event"
-        body={<>Are you sure you want to delete <span className="font-semibold text-text-primary">{event.title}</span>? This action cannot be undone.</>}
-        confirmLabel="Delete Event"
+        title={`Delete ${event.title}?`}
+        body="This cannot be undone."
+        confirmLabel="Delete"
         destructive
         error={deleteError}
         closeOnBackdrop={false}

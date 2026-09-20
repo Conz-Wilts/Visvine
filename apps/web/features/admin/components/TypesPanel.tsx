@@ -846,14 +846,8 @@ export default function TypesPanel() {
       <ConfirmDialog
         open={deleting !== null}
         title={`Delete "${deleting?.name ?? ''}"?`}
-        body={
-          <>
-            It stops being offered when somebody types a type, and notes already
-            marked <code>{deleting?.name}</code> lose its colour and chip. Their
-            frontmatter is left alone, so naming the type again brings them back.
-          </>
-        }
-        confirmLabel="Delete type"
+        body="Notes keep their type, uncoloured."
+        confirmLabel="Delete"
         destructive
         onConfirm={async () => { if (deleting) await handleDeleteType(deleting); }}
         onClose={() => setDeleting(null)}

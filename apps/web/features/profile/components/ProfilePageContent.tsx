@@ -343,11 +343,11 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
                           isOwner={isOwner} onEdit={() => setModal('contact')} />
       )}
       {modal === 'mutuals' && (
-        <MutualsModal nodeId={nodeId} personName={profile.name} onClose={() => setModal(null)} />
+        <MutualsModal nodeId={nodeId} onClose={() => setModal(null)} />
       )}
       {modal === 'spaces' && (
         <SpacesModal open onClose={() => setModal(null)} spaces={profileSpaces}
-                          isOwner={isOwner} personName={profile.name} theme={theme}
+                          isOwner={isOwner} theme={theme}
                           onToggle={isOwner ? toggleSpaceVisibility : undefined} />
       )}
     </div>

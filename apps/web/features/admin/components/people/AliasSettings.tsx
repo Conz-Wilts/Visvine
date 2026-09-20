@@ -40,16 +40,8 @@ interface SettingsProps {
 function deleteBody(holders: number, grants: number) {
   return (
     <>
-      {holders > 0 ? (
-        <>
-          <span className="font-semibold">{holders}</span>{' '}
-          {holders === 1 ? 'person holds' : 'people hold'} this alias, and{' '}
-        </>
-      ) : (
-        <>Nobody holds this alias. </>
-      )}
-      everything it reaches ({grants} {grants === 1 ? 'grant' : 'grants'}) goes with it. Members
-      keep whatever their other aliases give them.
+      {holders > 0 && <>{holders} {holders === 1 ? 'person holds' : 'people hold'} it. </>}
+      Its {grants} {grants === 1 ? 'grant goes' : 'grants go'} with it.
     </>
   );
 }
@@ -237,7 +229,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run, half }: Setting
           open={confirmDelete}
           title={`Delete "${alias.name}"?`}
           body={deleteBody(alias.holders.length, grants.length)}
-          confirmLabel="Delete alias"
+          confirmLabel="Delete"
           destructive
           onConfirm={() => {
             setConfirmDelete(false);

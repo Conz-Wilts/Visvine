@@ -130,7 +130,7 @@ export default function ActivateAgentDialog({
       title={agent.title || agent.name}
       size="sm"
       footer={
-        <div className="flex items-center justify-end gap-2 px-5 py-3">
+        <div className="flex items-center justify-end gap-2 px-6 py-3">
           <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
@@ -140,10 +140,8 @@ export default function ActivateAgentDialog({
         </div>
       }
     >
-      <div className="flex flex-col gap-4 px-5 py-4 text-sm">
-        <p className="text-[13px] text-text-muted">
-          Runs unattended with <span className="font-mono text-text-primary">{reach.join(' · ')}</span>. Editing the brief turns it off again.
-        </p>
+      <div className="flex flex-col gap-4 px-6 py-4 text-sm">
+        <p className="font-mono text-[13px] text-text-muted">{reach.join(' · ')}</p>
 
         <Field label="Runs">
           <Select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
@@ -156,8 +154,8 @@ export default function ActivateAgentDialog({
         </Field>
 
         {kind === 'every' && (
-          <Field label="Every" hint="15m, 2h, or a cron line">
-            <Input value={every} onChange={(e) => setEvery(e.target.value)} placeholder="15m" className="font-mono" />
+          <Field label="Every">
+            <Input value={every} onChange={(e) => setEvery(e.target.value)} placeholder="15m, 2h or cron" className="font-mono" />
           </Field>
         )}
 
@@ -200,7 +198,7 @@ export default function ActivateAgentDialog({
         )}
 
         {needsClock && (
-          <Field label="Timezone" hint="Whose clock “07:00” means. Written into the agent's own brief.">
+          <Field label="Timezone">
             <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
               {/* No "space default": the space no longer keeps one, and a
                   schedule whose zone is implied is a schedule nobody can read
@@ -219,11 +217,11 @@ export default function ActivateAgentDialog({
 
         {!showTriggers ? (
           <button type="button" className="self-start text-[13px] font-semibold text-brand-dark-green hover:underline" onClick={() => setShowTriggers(true)}>
-            + Also run on changes or webhooks
+            + Triggers
           </button>
         ) : (
           <div className="flex flex-col gap-3 border-t border-border-subtle pt-4">
-            <Field label="When a note changes under" hint="One glob per line">
+            <Field label="On changes under">
               <textarea
                 value={contextGlobs}
                 onChange={(e) => setContextGlobs(e.target.value)}
@@ -232,7 +230,7 @@ export default function ActivateAgentDialog({
                 className="w-full rounded-lg bg-surface-2 px-2.5 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:ring-1 focus:ring-border-default"
               />
             </Field>
-            <Field label="When a webhook arrives for">
+            <Field label="On webhook from">
               <Select value={webhook} onChange={(e) => setWebhook(e.target.value)}>
                 <option value="">—</option>
                 {connectors.map((c) => (
@@ -244,7 +242,7 @@ export default function ActivateAgentDialog({
               </Select>
             </Field>
             {hasTrigger && (
-              <Field label="Debounce" hint="Default 60s, max 30m">
+              <Field label="Debounce">
                 <Input value={debounce} onChange={(e) => setDebounce(e.target.value)} placeholder="60s" className="font-mono" />
               </Field>
             )}

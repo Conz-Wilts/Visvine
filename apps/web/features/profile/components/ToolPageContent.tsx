@@ -217,7 +217,7 @@ function PublishDialog({
       title={`Publish ${tool.title} v${nextVersion}`}
       size="sm"
       footer={
-        <div className="flex items-center justify-end gap-2 px-5 py-3">
+        <div className="flex items-center justify-end gap-2 px-6 py-3">
           <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
@@ -227,39 +227,25 @@ function PublishDialog({
         </div>
       }
     >
-      <div className="flex flex-col gap-4 px-5 py-4 text-sm">
-        <p className="text-[13px] leading-snug text-text-muted">
-          This snapshots the working copy exactly as it is now — code, config and the reach below — and queues
-          it for review. Nothing installs until a Visvine super-admin approves it, and spaces already running an
-          older version keep it until an admin there applies the upgrade.
-        </p>
-
+      <div className="flex flex-col gap-4 px-6 py-4 text-sm">
         {tool.config ? (
-          <div className="rounded-xl border border-border-subtle bg-surface-2 px-3 py-2.5">
-            <p className="pb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
-              Reach every installing space grants
-            </p>
+          <div>
+            <p className="pb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Reach</p>
             <PerimeterSummary perimeter={tool.config.perimeter} />
           </div>
         ) : (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700">
-            The config does not parse, so there is no declared reach to publish.
-          </p>
+          <p className="border-l-2 border-red-500 pl-3 text-[13px] text-red-700">The config does not parse.</p>
         )}
 
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-            Note for the reviewer
-          </span>
-          <Textarea
-            rows={3}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="What changed, and why it needs the reach it asks for."
-          />
-        </label>
+        <Textarea
+          rows={3}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          aria-label="Note for the reviewer"
+          placeholder="Note for the reviewer"
+        />
 
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>}
+        {error && <p className="border-l-2 border-red-500 pl-3 text-[13px] text-red-700">{error}</p>}
       </div>
     </Modal>
   );

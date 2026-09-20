@@ -87,7 +87,7 @@ export default function EditSectionModal({ open, section, onClose, onSave, onDel
           {onDelete ? (
             <button type="button" onClick={() => void onDelete().then(onClose)}
                     className="text-xs text-red-600 hover:text-red-800">
-              Delete section
+              Delete
             </button>
           ) : <span />}
           <ModalFooter onCancel={onClose} saving={saving} />

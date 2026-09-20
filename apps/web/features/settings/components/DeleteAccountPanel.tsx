@@ -57,13 +57,9 @@ export default function DeleteAccountPanel() {
       </Button>
 
       <Modal open={open} onClose={close} title="Delete account" size="sm">
-        <div className="space-y-4">
-          <Alert variant="warning">
-            This permanently deletes your account and your profile. It cannot be undone, and
-            support cannot restore it.
-          </Alert>
+        <div className="space-y-4 p-6">
           <p className="text-sm text-text-secondary">
-            Type <span className="font-medium text-text-primary">{email}</span> to confirm.
+            This cannot be undone. Type <span className="font-medium text-text-primary">{email}</span> to confirm.
           </p>
           <Input
             value={typed}

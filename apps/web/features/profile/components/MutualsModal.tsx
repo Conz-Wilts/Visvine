@@ -9,8 +9,8 @@ import SpaceLink from '@/features/shared/components/SpaceLink';
 import { fetchJson } from '@/lib/fetchJson';
 import type { Mutual } from '@/app/api/profile/[personId]/mutuals/route';
 
-export default function MutualsModal({ nodeId, personName, onClose }: {
-  nodeId: string; personName: string; onClose: () => void;
+export default function MutualsModal({ nodeId, onClose }: {
+  nodeId: string; onClose: () => void;
 }) {
   const [mutuals, setMutuals] = useState<Mutual[] | null>(null);
 
@@ -23,7 +23,7 @@ export default function MutualsModal({ nodeId, personName, onClose }: {
   }, [nodeId]);
 
   return (
-    <Modal open title={`You and ${personName}`} onClose={onClose} size="sm">
+    <Modal open title="Mutuals" onClose={onClose} size="sm">
       <div className="p-2">
         {mutuals === null && <p className="px-4 py-6 text-sm text-text-muted">Loading…</p>}
         {mutuals?.map((m) => {

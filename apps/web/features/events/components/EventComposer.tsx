@@ -1,7 +1,7 @@
 'use client';
 
 import { useSpaceHref } from '@/features/shared/contexts/SpaceContext';
-import { Alert } from '@/components/ui';
+import { Alert, Button, Modal } from '@/components/ui';
 
 /**
  * EventComposer — a single-screen, poster-first event creator (replaces the old
@@ -709,55 +709,35 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
   const copyLink = () => { void copy(publicUrl); };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="w-full max-w-md bg-brand-white rounded-2xl shadow-float p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-brand-black">You’re live</h2>
-            <p className="text-sm text-brand-grey mt-1">Share the link and start collecting RSVPs.</p>
-          </div>
-          <button onClick={onClose} className="p-1.5 text-brand-grey hover:text-brand-black rounded-lg" aria-label="Close">
-            <XIcon className="w-5 h-5" />
-          </button>
+    <Modal onClose={onClose} title="You’re live" maxWidth="max-w-sm">
+      <div className="flex flex-col gap-4 p-6">
+        <div className="flex items-center gap-2 rounded-lg bg-surface-2 py-1.5 pl-3 pr-1.5">
+          <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{publicUrl}</span>
+          <Button variant="brand" onClick={copyLink} className="inline-flex items-center gap-1.5 !px-3 !py-1.5">
+            {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <Link2Icon className="h-3.5 w-3.5" />}
+            {copied ? 'Copied' : 'Copy'}
+          </Button>
         </div>
 
-        <div className="mt-5 flex items-center gap-2 p-3 rounded-xl border border-border-subtle bg-brand-light-bg/40">
-          <span className="flex-1 text-sm text-brand-black truncate">{publicUrl}</span>
-          <button
-            onClick={copyLink}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-brand-green rounded-lg hover:opacity-90 transition-all"
-          >
-            {copied ? <CheckIcon className="w-3.5 h-3.5" /> : <Link2Icon className="w-3.5 h-3.5" />}
-            {copied ? 'Copied' : 'Copy link'}
-          </button>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-2 gap-2">
           <a
             href={`/api/events/${event.id}/ics?spaceId=${encodeURIComponent(spaceId)}`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-border-subtle rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-surface-2 px-4 py-2.5 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-3"
           >
-            <CalendarPlusIcon className="w-4 h-4" /> Add to calendar
+            <CalendarPlusIcon className="h-4 w-4" /> Calendar
           </a>
           <a
             href={path}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-border-subtle rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-surface-2 px-4 py-2.5 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-3"
           >
-            <ExternalLinkIcon className="w-4 h-4" /> View page
+            <ExternalLinkIcon className="h-4 w-4" /> View page
           </a>
         </div>
-
-        <button
-          onClick={onClose}
-          className="mt-5 w-full px-4 py-2.5 text-sm font-semibold text-white bg-brand-green rounded-lg hover:opacity-90 transition-all"
-        >
-          Manage event &amp; guests
-        </button>
       </div>
-    </div>
+    </Modal>
   );
 }

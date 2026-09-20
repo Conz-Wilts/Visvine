@@ -177,13 +177,8 @@ export default function MemberTable() {
 
       <ConfirmDialog
         open={confirm !== null}
-        title="Remove member"
-        body={
-          <>
-            Are you sure you want to remove <span className="font-semibold">{confirm?.name}</span> from
-            this space? Their aliases and direct grants go with them.
-          </>
-        }
+        title={`Remove ${confirm?.name ?? 'member'}?`}
+        body="Their aliases and grants go with them."
         confirmLabel="Remove"
         destructive
         onConfirm={async () => {

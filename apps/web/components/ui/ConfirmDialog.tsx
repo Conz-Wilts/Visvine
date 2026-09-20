@@ -86,9 +86,9 @@ export default function ConfirmDialog({
         className="absolute inset-0 bg-black/40"
         onClick={() => closeOnBackdrop && !busy && onClose()}
       />
-      <div className="relative w-full max-w-md rounded-2xl border border-border-subtle bg-surface-1 p-6 shadow-float">
-        <h3 className="font-title text-lg font-medium text-text-primary">{title}</h3>
-        {body && <div className="mt-2 text-sm leading-relaxed text-text-secondary">{body}</div>}
+      <div className="relative w-full max-w-sm rounded-xl bg-surface-1 p-5 shadow-float">
+        <h3 className="text-base font-semibold text-text-primary">{title}</h3>
+        {body && <div className="mt-1.5 text-sm text-text-secondary">{body}</div>}
 
         {error && (
           <div className="mt-3 border-l-2 border-red-500 pl-3 py-1 text-sm font-medium text-red-600">
@@ -113,7 +113,7 @@ export default function ConfirmDialog({
           </div>
         )}
 
-        <div className="mt-6 flex justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-2">
           <Button variant="neutral" onClick={onClose} disabled={busy}>
             Cancel
           </Button>

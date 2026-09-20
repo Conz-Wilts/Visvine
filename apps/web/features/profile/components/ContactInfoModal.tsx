@@ -52,7 +52,7 @@ export default function ContactInfoModal({ open, onClose, profile, isOwner, onEd
           </div>
         ) : (
           <p className="text-sm text-text-muted">
-            {isOwner ? 'You haven’t added any contact info yet.' : 'No contact info listed.'}
+            No contact info
           </p>
         )}
 
@@ -60,7 +60,7 @@ export default function ContactInfoModal({ open, onClose, profile, isOwner, onEd
           <button type="button" onClick={onEdit}
                   className="mt-6 inline-flex items-center gap-1.5 text-[13px] font-semibold text-text-muted hover:text-text-primary transition-colors">
             <PencilIcon className="w-3.5 h-3.5" />
-            {rows.length > 0 ? 'Edit contact info' : 'Add contact info'}
+            {rows.length > 0 ? 'Edit' : 'Add'}
           </button>
         )}
       </div>

@@ -49,15 +49,15 @@ export function MoveAccessDialog({ ask }: { ask: MoveAsk | null }) {
 
   const notes: string[] = []
   if (preview.entersRestricted !== null) {
-    notes.push(`“${labels.dest}” is inside a restricted folder — only people given access there will see ${it}.`)
+    notes.push(`“${labels.dest}” is restricted — only people with access there will see ${it}.`)
   }
   if (preview.leavesRestricted !== null) {
-    notes.push(`It leaves a restricted folder, so it takes on the access of “${labels.dest}”.`)
+    notes.push(`It takes on the access of “${labels.dest}”.`)
   }
-  if (preview.lockedAfter && !preview.lockedBefore) notes.push('It will be frozen for AI there — agents and AI edits can’t change it.')
-  if (preview.lockedBefore && !preview.lockedAfter) notes.push('It will no longer be frozen for AI — agents and AI edits can change it.')
-  if (preview.sharedDown === 'stops') notes.push('It will stop being shared with sub-spaces.')
-  if (preview.sharedDown === 'starts') notes.push('It will start being shared with sub-spaces.')
+  if (preview.lockedAfter && !preview.lockedBefore) notes.push('Frozen for AI there.')
+  if (preview.lockedBefore && !preview.lockedAfter) notes.push('No longer frozen for AI.')
+  if (preview.sharedDown === 'stops') notes.push('Stops being shared with sub-spaces.')
+  if (preview.sharedDown === 'starts') notes.push('Starts being shared with sub-spaces.')
 
   return (
     <ConfirmDialog
@@ -67,22 +67,21 @@ export function MoveAccessDialog({ ask }: { ask: MoveAsk | null }) {
       onConfirm={ask.confirm}
       onClose={ask.cancel}
       body={
-        <div className="flex flex-col gap-4">
-          <p>Access comes from where something is filed, so moving {it} changes who can see it.</p>
+        <div className="flex flex-col gap-3">
           <SubjectList
-            title="Will lose access"
+            title="Loses access"
             tone="loss"
             subjects={preview.lost}
             detail={(s) => (s.before ? `${LEVEL_LABEL[s.before]} now` : '')}
           />
           <SubjectList
-            title="Will gain access"
+            title="Gains access"
             tone="gain"
             subjects={preview.gained}
             detail={(s) => (s.after ? LEVEL_LABEL[s.after] : '')}
           />
           <SubjectList
-            title="Access changes"
+            title="Changes"
             tone="neutral"
             subjects={preview.changed}
             detail={(s) => `${s.before ? LEVEL_LABEL[s.before] : 'no access'} → ${s.after ? LEVEL_LABEL[s.after] : 'no access'}`}
@@ -94,7 +93,6 @@ export function MoveAccessDialog({ ask }: { ask: MoveAsk | null }) {
               ))}
             </ul>
           )}
-          <p className="text-xs text-text-muted">Anything shared directly on it keeps its sharing. Space admins always have access.</p>
         </div>
       }
     />

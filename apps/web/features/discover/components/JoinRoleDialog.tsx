@@ -21,16 +21,12 @@ export default function JoinRoleDialog({
   const aliases = selfJoinAliases(space.aliases);
 
   return (
-    <Modal onClose={onCancel} size="sm" ariaLabel="Choose your role">
+    <Modal onClose={onCancel} maxWidth="max-w-sm" ariaLabel="Choose your role">
       <div className="p-6">
         <div className="mb-4 flex items-center gap-3">
           <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" />
-          <div>
-            <h2 className="text-lg font-semibold text-text-primary">How do you identify?</h2>
-            <p className="text-xs text-text-muted">{space.name}</p>
-          </div>
+          <h2 className="text-base font-semibold text-text-primary">Join {space.name} as</h2>
         </div>
-        <p className="mb-6 text-sm text-text-secondary">Choose your role so others in the space know who you are.</p>
 
         {/* One row per role: a colour dot and the word. The chosen one is
             bolder and tinted; nothing is outlined. */}

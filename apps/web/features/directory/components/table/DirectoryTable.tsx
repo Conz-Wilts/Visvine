@@ -649,12 +649,7 @@ export default function DirectoryTable({
       <ConfirmDialog
         open={removing !== null}
         title={removing ? `Stop tracking “${removing.label}”?` : ''}
-        body={
-          <>
-            The column goes for everyone in the space. Values already entered stay on each entry&apos;s record and
-            note — nothing is deleted — but nobody sees or edits them here until the field is tracked again.
-          </>
-        }
+        body="The column goes for everyone. Values stay on each record."
         confirmLabel="Stop tracking"
         destructive
         error={fields?.error ?? undefined}

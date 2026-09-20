@@ -480,9 +480,9 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
 
       <ConfirmDialog
         open={showDeleteModal}
-        title="Delete Event"
-        body={<>Are you sure you want to delete <span className="font-semibold text-text-primary">{event.title}</span>? This action cannot be undone.</>}
-        confirmLabel="Delete Event"
+        title={`Delete ${event.title}?`}
+        body="This cannot be undone."
+        confirmLabel="Delete"
         destructive
         error={deleteError}
         closeOnBackdrop={false}

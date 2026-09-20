@@ -134,15 +134,15 @@ export default function AccessRequests() {
         body={
           denyRequest && (
             <>
-              {denyRequest.requesterName ?? 'This member'} won’t get access to{' '}
+              {denyRequest.requesterName ?? 'This member'} won’t get{' '}
               <span className="font-medium text-text-primary">
                 {requestTargetLabel(denyRequest.resourcePath, contextName)}
               </span>
-              . They can ask again.
+              .
             </>
           )
         }
-        confirmLabel="Deny request"
+        confirmLabel="Deny"
         destructive
         onConfirm={async () => {
           const request = denyRequest;

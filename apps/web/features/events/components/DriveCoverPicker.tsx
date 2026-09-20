@@ -65,61 +65,63 @@ export function DriveCoverPicker({ spaceId, eventId, onClose, onPicked }: Props)
   };
 
   return (
-    <Modal onClose={onClose} title="Choose from the Drive" size="lg">
-      <div className="relative mb-4">
-        <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-grey" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search pictures"
-          className="w-full pl-9 pr-3 py-2 text-sm bg-transparent border border-border-subtle rounded-lg focus:outline-none focus:border-brand-black"
-        />
+    <Modal onClose={onClose} title="Drive" size="lg">
+      <div className="p-6">
+        <div className="relative mb-4">
+          <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-grey" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search pictures"
+            className="w-full pl-9 pr-3 py-2 text-sm bg-transparent border border-border-subtle rounded-lg focus:outline-none focus:border-brand-black"
+          />
+        </div>
+
+        {(error ?? driveError) && <Alert className="mb-3">{error ?? driveError}</Alert>}
+
+        {images === null ? (
+          <div className="py-12 flex justify-center">
+            <LoaderCircleIcon className="w-5 h-5 animate-spin text-brand-grey" />
+          </div>
+        ) : shown.length === 0 ? (
+          <p className="py-12 text-sm text-brand-grey text-center">
+            {images.length === 0
+              ? 'No pictures yet.'
+              : 'Nothing matches that.'}
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {shown.map((file) => (
+              <button
+                key={file.id}
+                type="button"
+                onClick={() => pick(file.id)}
+                disabled={applying !== null}
+                className="group text-left disabled:opacity-50"
+              >
+                <div className="relative aspect-[16/9] rounded-lg overflow-hidden bg-surface-2 border border-border-subtle">
+                  {file.fileUrl && (
+                    <img src={file.fileUrl} alt={file.name} className="w-full h-full object-cover" />
+                  )}
+                  <div className="absolute inset-0 group-hover:bg-black/10 transition-colors" />
+                  {applying === file.id && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <LoaderCircleIcon className="w-5 h-5 animate-spin text-white" />
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1.5 text-xs text-brand-black truncate">{file.name}</p>
+                {file.folderId && (
+                  <p className="text-[11px] text-brand-grey inline-flex items-center gap-1">
+                    <FolderIcon className="w-3 h-3" />
+                    {folderName.get(file.folderId) ?? 'Folder'}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-
-      {(error ?? driveError) && <Alert className="mb-3">{error ?? driveError}</Alert>}
-
-      {images === null ? (
-        <div className="py-12 flex justify-center">
-          <LoaderCircleIcon className="w-5 h-5 animate-spin text-brand-grey" />
-        </div>
-      ) : shown.length === 0 ? (
-        <p className="py-12 text-sm text-brand-grey text-center">
-          {images.length === 0
-            ? 'No pictures yet.'
-            : 'Nothing matches that.'}
-        </p>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {shown.map((file) => (
-            <button
-              key={file.id}
-              type="button"
-              onClick={() => pick(file.id)}
-              disabled={applying !== null}
-              className="group text-left disabled:opacity-50"
-            >
-              <div className="relative aspect-[16/9] rounded-lg overflow-hidden bg-surface-2 border border-border-subtle">
-                {file.fileUrl && (
-                  <img src={file.fileUrl} alt={file.name} className="w-full h-full object-cover" />
-                )}
-                <div className="absolute inset-0 group-hover:bg-black/10 transition-colors" />
-                {applying === file.id && (
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                    <LoaderCircleIcon className="w-5 h-5 animate-spin text-white" />
-                  </div>
-                )}
-              </div>
-              <p className="mt-1.5 text-xs text-brand-black truncate">{file.name}</p>
-              {file.folderId && (
-                <p className="text-[11px] text-brand-grey inline-flex items-center gap-1">
-                  <FolderIcon className="w-3 h-3" />
-                  {folderName.get(file.folderId) ?? 'Folder'}
-                </p>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
     </Modal>
   );
 }
