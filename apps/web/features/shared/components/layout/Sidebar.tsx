@@ -573,6 +573,11 @@ export default function Sidebar() {
             // hairline, and its rounded corner where it reaches the band.
             background: "var(--color-surface-1)",
             borderLeft: FRAME_LINE,
+            // The seam between the docked list and the content beside it. It
+            // lives here rather than on the panel because the panel is exactly
+            // as wide as this column's content box, so a border of its own
+            // falls outside the clip and never draws.
+            borderRight: docked ? FRAME_LINE : undefined,
             borderTop: dockTopInset === 0 ? FRAME_LINE : undefined,
             borderTopLeftRadius: dockTopInset === 0 ? FRAME_RADIUS : SHELL_FRAME_RADIUS,
             borderBottomLeftRadius: SHELL_FRAME_RADIUS,

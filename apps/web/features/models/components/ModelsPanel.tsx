@@ -58,7 +58,7 @@ interface ModelRow {
   legacy: boolean;
 }
 
-const ACTION_SLOT = 'w-24 justify-center';
+const ACTION_SLOT = 'shrink-0 justify-center whitespace-nowrap';
 
 function statusOf(m: ModelRow): { label: string; tone: 'ok' | 'warn' | 'bad' | 'muted' } | null {
   if (!m.enabled) return { label: 'Off', tone: 'muted' };
@@ -128,19 +128,19 @@ export default function ModelsPanel({ space }: {
                 and "New type" have at the head of theirs. It opens the
                 providers under itself, and nothing else. */}
             {canManage && (
-              <li className="py-1">
+              <li className="py-0.5">
                 <NewRow label="Add model" onClick={() => setPicker((p) => !p)} />
               </li>
             )}
             {rows.map((m) => {
               const status = statusOf(m);
               return (
-                <li key={m.path} className="py-1">
+                <li key={m.path} className="py-0.5">
                   <button
                     onClick={() => open(m.name)}
-                    className="-mx-3 flex min-h-14 w-[calc(100%+1.5rem)] items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+                    className="-mx-3 flex min-h-11 w-[calc(100%+1.5rem)] items-center gap-3 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-surface-2"
                   >
-                    <ConnectorLogo entry={modelCatalogEntryFor(m.recipe, m.provider)} />
+                    <ConnectorLogo entry={modelCatalogEntryFor(m.recipe, m.provider)} size="sm" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-text-primary">{m.modelId ?? m.title ?? m.name}</p>
                       <p className="truncate text-xs text-text-muted">{m.providerLabel} · {m.name}</p>
@@ -159,12 +159,12 @@ export default function ModelsPanel({ space }: {
       {picker && canManage && (
         <ul className="divide-y divide-border-subtle border-t border-border-subtle">
           {MODEL_CATALOG.map((e) => (
-            <li key={e.id} className="py-1">
+            <li key={e.id} className="py-0.5">
               <button
                 onClick={() => { setPicker(false); setEntry(e); }}
-                className="-mx-3 flex min-h-14 w-[calc(100%+1.5rem)] items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-2"
+                className="-mx-3 flex min-h-11 w-[calc(100%+1.5rem)] items-center gap-3 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-surface-2"
               >
-                <ConnectorLogo entry={e} />
+                <ConnectorLogo entry={e} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-text-primary">{e.name}</p>
                   <p className="truncate text-xs text-text-muted">{e.description}</p>
@@ -232,8 +232,8 @@ function YourPlan({ enabled }: { enabled: Record<LocalRuntimeId, boolean> }) {
                   ? { label: 'Signed in', tone: 'ok' as const }
                   : { label: 'Not signed in', tone: 'warn' as const };
             return (
-              <li key={r.id} className="py-1">
-                <div className="-mx-3 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2.5">
+              <li key={r.id} className="py-0.5">
+                <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-text-primary">{r.label}</p>
                     <p className="truncate text-xs text-text-muted" title={r.policy}>

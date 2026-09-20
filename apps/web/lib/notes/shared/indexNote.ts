@@ -96,7 +96,7 @@ export function declaresIndexType(content: string): boolean {
 export const INDEX_DISPLAY_TYPE = 'Index'
 
 /** The word a sub-space's root shows in its house's context — display only, like Index. */
-export const SUBSPACE_DISPLAY_TYPE = 'Subspace'
+const SUBSPACE_DISPLAY_TYPE = 'Subspace'
 const SUBSPACE_ROOT_INDEX = /^subspaces\/[^/]+\/index\.md$/
 
 /**

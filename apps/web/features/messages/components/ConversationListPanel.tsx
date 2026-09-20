@@ -460,11 +460,10 @@ export default function ConversationListPanel({
 
   return docked
     ? createPortal(
-        // border-r: the channel list's right edge inside the shell card. The
-        // docked column itself carries no seam, so the line lives on the
-        // channel panel — without it the list bleeds into the thread.
+        // No seam here: the docked column (Sidebar.tsx) draws the right edge,
+        // because this panel fills that column's content box exactly.
         <div
-          className="flex h-full min-h-0 flex-col overflow-hidden border-r border-border-subtle"
+          className="flex h-full min-h-0 flex-col overflow-hidden"
           style={{ animation: 'fadeIn 0.3s ease-out' }}
         >
           {inbox}

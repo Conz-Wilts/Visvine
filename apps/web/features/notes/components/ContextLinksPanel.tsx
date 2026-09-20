@@ -12,8 +12,9 @@
 // A folder — which in this product IS its index note — groups by what it is
 // ABOUT, exactly like every other row: a person's context folder sits under
 // People beside the flat person notes, because it is a person note that grew a
-// folder. Only a folder that claims no subject falls into its own "Folders"
-// group, labelled Index, pinned to the top above the notes that live inside them.
+// folder. Only a folder that claims no subject stands as its own type — Index,
+// or Subspace for a room's root — pinned to the top above the notes inside it,
+// and painted in that type's console colour like every other band.
 //
 // Each group is painted in its type's configured colour — the same colour the
 // directory grid and the profile rails use — because the grouping IS the
@@ -23,7 +24,7 @@
 
 import { useMemo, useState, type CSSProperties } from 'react';
 import { ChevronDownIcon, ChevronRightIcon } from '@/features/shared/icons';
-import { INDEX_DISPLAY_TYPE, isIndexPath } from '@/lib/notes/shared/indexNote';
+import { displayTypeOf } from '@/lib/notes/shared/indexNote';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { findAlias, getNodeTypeConfig } from '@/lib/types';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
@@ -46,14 +47,14 @@ interface Group {
   label: string;
   /** The alias's colour, else the type's — what the whole group is painted in. */
   color: string;
+  /** A type a note wears by its SHAPE — Index, Subspace. Sorts above the rest. */
+  container: boolean;
   connections: Connection[];
 }
 
-// Sort keys, not labels. FOLDER pins the untyped-folder group to the top; the
-// other two stand for "this has no type" and "there's nothing on the other
-// end", which are absences rather than types and are deliberately left
-// uncoloured.
-const FOLDER = '__folder__';
+// Sort keys, not labels. These two stand for "this has no type" and "there's
+// nothing on the other end", which are absences rather than types and are
+// deliberately left uncoloured.
 const UNTYPED = '__note__';
 const UNRESOLVED = '__unresolved__';
 
@@ -144,6 +145,10 @@ export default function ContextLinksPanel({
       // so those fall back to the plain type group. Only a note with no type at
       // all falls into the untyped bucket.
       const rawType = connection.path ? byPath.get(connection.path)?.type?.trim() || null : null;
+      // What the note SHOWS: its declared type, else the one its shape gives it
+      // — Index for a folder, Subspace for a room's root. Derived from the path
+      // every time, because neither word is ever stored (indexNote.ts).
+      const shownType = connection.path ? displayTypeOf(connection.path, rawType) : null;
       let key: string;
       let label: string;
       let color: string;
@@ -151,28 +156,29 @@ export default function ContextLinksPanel({
         key = UNRESOLVED;
         label = 'Unresolved';
         color = NEUTRAL;
-      } else if (!rawType && isIndexPath(connection.path)) {
-        // A folder about nothing in particular. Typed folders never reach here:
-        // they group under their subject with everything else of that type.
-        key = FOLDER;
-        label = INDEX_DISPLAY_TYPE;
-        color = NEUTRAL;
-      } else if (!rawType) {
+      } else if (!shownType) {
         key = UNTYPED;
         label = 'Untyped';
         color = NEUTRAL;
       } else {
-        const typeName = getNodeTypeConfig(rawType, nodeTypes).name;
-        const alias = findAlias(aliases, aliasOfPath(connection.path), rawType);
+        const typeName = getNodeTypeConfig(shownType, nodeTypes).name;
+        // A shape type holds no aliases (noAliases) and names no node, so only a
+        // DECLARED type asks for one.
+        const alias = rawType ? findAlias(aliases, aliasOfPath(connection.path), rawType) : undefined;
         // NUL joins the pair: it can't occur in a type or an alias name, so two
         // groups collide only when they really are the same type and alias.
         key = alias ? `${typeName}\u0000${alias.name}` : typeName;
         label = alias?.name ?? typeName;
+        // A shape resolves through the space's vocabulary like any other type —
+        // that is what `Index` is doing in DEFAULT_NODE_TYPES — so the band is
+        // the console's colour, not a grey standing in for one.
         color = alias?.color ?? getTypeColor(typeName, nodeTypes);
       }
       const group = grouped.get(key);
       if (group) group.connections.push(connection);
-      else grouped.set(key, { key, label, color, connections: [connection] });
+      // A shape group — a folder or a room's root — is a container the rest sit
+      // inside, so it is pinned above them however it is spelled here.
+      else grouped.set(key, { key, label, color, container: !rawType && !!shownType, connections: [connection] });
     }
 
     return [...grouped.values()]
@@ -184,8 +190,7 @@ export default function ContextLinksPanel({
       // the biggest group — the note's dominant relationship — with unresolved
       // always last, since it's a to-do list, not a neighbourhood.
       .sort((a, b) => {
-        if (a.key === FOLDER) return -1;
-        if (b.key === FOLDER) return 1;
+        if (a.container !== b.container) return a.container ? -1 : 1;
         if (a.key === UNRESOLVED) return 1;
         if (b.key === UNRESOLVED) return -1;
         return b.connections.length - a.connections.length || a.label.localeCompare(b.label);

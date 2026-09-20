@@ -253,8 +253,14 @@ export interface LinkTypeConfig {
 // these via `nodeTypes`, but every type listed here resolves to a non-grey colour
 // even before a space config has loaded. This is what prevents the
 // "everything is grey on first paint" race condition.
+//
+// One palette, one weight: every colour here is the mid-light step of its hue,
+// so no type shouts over its neighbours and a row of chips reads as one set.
+// The hues are spread far enough apart that shape and colour together tell any
+// two types apart — which is why Tool (square) and Model (rectangle) may sit
+// one step apart in the purples.
 export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
-  { name: 'Person',    color: '#2563eb', shape: 'rectangle' },
+  { name: 'Person',    color: '#60a5fa', shape: 'rectangle' },
   // A group, organisation or space recorded in the directory — the type
   // was called Space until the 2026-08 vocabulary rename (and Group /
   // Organization before that). There is one type because there is one thing:
@@ -262,49 +268,49 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // `metadata.spaceRef`, unclaimed until somebody runs it (lib/spaces/
   // stub.ts). isOwnSpaceNode below tells the space you're IN apart from
   // the organisations recorded inside it.
-  { name: 'Space',     color: '#78d870', shape: 'square', system: true },
-  { name: 'Event',     color: '#ef4444', shape: 'rectangle' },
-  { name: 'Resource',  color: '#f97316', shape: 'rectangle' },
+  { name: 'Space',     color: '#4ade80', shape: 'square', system: true },
+  { name: 'Event',     color: '#f87171', shape: 'rectangle' },
+  { name: 'Resource',  color: '#fb923c', shape: 'rectangle' },
   // Structural types — the container kinds. Colours match the Create panel's
   // tiles so a thing looks the same wherever you meet it. Notes and uploaded
   // files are deliberately absent: they are content in a context, not nodes in
   // the graph, so nothing syncs a `note:`/`file:` node for them. Section was
   // called Space before the rename freed that name for the org type; stored
   // rows are migrated by scripts/rename-community-to-space.ts.
-  { name: 'Section',   color: '#0ea5e9', shape: 'square' },
-  { name: 'Channel',   color: '#ec4899', shape: 'rectangle' },
+  { name: 'Section',   color: '#38bdf8', shape: 'square' },
+  { name: 'Channel',   color: '#f472b6', shape: 'rectangle' },
   // A connector is a space's gateway to an external API or database, kept
   // as a note under connectors/. Rectangle like the other document types — the
-  // indigo tint and the plug glyph are what set it apart.
-  { name: 'Connector', color: '#4f46e5', shape: 'rectangle', system: true, noAliases: true },
+  // indigo and the plug glyph are what set it apart.
+  { name: 'Connector', color: '#818cf8', shape: 'rectangle', system: true, noAliases: true },
   // An agent is a scheduled worker authored as a note under agents/ (lib/agents).
-  // Teal, the one saturated hue no other document type uses.
-  { name: 'Agent',     color: '#0d9488', shape: 'rectangle', system: true },
+  // Teal, the one hue no other document type uses.
+  { name: 'Agent',     color: '#2dd4bf', shape: 'rectangle', system: true },
   // A Tool is a member-built app authored as an entity folder under tools/
   // (lib/tools) — its index is the config, its sub-notes the source. Square
   // because a Tool is a container of its own surfaces, not a document; purple,
-  // kept lighter than Connector's indigo so the two never read as one.
-  { name: 'Tool',      color: '#a855f7', shape: 'square', system: true, noAliases: true },
+  // clear of Connector's indigo so the two never read as one.
+  { name: 'Tool',      color: '#c084fc', shape: 'square', system: true, noAliases: true },
   // A model is what agents run on, kept as a note under models/ (lib/models).
   // Without a row here it fell through to the unknown-type grey and the Type
-  // filter showed the raw lowercase `models`. Amber-brown, a hue no other
-  // document type uses.
-  { name: 'Model',     color: '#b45309', shape: 'rectangle', system: true, noAliases: true },
+  // filter showed the raw lowercase `models`. Violet, one step off Tool's
+  // purple — the shapes carry the rest of the difference.
+  { name: 'Model',     color: '#a78bfa', shape: 'rectangle', system: true, noAliases: true },
   // A folder, which is its `index.md` (lib/notes/shared/indexNote.ts). It is
   // here so the word a folder shows has a colour and a spelling the console
   // owns like every other type — not so anything can be typed `Index`: the name
   // stays reserved (nodeTypeRegistry.ts RESERVED), no picker offers it and the
   // index contract still strips it from frontmatter. Square, like the other
-  // containers; manila yellow, the colour a folder already is.
+  // containers; yellow, the colour a folder already is.
   //
   // `scope: 'note'` is the honest one: it labels a NOTE and never a node —
   // nothing syncs an `index:` node — so it belongs with the vocabulary the
   // directory's type filter skips rather than with the types a card can wear.
-  { name: 'Index',     color: '#eab308', shape: 'square', scope: 'note', system: true, noAliases: true },
+  { name: 'Index',     color: '#facc15', shape: 'square', scope: 'note', system: true, noAliases: true },
   // A sub-space's root as it is drawn in its house's context — the
   // `subspaces/<id>/` folder (lib/notes/federation.ts). Like Index it labels a
   // PATH and never a node: a room is a tenant, not a directory record.
-  { name: 'Subspace',  color: '#65a30d', shape: 'square', scope: 'note', system: true, noAliases: true },
+  { name: 'Subspace',  color: '#a3e635', shape: 'square', scope: 'note', system: true, noAliases: true },
 ];
 
 /** Is this a built-in that can hold no aliases ({@link NodeTypeConfig.noAliases})? */
