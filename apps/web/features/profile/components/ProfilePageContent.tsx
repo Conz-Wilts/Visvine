@@ -17,9 +17,9 @@ import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import PageError from '@/components/ui/PageError';
 import { matchCountryInLocation } from '@/lib/countries';
 import CountryFlag from './CountryFlag';
+import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
 import Button from '@/components/ui/Button';
-import { getInitials } from '@/lib/avatarUtils';
 import { SectionCard, cssVars, hostname } from './profileCards';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
 import EditBasicInfoModal from './edit/EditBasicInfoModal';
@@ -197,7 +197,6 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
                   <ShieldCheckIcon className="w-5 h-5" />
                 </span>
               )}
-              {profile.pronouns && <span className="text-sm text-text-muted">{profile.pronouns}</span>}
               {aliasName && (
                 <Chip tone="solid" size="xl" color={aliasColor}>
                   {aliasName}
@@ -209,28 +208,27 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
               <p className="mt-1.5 text-lg text-text-primary max-w-[60ch]">{profile.subtitle}</p>
             )}
 
-            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text-muted">
-              {profile.location && (
-                <span className="inline-flex items-center gap-1.5">
-                  {hasCountry
-                    ? <CountryFlag location={profile.location} />
-                    : <MapPinIcon className="w-3.5 h-3.5" />}
-                  {profile.location}
-                </span>
-              )}
+            {profile.location && (
+              <div className="mt-2 flex items-center gap-1.5 text-sm text-text-muted">
+                {hasCountry
+                  ? <CountryFlag location={profile.location} />
+                  : <MapPinIcon className="w-3.5 h-3.5" />}
+                {profile.location}
+              </div>
+            )}
+
+            {/* The ways to reach them, under where they are */}
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text-muted">
               {profile.website && (
-                <>
-                  {profile.location && <span aria-hidden>·</span>}
-                  <a href={profile.website} target="_blank" rel="noopener noreferrer"
-                     className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
-                    <EarthIcon className="w-3.5 h-3.5" />{hostname(profile.website)}
-                  </a>
-                </>
+                <a href={profile.website} target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
+                  <EarthIcon className="w-3.5 h-3.5" />{hostname(profile.website)}
+                </a>
               )}
               {/* Contact info — the details live behind this link, not on the page */}
               {(hasContact || isOwner) && (
                 <>
-                  {(profile.location || profile.website) && <span aria-hidden>·</span>}
+                  {profile.website && <span aria-hidden>·</span>}
                   <button type="button" onClick={() => setModal('contactInfo')}
                           className="font-semibold hover:underline" style={{ color: theme.dark }}>
                     Contact info
@@ -239,13 +237,10 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
               )}
             </div>
 
-            {spacesClickable ? (
-              <button type="button" onClick={() => setModal('spaces')}
-                      className="mt-2 text-sm font-semibold hover:underline" style={{ color: theme.dark }}>
-                {spaceCount} {spaceCount === 1 ? 'space' : 'spaces'}
-              </button>
-            ) : (
-              <p className="mt-2 text-sm font-semibold text-text-secondary">{spaceCount} {spaceCount === 1 ? 'space' : 'spaces'}</p>
+            {follow.followers > 0 && (
+              <p className="mt-2 text-sm font-semibold text-text-secondary">
+                {follow.followers} {follow.followers === 1 ? 'follower' : 'followers'}
+              </p>
             )}
 
             {/* Who you both know — silent when you know nobody in common */}
@@ -292,20 +287,25 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
             )}
           </div>
 
-          {/* their spaces, logo first — the spot LinkedIn gives the current company */}
+          {/* their spaces, logo first — the count over them, the spot LinkedIn
+              gives the current company */}
           {visibleSpaces.length > 0 && (
             <div className="lg:w-72 flex-none flex flex-col gap-3 lg:pt-1">
+              {spacesClickable ? (
+                <button type="button" onClick={() => setModal('spaces')}
+                        className="self-start text-sm font-semibold hover:underline" style={{ color: theme.dark }}>
+                  {spaceCount} {spaceCount === 1 ? 'space' : 'spaces'}
+                </button>
+              ) : (
+                <p className="text-sm font-semibold text-text-secondary">
+                  {spaceCount} {spaceCount === 1 ? 'space' : 'spaces'}
+                </p>
+              )}
               {visibleSpaces.slice(0, 3).map((space) => (
                 <button key={space.id} type="button" onClick={() => setModal('spaces')}
                         className="group flex items-center gap-3 text-left">
-                  {space.imageUrl ? (
-                    <img src={space.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-none" />
-                  ) : (
-                    <span className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-semibold flex-none"
-                          style={{ background: theme.light, color: theme.dark }}>
-                      {getInitials(space.name)}
-                    </span>
-                  )}
+                  <SpaceAvatar name={space.name} imageUrl={space.imageUrl ?? undefined}
+                               size="lg" rounded="rounded-lg" className="w-10 h-10 flex-none" />
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-text-primary truncate group-hover:underline">{space.name}</span>
                     <span className="block text-[13px] text-text-muted">

@@ -37,7 +37,7 @@ export default function SpaceAvatar({ name, imageUrl, size = 'md', rounded = 'ro
     <Avatar
       name={name}
       imageUrl={imageUrl}
-      fallback="initials"
+      fallback="space"
       // Rounded square to match the profile/person avatar style, rather than a circle.
       sizeClassName={`${rounded} ${SIZE_CLASSES[size]}`}
       pixelSize={SIZE_PX[size]}

@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { getInitials } from '@/lib/avatarUtils';
 import { isOptimizableImageUrl } from '@/lib/mediaUrl';
 import PersonSilhouette from './PersonSilhouette';
+import { BlocksIcon } from '@/features/shared/icons';
 
 // Square avatars (rounded-xl/lg) — matches profile imagery across the app
 // (directory, full-profile overlay, mutual-connection cards).
@@ -47,7 +48,7 @@ interface AvatarProps {
    * What to render when there's no image: a person silhouette (default) or the
    * entity's initials on a brand-green tile (used for spaces).
    */
-  fallback?: 'silhouette' | 'initials';
+  fallback?: 'silhouette' | 'initials' | 'space';
   /**
    * Fully replaces the built-in size map — supply dimensions, rounding, and
    * (for initials) text-size classes. Lets wrappers with their own size scale
@@ -104,6 +105,20 @@ export default function Avatar({
         // CDN hostname) render unoptimized rather than throwing.
         unoptimized={!isOptimizableImageUrl(imageUrl)}
       />
+    );
+  }
+  if (fallback === 'space') {
+    // A space with no logo is drawn as a space, not as its own initials —
+    // `blocks` is the glyph the namespace table gives `spaces/`.
+    return (
+      <div
+        role="img"
+        aria-label={name}
+        className={`${cls} shrink-0 bg-brand-green flex items-center justify-center text-white ${className}`}
+        style={style}
+      >
+        <BlocksIcon className="w-[55%] h-[55%]" />
+      </div>
     );
   }
   if (fallback === 'initials') {
