@@ -1313,6 +1313,9 @@ model User {
   connectorRequests       ConnectorRequest[]
   identity                Identity?
   oauthAuthCodes          OAuthAuthCode[]
+  education               ProfileEducation[]
+  following               Follow[]               @relation("FollowsGiven")
+  followers               Follow[]               @relation("FollowsReceived")
 
   @@map("users")
 }
@@ -1823,4 +1826,44 @@ model ContextCleanRun {
 
   @@index([spaceId, startedAt(sort: Desc)])
   @@map("context_clean_runs")
+}
+
+/// One person following another, across every space. A follow is not membership
+/// and grants nothing: it is a stated interest, read by the profile header and
+/// nothing else. Both sides are foreign keys so a deleted account takes its
+/// follows with it.
+model Follow {
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  followerId String   @map("follower_id")
+  followeeId String   @map("followee_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  follower   User     @relation("FollowsGiven", fields: [followerId], references: [id], onDelete: Cascade)
+  followee   User     @relation("FollowsReceived", fields: [followeeId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followeeId])
+  @@index([followeeId])
+  @@map("follows")
+}
+
+/// A school on a member's profile. Profile facts a person lists about
+/// themselves are rows, not note frontmatter: they are queried as a table,
+/// sorted and edited one at a time.
+model ProfileEducation {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId      String   @map("user_id")
+  school      String
+  degree      String?
+  field       String?
+  /// 'YYYY' — a school year, not a date.
+  startYear   String?  @map("start_year")
+  endYear     String?  @map("end_year")
+  description String?
+  imageUrl    String?  @map("image_url")
+  position    Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("profile_education")
 }

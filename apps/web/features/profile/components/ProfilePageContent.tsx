@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { evictRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
-import { CameraIcon, ChevronDownIcon, ChevronUpIcon, EarthIcon, LoaderCircleIcon, MapPinIcon, PencilIcon, ShieldCheckIcon } from '@/features/shared/icons';
+import { ArrowRightIcon, CameraIcon, ChevronDownIcon, ChevronUpIcon, EarthIcon, LoaderCircleIcon, MapPinIcon, PencilIcon, ShieldCheckIcon, UserCheckIcon, UserPlusIcon } from '@/features/shared/icons';
 import Image from 'next/image';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import { useMemberConnection } from '@/features/profile/hooks/useMemberConnection';
@@ -29,8 +29,12 @@ import SpacesModal, { type ProfileSpace } from './SpacesModal';
 import type { FullProfile } from '@/lib/types/profile';
 import ExperienceTimeline from './ExperienceTimeline';
 import ContactInfoModal from './ContactInfoModal';
+import MutualsRow from './MutualsRow';
+import MutualsModal from './MutualsModal';
+import EducationSection from './EducationSection';
+import { useFollow } from '@/features/profile/hooks/useFollow';
 
-type ModalState = 'basicInfo' | 'about' | 'contact' | 'contactInfo' | 'spaces' | null;
+type ModalState = 'basicInfo' | 'about' | 'contact' | 'contactInfo' | 'spaces' | 'mutuals' | null;
 /** Your own space: no member list to connect to, so the link isn't offered. */
 const PERSONAL_ID_PREFIX = 'me:';
 
@@ -44,13 +48,14 @@ interface ProfilePageContentProps {
 
 export default function ProfilePageContent({ nodeId, overlay = false, selfView = false }: ProfilePageContentProps) {
   const { session, refreshSession } = useAuth();
-  const { currentSpace } = useSpace();
+  const { currentSpace, setCurrentSpace } = useSpace();
   const { profile, loading, error, updateBasicInfo, reload } = useProfile(nodeId);
   const { data: nodeData } = useNodeProfile(nodeId);
   const [modal, setModal] = useState<ModalState>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileSpaces, setProfileSpaces] = useState<ProfileSpace[]>([]);
+  const follow = useFollow(nodeId);
 
   // Spaces shown on the profile: managed (admin) ones always, member ones
   // only when the owner has toggled them visible. Owner receives the full list
@@ -148,6 +153,15 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
   const visibleSpaces = profileSpaces.filter((c) => c.visible);
   const spaceCount = profileSpaces.length > 0 ? visibleSpaces.length : (nodeData?.spaceCount ?? 1);
   const spacesClickable = profileSpaces.length > 0;
+  // Open space: the first space of theirs you are not already standing in,
+  // falling back to the space this record lives in — which is where a person
+  // reached from search or another space is actually kept. Standing in it
+  // already, the button would go nowhere, so it isn't offered.
+  const nodeSpaceId = nodeData?.node?.space_id ?? null;
+  const openableSpaceId = visibleSpaces.find((space) => space.id !== currentSpace?.id)?.id
+    ?? (nodeSpaceId && nodeSpaceId !== currentSpace?.id && !nodeSpaceId.startsWith(PERSONAL_ID_PREFIX)
+      ? nodeSpaceId
+      : null);
   const hasCountry = !!matchCountryInLocation(profile.location);
   const hasContact = !!(profile.email || profile.phone || profile.website || profile.linkedinUrl || profile.twitterUrl);
 
@@ -235,13 +249,29 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
               <p className="mt-2 text-sm font-semibold text-text-secondary">{spaceCount} {spaceCount === 1 ? 'space' : 'spaces'}</p>
             )}
 
+            {/* Who you both know — silent when you know nobody in common */}
+            {!isOwner && <MutualsRow nodeId={nodeId} accent={theme.dark} onOpen={() => setModal('mutuals')} />}
+
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {isOwner ? (
                 <Button onClick={() => setModal('basicInfo')} className="inline-flex items-center gap-2">
                   <PencilIcon className="w-4 h-4" /> Edit profile
                 </Button>
-              ) : hasContact && (
-                <Button onClick={() => setModal('contactInfo')}>Contact info</Button>
+              ) : (
+                follow.followable && (
+                  <Button variant={follow.following ? 'neutral' : 'brand'} disabled={follow.busy}
+                          onClick={() => void follow.toggle()} className="inline-flex items-center gap-2">
+                    {follow.following
+                      ? <><UserCheckIcon className="w-4 h-4" /> Following</>
+                      : <><UserPlusIcon className="w-4 h-4" /> Follow</>}
+                  </Button>
+                )
+              )}
+              {openableSpaceId && (
+                <Button variant="neutral" onClick={() => setCurrentSpace(openableSpaceId)}
+                        className="inline-flex items-center gap-2">
+                  Open space <ArrowRightIcon className="w-4 h-4" />
+                </Button>
               )}
             </div>
 
@@ -304,6 +334,10 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
         <SectionCard id="experience" title="Experience" size="lg" card scrollMargin={sectionScrollMargin}>
           <ExperienceTimeline accountCreatedAt={profile.createdAt ?? null} />
         </SectionCard>
+
+        {/* Education — rows of `profile_education`, the member's own to keep */}
+        <EducationSection nodeId={nodeId} isOwner={isOwner}
+                          scrollMargin={sectionScrollMargin} accent={theme.dark} />
       </div>
 
       {/* Modals */}
@@ -313,6 +347,9 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
       {modal === 'contactInfo' && (
         <ContactInfoModal open onClose={() => setModal(null)} profile={profile}
                           isOwner={isOwner} onEdit={() => setModal('contact')} />
+      )}
+      {modal === 'mutuals' && (
+        <MutualsModal nodeId={nodeId} personName={profile.name} onClose={() => setModal(null)} />
       )}
       {modal === 'spaces' && (
         <SpacesModal open onClose={() => setModal(null)} spaces={profileSpaces}
