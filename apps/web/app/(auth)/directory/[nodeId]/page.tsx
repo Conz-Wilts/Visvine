@@ -29,7 +29,8 @@ import TypePageTab from '@/features/tools/components/TypePageTab';
 import { useTypeTabs } from '@/features/tools/hooks/useTypePages';
 import ProfileSkeletonLoader from '@/features/profile/components/ProfileSkeletonLoader';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
-import { usePrefetchEntityContext } from '@/features/notes/lib/contextPrefetch';
+import { contextKeys, swrFetch, usePrefetchEntityContext } from '@/features/notes/lib/contextPrefetch';
+import { notesApi } from '@/features/notes/lib/notesApi';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import ProfilePageContent from '@/features/profile/components/ProfilePageContent';
 import { isSelfView } from '@/features/profile/lib/selfView';
@@ -81,6 +82,30 @@ function useContextTabAvailable(node: NBNode | null): boolean {
     entityKindOf(node.type) !== null &&
     (!node.space_id || node.space_id === currentSpace.id)
   );
+}
+
+// Whether the viewer can read the entity's note in the current space — null
+// while the answer is in flight. A person whose note no grant reaches has a
+// profile and nothing else: the Context tab would only open onto a refusal.
+function useCanReadEntityNote(notePath: string | null, enabled: boolean): boolean | null {
+  const { currentSpace } = useSpace();
+  const spaceId = currentSpace?.id ?? null;
+  const [answer, setAnswer] = useState<{ key: string; canRead: boolean } | null>(null);
+  const key = enabled && spaceId && notePath ? contextKeys.access(spaceId, notePath) : null;
+
+  useEffect(() => {
+    if (!key || !spaceId || !notePath) return;
+    let cancelled = false;
+    swrFetch(key, () => notesApi.getAccess(spaceId, notePath), (access) => {
+      if (!cancelled) setAnswer({ key, canRead: access.canRead });
+    }).catch(() => {
+      if (!cancelled) setAnswer({ key, canRead: false });
+    });
+    return () => { cancelled = true; };
+  }, [key, spaceId, notePath]);
+
+  if (!key) return false;
+  return answer?.key === key ? answer.canRead : null;
 }
 
 // Tab state lives in the URL (?tab=context / ?tab=raw) so tree/context/backlink
@@ -317,7 +342,11 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   const { data, loading: nodeLoading } = useNodeProfile(nodeId);
   const node = data?.node ?? null;
   const { currentSpace, loading: spaceLoading } = useSpace();
-  const contextAvailable = useContextTabAvailable(node);
+  const entityInSpace = useContextTabAvailable(node);
+  const notePath = useEntityNotePath(nodeId, node);
+  const canRead = useCanReadEntityNote(notePath, entityInSpace);
+  const accessPending = entityInSpace && canRead === null;
+  const contextAvailable = entityInSpace && canRead === true;
   const [wantedTab, setTabParam] = useProfileTabParam();
   const selfView = isSelfView(useSearchParams());
   // A Tool tab is local state: it has no ?tab= value (see ProfileTab), and
@@ -333,14 +362,14 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
     : wantedTab && contextAvailable
       ? wantedTab
       : 'about';
-  const notePath = useEntityNotePath(nodeId, node);
   // Warm the Context tab (Tiptap chunk + note/registry/config fetches) as soon
   // as the profile knows the tab exists, so clicking over paints immediately.
-  usePrefetchEntityContext(nodeId, node, contextAvailable);
+  usePrefetchEntityContext(nodeId, node, entityInSpace);
   // Deep link to ?tab=context/raw while space/node data still resolves: keep
   // the predicted bar + docked tree up instead of blinking them out for the
   // length of the fetch.
-  const stillResolving = wantedTab !== null && !contextAvailable && (spaceLoading || nodeLoading || !currentSpace);
+  const stillResolving =
+    wantedTab !== null && !contextAvailable && (spaceLoading || nodeLoading || !currentSpace || accessPending);
   const noteSurface = stillResolving || (contextAvailable && isNoteTab(activeTab));
   // activeTab falls back to 'about' until contextAvailable resolves, but while
   // resolving the URL's tab is where we're heading — underlining it keeps the
@@ -380,10 +409,10 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   // Strip a stale ?tab=context/raw (tool off / non-entity / foreign node) once
   // everything needed to decide has resolved.
   useEffect(() => {
-    if (wantedTab && !contextAvailable && !spaceLoading && !nodeLoading && currentSpace && node) {
+    if (wantedTab && !contextAvailable && !accessPending && !spaceLoading && !nodeLoading && currentSpace && node) {
       setTabParam('about');
     }
-  }, [wantedTab, contextAvailable, spaceLoading, nodeLoading, currentSpace, node, setTabParam]);
+  }, [wantedTab, contextAvailable, accessPending, spaceLoading, nodeLoading, currentSpace, node, setTabParam]);
 
   // Note surfaces are entirely shell-rendered (PaneSurfaceHost).
   if (noteSurface) return null;
