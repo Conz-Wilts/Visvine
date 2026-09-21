@@ -10,7 +10,7 @@ import { useSpace } from "@/features/shared/contexts/SpaceContext";
 import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
-import { CompassIcon, NewspaperIcon } from "@/features/shared/icons";
+import { CompassIcon, FeedIcon } from "@/features/shared/icons";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
 import { FRAME_BG, FRAME_LINE, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
@@ -338,7 +338,7 @@ export default function Sidebar() {
               label="Feed"
               href="/feed"
               active={pathname === "/feed" || pathname.startsWith("/feed/")}
-              icon={<NewspaperIcon className="!h-9 !w-9" strokeWidth={1.5} />}
+              icon={<FeedIcon className="!h-9 !w-9" strokeWidth={1.5} />}
             />
           </div>
           {/* Discover: the open spaces. It is here even with no space chosen,
@@ -582,14 +582,16 @@ export default function Sidebar() {
             marginLeft: SHELL_FRAME_GAP,
             // The column is the sheet's left edge, so it carries the sheet's
             // hairline, and its rounded corner where it reaches the band.
+            // Closed it is 0px wide, where a radius cannot bend: its edges
+            // would draw a straight line past the sheet's own curve.
             background: "var(--color-surface-1)",
-            borderLeft: FRAME_LINE,
+            borderLeft: docked ? FRAME_LINE : undefined,
             // The seam between the docked list and the content beside it. It
             // lives here rather than on the panel because the panel is exactly
             // as wide as this column's content box, so a border of its own
             // falls outside the clip and never draws.
             borderRight: docked ? FRAME_LINE : undefined,
-            borderTop: dockTopInset === 0 ? FRAME_LINE : undefined,
+            borderTop: docked && dockTopInset === 0 ? FRAME_LINE : undefined,
             borderTopLeftRadius: dockTopInset === 0 ? FRAME_RADIUS : SHELL_FRAME_RADIUS,
             borderBottomLeftRadius: SHELL_FRAME_RADIUS,
             transition: `width ${dur} ${ease}, margin-top ${dur} ${ease}`,

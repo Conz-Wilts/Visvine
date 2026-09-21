@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { getInitials } from '@/lib/avatarUtils';
 import { isOptimizableImageUrl } from '@/lib/mediaUrl';
 import PersonSilhouette from './PersonSilhouette';
-import { SquareIcon } from '@/features/shared/icons';
+import { SpaceIcon } from '@/features/shared/icons';
 
 // Square avatars (rounded-xl/lg) — matches profile imagery across the app
 // (directory, full-profile overlay, mutual-connection cards).
@@ -108,8 +108,8 @@ export default function Avatar({
     );
   }
   if (fallback === 'space') {
-    // A space with no logo is drawn as a space, not as its own initials: one
-    // square, the mark every surface gives a space (see NODE_GLYPH_PATHS).
+    // A space with no logo is drawn as a space, not as its own initials: the
+    // cornered square, the mark every surface gives a space (see NODE_GLYPH_PATHS).
     return (
       <div
         role="img"
@@ -117,7 +117,7 @@ export default function Avatar({
         className={`${cls} shrink-0 bg-brand-green flex items-center justify-center text-white ${className}`}
         style={style}
       >
-        <SquareIcon className="w-[55%] h-[55%]" />
+        <SpaceIcon className="w-[55%] h-[55%]" />
       </div>
     );
   }

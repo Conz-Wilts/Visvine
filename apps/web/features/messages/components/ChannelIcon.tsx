@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { HashIcon, Icon, NewspaperIcon } from '@/features/shared/icons';
+import { HashIcon, Icon, FeedIcon } from '@/features/shared/icons';
 
 export function ChannelIcon({ icon, fallback = 'hash', className = 'h-4 w-4' }: {
   icon?: string | null;
@@ -25,7 +25,7 @@ export function ChannelIcon({ icon, fallback = 'hash', className = 'h-4 w-4' }: 
     return <Icon name={icon} className={`shrink-0 ${className}`} strokeWidth={2} />;
   }
   if (fallback === 'feed') {
-    return <NewspaperIcon className={`shrink-0 ${className}`} strokeWidth={2} />;
+    return <FeedIcon className={`shrink-0 ${className}`} strokeWidth={2} />;
   }
   return <HashIcon className={`shrink-0 ${className}`} strokeWidth={2} />;
 }

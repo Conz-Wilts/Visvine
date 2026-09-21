@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from 'react';
 import { ViewToggle } from '@/components/ui';
-import { ChevronDownIcon, ChevronRightIcon, HashIcon, Icon, MessageCircleIcon, NewspaperIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from '@/features/shared/icons';
+import { ChevronDownIcon, ChevronRightIcon, HashIcon, Icon, MessageCircleIcon, FeedIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from '@/features/shared/icons';
 import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { ChannelIcon, ChannelIconPicker } from './ChannelIcon';
 import type { ChannelDirectoryEntry, ChannelSectionEntry, ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
@@ -215,7 +215,7 @@ export default function ConversationListPanel({
           onChange={setChannelViewMode}
           options={[
             { id: 'CHAT' as const, label: 'Chat', icon: <MessageCircleIcon className="h-3.5 w-3.5" /> },
-            { id: 'FEED' as const, label: 'Feed', icon: <NewspaperIcon className="h-3.5 w-3.5" /> },
+            { id: 'FEED' as const, label: 'Feed', icon: <FeedIcon className="h-3.5 w-3.5" /> },
           ]}
         />
         {channelSections.length > 0 && (

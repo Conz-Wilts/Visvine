@@ -123,7 +123,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     // The directory's organisation records — a company or group this space
     // tracks. Not this space's sub-spaces: those are grafted into subspaces/.
     description: 'The organisations this space keeps context about.',
-    icon: 'square',
+    icon: 'space',
   },
   {
     dir: 'events',
@@ -236,7 +236,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     appearance: 'derived',
     writes: 'nobody',
     description: "This space's sub-spaces, each read as of now — written in the sub-space itself.",
-    icon: 'square',
+    icon: 'space',
   },
   {
     dir: 'parent',
@@ -249,7 +249,7 @@ export const RESERVED_NAMESPACES: readonly Namespace[] = [
     appearance: 'derived',
     writes: 'nobody',
     description: 'What the space this one sits inside shares with it — read-only.',
-    icon: 'square',
+    icon: 'space',
   },
 ]
 

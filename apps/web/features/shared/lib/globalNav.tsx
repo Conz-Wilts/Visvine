@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { CompassIcon, NewspaperIcon } from '@/features/shared/icons';
+import { CompassIcon, FeedIcon } from '@/features/shared/icons';
 
 /**
  * The rail's top group — the surfaces that are yours rather than the space's:
@@ -30,7 +30,7 @@ export const GLOBAL_NAV: GlobalNavItem[] = [
     key: 'feed',
     label: 'Feed',
     href: '/feed',
-    icon: <NewspaperIcon className={iconClass} />,
+    icon: <FeedIcon className={iconClass} />,
   },
   {
     key: 'discover',

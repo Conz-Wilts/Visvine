@@ -141,23 +141,6 @@ export function useFeed(currentUserId: string) {
     } catch { /* best-effort */ }
   }, [conversationOf]);
 
-  const patch = useCallback((messageId: string, change: (m: SerializedMessage) => SerializedMessage) => {
-    setPosts((loaded) => loaded.map((post) => post.message.id === messageId ? { ...post, message: change(post.message) } : post));
-  }, []);
-
-  const toggleStar = useCallback(async (messageId: string) => {
-    const conversationId = conversationOf(messageId);
-    if (!conversationId) return;
-    // Stars are private, so no echo corrects an optimistic flip.
-    patch(messageId, (m) => ({ ...m, starred: !m.starred }));
-    try {
-      const { starred } = await fetchJson<{ starred: boolean }>(`${messagesUrl(conversationId)}/${messageId}/star`, { method: 'POST' });
-      patch(messageId, (m) => ({ ...m, starred }));
-    } catch {
-      patch(messageId, (m) => ({ ...m, starred: !m.starred }));
-    }
-  }, [conversationOf, patch]);
-
   const edit = useCallback(async (messageId: string, text: string) => {
     const conversationId = conversationOf(messageId);
     if (!conversationId) return;
@@ -179,6 +162,6 @@ export function useFeed(currentUserId: string) {
   return {
     posts, targets, loading, failed, loadingOlder,
     hasMore: nextCursor !== null,
-    loadOlder, send, comment, react, toggleStar, edit, remove,
+    loadOlder, send, comment, react, edit, remove,
   };
 }

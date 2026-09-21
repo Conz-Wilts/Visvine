@@ -91,7 +91,7 @@ function buildFeed(messages: SerializedMessage[]): FeedPost[] {
 
 // ─── Comment row ─────────────────────────────────────────────────────────────
 
-const CommentRow = memo(function CommentRow({
+export const CommentRow = memo(function CommentRow({
   comment,
   onReaction,
   onDelete,
@@ -182,7 +182,7 @@ const CommentRow = memo(function CommentRow({
 
 // ─── Post card ───────────────────────────────────────────────────────────────
 
-export const PostCard = memo(function PostCard({
+const PostCard = memo(function PostCard({
   post,
   comments,
   context,

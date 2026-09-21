@@ -7,7 +7,7 @@
  */
 
 import { ViewToggle } from '@/components/ui';
-import { HashIcon, LogOutIcon, MessageCircleIcon, NewspaperIcon, PencilIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
+import { HashIcon, LogOutIcon, MessageCircleIcon, FeedIcon, PencilIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
 import type { ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
 import Avatar from '@/components/ui/Avatar';
 
@@ -59,7 +59,7 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
             onChange={(mode) => { if (mode !== viewMode) onChangeViewMode(mode); }}
             options={[
               { id: 'CHAT' as const, label: 'Chat', icon: <MessageCircleIcon className="h-3.5 w-3.5" /> },
-              { id: 'FEED' as const, label: 'Feed', icon: <NewspaperIcon className="h-3.5 w-3.5" /> },
+              { id: 'FEED' as const, label: 'Feed', icon: <FeedIcon className="h-3.5 w-3.5" /> },
             ]}
           />
         </div>

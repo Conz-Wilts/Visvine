@@ -19,15 +19,21 @@ export const PERSON_SILHOUETTE_PATH =
   'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.42 0-8 2.69-8 6v2h16v-2c0-3.31-3.58-6-8-6Z';
 
 /**
- * SVG path for a space (24×24 viewBox): one rounded square. A space is ONE of
- * the things the Directory holds four of — the Directory's own mark is the
- * grid of four, so a space is a single square and the two never read alike.
- * Every surface that stands for a space draws this, whether as a silhouette or
- * as the `square` icon (see `getNodeGlyph`, `Avatar`'s `space` fallback).
+ * SVG path for a space (24×24 viewBox): a square with a hollow ring on each
+ * corner, drawn as rings and bars filled by the even-odd rule. Every surface
+ * that stands for a space draws this, whether as a silhouette or as the
+ * `space` icon (see `getNodeGlyph`, `Avatar`'s `space` fallback).
  */
 const SPACE_SILHOUETTE_PATH =
-  'M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3Z' +
-  'M6 5.4a.6.6 0 0 0-.6.6v12a.6.6 0 0 0 .6.6h12a.6.6 0 0 0 .6-.6V6a.6.6 0 0 0-.6-.6Z';
+  [
+    [5, 5],
+    [19, 5],
+    [5, 19],
+    [19, 19],
+  ]
+    .map(([x, y]) => `M${x - 3.5} ${y}a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0Z` + `M${x - 1.5} ${y}a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0Z`)
+    .join('') +
+  'M8.5 4h7v2h-7ZM8.5 18h7v2h-7ZM4 8.5h2v7H4ZM18 8.5h2v7h-2Z';
 
 /**
  * The container glyph a section or a channel draws: the isometric cube spaces
@@ -102,8 +108,7 @@ export type NodeGlyph = keyof typeof NODE_GLYPH_PATHS;
 
 /** Glyphs whose holes are drawn by the even-odd rule rather than reversed winding. */
 export const NODE_GLYPH_FILL_RULE: Partial<Record<NodeGlyph, 'evenodd'>> = {
-  // The square is drawn as an outline, the way the `square` icon draws it —
-  // a solid block reads as a missing image, not as a space.
+  // The corner rings are hollow, the way the `space` icon draws them.
   space: 'evenodd',
   event: 'evenodd',
 };
