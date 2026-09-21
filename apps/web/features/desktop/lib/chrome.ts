@@ -21,7 +21,9 @@ import { SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
  * width and its top, so nothing in it moves.
  *
  * A browser has no controls to clear, so there the rail starts at the window's
- * top edge: the space's row is a square cell, which is its own margin.
+ * top edge: the space's row is a square cell, which is its own margin. The
+ * band beside it is that row's height, so the sheet's top hairline and the
+ * line under the space are one line across the window.
  */
 const MAC_LIGHTS = { x: 14, y: SHELL_TOP_BAR_H / 2 - 7 };
 const MAC_RAIL_W = 72;
@@ -31,12 +33,14 @@ type DesktopChrome = {
   inset: number;
   /** The closed rail's width, centred on the window's controls. */
   railW: number;
+  /** The band's height. */
+  bandH: number;
   /** Where the rail's first row starts: under the window's controls, or at the top where there are none. */
   railTop: number;
 };
 
-const BROWSER: DesktopChrome = { inset: 0, railW: COLLAPSED_W, railTop: 0 };
-const MAC: DesktopChrome = { inset: SHELL_TOP_BAR_H, railW: MAC_RAIL_W, railTop: SHELL_TOP_BAR_H };
+const BROWSER: DesktopChrome = { inset: 0, railW: COLLAPSED_W, railTop: 0, bandH: COLLAPSED_W };
+const MAC: DesktopChrome = { inset: SHELL_TOP_BAR_H, railW: MAC_RAIL_W, railTop: SHELL_TOP_BAR_H, bandH: SHELL_TOP_BAR_H };
 const MAC_FULL_SCREEN: DesktopChrome = { ...MAC, inset: 0 };
 
 // One read of the shell for every component that measures against it.
