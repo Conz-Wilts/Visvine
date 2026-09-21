@@ -1,6 +1,6 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
+import { useLayoutEffect, useSyncExternalStore } from 'react';
 import { COLLAPSED_W } from '@/features/shared/components/layout/railRow';
 import { SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
 
@@ -19,6 +19,11 @@ import { SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
  * In full screen macOS hides the lights in the menu bar's drop-down; the band
  * stays, because it carries the page's tabs and actions, and the rail keeps its
  * width, so nothing beside it moves sideways.
+ *
+ * The band is there only while something stands on it. A page with no tabs,
+ * no actions and nothing hoisted (the Feed) gets no band: the sheet runs to the
+ * window's top. In a browser the rail goes up with it, since nothing there
+ * needs clearing; in the mac app the rail stays under the window's controls.
  */
 const MAC_LIGHTS = { x: 14, y: SHELL_TOP_BAR_H / 2 - 7 };
 const MAC_RAIL_W = 72;
@@ -28,21 +33,70 @@ type DesktopChrome = {
   inset: number;
   /** The closed rail's width, centred on the window's controls. */
   railW: number;
+  /** The band's height: 0 on a page that puts nothing on it. */
+  bandH: number;
+  /** Where the rail's first row starts. */
+  railTop: number;
 };
 
-const BROWSER: DesktopChrome = { inset: 0, railW: COLLAPSED_W };
-const MAC: DesktopChrome = { inset: SHELL_TOP_BAR_H, railW: MAC_RAIL_W };
+const BROWSER: DesktopChrome = { inset: 0, railW: COLLAPSED_W, bandH: SHELL_TOP_BAR_H, railTop: SHELL_TOP_BAR_H };
+const MAC: DesktopChrome = { inset: SHELL_TOP_BAR_H, railW: MAC_RAIL_W, bandH: SHELL_TOP_BAR_H, railTop: SHELL_TOP_BAR_H };
 const MAC_FULL_SCREEN: DesktopChrome = { ...MAC, inset: 0 };
 
+// Each shell with its band gone. Built once, so a snapshot is a stable object.
+const BARE = new Map<DesktopChrome, DesktopChrome>([
+  [BROWSER, { ...BROWSER, bandH: 0, railTop: 0 }],
+  [MAC, { ...MAC, bandH: 0 }],
+  [MAC_FULL_SCREEN, { ...MAC_FULL_SCREEN, bandH: 0 }],
+]);
+
 // One read of the shell for every component that measures against it.
-let chrome = BROWSER;
+let shell = BROWSER;
+let bandUsers = 0;
+let bandBare = false;
+let bareTimer: ReturnType<typeof setTimeout> | null = null;
 let started = false;
 const listeners = new Set<() => void>();
 
+const snapshot = () => (bandBare ? BARE.get(shell) ?? shell : shell);
+const emit = () => listeners.forEach((l) => l());
+
 function set(next: DesktopChrome) {
-  if (next === chrome) return;
-  chrome = next;
-  listeners.forEach((l) => l());
+  if (next === shell) return;
+  shell = next;
+  emit();
+}
+
+// A navigation takes one page's tabs off the band a moment before the next
+// page's arrive, so the band goes only once it has stayed empty.
+const BARE_AFTER_MS = 150;
+
+function setBandBare(bare: boolean) {
+  if (bareTimer) { clearTimeout(bareTimer); bareTimer = null; }
+  if (bare === bandBare) return;
+  if (!bare) { bandBare = false; emit(); return; }
+  bareTimer = setTimeout(() => { bareTimer = null; bandBare = true; emit(); }, BARE_AFTER_MS);
+}
+
+/** Holds the band open while the caller has something on it. */
+export function useShellBand(active = true) {
+  useLayoutEffect(() => {
+    if (!active) return;
+    bandUsers += 1;
+    setBandBare(false);
+    return () => {
+      bandUsers -= 1;
+      if (bandUsers === 0) setBandBare(true);
+    };
+  }, [active]);
+}
+
+/** The shell's own claim: with no page holding the band, it goes. */
+export function useShellBandRoot() {
+  useLayoutEffect(() => {
+    if (bandUsers === 0) setBandBare(true);
+    return () => setBandBare(false);
+  }, []);
 }
 
 function start() {
@@ -67,7 +121,7 @@ function subscribe(listener: () => void) {
 
 /** The room the window's controls take — the browser's shell everywhere but the mac app. */
 export function useDesktopChrome(): DesktopChrome {
-  return useSyncExternalStore(subscribe, () => chrome, () => BROWSER);
+  return useSyncExternalStore(subscribe, snapshot, () => BROWSER);
 }
 
 /** The frame: the surface itself, so the sheet is told apart by its line. */

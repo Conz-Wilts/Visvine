@@ -26,6 +26,7 @@ import { TAB_MOTION, TAB_MOTION_EASE, TAB_SET_MOTION_MS } from '@/components/ui/
 import { usePaneChromeState, type PaneChromeState, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import PaneTopScrollbarMask from './PaneTopScrollbarMask';
 import { SHELL_PANE_TOP } from '@/features/shared/contexts/ThemeContext';
+import { useShellBand } from '@/features/desktop/lib/chrome';
 
 /** Height the attached region reserves: the floating toolbar card (44px), the
  *  gap detaching it from the nav line, and room below for its shadow — the
@@ -98,6 +99,7 @@ function PaneTabBarInner({
   // centred on the full card while the text it acts on slides left. Both only
   // exist at a breakpoint inline padding can't see, so each is read in JS.
   const { connectionsOpen, setConnectionsOpen, setTabTrailHost, shellTabsHost, shellTrailHost } = useContextPanel();
+  useShellBand(!!shellTabsHost);
   const surfaceKind = chrome.surface?.kind;
   const showConnections = surfaceKind === 'note' || surfaceKind === 'entity';
   const rawOn =

@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useDesktopChrome } from '@/features/desktop/lib/chrome';
 import { createPortal } from 'react-dom';
-import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_PANE_TOP, SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
+import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_PANE_TOP } from '@/features/shared/contexts/ThemeContext';
 
 /**
  * Hides the page scrollbar behind a pane-top tab bar.
@@ -45,13 +46,14 @@ export default function PaneTopScrollbarMask({
   transparent?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
+  const { bandH } = useDesktopChrome();
   useEffect(() => setMounted(true), []);
 
   // The strip starts where <main> does — under the shell's top band — so it
   // covers the clearance above the bar as well as the bar itself, and the track
   // runs through both.
   // +1: below the sheet's top hairline (FRAME_LINE), which it would paint over.
-  const top = SHELL_TOP_BAR_H + SHELL_FRAME_GAP + 1;
+  const top = bandH + SHELL_FRAME_GAP + 1;
   const resolvedHeight = bottom != null ? Math.max(0, bottom - top) : height + SHELL_PANE_TOP;
 
   // Set on <main> itself so Chromium re-resolves the scrollbar style when it

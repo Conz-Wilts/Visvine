@@ -2,8 +2,7 @@
 
 import { useHeader } from "@/features/shared/contexts/HeaderContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
-import { SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
-import { FRAME_RADIUS } from "@/features/desktop/lib/chrome";
+import { FRAME_RADIUS, useDesktopChrome, useShellBand, useShellBandRoot } from "@/features/desktop/lib/chrome";
 
 /*
  * The band across the top of the content surface — the shell's chrome AND the
@@ -15,7 +14,8 @@ import { FRAME_RADIUS } from "@/features/desktop/lib/chrome";
  * (PaneTabBar → shellTabsHost / shellTrailHost on ContextPanelContext), so a
  * page under the pane shell puts its sections and its actions on the band
  * rather than in a second bar below it. A page with neither leaves both hosts
- * empty and the band is bare — you are the rail's last row, not this one's.
+ * empty, and a bare band is not drawn at all (useShellBand): it keeps its
+ * hosts mounted at no height, so the next page's tabs have somewhere to land.
  *
  * There is no side-panel switch: a surface that has a panel — the context tree
  * beside a note, the channel list on /channels — keeps it open. The panel is
@@ -29,6 +29,9 @@ import { FRAME_RADIUS } from "@/features/desktop/lib/chrome";
 export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
   const { setShellTabsHost, setShellTrailHost } = useContextPanel();
   const { headerContent, headerRight } = useHeader();
+  const { bandH } = useDesktopChrome();
+  useShellBandRoot();
+  useShellBand(!!headerContent || !!headerRight);
 
   return (
     // paddingLeft: the first tab starts just past the sheet's rounded corner,
@@ -38,7 +41,8 @@ export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
     <div
       className="flex shrink-0 items-center gap-4 pr-1"
       style={{
-        height: SHELL_TOP_BAR_H,
+        height: bandH,
+        overflow: bandH ? undefined : "hidden",
         paddingLeft: leftInset + FRAME_RADIUS + 4,
         transition: "padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
         WebkitAppRegion: "drag",

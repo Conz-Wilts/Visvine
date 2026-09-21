@@ -7,7 +7,7 @@ import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/Cre
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { useSpace } from "@/features/shared/contexts/SpaceContext";
-import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
+import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from "@/features/shared/contexts/ThemeContext";
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { CompassIcon, FeedIcon } from "@/features/shared/icons";
@@ -93,7 +93,7 @@ export default function Sidebar() {
   const intent = useHoverIntent();
   // The desktop shell's window controls stand in the band's left end, over
   // the rail, and the closed rail is wide enough to clear them.
-  const { inset: chromeInset, railW: collapsedW } = useDesktopChrome();
+  const { inset: chromeInset, railW: collapsedW, railTop, bandH } = useDesktopChrome();
 
   const ease = DOCK_EASE;
 
@@ -175,7 +175,7 @@ export default function Sidebar() {
   const railW = expanded ? EXPANDED_W : collapsedW;
   // Where a rail panel stands: the content sheet's box, below the band.
   const railPanelBox = (open: boolean): React.CSSProperties => ({
-    top: SHELL_TOP_BAR_H + SHELL_FRAME_GAP,
+    top: bandH + SHELL_FRAME_GAP,
     bottom: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN,
     left: railW + SHELL_FRAME_GAP,
     width: railPanelW,
@@ -527,7 +527,7 @@ export default function Sidebar() {
             // sheet's hairline is the divide.
             background: FRAME_BG,
             width: railW,
-            paddingTop: SHELL_TOP_BAR_H,
+            paddingTop: railTop,
             transition: reduced ? "none" : `width ${RAIL_MOTION}`,
           }}
           // Coming back before a shutting panel has released the rail keeps it
@@ -575,7 +575,7 @@ export default function Sidebar() {
             width: columnW,
             // dockTopInset is measured from <main>'s top; this column hangs in
             // the full-height aside, so it clears the shell's band as well.
-            marginTop: SHELL_TOP_BAR_H + dockTopInset + SHELL_FRAME_GAP,
+            marginTop: bandH + dockTopInset + SHELL_FRAME_GAP,
             marginBottom: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN,
             // Rail is railW wide (no +1 border column), so the full GAP closes
             // the distance to the card's left edge.

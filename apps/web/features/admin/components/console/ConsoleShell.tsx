@@ -10,6 +10,7 @@ import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '
 import { TAB_MOTION } from '@/components/ui/tabMotion';
 import PaneTopScrollbarMask from '@/features/shared/components/pane/PaneTopScrollbarMask';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
+import { useShellBand } from '@/features/desktop/lib/chrome';
 import { ConsoleSaveProvider, useConsoleSave } from './ConsoleSaveContext';
 
 /**
@@ -62,6 +63,7 @@ export default function ConsoleShell({
   ariaLabel = 'Console sections',
 }: ConsoleShellProps) {
   const { shellTabsHost, shellTrailHost } = useContextPanel();
+  useShellBand(!!shellTabsHost);
   const router = useSpaceRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

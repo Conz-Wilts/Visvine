@@ -4,6 +4,7 @@ import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
+import { useShellBand } from '@/features/desktop/lib/chrome';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
 import { TAB_MOTION } from '@/components/ui/tabMotion';
 
@@ -69,6 +70,7 @@ export default function PageTabBar({
   // attached toolbar tray, which belong over the content. Outside the shell
   // (no host) the bar draws its own row where it stands.
   const { shellTabsHost } = useContextPanel();
+  useShellBand(!!shellTabsHost);
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
   // Transitions are ARMED only after the bar's first frame is on screen. This bar
