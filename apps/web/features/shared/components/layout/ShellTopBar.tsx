@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useHeader } from "@/features/shared/contexts/HeaderContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
-import { FRAME_RADIUS, useDesktopChrome, useShellBand, useShellBandRoot } from "@/features/desktop/lib/chrome";
+import { useSidebar } from "@/features/shared/contexts/SidebarContext";
+import { BAND_MOTION, FRAME_RADIUS, useDesktopChrome, useShellBand, useShellBandRoot } from "@/features/desktop/lib/chrome";
 
 /*
  * The band across the top of the content surface — the shell's chrome AND the
@@ -30,6 +32,11 @@ export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
   const { setShellTabsHost, setShellTrailHost } = useContextPanel();
   const { headerContent, headerRight } = useHeader();
   const { bandH } = useDesktopChrome();
+  const { reduced } = useSidebar();
+  // While the band travels it clips what stands on it, so tabs never spill
+  // over the sheet; at rest it clips nothing (focus rings, menus).
+  const [settledH, setSettledH] = useState(bandH);
+  const moving = !reduced && settledH !== bandH;
   useShellBandRoot();
   useShellBand(!!headerContent || !!headerRight);
 
@@ -42,11 +49,14 @@ export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
       className="flex shrink-0 items-center gap-4 pr-1"
       style={{
         height: bandH,
-        overflow: bandH ? undefined : "hidden",
+        overflow: bandH && !moving ? undefined : "hidden",
         paddingLeft: leftInset + FRAME_RADIUS + 4,
-        transition: "padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
+        transition: reduced ? "none" : `padding-left ${BAND_MOTION}, height ${BAND_MOTION}`,
         WebkitAppRegion: "drag",
       } as React.CSSProperties}
+      onTransitionEnd={(e) => {
+        if (e.target === e.currentTarget && e.propertyName === "height") setSettledH(bandH);
+      }}
     >
       {/* The page's tab set (pane shell pages portal it in; empty elsewhere).
           It scrolls sideways before it ever pushes the actions out of the

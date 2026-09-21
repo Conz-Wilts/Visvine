@@ -124,9 +124,13 @@ export function useDesktopChrome(): DesktopChrome {
   return useSyncExternalStore(subscribe, snapshot, () => BROWSER);
 }
 
+/** The band's motion when it comes and goes: the rail's own, so the frame moves as one. */
+export const BAND_MOTION = '0.3s cubic-bezier(0.25, 0.1, 0.25, 1)';
+
 /** The frame: the surface itself, so the sheet is told apart by its line. */
 export const FRAME_BG = 'var(--color-surface-1)';
 /** The hairline between the frame and the sheet. */
-export const FRAME_LINE = '1px solid var(--shell-border, #e5e7eb)';
+export const FRAME_LINE_COLOR = 'var(--shell-border, #e5e7eb)';
+export const FRAME_LINE = `1px solid ${FRAME_LINE_COLOR}`;
 /** The sheet's corner where the band and the rail meet. */
 export const FRAME_RADIUS = 12;

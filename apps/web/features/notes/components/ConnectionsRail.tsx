@@ -17,7 +17,7 @@
 // their own note view: the same rule the docked tree and the note body follow.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useDesktopChrome } from '@/features/desktop/lib/chrome';
+import { BAND_MOTION, useDesktopChrome } from '@/features/desktop/lib/chrome';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { CONNECTIONS_RAIL_W, useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
@@ -110,7 +110,7 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
     // pointer-events-none so the transparent wrapper never swallows clicks;
     // the aside re-enables them on itself.
     <div
-      className="pointer-events-none fixed z-30 hidden overflow-hidden xl:block"
+      className="pointer-events-none fixed z-30 hidden overflow-hidden motion-reduce:!transition-none xl:block"
       style={{
         top: bandH + SHELL_FRAME_GAP + dockTopInset,
         right: SHELL_FRAME_MARGIN + SHELL_FRAME_GAP,
@@ -120,6 +120,7 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
         // row it sits mid-edge, where a radius would round nothing.
         borderTopRightRadius: dockTopInset > 0 ? 0 : SHELL_FRAME_RADIUS,
         borderBottomRightRadius: SHELL_FRAME_RADIUS,
+        transition: `top ${BAND_MOTION}`,
       }}
     >
     <aside

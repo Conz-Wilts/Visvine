@@ -13,7 +13,7 @@ import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { CompassIcon, FeedIcon } from "@/features/shared/icons";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
-import { FRAME_BG, FRAME_LINE, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
+import { BAND_MOTION, FRAME_BG, FRAME_LINE, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
 import Modal from "@/components/ui/Modal";
 import UserMenu from "@/features/auth/components/UserMenu";
 import CreatePanel from "@/features/create/components/CreatePanel";
@@ -186,7 +186,7 @@ export default function Sidebar() {
     borderBottom: open ? FRAME_LINE : undefined,
     borderTopLeftRadius: FRAME_RADIUS,
     borderBottomLeftRadius: SHELL_FRAME_RADIUS,
-    transition: reduced ? "none" : `left ${RAIL_MOTION}`,
+    transition: reduced ? "none" : `left ${RAIL_MOTION}, top ${BAND_MOTION}`,
   });
   // Create new is open only while the pointer is on its row or in the panel:
   // pointing at any other row of the rail puts it away. The switcher is not
@@ -528,7 +528,7 @@ export default function Sidebar() {
             background: FRAME_BG,
             width: railW,
             paddingTop: railTop,
-            transition: reduced ? "none" : `width ${RAIL_MOTION}`,
+            transition: reduced ? "none" : `width ${RAIL_MOTION}, padding-top ${BAND_MOTION}`,
           }}
           // Coming back before a shutting panel has released the rail keeps it
           // open — the release is cancelled, not raced.

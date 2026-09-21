@@ -10,7 +10,7 @@ import { SHELL_PANE_TOP } from "@/features/shared/contexts/ThemeContext";
 import { SpaceProvider, useSpace } from "@/features/shared/contexts/SpaceContext";
 import { FEATURES, canAccessFeature, defaultLandingHref } from "@/features/shared/lib/features";
 import { EXPANDED_W } from "@/features/shared/components/layout/railRow";
-import { FRAME_BG, FRAME_LINE, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
+import { BAND_MOTION, FRAME_BG, FRAME_LINE, FRAME_LINE_COLOR, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
 import type { SpaceFeatureConfig } from "@/lib/types";
 import { SpaceDesignProvider } from "@/features/shared/contexts/SpaceDesignContext";
 import { ProfileProvider } from "@/features/shared/contexts/ProfileContext";
@@ -65,7 +65,7 @@ export function useViewportPane(fills = true) {
 }
 
 function AuthLayoutInner({ children }: { children: React.ReactNode }) {
-  const { expanded } = useSidebar();
+  const { expanded, reduced } = useSidebar();
   const [viewportPane, setViewportPane] = useState(false);
   const pathname = useRoutePathname();
   useFeatureRouteGuard();
@@ -121,11 +121,17 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
         className="flex min-h-0 flex-1 flex-col"
         style={{
           marginLeft: railW,
-          transition: `margin-left ${railMotion}`,
+          transition: reduced
+            ? "none"
+            : `margin-left ${railMotion}, border-top-color ${BAND_MOTION}, border-top-left-radius ${BAND_MOTION}`,
           // The content is a sheet set into the frame: one hairline along the
           // band and the rail, rounded where they meet.
           background: "var(--color-surface-1)",
-          borderTop: bandH ? FRAME_LINE : undefined,
+          // The top line stays in the box and only loses its colour, so the
+          // sheet never jumps a pixel as the band comes and goes.
+          borderTopWidth: 1,
+          borderTopStyle: "solid",
+          borderTopColor: bandH ? FRAME_LINE_COLOR : "transparent",
           borderLeft: FRAME_LINE,
           borderTopLeftRadius: bandH ? FRAME_RADIUS : 0,
           overflow: "hidden",
