@@ -2,7 +2,8 @@
 
 import { useHeader } from "@/features/shared/contexts/HeaderContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
-import { FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
+import { SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
+import { FRAME_RADIUS } from "@/features/desktop/lib/chrome";
 
 /*
  * The band across the top of the content surface — the shell's chrome AND the
@@ -28,7 +29,6 @@ import { FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
 export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
   const { setShellTabsHost, setShellTrailHost } = useContextPanel();
   const { headerContent, headerRight } = useHeader();
-  const { bandH } = useDesktopChrome();
 
   return (
     // paddingLeft: the first tab starts just past the sheet's rounded corner,
@@ -38,7 +38,7 @@ export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
     <div
       className="flex shrink-0 items-center gap-4 pr-1"
       style={{
-        height: bandH,
+        height: SHELL_TOP_BAR_H,
         paddingLeft: leftInset + FRAME_RADIUS + 4,
         transition: "padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
         WebkitAppRegion: "drag",
@@ -46,11 +46,10 @@ export default function ShellTopBar({ leftInset = 0 }: { leftInset?: number }) {
     >
       {/* The page's tab set (pane shell pages portal it in; empty elsewhere).
           It scrolls sideways before it ever pushes the actions out of the
-          band, and stands on the band's bottom edge so the tabs' underline
-          sits on the sheet's hairline however tall the band is. */}
+          band. */}
       <div
         ref={setShellTabsHost}
-        className="flex min-w-0 shrink items-center self-end overflow-x-auto"
+        className="flex min-w-0 shrink items-center overflow-x-auto"
         style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
       />
 

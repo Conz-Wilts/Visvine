@@ -1,8 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useDesktopChrome } from '@/features/desktop/lib/chrome';
-import { SHELL_PANE_TOP } from '@/features/shared/contexts/ThemeContext';
+import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from '@/features/shared/contexts/ThemeContext';
 
 interface ProfileSkeletonLoaderProps {
   /** Retained for API compatibility; the profile only renders one full layout. */
@@ -19,10 +18,10 @@ const block = 'rounded bg-surface-3';
 // entrance animation shifts the panel down by (a transform counts towards the
 // scroller's overflow), with a few px of slack. Cutting the bottom off a
 // placeholder costs nothing — the part being cut is below the fold.
-const PANE_CHROME_PX = SHELL_PANE_TOP + 24; // top inset, main's pb-6; the band is added per shell
+const PANE_CHROME_PX = SHELL_TOP_BAR_H + SHELL_PANE_TOP + 24; // band, top inset, main's pb-6
 const PANEL_PADDING_PX = 24 + 40; // the tab panel's pt-6 + pb-10
 const ENTRANCE_SHIFT_PX = 24; // profile-enter's translateY(18px), plus slack
-const SKELETON_CHROME_PX = PANE_CHROME_PX + PANEL_PADDING_PX + ENTRANCE_SHIFT_PX;
+const SKELETON_MAX_H = `calc(100dvh - ${PANE_CHROME_PX + PANEL_PADDING_PX + ENTRANCE_SHIFT_PX}px)`;
 
 /**
  * Loading placeholder mirroring ProfilePageContent's layout: an avatar-and-identity hero
@@ -30,11 +29,10 @@ const SKELETON_CHROME_PX = PANE_CHROME_PX + PANEL_PADDING_PX + ENTRANCE_SHIFT_PX
  * sticky rail). Kept structurally in sync so the page doesn't jump on load.
  */
 export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps) {
-  const { bandH } = useDesktopChrome();
   return (
     <div
       className="flex flex-col gap-5 overflow-hidden animate-pulse"
-      style={{ maxHeight: `calc(100dvh - ${bandH + SKELETON_CHROME_PX}px)` }}
+      style={{ maxHeight: SKELETON_MAX_H }}
     >
       {/* ══ IDENTITY HERO — avatar beside identity + spaces ══ */}
       <section className="rounded-2xl border border-border-subtle bg-surface-1 px-5 py-5 shadow-strip sm:px-7 sm:py-7 flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">

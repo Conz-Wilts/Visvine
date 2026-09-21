@@ -6,7 +6,7 @@ import { useRoutePathname } from "@/features/shared/hooks/useRoutePathname";
 import Sidebar from "@/features/shared/components/layout/Sidebar";
 import { HeaderProvider } from "@/features/shared/contexts/HeaderContext";
 import ShellTopBar from "@/features/shared/components/layout/ShellTopBar";
-import { SHELL_PANE_TOP } from "@/features/shared/contexts/ThemeContext";
+import { SHELL_PANE_TOP, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
 import { SpaceProvider, useSpace } from "@/features/shared/contexts/SpaceContext";
 import { FEATURES, canAccessFeature, defaultLandingHref } from "@/features/shared/lib/features";
 import { EXPANDED_W } from "@/features/shared/components/layout/railRow";
@@ -87,13 +87,13 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   // bounce down and visibly unstick. Killing the bounce keeps every page's
   // sticky top bar welded to the top of the surface.
 
-  const { railW: collapsedW, bandH } = useDesktopChrome();
+  const { railW: collapsedW } = useDesktopChrome();
   const railW = expanded ? EXPANDED_W : collapsedW;
 
   const mainInner = fullBleed ? (
     <div className="h-full">{children}</div>
   ) : (
-    <div style={{ minHeight: `calc(100dvh - ${bandH + SHELL_PANE_TOP + 24}px)` }}>
+    <div style={{ minHeight: `calc(100dvh - ${SHELL_TOP_BAR_H + SHELL_PANE_TOP + 24}px)` }}>
       {children}
     </div>
   );
