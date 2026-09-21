@@ -399,8 +399,8 @@ export function EyeIcon(props: IconProps) {
 export function FeedIcon(props: IconProps) {
   return (
     <IconBase strokeWidth={2} {...props}>
-      <path d="M8 14H4.5A1.5 1.5 0 0 1 3 12.5v-7A1.5 1.5 0 0 1 4.5 4h10A1.5 1.5 0 0 1 16 5.5V10" />
-      <rect x="8" y="10" width="13" height="10" rx="1.5" />
+      <rect x="3" y="4" width="13" height="10" rx="1.5" />
+      <path d="M16 10h3.5a1.5 1.5 0 0 1 1.5 1.5v7a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 8 18.5V14" />
     </IconBase>
   );
 }
@@ -1105,11 +1105,7 @@ export function SmileIcon(props: IconProps) {
 export function SpaceIcon(props: IconProps) {
   return (
     <IconBase strokeWidth={2} {...props}>
-      <path d="M7.5 5h9M7.5 19h9M5 7.5v9M19 7.5v9" />
-      <circle cx="5" cy="5" r="2.5" />
-      <circle cx="19" cy="5" r="2.5" />
-      <circle cx="5" cy="19" r="2.5" />
-      <circle cx="19" cy="19" r="2.5" />
+      <path d="M7.5 5h9M7.5 19h9M5 7.5v9M19 7.5v9M2.5 5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M16.5 5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M2.5 19a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M16.5 19a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0" />
     </IconBase>
   );
 }
