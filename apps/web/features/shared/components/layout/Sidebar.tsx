@@ -10,7 +10,7 @@ import { useSpace } from "@/features/shared/contexts/SpaceContext";
 import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS, SHELL_TOP_BAR_H } from "@/features/shared/contexts/ThemeContext";
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
-import { CompassIcon } from "@/features/shared/icons";
+import { CompassIcon, NewspaperIcon } from "@/features/shared/icons";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
 import { FRAME_BG, FRAME_LINE, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
@@ -330,6 +330,17 @@ export default function Sidebar() {
             borderTopColor: "transparent",
           }}
         >
+          {/* Feed: the posts of every space you are in, in one stream. */}
+          <div {...intent(leaveRailPanels)} onClickCapture={pressRailRow}>
+            <Row
+              expanded={expanded}
+              reduced={reduced}
+              label="Feed"
+              href="/feed"
+              active={pathname === "/feed" || pathname.startsWith("/feed/")}
+              icon={<NewspaperIcon className="!h-9 !w-9" strokeWidth={1.5} />}
+            />
+          </div>
           {/* Discover: the open spaces. It is here even with no space chosen,
               because it is where someone with none goes to find one. Like any
               tool row, pointing at it puts Create new away and pressing it puts

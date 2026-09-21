@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
-import { CompassIcon } from '@/features/shared/icons';
+import { CompassIcon, NewspaperIcon } from '@/features/shared/icons';
 
 /**
  * The rail's top group — the surfaces that are yours rather than the space's:
- * the list of the spaces themselves.
+ * the feed of every space you are in, and the list of the spaces themselves.
  *
  * They are NOT feature keys: no space switches them off, they carry no
  * per-space config and they do not appear in the console's order editor. That
@@ -26,6 +26,12 @@ export interface GlobalNavItem {
 const iconClass = 'h-5 w-5 shrink-0';
 
 export const GLOBAL_NAV: GlobalNavItem[] = [
+  {
+    key: 'feed',
+    label: 'Feed',
+    href: '/feed',
+    icon: <NewspaperIcon className={iconClass} />,
+  },
   {
     key: 'discover',
     label: 'Discover',

@@ -246,6 +246,22 @@ it opens the same space, and two tabs stand in two spaces.
 - **No space id may be a page name** (`isSpaceRouteName`, in
   `isReservedSpaceId`): a room's id sits where the page does.
 
+## The Feed
+
+`/feed` is the rail row above Discover: one stream of posts from every space a
+person is in, outside every space like `/discover`. **A post is a top-level
+message in a FEED-mode channel; a comment is a reply to it** — there are no
+feed tables. `lib/messages/feedService.ts#listFeedForUser` is the one read
+(`GET /api/feed`, keyset-paged): channels the caller has JOINED, in spaces they
+are an active member of, where Channels is a tool they can open
+(`canAccessFeature`). The first page carries `targets`, the same set, which is
+where the composer may post. Every act — post, comment, react, star, edit,
+delete — goes to the post's own channel through the messages routes, so their
+gates and broadcasts are the only ones. Live is `/api/messages/stream` patched
+through `lib/messages/shared/feed.ts#applyFeedEvent` (pure, tested); because
+that stream fans out inside one process, the first page is re-read on
+reconnect and when the tab comes back.
+
 ## Creating things
 
 **Create new is a panel of the rail, and `lib/create/rows.ts#createRows` is the

@@ -3,6 +3,7 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type RefObject, type SetStateAction } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 import type { ConversationSummary, RealtimeEvent, SerializedMessage } from '@/lib/messages/types';
+import { patchReactions } from '@/lib/messages/shared/feed';
 
 interface UseMessagesRealtimeArgs {
   currentUserId: string;
@@ -119,29 +120,9 @@ export function useMessagesRealtime({
         }
         if (payload.type === 'reaction.added' || payload.type === 'reaction.removed') {
           if (payload.conversationId === selectedConversationRef.current) {
-            setMessages((prev) => prev.map((m) => {
-              if (m.id !== payload.messageId) return m;
-              const reactions = [...(m.reactions ?? [])];
-              const existing = reactions.find((r) => r.emoji === payload.emoji);
-              if (payload.type === 'reaction.added') {
-                if (existing) {
-                  existing.count++;
-                  if (payload.userId === currentUserId) existing.reacted = true;
-                } else {
-                  reactions.push({ emoji: payload.emoji, count: 1, reacted: payload.userId === currentUserId });
-                }
-              } else {
-                if (existing) {
-                  existing.count--;
-                  if (payload.userId === currentUserId) existing.reacted = false;
-                  if (existing.count <= 0) {
-                    const idx = reactions.indexOf(existing);
-                    reactions.splice(idx, 1);
-                  }
-                }
-              }
-              return { ...m, reactions };
-            }));
+            setMessages((prev) => prev.map((m) => m.id === payload.messageId
+              ? { ...m, reactions: patchReactions(m.reactions, payload, currentUserId) }
+              : m));
           }
         }
         // conversation.updated carries no data (rename, membership change) —

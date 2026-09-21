@@ -8,7 +8,7 @@
  * shown as a comment thread under their post instead of inline quotes.
  */
 
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MessageCircleIcon, PencilIcon, PinIcon, SmileIcon, StarIcon, Trash2Icon } from '@/features/shared/icons';
 import Avatar from '@/components/ui/Avatar';
 import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
@@ -182,9 +182,10 @@ const CommentRow = memo(function CommentRow({
 
 // ─── Post card ───────────────────────────────────────────────────────────────
 
-const PostCard = memo(function PostCard({
+export const PostCard = memo(function PostCard({
   post,
   comments,
+  context,
   onReaction,
   onEdit,
   onDelete,
@@ -193,6 +194,8 @@ const PostCard = memo(function PostCard({
 }: {
   post: SerializedMessage;
   comments: SerializedMessage[];
+  /** Where the post was written, for a surface that draws more than one channel. */
+  context?: ReactNode;
   onReaction: (messageId: string, emoji: string) => Promise<void>;
   onEdit: (messageId: string, text: string) => Promise<void>;
   onDelete: (messageId: string) => Promise<void>;
@@ -240,6 +243,7 @@ const PostCard = memo(function PostCard({
           <p className="flex flex-wrap items-baseline gap-x-2">
             <span className="text-[15px] font-semibold text-text-primary">{post.isOwn ? 'You' : post.sender.name}</span>
             <span className="text-[11px] text-text-muted">{formatChatTimestamp(post.createdAt)}</span>
+            {context}
             {post.pinnedAt && (
               <span className="inline-flex items-center gap-0.5 rounded-md bg-brand-green px-2 py-0.5 text-[10px] font-medium text-white">
                 <PinIcon className="h-2.5 w-2.5" /> Pinned

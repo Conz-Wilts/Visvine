@@ -1649,10 +1649,11 @@ export const CHANNEL_SECTIONS = [
   { id: 'section_hq_gtm', name: 'Go-to-market', icon: 'trending-up', position: 1 },
 ]
 
-export const CHANNELS = [
+// `launches` is posts rather than chat, so the seeded Feed has something in it.
+export const CHANNELS: Array<{ id: string; name: string; icon: string; section: string; description: string; viewMode?: 'CHAT' | 'FEED' }> = [
   { id: 'chan_hq_general', name: 'general', icon: 'hash', section: 'section_hq_company', description: 'Everything that does not have a better home.' },
   { id: 'chan_hq_product', name: 'product', icon: 'lightbulb', section: 'section_hq_company', description: 'What we are building and why. Decisions get written up as notes.' },
-  { id: 'chan_hq_launches', name: 'launches', icon: 'rocket', section: 'section_hq_company', description: 'What shipped, and who asked for it.' },
+  { id: 'chan_hq_launches', name: 'launches', icon: 'rocket', section: 'section_hq_company', description: 'What shipped, and who asked for it.', viewMode: 'FEED' as const },
   { id: 'chan_hq_customers', name: 'customers', icon: 'handshake', section: 'section_hq_gtm', description: 'Account news, renewals and anything a customer said that we should not forget.' },
   { id: 'chan_hq_pipeline', name: 'pipeline', icon: 'target', section: 'section_hq_gtm', description: 'Live deals. Every stage change gets a line here.' },
   { id: 'chan_hq_support', name: 'support', icon: 'bell', section: 'section_hq_gtm', description: 'The inbox, triaged in public.' },

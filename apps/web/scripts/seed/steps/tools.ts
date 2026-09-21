@@ -212,6 +212,7 @@ export async function seedChannels(): Promise<{ sections: number; channels: numb
         name: ch.name,
         description: ch.description,
         icon: ch.icon,
+        viewMode: ch.viewMode ?? 'CHAT',
         spaceId: SPACE_ID,
         sectionId: ch.section,
         createdById: ADMIN_USER,
