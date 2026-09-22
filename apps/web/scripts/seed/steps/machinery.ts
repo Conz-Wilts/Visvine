@@ -34,7 +34,11 @@ import { publishNote, unpublish } from '../../../lib/notes/publications'
 import { SHARED_OWNER_KEY } from '../../../lib/notes/store'
 import { GLOBAL_SPACE_ID } from '../../../lib/spaces/globalSpace'
 import { CONNECTOR_DEMOS, connectorDemo } from '../connectors'
-import { ADMIN_USER, MEMBER_USER, SPACE_ID, SPACE_TIMEZONE } from '../space'
+import { ADMIN_USER, ANCHORS, MEMBER_USER, SPACE_ID, SPACE_NAME, SPACE_TIMEZONE } from '../space'
+import { mergeFeatureConfig } from '../../../lib/featureAccess'
+import type { SpaceFeatureConfig } from '../../../lib/types'
+import { normalizePhone } from '../../../lib/imessage/shared/phone'
+import { PHONE_AGENT, PHONE_BRIEF_DESCRIPTION, PHONE_BRIEF_TITLE, phoneBriefBody } from '../../../lib/imessage/shared/brief'
 import { anchorActor } from './base'
 import { putNote, putNotes } from '../write'
 import { digestDemoRuns } from './agentDemoRuns'
@@ -125,6 +129,26 @@ data/retention.md. Numbers first, then the one thing that went wrong, then
 what we are hiring for. Plain sentences; no adjectives about growth.
 `
 
+/**
+ * The space's iMessage number (docs/imessage.md): a fake Sendblue line, the
+ * switch on, the `phone` agent that answers it, and both anchors' phones
+ * linked. `scripts/imessage-fake.ts` posts a text from one of them.
+ */
+export const IMESSAGE_LINE = '+14155550199'
+
+const PHONE_BRIEF = `---
+type: agent
+title: ${PHONE_BRIEF_TITLE}
+description: ${PHONE_BRIEF_DESCRIPTION}
+connectors: []
+tools: [actions, web, directory]
+max_turns: 12
+active: false
+---
+
+${phoneBriefBody(SPACE_NAME)}
+`
+
 const DIGEST_MEMORY = `---
 title: Memory
 agent: ${DIGEST}
@@ -166,6 +190,21 @@ export async function seedAgents(): Promise<{ agents: number; runs: number }> {
   await putNote(context, `agents/${DIGEST}/index.md`, DIGEST_BRIEF, actor)
   await putNote(context, `agents/${DRAFTER}/index.md`, DRAFTER_BRIEF, actor)
   await putNote(context, `agents/${DIGEST}/memory.md`, DIGEST_MEMORY, actor)
+  await putNote(context, `agents/${PHONE_AGENT}/index.md`, PHONE_BRIEF, actor)
+
+  // iMessage: the line, the switch, and the anchors' phones (verified, so a
+  // faked text from either runs as them).
+  await prisma.imessageLine.create({ data: { spaceId: SPACE_ID, number: IMESSAGE_LINE } })
+  const hq = await prisma.space.findUniqueOrThrow({ where: { id: SPACE_ID }, select: { featureConfig: true } })
+  await prisma.space.update({
+    where: { id: SPACE_ID },
+    data: { featureConfig: mergeFeatureConfig(hq.featureConfig as SpaceFeatureConfig, { enabled: { imessage: true } }) as object },
+  })
+  for (const anchor of ANCHORS) {
+    const phone = normalizePhone(anchor.profile.phone, '64')
+    if (!phone) throw new Error(`seed: anchor phone ${anchor.profile.phone} is not a number`)
+    await prisma.imessageLink.create({ data: { userId: anchor.id, phone, verifiedAt: ago(60 * 24 * 3) } })
+  }
 
   const digest = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId: SPACE_ID, name: DIGEST } } })
   const drafter = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId: SPACE_ID, name: DRAFTER } } })

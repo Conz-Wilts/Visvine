@@ -5,6 +5,7 @@ import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import PeopleDataProvider from '@/features/admin/components/people/PeopleDataContext';
 import ModelsPanel from '@/features/models/components/ModelsPanel';
+import ImessagePanel from '@/features/imessage/components/ImessagePanel';
 import MembersPanel from '@/features/admin/components/people/MembersPanel';
 import SpaceSettingsPanel from '@/features/admin/components/SpaceSettingsPanel';
 import TypesPanel from '@/features/admin/components/TypesPanel';
@@ -76,6 +77,8 @@ function AdminConsole({ space, onSaved }: {
     { id: 'connectors', label: 'Connectors', width: 'form', badge: connectorRequests.count },
     // What the space's agents run on: the space's, and an admin's to set.
     { id: 'models', label: 'Models', width: 'form' },
+    // The space's number, and the agent that answers it (docs/imessage.md).
+    { id: 'imessage', label: 'iMessage', width: 'form' },
     // Both queues a person can be waiting in — to join, and for context access —
     // are resolved here, so one badge counts them both.
     { id: 'members', label: 'Members', width: 'wide', badge: pending.members + pending.requests },
@@ -126,6 +129,8 @@ function AdminConsole({ space, onSaved }: {
               return <ConnectorsPanel key={space.id} onRequestsChanged={connectorRequests.refresh} />;
             case 'models':
               return <ModelsPanel key={space.id} space={space.id} />;
+            case 'imessage':
+              return <ImessagePanel key={space.id} space={space.id} />;
             case 'members':
               return <MembersPanel key={space.id} />;
             case 'types':

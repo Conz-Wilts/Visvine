@@ -94,6 +94,8 @@ model Space {
   agentRuns       AgentRun[]
   agentSubscriptions AgentSubscription[]
   agentEvents     AgentEvent[]
+  imessageLine    ImessageLine?
+  imessageThreads ImessageThread[]
   agentEgressLog  AgentEgressLog[]
   agentVms        AgentVm[]
   agentVmEvents   AgentVmEvent[]
@@ -412,6 +414,74 @@ model ConnectorRequest {
   @@index([spaceId, status])
   @@index([userId])
   @@map("connector_requests")
+}
+
+/// A space's iMessage number (docs/imessage.md). Visvine owns ONE Sendblue
+/// account; a line on it is assigned to a space here, by a super-admin, and
+/// nothing in the space ever sees a Sendblue key. Inbound routing is by the
+/// line that received the text (`sendblue_number`), which is why `number` is
+/// unique across the deployment and a space holds at most one.
+model ImessageLine {
+  id        String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String    @unique @map("space_id")
+  /// E.164, the Sendblue line.
+  number    String    @unique
+  /// Name shown on the contact card; null = the space's name.
+  name      String?
+  status    String    @default("active") // active | suspended
+  /// Last contact-sharing profile push (name + icon) for this line.
+  profileAt DateTime? @map("profile_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  space     Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  threads   ImessageThread[]
+
+  @@map("imessage_lines")
+}
+
+/// A person's phone, linked to their account by texting a code to any line
+/// they can reach. One account per phone: a text from `phone` runs AS this
+/// user, so the binding is the whole authentication and must never be shared.
+model ImessageLink {
+  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId        String    @map("user_id")
+  /// E.164.
+  phone         String    @unique
+  /// The 6-digit code the person must text, until `verifiedAt` is set.
+  code          String?
+  codeExpiresAt DateTime? @map("code_expires_at")
+  verifiedAt    DateTime? @map("verified_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("imessage_links")
+}
+
+/// One conversation between a line and a phone: which space in the family the
+/// texter is currently talking to (the house, or a room they belong to), so a
+/// follow-up text lands where the last one did.
+model ImessageThread {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  lineId    String   @map("line_id")
+  phone     String
+  /// The space the thread currently targets — the line's space or one of its rooms.
+  spaceId   String   @map("space_id")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  line      ImessageLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  space     Space        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([lineId, phone], name: "thread_identity")
+  @@map("imessage_threads")
+}
+
+/// Every inbound `message_handle` seen, so a provider retry is never a second
+/// run. Pruned on the way in (rows older than IMESSAGE_INBOUND_KEEP_DAYS).
+model ImessageInbound {
+  handle     String   @id
+  receivedAt DateTime @default(now()) @map("received_at")
+
+  @@index([receivedAt])
+  @@map("imessage_inbound")
 }
 
 /// A connector's small memory between runs — `visvine.state.get/set` inside
@@ -1361,6 +1431,7 @@ model User {
   connectorRequests       ConnectorRequest[]
   connectorAccounts       ConnectorAccount[]
   connectorAccountClients ConnectorAccountClient[]
+  imessageLinks           ImessageLink[]
   identity                Identity?
   oauthAuthCodes          OAuthAuthCode[]
   profileSections         ProfileSection[]

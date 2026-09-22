@@ -9,6 +9,7 @@ import { SettingsSection } from '@/components/ui';
 import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePanel';
 import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPanel';
 import AccountsPanel from '@/features/connectors/components/AccountsPanel';
+import PhonePanel from '@/features/imessage/components/PhonePanel';
 
 /**
  * Personal settings. Same shell as the Space Console — a pane-top tab bar
@@ -92,7 +93,12 @@ function renderSection(id: string) {
     case 'general':
       return <GeneralSection />;
     case 'accounts':
-      return <AccountsPanel />;
+      return (
+        <div className="space-y-8">
+          <AccountsPanel />
+          <PhonePanel />
+        </div>
+      );
     default:
       return null;
   }

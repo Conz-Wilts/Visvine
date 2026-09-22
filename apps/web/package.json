@@ -38,6 +38,7 @@
     "db:settings:drop": "tsx scripts/drop-settings-notes.ts",
     "db:notes:verify": "tsx scripts/verify-notes-rules.ts",
     "db:embed": "tsx scripts/embed-context.ts",
+    "imessage:fake": "tsx scripts/imessage-fake.ts",
     "db:memories": "tsx scripts/derive-memories.ts",
     "db:global:rebuild": "tsx scripts/rebuild-global-records.ts",
     "db:identity:family": "tsx scripts/cleanup-family-identities.ts",

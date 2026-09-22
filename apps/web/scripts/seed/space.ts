@@ -245,7 +245,10 @@ export const ALIASES: SeedAlias[] = [
 ]
 
 /** What every member reaches without holding anything — the "Everyone" card. */
-export const SPACE_GRANTS: Array<[string, number]> = [['segments', VIEW]]
+// `agents/phone` is readable by every member because a text to the space's
+// line runs it AS the texter, who must be able to read the brief that runs
+// (docs/imessage.md). Console → iMessage writes the same grant when it makes one.
+export const SPACE_GRANTS: Array<[string, number]> = [['segments', VIEW], ['agents/phone', VIEW]]
 
 // ---- segments ---------------------------------------------------------------
 

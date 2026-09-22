@@ -19,7 +19,7 @@
  */
 import { scoreCandidates, type KeywordRule, type MatchCandidate } from '@/lib/actions/shared/match'
 
-export type ChannelKind = 'in_app' | 'email' | 'slack'
+export type ChannelKind = 'in_app' | 'email' | 'slack' | 'imessage'
 
 /** What every adapter produces. Nothing below this layer knows which channel it came from. */
 export interface InboundMessage {
@@ -28,13 +28,23 @@ export interface InboundMessage {
   spaceId: string
   /** The agent named by the address, or null when the router should choose. */
   agentName: string | null
-  /** How the sender identified themselves. A claim, checked before it is trusted. */
-  from: { email?: string; handle?: string; display?: string }
+  /**
+   * How the sender identified themselves. A claim, checked before it is
+   * trusted — unless the adapter has already resolved it to an account
+   * (`userId`), as the in-app door and a verified phone link have.
+   */
+  from: { email?: string; handle?: string; display?: string; userId?: string }
   /** One line for the run's "Triggered by", already trimmed. */
   subject: string
   body: string
   /** The provider's own id for this message, when it has one — used to dedupe. */
   externalId: string | null
+  /**
+   * What the adapter needs back when the run ends — a reply address, say —
+   * stored on the mailbox event beside the message. Data the run-end hook
+   * reads; never shown to the model.
+   */
+  payload?: Record<string, unknown>
 }
 
 export const MAX_SUBJECT = 200

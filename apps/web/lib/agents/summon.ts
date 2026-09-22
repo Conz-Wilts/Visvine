@@ -16,7 +16,7 @@
 import { deliverMessage } from './channels'
 import { claimManualRun } from './schedule'
 import { canTriggerRun } from './service'
-import { clean, MAX_BODY, MAX_SUBJECT } from './shared/channels'
+import { clean, MAX_BODY, MAX_SUBJECT, type ChannelKind } from './shared/channels'
 import type { DispatchResult } from './dispatch'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 
@@ -39,25 +39,46 @@ export async function summonAgent(input: {
   text: string
   /** Start a run now when possible (default true). False is the old "read on its next run". */
   run?: boolean
+  /** Where the words came from. The page's box and `run_agent` are `in_app`; a text is `imessage`. */
+  channel?: ChannelKind
+  /** The provider's id for the message, so a retried delivery is one message. Defaults to one per call. */
+  externalId?: string
+  /** Anything the run should carry about where to answer — a reply address the run-end hook reads. */
+  payload?: Record<string, unknown>
+  /**
+   * Who may make this agent run. `brief` (default) is the page's rule — the
+   * author, or anyone who can edit the brief (`canTriggerRun`). `member` is
+   * for a door whose admin has opened it to every member of the space
+   * (iMessage: switching the tool on IS that decision); membership was already
+   * checked by the delivery, so nothing further is asked here.
+   */
+  gate?: 'brief' | 'member'
 }): Promise<SummonResult> {
   const { spaceId, name, principal } = input
   const body = clean(input.text, MAX_BODY)
-  const delivered = await deliverMessage({
-    channel: 'in_app',
-    spaceId,
-    agentName: name,
-    from: { email: principal.email ?? undefined, display: principal.name },
-    subject: clean(body, MAX_SUBJECT),
-    body,
-    // One send is one message; a double-click is deduped by the mailbox.
-    externalId: `${principal.userId}:${Date.now()}`,
-  })
+  const run = input.run !== false
+  const delivered = await deliverMessage(
+    {
+      channel: input.channel ?? 'in_app',
+      spaceId,
+      agentName: name,
+      from: { userId: principal.userId, email: principal.email ?? undefined, display: principal.name },
+      subject: clean(body, MAX_SUBJECT),
+      body,
+      // One send is one message; a double-click is deduped by the mailbox.
+      externalId: input.externalId ?? `${principal.userId}:${Date.now()}`,
+      payload: input.payload,
+    },
+    // A person is here asking for a run: the agent need not be switched on for
+    // unattended runs (the claim below carries the same waiver).
+    { allowInactive: run },
+  )
   if (!delivered.ok) {
     const status = delivered.reason === 'not_a_member' ? 403 : delivered.reason === 'dropped' ? 409 : 404
     return { ok: false, status, message: delivered.message }
   }
-  if (input.run === false) return { ok: true, eventId: delivered.eventId, runId: null, dispatch: null, waiting: null }
-  if (!(await canTriggerRun(principal, spaceId, name))) {
+  if (!run) return { ok: true, eventId: delivered.eventId, runId: null, dispatch: null, waiting: null }
+  if (input.gate !== 'member' && !(await canTriggerRun(principal, spaceId, name))) {
     return { ok: true, eventId: delivered.eventId, runId: null, dispatch: null, waiting: 'cannot_run' }
   }
   // A person said something to it: attended, as them, whether or not the agent

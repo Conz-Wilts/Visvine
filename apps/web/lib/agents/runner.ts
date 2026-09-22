@@ -37,6 +37,7 @@ import { principalForUser } from './principal'
 import { resolveAgentChatConfig } from './providers'
 import { dropRunsFor } from './service'
 import { modelFor } from './shared/runsFor'
+import { answerChannels } from './channelReplies'
 import { clipEventText, finishRun, flushRunEvents, ledgerSpendForMonth, recordRunInput, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
 import { memoryForPrompt, memoryPath, setLastRun } from './shared/memory'
 import { agentPreamble } from './shared/prompt'
@@ -182,6 +183,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       model: o.model ?? undefined,
     })
     await recordRunInput(runId, { writes, dryRun }).catch(() => {})
+    await answerChannels(runId)
     const deactivated = await release(state.id, runId, spaceId, name, {
       failed: true,
       countsAsFailure: o.countsAsFailure ?? true,
@@ -412,6 +414,9 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
           model: modelUsed,
         })
         await recordRunInput(runId, { writes, dryRun }).catch(() => {})
+        // Whoever texted (or otherwise wrote in on a channel that answers)
+        // hears the summary now, before the memory is written.
+        await answerChannels(runId)
         // The runner's own line in the memory: what this run did, so the next
         // one starts knowing. Mechanical, never the model's to forget; a dry
         // run leaves the note alone.
