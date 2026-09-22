@@ -79,7 +79,7 @@ struct SpaceSidebar: View {
                         if open { expanded.remove(branch.id) } else { expanded.insert(branch.id) }
                     }
                 } label: {
-                    VisvineIcon(.chevronRight, size: 14)
+                    VisvineIcon(.chevronRight, size: 20)
                         .foregroundStyle(c.textMuted)
                         .rotationEffect(.degrees(open ? 90 : 0))
                         .frame(width: 44, height: 44)
@@ -113,12 +113,6 @@ struct SpaceSidebar: View {
                 HStack(spacing: 14) {
                     SpaceAvatar(name: item.name, imageUrl: item.image, size: size)
                         .padding(3)
-                        .overlay {
-                            if active {
-                                RoundedRectangle(cornerRadius: (size + 6) * 0.26, style: .continuous)
-                                    .strokeBorder(c.textPrimary, lineWidth: 2.5)
-                            }
-                        }
                     VStack(alignment: .leading, spacing: 2) {
                         Text(item.name)
                             .font(.system(size: size > 40 ? 18 : 16, weight: .semibold))
@@ -129,6 +123,9 @@ struct SpaceSidebar: View {
                         }
                     }
                     Spacer(minLength: 4)
+                    if active {
+                        VisvineIcon(.checkCircle, size: 22).foregroundStyle(c.accentDark)
+                    }
                 }
                 .contentShape(Rectangle())
             }
