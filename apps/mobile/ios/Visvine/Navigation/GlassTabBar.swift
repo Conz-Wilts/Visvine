@@ -1,16 +1,13 @@
 import SwiftUI
 
-/// The floating Liquid Glass bar: three tabs in one capsule, and beside it a
-/// column of two circles — create over search. Search opens in place: the
-/// circle grows into the field and the capsule gives way to it.
+/// The floating Liquid Glass bar: three tabs in one capsule, and beside it
+/// the create circle in the accent.
 struct GlassTabBar: View {
     @Environment(ThemeStore.self) private var theme
-    @Environment(SearchStore.self) private var searchStore
     @Binding var selected: MainTab
     var onCreate: () -> Void
 
     @Namespace private var glass
-    @FocusState private var focused: Bool
 
     // One stroke glyph per tab (docs/icons.md).
     private struct Item { let tab: MainTab; let label: String; let icon: VisvineIconName }
@@ -21,35 +18,22 @@ struct GlassTabBar: View {
     ]
 
     var body: some View {
-        @Bindable var search = searchStore
         GlassEffectContainer(spacing: 12) {
             HStack(alignment: .bottom, spacing: 12) {
-                if search.isOpen {
-                    field(query: $search.query)
-                    circle(.xmark, label: "Close search", id: "search") { search.close() }
-                } else {
-                    tabs
-                    VStack(spacing: 12) {
-                        circle(.plus, label: "Create", id: "create", action: onCreate)
-                        circle(.search, label: "Search", id: "search") { search.open() }
-                    }
-                }
+                tabs
+                create
             }
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, bottomGap(searching: search.isOpen))
-        // Measured from the screen's edge, as the system tab bar is; the
-        // keyboard's inset still lifts it while search is typing.
+        .padding(.bottom, bottomGap)
+        // Measured from the screen's edge, as the system tab bar is.
         .ignoresSafeArea(.container, edges: .bottom)
-        .animation(.bouncy(duration: 0.35), value: search.isOpen)
         .animation(.snappy(duration: 0.2), value: selected)
-        .onChange(of: search.isOpen) { _, open in focused = open }
     }
 
     /// 20pt off the edge on a home-indicator phone, where the system's own tab
-    /// bar sits; 8pt over the keyboard.
-    private func bottomGap(searching: Bool) -> CGFloat {
-        if searching { return 8 }
+    /// bar sits.
+    private var bottomGap: CGFloat {
         let window = UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
         return (window?.safeAreaInsets.bottom ?? 0) > 0 ? 20 : 12
@@ -85,33 +69,16 @@ struct GlassTabBar: View {
         .glassEffectID("tabs", in: glass)
     }
 
-    private func field(query: Binding<String>) -> some View {
-        let c = theme.colors
-        return HStack(spacing: 10) {
-            VisvineIcon(.search).foregroundStyle(c.textPrimary)
-            TextField(searchStore.placeholder, text: query)
-                .focused($focused)
-                .submitLabel(.search)
-                .onSubmit { focused = false }
-                .foregroundStyle(c.textPrimary)
-        }
-        .padding(.horizontal, 20)
-        .frame(height: 64)
-        .frame(maxWidth: .infinity)
-        .glassEffect(.regular.interactive(), in: .capsule)
-        .glassEffectID("tabs", in: glass)
-    }
-
-    private func circle(_ icon: VisvineIconName, label: String, id: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VisvineIcon(icon, size: 22)
-                .foregroundStyle(theme.colors.textPrimary)
+    private var create: some View {
+        Button(action: onCreate) {
+            VisvineIcon(.plus, size: 24)
+                .foregroundStyle(.white)
                 .frame(width: 64, height: 64)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)
-        .glassEffectID(id, in: glass)
-        .accessibilityLabel(label)
+        .glassEffect(.regular.tint(theme.colors.accent).interactive(), in: .circle)
+        .glassEffectID("create", in: glass)
+        .accessibilityLabel("Create")
     }
 }
