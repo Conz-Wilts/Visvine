@@ -124,7 +124,7 @@ struct SpaceSidebar: View {
                     }
                     Spacer(minLength: 4)
                     if active {
-                        VisvineIcon(.checkCircle, size: 22).foregroundStyle(c.accentDark)
+                        VisvineIcon(.check, size: 22).foregroundStyle(c.accentDark)
                     }
                 }
                 .contentShape(Rectangle())

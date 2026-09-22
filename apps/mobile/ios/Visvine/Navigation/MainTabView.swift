@@ -38,7 +38,9 @@ struct MainTabView: View {
             Tab(value: MainTab.create, role: .search) {
                 Color.clear
             } label: {
-                Label("Create", systemImage: "plus")
+                Label { Text("Create") } icon: {
+                    Image(uiImage: createIcon).renderingMode(.original)
+                }
             }
         }
         .tint(theme.colors.accent)
@@ -70,6 +72,25 @@ struct MainTabView: View {
                 .environment(auth)
                 .environment(space)
         }
+    }
+
+    /// The create button is a solid accent circle with a white cross. Drawn
+    /// as an original-colour image, because the tab bar tints a symbol.
+    private var createIcon: UIImage {
+        let side: CGFloat = 44
+        let accent = UIColor(theme.colors.accent)
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+            accent.setFill()
+            UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side)).fill()
+            let arm: CGFloat = 11, mid = side / 2
+            let cross = UIBezierPath()
+            cross.move(to: CGPoint(x: mid - arm, y: mid)); cross.addLine(to: CGPoint(x: mid + arm, y: mid))
+            cross.move(to: CGPoint(x: mid, y: mid - arm)); cross.addLine(to: CGPoint(x: mid, y: mid + arm))
+            cross.lineWidth = 3.5
+            cross.lineCapStyle = .round
+            UIColor.white.setStroke()
+            cross.stroke()
+        }.withRenderingMode(.alwaysOriginal)
     }
 
     private func stack(@ViewBuilder _ root: () -> some View) -> some View {

@@ -98,7 +98,7 @@ struct ProfileView: View {
                             Circle().fill(c.accent).frame(width: 8, height: 8)
                             Text(item.name).font(.system(size: 16)).foregroundStyle(active ? c.accent : c.textSecondary)
                             Spacer()
-                            if active { VisvineIcon(.checkCircle).foregroundStyle(c.accent) }
+                            if active { VisvineIcon(.check).foregroundStyle(c.accent) }
                         }
                         .padding(.vertical, 12)
                     }
