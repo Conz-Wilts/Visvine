@@ -1,23 +1,31 @@
 import SwiftUI
 
 /// Hosts the three tabs — Home, Messages, Discover (docs/mobile.md) — the
-/// floating glass tab bar, the search overlay, and the Profile modal. Each tab
+/// floating glass tab bar with create and search, the space dropdown, and the
+/// Profile modal. Each tab
 /// is its own NavigationStack so detail screens push within the tab; the
 /// Directory and Events screens are pushed from Home rather than being tabs.
 struct MainTabView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(AuthManager.self) private var auth
     @Environment(SpaceStore.self) private var space
-    @Environment(SearchStore.self) private var search
 
     @State private var selected: MainTab = .home
     @State private var profilePresented = false
+    @State private var createPresented = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
             tabContent
-            GlassTabBar(selected: $selected, onSearch: { search.open() })
-            SearchOverlay()
+            GlassTabBar(selected: $selected, onCreate: { createPresented = true })
+        }
+        .overlay(alignment: .topLeading) {
+            if space.switcherOpen { SpaceDropdown() }
+        }
+        .sheet(isPresented: $createPresented) {
+            CreateSheet()
+                .environment(theme)
+                .environment(space)
         }
         .task(id: auth.user?.id) { await space.refresh() }
         .onAppear { applyPendingRoute() }

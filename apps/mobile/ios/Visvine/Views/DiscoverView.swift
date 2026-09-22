@@ -56,7 +56,7 @@ struct DiscoverView: View {
     var body: some View {
         let c = theme.colors
         VStack(spacing: 0) {
-            ScreenHeader(title: "Discover", onProfile: onProfile)
+            ScreenHeader(onProfile: onProfile)
             SegmentedNav(items: ["Spaces", "Events"], selected: $segment)
             if let error = model.error {
                 Text(error).foregroundStyle(c.error).font(.system(size: 14))

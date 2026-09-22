@@ -12,6 +12,8 @@ final class SpaceStore {
     var spaces: [Space] = []
     var current: Space?
     var isLoading = false
+    /// The header's space dropdown, drawn over every tab by MainTabView.
+    var switcherOpen = false
 
     private let repo = SpaceRepository()
     private let auth: AuthManager
@@ -23,6 +25,26 @@ final class SpaceStore {
     func setCurrent(_ space: Space?) {
         current = space
         PreferencesStore.shared.currentSpaceId = space?.id
+    }
+
+    /// One branch per top-level space with the rooms the person also holds. A
+    /// room whose house they are not in stands as its own branch.
+    struct Branch: Identifiable {
+        let house: Space
+        let rooms: [Space]
+        var id: String { house.id }
+    }
+
+    var tree: [Branch] {
+        let ids = Set(spaces.map(\.id))
+        let isRoomHere = { (s: Space) in s.parentId.map(ids.contains) ?? false }
+        return spaces.filter { !isRoomHere($0) }.map { house in
+            Branch(house: house, rooms: spaces.filter { $0.parentId == house.id })
+        }
+    }
+
+    func parent(of s: Space) -> Space? {
+        s.parentId.flatMap { id in spaces.first { $0.id == id } }
     }
 
     func isJoined(_ id: String) -> Bool { spaces.contains { $0.id == id } }

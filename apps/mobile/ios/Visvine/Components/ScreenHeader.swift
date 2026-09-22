@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// The header every main screen carries: the screen's name on the left, the
-/// space switcher and the profile avatar on the right.
+/// The header every main screen carries: the current space on the left — its
+/// square, its name, a chevron that drops the space list — and the profile
+/// avatar on the right. A screen without the switcher shows its title there.
 struct ScreenHeader: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(SpaceStore.self) private var space
@@ -11,12 +12,16 @@ struct ScreenHeader: View {
     var showSpaceSelector: Bool = true
     var onProfile: () -> Void
 
-    @State private var pickerVisible = false
-
     var body: some View {
         let c = theme.colors
         HStack(spacing: 10) {
-            if let title {
+            if showSpaceSelector, let current = space.current {
+                Button {
+                    withAnimation(.bouncy(duration: 0.35)) { space.switcherOpen = true }
+                } label: { SpaceMark(space: current, parent: space.parent(of: current)) }
+                    .buttonStyle(.plain)
+                    .opacity(space.switcherOpen ? 0 : 1)
+            } else if let title {
                 Text(title)
                     .font(.system(size: 28, weight: .bold))
                     .tracking(-0.4)
@@ -26,94 +31,48 @@ struct ScreenHeader: View {
                 Wordmark(size: 18)
             }
             Spacer(minLength: 8)
-            if showSpaceSelector, let current = space.current {
-                Button { pickerVisible = true } label: { switcher(current) }
-                    .buttonStyle(.plain)
-            }
             Button(action: onProfile) {
-                PersonAvatar(name: auth.user?.name ?? "", imageUrl: auth.user?.image, size: 34)
+                PersonAvatar(name: auth.user?.name ?? "", imageUrl: auth.user?.image, size: 38)
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
-        .frame(height: 60)
+        .frame(height: 64)
         .background(c.bgPrimary)
-        .sheet(isPresented: $pickerVisible) {
-            SpacePickerSheet(onDone: { pickerVisible = false })
-                .environment(theme)
-                .environment(space)
-        }
-    }
-
-    /// The current space as a compact pill: its mark, its name, a chevron.
-    private func switcher(_ current: Space) -> some View {
-        let c = theme.colors
-        return HStack(spacing: 6) {
-            SpaceAvatar(name: current.name, imageUrl: current.image, size: 24)
-            Text(current.name)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(c.textPrimary)
-                .lineLimit(1)
-                .frame(maxWidth: 120, alignment: .leading)
-                .fixedSize(horizontal: true, vertical: false)
-            VisvineIcon(.chevronDown, size: 12).foregroundStyle(c.textMuted)
-        }
-        .padding(.leading, 4)
-        .padding(.trailing, 10)
-        .frame(height: 34)
-        .background(c.bgTertiary, in: Capsule())
-        .accessibilityLabel("Space: \(current.name)")
     }
 }
 
-/// The joined spaces, one row each, the current one ticked.
-private struct SpacePickerSheet: View {
+/// The current space as the header draws it — and as the dropdown's first row
+/// draws it, so opening the list leaves it where it was.
+struct SpaceMark: View {
     @Environment(ThemeStore.self) private var theme
-    @Environment(SpaceStore.self) private var space
-    var onDone: () -> Void
+    let space: Space
+    let parent: Space?
+    var open = false
 
     var body: some View {
         let c = theme.colors
-        VStack(spacing: 0) {
-            Text("Spaces")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(c.textPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 20).padding(.bottom, 12)
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(space.spaces) { item in
-                        let active = space.current?.id == item.id
-                        Button {
-                            space.setCurrent(item)
-                            onDone()
-                        } label: {
-                            HStack(spacing: 12) {
-                                SpaceAvatar(name: item.name, imageUrl: item.image, size: 36)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.name)
-                                        .font(.system(size: 16, weight: active ? .semibold : .regular))
-                                        .foregroundStyle(c.textPrimary)
-                                        .lineLimit(1)
-                                    if item.visibility == "private" {
-                                        Text("Private").font(.system(size: 12)).foregroundStyle(c.textMuted)
-                                    }
-                                }
-                                Spacer()
-                                if active { VisvineIcon(.check, size: 18).foregroundStyle(c.accentDark) }
-                            }
-                            .padding(.horizontal, 20)
-                            .frame(height: 60)
-                            .background(active ? c.accentLight : Color.clear)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
+        HStack(spacing: 10) {
+            SpaceAvatar(name: space.name, imageUrl: space.image, size: 40)
+            VStack(alignment: .leading, spacing: 0) {
+                if let parent {
+                    Text(parent.name)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(c.textMuted)
+                        .lineLimit(1)
                 }
+                Text(space.name)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(c.textPrimary)
+                    .lineLimit(1)
             }
+            .frame(maxWidth: 200, alignment: .leading)
+            .fixedSize(horizontal: true, vertical: false)
+            VisvineIcon(.chevronDown, size: 12)
+                .foregroundStyle(c.textMuted)
+                .rotationEffect(.degrees(open ? 180 : 0))
         }
-        .background(c.bgPrimary)
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .contentShape(Rectangle())
+        .accessibilityLabel("Space: \(space.name)")
     }
 }

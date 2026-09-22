@@ -3,7 +3,7 @@ package com.visvine.mobile.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,7 +36,7 @@ fun SpaceAvatar(
 
     val fallback: @Composable () -> Unit = {
         Box(
-            modifier = Modifier.size(size).clip(CircleShape).background(colors.accent),
+            modifier = Modifier.size(size).clip(RoundedCornerShape(24)).background(colors.accent),
             contentAlignment = Alignment.Center,
         ) {
             Text(initialsOf(name), color = Color.White, fontSize = fontSize, fontWeight = FontWeight.SemiBold)
@@ -50,7 +50,7 @@ fun SpaceAvatar(
             model = imageUrl,
             contentDescription = name,
             contentScale = ContentScale.Crop,
-            modifier = modifier.size(size).clip(CircleShape),
+            modifier = modifier.size(size).clip(RoundedCornerShape(24)),
             error = { fallback() },
             loading = { fallback() },
         )

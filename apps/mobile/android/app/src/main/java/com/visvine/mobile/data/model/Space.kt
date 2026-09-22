@@ -10,6 +10,8 @@ data class Space(
     val description: String? = null,
     val imageUrl: String? = null,
     val image: String? = null,
+    /** The house this space is a room of; null for a top-level space. */
+    val parentId: String? = null,
 )
 
 @Serializable

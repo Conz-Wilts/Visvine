@@ -85,7 +85,7 @@ struct EventsListView: View {
     var body: some View {
         let c = theme.colors
         VStack(spacing: 0) {
-            ScreenHeader(title: "Events", onProfile: onProfile)
+            ScreenHeader(title: "Events", showSpaceSelector: false, onProfile: onProfile)
             if model.loading {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if space.current == nil {

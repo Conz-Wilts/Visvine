@@ -7,7 +7,8 @@ func avatarInitials(_ name: String) -> String {
         .joined()
 }
 
-/// A space's avatar: its image, or its initials when there is none.
+/// A space's avatar: its image, or its initials when there is none. A space is
+/// always a rounded square; a person is a circle.
 struct SpaceAvatar: View {
     @Environment(ThemeStore.self) private var theme
     let name: String
@@ -29,7 +30,12 @@ struct SpaceAvatar: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(Circle())
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5))
+    }
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
     }
 
     private var fallback: some View {

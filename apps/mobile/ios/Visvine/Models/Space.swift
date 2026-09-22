@@ -8,6 +8,8 @@ struct Space: Codable, Identifiable, Equatable {
     var imageUrl: String?
     var image: String?
     var visibility: String?
+    /// The house this space is a room of (docs/sub-spaces.md); nil for a top-level space.
+    var parentId: String?
 }
 
 struct SpacesResponse: Codable {
