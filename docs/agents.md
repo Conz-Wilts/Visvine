@@ -247,6 +247,35 @@ timezone: Pacific/Auckland # required to activate anything with a clock
 - Tick liveness: `agent_heartbeat` is written every tick; an agent's page shows a "scheduler delayed"
   banner when it is > 10 min old.
 
+## Chat
+
+A person can **talk to an agent** — the phone's Messages → Agents screen
+(`docs/mobile.md`). A thread is one row per (person, space, agent)
+(`agent_chat_threads`), and each message is ONE turn (`lib/agents/chat.ts`):
+
+- system = `agentChatPreamble(name)` (the run preamble's rules, minus the
+  memory bullet, with "a person is present, answer like a text") + the brief
+  body; then the memory note **read-only**; then the last 20 messages as plain
+  text; then the person's words, fenced as data (`shared/chat.ts`).
+- tools = `agentTools(...)` with `attended: true`, running **as the person**
+  (their principal, their grants), minus `remember` — a chat never writes the
+  memory note, so a person's aside can never become tomorrow's fact.
+- the model is the space's (`resolveAgentChatConfig`), the agent's monthly cap
+  and the key's cap both bind (`ledgerSpendForAgent`, `preRunStop`,
+  `perTurnStop`), and what is spent is metered under the agent's name in
+  `agent_model_usage`. A turn is at most 8 loop turns and 90 s.
+- **Not a run.** No mailbox event, no `agent_runs` row, no schedule, no
+  `Last run`. The agent page does not show chats; the thread is the person's.
+- one turn per thread at a time: the assistant row is written `pending` and
+  claimed on the thread (`pending_message_id`); a claim older than
+  `CHAT_CLAIM_MS` is a dead turn and is taken over. The turn runs to completion
+  whether or not the request that started it is still listening.
+- the gate is "can read the brief" — the roster's rule — not `canTriggerRun`.
+
+Routes: `GET /api/spaces/<id>/agents/chat`, `GET|POST|DELETE …/agents/<name>/chat`,
+`POST …/agents/<name>/chat/stream` (SSE). `tests/agent-chat.test.ts` drives the
+turn with a scripted model.
+
 ## Tools an agent gets
 
 Every tool runs under the **author's principal** through the same layer a human or an MCP client

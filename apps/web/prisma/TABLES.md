@@ -44,6 +44,13 @@ in the shared context of a personal Space, so any other value is legacy.)
 | `context_grants` | One rule: *subject* (whole Space / an alias / a single user) gets *level* (view 10, edit 30) on *path* (root, a folder, or one note). Access flows down the tree; your effective level is the highest grant that reaches the note. Grants only ever add. |
 | `context_access_requests` | "Please give me access to X" — the request, its status, and what an admin eventually granted. Kept afterwards as the audit trail. |
 
+## Agent chats
+
+| Table | Controls |
+| --- | --- |
+| `agent_chat_threads` | A person's standing conversation with one agent in one space (the phone's Messages → Agents). Not a run: no mailbox, no schedule, no `agent_runs` row. `pending_message_id` is the one-turn-at-a-time claim. Cascades from `users` and `spaces`. |
+| `agent_chat_messages` | One bubble each. An assistant row is written `pending` when a turn is claimed and finished with its text, tool trace and metering — so a turn that outlives the request is never lost. |
+
 ## Connectors
 
 | Table | Controls |

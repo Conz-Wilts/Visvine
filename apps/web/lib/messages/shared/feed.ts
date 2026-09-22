@@ -25,6 +25,11 @@ export interface FeedPage {
   targets?: FeedPlace[];
 }
 
+/** The places in one space, or all of them when no space is named. */
+export function filterPlaces<T extends FeedPlace>(places: readonly T[], spaceId?: string | null): T[] {
+  return spaceId ? places.filter((p) => p.space.id === spaceId) : [...places];
+}
+
 export const FEED_PAGE_SIZE = 20;
 export const FEED_PAGE_MAX = 50;
 

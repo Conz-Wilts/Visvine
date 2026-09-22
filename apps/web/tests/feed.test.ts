@@ -11,6 +11,7 @@ import {
   patchReactions,
   type FeedPlace,
   type FeedPost,
+  filterPlaces,
 } from '../lib/messages/shared/feed';
 import type { SerializedMessage } from '../lib/messages/types';
 
@@ -126,4 +127,14 @@ test('a reaction reaches a post or a comment', () => {
   assert.equal(applyFeedEvent(posts, { ...event, messageId: 'p1' }, places, ME)[0].message.reactions?.[0].count, 1);
   assert.equal(applyFeedEvent(posts, { ...event, messageId: 'r1' }, places, ME)[0].comments[0].reactions?.[0].reacted, true);
   assert.equal(applyFeedEvent(posts, { ...event, messageId: 'nope' }, places, ME), posts);
+});
+
+test('filterPlaces keeps one space, or everything when no space is named', () => {
+  const places = [
+    { conversationId: 'c1', channel: { id: 'c1', name: 'general' }, space: { id: 'acme', name: 'Acme' } },
+    { conversationId: 'c2', channel: { id: 'c2', name: 'design' }, space: { id: 'beta', name: 'Beta' } },
+  ];
+  assert.deepEqual(filterPlaces(places, 'acme').map((p) => p.conversationId), ['c1']);
+  assert.equal(filterPlaces(places, null).length, 2);
+  assert.equal(filterPlaces(places, 'nope').length, 0);
 });

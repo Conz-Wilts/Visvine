@@ -115,6 +115,50 @@ async function getConversationSummaryForUser(userId: string, conversationId: str
  * Create a space channel. Authorization (space admin) is enforced by the route;
  * this only validates the space exists and seeds the creator as channel admin.
  */
+/**
+ * The DM between two people, made on first use.
+ *
+ * Refused unless they share an active membership of a real (non-personal)
+ * space — the same reach `searchUsers` gives a people picker, so a DM can
+ * never be opened with someone the caller could not have found. The existing
+ * DM is returned when there is one: a DM is identified by its two members,
+ * and the phone's "New message" must land in the thread that already exists.
+ */
+export async function findOrCreateDm(currentUserId: string, otherUserId: string): Promise<ConversationSummary> {
+  if (otherUserId === currentUserId) throw new MessagingError(400, 'That is you.');
+  const shared = await prisma.spaceMember.findFirst({
+    where: {
+      userId: otherUserId,
+      status: 'active',
+      space: { personalOwnerId: null, members: { some: { userId: currentUserId, status: 'active' } } },
+    },
+    select: { id: true },
+  });
+  if (!shared) throw new MessagingError(404, 'No such person in your spaces.');
+
+  const existing = await prisma.conversation.findFirst({
+    where: {
+      type: ConversationType.DM,
+      AND: [{ members: { some: { userId: currentUserId } } }, { members: { some: { userId: otherUserId } } }],
+    },
+    include: CONVERSATION_INCLUDE,
+    orderBy: { createdAt: 'asc' },
+  });
+  const conversation =
+    existing ??
+    (await prisma.conversation.create({
+      data: {
+        type: ConversationType.DM,
+        createdById: currentUserId,
+        members: { create: [{ userId: currentUserId }, { userId: otherUserId }] },
+      },
+      include: CONVERSATION_INCLUDE,
+    }));
+  const me = conversation.members.find((m) => m.userId === currentUserId);
+  const unread = await getUnreadCount(conversation.id, currentUserId, me?.lastReadAt ?? null);
+  return serializeConversation(conversation, currentUserId, unread, me?.role ?? ConversationMemberRole.MEMBER);
+}
+
 export async function createChannelConversation(
   currentUserId: string,
   spaceId: string,

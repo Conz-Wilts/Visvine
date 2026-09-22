@@ -329,6 +329,20 @@ export async function ledgerSpendForMonth(spaceId: string, providerId: string, a
   return agg._sum.costMicros ?? BigInt(0)
 }
 
+/**
+ * One agent's spend for the UTC month of `at`, from the ledger — runs AND
+ * chat turns (lib/agents/chat.ts), which meter under the agent's name but
+ * never make a run row. What the agent's own `budgetMonthlyCents` compares
+ * against when a chat turn asks.
+ */
+export async function ledgerSpendForAgent(spaceId: string, name: string, at: Date): Promise<bigint> {
+  const agg = await prisma.agentModelUsage.aggregate({
+    where: { spaceId, month: monthBounds(at).start, name },
+    _sum: { costMicros: true },
+  })
+  return agg._sum.costMicros ?? BigInt(0)
+}
+
 /** Retention: drop runs older than RUN_RETENTION_DAYS, keeping the newest RUN_KEEP_PER_AGENT per agent. */
 export async function pruneRuns(now = new Date()): Promise<number> {
   await pruneEvents(now)

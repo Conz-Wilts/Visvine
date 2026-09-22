@@ -93,6 +93,7 @@ model Space {
   agentStates     AgentState[]
   agentRuns       AgentRun[]
   agentSubscriptions AgentSubscription[]
+  agentChatThreads AgentChatThread[]
   agentEvents     AgentEvent[]
   agentEgressLog  AgentEgressLog[]
   agentVms        AgentVm[]
@@ -617,6 +618,63 @@ model AgentVmUsage {
 /// UTC month, incremented when a run finishes (lib/agents/runs.ts#finishRun) the
 /// way the tick increments AgentVmUsage. agent_runs rows are pruned (90 days /
 /// 100 per agent); these survive, so "what did March cost" has an answer.
+/// A person's standing conversation with one agent in one space — the mobile
+/// Messages → Agents thread (docs/agents.md § Chat). NOT a run: it never
+/// touches agent_state, the mailbox or the schedule. Each turn is one chat on
+/// the space's model with the brief as system prompt and the agent's tools,
+/// acting as the person. Cascades from users (the delete-account guard) and
+/// spaces. `pendingMessageId` is the per-thread turn claim: one turn at a time
+/// across N instances, stale after CHAT_CLAIM_MS (lib/agents/shared/chat.ts).
+model AgentChatThread {
+  id               String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId          String    @map("space_id")
+  agentName        String    @map("agent_name")
+  userId           String    @map("user_id")
+  lastMessageAt    DateTime? @map("last_message_at")
+  /// First ~160 chars of the newest message, for the list row.
+  lastPreview      String?   @map("last_preview")
+  /// When the person last opened the thread; unread = lastMessageAt > this.
+  lastReadAt       DateTime? @map("last_read_at")
+  pendingMessageId String?   @map("pending_message_id")
+  pendingSince     DateTime? @map("pending_since")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  space            Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages         AgentChatMessage[]
+
+  @@unique([spaceId, agentName, userId], name: "chat_identity")
+  @@index([userId, lastMessageAt(sort: Desc)])
+  @@index([spaceId, agentName])
+  @@map("agent_chat_threads")
+}
+
+/// One bubble of a thread. An assistant row is written `pending` when the turn
+/// is claimed and finished with its text, trace and metering (or `failed` and
+/// a reason), so a turn that outlives the request is never lost.
+model AgentChatMessage {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  threadId         String   @map("thread_id")
+  role             String // user | assistant
+  text             String
+  status           String   @default("done") // pending | done | failed
+  /// Assistant rows: why the turn ended — finished | max_turns | budget | timeout | error | narrated
+  reason           String?
+  errorMessage     String?  @map("error_message")
+  /// Assistant rows: compact tool trace, [{ tool, detail, ok }], capped (shared/chat.ts#compactTrace)
+  trace            Json?
+  model            String?
+  turns            Int      @default(0)
+  promptTokens     Int      @default(0) @map("prompt_tokens")
+  completionTokens Int      @default(0) @map("completion_tokens")
+  costMicros       BigInt?  @map("cost_micros")
+  createdAt        DateTime @default(now()) @map("created_at")
+  thread           AgentChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt(sort: Desc)])
+  @@map("agent_chat_messages")
+}
+
 /// Tokens are BigInt because a month of runs outgrows what one run never will.
 /// No user key — spend belongs to the space — so deleteAccount owes it nothing.
 model AgentModelUsage {
@@ -1361,6 +1419,7 @@ model User {
   connectorRequests       ConnectorRequest[]
   connectorAccounts       ConnectorAccount[]
   connectorAccountClients ConnectorAccountClient[]
+  agentChatThreads        AgentChatThread[]
   identity                Identity?
   oauthAuthCodes          OAuthAuthCode[]
   profileSections         ProfileSection[]

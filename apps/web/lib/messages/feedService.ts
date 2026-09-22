@@ -9,6 +9,7 @@ import {
   FEED_PAGE_SIZE,
   decodeFeedCursor,
   encodeFeedCursor,
+  filterPlaces,
   groupComments,
   type FeedPage,
   type FeedPlace,
@@ -63,9 +64,9 @@ async function feedPlaces(userId: string, email?: string | null): Promise<FeedPl
 /** One page of the feed, newest post first, each post with its comments. */
 export async function listFeedForUser(
   user: { id: string; email?: string | null },
-  options?: { cursor?: string | null; limit?: number },
+  options?: { cursor?: string | null; limit?: number; spaceId?: string | null },
 ): Promise<FeedPage> {
-  const places = await feedPlaces(user.id, user.email);
+  const places = filterPlaces(await feedPlaces(user.id, user.email), options?.spaceId);
   const cursor = decodeFeedCursor(options?.cursor);
   const targets = cursor ? undefined : places;
   if (places.length === 0) return { posts: [], nextCursor: null, targets };

@@ -530,6 +530,13 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   subscription (`lib/agents/shared/rehearsal.ts`, pure). Nothing billed, no run
   recorded. Rules: one round, write nothing, use only what the brief declares,
   report what is out of reach.
+- **A person can chat with an agent, and a chat is not a run.**
+  `lib/agents/chat.ts`: a thread per (person, space, agent) in `agent_chat_*`,
+  each message one tool-loop turn on the space's model with the brief as system
+  prompt, the memory note read-only (no `remember`), the last 20 messages
+  replayed, the tools running AS the person. No mailbox, no `agent_runs`, no
+  schedule; spend is metered under the agent's name. Gate = can read the
+  brief. `docs/agents.md § Chat`; the phone's surface is `docs/mobile.md`.
 - **An agent is watched on its own node page** — `/directory/agent:<name>`, the
   Agent tab beside Context and Raw (`AgentPageContent.tsx`). There is no agents
   tool: no rail row, no feature key, no console section. **The roster is the
@@ -557,6 +564,17 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   still takes a `message` and `send_to_agent` still fills the mailbox
   (`lib/agents/summon.ts`). Actions return `watch` hrefs (`config.ts#agentPageHref`).
   Polling, never a stream.
+
+## Mobile
+
+`docs/mobile.md`. Two native clients (`apps/mobile`), three tabs — Home (space
+switcher, feed, People/Events rows, quick capture via `edit_context` /
+`add_context`), Messages (Agents = chat threads, Contacts = DMs; `POST
+/api/messages/conversations { userId }` makes a DM), Activity
+(`GET /api/activity`: runs for you, mentions, replies, requests you can
+answer with the existing routes, upcoming events — `lib/activity/`, pure fold
+tested). `GET /api/feed?spaceId=` is one space's feed. Responses camelCase;
+action inputs snake_case; the clients mirror each handler by hand.
 
 ## The Directory
 

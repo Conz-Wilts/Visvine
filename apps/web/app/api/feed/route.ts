@@ -7,6 +7,8 @@ import { FEED_PAGE_MAX } from '@/lib/messages/shared/feed';
 const querySchema = z.object({
   cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(FEED_PAGE_MAX).optional(),
+  /** One space's feed only — what the phone's Home asks for. */
+  spaceId: z.string().max(200).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -18,6 +20,7 @@ export async function GET(request: NextRequest) {
     const query = querySchema.safeParse({
       cursor: searchParams.get('cursor') ?? undefined,
       limit: searchParams.get('limit') ?? undefined,
+      spaceId: searchParams.get('spaceId') ?? undefined,
     });
     if (!query.success) return NextResponse.json({ error: 'Invalid query' }, { status: 400 });
 
