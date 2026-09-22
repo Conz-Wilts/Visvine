@@ -3,6 +3,8 @@ import Foundation
 /// Tabs (Home / Messages / Discover).
 enum MainTab: Hashable {
     case home, messages, discover
+    /// Not a destination: the tab bar's create button.
+    case create
 
     /// Map an OAuth pending-route hint ("Messages"/"Discover") to a tab. Anything else lands on Home.
     static func from(pendingRoute name: String?) -> MainTab {

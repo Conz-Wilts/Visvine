@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Hosts the three tabs — Home, Messages, Discover (docs/mobile.md) — the
-/// floating glass tab bar with create and search, the space sidebar, and the
+/// system tab bar with create, the space sidebar, and the
 /// Profile modal. Each tab
 /// is its own NavigationStack so detail screens push within the tab; the
 /// Directory and Events screens are pushed from Home rather than being tabs.
@@ -14,11 +14,33 @@ struct MainTabView: View {
     @State private var profilePresented = false
     @State private var createPresented = false
 
+    /// The create tab is never selected: choosing it opens the sheet.
+    private var selection: Binding<MainTab> {
+        Binding(get: { selected }, set: { tab in
+            if tab == .create { createPresented = true } else { selected = tab }
+        })
+    }
+
+    // The system tab bar, so it sits where iOS puts it and its glass takes a
+    // press-and-drag across tabs. Create rides the search slot: its own circle.
     var body: some View {
-        ZStack(alignment: .bottom) {
-            tabContent
-            GlassTabBar(selected: $selected, onCreate: { createPresented = true })
+        TabView(selection: selection) {
+            Tab("Home", systemImage: "house", value: MainTab.home) {
+                stack { HomeView(onProfile: { profilePresented = true }) }
+            }
+            Tab("Messages", systemImage: "bubble.left", value: MainTab.messages) {
+                stack { MessagesHubView(onProfile: { profilePresented = true }) }
+            }
+            Tab("Discover", systemImage: "safari", value: MainTab.discover) {
+                stack { DiscoverView(onProfile: { profilePresented = true }) }
+            }
+            Tab(value: MainTab.create, role: .search) {
+                Color.clear
+            } label: {
+                Label("Create", systemImage: "plus")
+            }
         }
+        .tint(theme.colors.accent)
         .overlay(alignment: .topLeading) {
             if space.switcherOpen {
                 SpaceSidebar(
@@ -44,23 +66,9 @@ struct MainTabView: View {
         }
     }
 
-    @ViewBuilder private var tabContent: some View {
-        switch selected {
-        case .home:
-            NavigationStack {
-                HomeView(onProfile: { profilePresented = true })
-                    .navigationDestination(for: AppRoute.self, destination: destination)
-            }
-        case .messages:
-            NavigationStack {
-                MessagesHubView(onProfile: { profilePresented = true })
-                    .navigationDestination(for: AppRoute.self, destination: destination)
-            }
-        case .discover:
-            NavigationStack {
-                DiscoverView(onProfile: { profilePresented = true })
-                    .navigationDestination(for: AppRoute.self, destination: destination)
-            }
+    private func stack(@ViewBuilder _ root: () -> some View) -> some View {
+        NavigationStack {
+            root().navigationDestination(for: AppRoute.self, destination: destination)
         }
     }
 
