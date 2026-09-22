@@ -39,7 +39,7 @@ struct MessagesHubView: View {
     var body: some View {
         let c = theme.colors
         VStack(spacing: 0) {
-            ScreenHeader(showSpaceSelector: true, onProfile: onProfile)
+            ScreenHeader(title: "Messages", onProfile: onProfile)
             HStack(spacing: 0) {
                 SegmentedNav(items: ["Agents", "Contacts"], selected: $segment)
                 if segment == 1 {

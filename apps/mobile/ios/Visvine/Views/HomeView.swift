@@ -69,7 +69,7 @@ struct HomeView: View {
     var body: some View {
         let c = theme.colors
         VStack(spacing: 0) {
-            ScreenHeader(showSpaceSelector: true, onProfile: onProfile)
+            ScreenHeader(title: "Home", onProfile: onProfile)
             ScrollView {
                 LazyVStack(spacing: 0) {
                     if let error = model.error {
@@ -77,10 +77,11 @@ struct HomeView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 16).padding(.vertical, 12)
                     }
-                    Hairline()
-                    NavigationLink(value: AppRoute.people) { LinkRow(icon: .people, label: "People") }.buttonStyle(.plain)
-                    Hairline()
-                    NavigationLink(value: AppRoute.events) { LinkRow(icon: .calendar, label: "Events") }.buttonStyle(.plain)
+                    HStack(spacing: 10) {
+                        NavigationLink(value: AppRoute.people) { Shortcut(icon: .people, label: "People") }.buttonStyle(.plain)
+                        NavigationLink(value: AppRoute.events) { Shortcut(icon: .calendar, label: "Events") }.buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 12)
                     Hairline()
 
                     if model.loading {
@@ -89,7 +90,7 @@ struct HomeView: View {
                         EmptyStateView(text: "Nothing in this space's feed yet", icon: .message)
                     } else {
                         Text("Feed")
-                            .font(.system(size: 13, weight: .semibold)).foregroundStyle(c.textMuted)
+                            .font(.system(size: 20, weight: .bold)).foregroundStyle(c.textPrimary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 4)
                         ForEach(model.posts) { post in
@@ -134,9 +135,9 @@ struct HomeView: View {
                     Button { kind = k } label: {
                         Text(k.label)
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(on ? .white : c.textSecondary)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(on ? c.accent : c.bgTertiary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .foregroundStyle(on ? c.accentDark : c.textMuted)
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(on ? c.accentLight : Color.clear, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -146,16 +147,16 @@ struct HomeView: View {
                 TextField(placeholder, text: $draft, axis: .vertical)
                     .lineLimit(1...4)
                     .focused($composing)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(.horizontal, 16).padding(.vertical, 11)
+                    .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 21, style: .continuous))
                     .foregroundStyle(c.textPrimary)
                 Button { send() } label: {
                     Group {
                         if model.capturing { ProgressView().tint(.white) }
                         else { VisvineIcon(kind == .note ? .plus : .send, size: 18).foregroundStyle(.white) }
                     }
-                    .frame(width: 40, height: 40)
-                    .background(canSend ? c.accent : c.borderDefault, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .frame(width: 42, height: 42)
+                    .background(canSend ? c.accentDark : c.borderDefault, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!canSend)
@@ -164,7 +165,7 @@ struct HomeView: View {
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 84)
-        .background(c.bgPrimary)
+        .background(c.bgPrimary.shadow(.drop(color: .black.opacity(0.04), radius: 8, y: -4)))
     }
 
     private var placeholder: String {
@@ -216,5 +217,28 @@ private struct FeedPostRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+}
+
+/// A way into one of the space's lists, side by side with the other.
+private struct Shortcut: View {
+    @Environment(ThemeStore.self) private var theme
+    let icon: VisvineIconName
+    let label: String
+
+    var body: some View {
+        let c = theme.colors
+        HStack(spacing: 10) {
+            VisvineIcon(icon, size: 18).foregroundStyle(c.accentDark)
+            Text(label).font(.system(size: 15, weight: .semibold)).foregroundStyle(c.textPrimary)
+            Spacer(minLength: 0)
+            VisvineIcon(.chevronRight, size: 12).foregroundStyle(c.textLight)
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity)
+        .frame(height: 48)
+        .background(c.bgSecondary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(c.borderSubtle, lineWidth: 1))
+        .contentShape(Rectangle())
     }
 }

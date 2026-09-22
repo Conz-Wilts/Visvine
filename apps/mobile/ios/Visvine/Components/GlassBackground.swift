@@ -12,7 +12,7 @@ struct GlassBackground: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
             )
-            .shadow(color: .black.opacity(0.28), radius: 24, x: 0, y: 12)
+            .shadow(color: .black.opacity(0.12), radius: 18, x: 0, y: 8)
     }
 }
 

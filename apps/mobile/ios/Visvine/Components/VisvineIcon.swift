@@ -33,6 +33,7 @@ enum VisvineIconName: String {
     case chevronDown = "chevron-down"
     case chevronRight = "chevron-right"
     case clock
+    case compass
     case globe
     case help = "circle-question-mark"
     case home = "house"

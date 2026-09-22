@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Hosts the three tabs — Home, Messages, Activity (docs/mobile.md) — the
+/// Hosts the three tabs — Home, Messages, Discover (docs/mobile.md) — the
 /// floating glass tab bar, the search overlay, and the Profile modal. Each tab
 /// is its own NavigationStack so detail screens push within the tab; the
 /// Directory and Events screens are pushed from Home rather than being tabs.
@@ -43,9 +43,9 @@ struct MainTabView: View {
                 MessagesHubView(onProfile: { profilePresented = true })
                     .navigationDestination(for: AppRoute.self, destination: destination)
             }
-        case .activity:
+        case .discover:
             NavigationStack {
-                ActivityView(onProfile: { profilePresented = true })
+                DiscoverView(onProfile: { profilePresented = true })
                     .navigationDestination(for: AppRoute.self, destination: destination)
             }
         }

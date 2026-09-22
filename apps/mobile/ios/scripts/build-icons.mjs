@@ -41,6 +41,7 @@ export const IOS_ICONS = [
   'circle-check',
   'circle-question-mark',
   'clock',
+  'compass',
   'globe',
   'hammer',
   'link-2',

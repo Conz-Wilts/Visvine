@@ -1,50 +1,55 @@
 import SwiftUI
 
-/// The bespoke glass pill tab bar: one row of tabs, selected by tap, with a
-/// search circle sitting to the right of the pill.
+/// The floating glass tab bar: three tabs in one pill, with a search circle
+/// beside it.
 struct GlassTabBar: View {
     @Environment(ThemeStore.self) private var theme
     @Binding var selected: MainTab
     var onSearch: () -> Void
 
-    // One icon per tab, not a filled/outline pair: our glyphs are stroke-only
-    // (see docs/icons.md), and focus is already carried by the accent colour on
-    // the whole cell — which was doing most of the work anyway.
+    // One stroke glyph per tab (docs/icons.md); focus is the accent on the cell.
     private struct Item { let tab: MainTab; let label: String; let icon: VisvineIconName }
     private let items: [Item] = [
         Item(tab: .home, label: "Home", icon: .home),
         Item(tab: .messages, label: "Messages", icon: .message),
-        Item(tab: .activity, label: "Activity", icon: .bell),
+        Item(tab: .discover, label: "Discover", icon: .compass),
     ]
 
     var body: some View {
         let c = theme.colors
-        let neutral: Color = .black
         HStack(spacing: 10) {
-            HStack(spacing: 0) {
+            HStack(spacing: 4) {
                 ForEach(items, id: \.tab) { item in
                     let focused = selected == item.tab
                     Button { selected = item.tab } label: {
-                        VStack(spacing: 2) {
-                            VisvineIcon(item.icon, size: 20)
-                            Text(item.label).font(.system(size: 11, weight: .bold))
+                        VStack(spacing: 3) {
+                            VisvineIcon(item.icon, size: 21)
+                            Text(item.label).font(.system(size: 10, weight: .semibold))
                         }
-                        .foregroundStyle(focused ? c.accent : neutral)
-                        .frame(maxWidth: .infinity)
+                        .foregroundStyle(focused ? c.accentDark : c.textMuted)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(focused ? c.accentLight.opacity(0.9) : Color.clear, in: Capsule())
+                        .contentShape(Capsule())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(focused ? .isSelected : [])
                 }
             }
-            .frame(height: 64)
-            .glass(cornerRadius: 32)
+            .padding(5)
+            .frame(height: 62)
+            .glass(cornerRadius: 31)
 
             Button(action: onSearch) {
-                VisvineIcon(.search, size: 24)
-                    .foregroundStyle(neutral)
-                    .frame(width: 64, height: 64)
-                    .glass(cornerRadius: 32)
+                VisvineIcon(.search, size: 22)
+                    .foregroundStyle(c.textSecondary)
+                    .frame(width: 62, height: 62)
+                    .glass(cornerRadius: 31)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Search")
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .padding(.bottom, 6)
+        .animation(.snappy(duration: 0.2), value: selected)
     }
 }

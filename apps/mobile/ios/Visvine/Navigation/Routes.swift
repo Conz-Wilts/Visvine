@@ -1,15 +1,14 @@
 import Foundation
 
-/// Tabs (Home / Messages / Activity).
+/// Tabs (Home / Messages / Discover).
 enum MainTab: Hashable {
-    case home, messages, activity
+    case home, messages, discover
 
-    /// Map an OAuth pending-route hint ("Messages"/"Activity", or the older
-    /// "Directory"/"Events") to a tab. Anything else lands on Home.
+    /// Map an OAuth pending-route hint ("Messages"/"Discover") to a tab. Anything else lands on Home.
     static func from(pendingRoute name: String?) -> MainTab {
         switch name?.lowercased() {
         case "messages": return .messages
-        case "activity": return .activity
+        case "discover": return .discover
         default: return .home
         }
     }
