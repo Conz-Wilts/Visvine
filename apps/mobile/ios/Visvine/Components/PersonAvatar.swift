@@ -21,13 +21,18 @@ struct PersonAvatar: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(Circle())
+        .clipShape(shape)
+    }
+
+    /// A rounded square, as the web's Avatar draws it (rounded-lg/xl).
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
     }
 
     private var fallback: some View {
         let c = theme.colors
         return ZStack {
-            Circle().fill(c.accentLight)
+            shape.fill(c.accentLight)
             if let glyph {
                 VisvineIcon(glyph, size: max(12, size * 0.45)).foregroundStyle(c.accentDark)
             } else {
