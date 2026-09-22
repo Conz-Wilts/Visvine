@@ -44,6 +44,21 @@ struct MainTabView: View {
             }
         }
         .tint(theme.colors.accent)
+        // The search slot always draws its own white glass disc, which no
+        // tint or image can fill. The slot keeps the space; this solid
+        // circle covers it and takes the press.
+        .overlay(alignment: .bottomTrailing) {
+            Button { createPresented = true } label: {
+                Image(uiImage: createIcon)
+                    .resizable()
+                    .frame(width: 64, height: 64)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Create")
+            .padding(.trailing, 20)
+            .padding(.bottom, 20)
+            .ignoresSafeArea()
+        }
         .overlay(alignment: .topLeading) {
             if space.switcherOpen {
                 SpaceSidebar(
@@ -77,16 +92,16 @@ struct MainTabView: View {
     /// The create button is a solid accent circle with a white cross. Drawn
     /// as an original-colour image, because the tab bar tints a symbol.
     private var createIcon: UIImage {
-        let side: CGFloat = 60
+        let side: CGFloat = 64
         let accent = UIColor(theme.colors.accent)
         return UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
             accent.setFill()
             UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side)).fill()
-            let arm: CGFloat = 12, mid = side / 2
+            let arm: CGFloat = 13, mid = side / 2
             let cross = UIBezierPath()
             cross.move(to: CGPoint(x: mid - arm, y: mid)); cross.addLine(to: CGPoint(x: mid + arm, y: mid))
             cross.move(to: CGPoint(x: mid, y: mid - arm)); cross.addLine(to: CGPoint(x: mid, y: mid + arm))
-            cross.lineWidth = 3.5
+            cross.lineWidth = 4
             cross.lineCapStyle = .round
             UIColor.white.setStroke()
             cross.stroke()
