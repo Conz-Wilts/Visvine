@@ -285,25 +285,27 @@
   background: color-mix(in srgb, var(--theme-accent-color, #78d870) 34%, transparent);
   color: inherit;
 }
-/* A reference from a note the viewer can't read: an inert frosted block — the
- * bars are decoration standing where an excerpt would be (the server sent no
- * text at all), the lock sits top-right, and the only action is Get access.
- * Not clickable: there is nothing to open. */
+/* A reference from a note the viewer can't read: the bars are decoration
+ * standing where an excerpt would be (the server sent no text at all), the
+ * lock stands at the right, centred on the block, and the only action is Get
+ * access. No container: it sits in the list as bare text rows, and it is not
+ * clickable — there is nothing to open. */
 .notes-ref-locked {
   position: relative;
+  padding-right: 52px;
   cursor: default;
-  border-color: var(--color-border-subtle, #e5e7eb);
-  background: color-mix(in srgb, var(--color-border-subtle, #e5e7eb) 14%, transparent);
 }
 .notes-ref-locked:hover {
-  background: color-mix(in srgb, var(--color-border-subtle, #e5e7eb) 14%, transparent);
+  border-color: transparent;
+  background: none;
 }
 .notes-ref-lock-icon {
   position: absolute;
-  top: 10px;
-  right: 12px;
-  width: 16px;
-  height: 16px;
+  top: 50%;
+  right: 14px;
+  width: 24px;
+  height: 24px;
+  transform: translateY(-50%);
   color: var(--color-text-muted, #4b5563);
 }
 .notes-ref-locked-lines {
