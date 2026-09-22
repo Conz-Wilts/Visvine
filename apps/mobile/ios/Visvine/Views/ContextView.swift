@@ -8,6 +8,8 @@ struct ContextFolderView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(SearchStore.self) private var search
     let node: ContextNode
+    /// Drawn under Home's chips rather than pushed with a title.
+    var embedded = false
 
     @State private var open: Set<String> = []
 
@@ -35,8 +37,8 @@ struct ContextFolderView: View {
             .padding(.bottom, 140)
         }
         .background(c.bgPrimary)
-        .navigationTitle(node.path.isEmpty ? "Context" : node.label)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationTitle(embedded ? "" : (node.path.isEmpty ? "Context" : node.label))
+        .navigationBarTitleDisplayMode(embedded ? .inline : .large)
         .searchScope("Search context")
         .animation(.snappy(duration: 0.22), value: open)
         .animation(.snappy(duration: 0.22), value: search.query)
@@ -50,8 +52,7 @@ struct ContextFolderView: View {
         let expanded = isOpen(n)
         let content = HStack(spacing: 0) {
             guides(row)
-            Image(systemName: n.isFolder ? (expanded ? "folder.fill" : "folder") : "doc.text")
-                .font(.system(size: 19))
+            VisvineIcon(n.isFolder ? (expanded ? .folderOpen : .folder) : .fileText, size: 19)
                 .foregroundStyle(n.isFolder ? c.accentDark : c.textMuted)
                 .frame(width: Self.glyph)
             Text(highlighted(n.label))
@@ -182,25 +183,28 @@ private struct TreeRowStyle: ButtonStyle {
     }
 }
 
-/// One note, read: its prose without the frontmatter or the child list.
+/// One note, read as the web's Context tab draws it — title, property rows,
+/// prose, the folder's children, what links here — or as the raw file.
 struct ContextNoteView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(SpaceStore.self) private var space
     let path: String
     let title: String
 
-    @State private var body_: String?
+    @AppStorage("noteMode") private var mode = 0
+    @State private var content: String?
+    @State private var doc: NoteDocument?
+    @State private var references: NoteReferences?
     @State private var error: String?
+    /// A note a link in the prose opened.
+    @State private var linked: String?
 
     var body: some View {
         let c = theme.colors
         ScrollView {
             Group {
-                if let body_ {
-                    Text(markdown(body_))
-                        .font(.system(size: 17))
-                        .foregroundStyle(c.textPrimary)
-                        .textSelection(.enabled)
+                if let content, let doc {
+                    if mode == 0 { context(doc) } else { raw(content) }
                 } else if let error {
                     Text(error).foregroundStyle(c.error)
                 } else {
@@ -208,33 +212,139 @@ struct ContextNoteView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .padding(.horizontal, 16)
             .padding(.bottom, 120)
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SegmentedNav(items: ["Context", "Raw"], selected: $mode).background(c.bgPrimary)
+        }
         .background(c.bgPrimary)
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.large)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .environment(\.openURL, OpenURLAction(handler: open))
+        .navigationDestination(item: $linked) { target in
+            ContextNoteView(path: target, title: Self.fallbackTitle(target))
+        }
         .task {
             guard let id = space.current?.id else { return }
             switch await ContextRepository().note(spaceId: id, path: path) {
-            case .success(let r): body_ = Self.prose(r.content)
+            case .success(let r):
+                content = r.content
+                doc = NoteDocument(r.content)
             case .failure(let m): error = m
+            }
+            if case .success(let refs) = await ContextRepository().references(spaceId: id, path: path) {
+                references = refs
             }
         }
     }
 
-    private func markdown(_ s: String) -> AttributedString {
-        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+    // MARK: context
+
+    @ViewBuilder private func context(_ doc: NoteDocument) -> some View {
+        let c = theme.colors
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(doc.title ?? title)
+                    .font(.custom("Visvine-Medium", size: 30, relativeTo: .largeTitle))
+                    .foregroundStyle(c.textPrimary)
+                if let d = doc.description {
+                    Text(d).font(.system(size: 16)).foregroundStyle(c.textMuted)
+                }
+            }
+            .padding(.top, 8)
+            NotePropertyRows(doc: doc)
+            if !doc.blocks.isEmpty { NoteBlocksView(blocks: doc.blocks) }
+            ForEach(Array(doc.children.enumerated()), id: \.offset) { _, section in
+                children(section)
+            }
+            if let refs = references, !(refs.linked.isEmpty && refs.unlinked.isEmpty) {
+                backlinks(refs)
+            }
+        }
     }
 
-    static func prose(_ content: String) -> String {
-        var text = content
-        if text.hasPrefix("---"), let end = text.range(of: "\n---", range: text.index(text.startIndex, offsetBy: 3)..<text.endIndex) {
-            text = String(text[end.upperBound...])
+    private func children(_ section: NoteDocument.ChildSection) -> some View {
+        group(section.title) {
+            ForEach(Array(section.rows.enumerated()), id: \.offset) { _, child in
+                if let target = NoteDocument.resolve(child.href, from: path) {
+                    NavigationLink(value: AppRoute.contextNote(path: target, title: child.title)) {
+                        row(child.title, child.description, icon: child.href.hasSuffix("index.md") ? .folder : .fileText)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
-        if let marker = text.range(of: "<!-- index:children -->") {
-            text = String(text[..<marker.lowerBound])
+    }
+
+    private func backlinks(_ refs: NoteReferences) -> some View {
+        group("Linked from") {
+            ForEach(refs.linked + refs.unlinked, id: \.self) { ref in
+                NavigationLink(value: AppRoute.contextNote(path: ref.fromPath, title: ref.fromTitle)) {
+                    row(ref.fromTitle, ref.excerpt, icon: .link)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func group(_ heading: String, @ViewBuilder _ rows: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(heading.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.6)
+                .foregroundStyle(theme.colors.textMuted)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
+            Hairline()
+            rows()
+        }
+    }
+
+    private func row(_ title: String, _ detail: String?, icon: VisvineIconName) -> some View {
+        let c = theme.colors
+        return HStack(alignment: .top, spacing: 12) {
+            VisvineIcon(icon, size: 17).foregroundStyle(c.textMuted).padding(.top, 2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 16, weight: .medium)).foregroundStyle(c.textPrimary)
+                if let detail, !detail.isEmpty {
+                    Text(detail).font(.system(size: 14)).foregroundStyle(c.textMuted).lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+            VisvineIcon(.chevronRight, size: 12).foregroundStyle(c.textLight).padding(.top, 4)
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+
+    // MARK: raw
+
+    private func raw(_ content: String) -> some View {
+        Text(content)
+            .font(.system(size: 14, design: .monospaced))
+            .foregroundStyle(theme.colors.textPrimary)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(theme.colors.bgSecondary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.top, 8)
+    }
+
+    // MARK: links
+
+    /// A link to another note opens it here; anything else leaves the app.
+    private func open(_ url: URL) -> OpenURLAction.Result {
+        if url.scheme == nil, let target = NoteDocument.resolve(url.relativeString, from: path) {
+            linked = target
+            return .handled
+        }
+        return .systemAction
+    }
+
+    private static func fallbackTitle(_ path: String) -> String {
+        let parts = path.split(separator: "/")
+        let name = parts.last == "index.md" && parts.count > 1 ? parts[parts.count - 2] : parts.last ?? ""
+        return name.replacingOccurrences(of: ".md", with: "")
     }
 }

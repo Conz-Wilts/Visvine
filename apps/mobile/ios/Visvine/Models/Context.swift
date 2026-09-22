@@ -25,4 +25,22 @@ struct ContextTreeResponse: Codable { let tree: ContextNode }
 struct ContextNoteResponse: Codable {
     let content: String
     let path: String
+    /// Frontmatter keys a write cannot change.
+    var held: [String]?
+}
+
+/// GET /api/notes/references — the notes that link to this one.
+struct NoteReferencesResponse: Codable {
+    let references: NoteReferences
+}
+
+struct NoteReferences: Codable {
+    var linked: [NoteReference]
+    var unlinked: [NoteReference]
+}
+
+struct NoteReference: Codable, Hashable {
+    let fromPath: String
+    let fromTitle: String
+    let excerpt: String
 }

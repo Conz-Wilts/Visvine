@@ -15,4 +15,12 @@ struct ContextRepository {
     func note(spaceId: String, path: String) async -> APIResult<ContextNoteResponse> {
         await api.request("/api/notes/item", query: ["spaceId": spaceId, "path": path])
     }
+
+    func references(spaceId: String, path: String) async -> APIResult<NoteReferences> {
+        let res: APIResult<NoteReferencesResponse> = await api.request("/api/notes/references", query: ["spaceId": spaceId, "path": path])
+        switch res {
+        case .success(let r): return .success(r.references)
+        case .failure(let m): return .failure(m)
+        }
+    }
 }
