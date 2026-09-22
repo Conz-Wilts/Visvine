@@ -23,7 +23,7 @@ struct SpaceSidebar: View {
                 panel
                     .frame(width: width)
                     .frame(maxHeight: .infinity)
-                    .glassEffect(.regular, in: UnevenRoundedRectangle(bottomTrailingRadius: 36, topTrailingRadius: 36, style: .continuous))
+                    .background(theme.colors.bgPrimary, in: UnevenRoundedRectangle(bottomTrailingRadius: 36, topTrailingRadius: 36, style: .continuous))
                     .ignoresSafeArea(edges: .vertical)
                     .offset(x: shown ? min(0, drag) : -width - 20)
                     .gesture(

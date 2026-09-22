@@ -2,7 +2,7 @@ import Foundation
 
 /// Tabs (Home / Messages / Discover).
 enum MainTab: Hashable {
-    case home, messages, discover
+    case home, messages, tools
     /// Not a destination: the tab bar's create button.
     case create
 
@@ -10,7 +10,7 @@ enum MainTab: Hashable {
     static func from(pendingRoute name: String?) -> MainTab {
         switch name?.lowercased() {
         case "messages": return .messages
-        case "discover": return .discover
+        case "tools": return .tools
         default: return .home
         }
     }

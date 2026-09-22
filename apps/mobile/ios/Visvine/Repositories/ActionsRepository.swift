@@ -47,6 +47,15 @@ struct ActionsRepository {
         }
     }
 
+    func listTools(spaceId: String) async -> APIResult<[InstalledTool]> {
+        let body = try? JSONEncoder().encode(["space_id": spaceId])
+        let res: APIResult<ActionEnvelope<ListToolsResult>> = await api.request("/api/actions/list_tools", method: "POST", body: body)
+        switch res {
+        case .success(let r): return .success(r.result.installed)
+        case .failure(let m): return .failure(m)
+        }
+    }
+
     /// `2026-09-22-1432`
     static func stamp(_ date: Date) -> String {
         let f = DateFormatter()

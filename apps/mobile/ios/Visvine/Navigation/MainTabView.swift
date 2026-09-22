@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Hosts the three tabs — Home, Messages, Discover (docs/mobile.md) — the
+/// Hosts the three tabs — Home, Messages, Tools (docs/mobile.md) — the
 /// system tab bar with create, the space sidebar, and the
 /// Profile modal. Each tab
 /// is its own NavigationStack so detail screens push within the tab; the
@@ -13,6 +13,7 @@ struct MainTabView: View {
     @State private var selected: MainTab = .home
     @State private var profilePresented = false
     @State private var createPresented = false
+    @State private var discoverPresented = false
 
     /// The create tab is never selected: choosing it opens the sheet.
     private var selection: Binding<MainTab> {
@@ -31,8 +32,8 @@ struct MainTabView: View {
             Tab("Messages", systemImage: "bubble.left", value: MainTab.messages) {
                 stack { MessagesHubView(onProfile: { profilePresented = true }) }
             }
-            Tab("Discover", systemImage: "safari", value: MainTab.discover) {
-                stack { DiscoverView(onProfile: { profilePresented = true }) }
+            Tab("Tools", systemImage: "square.grid.2x2", value: MainTab.tools) {
+                stack { ToolsView(onProfile: { profilePresented = true }) }
             }
             Tab(value: MainTab.create, role: .search) {
                 Color.clear
@@ -44,10 +45,15 @@ struct MainTabView: View {
         .overlay(alignment: .topLeading) {
             if space.switcherOpen {
                 SpaceSidebar(
-                    onDiscover: { selected = .discover },
+                    onDiscover: { discoverPresented = true },
                     onSettings: { profilePresented = true }
                 )
             }
+        }
+        .sheet(isPresented: $discoverPresented) {
+            stack { DiscoverView(onProfile: { discoverPresented = false; profilePresented = true }) }
+                .environment(theme)
+                .environment(space)
         }
         .sheet(isPresented: $createPresented) {
             CreateSheet()
