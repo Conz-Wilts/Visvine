@@ -22,8 +22,10 @@ import SwiftUI
 /// then add the case below.
 enum VisvineIconName: String {
     case arrowDown = "arrow-down"
+    case arrowLeft = "arrow-left"
     case arrowUp = "arrow-up"
     case bell
+    case bot
     case calendar
     case check
     case checkCircle = "circle-check"
@@ -33,20 +35,26 @@ enum VisvineIconName: String {
     case clock
     case globe
     case help = "circle-question-mark"
+    case home = "house"
     case link = "link-2"
     case location = "map-pin"
     case lock
     case logout = "log-out"
     case mail
     case message = "message-circle"
+    case mic
     case network = "waypoints"
     case palette
     case pencil
     case people = "users"
     case person = "user"
+    case personAdd = "user-plus"
     case phone
+    case plus
     case search
+    case send
     case settings
+    case sparkles
     case square
     case tag
     case tool = "hammer"

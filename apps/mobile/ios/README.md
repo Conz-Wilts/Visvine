@@ -51,16 +51,18 @@ Visvine/
 ├── Models/          Codable wire models (mirror the web API server-truth shapes)
 ├── Networking/      APIClient (URLSession), MediaURL, APIResult
 ├── Storage/         KeychainTokenStore, PreferencesStore (UserDefaults)
-├── Realtime/        MessageStream (URLSession.bytes SSE → /api/messages/stream)
-├── Repositories/    Auth/Space/Directory/Events/Messages/Profile
+├── Realtime/        SSEParser, MessageStream (/api/messages/stream), ChatEventParser (the agent chat send)
+├── Repositories/    Auth/Space/Directory/Events/Messages/Profile/Feed/Agents/Activity/Actions
 ├── Auth/            AuthManager (session+deep link), OAuthService (ASWebAuth…)
 ├── State/           SpaceStore, ThemeStore, SearchStore (@Observable)
 ├── Theme/           8 hues (buildColors), DynamicColors
 ├── Util/            search heuristic, date formatting
-├── Components/      ScreenHeader, SearchOverlay, SpaceAvatar, glass
+├── Components/      ScreenHeader, SearchOverlay, SpaceAvatar, PersonAvatar, SegmentedNav,
+│                    MessageBubble, ConversationRow, Hairline/DateSeparator/LinkRow, glass
 ├── Navigation/      RootView, MainTabView, glass tab bar, route enums
-└── Views/           login, dev-login, directory, full-profile, events,
-                     messaging, profile, edit-profile, settings
+└── Views/           home (feed + capture), messages hub (agents | contacts), agent chat,
+                     new message, activity, directory, full-profile, events, event detail,
+                     conversation, login, dev-login, profile, edit-profile, settings
 ```
 
 ## Notes

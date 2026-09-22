@@ -15,15 +15,17 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.visvine.mobile.ui.components.SearchOverlay
-import com.visvine.mobile.ui.screens.directory.DirectoryScreen
-import com.visvine.mobile.ui.screens.events.EventsListScreen
-import com.visvine.mobile.ui.screens.messaging.ConversationsListScreen
+import com.visvine.mobile.ui.screens.activity.ActivityScreen
+import com.visvine.mobile.ui.screens.home.HomeScreen
+import com.visvine.mobile.ui.screens.messaging.MessagesHubScreen
 import com.visvine.mobile.ui.viewmodel.SearchViewModel
 
 /**
- * Hosts the three tabs, the floating glass tab bar, and the search overlay —
- * the native equivalent of TabNavigator. Tab content fills the screen and the
- * bar floats over it (content scrolls under the translucent bar, matching RN).
+ * Hosts the three tabs — Home / Messages / Activity — the floating glass tab
+ * bar, and the search overlay. Tab content fills the screen and the bar floats
+ * over it. Everything a tab opens (a person, an event, a conversation, an
+ * agent chat, the Directory and Events screens) is a destination of the root
+ * graph, so it sits over the bar.
  */
 @Composable
 fun MainTabScaffold(
@@ -34,7 +36,7 @@ fun MainTabScaffold(
 ) {
     val tabNav = rememberNavController()
     val backStackEntry by tabNav.currentBackStackEntryAsState()
-    val currentTab = backStackEntry?.destination?.route ?: Routes.DIRECTORY
+    val currentTab = backStackEntry?.destination?.route ?: Routes.HOME
 
     // Land on the tab the OAuth callback requested, then consume the hint.
     LaunchedEffect(pendingRoute) {
@@ -47,24 +49,29 @@ fun MainTabScaffold(
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = tabNav,
-            startDestination = Routes.DIRECTORY,
+            startDestination = Routes.HOME,
             modifier = Modifier.fillMaxSize(),
         ) {
-            composable(Routes.DIRECTORY) {
-                DirectoryScreen(
+            composable(Routes.HOME) {
+                HomeScreen(
                     onProfileClick = { rootNav.navigate(Routes.PROFILE) },
-                    onOpenProfile = { personId, name -> rootNav.navigate(Routes.fullProfile(personId, name)) },
+                    onOpenPeople = { rootNav.navigate(Routes.DIRECTORY) },
+                    onOpenEvents = { rootNav.navigate(Routes.EVENTS) },
                 )
             }
             composable(Routes.MESSAGES) {
-                ConversationsListScreen(
+                MessagesHubScreen(
                     onProfileClick = { rootNav.navigate(Routes.PROFILE) },
+                    onOpenAgent = { spaceId, name, title -> rootNav.navigate(Routes.agentChat(spaceId, name, title)) },
                     onOpenConversation = { id, name -> rootNav.navigate(Routes.conversation(id, name)) },
+                    onNewMessage = { rootNav.navigate(Routes.NEW_MESSAGE) },
                 )
             }
-            composable(Routes.EVENTS) {
-                EventsListScreen(
+            composable(Routes.ACTIVITY) {
+                ActivityScreen(
                     onProfileClick = { rootNav.navigate(Routes.PROFILE) },
+                    onOpenAgent = { spaceId, name, title -> rootNav.navigate(Routes.agentChat(spaceId, name, title)) },
+                    onOpenConversation = { id, name -> rootNav.navigate(Routes.conversation(id, name)) },
                     onOpenEvent = { id, title -> rootNav.navigate(Routes.eventDetail(id, title)) },
                 )
             }

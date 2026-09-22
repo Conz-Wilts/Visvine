@@ -79,6 +79,7 @@ export const ICON_NAMES = [
   'megaphone',
   'message-circle',
   'message-square',
+  'mic',
   'minus',
   'moon',
   'music',

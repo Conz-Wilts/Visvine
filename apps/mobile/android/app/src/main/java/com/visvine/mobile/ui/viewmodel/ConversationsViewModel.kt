@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.visvine.mobile.auth.AuthManager
 import com.visvine.mobile.data.model.Conversation
 import com.visvine.mobile.data.remote.ApiResult
+import com.visvine.mobile.data.remote.MediaUrl
 import com.visvine.mobile.data.repository.MessagesRepository
 import com.visvine.mobile.ui.state.SearchController
 import com.visvine.mobile.ui.util.searchScore
@@ -62,6 +63,12 @@ class ConversationsViewModel @Inject constructor(
     fun displayName(c: Conversation, userId: String?): String {
         val other = c.participants.firstOrNull { it.id != userId }
         return if (c.type == "GROUP") c.name else other?.name ?: "Unknown"
+    }
+
+    /** The other person's image for a DM, the conversation's own otherwise. */
+    fun displayImage(c: Conversation, userId: String?): String? {
+        val other = c.participants.firstOrNull { it.id != userId }
+        return MediaUrl.resolve(if (c.type == "GROUP") c.avatarUrl else other?.image ?: c.avatarUrl)
     }
 
     fun load() {

@@ -6,7 +6,6 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -57,8 +56,8 @@ class MessageStream @Inject constructor(
             ) {
                 // Backend sends `data: {json}` lines; keepalive/comment lines are
                 // delivered as comments and never reach onEvent.
+                val obj = sseDataObject(json, data) ?: return
                 runCatching {
-                    val obj = json.parseToJsonElement(data) as? JsonObject ?: return
                     val eventType = obj["type"]?.jsonPrimitive?.content ?: return
                     val convoId = obj["conversationId"]?.jsonPrimitive?.content
                     trySend(RealtimeEvent(eventType, convoId))

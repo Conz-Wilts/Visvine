@@ -12,9 +12,9 @@ struct GlassTabBar: View {
     // the whole cell — which was doing most of the work anyway.
     private struct Item { let tab: MainTab; let label: String; let icon: VisvineIconName }
     private let items: [Item] = [
-        Item(tab: .directory, label: "Directory", icon: .people),
+        Item(tab: .home, label: "Home", icon: .home),
         Item(tab: .messages, label: "Messages", icon: .message),
-        Item(tab: .events, label: "Events", icon: .calendar),
+        Item(tab: .activity, label: "Activity", icon: .bell),
     ]
 
     var body: some View {

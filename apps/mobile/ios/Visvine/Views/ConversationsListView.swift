@@ -80,10 +80,10 @@ struct ConversationsListView: View {
                             ForEach(items) { conversation in
                                 let name = model.displayName(conversation, userId: auth.user?.id)
                                 NavigationLink(value: AppRoute.conversation(id: conversation.id, name: name)) {
-                                    row(conversation, name: name)
+                                    ConversationRow(conversation: conversation, name: name)
                                 }
                                 .buttonStyle(.plain)
-                                Rectangle().fill(c.borderSubtle).frame(height: 1)
+                                Hairline()
                             }
                         }
                     }
@@ -96,33 +96,4 @@ struct ConversationsListView: View {
         .task { await model.startRealtime() }
     }
 
-    private func row(_ conversation: Conversation, name: String) -> some View {
-        let c = theme.colors
-        return HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(c.accentLight)
-                Text(name.prefix(1).uppercased()).font(.system(size: 18, weight: .semibold)).foregroundStyle(c.accentDark)
-            }
-            .frame(width: 48, height: 48)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(name).font(.system(size: 16, weight: .semibold)).foregroundStyle(c.textPrimary).lineLimit(1)
-                    Spacer()
-                    if let last = conversation.lastMessage {
-                        Text(DateFormatting.relativeShort(last.createdAt)).font(.system(size: 12)).foregroundStyle(c.textMuted)
-                    }
-                }
-                HStack {
-                    let preview = conversation.lastMessage.map { "\($0.sender.name): \($0.text)" } ?? "No messages yet"
-                    Text(preview).font(.system(size: 14)).foregroundStyle(c.textMuted).lineLimit(1)
-                    Spacer()
-                    if conversation.unreadCount > 0 {
-                        Text("\(conversation.unreadCount)").font(.system(size: 12, weight: .semibold)).foregroundStyle(c.bgPrimary)
-                            .padding(.horizontal, 8).padding(.vertical, 2).background(c.accent, in: RoundedRectangle(cornerRadius: 6))
-                    }
-                }
-            }
-        }
-        .padding(16)
-    }
 }

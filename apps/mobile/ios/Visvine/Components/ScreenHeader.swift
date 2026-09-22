@@ -36,28 +36,8 @@ struct ScreenHeader: View {
         }
     }
 
-    @ViewBuilder private var profileAvatar: some View {
-        let c = theme.colors
-        if let image = auth.user?.image, let url = URL(string: image) {
-            AsyncImage(url: url) { phase in
-                if let img = phase.image { img.resizable().scaledToFill() } else { initialsCircle }
-            }
-            .frame(width: 40, height: 40)
-            .clipShape(Circle())
-        } else {
-            initialsCircle
-        }
-    }
-
-    private var initialsCircle: some View {
-        let c = theme.colors
-        let name = auth.user?.name ?? ""
-        let initials = name.isEmpty ? "?" : avatarInitials(name)
-        return ZStack {
-            Circle().fill(c.accentLight)
-            Text(initials).foregroundStyle(c.accentDark).font(.system(size: 15, weight: .semibold))
-        }
-        .frame(width: 40, height: 40)
+    private var profileAvatar: some View {
+        PersonAvatar(name: auth.user?.name ?? "", imageUrl: auth.user?.image, size: 40)
     }
 
     private var spacePicker: some View {

@@ -39,9 +39,9 @@ private data class TabMeta(
 )
 
 private val TABS = listOf(
-    TabMeta(Routes.DIRECTORY, "Directory") { AppIcons.People },
+    TabMeta(Routes.HOME, "Home") { AppIcons.Home },
     TabMeta(Routes.MESSAGES, "Messages") { AppIcons.Message },
-    TabMeta(Routes.EVENTS, "Events") { AppIcons.Calendar },
+    TabMeta(Routes.ACTIVITY, "Activity") { AppIcons.Bell },
 )
 
 /**

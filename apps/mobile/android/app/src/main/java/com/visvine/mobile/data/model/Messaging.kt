@@ -60,3 +60,20 @@ data class MessagesPage(
 data class SendMessageRequest(
     val text: String,
 )
+
+/** POST /api/messages/conversations `{ userId }` — the DM with one person, made on first use. */
+@Serializable
+data class CreateDmRequest(
+    val userId: String,
+)
+
+@Serializable
+data class CreateDmResponse(
+    val conversation: Conversation,
+)
+
+/** GET /api/messages/users?query= → people the caller may message (id, name, image only). */
+@Serializable
+data class UsersSearchResponse(
+    val users: List<MessageSender> = emptyList(),
+)

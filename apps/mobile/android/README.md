@@ -32,7 +32,7 @@ sdk.dir=/path/to/Android/sdk
 ```bash
 ./gradlew :app:assembleDebug      # build
 ./gradlew :app:installDebug       # install on a running emulator/device
-./gradlew :app:testDebugUnitTest  # unit tests (MediaUrl, search heuristic)
+./gradlew :app:testDebugUnitTest  # unit tests (MediaUrl, search heuristic, chat SSE events)
 ./gradlew :app:lintDebug          # Android lint
 ```
 
@@ -61,17 +61,31 @@ app/src/main/java/com/visvine/mobile/
 │   ├── model/       @Serializable wire models (mirror the web API server-truth shapes)
 │   ├── remote/      Retrofit VisvineApi, AuthInterceptor, MediaUrl, ApiResult
 │   ├── local/       TokenStore (Keystore), PreferencesStore (DataStore)
-│   ├── realtime/    MessageStream (OkHttp SSE → /api/messages/stream)
-│   └── repository/  Auth/Space/Directory/Events/Messages/Profile repos
+│   ├── realtime/    MessageStream (OkHttp SSE → /api/messages/stream), ChatEventParser
+│   └── repository/  Auth/Space/Directory/Events/Messages/Feed/Agents/Activity/Actions/Profile repos
 ├── di/              Hilt NetworkModule
 └── ui/
     ├── theme/       8 hues (buildColors), Compose theme
     ├── state/       SpaceManager, SearchController (app-scoped stores)
     ├── viewmodel/   one ViewModel per screen + shared (Auth/Theme/...)
-    ├── components/   ScreenHeader, SearchOverlay, SpaceAvatar, Loading
+    ├── components/  ScreenHeader, SearchOverlay, SpaceAvatar, PersonAvatar, SegmentedNav,
+    │                MessageBubble, ConversationRow, DateSeparator, Hairline, Loading
     ├── navigation/  Routes, nav graphs, glass tab bar
-    └── screens/     auth, directory, events, messaging, profile, settings
+    └── screens/     home, messaging, activity, agents, directory, events, auth, profile, settings
 ```
+
+## Screens
+
+Three tabs (`docs/mobile.md`), and what each opens:
+
+| Tab | Screen | Opens |
+|---|---|---|
+| **Home** | `home/HomeScreen` — the space switcher, People and Events rows, the space's feed, the quick-capture composer | `directory/DirectoryScreen`, `events/EventsListScreen` (root-level, from the two rows) |
+| **Messages** | `messaging/MessagesHubScreen` — Agents (standing threads) / Contacts (DMs) | `agents/AgentChatScreen` (SSE turn over `…/chat/stream`), `messaging/ConversationScreen`, `messaging/NewMessageScreen` (person picker → DM) |
+| **Activity** | `activity/ActivityScreen` — coming up, then runs, mentions, replies and requests by day, approve/decline on the row | an agent chat, a conversation, an event |
+
+The current space is remembered in DataStore (`visvine_current_space_id`) and
+restored on launch by `SpaceManager`.
 
 ## Notes
 

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -43,7 +42,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.visvine.mobile.data.model.Message
+import com.visvine.mobile.data.remote.MediaUrl
+import com.visvine.mobile.ui.components.MessageBubble
+import com.visvine.mobile.ui.components.PersonAvatar
 import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
@@ -100,10 +101,18 @@ fun ConversationScreen(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(state.messages, key = { it.id }) { message -> MessageBubble(message) }
+                items(state.messages, key = { it.id }) { message ->
+                    MessageBubble(
+                        text = message.text,
+                        isOwn = message.isOwn,
+                        time = DateTimeFormat.time(message.createdAt),
+                        senderName = message.sender.name,
+                        leading = { PersonAvatar(name = message.sender.name, imageUrl = MediaUrl.resolve(message.sender.image), size = 32.dp) },
+                    )
+                }
             }
         }
 
@@ -144,43 +153,6 @@ fun ConversationScreen(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun MessageBubble(message: Message) {
-    val colors = VisvineTheme.colors
-    val isOwn = message.isOwn
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isOwn) Arrangement.End else Arrangement.Start,
-    ) {
-        if (!isOwn) {
-            Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(colors.accentLight), contentAlignment = Alignment.Center) {
-                Text(message.sender.name.take(1).uppercase(), color = colors.accentDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
-        Column(
-            modifier = Modifier
-                .widthIn(max = 280.dp)
-                .padding(start = if (isOwn) 0.dp else 8.dp)
-                .clip(
-                    if (isOwn) RoundedCornerShape(18.dp, 18.dp, 6.dp, 18.dp)
-                    else RoundedCornerShape(18.dp, 18.dp, 18.dp, 6.dp)
-                )
-                .background(if (isOwn) colors.accent else colors.bgPrimary)
-                .padding(12.dp),
-        ) {
-            if (!isOwn) Text(message.sender.name, color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
-            Text(message.text, color = if (isOwn) Color.White else colors.textPrimary, fontSize = 15.sp)
-            Text(
-                DateTimeFormat.time(message.createdAt),
-                color = if (isOwn) Color.White.copy(alpha = 0.7f) else colors.textLight,
-                fontSize = 10.sp,
-                modifier = Modifier.padding(top = 4.dp),
-            )
         }
     }
 }

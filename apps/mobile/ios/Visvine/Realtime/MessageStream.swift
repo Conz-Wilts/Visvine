@@ -30,12 +30,10 @@ final class MessageStream {
                     if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                         continuation.finish(); return
                     }
+                    var parser = SSEParser()
                     for try await line in bytes.lines {
-                        // SSE: payload lines start with `data:`; `:` comments (keepalive) are skipped.
-                        guard line.hasPrefix("data:") else { continue }
-                        let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
-                        guard !payload.isEmpty,
-                              let data = payload.data(using: .utf8),
+                        guard let frame = parser.feed(line),
+                              let data = frame.data.data(using: .utf8),
                               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                               let type = obj["type"] as? String else { continue }
                         continuation.yield(RealtimeEvent(type: type, conversationId: obj["conversationId"] as? String))

@@ -66,6 +66,12 @@ export const ANDROID_ICONS = [
   'user-plus',
   'users',
   'waypoints',
+  'bot',
+  'house',
+  'mic',
+  'plus',
+  'send',
+  'sparkles',
   'x',
 ];
 

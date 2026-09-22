@@ -60,6 +60,14 @@ export const IOS_ICONS = [
   'user',
   'users',
   'waypoints',
+  'arrow-left',
+  'bot',
+  'house',
+  'mic',
+  'plus',
+  'send',
+  'sparkles',
+  'user-plus',
   'x',
 ];
 

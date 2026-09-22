@@ -14,7 +14,8 @@ private val Context.dataStore by preferencesDataStore(name = "visvine_prefs")
 
 /**
  * Non-secret UI preferences via DataStore — the selected hue, under the same key
- * ThemeContext uses on the web (`nb_color_theme`).
+ * ThemeContext uses on the web (`nb_color_theme`), and the space the person
+ * last stood in, so a relaunch opens where they left off.
  */
 @Singleton
 class PreferencesStore @Inject constructor(
@@ -26,7 +27,16 @@ class PreferencesStore @Inject constructor(
         context.dataStore.edit { it[KEY_THEME] = id }
     }
 
+    val currentSpaceId: Flow<String?> = context.dataStore.data.map { it[KEY_CURRENT_SPACE] }
+
+    suspend fun setCurrentSpaceId(id: String?) {
+        context.dataStore.edit {
+            if (id == null) it.remove(KEY_CURRENT_SPACE) else it[KEY_CURRENT_SPACE] = id
+        }
+    }
+
     private companion object {
         val KEY_THEME = stringPreferencesKey("nb_color_theme")
+        val KEY_CURRENT_SPACE = stringPreferencesKey("visvine_current_space_id")
     }
 }

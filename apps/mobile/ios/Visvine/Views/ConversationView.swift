@@ -130,25 +130,17 @@ struct ConversationView: View {
     }
 
     private func bubble(_ message: Message) -> some View {
-        let c = theme.colors
         let isOwn = message.isOwn
         return HStack(alignment: .bottom, spacing: 8) {
-            if isOwn { Spacer(minLength: 40) }
             if !isOwn {
-                ZStack {
-                    Circle().fill(c.accentLight)
-                    Text(message.sender.name.prefix(1).uppercased()).font(.system(size: 14, weight: .semibold)).foregroundStyle(c.accentDark)
-                }
-                .frame(width: 32, height: 32)
+                PersonAvatar(name: message.sender.name, imageUrl: message.sender.image, size: 32)
             }
-            VStack(alignment: .leading, spacing: 4) {
-                if !isOwn { Text(message.sender.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(c.textMuted) }
-                Text(message.text).font(.system(size: 15)).foregroundStyle(isOwn ? .white : c.textPrimary)
-                Text(DateFormatting.time(message.createdAt)).font(.system(size: 10)).foregroundStyle(isOwn ? Color.white.opacity(0.7) : c.textLight)
-            }
-            .padding(12)
-            .background(isOwn ? c.accent : c.bgPrimary, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            if !isOwn { Spacer(minLength: 40) }
+            MessageBubble(
+                text: message.text,
+                isOwn: isOwn,
+                time: DateFormatting.time(message.createdAt),
+                senderName: isOwn ? nil : message.sender.name
+            )
         }
     }
 }

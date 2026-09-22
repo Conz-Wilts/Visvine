@@ -1,6 +1,7 @@
 package com.visvine.mobile.ui.util
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -73,6 +74,18 @@ object DateTimeFormat {
     fun isUpcoming(iso: String): Boolean {
         val instant = parse(iso) ?: return false
         return instant.isAfter(Instant.now())
+    }
+
+    /** "Today" / "Yesterday" / "Monday, January 5, 2026" — the day a list files a row under. */
+    fun dayLabel(iso: String): String {
+        val instant = parse(iso) ?: return iso
+        val day = instant.atZone(zone).toLocalDate()
+        val today = LocalDate.now(zone)
+        return when (day) {
+            today -> "Today"
+            today.minusDays(1) -> "Yesterday"
+            else -> longDate(iso)
+        }
     }
 
     /** Conversations list relative format: now / 5m / 3h / 2d / "Mar 4". */

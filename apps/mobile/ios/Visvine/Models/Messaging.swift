@@ -51,3 +51,17 @@ struct MessagesPage: Codable {
 struct SendMessageRequest: Codable {
     let text: String
 }
+
+/// POST /api/messages/conversations → the DM with one person, made on first use.
+struct CreateDmRequest: Codable {
+    let userId: String
+}
+
+struct CreateDmResponse: Codable {
+    let conversation: Conversation
+}
+
+/// GET /api/messages/users?query= — the people picker (email is never sent).
+struct UsersSearchResponse: Codable {
+    let users: [MessageSender]
+}

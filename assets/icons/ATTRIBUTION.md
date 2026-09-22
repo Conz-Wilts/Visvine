@@ -17,7 +17,7 @@ introduced; the geometry is unchanged from what shipped there.
 | `nav-context` | `tool-calendar` | `tool-list` |  |
 | `nav-directory` | `tool-chart` | `tool-note` |  |
 
-## Derived from Lucide (130)
+## Derived from Lucide (131)
 
 Copied verbatim from `lucide-react` 0.545.0 — the version the app depended on
 before it owned its icons — then normalised into this directory's file shape
@@ -63,6 +63,7 @@ the upstream art.
 | `code` | `linkedin` | `search` | `zoom-in` |
 | `coffee` | `list-ordered` | `send` | `zoom-out` |
 | `eye-off` | `type` |  |  |
+| `mic` |  |  |  |
 
 ### Licence — Lucide (ISC, with portions from Feather under MIT)
 

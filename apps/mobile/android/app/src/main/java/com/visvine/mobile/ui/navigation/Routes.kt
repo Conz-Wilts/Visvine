@@ -3,8 +3,10 @@ package com.visvine.mobile.ui.navigation
 import android.net.Uri
 
 /**
- * Route table: an auth/main switch, a tab host (Directory / Messages / Events),
- * per-tab detail screens, and modal Profile / EditProfile / Settings.
+ * Route table: an auth/main switch, a tab host (Home / Messages / Activity),
+ * the root-level details (Directory and Events, reached from Home; a person,
+ * an event, a conversation, an agent chat, the new-message picker), and modal
+ * Profile / EditProfile / Settings.
  */
 object Routes {
     const val MAIN = "main"
@@ -19,8 +21,12 @@ object Routes {
     const val SETTINGS = "settings"
 
     // Tabs
-    const val DIRECTORY = "directory"
+    const val HOME = "home"
     const val MESSAGES = "messages"
+    const val ACTIVITY = "activity"
+
+    // Root-level details reached from Home
+    const val DIRECTORY = "directory"
     const val EVENTS = "events"
 
     // Detail: Full profile
@@ -50,10 +56,23 @@ object Routes {
         return if (name != null) "$base?$ARG_CONVERSATION_NAME=${Uri.encode(name)}" else base
     }
 
-    /** Map a pending-route hint ("Directory"/"Messages"/"Events") to a tab route. */
+    // Detail: Agent chat — a thread with one agent in one space
+    const val ARG_SPACE_ID = "spaceId"
+    const val ARG_AGENT_NAME = "agentName"
+    const val ARG_AGENT_TITLE = "agentTitle"
+    const val AGENT_CHAT = "agent_chat/{$ARG_SPACE_ID}/{$ARG_AGENT_NAME}?$ARG_AGENT_TITLE={$ARG_AGENT_TITLE}"
+    fun agentChat(spaceId: String, name: String, title: String?): String {
+        val base = "agent_chat/${Uri.encode(spaceId)}/${Uri.encode(name)}"
+        return if (title != null) "$base?$ARG_AGENT_TITLE=${Uri.encode(title)}" else base
+    }
+
+    // The person picker a new DM starts from
+    const val NEW_MESSAGE = "new_message"
+
+    /** Map a pending-route hint ("Home"/"Messages"/"Activity") to a tab route. */
     fun tabForPendingRoute(name: String?): String = when (name?.lowercase()) {
         "messages" -> MESSAGES
-        "events" -> EVENTS
-        else -> DIRECTORY
+        "activity" -> ACTIVITY
+        else -> HOME
     }
 }

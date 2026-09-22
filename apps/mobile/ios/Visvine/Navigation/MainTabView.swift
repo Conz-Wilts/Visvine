@@ -1,15 +1,16 @@
 import SwiftUI
 
-/// Hosts the three tabs, the floating glass tab bar, the search overlay, and the
-/// Profile modal — the native equivalent of TabNavigator + the root modal stack.
-/// Each tab is its own NavigationStack so detail screens push within the tab.
+/// Hosts the three tabs — Home, Messages, Activity (docs/mobile.md) — the
+/// floating glass tab bar, the search overlay, and the Profile modal. Each tab
+/// is its own NavigationStack so detail screens push within the tab; the
+/// Directory and Events screens are pushed from Home rather than being tabs.
 struct MainTabView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(AuthManager.self) private var auth
     @Environment(SpaceStore.self) private var space
     @Environment(SearchStore.self) private var search
 
-    @State private var selected: MainTab = .directory
+    @State private var selected: MainTab = .home
     @State private var profilePresented = false
 
     var body: some View {
@@ -32,19 +33,19 @@ struct MainTabView: View {
 
     @ViewBuilder private var tabContent: some View {
         switch selected {
-        case .directory:
+        case .home:
             NavigationStack {
-                DirectoryView(onProfile: { profilePresented = true })
+                HomeView(onProfile: { profilePresented = true })
                     .navigationDestination(for: AppRoute.self, destination: destination)
             }
         case .messages:
             NavigationStack {
-                ConversationsListView(onProfile: { profilePresented = true })
+                MessagesHubView(onProfile: { profilePresented = true })
                     .navigationDestination(for: AppRoute.self, destination: destination)
             }
-        case .events:
+        case .activity:
             NavigationStack {
-                EventsListView(onProfile: { profilePresented = true })
+                ActivityView(onProfile: { profilePresented = true })
                     .navigationDestination(for: AppRoute.self, destination: destination)
             }
         }
@@ -58,6 +59,14 @@ struct MainTabView: View {
             EventDetailView(eventId: eventId, title: title)
         case let .conversation(id, name):
             ConversationView(conversationId: id, conversationName: name)
+        case let .agentChat(spaceId, agentName, title):
+            AgentChatView(spaceId: spaceId, agentName: agentName, title: title)
+        case .newMessage:
+            NewMessageView()
+        case .people:
+            DirectoryView(onProfile: { profilePresented = true })
+        case .events:
+            EventsListView(onProfile: { profilePresented = true })
         }
     }
 
