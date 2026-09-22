@@ -20,7 +20,10 @@ struct RootView: View {
                 BlockingScreen(title: "Update required", message: message)
             case .operational:
                 if auth.isLoading {
-                    LoadingView(message: "Signing you in…", fullScreen: true)
+                    VStack(spacing: 28) {
+                        Wordmark(size: 30)
+                        ProgressView()
+                    }
                 } else if auth.isAuthenticated {
                     MainTabView()
                 } else {

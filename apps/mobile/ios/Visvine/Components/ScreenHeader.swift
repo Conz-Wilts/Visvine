@@ -20,9 +20,7 @@ struct ScreenHeader: View {
                 }
             } else {
                 HStack(spacing: 8) {
-                    VisvineIcon(.network)
-                        .foregroundStyle(c.accent)
-                    Text("Visvine").font(.system(size: 18, weight: .bold)).foregroundStyle(c.textPrimary)
+                    Wordmark(size: 18)
                 }
             }
             Spacer()

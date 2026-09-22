@@ -11,8 +11,7 @@ struct LoginView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 Spacer()
-                VisvineIcon(.network, size: 56).foregroundStyle(c.accent)
-                Text("Visvine").font(.system(size: 34, weight: .bold)).foregroundStyle(c.textPrimary).padding(.top, 16)
+                Wordmark(size: 30)
                 Text("Connect with your space").font(.system(size: 16)).foregroundStyle(c.textMuted).padding(.top, 8)
 
                 if let error = auth.authErrorMessage {

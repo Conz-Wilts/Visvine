@@ -20,6 +20,13 @@
     <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
     <string>$(CURRENT_PROJECT_VERSION)</string>
+    <!-- Brand face (ABC Ginto Rounded, shipped as "Visvine"), converted from
+         apps/web/public/fonts. Used for the wordmark only, as on the web. -->
+    <key>UIAppFonts</key>
+    <array>
+        <string>Visvine-Medium.otf</string>
+        <string>Visvine-Bold.otf</string>
+    </array>
     <key>UILaunchScreen</key>
     <dict/>
     <!-- The web app is light-only; pin system-drawn UI (sheets, keyboard,
