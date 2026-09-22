@@ -11,8 +11,7 @@ struct LoginView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 Spacer()
-                Wordmark(size: 30)
-                Text("Connect with your space").font(.system(size: 16)).foregroundStyle(c.textMuted).padding(.top, 8)
+                Wordmark(size: 30, stacked: true)
 
                 if let error = auth.authErrorMessage {
                     Text(error).font(.system(size: 14)).foregroundStyle(c.error)

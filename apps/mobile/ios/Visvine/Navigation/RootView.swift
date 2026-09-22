@@ -21,7 +21,7 @@ struct RootView: View {
             case .operational:
                 if auth.isLoading {
                     VStack(spacing: 28) {
-                        Wordmark(size: 30)
+                        Wordmark(size: 30, stacked: true)
                         ProgressView()
                     }
                 } else if auth.isAuthenticated {

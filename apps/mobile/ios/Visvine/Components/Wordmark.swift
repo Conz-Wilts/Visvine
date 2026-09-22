@@ -1,22 +1,38 @@
 import SwiftUI
 
-/// The brand lockup — the app icon beside "Visvine" in the brand face, in the
-/// brand green. Mirrors the web's SignInCard logo.
+/// The brand lockup — the green mark and "Visvine" in the brand face, in the
+/// brand green. Inline in the header; `stacked` puts a larger mark above the
+/// name, for the sign-in and splash screens.
 struct Wordmark: View {
     var size: CGFloat = 18
+    var stacked = false
 
     var body: some View {
-        HStack(spacing: size * 0.45) {
-            Image("Logo")
-                .resizable()
-                .frame(width: size * 1.55, height: size * 1.55)
-                .clipShape(RoundedRectangle(cornerRadius: size * 0.44, style: .continuous))
-            Text("Visvine")
-                .font(.custom("Visvine-Medium", size: size))
-                .tracking(-0.02 * size)
-                .foregroundStyle(Color(hex: 0x78D870))
+        Group {
+            if stacked {
+                VStack(spacing: size * 0.5) {
+                    mark(size * 2.6)
+                    name
+                }
+            } else {
+                HStack(spacing: size * 0.35) {
+                    mark(size * 1.2)
+                    name
+                }
+            }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Visvine")
+    }
+
+    private func mark(_ side: CGFloat) -> some View {
+        Image("Logo").resizable().frame(width: side, height: side)
+    }
+
+    private var name: some View {
+        Text("Visvine")
+            .font(.custom("Visvine-Medium", size: size))
+            .tracking(-0.02 * size)
+            .foregroundStyle(Color(hex: 0x78D870))
     }
 }
