@@ -7,3 +7,6 @@ DEVELOPMENT_TEAM = REPLACE_WITH_TEAM_ID
 
 // Optional: real Google OAuth web client id for on-device Google sign-in.
 // VISVINE_GOOGLE_CLIENT_ID = xxxxxxxx.apps.googleusercontent.com
+
+// Optional: Debug backend for a physical phone (the Mac's Bonjour name or LAN IP).
+// VISVINE_API_BASE_URL = http:/$()/Your-Mac.local:3000

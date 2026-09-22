@@ -6,3 +6,6 @@ VISVINE_API_BASE_URL = http:/$()/localhost:3000
 
 // Dev-login bypass is available in Debug builds only.
 VISVINE_DEV_AUTH_ENABLED = true
+
+// Local.xcconfig last, so a developer's backend URL wins over the default.
+#include? "Local.xcconfig"
