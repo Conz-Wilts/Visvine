@@ -34,7 +34,6 @@ import {
 import { isEntityFolderIndex } from '@/lib/notes/entities'
 import { filterTree, folderPathsIn } from '@/lib/notes/shared/context'
 import { tierRoot } from '@/lib/notes/shared/rootTiers'
-import { drawnChain, focusFor, focusUp, maxRowDepthFor } from '@/lib/notes/shared/treeFocus'
 import {
   TRASH_PATH,
   treeScrollMemory as scrollMemory,
@@ -318,58 +317,6 @@ export function NoteSidebar({
   }, [searching, shownTree, effectiveOpenPaths, sprung])
   const noMatches = searching && (shownTree.children ?? []).length === 0
 
-  // Folders nest without limit, but a panel only fits so many levels of indent
-  // before the names are squeezed out. Past that the tree drills in: it is
-  // drawn from a deeper folder and the levels above fold into one `..` row
-  // (lib/notes/shared/treeFocus.ts). How deep fits is read off the panel's
-  // width. A search shows the whole tree it matched, so it is never focused.
-  const [panelWidth, setPanelWidth] = useState(0)
-  const [focus, setFocus] = useState<string | null>(null)
-  // With no root row the root's children are the top rows, one level up.
-  const maxDepth = maxRowDepthFor(panelWidth) + (root ? 0 : 1)
-  const focusChain = useMemo(
-    () => (focus && !searching ? drawnChain(shownTree, focus) : null),
-    [focus, searching, shownTree],
-  )
-  const focusNode = focusChain ? folderNodeIn(focusChain[focusChain.length - 1], focus!) : null
-  const focusRef = useRef<string | null>(null)
-  focusRef.current = focusNode ? focus : null
-  const panelWide = panelWidth > 0
-  // Opening a folder whose rows would land past the edge drills in to them.
-  const focusOn = useCallback(
-    (folder: string) => {
-      if (!panelWide) return
-      const chain = drawnChain(shownTree, folder)
-      const node = chain && folderNodeIn(chain[chain.length - 1] ?? shownTree, folder)
-      if (chain && node) setFocus(focusFor([...chain, node], focusRef.current, maxDepth))
-    },
-    [panelWide, shownTree, maxDepth],
-  )
-  const toggleFocused = useCallback(
-    (path: string, isOpen: boolean) => {
-      toggleFolder(path, isOpen)
-      if (!isOpen) focusOn(path)
-    },
-    [toggleFolder, focusOn],
-  )
-  const openFocused = useCallback(
-    (path: string) => {
-      openFolder(path)
-      focusOn(path)
-    },
-    [openFolder, focusOn],
-  )
-  // A note opened from outside the tree (a link, a search hit, a profile) is
-  // drilled to when it is not in the focused branch or sits past the edge. Keyed
-  // on the note alone, so stepping up with `..` is not undone by a re-render.
-  const revealTarget = revealPath ?? selectedPath
-  useEffect(() => {
-    if (!revealTarget || searching || !panelWide) return
-    const chain = drawnChain(shownTree, revealTarget)
-    if (chain) setFocus(focusFor(chain, focusRef.current, maxDepth))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the note moving is the only trigger
-  }, [revealTarget, searching, panelWide])
-
   // Keep the selected row in view when selection changes from outside the tree
   // (context search focus, profile navigation). An off-screen row is centred so it
   // lands mid-panel, not clinging to an edge; an already-visible row stays put,
@@ -377,15 +324,6 @@ export function NoteSidebar({
   // collapsed ancestor folder auto-opens in response to the same selection
   // change, so the row may only mount a render later.
   const scrollRef = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const measure = () => setPanelWidth(el.clientWidth)
-    measure()
-    const observer = new ResizeObserver(measure)
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [])
 
   // Moving is a drag, and it reads like a sortable list: the row lifts off the
   // tree and follows the pointer, the tree keeps a slot open where it would
@@ -564,28 +502,7 @@ export function NoteSidebar({
             bands still bleed past it; a matching pr would pull the bands'
             right edge in and break the full-width look. */}
         <div className="pl-2">
-          {focusNode && focusChain ? (
-            <>
-              <FocusUpRow
-                trail={focusChain.map((n, i) => (i === 0 ? (root?.label ?? null) : n.title ?? n.name)).filter((l): l is string => !!l)}
-                onUp={() => setFocus(focusUp(focusChain))}
-              />
-              <FolderRow
-                node={focusNode}
-                openPaths={openPaths}
-                onToggleFolder={toggleFocused}
-                onOpenFolder={openFocused}
-                selectedPath={selectedPath}
-                canEdit={canEdit}
-                onSelect={onSelect}
-                onDeleteNote={onDeleteNote}
-                folderBadges={folderBadges}
-                onFolderAccess={onFolderAccess}
-                onShareNote={onShareNote}
-                onDeleteFolder={onDeleteFolder}
-              />
-            </>
-          ) : root ? (
+          {root ? (
             // The context root as the tree's own top-level folder â€” same row
             // chrome as any other folder, so nesting reads uniformly from the
             // space down.
@@ -595,8 +512,8 @@ export function NoteSidebar({
               icon={root.icon ?? null}
               spaceRow
               openPaths={openPaths}
-              onToggleFolder={toggleFocused}
-              onOpenFolder={openFocused}
+              onToggleFolder={toggleFolder}
+              onOpenFolder={openFolder}
               selectedPath={selectedPath}
               canEdit={canEdit}
               onSelect={onSelect}
@@ -610,8 +527,8 @@ export function NoteSidebar({
             <Tree
               node={shownTree}
               openPaths={openPaths}
-              onToggleFolder={toggleFocused}
-              onOpenFolder={openFocused}
+              onToggleFolder={toggleFolder}
+              onOpenFolder={openFolder}
               selectedPath={selectedPath}
               canEdit={canEdit}
               onSelect={onSelect}
@@ -948,36 +865,6 @@ function TierSeam() {
       {/* Meets that stroke on the left and bleeds past the panel on the right
           (the scroll container clips it), so the hairline has no loose end. */}
       <span className="absolute inset-x-0 top-1/2 -mr-[999px] h-px bg-border-subtle" />
-    </div>
-  )
-}
-
-/** The levels the tree has drilled past, folded into one row: `..` and the
- *  folders it stands for. Pressing it steps back up one level. The trail keeps
- *  its END when it is cut — the folder just above is the one that matters. */
-function FocusUpRow({ trail, onUp }: { trail: string[]; onUp: () => void }) {
-  const path = trail.join(' / ')
-  return (
-    <div data-drop-none className={`flex items-center pr-1.5 transition hover:bg-surface-2 ${ROW_BLEED}`}>
-      <button
-        type="button"
-        onClick={onUp}
-        title={path}
-        aria-label={`Up to ${trail[trail.length - 1] ?? 'the top'}`}
-        className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] text-text-muted hover:text-text-primary"
-      >
-        <span className="flex shrink-0 items-center pl-1.5 pr-1.5">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M14 9 9 4 4 9" />
-            <path d="M20 20h-7a4 4 0 0 1-4-4V4" />
-          </svg>
-        </span>
-        <span className="shrink-0 font-semibold">..</span>
-        {/* rtl moves the ellipsis to the START; the bdi keeps the words in order. */}
-        <span dir="rtl" className="min-w-0 truncate text-[13px]">
-          <bdi>{path}</bdi>
-        </span>
-      </button>
     </div>
   )
 }
