@@ -54,6 +54,7 @@ struct MessagesHubView: View {
             if segment == 0 { agentsList } else { contactsList }
         }
         .background(c.bgPrimary)
+        .searchScope("Search messages")
         .task(id: space.current?.id) { await agents.load(spaceId: space.current?.id) }
         .task { await conversations.load() }
         .task { await conversations.startRealtime() }

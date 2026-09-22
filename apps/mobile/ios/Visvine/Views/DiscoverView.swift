@@ -76,6 +76,7 @@ struct DiscoverView: View {
             }
         }
         .background(c.bgPrimary)
+        .searchScope("Search Discover")
         .task { await model.load() }
     }
 

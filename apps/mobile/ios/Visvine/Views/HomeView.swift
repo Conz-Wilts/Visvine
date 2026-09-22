@@ -46,6 +46,7 @@ final class HomeModel {
 struct HomeView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(SpaceStore.self) private var space
+    @Environment(SearchStore.self) private var search
     @State private var model = HomeModel()
 
     var onProfile: () -> Void
@@ -64,10 +65,10 @@ struct HomeView: View {
                     }
                     if model.loading {
                         ProgressView().tint(c.accent).frame(maxWidth: .infinity).padding(.vertical, 48)
-                    } else if model.posts.isEmpty {
-                        EmptyStateView(text: "Nothing in this space's feed yet", icon: .message)
+                    } else if posts.isEmpty {
+                        EmptyStateView(text: search.query.isEmpty ? "Nothing in this space's feed yet" : "No posts found", icon: .message)
                     } else {
-                        ForEach(model.posts) { post in
+                        ForEach(posts) { post in
                             FeedPostRow(post: post)
                                 .onAppear {
                                     if post.id == model.posts.last?.id { Task { await model.loadMore(spaceId: space.current?.id) } }
@@ -85,7 +86,17 @@ struct HomeView: View {
             .refreshable { await model.load(spaceId: space.current?.id) }
         }
         .background(c.bgPrimary)
+        .searchScope("Search feed")
         .task(id: space.current?.id) { await model.load(spaceId: space.current?.id) }
+    }
+
+    /// The feed, narrowed to posts whose words, author or channel match.
+    private var posts: [FeedPost] {
+        let q = search.query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return model.posts }
+        return model.posts.filter {
+            "\($0.message.text) \($0.message.sender.name) \($0.channel.name)".lowercased().contains(q)
+        }
     }
 
     /// Feed is this page; Events and Context push theirs. Context is offered to

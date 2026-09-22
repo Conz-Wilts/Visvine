@@ -121,7 +121,7 @@ struct DirectoryView: View {
         }
         .background(c.bgPrimary)
         .task(id: space.current?.id) { await model.load(spaceId: space.current?.id) }
-        .onAppear { search.placeholder = "Search directory" }
+        .searchScope("Search people")
         .sheet(item: $sheet) { which in filterSheet(which).environment(theme) }
     }
 

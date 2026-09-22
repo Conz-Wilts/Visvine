@@ -117,7 +117,7 @@ struct EventsListView: View {
         }
         .background(c.bgPrimary)
         .task(id: space.current?.id) { await model.load(spaceId: space.current?.id) }
-        .onAppear { search.placeholder = "Search events" }
+        .searchScope("Search events")
     }
 
     @ViewBuilder private func sectionView(_ section: EventSection) -> some View {
