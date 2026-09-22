@@ -485,10 +485,12 @@ export function NoteSidebar({
       {/* overscroll-contain: hitting either end of the tree must not chain the
           wheel out to the page behind it (on the Context views that reads as the
           graph jumping while you scroll the tree). */}
-      {/* overflow-x-hidden clips ROW_BLEED's overhang (overflow-y-auto alone
-          would resolve x to auto and show a horizontal scrollbar). No px here:
-          the row bands must reach both panel edges â€” rows carry their own
-          inner padding. */}
+      {/* Scrolls sideways when a branch nests deeper than the panel is wide:
+          a row's label never gets narrower than 8rem, so past that the rows
+          push the tree wider instead of squeezing their names out. ROW_BLEED's
+          overhang is to the LEFT, which a scrollport never scrolls to. No px
+          here: the row bands must reach both panel edges — rows carry their
+          own inner padding. */}
       {/* The scrollport is itself a drop zone: the blank below the last row
           files to the top level, so there is no dead space to miss into. */}
       <div
@@ -496,12 +498,14 @@ export function NoteSidebar({
         onScroll={rememberScroll}
         data-drop-folder=""
         style={{ overflowAnchor: 'none' }}
-        className="scrollbar-on-hover flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-3"
+        className="scrollbar-on-hover flex-1 overflow-auto overscroll-contain py-3"
       >
         {/* pl only â€” it insets the row CONTENT off the panel edge while the
             bands still bleed past it; a matching pr would pull the bands'
             right edge in and break the full-width look. */}
-        <div className="pl-2">
+        {/* min-w-min: as wide as the deepest row needs, so every band spans
+            the scrolled width rather than stopping at the panel's edge. */}
+        <div className="min-w-min pl-2">
           {root ? (
             // The context root as the tree's own top-level folder â€” same row
             // chrome as any other folder, so nesting reads uniformly from the
@@ -624,7 +628,7 @@ function TrashFolder({
         <button
           type="button"
           onClick={onToggle}
-          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] text-text-secondary"
+          className="flex min-w-[8rem] flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] text-text-secondary"
         >
           <span className="truncate font-medium">Trash</span>
           {entries.length > 0 && (
@@ -705,13 +709,13 @@ function TrashRow({
           type="button"
           onClick={() => onOpen(entry)}
           title={entry.path}
-          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-left text-[15px]"
+          className="flex min-w-[8rem] flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-left text-[15px]"
         >
           {label}
         </button>
       ) : (
         <div
-          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-[15px]"
+          className="flex min-w-[8rem] flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-[15px]"
           title={entry.path}
         >
           {label}
@@ -862,9 +866,9 @@ function TierSeam() {
       {/* The branch's own stroke, continued through the seam: the guide column
           is where GuideLine puts it on every row above and below. */}
       <span className="tree-line absolute left-0 top-0 h-full w-px bg-border-default/70" />
-      {/* Meets that stroke on the left and bleeds past the panel on the right
-          (the scroll container clips it), so the hairline has no loose end. */}
-      <span className="absolute inset-x-0 top-1/2 -mr-[999px] h-px bg-border-subtle" />
+      {/* Meets that stroke on the left and runs to the tree's right edge, so
+          the hairline has no loose end. */}
+      <span className="absolute inset-x-0 top-1/2 h-px bg-border-subtle" />
     </div>
   )
 }
@@ -895,7 +899,7 @@ function DropPreviewRow({ item, guide, settled }: { item: MovableItem; guide: Gu
       className={`pointer-events-none flex items-center pr-1.5 ${ROW_BLEED}`}
     >
       <GuideLine guide={guide} />
-      <span className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-[15px] ${settled ? '' : 'invisible'}`}>
+      <span className={`flex min-w-[8rem] flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-[15px] ${settled ? '' : 'invisible'}`}>
         <span className="shrink-0 text-brand-green">
           {item.kind === 'note' ? <FileIcon /> : <FolderIcon />}
         </span>
@@ -1082,7 +1086,7 @@ function FolderRow(props: {
             props.onOpenFolder(props.node.path)
             openPath(indexPath)
           }}
-          className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] ${
+          className={`flex min-w-[8rem] flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] ${
             selected ? 'text-text-primary' : 'text-text-secondary'
           }`}
         >
@@ -1327,7 +1331,7 @@ function NoteRow({
       <button
         type="button"
         onClick={() => onSelect(path)}
-        className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] ${
+        className={`flex min-w-[8rem] flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] ${
           // Notes carry no chevron, so the icon is padded across to sit under
           // the folder icons above it.
           guide ? 'pl-1.5' : 'pl-2'

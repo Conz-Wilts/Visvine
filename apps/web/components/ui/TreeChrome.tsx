@@ -15,8 +15,8 @@ import { Children } from 'react';
 // inside per-level indent containers, so the depth offset isn't knowable in the
 // row — instead the row box is pulled far to the left and given matching padding
 // back, which leaves its content exactly where it was and lets the background
-// (and the guide lines it covers) bleed out to the panel edge. The scroll
-// container clips the overhang with overflow-x-hidden.
+// (and the guide lines it covers) bleed out to the panel edge. The overhang is
+// to the left, which a scroll container clips and never scrolls to.
 export const TREE_ROW_BLEED = '-ml-[999px] pl-[999px]';
 
 // Indents that keep every level's line centred under its parent's glyph:
