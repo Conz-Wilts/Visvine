@@ -48,6 +48,7 @@ struct HomeView: View {
     @Environment(SpaceStore.self) private var space
     @Environment(SearchStore.self) private var search
     @State private var model = HomeModel()
+    @State private var section: HomeSection = .feed
 
     var onProfile: () -> Void
 
@@ -55,9 +56,29 @@ struct HomeView: View {
         let c = theme.colors
         VStack(spacing: 0) {
             ScreenHeader(onProfile: onProfile)
-            ScrollView {
+            chips
+            switch section {
+            case .feed: feed
+            case .events: EventsListView(onProfile: onProfile, embedded: true)
+            case .context:
+                if let root = model.context {
+                    ContextFolderView(node: root, embedded: true)
+                } else {
+                    ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+        }
+        .background(c.bgPrimary)
+        .task(id: space.current?.id) {
+            section = .feed
+            await model.load(spaceId: space.current?.id)
+        }
+    }
+
+    private var feed: some View {
+        let c = theme.colors
+        return ScrollView {
                 LazyVStack(spacing: 0) {
-                    chips
                     if let error = model.error {
                         Text(error).foregroundStyle(c.error).font(.system(size: 14))
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -84,10 +105,7 @@ struct HomeView: View {
                 }
             }
             .refreshable { await model.load(spaceId: space.current?.id) }
-        }
-        .background(c.bgPrimary)
-        .searchScope("Search feed")
-        .task(id: space.current?.id) { await model.load(spaceId: space.current?.id) }
+            .searchScope("Search feed")
     }
 
     /// The feed, narrowed to posts whose words, author or channel match.
@@ -99,16 +117,16 @@ struct HomeView: View {
         }
     }
 
-    /// Feed is this page; Events and Context push theirs. Context is offered to
-    /// an admin, or to anyone whose grants reach a note of it.
+    /// Feed, Events and Context swap in place under the chips. Context is
+    /// offered to an admin, or to anyone whose grants reach a note of it.
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             GlassEffectContainer(spacing: 10) {
                 HStack(spacing: 10) {
-                    Chip(label: "Feed", on: true) {}
-                    NavigationLink(value: AppRoute.events) { ChipLabel(text: "Events") }.buttonStyle(.plain)
+                    Chip(label: "Feed", on: section == .feed) { section = .feed }
+                    Chip(label: "Events", on: section == .events) { section = .events }
                     if let root = model.context, space.current?.isAdmin == true || root.noteCount > 0 {
-                        NavigationLink(value: AppRoute.contextFolder(root)) { ChipLabel(text: "Context") }.buttonStyle(.plain)
+                        Chip(label: "Context", on: section == .context) { section = .context }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -120,20 +138,7 @@ struct HomeView: View {
     }
 }
 
-/// An unchosen chip that is a link rather than a button.
-private struct ChipLabel: View {
-    @Environment(ThemeStore.self) private var theme
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundStyle(theme.colors.textPrimary)
-            .padding(.horizontal, 18)
-            .frame(height: 40)
-            .glassEffect(.regular.interactive(), in: .capsule)
-    }
-}
+private enum HomeSection { case feed, events, context }
 
 /// One post: who, in which channel, when — then the words, and the comments.
 private struct FeedPostRow: View {
@@ -146,10 +151,7 @@ private struct FeedPostRow: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 PersonAvatar(name: post.message.sender.name, imageUrl: post.message.sender.image, size: 28)
-                (Text(post.message.sender.name).fontWeight(.semibold).foregroundColor(c.textSecondary)
-                 + Text(" in ").foregroundColor(c.textMuted)
-                 + Text(post.channel.name).fontWeight(.semibold).foregroundColor(c.textSecondary)
-                 + Text(" · \(DateFormatting.relativeShort(post.message.createdAt))").foregroundColor(c.textMuted))
+                Text("\(Text(post.message.sender.name).fontWeight(.semibold).foregroundStyle(c.textSecondary))\(Text(" in ").foregroundStyle(c.textMuted))\(Text(post.channel.name).fontWeight(.semibold).foregroundStyle(c.textSecondary))\(Text(" · \(DateFormatting.relativeShort(post.message.createdAt))").foregroundStyle(c.textMuted))")
                     .font(.system(size: 14))
                     .lineLimit(1)
             }

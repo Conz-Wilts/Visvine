@@ -81,11 +81,15 @@ struct EventsListView: View {
     @State private var model = EventsListModel()
 
     var onProfile: () -> Void
+    /// Drawn under Home's chips, which already carry the header.
+    var embedded = false
 
     var body: some View {
         let c = theme.colors
         VStack(spacing: 0) {
-            ScreenHeader(title: "Events", showSpaceSelector: false, onProfile: onProfile)
+            if !embedded {
+                ScreenHeader(title: "Events", showSpaceSelector: false, onProfile: onProfile)
+            }
             if model.loading {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if space.current == nil {
@@ -171,8 +175,7 @@ private struct EventRow: View {
 
             Group {
                 if let countdown {
-                    Text(countdown).font(.system(size: 14, weight: .semibold)).foregroundStyle(c.accentDark)
-                    + Text(" · \(facts)").font(.system(size: 14)).foregroundStyle(c.textSecondary)
+                    Text("\(Text(countdown).font(.system(size: 14, weight: .semibold)).foregroundStyle(c.accentDark))\(Text(" · \(facts)").font(.system(size: 14)).foregroundStyle(c.textSecondary))")
                 } else {
                     Text(facts).font(.system(size: 14)).foregroundStyle(c.textSecondary)
                 }

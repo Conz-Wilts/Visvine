@@ -26,13 +26,13 @@ struct MainTabView: View {
     // press-and-drag across tabs. Create rides the search slot: its own circle.
     var body: some View {
         TabView(selection: selection) {
-            Tab("Home", systemImage: "house", value: MainTab.home) {
+            Tab("Home", image: VisvineIconName.home.rawValue, value: MainTab.home) {
                 stack { HomeView(onProfile: { profilePresented = true }) }
             }
-            Tab("Messages", systemImage: "bubble.left", value: MainTab.messages) {
+            Tab("Messages", image: VisvineIconName.message.rawValue, value: MainTab.messages) {
                 stack { MessagesHubView(onProfile: { profilePresented = true }) }
             }
-            Tab("Tools", systemImage: "square.grid.2x2", value: MainTab.tools) {
+            Tab("Tools", image: VisvineIconName.grid.rawValue, value: MainTab.tools) {
                 stack { ToolsView(onProfile: { profilePresented = true }) }
             }
             Tab(value: MainTab.create, role: .search) {

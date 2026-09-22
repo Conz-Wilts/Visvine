@@ -42,10 +42,8 @@ final class OAuthService: NSObject, ASWebAuthenticationPresentationContextProvid
     }
 
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        let window = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .first { $0.isKeyWindow }
-        return window ?? ASPresentationAnchor()
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let window = scenes.flatMap(\.windows).first(where: \.isKeyWindow) { return window }
+        return ASPresentationAnchor(windowScene: scenes.first!)
     }
 }

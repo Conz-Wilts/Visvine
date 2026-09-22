@@ -70,6 +70,10 @@ export const IOS_ICONS = [
   'sparkles',
   'user-plus',
   'x',
+  'file-text',
+  'folder',
+  'folder-open',
+  'tool-grid',
 ];
 
 const CONTENTS_JSON = (file) =>

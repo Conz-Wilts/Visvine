@@ -60,6 +60,10 @@ enum VisvineIconName: String {
     case tag
     case tool = "hammer"
     case xmark = "x"
+    case fileText = "file-text"
+    case folder
+    case folderOpen = "folder-open"
+    case grid = "tool-grid"
 }
 
 struct VisvineIcon: View {

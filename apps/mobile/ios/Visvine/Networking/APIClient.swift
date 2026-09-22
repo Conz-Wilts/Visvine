@@ -17,11 +17,23 @@ private struct ErrorBody: Decodable { let error: String? }
 final class APIClient {
     static let shared = APIClient()
 
+    /// The failure message for a request that never reached the server, so a
+    /// caller can tell "offline" from "refused".
+    static let offlineMessage = "Can't reach the server"
+
+    /// Fail fast when the backend is down rather than holding the default 60s.
+    private static let defaultSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 10
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }()
+
     private let session: URLSession
     private let tokenStore: KeychainTokenStore
     private let decoder = JSONDecoder()
 
-    init(session: URLSession = .shared, tokenStore: KeychainTokenStore = .shared) {
+    init(session: URLSession = APIClient.defaultSession, tokenStore: KeychainTokenStore = .shared) {
         self.session = session
         self.tokenStore = tokenStore
     }
@@ -57,6 +69,8 @@ final class APIClient {
             return .success(value)
         } catch is DecodingError {
             return .failure("Unexpected response")
+        } catch is URLError {
+            return .failure(Self.offlineMessage)
         } catch {
             return .failure(error.localizedDescription)
         }

@@ -23,11 +23,16 @@ final class AuthManager {
     }
 
     func checkSession() async {
+        // No token means nothing to restore: show sign-in without a round trip.
+        guard repo.savedToken != nil else { isLoading = false; return }
         switch await repo.getSession() {
         case .success(let u):
             user = u; isAuthenticated = true; isLoading = false
-        case .failure:
-            repo.clearToken(); user = nil; isAuthenticated = false; isLoading = false
+        case .failure(let message):
+            // Only a server that answered may end the session; an unreachable
+            // one keeps the token for the next launch.
+            if message != APIClient.offlineMessage { repo.clearToken() }
+            user = nil; isAuthenticated = false; isLoading = false
         }
     }
 
