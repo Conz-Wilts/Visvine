@@ -53,15 +53,6 @@ in the shared context of a personal Space, so any other value is legacy.)
 | `connector_requests` | "Please connect X for this space" — a member asks for a catalog service the space has no connector for; an admin adds it (the note it wrote is stamped on the row) or dismisses it. |
 | `connector_secrets` | Named, encrypted secrets a connector note refers to as `{{secret:NAME}}`. Only decrypted server-side while a connector runs — the API lists names, never values. The connector itself is a note, so it lives in `context_notes`. |
 
-## iMessage
-
-| Table | Controls |
-| --- | --- |
-| `imessage_lines` | A space's iMessage number on Visvine's one Sendblue account — assigned by a super-admin, one per space. `name` is the contact card's; null = the space's name. The switch is `spaces.feature_config.enabled.imessage`. |
-| `imessage_links` | A person's phone bound to their account by texting a code to a line they can reach. The binding IS the authentication for every text from that phone. One phone per account. Cascades from `users`. |
-| `imessage_threads` | Per (line, phone): which space in the family the conversation currently targets, so a follow-up lands where the last text did. |
-| `imessage_inbound` | Every `message_handle` seen in the last week, so a Sendblue retry is never a second run. |
-
 ## The graph (Directory, Events, Context entities)
 
 Not prefixed on purpose: these three tables back the Directory, Events, *and*

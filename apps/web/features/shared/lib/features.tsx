@@ -73,15 +73,6 @@ export const FEATURES: FeatureDef[] = [
     core: true,
     icon: <NavConnectorsIcon className={iconClass} />,
   },
-  {
-    key: 'imessage',
-    label: 'iMessage',
-    href: '/admin?section=imessage',
-    description: "Members text the space's number and its phone agent does the work as them.",
-    // Nav-less and admin-only: switched in Console → iMessage, where the
-    // line is. See NAV_HIDDEN_FEATURE_KEYS / ADMIN_ONLY_FEATURE_KEYS.
-    icon: <NavChannelsIcon className={iconClass} />,
-  },
 ];
 
 /**

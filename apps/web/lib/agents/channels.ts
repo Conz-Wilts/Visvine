@@ -56,24 +56,18 @@ async function routableAgents(spaceId: string): Promise<RoutableAgent[]> {
  * place is refused rather than run as "somebody": an agent that answers
  * strangers is an agent anybody can spend the space's model key on.
  */
-async function senderMember(spaceId: string, from: InboundMessage['from']): Promise<{ userId: string; name: string } | null> {
-  // An adapter that already knows the account (the in-app box, a verified
-  // phone) names it; the membership check still runs — knowing who someone
-  // is never says they belong here.
-  const user = from.userId
-    ? await prisma.user.findUnique({ where: { id: from.userId }, select: { id: true, name: true, email: true } })
-    : from.email
-      ? await prisma.user.findFirst({
-          where: { email: { equals: from.email.trim().toLowerCase(), mode: 'insensitive' } },
-          select: { id: true, name: true, email: true },
-        })
-      : null
+async function senderMember(spaceId: string, email: string | undefined): Promise<{ userId: string; name: string } | null> {
+  if (!email) return null
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: email.trim().toLowerCase(), mode: 'insensitive' } },
+    select: { id: true, name: true },
+  })
   if (!user) return null
   const member = await prisma.spaceMember.findFirst({
-    where: { spaceId, userId: user.id, status: 'active' },
+    where: { spaceId, userId: user.id },
     select: { userId: true },
   })
-  return member ? { userId: user.id, name: user.name ?? from.display ?? user.email ?? 'someone' } : null
+  return member ? { userId: user.id, name: user.name ?? email } : null
 }
 
 /**
@@ -84,23 +78,11 @@ async function senderMember(spaceId: string, from: InboundMessage['from']): Prom
  * from a person that arrived between runs. Deduped on the provider's own id,
  * so a retried delivery is not a second run.
  */
-export async function deliverMessage(
-  message: InboundMessage,
-  opts: {
-    /**
-     * A person is at a door, asking for a run now — the message may reach an
-     * agent that is switched off, because the claim that follows will run it
-     * attended, as them (`claimManualRun`'s `allowInactive`). Never set for a
-     * channel that only fills the mailbox: mail for an inactive agent waits
-     * for nobody.
-     */
-    allowInactive?: boolean
-  } = {},
-): Promise<DeliveryResult> {
+export async function deliverMessage(message: InboundMessage): Promise<DeliveryResult> {
   const space = await prisma.space.findUnique({ where: { id: message.spaceId }, select: { id: true } })
   if (!space) return { ok: false, reason: 'unknown_space', message: 'No such space.' }
 
-  const sender = await senderMember(message.spaceId, message.from)
+  const sender = await senderMember(message.spaceId, message.from.email)
   if (!sender) {
     // Worth a warn: it is the app working as designed, and it is also what an
     // attempt to talk to somebody else's agent looks like.
@@ -126,7 +108,7 @@ export async function deliverMessage(
     select: { active: true },
   })
   if (!state) return { ok: false, reason: 'unknown_agent', message: `No agent called ${agentName} here.` }
-  if (!state.active && !opts.allowInactive) return { ok: false, reason: 'inactive', message: `${agentName} is switched off.` }
+  if (!state.active) return { ok: false, reason: 'inactive', message: `${agentName} is switched off.` }
 
   const enqueued = await enqueueAgentEvent({
     spaceId: message.spaceId,
@@ -135,7 +117,6 @@ export async function deliverMessage(
     source: `${message.channel}:${sender.name}`,
     summary: messageSummary(message),
     payload: {
-      ...(message.payload ?? {}),
       channel: message.channel,
       from: { name: sender.name, userId: sender.userId },
       // Fenced and labelled: this is somebody's words, not the operator's brief.

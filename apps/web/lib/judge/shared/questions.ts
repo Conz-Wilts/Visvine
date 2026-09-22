@@ -270,20 +270,6 @@ export const browseValueQuestion = (goal: string, inputs: Record<string, string>
 export const BROWSE_OPERATION_FLOOR = 0.5
 export const BROWSE_TARGET_FLOOR = 0.45
 
-// ── iMessage ────────────────────────────────────────────────────────────────
-
-/**
- * State: the text. Which space in the family it is about, when the texter is
- * in several and named none. The judge picks within the texter's OWN
- * candidates or `unclear`; a pick under the floor asks the person instead.
- */
-export const imessageTargetQuestion = (options: Record<string, string>): ChoiceQuestion => ({
-  type: 'choice',
-  instructions: 'Which of these spaces is this text message about?',
-  criteria: { ...options, unclear: 'The text does not say which space it is about, or it could be about any of them.' },
-})
-export const IMESSAGE_TARGET_AT = 0.6
-
 // ── Asked by an agent ───────────────────────────────────────────────────────
 
 /**

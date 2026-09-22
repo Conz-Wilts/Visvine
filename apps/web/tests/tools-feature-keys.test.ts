@@ -53,7 +53,7 @@ describe('the tool vocabulary has no feature key of its own', () => {
   });
 
   it('has no sidebar row, so it can be neither locked nor tucked into More', () => {
-    assert.deepEqual(adminOnlyFeatureKeys({ adminOnly: ['tools'] }), ['connectors', 'imessage']);
+    assert.deepEqual(adminOnlyFeatureKeys({ adminOnly: ['tools'] }), ['connectors']);
     assert.deepEqual(moreFeatureKeys({ more: ['tools'] }), []);
     assert.equal('more' in sanitizeFeatureConfig({ more: ['tools'] }), false);
   });

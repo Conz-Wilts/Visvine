@@ -58,8 +58,8 @@ describe('isFeatureEnabled', () => {
   });
 
   it('hides connectors from the nav rail and console toggles', () => {
-    // Nav-hidden: connectors and iMessage are Space Console sections.
-    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['connectors', 'imessage']);
+    // Core and nav-hidden: connectors is a Space Console section.
+    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['connectors']);
     // Agents is not a feature key at all: an agent is a note under `agents/`,
     // watched on its own node page's Agent tab — there is no agents surface to
     // switch on, off or hide.
@@ -312,16 +312,16 @@ describe('isNodeTypeEnabled', () => {
 
 describe('adminOnlyFeatureKeys', () => {
   it('folds the legacy directoryPrivate flag in', () => {
-    assert.deepEqual(adminOnlyFeatureKeys({ directoryPrivate: true }), ['directory', 'connectors', 'imessage']);
-    assert.deepEqual(adminOnlyFeatureKeys({ adminOnly: ['directory'], directoryPrivate: true }), ['directory', 'connectors', 'imessage']);
-    // Connectors and iMessage are admins-only by nature, so they're there even with no config.
-    assert.deepEqual(adminOnlyFeatureKeys({}), ['connectors', 'imessage']);
+    assert.deepEqual(adminOnlyFeatureKeys({ directoryPrivate: true }), ['directory', 'connectors']);
+    assert.deepEqual(adminOnlyFeatureKeys({ adminOnly: ['directory'], directoryPrivate: true }), ['directory', 'connectors']);
+    // Connectors is admins-only by nature, so it's there even with no config.
+    assert.deepEqual(adminOnlyFeatureKeys({}), ['connectors']);
   });
 
   it('drops unknown, nav-hidden and repeated keys', () => {
     assert.deepEqual(
       adminOnlyFeatureKeys({ adminOnly: ['channels', 'channels', 'notes', 'nope', 42 as never] }),
-      ['channels', 'connectors', 'imessage'],
+      ['channels', 'connectors'],
     );
   });
 

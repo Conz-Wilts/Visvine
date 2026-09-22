@@ -558,19 +558,6 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
   (`lib/agents/summon.ts`). Actions return `watch` hrefs (`config.ts#agentPageHref`).
   Polling, never a stream.
 
-## iMessage
-
-`docs/imessage.md` is the reference. A space can be assigned a line on
-Visvine's ONE Sendblue account (super-admin, Console → iMessage); members
-link their phone once (Settings → Accounts → Phone, by texting a code) and a
-text to the line runs the space's ordinary `phone` agent **as the texter**
-through `summonAgent` (channel `imessage`, `gate: 'member'`), the reply being
-the run's summary sent by the runner's `answerChannels` when the run ends.
-The line's space is the house; a text may land in a room the texter is in
-that has a `phone` agent (`lib/imessage/shared/targets.ts`, judge fallback).
-`imessage` is a toggleable, admin-only, nav-hidden feature key; the tables
-are `imessage_*`; no space ever sees a Sendblue key.
-
 ## The Directory
 
 `/directory` is one page, three tabs — Grid · Context · Table — with

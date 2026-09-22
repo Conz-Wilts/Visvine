@@ -39,7 +39,7 @@ export const CORE_FEATURE_KEYS: string[] = ['directory', 'connectors'];
  * reject unknown keys from a client-submitted `order`, alongside the dynamic
  * `tool:<slug>` rail keys below (see isPersistableFeatureKey).
  */
-export const ALL_FEATURE_KEYS: string[] = ['directory', 'channels', 'connectors', 'imessage'];
+export const ALL_FEATURE_KEYS: string[] = ['directory', 'channels', 'connectors'];
 
 /**
  * The `featureConfig` a freshly created space is stored with: core keys are
@@ -108,25 +108,19 @@ function isPersistableFeatureKey(key: unknown): key is string {
  * Tools is not here either: members author under `tools/`; only installing
  * and publishing are admin acts.
  */
-export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors', 'imessage'];
+export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
 
 /**
  * Feature keys that carry NO sidebar nav item (and no console toggle):
  * - `connectors` is a section of the Space Console (`/admin?section=connectors`),
  *   admins only by nature, so it has neither a rail row nor a toggle.
  *
- * - `imessage` is Console → iMessage (docs/imessage.md): the space's line is
- *   assigned by Visvine and switched by an admin in that section's header, so
- *   it has no rail row either. Unlike connectors it IS toggleable — a new
- *   space starts with it off (defaultFeatureConfig) — but the switch lives in
- *   its own section, not the Tools list.
- *
  * The marketplace is not here because it is not a key at all: it is reached
  * from the navbar icon, and each INSTALLED Tool gets its own rail row keyed
  * `tool:<slug>`. Those per-install keys are not nav-hidden — they ARE the rail
  * rows.
  */
-export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['connectors', 'imessage'];
+export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['connectors'];
 
 /**
  * Is `key` enabled for a space? Core features are always enabled; any other
