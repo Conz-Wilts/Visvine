@@ -44,21 +44,6 @@ struct MainTabView: View {
             }
         }
         .tint(theme.colors.accent)
-        // The search slot always draws its own white glass disc, which no
-        // tint or image can fill. The slot keeps the space; this solid
-        // circle covers it and takes the press.
-        .overlay(alignment: .bottomTrailing) {
-            Button { createPresented = true } label: {
-                Image(uiImage: createIcon)
-                    .resizable()
-                    .frame(width: 64, height: 64)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Create")
-            .padding(.trailing, 20)
-            .padding(.bottom, 20)
-            .ignoresSafeArea()
-        }
         .overlay(alignment: .topLeading) {
             if space.switcherOpen {
                 SpaceSidebar(
