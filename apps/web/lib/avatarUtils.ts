@@ -20,7 +20,10 @@ export const PERSON_SILHOUETTE_PATH =
 
 /**
  * SVG path for a space (24×24 viewBox): a square with a hollow ring on each
- * corner, drawn as rings and bars filled by the even-odd rule. Every surface
+ * corner. The bars run into the rings (ending inside the ring's band, short of
+ * its hole) so they join without a notch; that overlap is why the path fills
+ * by winding — rings and bars clockwise, holes counter-clockwise — since the
+ * even-odd rule would punch the overlap out. Every surface
  * that stands for a space draws this, whether as a silhouette or as the
  * `space` icon (see `getNodeGlyph`, `Avatar`'s `space` fallback).
  */
@@ -31,9 +34,9 @@ const SPACE_SILHOUETTE_PATH =
     [5, 19],
     [19, 19],
   ]
-    .map(([x, y]) => `M${x - 3.5} ${y}a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0Z` + `M${x - 1.5} ${y}a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0Z`)
+    .map(([x, y]) => `M${x - 3.5} ${y}a3.5 3.5 0 1 1 7 0a3.5 3.5 0 1 1-7 0Z` + `M${x - 1.5} ${y}a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0Z`)
     .join('') +
-  'M8.5 4h7v2h-7ZM8.5 18h7v2h-7ZM4 8.5h2v7H4ZM18 8.5h2v7h-2Z';
+  'M7 4h10v2H7ZM7 18h10v2H7ZM6 7v10H4V7ZM20 7v10h-2V7Z';
 
 /**
  * The container glyph a section or a channel draws: the isometric cube spaces
@@ -108,8 +111,6 @@ export type NodeGlyph = keyof typeof NODE_GLYPH_PATHS;
 
 /** Glyphs whose holes are drawn by the even-odd rule rather than reversed winding. */
 export const NODE_GLYPH_FILL_RULE: Partial<Record<NodeGlyph, 'evenodd'>> = {
-  // The corner rings are hollow, the way the `space` icon draws them.
-  space: 'evenodd',
   event: 'evenodd',
 };
 
