@@ -12,7 +12,7 @@ final class SpaceStore {
     var spaces: [Space] = []
     var current: Space?
     var isLoading = false
-    /// The header's space dropdown, drawn over every tab by MainTabView.
+    /// The space sidebar, drawn over every tab by MainTabView.
     var switcherOpen = false
 
     private let repo = SpaceRepository()

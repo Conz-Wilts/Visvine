@@ -17,10 +17,9 @@ struct ScreenHeader: View {
         HStack(spacing: 10) {
             if showSpaceSelector, let current = space.current {
                 Button {
-                    withAnimation(.bouncy(duration: 0.35)) { space.switcherOpen = true }
+                    withAnimation(.smooth(duration: 0.3)) { space.switcherOpen = true }
                 } label: { SpaceMark(space: current, parent: space.parent(of: current)) }
                     .buttonStyle(.plain)
-                    .opacity(space.switcherOpen ? 0 : 1)
             } else if let title {
                 Text(title)
                     .font(.system(size: 28, weight: .bold))
@@ -42,13 +41,11 @@ struct ScreenHeader: View {
     }
 }
 
-/// The current space as the header draws it — and as the dropdown's first row
-/// draws it, so opening the list leaves it where it was.
+/// The current space as the header draws it; pressing it opens the sidebar.
 struct SpaceMark: View {
     @Environment(ThemeStore.self) private var theme
     let space: Space
     let parent: Space?
-    var open = false
 
     var body: some View {
         let c = theme.colors
@@ -68,9 +65,8 @@ struct SpaceMark: View {
             }
             .frame(maxWidth: 200, alignment: .leading)
             .fixedSize(horizontal: true, vertical: false)
-            VisvineIcon(.chevronDown, size: 12)
+            VisvineIcon(.chevronRight, size: 12)
                 .foregroundStyle(c.textMuted)
-                .rotationEffect(.degrees(open ? 180 : 0))
         }
         .contentShape(Rectangle())
         .accessibilityLabel("Space: \(space.name)")

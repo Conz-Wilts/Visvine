@@ -37,10 +37,22 @@ struct GlassTabBar: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.bottom, 6)
+        .padding(.bottom, bottomGap(searching: search.isOpen))
+        // Measured from the screen's edge, as the system tab bar is; the
+        // keyboard's inset still lifts it while search is typing.
+        .ignoresSafeArea(.container, edges: .bottom)
         .animation(.bouncy(duration: 0.35), value: search.isOpen)
         .animation(.snappy(duration: 0.2), value: selected)
         .onChange(of: search.isOpen) { _, open in focused = open }
+    }
+
+    /// 20pt off the edge on a home-indicator phone, where the system's own tab
+    /// bar sits; 8pt over the keyboard.
+    private func bottomGap(searching: Bool) -> CGFloat {
+        if searching { return 8 }
+        let window = UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }.first
+        return (window?.safeAreaInsets.bottom ?? 0) > 0 ? 20 : 12
     }
 
     private var tabs: some View {

@@ -10,17 +10,23 @@ final class HomeModel {
     var loadingMore = false
     var error: String?
 
+    /// The space's context as the person may read it; nil until read.
+    var context: ContextNode?
+
     private let feed = FeedRepository()
     private var loadedFor: String?
 
     func load(spaceId: String?) async {
         guard let spaceId else { posts = []; loading = false; return }
         loading = loadedFor != spaceId
+        if loadedFor != spaceId { context = nil }
         loadedFor = spaceId
+        async let tree = ContextRepository().tree(spaceId: spaceId)
         switch await feed.getFeed(spaceId: spaceId) {
         case .success(let page): posts = page.posts; nextCursor = page.nextCursor; error = nil
         case .failure(let m): error = m
         }
+        if case .success(let root) = await tree { context = root }
         loading = false
     }
 
@@ -82,19 +88,24 @@ struct HomeView: View {
         .task(id: space.current?.id) { await model.load(spaceId: space.current?.id) }
     }
 
-    /// Feed is this page; People and Events push their lists.
+    /// Feed is this page; Events and Context push theirs. Context is offered to
+    /// an admin, or to anyone whose grants reach a note of it.
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             GlassEffectContainer(spacing: 10) {
                 HStack(spacing: 10) {
                     Chip(label: "Feed", on: true) {}
-                    NavigationLink(value: AppRoute.people) { ChipLabel(text: "People") }.buttonStyle(.plain)
                     NavigationLink(value: AppRoute.events) { ChipLabel(text: "Events") }.buttonStyle(.plain)
+                    if let root = model.context, space.current?.isAdmin == true || root.noteCount > 0 {
+                        NavigationLink(value: AppRoute.contextFolder(root)) { ChipLabel(text: "Context") }.buttonStyle(.plain)
+                    }
                 }
                 .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
         }
-        .padding(.top, 4).padding(.bottom, 8)
+        .scrollClipDisabled()
+        .padding(.bottom, 4)
     }
 }
 

@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Hosts the three tabs — Home, Messages, Discover (docs/mobile.md) — the
-/// floating glass tab bar with create and search, the space dropdown, and the
+/// floating glass tab bar with create and search, the space sidebar, and the
 /// Profile modal. Each tab
 /// is its own NavigationStack so detail screens push within the tab; the
 /// Directory and Events screens are pushed from Home rather than being tabs.
@@ -20,7 +20,12 @@ struct MainTabView: View {
             GlassTabBar(selected: $selected, onCreate: { createPresented = true })
         }
         .overlay(alignment: .topLeading) {
-            if space.switcherOpen { SpaceDropdown() }
+            if space.switcherOpen {
+                SpaceSidebar(
+                    onDiscover: { selected = .discover },
+                    onSettings: { profilePresented = true }
+                )
+            }
         }
         .sheet(isPresented: $createPresented) {
             CreateSheet()
@@ -75,6 +80,10 @@ struct MainTabView: View {
             DirectoryView(onProfile: { profilePresented = true })
         case .events:
             EventsListView(onProfile: { profilePresented = true })
+        case let .contextFolder(node):
+            ContextFolderView(node: node)
+        case let .contextNote(path, title):
+            ContextNoteView(path: path, title: title)
         }
     }
 

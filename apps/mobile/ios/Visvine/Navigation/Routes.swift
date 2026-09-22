@@ -26,6 +26,9 @@ enum AppRoute: Hashable {
     /// The Directory and Events screens, reached from Home.
     case people
     case events
+    /// A folder of the space's context, and one note of it.
+    case contextFolder(ContextNode)
+    case contextNote(path: String, title: String)
 }
 
 /// Pushes within the Profile modal stack.
