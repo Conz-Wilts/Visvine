@@ -3,10 +3,9 @@
 import Link from '@/features/shared/components/SpaceLink';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useCardTilt } from '@/features/directory/hooks/useCardTilt';
-import { Chip, CountryFlagIcon } from '@/components/ui';
+import { CountryFlagIcon } from '@/components/ui';
 import TypeSilhouette from '@/components/ui/TypeSilhouette';
 import { getNodeTypeConfig } from '@/lib/types';
-import { tagPalette } from '@/lib/tagColors';
 import { spaceCountryCode } from '@/lib/discover/filters';
 import type { Space } from '@/lib/types';
 import JoinWord from './JoinWord';
@@ -24,8 +23,8 @@ export const SPACE_COLOR = getNodeTypeConfig('space').color;
 /**
  * A space as the Directory draws an entry: a bordered tile in the Space
  * colour, a square of identity media (the mark, or the monogram on a painted
- * field), then name over facts over the sectors it declares. Join is a word
- * in the accent. The tile opens the space's page.
+ * field), then name, one line of facts and the join word, centred. Sectors
+ * are browsed from the strip above the grid. The tile opens the space's page.
  */
 export default function SpaceTile({
   space,
@@ -35,7 +34,6 @@ export default function SpaceTile({
   door = 'active',
   asked = false,
   onJoin,
-  compact = false,
 }: {
   space: Space;
   /** The mark it wears — a sub-space wears its parent's (spaceMark). */
@@ -46,8 +44,6 @@ export default function SpaceTile({
   door?: ViewerDoor;
   asked?: boolean;
   onJoin: (space: Space) => void;
-  /** A branch tile: shorter media, one line of facts, no sectors. */
-  compact?: boolean;
 }) {
   const router = useSpaceRouter();
   const tiltRef = useCardTilt();
@@ -56,9 +52,7 @@ export default function SpaceTile({
   const facts = [
     parentName ? `in ${parentName}` : null,
     `${formatMemberCount(space.memberCount)} ${space.memberCount === 1 ? 'member' : 'members'}`,
-    space.location,
   ].filter(Boolean).join(' · ');
-  const sectors = (space.tags ?? []).slice(0, 3);
 
   const style = {
     borderColor: SPACE_COLOR,
@@ -76,7 +70,7 @@ export default function SpaceTile({
       style={style}
       className="group relative z-0 flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl border-4 bg-surface-1 transition-[box-shadow,transform] duration-200 hover:z-10 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_16px_32px_rgba(0,0,0,0.16),0_0_20px_4px_var(--card-glow-strong)]"
     >
-      <div className={`${compact ? 'aspect-[4/3]' : 'aspect-square'} w-full shrink-0 overflow-hidden`}>
+      <div className="aspect-square w-full shrink-0 overflow-hidden">
         {mark.imageUrl ? (
           <img
             src={mark.imageUrl}
@@ -91,36 +85,19 @@ export default function SpaceTile({
         )}
       </div>
 
-      <div className={`flex min-h-0 flex-1 flex-col ${compact ? 'px-3 pt-2.5 pb-3' : 'px-4 pt-3 pb-4'}`}>
+      <div className="flex flex-1 flex-col items-center gap-1 px-4 pt-3 pb-4 text-center">
         <Link
           href={href}
           onClick={(e) => e.stopPropagation()}
-          className={`line-clamp-1 font-semibold leading-tight text-text-primary ${compact ? 'text-[14px]' : 'text-base'}`}
+          className="line-clamp-1 text-base font-semibold leading-tight text-text-primary"
         >
           {space.name}
         </Link>
-
-        <p className="mt-1.5 flex items-center gap-1.5 text-[13px] leading-[1.35] text-text-secondary">
-          {country && <CountryFlagIcon code={country} className="h-[11px] w-[15px]" />}
-          <span className="min-w-0 flex-1 truncate">{facts}</span>
-          {compact && <JoinWord joined={joined} door={door} asked={asked} onJoin={() => onJoin(space)} />}
+        <p className="flex max-w-full items-center justify-center gap-1.5 text-[13px] leading-[1.35] text-text-muted">
+          {country && <CountryFlagIcon code={country} className="h-[11px] w-[15px] shrink-0" />}
+          <span className="truncate">{facts}</span>
         </p>
-
-        {!compact && (
-          <>
-            <p className="mt-1.5 line-clamp-2 min-h-[35px] text-[13px] leading-[1.35] text-text-muted">
-              {space.description || ''}
-            </p>
-            <div className="mt-3 flex items-end justify-between gap-2">
-              <div className="flex min-w-0 flex-wrap gap-1">
-                {sectors.map((tag) => (
-                  <Chip key={tag} color={tagPalette(tag, space.designConfig?.tagColors).base} size="xs">{tag}</Chip>
-                ))}
-              </div>
-              <JoinWord joined={joined} door={door} asked={asked} onJoin={() => onJoin(space)} />
-            </div>
-          </>
-        )}
+        <JoinWord joined={joined} door={door} asked={asked} onJoin={() => onJoin(space)} className="mt-1" />
       </div>
     </div>
   );

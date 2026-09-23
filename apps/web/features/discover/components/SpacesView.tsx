@@ -56,7 +56,6 @@ export default function SpacesView({
     <div className="flex flex-col gap-6">
       {sectorOpts.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[13px] font-semibold text-text-primary">Browse by sector</span>
           {sectorOpts.map((o) => {
             const on = sectors.has(o.value);
             return (
