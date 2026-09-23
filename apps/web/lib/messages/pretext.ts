@@ -31,6 +31,7 @@ const REACTION_ROW_HEIGHT = 26; // reaction pills below the body
 const IMAGE_SINGLE_HEIGHT = 262; // max-h-64 + mt-1.5
 const IMAGE_GRID_HEIGHT = 134; // h-32 + mt-1.5 + gap
 const LINK_PREVIEW_HEIGHT = 180; // image + text card
+const FILE_ROW_HEIGHT = 60; // a file's hairline row
 const DELETED_MESSAGE_HEIGHT = 28; // fixed height for deleted messages
 
 // The feed spans the full width between the side boxes; the ResizeObserver measures
@@ -112,6 +113,14 @@ export function calculateMessageHeight(
       height += IMAGE_GRID_HEIGHT;
     }
   }
+
+  // Drive files: images as the grid, anything else a row each
+  const fileImages = message.files?.filter((f) => f.fileType === 'image').length ?? 0;
+  const fileRows = (message.files?.length ?? 0) - fileImages;
+  if (fileImages > 0 && !(message.images && message.images.length > 0)) {
+    height += fileImages === 1 ? IMAGE_SINGLE_HEIGHT : IMAGE_GRID_HEIGHT;
+  }
+  height += FILE_ROW_HEIGHT * fileRows;
 
   // Link previews
   if (message.linkPreviews && message.linkPreviews.length > 0) {

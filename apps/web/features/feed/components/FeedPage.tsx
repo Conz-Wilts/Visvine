@@ -141,6 +141,7 @@ export default function FeedPage() {
             onSend={(payload) => { void feed.send(target.conversationId, payload); setComposing(false); }}
             spaceId={target.space.id}
             conversationId={target.conversationId}
+            filesSpaceId={target.space.id}
             variant="slim"
             currentUser={{ name: user.name, image: user.image ?? null }}
             placeholder="Start a post"

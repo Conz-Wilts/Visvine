@@ -5,7 +5,7 @@ import Avatar from '@/components/ui/Avatar';
 import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
 import { HeartIcon, MessageCircleIcon, PencilIcon, SmileIcon, Trash2Icon } from '@/features/shared/icons';
 import { CommentRow } from '@/features/messages/components/FeedView';
-import { EmojiPicker, MarkdownMessage, MessageImageGrid } from '@/features/messages/components/MessageRow';
+import { EmojiPicker, MarkdownMessage, MessageImageGrid, MessageFiles } from '@/features/messages/components/MessageRow';
 import { timeAgo } from '@/lib/date';
 import type { SerializedMessage } from '@/lib/messages/types';
 
@@ -123,6 +123,7 @@ export const FeedPostCard = memo(function FeedPostCard({
               </div>
             )}
             <MessageImageGrid images={post.images} />
+          <MessageFiles files={post.files} />
             {post.linkPreviews?.map((lp) => <LinkPreviewCard key={lp.url} preview={lp} />)}
           </div>
         )}

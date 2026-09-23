@@ -10,6 +10,7 @@ import MessageRow from './MessageRow';
 import FeedView from './FeedView';
 import { formatChatTimestamp, formatDateLabel } from '@/lib/date';
 import type {
+  ComposerPayload,
   ConversationSummary,
   SavedMessageEntry,
   SerializedMessage,
@@ -70,12 +71,7 @@ interface ThreadPanelProps {
   onScrollToMessage: (messageId: string) => void;
   onToggleStar: (messageId: string) => Promise<void>;
   // Composer
-  onSendMessage: (payload: {
-    text: string;
-    imageUrls?: string[];
-    mentions?: Array<{ mentionedUserId?: string; mentionedNodeId?: string; mentionType: string }>;
-    replyToId?: string;
-  }) => Promise<void>;
+  onSendMessage: (payload: ComposerPayload) => Promise<void>;
   typingLabel: string | null;
   onComposerTyping: () => void;
   // Channel management
@@ -533,6 +529,7 @@ export default function ThreadPanel({
             typingLabel={typingLabel}
             onTyping={onComposerTyping}
             conversationId={selectedConversationId}
+            filesSpaceId={selectedConversation.type === 'CHANNEL' ? spaceId : null}
             variant="slim"
             currentUser={currentUser}
             placeholder={`${selectedConversation.name}…`}

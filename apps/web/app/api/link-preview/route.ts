@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireApiSession, handleApiError } from '@/lib/api/route';
-import { getOrFetchLinkPreview } from '@/lib/linkPreview';
+import { getOrFetchLinkPreview, serializeLinkPreview } from '@/lib/linkPreview';
 
-// GET /api/link-preview?url=<encoded> — OpenGraph unfurl for an external link
+// GET /api/link-preview?url=<encoded> — the unfurl of an external link
 // (resource-node Preview tab). SSRF guards, timeout, and the 7-day linkPreview
 // cache live in lib/linkPreview.ts; blocked/unfurlable URLs yield preview: null.
 // `embeddable` (from X-Frame-Options / CSP frame-ancestors) is only present on
@@ -25,15 +25,7 @@ export async function GET(request: Request) {
   try {
     const { preview, embeddable } = await getOrFetchLinkPreview(url);
     return NextResponse.json({
-      preview: preview
-        ? {
-            url: preview.url,
-            title: preview.title,
-            description: preview.description,
-            imageUrl: preview.imageUrl,
-            siteName: preview.siteName,
-          }
-        : null,
+      preview: preview ? serializeLinkPreview(preview) : null,
       embeddable,
     });
   } catch (error) {

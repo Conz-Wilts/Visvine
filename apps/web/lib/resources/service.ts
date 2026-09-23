@@ -158,6 +158,12 @@ export interface UploadInput {
    * node of its own, named after the file.
    */
   nodeId?: string | null
+  /**
+   * The channel the file was dropped into. Such a file is the channel's and
+   * gets NO resource node — a directory of chat screenshots is noise; it is
+   * listed in Resources to the channel's members instead.
+   */
+  conversationId?: string | null
 }
 
 export type UploadedFile = DriveFile & { nodeId: string | null }
@@ -169,6 +175,7 @@ export type UploadedFile = DriveFile & { nodeId: string | null }
 export async function uploadResource(input: UploadInput): Promise<UploadedFile> {
   if (input.nodeId) await requireResourceNode(input.spaceId, input.nodeId)
   const file = await storeResource(input)
+  if (input.conversationId) return { ...file, nodeId: null }
   const { nodeId, replacedFileId } = await linkFileNode(file, input.nodeId ?? null)
   if (replacedFileId && replacedFileId !== file.id) await deleteResource(replacedFileId)
   return { ...file, nodeId }
@@ -228,6 +235,7 @@ async function storeResource(input: UploadInput): Promise<DriveFile> {
       fileSize: bytes.length,
       uploadedBy,
       folderId,
+      conversationId: input.conversationId ?? null,
       indexState: kind ? 'pending' : 'unsupported',
       indexError: kind
         ? null

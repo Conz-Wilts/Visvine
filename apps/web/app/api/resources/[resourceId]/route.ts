@@ -34,6 +34,14 @@ export async function GET(
   if (!membership && !superAdmin) {
     return forbiddenResponse();
   }
+  // A file dropped into a channel is read by that channel's members.
+  if (resource.conversationId && !superAdmin) {
+    const inChannel = await prisma.conversationMember.findUnique({
+      where: { conversationId_userId: { conversationId: resource.conversationId, userId: session.userId } },
+      select: { id: true },
+    });
+    if (!inChannel) return forbiddenResponse();
+  }
   const canManage = await isAdmin(session.userId, resource.spaceId, session.email);
 
   // A download URL is signed per read and never stored — see the note on

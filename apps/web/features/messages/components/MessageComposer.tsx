@@ -3,10 +3,12 @@
 import { useState, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
 import { AtSignIcon, ImagePlusIcon, Link2Icon, PlusIcon, SendIcon, SmileIcon, XIcon } from '@/features/shared/icons';
+import { FileTypeIcon } from '@/features/resources/components/resourceUi';
+import { resourceRawPath } from '@/lib/resources/shared/fileNode';
 import Avatar from '@/components/ui/Avatar';
 
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
-import type { SerializedReplyTo } from '@/lib/messages/types';
+import type { ComposerPayload, SerializedMessageFile, SerializedReplyTo } from '@/lib/messages/types';
 
 interface MentionResult {
   id: string;
@@ -17,12 +19,7 @@ interface MentionResult {
 }
 
 interface MessageComposerProps {
-  onSend: (payload: {
-    text: string;
-    imageUrls?: string[];
-    mentions?: Array<{ mentionedUserId?: string; mentionedNodeId?: string; mentionType: string }>;
-    replyToId?: string;
-  }) => void;
+  onSend: (payload: ComposerPayload) => void;
   replyTo?: SerializedReplyTo | null;
   onCancelReply?: () => void;
   spaceId?: string | null;
@@ -30,6 +27,11 @@ interface MessageComposerProps {
   typingLabel?: string | null;
   onTyping?: () => void;
   conversationId?: string | null;
+  /**
+   * The space whose Drive a dropped file lands in — the channel's. Null (a DM,
+   * which belongs to no space) takes no files.
+   */
+  filesSpaceId?: string | null;
   /**
    * 'full' (default) → the elevated card with the toolbar row (Messages/DMs).
    * 'slim' → a single-line feed-style bar (avatar · photo · text · send) for
@@ -53,6 +55,7 @@ export default function MessageComposer({
   typingLabel,
   onTyping,
   conversationId,
+  filesSpaceId,
   variant = 'full',
   currentUser,
   placeholder,
@@ -60,8 +63,10 @@ export default function MessageComposer({
   // Channels use the slim, single-line feed composer; DMs keep the full card.
   const slim = variant === 'slim';
   const [text, setText] = useState('');
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [files, setFiles] = useState<SerializedMessageFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const canAttach = !!filesSpaceId && !!conversationId;
   const [showMentions, setShowMentions] = useState(false);
   const [, setMentionQuery] = useState('');
   const [, setMentionType] = useState<'user' | 'event'>('user');
@@ -124,26 +129,32 @@ export default function MessageComposer({
     return () => clearTimeout(t);
   }, [text, conversationId]);
 
-  const uploadFiles = useCallback(async (files: File[]) => {
-    const images = files.filter((f) => f.type.startsWith('image/'));
-    if (!images.length) return;
+  // A dropped file becomes a Drive file of the channel's space first, as Slack
+  // uploads before it shares; the message then carries it by id.
+  const uploadFiles = useCallback(async (picked: File[]) => {
+    if (!picked.length || !filesSpaceId || !conversationId) return;
     setUploading(true);
-    const newUrls: string[] = [];
-    for (const file of images) {
+    setUploadError(null);
+    const added: SerializedMessageFile[] = [];
+    const failed: string[] = [];
+    for (const file of picked) {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('type', 'message');
+      formData.append('spaceId', filesSpaceId);
+      formData.append('conversationId', conversationId);
       try {
-        const res = await fetch('/api/upload', { method: 'POST', body: formData });
-        if (res.ok) {
-          const data = await res.json();
-          newUrls.push(data.url);
-        }
-      } catch { /* ignore */ }
+        const res = await fetch('/api/resources/upload', { method: 'POST', body: formData });
+        if (!res.ok) { failed.push(file.name); continue; }
+        const data = await res.json() as { id: string; name: string; fileType: string; fileSize: number | null };
+        added.push({ id: data.id, name: data.name, fileType: data.fileType, fileSize: data.fileSize, url: resourceRawPath(data.id) });
+      } catch {
+        failed.push(file.name);
+      }
     }
-    setImageUrls((prev) => [...prev, ...newUrls]);
+    setFiles((prev) => [...prev, ...added].slice(0, 10));
+    if (failed.length) setUploadError(`Couldn't attach ${failed.join(', ')}`);
     setUploading(false);
-  }, []);
+  }, [filesSpaceId, conversationId]);
 
   const insertEmoji = (emoji: string) => {
     const textarea = textareaRef.current;
@@ -254,7 +265,7 @@ export default function MessageComposer({
     setShowLinkInput(false);
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
     await uploadFiles(Array.from(files));
@@ -262,23 +273,24 @@ export default function MessageComposer({
   };
 
   const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'));
-    if (files.length) {
+    if (!canAttach) return;
+    const pasted = Array.from(e.clipboardData.files);
+    if (pasted.length) {
       e.preventDefault();
-      await uploadFiles(files);
+      await uploadFiles(pasted);
     }
   };
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length) await uploadFiles(files);
+    const dropped = Array.from(e.dataTransfer.files);
+    if (dropped.length) await uploadFiles(dropped);
   };
 
   const handleSubmit = () => {
     const trimmed = text.trim();
-    if (!trimmed && imageUrls.length === 0) return;
+    if ((!trimmed && files.length === 0) || uploading) return;
 
     const mentions: Array<{ mentionedUserId?: string; mentionedNodeId?: string; mentionType: string }> = [];
     for (const userId of mentionedUsers) {
@@ -289,17 +301,16 @@ export default function MessageComposer({
     }
 
     onSend({
-      // The schema requires a body; an image sent without a caption gets the
-      // word, not a camera glyph — it is also what the conversation list shows
-      // as the last message.
-      text: trimmed || 'Photo',
-      imageUrls: imageUrls.length ? imageUrls : undefined,
+      text: trimmed,
+      fileIds: files.length ? files.map((f) => f.id) : undefined,
+      files: files.length ? files : undefined,
       mentions: mentions.length ? mentions : undefined,
       replyToId: replyTo?.id,
     });
 
     setText('');
-    setImageUrls([]);
+    setFiles([]);
+    setUploadError(null);
     setMentionedUsers([]);
     setMentionedNodes([]);
     if (conversationId) {
@@ -344,7 +355,7 @@ export default function MessageComposer({
   return (
     <footer
       className={`relative w-full ${slim ? 'px-3 pb-3 pt-2' : 'px-4 pb-4 pt-2 md:px-6'} ${isDragging ? 'bg-brand-green/5' : ''}`}
-      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragOver={(e) => { if (!canAttach) return; e.preventDefault(); setIsDragging(true); }}
       onDragLeave={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node)) return;
         setIsDragging(false);
@@ -353,7 +364,7 @@ export default function MessageComposer({
     >
       {isDragging && (
         <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand-green bg-surface-1/80 text-sm font-medium text-brand-green">
-          Drop images to attach
+          Drop to attach
         </div>
       )}
       {/* Slim (channel) composer spans the full Slack-style feed width. */}
@@ -375,16 +386,24 @@ export default function MessageComposer({
         </div>
       )}
 
-      {/* Image previews */}
-      {imageUrls.length > 0 && (
+      {/* Attached files */}
+      {(files.length > 0 || uploading) && (
         <div className="mb-2 flex gap-2 overflow-x-auto">
-          {imageUrls.map((url, i) => (
-            <div key={url} className="relative shrink-0">
-              <img src={url} alt="" className="h-16 w-16 rounded-lg object-cover" />
+          {files.map((file) => (
+            <div key={file.id} className="relative shrink-0">
+              {file.fileType === 'image' ? (
+                <img src={file.url} alt="" className="h-16 w-16 rounded-lg object-cover" />
+              ) : (
+                <div className="flex h-16 max-w-[200px] items-center gap-2 rounded-lg border border-border-subtle bg-surface-1 px-3">
+                  <FileTypeIcon type={file.fileType} />
+                  <span className="truncate text-sm text-text-primary">{file.name}</span>
+                </div>
+              )}
               <button
                 type="button"
-                onClick={() => setImageUrls((prev) => prev.filter((_, idx) => idx !== i))}
+                onClick={() => setFiles((prev) => prev.filter((f) => f.id !== file.id))}
                 className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900/80 text-white"
+                aria-label={`Remove ${file.name}`}
               >
                 <XIcon className="h-3 w-3" />
               </button>
@@ -397,6 +416,7 @@ export default function MessageComposer({
           )}
         </div>
       )}
+      {uploadError && <p className="mb-1.5 px-1 text-xs text-red-600">{uploadError}</p>}
 
       {/* Link input */}
       {showLinkInput && (
@@ -466,25 +486,28 @@ export default function MessageComposer({
                 <Avatar name={currentUser.name} imageUrl={currentUser.image} size="sm" />
               </div>
             )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleImageUpload}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="shrink-0 self-center rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-brand-green"
-              aria-label="Attach photo"
-            >
-              {uploading
-                ? <span className="block h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
-                : <ImagePlusIcon className="h-5 w-5" />}
-            </button>
+            {canAttach && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFilePick}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="shrink-0 self-center rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-brand-green"
+                  aria-label="Attach files"
+                >
+                  {uploading
+                    ? <span className="block h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+                    : <PlusIcon className="h-5 w-5" />}
+                </button>
+              </>
+            )}
             <textarea
               ref={textareaRef}
               value={text}
@@ -499,7 +522,7 @@ export default function MessageComposer({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={disabled || (!text.trim() && imageUrls.length === 0)}
+              disabled={disabled || uploading || (!text.trim() && files.length === 0)}
               className="shrink-0 self-center rounded-full bg-brand-green p-2 text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
               aria-label="Send"
             >
@@ -545,14 +568,16 @@ export default function MessageComposer({
                 {/* Attachment popup menu */}
                 {showAttachMenu && (
                   <div className="absolute bottom-full left-0 mb-1 w-44 rounded-lg border border-border-subtle bg-surface-1 py-1 shadow-float z-50">
-                    <button
-                      type="button"
-                      onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-text-primary hover:bg-surface-2 transition-colors"
-                    >
-                      <ImagePlusIcon className="h-4 w-4 text-text-muted" />
-                      Upload image
-                    </button>
+                    {canAttach && (
+                      <button
+                        type="button"
+                        onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
+                        className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-text-primary hover:bg-surface-2 transition-colors"
+                      >
+                        <ImagePlusIcon className="h-4 w-4 text-text-muted" />
+                        Upload file
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => { setShowLinkInput((v) => !v); setShowAttachMenu(false); }}
@@ -568,9 +593,8 @@ export default function MessageComposer({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
                 multiple
-                onChange={handleImageUpload}
+                onChange={handleFilePick}
                 className="hidden"
               />
 
@@ -630,7 +654,7 @@ export default function MessageComposer({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={disabled || (!text.trim() && imageUrls.length === 0)}
+              disabled={disabled || uploading || (!text.trim() && files.length === 0)}
               className="flex h-7 w-7 items-center justify-center rounded-md text-brand-green transition-colors hover:bg-brand-green/10 disabled:text-text-muted disabled:hover:bg-transparent"
               title="Send"
             >

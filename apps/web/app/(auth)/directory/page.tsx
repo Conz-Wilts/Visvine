@@ -6,6 +6,7 @@ import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import NodeGrid from '@/features/directory/components/NodeGrid';
 import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
 import DirectoryTableView from '@/features/directory/components/table/DirectoryTableView';
+import ResourcesView from '@/features/resources/components/ResourcesView';
 import ContentReveal from '@/components/ui/ContentReveal';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useViewportPane } from '@/app/(auth)/AuthLayoutClient';
@@ -21,13 +22,7 @@ import {
 import { ensureRootIndexNote, ROOT_INDEX_PATH } from '@/features/notes/lib/rootIndex';
 import { resetContextTreeState } from '@/features/notes/hooks/useContextTreeState';
 import { noteHref } from '@/lib/notes/entities';
-import {
-  directoryTabs,
-  directoryViewHref,
-  isDirectoryView,
-  RESOURCES_HREF,
-  type DirectoryView,
-} from '@/lib/directory/views';
+import { directoryTabs, directoryViewHref, isDirectoryView, type DirectoryView } from '@/lib/directory/views';
 import type { NoteMeta } from '@/lib/notes/shared/types';
 import type { SpaceAlias } from '@/lib/types';
 
@@ -37,7 +32,8 @@ const DIRECTORY_TABS: PaneTabItem[] = directoryTabs();
 /**
  * The Directory: a searchable, filterable card grid of everyone and everything
  * (Grid), the same entries as rows with a column per thing their type tracks
- * (Table, `?view=table&type=<type>`). The Context tab
+ * (Table, `?view=table&type=<type>`), and every file and link the space holds
+ * (Resources, `?view=resources`). The Context tab
  * in the pane bar isn't a view of this page — it navigates to the context's
  * top-level index note (`index.md`, the space's home page). The bar itself
  * lives in the persistent pane shell (directory/layout.tsx) — this page just
@@ -87,7 +83,7 @@ function DirectoryPane() {
   // grid and hop straight to the index note.
   const searchParams = useSearchParams();
   const viewParam = searchParams.get('view');
-  const view: DirectoryView = viewParam === 'table' ? viewParam : 'grid';
+  const view: DirectoryView = viewParam === 'table' || viewParam === 'resources' ? viewParam : 'grid';
   const typeParam = searchParams.get('type');
   const wantsContext = viewParam === 'context';
   const redirected = useRef(false);
@@ -96,11 +92,6 @@ function DirectoryPane() {
     redirected.current = true;
     openContext();
   }, [wantsContext, spaceId, openContext]);
-
-  // ?view=resources is the resources table.
-  useEffect(() => {
-    if (viewParam === 'resources') router.replace(RESOURCES_HREF);
-  }, [viewParam, router]);
 
   // Selecting Grid closes any docked tree now, skipping the release grace:
   // the grace exists for navigations where another surface re-claims the dock,
@@ -136,7 +127,7 @@ function DirectoryPane() {
   // click is a route change over a warm cache.
   usePrefetchContextRoot(spaceId, !noSpace);
 
-  // Standing on the grid (or the table) is leaving Context, so
+  // Standing on the grid (or the table, or Resources) is leaving Context, so
   // the tree's expansion is forgotten here: entering Context always opens at
   // the space root with one layer under it, never on the chain that happened to
   // be open last time.
@@ -166,6 +157,8 @@ function DirectoryPane() {
   // rendered at all — a min-height filler here would overflow <main>'s own
   // padded height and leave a scrollbar on an empty page.
   if (noSpace) return null;
+
+  if (view === 'resources') return <ResourcesView />;
 
   if (view === 'table') {
     return (

@@ -9,22 +9,22 @@ datasource db {
 }
 
 model Space {
-  id              String                 @id
-  name            String
-  description     String?
-  location        String?
-  tags            String[]               @default([])
-  createdAt       DateTime               @default(now()) @map("created_at")
-  imageUrl        String?                @map("image_url")
-  nodeTypes       Json?                  @default("[{\"name\": \"Person\", \"color\": \"#2563eb\", \"shape\": \"rectangle\"}, {\"name\": \"Space\", \"color\": \"#78d870\", \"shape\": \"square\"}, {\"name\": \"Event\", \"color\": \"#ef4444\", \"shape\": \"rectangle\"}]") @map("node_types")
-  aliases         Json?                  @default("[{\"id\": \"admin\", \"name\": \"Admin\", \"color\": \"#b4881b\", \"admin\": true, \"system\": true, \"nodeType\": \"Person\"}]")
-  linkTypes       Json?                  @default("[{\"name\": \"Related\", \"color\": \"#94a3b8\", \"directed\": false}, {\"name\": \"Knows\", \"color\": \"#2563eb\", \"directed\": false}, {\"name\": \"Works at\", \"color\": \"#9333ea\", \"directed\": true}, {\"name\": \"Founded\", \"color\": \"#16a34a\", \"directed\": true}, {\"name\": \"Invested in\", \"color\": \"#f59e0b\", \"directed\": true}, {\"name\": \"Member of\", \"color\": \"#0ea5e9\", \"directed\": true}, {\"name\": \"Partner\", \"color\": \"#ec4899\", \"directed\": false}, {\"name\": \"Mentors\", \"color\": \"#14b8a6\", \"directed\": true}, {\"name\": \"Attended\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Hosting\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Introduced\", \"color\": \"#06b6d4\", \"directed\": false, \"system\": true}, {\"name\": \"Mentioned\", \"color\": \"#8b5cf6\", \"directed\": false, \"system\": true}]") @map("link_types")
-  designConfig    Json                   @default("{}") @map("design_config")
-  featureConfig   Json                   @default("{}") @map("feature_config")
+  id                 String                 @id
+  name               String
+  description        String?
+  location           String?
+  tags               String[]               @default([])
+  createdAt          DateTime               @default(now()) @map("created_at")
+  imageUrl           String?                @map("image_url")
+  nodeTypes          Json?                  @default("[{\"name\": \"Person\", \"color\": \"#2563eb\", \"shape\": \"rectangle\"}, {\"name\": \"Space\", \"color\": \"#78d870\", \"shape\": \"square\"}, {\"name\": \"Event\", \"color\": \"#ef4444\", \"shape\": \"rectangle\"}]") @map("node_types")
+  aliases            Json?                  @default("[{\"id\": \"admin\", \"name\": \"Admin\", \"color\": \"#b4881b\", \"admin\": true, \"system\": true, \"nodeType\": \"Person\"}]")
+  linkTypes          Json?                  @default("[{\"name\": \"Related\", \"color\": \"#94a3b8\", \"directed\": false}, {\"name\": \"Knows\", \"color\": \"#2563eb\", \"directed\": false}, {\"name\": \"Works at\", \"color\": \"#9333ea\", \"directed\": true}, {\"name\": \"Founded\", \"color\": \"#16a34a\", \"directed\": true}, {\"name\": \"Invested in\", \"color\": \"#f59e0b\", \"directed\": true}, {\"name\": \"Member of\", \"color\": \"#0ea5e9\", \"directed\": true}, {\"name\": \"Partner\", \"color\": \"#ec4899\", \"directed\": false}, {\"name\": \"Mentors\", \"color\": \"#14b8a6\", \"directed\": true}, {\"name\": \"Attended\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Hosting\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Introduced\", \"color\": \"#06b6d4\", \"directed\": false, \"system\": true}, {\"name\": \"Mentioned\", \"color\": \"#8b5cf6\", \"directed\": false, \"system\": true}]") @map("link_types")
+  designConfig       Json                   @default("{}") @map("design_config")
+  featureConfig      Json                   @default("{}") @map("feature_config")
   // Set = a private, single-member "personal space" owned by this user (created on
   // first use to host their personal context notes). Null = a normal space.
   // Filtered out of Discover / other users' space lists.
-  personalOwnerId String?                @map("personal_owner_id")
+  personalOwnerId    String?                @map("personal_owner_id")
   // "public" = discoverable & self-joinable from Discover; "private" = hidden from
   // Discover / non-members' lists, joinable only via invite link or admin add.
   // A sub-space's visibility is its own, independent of its parent's: a
@@ -32,88 +32,88 @@ model Space {
   // context is read into the parent's (lib/spaces/subspaces.ts).
   // Private by default: a space someone forgot to set visibility on must err
   // toward hidden, never toward discoverable (demo seeds opt into public).
-  visibility      String                 @default("private")
+  visibility         String                 @default("private")
   // Set = this is a sub-space of that space (one level: a sub-space never
   // holds sub-spaces, lib/spaces/subspaces.ts#parentDenial). Its own tenant
   // in every other table — members, aliases, tools, context — with the parent
   // named here and nowhere else. Restrict, not cascade: deleting a space with
   // sub-spaces is a deliberate children-first delete, never a silent wipe.
-  parentId        String?                @map("parent_id")
-  parent          Space?                 @relation("SpaceChildren", fields: [parentId], references: [id], onDelete: Restrict)
-  children        Space[]                @relation("SpaceChildren")
+  parentId           String?                @map("parent_id")
+  parent             Space?                 @relation("SpaceChildren", fields: [parentId], references: [id], onDelete: Restrict)
+  children           Space[]                @relation("SpaceChildren")
   // Rooms in a house (docs/sub-spaces.md). Four dials a sub-space sets for
   // itself; `visibility` above stays what every gate reads.
   // Listing — who can see the room exists: 'secret' | 'house' | 'world'.
   // Only meaningful with `visibility` (world ⇔ public); see subspaces.ts#listingOf.
-  listing         String                 @default("house")
+  listing            String                 @default("house")
   // Doors — who may enter without an invite, 'invite' | 'ask' | 'open': one
   // for the parent's members, one for everyone else (never wider).
-  houseDoor       String                 @default("ask") @map("house_door")
-  worldDoor       String                 @default("open") @map("world_door")
+  houseDoor          String                 @default("ask") @map("house_door")
+  worldDoor          String                 @default("open") @map("world_door")
   // What flows up into the parent, each the room's own switch; none for a
   // secret room, whatever these say.
-  flowContext     Boolean                @default(true) @map("flow_context")
-  flowEvents      Boolean                @default(true) @map("flow_events")
+  flowContext        Boolean                @default(true) @map("flow_context")
+  flowEvents         Boolean                @default(true) @map("flow_events")
   // Whether the parent's admins administer this sub-space too (lib/auth.ts
   // #isAdmin). On when a parent's admin creates the room; switching it off is
   // the room's own act and only a holder of the room's own admin alias can
   // switch it back on.
-  parentAdmins    Boolean                @default(false) @map("parent_admins")
+  parentAdmins       Boolean                @default(false) @map("parent_admins")
   // The house's side of the wall: { modelKeys, hiddenFromBand }
   // (lib/spaces/subspaces.ts#subspaceConfigOf).
-  subspaceConfig  Json                   @default("{}") @map("subspace_config")
+  subspaceConfig     Json                   @default("{}") @map("subspace_config")
   // Reusable, revocable invite token. Regenerating overwrites it, invalidating the
   // previously shared link. Null until first generated.
-  inviteToken     String?                @unique @map("invite_token")
+  inviteToken        String?                @unique @map("invite_token")
   // IANA zone the space's scheduled agents run in when an agent doesn't name
   // its own (lib/agents/config.ts). Null = UTC. The only other agent-wide
   // setting, the custom model endpoint, is a connector note (lib/connectors/model.ts).
-  timezone        String?
-  links           Link[]
-  nodes           Node[]
-  members         SpaceMember[]
-  notes           ContextNote[]
-  noteFolders     ContextFolder[]
-  contextState    ContextState[]
-  secrets         ConnectorSecret[]
-  oauthClients    ConnectorOAuthClient[]
-  connections     ConnectorConnection[]
-  connectorRequests ConnectorRequest[]
-  connectorState  ConnectorState[]
-  noteEmbeddings  ContextNoteEmbedding[]
-  memories        ContextMemory[]
-  contextSources  ContextSource[]
-  userAliases     UserAlias[]
-  contextGrants   ContextGrant[]
-  accessRequests  ContextAccessRequest[]
-  auditEntries    ContextAuditEntry[]
-  moveProposals   ContextMoveProposal[]
-  publicationsOut ContextPublication[]   @relation("PublicationSource")
-  publicationsIn  ContextPublication[]   @relation("PublicationTarget")
-  agentStates     AgentState[]
-  agentRuns       AgentRun[]
+  timezone           String?
+  links              Link[]
+  nodes              Node[]
+  members            SpaceMember[]
+  notes              ContextNote[]
+  noteFolders        ContextFolder[]
+  contextState       ContextState[]
+  secrets            ConnectorSecret[]
+  oauthClients       ConnectorOAuthClient[]
+  connections        ConnectorConnection[]
+  connectorRequests  ConnectorRequest[]
+  connectorState     ConnectorState[]
+  noteEmbeddings     ContextNoteEmbedding[]
+  memories           ContextMemory[]
+  contextSources     ContextSource[]
+  userAliases        UserAlias[]
+  contextGrants      ContextGrant[]
+  accessRequests     ContextAccessRequest[]
+  auditEntries       ContextAuditEntry[]
+  moveProposals      ContextMoveProposal[]
+  publicationsOut    ContextPublication[]   @relation("PublicationSource")
+  publicationsIn     ContextPublication[]   @relation("PublicationTarget")
+  agentStates        AgentState[]
+  agentRuns          AgentRun[]
   agentSubscriptions AgentSubscription[]
-  agentChatThreads AgentChatThread[]
-  agentEvents     AgentEvent[]
-  agentEgressLog  AgentEgressLog[]
-  agentVms        AgentVm[]
-  agentVmEvents   AgentVmEvent[]
-  agentVmUsage    AgentVmUsage[]
-  agentModelUsage AgentModelUsage[]
+  agentChatThreads   AgentChatThread[]
+  agentEvents        AgentEvent[]
+  agentEgressLog     AgentEgressLog[]
+  agentVms           AgentVm[]
+  agentVmEvents      AgentVmEvent[]
+  agentVmUsage       AgentVmUsage[]
+  agentModelUsage    AgentModelUsage[]
 
   channels        Conversation[]
   channelSections ChannelSection[]
 
-  appToolBuilds   AppToolBuild[]
-  appToolInstalls AppToolInstall[]
-  sharedToolInstalls AppToolInstall[] @relation("SharedToolInstalls")
-  resources       Resource[]
-  resourceFolders ResourceFolder[]
-  projectionJobs  NoteProjectionJob[]
-  cleanSchedule   ContextCleanSchedule?
-  cleanRuns       ContextCleanRun[]
-  noteChunks      ContextNoteChunk[]
-  profileEntries  ProfileSectionEntry[]
+  appToolBuilds      AppToolBuild[]
+  appToolInstalls    AppToolInstall[]
+  sharedToolInstalls AppToolInstall[]      @relation("SharedToolInstalls")
+  resources          Resource[]
+  resourceFolders    ResourceFolder[]
+  projectionJobs     NoteProjectionJob[]
+  cleanSchedule      ContextCleanSchedule?
+  cleanRuns          ContextCleanRun[]
+  noteChunks         ContextNoteChunk[]
+  profileEntries     ProfileSectionEntry[]
 
   @@index([personalOwnerId])
   @@index([parentId])
@@ -185,9 +185,9 @@ model ContextNoteRevision {
 /// settled rows are deleted, since the durable record of the write is the note
 /// revision, not the job.
 model NoteProjectionJob {
-  id       String @id @default(dbgenerated("(gen_random_uuid())::text"))
-  spaceId  String @map("space_id")
-  ownerKey String @map("owner_key")
+  id       String  @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId  String  @map("space_id")
+  ownerKey String  @map("owner_key")
   /// Post-mutation path: the new path for a rename, the trashed note's path for
   /// a delete. Together with `kind` this is everything applyProjections needs —
   /// the note CONTENT is re-read from the row, never carried here, so a retry
@@ -208,17 +208,17 @@ model NoteProjectionJob {
   /// auto-deactivate rule fires on a real edit, not on a no-op re-save.
   changed    Boolean @default(true)
 
-  attempts    Int       @default(0)
-  lastError   String?   @map("last_error")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  attempts  Int       @default(0)
+  lastError String?   @map("last_error")
+  createdAt DateTime  @default(now()) @map("created_at")
   /// Not before this instant. Set to now() on enqueue and pushed out by an
   /// exponential backoff on each failure.
-  runAfter    DateTime  @default(now()) @map("run_after")
+  runAfter  DateTime  @default(now()) @map("run_after")
   /// Non-null = settled. Rows are deleted on success; this column exists so a
   /// drain can mark-then-delete without a second lookup, and so a poisoned row
   /// that exhausted its attempts can be parked rather than retried forever.
-  doneAt      DateTime? @map("done_at")
-  space       Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  doneAt    DateTime? @map("done_at")
+  space     Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
   /// The drain's only query: due, unsettled, oldest first.
   @@index([doneAt, runAfter])
@@ -443,28 +443,28 @@ model ConnectorState {
 /// Cloud Run instances. `budgetMonthlyCents` is the one agent fact that is
 /// deliberately NOT in a note: money is admin-read, notes are member-read.
 model AgentState {
-  id                  String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  spaceId             String    @map("space_id")
+  id                  String     @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId             String     @map("space_id")
   name                String // agent name = the folder under agents/
-  runAsUserId         String?   @map("run_as_user_id") // the brief's author; the principal a run acts as
-  briefNoteId         String?   @map("brief_note_id") // the context_notes row this state was derived from; a different id at the same name is a NEW agent, and the old one's runs go with it
-  active              Boolean   @default(false)
-  status              String    @default("idle") // idle | running
-  nextRunAt           DateTime? @map("next_run_at")
-  lastRunAt           DateTime? @map("last_run_at")
-  runningSince        DateTime? @map("running_since")
-  currentRunId        String?   @map("current_run_id") // the AgentRun holding the `running` claim; release is a CAS on it
-  scheduleHash        String?   @map("schedule_hash")
-  budgetMonthlyCents  Int?      @map("budget_monthly_cents") // null = uncapped
-  deactivatedReason   String?   @map("deactivated_reason") // DeactivationReason: brief_changed | key_rejected | repeated_failure | author_gone | renamed | deleted | admin | config
-  deactivatedDetail   String?   @map("deactivated_detail") // e.g. who edited the brief
-  consecutiveFailures Int       @default(0) @map("consecutive_failures")
-  triggersJson        Json?     @map("triggers_json") // the live note's parsed `on:` map — { context: [globs], webhook: name }
-  sharedFrom          String?   @map("shared_from") // a run-in copy: the HOUSE whose brief this row runs, in this room (lib/agents/hooks.ts#syncSharedCopies)
-  debounceMs          Int       @default(60000) @map("debounce_ms") // how far forward an event pulls next_run_at
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
-  space               Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  runAsUserId         String?    @map("run_as_user_id") // the brief's author; the principal a run acts as
+  briefNoteId         String?    @map("brief_note_id") // the context_notes row this state was derived from; a different id at the same name is a NEW agent, and the old one's runs go with it
+  active              Boolean    @default(false)
+  status              String     @default("idle") // idle | running
+  nextRunAt           DateTime?  @map("next_run_at")
+  lastRunAt           DateTime?  @map("last_run_at")
+  runningSince        DateTime?  @map("running_since")
+  currentRunId        String?    @map("current_run_id") // the AgentRun holding the `running` claim; release is a CAS on it
+  scheduleHash        String?    @map("schedule_hash")
+  budgetMonthlyCents  Int?       @map("budget_monthly_cents") // null = uncapped
+  deactivatedReason   String?    @map("deactivated_reason") // DeactivationReason: brief_changed | key_rejected | repeated_failure | author_gone | renamed | deleted | admin | config
+  deactivatedDetail   String?    @map("deactivated_detail") // e.g. who edited the brief
+  consecutiveFailures Int        @default(0) @map("consecutive_failures")
+  triggersJson        Json?      @map("triggers_json") // the live note's parsed `on:` map — { context: [globs], webhook: name }
+  sharedFrom          String?    @map("shared_from") // a run-in copy: the HOUSE whose brief this row runs, in this room (lib/agents/hooks.ts#syncSharedCopies)
+  debounceMs          Int        @default(60000) @map("debounce_ms") // how far forward an event pulls next_run_at
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+  space               Space      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   runs                AgentRun[]
 
   @@unique([spaceId, name], name: "agent_identity")
@@ -495,26 +495,26 @@ model AgentSubscription {
 /// reason and the `AgentEvent` trace (tool results clipped, secrets already
 /// redacted by the isolate). Monthly spend is SUM(costMicros) by startedAt.
 model AgentRun {
-  id               String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  stateId          String    @map("state_id")
-  spaceId          String    @map("space_id")
+  id               String     @id @default(dbgenerated("(gen_random_uuid())::text"))
+  stateId          String     @map("state_id")
+  spaceId          String     @map("space_id")
   name             String
   trigger          String // RunTrigger: scheduled | manual | event | webhook | interval
-  status           String    @default("running") // running | succeeded | failed
-  startedAt        DateTime  @default(now()) @map("started_at")
-  endedAt          DateTime? @map("ended_at")
-  startedBy        String?   @map("started_by") // userId for manual runs
-  runAsUserId      String?   @map("run_as_user_id") // whose principal this run acted as; null = the state row's runAsUserId
+  status           String     @default("running") // running | succeeded | failed
+  startedAt        DateTime   @default(now()) @map("started_at")
+  endedAt          DateTime?  @map("ended_at")
+  startedBy        String?    @map("started_by") // userId for manual runs
+  runAsUserId      String?    @map("run_as_user_id") // whose principal this run acted as; null = the state row's runAsUserId
   model            String?
-  promptTokens     Int       @default(0) @map("prompt_tokens")
-  completionTokens Int       @default(0) @map("completion_tokens")
-  costMicros       BigInt?   @map("cost_micros") // USD micro-dollars; null = pricing unknown
-  turns            Int       @default(0)
-  terminalReason   String?   @map("terminal_reason") // finished | max_turns | budget | timeout | crashed | error | auth | quota | upstream | config | author_gone
+  promptTokens     Int        @default(0) @map("prompt_tokens")
+  completionTokens Int        @default(0) @map("completion_tokens")
+  costMicros       BigInt?    @map("cost_micros") // USD micro-dollars; null = pricing unknown
+  turns            Int        @default(0)
+  terminalReason   String?    @map("terminal_reason") // finished | max_turns | budget | timeout | crashed | error | auth | quota | upstream | config | author_gone
   summary          String? // the model's final answer, capped
-  errorMessage     String?   @map("error_message") // redacted
-  events           Json      @default("[]") // AgentEvent[] trace
-  eventCount       Int       @default(0) @map("event_count") // agent_events rows this run consumed
+  errorMessage     String?    @map("error_message") // redacted
+  events           Json       @default("[]") // AgentEvent[] trace
+  eventCount       Int        @default(0) @map("event_count") // agent_events rows this run consumed
   input            Json? // { events: [{ kind, source, summary, at }] } — the "Triggered by …" block
   state            AgentState @relation(fields: [stateId], references: [id], onDelete: Cascade)
   space            Space      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
@@ -531,17 +531,17 @@ model AgentRun {
 /// The partial indexes (pending per agent; unique dedupe_key while pending)
 /// live in the hand-written migration — Prisma can't express WHERE clauses.
 model AgentEvent {
-  id         String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  spaceId    String    @map("space_id")
-  agentName  String    @map("agent_name")
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId    String   @map("space_id")
+  agentName  String   @map("agent_name")
   kind       String // note_written | webhook | reply
   source     String // note path / connector name / who replied
   summary    String
-  payload    Json      @default("{}")
-  dedupeKey  String?   @map("dedupe_key")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  consumedBy String?   @map("consumed_by") // AgentRun.id once claimed
-  space      Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  payload    Json     @default("{}")
+  dedupeKey  String?  @map("dedupe_key")
+  createdAt  DateTime @default(now()) @map("created_at")
+  consumedBy String?  @map("consumed_by") // AgentRun.id once claimed
+  space      Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
   @@index([consumedBy])
   @@map("agent_events")
@@ -626,21 +626,21 @@ model AgentVmUsage {
 /// spaces. `pendingMessageId` is the per-thread turn claim: one turn at a time
 /// across N instances, stale after CHAT_CLAIM_MS (lib/agents/shared/chat.ts).
 model AgentChatThread {
-  id               String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  spaceId          String    @map("space_id")
-  agentName        String    @map("agent_name")
-  userId           String    @map("user_id")
-  lastMessageAt    DateTime? @map("last_message_at")
+  id               String             @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId          String             @map("space_id")
+  agentName        String             @map("agent_name")
+  userId           String             @map("user_id")
+  lastMessageAt    DateTime?          @map("last_message_at")
   /// First ~160 chars of the newest message, for the list row.
-  lastPreview      String?   @map("last_preview")
+  lastPreview      String?            @map("last_preview")
   /// When the person last opened the thread; unread = lastMessageAt > this.
-  lastReadAt       DateTime? @map("last_read_at")
-  pendingMessageId String?   @map("pending_message_id")
-  pendingSince     DateTime? @map("pending_since")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-  space            Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt       DateTime?          @map("last_read_at")
+  pendingMessageId String?            @map("pending_message_id")
+  pendingSince     DateTime?          @map("pending_since")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  space            Space              @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages         AgentChatMessage[]
 
   @@unique([spaceId, agentName, userId], name: "chat_identity")
@@ -653,22 +653,22 @@ model AgentChatThread {
 /// is claimed and finished with its text, trace and metering (or `failed` and
 /// a reason), so a turn that outlives the request is never lost.
 model AgentChatMessage {
-  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  threadId         String   @map("thread_id")
+  id               String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  threadId         String          @map("thread_id")
   role             String // user | assistant
   text             String
-  status           String   @default("done") // pending | done | failed
+  status           String          @default("done") // pending | done | failed
   /// Assistant rows: why the turn ended — finished | max_turns | budget | timeout | error | narrated
   reason           String?
-  errorMessage     String?  @map("error_message")
+  errorMessage     String?         @map("error_message")
   /// Assistant rows: compact tool trace, [{ tool, detail, ok }], capped (shared/chat.ts#compactTrace)
   trace            Json?
   model            String?
-  turns            Int      @default(0)
-  promptTokens     Int      @default(0) @map("prompt_tokens")
-  completionTokens Int      @default(0) @map("completion_tokens")
-  costMicros       BigInt?  @map("cost_micros")
-  createdAt        DateTime @default(now()) @map("created_at")
+  turns            Int             @default(0)
+  promptTokens     Int             @default(0) @map("prompt_tokens")
+  completionTokens Int             @default(0) @map("completion_tokens")
+  costMicros       BigInt?         @map("cost_micros")
+  createdAt        DateTime        @default(now()) @map("created_at")
   thread           AgentChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId, createdAt(sort: Desc)])
@@ -833,49 +833,49 @@ model AppToolBuild {
 /// A Tool written in a private space therefore stays in it: nothing is offered
 /// to the world without a second, explicit act.
 model AppToolVersion {
-  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  key           String // `<sourceSpaceId>/<name>`
-  name          String
-  version       Int
-  title         String
-  description   String?
-  authorUserId  String?   @map("author_user_id")
-  sourceSpaceId String    @map("source_space_id") // no FK — must outlive the source space
-  config        Json // validated ToolConfig at publish time
-  perimeter     Json // declared reach: note globs / types / connectors / agents
-  indexSource   String    @map("index_source") // index.md body (docs) at publish time
-  uiSource      String    @map("ui_source") // ui.tsx source at publish time
-  dataSource    String    @map("data_source") // data.js source at publish time
+  id                     String           @id @default(dbgenerated("(gen_random_uuid())::text"))
+  key                    String // `<sourceSpaceId>/<name>`
+  name                   String
+  version                Int
+  title                  String
+  description            String?
+  authorUserId           String?          @map("author_user_id")
+  sourceSpaceId          String           @map("source_space_id") // no FK — must outlive the source space
+  config                 Json // validated ToolConfig at publish time
+  perimeter              Json // declared reach: note globs / types / connectors / agents
+  indexSource            String           @map("index_source") // index.md body (docs) at publish time
+  uiSource               String           @map("ui_source") // ui.tsx source at publish time
+  dataSource             String           @map("data_source") // data.js source at publish time
   /// The Tool's own rail glyph, sanitized at build time (lib/tools/iconSvg.ts)
   /// and snapshotted here so an install carries it. Null = uses a built-in.
-  iconSvg       String?   @map("icon_svg")
-  uiBundle      String    @map("ui_bundle") // compiled ESM
-  dataBundle    String    @map("data_bundle") // compiled ESM
-  sizeBytes     Int       @map("size_bytes")
+  iconSvg                String?          @map("icon_svg")
+  uiBundle               String           @map("ui_bundle") // compiled ESM
+  dataBundle             String           @map("data_bundle") // compiled ESM
+  sizeBytes              Int              @map("size_bytes")
   /// The source space's own verdict: pending | approved | rejected | withdrawn.
   /// An admin publishing approves as they publish; a member publishing queues.
-  status        String    @default("pending") // pending | approved | rejected | withdrawn
-  submittedAt   DateTime  @default(now()) @map("submitted_at")
-  reviewedBy    String?   @map("reviewed_by")
-  reviewedAt    DateTime? @map("reviewed_at")
-  reviewNote    String?   @map("review_note")
+  status                 String           @default("pending") // pending | approved | rejected | withdrawn
+  submittedAt            DateTime         @default(now()) @map("submitted_at")
+  reviewedBy             String?          @map("reviewed_by")
+  reviewedAt             DateTime?        @map("reviewed_at")
+  reviewNote             String?          @map("review_note")
   /// Visvine's verdict on a global listing, and NULL while nobody has asked for
   /// one — the column that keeps a private space's Tool private. Same four
   /// values as `status`, decided by a super-admin in the review queue.
-  marketplaceStatus      String?   @map("marketplace_status")
-  marketplaceSubmittedAt DateTime? @map("marketplace_submitted_at")
-  marketplaceReviewedBy  String?   @map("marketplace_reviewed_by")
-  marketplaceReviewedAt  DateTime? @map("marketplace_reviewed_at")
-  marketplaceReviewNote  String?   @map("marketplace_review_note")
+  marketplaceStatus      String?          @map("marketplace_status")
+  marketplaceSubmittedAt DateTime?        @map("marketplace_submitted_at")
+  marketplaceReviewedBy  String?          @map("marketplace_reviewed_by")
+  marketplaceReviewedAt  DateTime?        @map("marketplace_reviewed_at")
+  marketplaceReviewNote  String?          @map("marketplace_review_note")
   /// Marketplace metadata, snapshotted at publish (migration 20260821130000):
   /// the author's own "what changed" text, the index.md `tags:` list and the
   /// `preview:` image URL. Immutable like every other snapshot column.
-  releaseNotes  String?   @map("release_notes")
-  tags          String[]  @default([])
-  previewUrl    String?   @map("preview_url")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  author        User?     @relation("AppToolVersionAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
-  installs      AppToolInstall[]
+  releaseNotes           String?          @map("release_notes")
+  tags                   String[]         @default([])
+  previewUrl             String?          @map("preview_url")
+  createdAt              DateTime         @default(now()) @map("created_at")
+  author                 User?            @relation("AppToolVersionAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+  installs               AppToolInstall[]
 
   @@unique([key, version], name: "app_tool_version_identity")
   @@index([status, submittedAt])
@@ -892,25 +892,25 @@ model AppToolVersion {
 /// admin-triggered upgrade — deliberately NOT a foreign key, so an admin can
 /// still see "an upgrade is available" even if that row were ever withdrawn.
 model AppToolInstall {
-  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  spaceId          String   @map("space_id")
-  versionId        String   @map("version_id")
-  key              String
-  slug             String // rail slug: tool:<slug>
-  enabled          Boolean  @default(true)
-  installedBy      String   @map("installed_by")
-  requirements     Json     @default("{}") // { connectors: string[]; types: string[]; agents: string[] } — MISSING items at last check
-  typeClaims       Json     @default("{}") @map("type_claims") // { [typeName]: 'page' | 'tab' }
-  pendingVersionId String?  @map("pending_version_id")
+  id                String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId           String         @map("space_id")
+  versionId         String         @map("version_id")
+  key               String
+  slug              String // rail slug: tool:<slug>
+  enabled           Boolean        @default(true)
+  installedBy       String         @map("installed_by")
+  requirements      Json           @default("{}") // { connectors: string[]; types: string[]; agents: string[] } — MISSING items at last check
+  typeClaims        Json           @default("{}") @map("type_claims") // { [typeName]: 'page' | 'tab' }
+  pendingVersionId  String?        @map("pending_version_id")
   /// Set when this install is the HOUSE's Tool shared down into this room
   /// (lib/tools/share.ts): the room runs it, the house owns it.
-  sharedFromSpaceId String? @map("shared_from_space_id")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-  space            Space          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  sharedFromSpace  Space?         @relation("SharedToolInstalls", fields: [sharedFromSpaceId], references: [id], onDelete: Cascade)
-  version          AppToolVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
-  state            AppToolState[]
+  sharedFromSpaceId String?        @map("shared_from_space_id")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  space             Space          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  sharedFromSpace   Space?         @relation("SharedToolInstalls", fields: [sharedFromSpaceId], references: [id], onDelete: Cascade)
+  version           AppToolVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  state             AppToolState[]
 
   @@unique([spaceId, key], name: "app_tool_install_identity")
   @@unique([spaceId, slug], name: "app_tool_install_slug")
@@ -959,7 +959,7 @@ model UserAlias {
   createdAt DateTime @default(now()) @map("created_at")
   space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([spaceId, userId, aliasId], name: "user_alias_identity")
   @@index([userId])
@@ -1373,31 +1373,31 @@ model EventAttendee {
 /// (lib/auth/bootstrap.ts) and carried in the session as the profile the
 /// account menu links to.
 model User {
-  id            String        @id @default(dbgenerated("(gen_random_uuid())::text"))
-  name          String
-  email         String        @unique
-  image         String?
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
-  claimNonce    String?       @unique @map("claim_nonce")
-  googleId      String?       @unique @map("google_id")
-  isActive      Boolean       @default(true) @map("is_active")
+  id           String        @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name         String
+  email        String        @unique
+  image        String?
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  claimNonce   String?       @unique @map("claim_nonce")
+  googleId     String?       @unique @map("google_id")
+  isActive     Boolean       @default(true) @map("is_active")
   /// Public profile metadata: what a claim import supplied (name, headline,
   /// avatar_url) and what the profile editor keeps here (experience,
   /// themeColor). PATCH /api/profile round-trips it whole as `metadata`.
-  publicMeta    Json          @default("{}") @map("public_meta")
-  nodeId        String?       @unique @map("node_id")
-  subtitle      String?
-  bio           String?
-  location      String?
-  website       String?
-  linkedinUrl   String?       @map("linkedin_url")
-  twitterUrl    String?       @map("twitter_url")
-  phone         String?
-  pronouns      String?
-  tags          String[]      @default([])
-  membersAdded  SpaceMember[] @relation("AddedByRelation")
-  memberships   SpaceMember[] @relation("MemberOf")
+  publicMeta   Json          @default("{}") @map("public_meta")
+  nodeId       String?       @unique @map("node_id")
+  subtitle     String?
+  bio          String?
+  location     String?
+  website      String?
+  linkedinUrl  String?       @map("linkedin_url")
+  twitterUrl   String?       @map("twitter_url")
+  phone        String?
+  pronouns     String?
+  tags         String[]      @default([])
+  membersAdded SpaceMember[] @relation("AddedByRelation")
+  memberships  SpaceMember[] @relation("MemberOf")
 
   // --- messaging ---
   conversationMemberships ConversationMember[]
@@ -1406,7 +1406,7 @@ model User {
   messageReactions        MessageReaction[]    @relation("ReactionAuthor")
   messageStars            MessageStar[]        @relation("StarAuthor")
 
-  appToolVersionsAuthored AppToolVersion[]     @relation("AppToolVersionAuthor")
+  appToolVersionsAuthored AppToolVersion[] @relation("AppToolVersionAuthor")
 
   // Deleting a person must take their ACCESS and their CREDENTIALS with it. Each
   // of these was a bare scalar that only lib/account/deleteAccount.ts knew to
@@ -1423,8 +1423,8 @@ model User {
   identity                Identity?
   oauthAuthCodes          OAuthAuthCode[]
   profileSections         ProfileSection[]
-  following               Follow[]               @relation("FollowsGiven")
-  followers               Follow[]               @relation("FollowsReceived")
+  following               Follow[]                 @relation("FollowsGiven")
+  followers               Follow[]                 @relation("FollowsReceived")
 
   @@map("users")
 }
@@ -1515,39 +1515,46 @@ model IdentityResolution {
 /// tier-3 pointer, this row is the tier-2 record, and `sourcePath` addresses the
 /// tier-1 context entry whose chunks carry the contents into retrieval.
 model Resource {
-  id         String            @id @default(dbgenerated("(gen_random_uuid())::text"))
-  spaceId    String            @map("space_id")
-  name       String
-  fileType   String            @map("file_type")
+  id             String            @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId        String            @map("space_id")
+  name           String
+  fileType       String            @map("file_type")
   /// The object in GCS_RESOURCES_BUCKET. SERVER-MINTED, never accepted from a
   /// client: this is the string the API signs a download URL for, so a
   /// client-supplied one would sign any object in the bucket — including another
   /// space's. Null for a row whose bytes were never stored (a seeded demo file).
-  gcsPath    String?           @map("gcs_path")
-  fileSize   Int?              @map("file_size")
-  uploadedBy String            @map("uploaded_by")
+  gcsPath        String?           @map("gcs_path")
+  fileSize       Int?              @map("file_size")
+  uploadedBy     String            @map("uploaded_by")
   /// The ContextSource path holding this file's extracted chunks, or null when
   /// the kind carries no text (images). The source row is the RAG projection of
   /// this record and is rebuildable from the GCS object by re-ingesting.
-  sourcePath String?           @map("source_path")
+  sourcePath     String?           @map("source_path")
   /// pending | indexed | unsupported | failed — where this file got to in the
   /// RAG pipeline, surfaced in the Drive so "why can't the AI see my file" has a
   /// visible answer instead of silence.
-  indexState String            @default("pending") @map("index_state")
-  indexError String?           @map("index_error")
-  metadata   Json              @default("{}")
-  createdAt  DateTime          @default(now()) @map("created_at")
+  indexState     String            @default("pending") @map("index_state")
+  indexError     String?           @map("index_error")
+  metadata       Json              @default("{}")
+  createdAt      DateTime          @default(now()) @map("created_at")
   /// The Drive folder it sits in; null is the Drive's root. Deleting a folder
   /// moves its files to its parent (see lib/resources/folders.ts) — never to
   /// the bin — so the FK only ever needs to SET NULL as a last resort.
-  folderId   String?           @map("folder_id")
-  space      Space             @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  folder     ResourceFolder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  changes    ResourceChange[]
-  comments   ResourceComment[]
+  folderId       String?           @map("folder_id")
+  /// The channel a file was dropped into. Such a file is the channel's: it has
+  /// no directory node, is listed in Resources only to that channel's members,
+  /// and a message carries it through `message_files`.
+  conversationId String?           @map("conversation_id")
+  space          Space             @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  folder         ResourceFolder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  conversation   Conversation?     @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  changes        ResourceChange[]
+  comments       ResourceComment[]
+  messages       MessageFile[]
 
   @@index([spaceId, createdAt(sort: Desc)])
   @@index([spaceId, folderId])
+  @@index([spaceId, conversationId])
   @@map("resources")
 }
 
@@ -1663,6 +1670,7 @@ model Conversation {
   section     ChannelSection?      @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   createdBy   User                 @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
   messages    Message[]
+  resources   Resource[]
 
   @@index([type])
   @@index([updatedAt])
@@ -1722,6 +1730,7 @@ model Message {
   replyTo        Message?             @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies        Message[]            @relation("MessageReplies")
   images         MessageImage[]
+  files          MessageFile[]
   mentions       MessageMention[]
   reactions      MessageReaction[]
   linkPreviews   MessageLinkPreview[]
@@ -1743,6 +1752,20 @@ model MessageImage {
 
   @@index([messageId])
   @@map("message_images")
+}
+
+/// A Drive file a message carries. The bytes are one `Resource`, as Slack keeps
+/// one File a message references, so the same file is listed in Resources.
+model MessageFile {
+  messageId  String   @map("message_id")
+  resourceId String   @map("resource_id")
+  position   Int      @default(0)
+  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, resourceId])
+  @@index([resourceId])
+  @@map("message_files")
 }
 
 model MessageMention {
@@ -1795,6 +1818,13 @@ model LinkPreview {
   description String?
   imageUrl    String?              @map("image_url")
   siteName    String?              @map("site_name")
+  faviconUrl  String?              @map("favicon_url")
+  authorName  String?              @map("author_name")
+  /// article | image | video | audio | file — what the URL IS, from its
+  /// content type or its oEmbed/og type. A media URL previews as itself.
+  mediaType   String?              @map("media_type")
+  /// `summary` (small square thumb) or `large` (wide image), from twitter:card.
+  imageLayout String?              @map("image_layout")
   fetchedAt   DateTime             @default(now()) @map("fetched_at")
   messages    MessageLinkPreview[]
 
@@ -1805,6 +1835,7 @@ model MessageLinkPreview {
   id            String      @id @default(dbgenerated("(gen_random_uuid())::text"))
   messageId     String      @map("message_id")
   linkPreviewId String      @map("link_preview_id")
+  createdAt     DateTime    @default(now()) @map("created_at")
   message       Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
   linkPreview   LinkPreview @relation(fields: [linkPreviewId], references: [id])
 
@@ -1862,34 +1893,34 @@ model RateLimitBucket {
 /// parent's read-only federated folder, and cleaning happens in the space that
 /// owns the notes (lib/notes/shared/cleanSchedule.ts#cleanScheduleDenial).
 model ContextCleanSchedule {
-  spaceId     String    @id @map("space_id")
-  enabled     Boolean   @default(false)
+  spaceId         String    @id @map("space_id")
+  enabled         Boolean   @default(false)
   /// Wall-clock hour in the space's timezone (Space.timezone, UTC when unset).
-  hour        Int       @default(3)
-  minute      Int       @default(30)
+  hour            Int       @default(3)
+  minute          Int       @default(30)
   /// UNUSED since the console collapsed to clean/embed/time (2026-09): a
   /// scheduled clean is always light, whole-space, every safe fix, and embeds
   /// whenever embedEnabled is on. Kept so a deploy's old image still reads the
   /// table; drop mode/targetPath/applyFixes/fixKinds/embedAfterClean in a
   /// follow-up migration once no image selects them.
-  mode        String    @default("light") // light | full
-  targetPath  String?   @map("target_path")
-  applyFixes  Boolean   @default(true) @map("apply_fixes")
-  fixKinds    String[]  @default([]) @map("fix_kinds")
-  runAsUserId String    @map("run_as_user_id")
+  mode            String    @default("light") // light | full
+  targetPath      String?   @map("target_path")
+  applyFixes      Boolean   @default(true) @map("apply_fixes")
+  fixKinds        String[]  @default([]) @map("fix_kinds")
+  runAsUserId     String    @map("run_as_user_id")
   /// Whether this space's notes are embedded at all — the nightly sweep, the
   /// query-time catch-up and the scheduled pass all read it. With a schedule it
   /// also embeds new or edited notes at hour:minute (after the clean when
   /// `enabled`). No row = on. The tick fires a row when enabled OR embedEnabled.
-  embedEnabled    Boolean @default(true) @map("embed_enabled")
-  embedAfterClean Boolean @default(true) @map("embed_after_clean")
-  updatedBy   String?   @map("updated_by")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  embedEnabled    Boolean   @default(true) @map("embed_enabled")
+  embedAfterClean Boolean   @default(true) @map("embed_after_clean")
+  updatedBy       String?   @map("updated_by")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
   /// The next instant the tick may claim this row. Advanced by the claim
   /// itself, so N instances racing produce one run.
-  nextRunAt   DateTime? @map("next_run_at")
-  lastRunAt   DateTime? @map("last_run_at")
-  space       Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  nextRunAt       DateTime? @map("next_run_at")
+  lastRunAt       DateTime? @map("last_run_at")
+  space           Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
   @@index([enabled, nextRunAt])
   @@map("context_clean_schedules")
@@ -1899,39 +1930,39 @@ model ContextCleanSchedule {
 /// runner could see, what was in its scope, what it wrote, and what it left
 /// for a person — `worklist` is the judgment work, never applied.
 model ContextCleanRun {
-  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  spaceId       String    @map("space_id")
-  trigger       String // scheduled | manual
-  status        String    @default("running") // running | succeeded | failed | skipped
-  startedAt     DateTime  @default(now()) @map("started_at")
-  endedAt       DateTime? @map("ended_at")
+  id              String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId         String    @map("space_id")
+  trigger         String // scheduled | manual
+  status          String    @default("running") // running | succeeded | failed | skipped
+  startedAt       DateTime  @default(now()) @map("started_at")
+  endedAt         DateTime? @map("ended_at")
   /// userId who pressed the old Run now; null for a scheduled fire.
-  startedBy     String?   @map("started_by")
+  startedBy       String?   @map("started_by")
   /// Whose principal the pass acted as.
-  runAsUserId   String    @map("run_as_user_id")
-  mode          String    @default("light")
-  targetPath    String?   @map("target_path")
+  runAsUserId     String    @map("run_as_user_id")
+  mode            String    @default("light")
+  targetPath      String?   @map("target_path")
   /// Notes the runner could READ (the visibility lens), and of those the ones
   /// inside its scope (owned + targeted + writable).
-  analyzedNotes Int       @default(0) @map("analyzed_notes")
-  inScopeNotes  Int       @default(0) @map("in_scope_notes")
-  safeFixes     Int       @default(0) @map("safe_fixes")
-  applied       Int       @default(0)
-  appliedByKind Json      @default("{}") @map("applied_by_kind")
+  analyzedNotes   Int       @default(0) @map("analyzed_notes")
+  inScopeNotes    Int       @default(0) @map("in_scope_notes")
+  safeFixes       Int       @default(0) @map("safe_fixes")
+  applied         Int       @default(0)
+  appliedByKind   Json      @default("{}") @map("applied_by_kind")
   /// Fixes a gate refused at write time: [{ path, reason }].
-  skipped       Json      @default("[]")
+  skipped         Json      @default("[]")
   /// The judgment work left over: [{ kind, count, items: [{ path, detail }] }].
-  worklist      Json      @default("[]")
+  worklist        Json      @default("[]")
   /// Full mode analysed only the first FULL_MODE_NOTE_CAP notes.
-  truncated     Boolean   @default(false)
+  truncated       Boolean   @default(false)
   /// What the post-clean embed did: off | no-key | skipped | succeeded | failed.
-  embedStatus     String  @default("skipped") @map("embed_status")
-  embeddedNotes   Int     @default(0) @map("embedded_notes")
-  embeddedChunks  Int     @default(0) @map("embedded_chunks")
-  embeddedSources Int     @default(0) @map("embedded_sources")
-  embedMessage    String? @map("embed_message")
-  errorMessage  String?   @map("error_message")
-  space         Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  embedStatus     String    @default("skipped") @map("embed_status")
+  embeddedNotes   Int       @default(0) @map("embedded_notes")
+  embeddedChunks  Int       @default(0) @map("embedded_chunks")
+  embeddedSources Int       @default(0) @map("embedded_sources")
+  embedMessage    String?   @map("embed_message")
+  errorMessage    String?   @map("error_message")
+  space           Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
   @@index([spaceId, startedAt(sort: Desc)])
   @@map("context_clean_runs")

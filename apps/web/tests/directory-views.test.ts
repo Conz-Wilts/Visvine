@@ -10,17 +10,17 @@ import {
   RESOURCES_HREF,
 } from '../lib/directory/views'
 
-test('Context sits beside Grid, before the Table', () => {
+test('Context sits beside Grid, before the Table; Resources is last', () => {
   assert.deepEqual(
     directoryTabs().map((t) => t.id),
-    ['grid', CONTEXT_TAB_ID, 'table'],
+    ['grid', CONTEXT_TAB_ID, 'table', 'resources'],
   )
 })
 
 test('Context is not a view — it is a navigation', () => {
   assert.equal(isDirectoryView('grid'), true)
   assert.equal(isDirectoryView('table'), true)
-  assert.equal(isDirectoryView('resources'), false)
+  assert.equal(isDirectoryView('resources'), true)
   assert.equal(isDirectoryView(CONTEXT_TAB_ID), false)
 })
 
@@ -47,6 +47,6 @@ test('a type that needs escaping is escaped', () => {
   assert.equal(directoryViewHref('table', 'deal flow'), '/directory?view=table&type=deal+flow')
 })
 
-test('a Resources link lands on the resources table', () => {
-  assert.equal(RESOURCES_HREF, '/directory?view=table&type=resource')
+test('a Resources link lands on the Resources tab', () => {
+  assert.equal(RESOURCES_HREF, '/directory?view=resources')
 })

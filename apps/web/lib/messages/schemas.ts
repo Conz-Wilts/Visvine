@@ -47,15 +47,21 @@ export const updateSectionSchema = z.object({
 });
 
 export const sendMessageSchema = z.object({
-  text: z.string().trim().min(1).max(4000),
+  // Empty only when the message carries files — a dropped file is a message.
+  text: z.string().trim().max(4000).default(''),
   attachmentUrl: z.string().url().optional(),
   imageUrls: z.array(z.string().url()).max(10).optional(),
+  /** Drive files the sender dropped into this channel (`POST /api/resources/upload`). */
+  fileIds: z.array(z.string().min(1)).max(10).optional(),
   mentions: z.array(z.object({
     mentionedUserId: z.string().optional(),
     mentionedNodeId: z.string().optional(),
     mentionType: z.enum(['user', 'event']).default('user'),
   })).optional(),
   replyToId: z.string().optional(),
+}).refine((body) => body.text.length > 0 || (body.fileIds?.length ?? 0) > 0 || (body.imageUrls?.length ?? 0) > 0, {
+  message: 'A message needs text or a file',
+  path: ['text'],
 });
 
 export const editMessageSchema = z.object({

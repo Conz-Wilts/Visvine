@@ -88,7 +88,7 @@ the entity notes in Context. They're the shared graph primitives.
 
 | Table | Controls |
 | --- | --- |
-| `resources` | An uploaded file in a Space — name, type, object path, size, uploader, and the folder it sits in. |
+| `resources` | An uploaded file in a Space — name, type, object path, size, uploader, the folder it sits in, and the channel it was dropped in. |
 | `resource_folders` | A folder in a Space's Drive — name and parent. Organisational only; files index and search the same anywhere. |
 | `resource_comments` | Comments on a resource, optionally pinned to a specific cell. |
 | `resource_changes` | Proposed edits to a specific cell, with an approve/reject workflow (who proposed, who reviewed). |
@@ -108,11 +108,12 @@ the entity notes in Context. They're the shared graph primitives.
 | `channel_sections` | Named groups of channels in the sidebar rail, with ordering. Deleting one just unfiles its channels. |
 | `conversation_members` | Who's in a conversation, their role, last-read timestamp (unread counts), and mute-until. |
 | `messages` | The message text, attachment, reply-parent, edit/delete timestamps, pin state. |
-| `message_images` | Ordered images attached to a message. |
+| `message_images` | Ordered images attached to a message (by URL, before files were Drive rows). |
+| `message_files` | Ordered Drive files a message carries. |
 | `message_mentions` | @-mentions in a message — of a user or of a directory node. |
 | `message_reactions` | Emoji reactions; one per (message, user, emoji). |
 | `message_stars` | Per-user saved/bookmarked messages. |
-| `link_previews` | Cached preview card (title, description, image) per URL, shared across messages. |
+| `link_previews` | Cached unfurl per URL (title, description, image, site, favicon, media type), shared across messages. |
 | `message_link_previews` | Joins a message to the preview cards it shows. |
 
 ## Two things that look like duplicates but aren't

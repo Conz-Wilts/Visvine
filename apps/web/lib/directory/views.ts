@@ -1,4 +1,4 @@
-// The Directory's three views, as one list and one href builder.
+// The Directory's views, as one list and one href builder.
 //
 // Two surfaces put these tabs in the pane bar — the Directory page itself and
 // any context note under it — and they have to agree on the order and on where
@@ -6,7 +6,8 @@
 //
 // Context is second, beside Grid: Grid and Context are the two ways to arrive
 // at a record (its card, its note), and Table is the one that needs a type
-// chosen first.
+// chosen first. Resources is last: not records but everything unstructured the
+// space holds — files and links, wherever they were shared.
 //
 // **The type travels with the view.** `?type=` is the Table's per-type tab, and
 // carrying it through Grid — which ignores it — is what makes
@@ -17,7 +18,7 @@
 //
 // Pure — no React, no DOM. `tests/directory-views.test.ts` covers it.
 
-export type DirectoryView = 'grid' | 'table'
+export type DirectoryView = 'grid' | 'table' | 'resources'
 
 /** A pane-bar tab, structurally the shell's `PaneTabItem`. */
 export interface DirectoryTab {
@@ -33,11 +34,12 @@ export function directoryTabs(): DirectoryTab[] {
     { id: 'grid', label: 'Grid' },
     { id: CONTEXT_TAB_ID, label: 'Context' },
     { id: 'table', label: 'Table' },
+    { id: 'resources', label: 'Resources' },
   ]
 }
 
 export function isDirectoryView(id: string): id is DirectoryView {
-  return id === 'grid' || id === 'table'
+  return id === 'grid' || id === 'table' || id === 'resources'
 }
 
 /**
@@ -53,8 +55,5 @@ export function directoryViewHref(view: DirectoryView, type?: string | null): st
   return query ? `/directory?${query}` : '/directory'
 }
 
-/**
- * Where a `?view=resources` or `/resources` link lands: the table of the
- * space's resources.
- */
-export const RESOURCES_HREF = directoryViewHref('table', 'resource')
+/** Where `/resources` lands: the Resources tab. */
+export const RESOURCES_HREF = directoryViewHref('resources')

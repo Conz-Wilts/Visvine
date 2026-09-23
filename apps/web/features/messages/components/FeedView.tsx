@@ -13,9 +13,9 @@ import { MessageCircleIcon, PencilIcon, PinIcon, SmileIcon, StarIcon, Trash2Icon
 import Avatar from '@/components/ui/Avatar';
 import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
 import MessageComposer from './MessageComposer';
-import { MarkdownMessage, EmojiPicker, MessageImageGrid } from './MessageRow';
+import { MarkdownMessage, EmojiPicker, MessageImageGrid, MessageFiles } from './MessageRow';
 import { formatChatTimestamp } from '@/lib/date';
-import type { ConversationSummary, SerializedMessage } from '@/lib/messages/types';
+import type { ComposerPayload, ConversationSummary, SerializedMessage } from '@/lib/messages/types';
 
 interface FeedPost {
   post: SerializedMessage;
@@ -31,12 +31,7 @@ interface FeedViewProps {
   hasMoreMessages: boolean;
   loadingOlderMessages: boolean;
   onLoadOlder: () => Promise<void>;
-  onSendMessage: (payload: {
-    text: string;
-    imageUrls?: string[];
-    mentions?: Array<{ mentionedUserId?: string; mentionedNodeId?: string; mentionType: string }>;
-    replyToId?: string;
-  }) => Promise<void>;
+  onSendMessage: (payload: ComposerPayload) => Promise<void>;
   onReaction: (messageId: string, emoji: string) => Promise<void>;
   onEdit: (messageId: string, text: string) => Promise<void>;
   onDelete: (messageId: string) => Promise<void>;
@@ -126,6 +121,7 @@ export const CommentRow = memo(function CommentRow({
           {comment.editedAt && <span className="ml-1 text-[11px] italic text-text-muted">(edited)</span>}
         </div>
         <MessageImageGrid images={comment.images} />
+        <MessageFiles files={comment.files} />
         {comment.reactions && comment.reactions.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {comment.reactions.map((r) => (
@@ -295,6 +291,7 @@ const PostCard = memo(function PostCard({
             </div>
           )}
           <MessageImageGrid images={post.images} />
+          <MessageFiles files={post.files} />
           {post.linkPreviews?.map((lp) => (
             <LinkPreviewCard key={lp.url} preview={lp} />
           ))}
@@ -459,6 +456,7 @@ export default function FeedView({
           onSend={onSendMessage}
           spaceId={spaceId}
           conversationId={conversation.id}
+          filesSpaceId={spaceId}
           variant="slim"
           currentUser={currentUser}
           placeholder="Share something…"

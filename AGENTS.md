@@ -267,12 +267,14 @@ reconnect and when the tab comes back.
 **Nothing in the apps creates anything. Every new thing is asked of an AI over
 the Visvine MCP server**, which runs the action for it; web, desktop, iOS and
 Android are where what it made is read, edited, published and switched on.
-There is no Create button, no draft surface, no `/events/new`.
+There is no Create button, no draft surface, no `/events/new`. The one
+exception is **Resources**: a person drops a file or pastes a link into the
+Directory's Resources tab, or a file into a channel, as they would in Slack.
 
 | Kind | Action |
 |---|---|
 | Note, folder, custom-typed note | `edit_context` (a folder is its `index.md`) |
-| Person, organisation record, resource | `add_context` |
+| Person, organisation record, resource | `add_context` — **and** a file or link dropped into Resources, a file into a channel |
 | Event | `create_event` → edited and published at `/events/<id>/edit` |
 | Space, sub-space | `create_space` — **and** New space on the switcher (`NewSpaceDialog`), the one create the app keeps, because a new account has no space to act in |
 | Agent | `create_agent`, then `activate_agent` |
@@ -584,8 +586,8 @@ action inputs snake_case; the clients mirror each handler by hand.
 
 ## The Directory
 
-`/directory` is one page, three tabs — Grid · Context · Table — with
-the view on the URL (`?view=table&type=person`). Grid and Table share
+`/directory` is one page, four tabs — Grid · Context · Table · Resources —
+with the view on the URL (`?view=table&type=person`, `?view=resources`). Grid and Table share
 `useDirectoryBrowse`; Table is per TYPE because the columns are, picked from
 `table/TypeStrip.tsx`. `?type=all` is the one cross-type table (core columns
 only).
@@ -625,6 +627,19 @@ only).
   `/resources/<id>` redirects to the node, deleting the node deletes the file,
   deleting the file drops the node and keeps the note. `db:resources:link`
   gives a file made before this its node.
+- **Resources is everything unstructured, the way Slack's Files is**
+  (`docs/resources.md`). One read, `lib/resources/library.ts` over the pure
+  fold `shared/library.ts`, lists Drive files, link resources, links shared in
+  channel messages and event images, newest first, one row per link.
+  **A file dropped into a channel is a Drive file of that channel**
+  (`Resource.conversationId`), carried by the message through `message_files`,
+  listed only to the channel's members and given **no** node — the one upload
+  that has none. Its bytes are served by `GET /api/resources/<id>/raw`, a gated
+  redirect to a fresh signed URL; a signed URL is never stored.
+  **A link is a resource wearing its unfurl** (`lib/resources/links.ts`): Slack's
+  order — oEmbed, then Open Graph, then Twitter tags, then `<title>` — read from
+  the head only (`lib/links/shared/unfurl.ts`, pure), an oEmbed `html` never
+  stored or drawn.
 - **A viewer's arrangement is theirs**: column order, hidden columns, widths and
   sort live in `localStorage` per space and type (`useTableView`), never on the
   space record. An unknown column appears at its canonical place.

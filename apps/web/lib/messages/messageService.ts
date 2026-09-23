@@ -15,6 +15,7 @@ import {
 } from './core';
 import { takeToken } from '@/lib/rateLimit';
 import { attachPreviewsToMessage } from '@/lib/linkPreview';
+import { messageFilesDenial } from '@/lib/resources/shared/messageFiles';
 
 export async function listMessagesForConversation(
   currentUserId: string,
@@ -78,11 +79,22 @@ export async function sendMessage(
     text: string;
     attachmentUrl?: string;
     imageUrls?: string[];
+    fileIds?: string[];
     mentions?: Array<{ mentionedUserId?: string; mentionedNodeId?: string; mentionType?: string }>;
     replyToId?: string;
   },
 ): Promise<{ message: SerializedMessage; memberIds: string[] }> {
   await ensureConversationMember(conversationId, currentUserId);
+
+  const fileIds = Array.from(new Set(payload.fileIds ?? []));
+  if (fileIds.length) {
+    const rows = await prisma.resource.findMany({
+      where: { id: { in: fileIds } },
+      select: { id: true, uploadedBy: true, conversationId: true },
+    });
+    const denial = messageFilesDenial(fileIds, rows, { userId: currentUserId, conversationId });
+    if (denial) throw new MessagingError(400, denial);
+  }
 
   const limit = await takeToken(`msg:${currentUserId}`);
   if (!limit.ok) {
@@ -107,6 +119,12 @@ export async function sendMessage(
           imageUrl: url,
           position: i,
         })),
+      });
+    }
+
+    if (fileIds.length) {
+      await tx.messageFile.createMany({
+        data: fileIds.map((resourceId, i) => ({ messageId: message.id, resourceId, position: i })),
       });
     }
 
@@ -202,6 +220,9 @@ export async function editMessage(
 
   const message = serializeMessage(fullMessage, currentUserId, membership.conversation.members);
   const memberIds = membership.conversation.members.map((m) => m.userId);
+
+  // The cards follow the text: a removed link loses its card, a new one gets one.
+  void attachPreviewsToMessage(messageId, text).catch(() => {});
 
   return { message, memberIds };
 }

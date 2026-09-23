@@ -4,7 +4,8 @@
  * The Resource is a `resource` node with its note in `resources/`, like any
  * record in the Directory; `metadata.fileId` names the `Resource` row holding
  * the bytes, and the node's page shows that file. Every upload has one: it is
- * either made for the file (named after it) or is the node the upload was for.
+ * either made for the file (named after it) or is the node the upload was for —
+ * except a file dropped into a channel, which is the channel's and has none.
  */
 import prisma from '@/lib/prisma'
 import { ApiError } from '@/lib/api/route'

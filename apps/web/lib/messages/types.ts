@@ -43,6 +43,33 @@ export interface SerializedLinkPreview {
   description: string | null;
   imageUrl: string | null;
   siteName: string | null;
+  faviconUrl?: string | null;
+  /** article | image | video | audio | file */
+  mediaType?: string | null;
+  /** `summary` draws a small square thumb beside the text; `large` a wide image above it. */
+  imageLayout?: 'summary' | 'large' | null;
+}
+
+/**
+ * What a composer hands its sender. `fileIds` is what the route stores; `files`
+ * rides along only so an optimistic copy can draw them before the reply lands.
+ */
+export interface ComposerPayload {
+  text: string;
+  imageUrls?: string[];
+  fileIds?: string[];
+  files?: SerializedMessageFile[];
+  mentions?: Array<{ mentionedUserId?: string; mentionedNodeId?: string; mentionType: string }>;
+  replyToId?: string;
+}
+
+/** A Drive file a message carries; `url` is the gated `/api/resources/<id>/raw`. */
+export interface SerializedMessageFile {
+  id: string;
+  name: string;
+  fileType: string;
+  fileSize: number | null;
+  url: string;
 }
 
 export interface SerializedMessage {
@@ -67,6 +94,7 @@ export interface SerializedMessage {
   reactions?: SerializedReaction[];
   replyTo?: SerializedReplyTo | null;
   linkPreviews?: SerializedLinkPreview[];
+  files?: SerializedMessageFile[];
   pinnedAt?: string | null;
   starred?: boolean;
 }

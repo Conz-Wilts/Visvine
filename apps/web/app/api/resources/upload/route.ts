@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ApiError, requireApiSession, forbiddenResponse } from '@/lib/api/route';
 import { featureAccessForbidden } from '@/lib/auth';
 import { MAX_RESOURCE_BYTES, uploadResource } from '@/lib/resources/service';
+import { requireChannelOfSpace } from '@/lib/resources/access';
 
 // Extraction + embedding run inline (see lib/resources/service.ts), and a large
 // spreadsheet can be a few batched embedding calls. Literal so Next can read it.
@@ -11,6 +12,9 @@ export const maxDuration = 300;
  * Upload a file into a space's Drive: store the bytes, record the file, run it
  * through the RAG pipeline so its contents are searchable, and bind it to its
  * Resource — the node named by `nodeId`, or a new one named after the file.
+ * With `conversationId` the file is being dropped into that channel: it must be
+ * a channel of the space the uploader is in, and the file gets no node — the
+ * message that carries it is where it lives (`message_files`).
  *
  * One call, where there used to be two. The old flow uploaded here and then had
  * the BROWSER post the resulting record — object path included — to
@@ -30,6 +34,8 @@ export async function POST(req: NextRequest) {
   const folderId = typeof folderIdRaw === 'string' && folderIdRaw ? folderIdRaw : null;
   const nodeIdRaw = formData.get('nodeId');
   const nodeId = typeof nodeIdRaw === 'string' && nodeIdRaw ? nodeIdRaw : null;
+  const conversationIdRaw = formData.get('conversationId');
+  const conversationId = typeof conversationIdRaw === 'string' && conversationIdRaw ? conversationIdRaw : null;
 
   if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 });
   if (!spaceId) return NextResponse.json({ error: 'spaceId is required' }, { status: 400 });
@@ -46,6 +52,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    if (conversationId) await requireChannelOfSpace(conversationId, spaceId, session.userId);
     const resource = await uploadResource({
       spaceId,
       filename: file.name,
@@ -53,7 +60,8 @@ export async function POST(req: NextRequest) {
       buffer: Buffer.from(await file.arrayBuffer()),
       uploadedBy: session.userId,
       folderId,
-      nodeId,
+      nodeId: conversationId ? null : nodeId,
+      conversationId,
     });
     return NextResponse.json(resource);
   } catch (err) {

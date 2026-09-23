@@ -13,6 +13,7 @@
  * every client on connect. Write it for the model that has to act on it.
  */
 
+import { wearUnfurl } from '@/lib/resources/links'
 import { inSpace } from '@/lib/spaces/shared/spaceUrl'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
@@ -1073,7 +1074,7 @@ export const CONTEXT_ACTIONS = [
         'suggest a new type in prose. The TYPE decides which fields apply and where the note lives:\n' +
         '  • person   → people/<slug>.md      fields: subtitle (role), email, companyName, linkedinUrl, location, image_url\n' +
         '  • space    → spaces/<slug>.md fields: subtitle (tagline), url (website), location, founded, memberCount, image_url\n' +
-        '  • resource → resources/<slug>.md   fields: subtitle (description), url\n' +
+        '  • resource → resources/<slug>.md   fields: subtitle (description), url — a link resource takes the page\'s preview image and description\n' +
         'A "space" here is a RECORD of an organisation — a company, collective or investor — kept as a card in ' +
         'this space\'s directory. It provisions nothing: to start a space or a sub-space people can join, use ' +
         'create_space. Pass `space_id_ref` when the organisation is a space that already runs here (list_spaces ' +
@@ -1148,6 +1149,10 @@ export const CONTEXT_ACTIONS = [
         const visibilityError = wantPrivate
           ? await makeNotePrivate(args.space_id, result.notePath!, { userId: ctx.userId, name: ctx.name })
           : null
+        // A link resource wears its unfurl — title aside, its image and
+        // description — unless a Drive image was named for it.
+        const linkUrl = args.type === 'resource' ? args.fields?.url : undefined
+        if (typeof linkUrl === 'string' && !args.image_resource_id) await wearUnfurl(result.node.id, linkUrl)
         // The entity exists either way; a picture that could not be used is
         // reported, and set_image retries it.
         let imageError: string | null = null

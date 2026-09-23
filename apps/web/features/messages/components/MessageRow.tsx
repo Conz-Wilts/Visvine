@@ -21,6 +21,9 @@ import type {
 } from '@/lib/messages/types';
 import Avatar from '@/components/ui/Avatar';
 import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
+import Link from '@/features/shared/components/SpaceLink';
+import { FILE_LABEL, FileTypeIcon } from '@/features/resources/components/resourceUi';
+import { formatBytes } from '@/lib/utils';
 import { isOptimizableImageUrl } from '@/lib/mediaUrl';
 import { formatChatTimestamp, formatTime } from '@/lib/date';
 
@@ -144,8 +147,45 @@ export function EmojiPicker({ onSelect, onClose }: { onSelect: (emoji: string) =
 
 // Only http(s)/relative URLs may go through next/image — optimistic sends or
 // previews could theoretically carry blob:/data: sources, which must stay <img>.
+// A Drive file's `/raw` address is a gated redirect the optimizer cannot follow
+// (it fetches without the reader's cookie), so it stays <img> too.
 function isNextImageSrc(url: string): boolean {
+  if (url.startsWith('/api/resources/')) return false;
   return url.startsWith('/') || url.startsWith('https://') || url.startsWith('http://');
+}
+
+/**
+ * The Drive files a message carries: its images as the image grid, anything
+ * else as one hairline row each — type, name, size — opening the file's page.
+ */
+export function MessageFiles({ files }: { files: SerializedMessage['files'] }) {
+  if (!files?.length) return null;
+  const images = files.filter((f) => f.fileType === 'image');
+  const others = files.filter((f) => f.fileType !== 'image');
+  return (
+    <>
+      <MessageImageGrid images={images.map((f, i) => ({ id: f.id, imageUrl: f.url, position: i }))} />
+      {others.length > 0 && (
+        <div className="mt-1.5 flex max-w-md flex-col gap-1">
+          {others.map((file) => (
+            <Link
+              key={file.id}
+              href={`/resources/${encodeURIComponent(file.id)}`}
+              className="flex items-center gap-3 rounded-xl border border-border-subtle px-3 py-2 transition-colors hover:bg-surface-2"
+            >
+              <FileTypeIcon type={file.fileType} className="h-9 w-9 shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-text-primary">{file.name}</span>
+                <span className="block text-xs text-text-muted">
+                  {[FILE_LABEL[file.fileType] ?? file.fileType, formatBytes(file.fileSize ?? undefined)].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </>
+  );
 }
 
 export function MessageImageGrid({ images }: { images: SerializedMessage['images'] }) {
@@ -373,6 +413,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
             )}
 
             <MessageImageGrid images={message.images} />
+            <MessageFiles files={message.files} />
 
             {/* Image-only messages still need their edited marker */}
             {!message.text && isEdited && (

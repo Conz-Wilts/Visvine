@@ -7,6 +7,7 @@ import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext'
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useMessageHeights } from '@/features/messages/hooks/useMessageHeights';
 import type {
+  ComposerPayload,
   ChannelDirectoryEntry,
   ChannelSectionEntry,
   ChannelViewMode,
@@ -16,6 +17,7 @@ import type {
   SerializedReplyTo,
 } from '@/lib/messages/types';
 import AddMembersModal from './AddMembersModal';
+import { withoutDraftFiles } from '@/lib/messages/shared/composer';
 import { mergeMessages } from './MessageRow';
 import { inflightFetch } from '@/features/shared/lib/requestCache';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
@@ -531,12 +533,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     await loadMessages(selectedConversationId, { cursor: messageCursor, prepend: true, query: messageSearch });
   }, [selectedConversationId, hasMoreMessages, messageCursor, loadingOlderMessages, loadMessages, messageSearch]);
 
-  const handleSendMessage = async (payload: {
-    text: string;
-    imageUrls?: string[];
-    mentions?: Array<{ mentionedUserId?: string; mentionedNodeId?: string; mentionType: string }>;
-    replyToId?: string;
-  }) => {
+  const handleSendMessage = async (payload: ComposerPayload) => {
     if (!selectedConversationId) return;
     const tempId = `temp-${crypto.randomUUID()}`;
     const optimistic: SerializedMessage = {
@@ -550,6 +547,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
       recipientCount: Math.max((selectedConversation?.participants.length ?? 1) - 1, 0),
       isFullyReadByRecipients: false,
       images: payload.imageUrls?.map((url, i) => ({ id: `temp-img-${i}`, imageUrl: url, position: i })),
+      files: payload.files,
       reactions: [],
       replyTo: replyTo,
     };
@@ -562,7 +560,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     });
 
     try {
-      const respPayload = await fetchJsonBody<{ message: SerializedMessage }>(`/api/messages/conversations/${selectedConversationId}/messages`, 'POST', payload);
+      const respPayload = await fetchJsonBody<{ message: SerializedMessage }>(`/api/messages/conversations/${selectedConversationId}/messages`, 'POST', withoutDraftFiles(payload));
       const sent: SerializedMessage = { ...respPayload.message, isOwn: respPayload.message.sender.id === currentUser.id };
       // The SSE stream may have already delivered this message — drop the
       // optimistic copy instead of replacing it, or the id appears twice.

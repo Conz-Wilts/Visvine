@@ -6,6 +6,8 @@ import type {
   SerializedReaction,
 } from './types';
 import { toIsoStringOrNull } from './utils';
+import { serializeLinkPreview } from '@/lib/linkPreview';
+import { resourceRawPath } from '@/lib/resources/shared/fileNode';
 
 export const CONVERSATION_INCLUDE = {
   members: {
@@ -51,6 +53,10 @@ export const MESSAGE_INCLUDE = {
   },
   images: {
     orderBy: { position: 'asc' as const },
+  },
+  files: {
+    orderBy: { position: 'asc' as const },
+    select: { resource: { select: { id: true, name: true, fileType: true, fileSize: true } } },
   },
   mentions: true,
   reactions: true,
@@ -173,13 +179,14 @@ export function serializeMessage(
           senderName: message.replyTo.sender.name,
         }
       : null,
-    linkPreviews: message.linkPreviews.map((lp) => ({
-      url: lp.linkPreview.url,
-      title: lp.linkPreview.title,
-      description: lp.linkPreview.description,
-      imageUrl: lp.linkPreview.imageUrl,
-      siteName: lp.linkPreview.siteName,
+    files: message.files.map(({ resource }) => ({
+      id: resource.id,
+      name: resource.name,
+      fileType: resource.fileType,
+      fileSize: resource.fileSize,
+      url: resourceRawPath(resource.id),
     })),
+    linkPreviews: message.linkPreviews.map((lp) => serializeLinkPreview(lp.linkPreview)),
     starred: message.stars.some((star) => star.userId === currentUserId),
   };
 }

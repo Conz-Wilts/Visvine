@@ -5,16 +5,12 @@ import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { inflightFetch, invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
 import { applyFeedEvent, type FeedPage, type FeedPlace, type FeedPost } from '@/lib/messages/shared/feed';
-import type { RealtimeEvent, SerializedMessage } from '@/lib/messages/types';
+import type { ComposerPayload, RealtimeEvent, SerializedMessage } from '@/lib/messages/types';
+import { withoutDraftFiles } from '@/lib/messages/shared/composer';
 
 const FIRST_PAGE_KEY = 'feed:first';
 
-type SendPayload = {
-  text: string;
-  imageUrls?: string[];
-  mentions?: Array<{ mentionedUserId?: string; mentionedNodeId?: string; mentionType: string }>;
-  replyToId?: string;
-};
+type SendPayload = ComposerPayload;
 
 const messagesUrl = (conversationId: string) => `/api/messages/conversations/${conversationId}/messages`;
 
@@ -122,7 +118,7 @@ export function useFeed(currentUserId: string) {
   }, [currentUserId]);
 
   const send = useCallback(async (conversationId: string, payload: SendPayload) => {
-    const { message } = await fetchJsonBody<{ message: SerializedMessage }>(messagesUrl(conversationId), 'POST', payload);
+    const { message } = await fetchJsonBody<{ message: SerializedMessage }>(messagesUrl(conversationId), 'POST', withoutDraftFiles(payload));
     // The stream echoes it too; the reducer drops the duplicate.
     apply({ type: 'message.new', conversationId, message });
     invalidateRequestCache(FIRST_PAGE_KEY);
