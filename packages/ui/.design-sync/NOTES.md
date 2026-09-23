@@ -4,9 +4,10 @@ Config home is `packages/ui/`: run everything from there.
 
 There are two targets, and the second is the current one:
 
-1. **The legacy project** "Visvine" (`projectId` in config.json, shape `package`),
-   a standalone claude.ai/design project that `/design-sync` writes. Claude Design
-   marks this format legacy.
+1. **The legacy standalone project** that `/design-sync` writes (shape `package`).
+   It was deleted on 2026-09-24 and is not re-created: Visvine lives only in the new
+   format. `config.json` therefore pins no `projectId`. Run the driver **without
+   uploading**: it is only the builder that the artifact is made from.
 2. **The Design System artifact** "Visvine",
    https://claude.ai/artifact/UojU5ss8jGdzvLPP2w4HtD, built from the type
    https://claude.ai/artifact/5M7UeXXcx16TP3vzVFNDzd. This is the new format.
@@ -15,7 +16,7 @@ There are two targets, and the second is the current one:
 
 ## Re-syncing the Design System artifact
 
-1. Run the legacy driver (below) so `ds-bundle/` is current and graded.
+1. Run the legacy driver (below, no `--remote`, no upload) so `ds-bundle/` is current and graded.
 2. `node .design-sync/artifact/build.mjs` writes `.design-sync/.cache/artifact/project/**`.
 3. `node .design-sync/artifact/check.mjs` renders every preview the way the page frames it.
 4. Upload only **new or changed** logos and icons (Artifact `publish`, `asset: true`,
