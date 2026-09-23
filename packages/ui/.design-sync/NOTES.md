@@ -1,7 +1,40 @@
 # design-sync notes: @visvine/ui → claude.ai/design
 
-Project: "Visvine" (`projectId` in config.json). Shape: `package` (no Storybook).
 Config home is `packages/ui/`: run everything from there.
+
+There are two targets, and the second is the current one:
+
+1. **The legacy project** "Visvine" (`projectId` in config.json, shape `package`),
+   a standalone claude.ai/design project that `/design-sync` writes. Claude Design
+   marks this format legacy.
+2. **The Design System artifact** "Visvine",
+   https://claude.ai/artifact/UojU5ss8jGdzvLPP2w4HtD, built from the type
+   https://claude.ai/artifact/5M7UeXXcx16TP3vzVFNDzd. This is the new format.
+   `.design-sync/artifact/` builds it **from the legacy sync's verified output**
+   (`ds-bundle/`), so the legacy driver still runs first.
+
+## Re-syncing the Design System artifact
+
+1. Run the legacy driver (below) so `ds-bundle/` is current and graded.
+2. `node .design-sync/artifact/build.mjs` writes `.design-sync/.cache/artifact/project/**`.
+3. `node .design-sync/artifact/check.mjs` renders every preview the way the page frames it.
+4. Upload only **new or changed** logos and icons (Artifact `publish`, `asset: true`,
+   up to 25 per call) from `.design-sync/.cache/artifact/upload/`. Record each id and
+   the **stored size the result reports** in `.design-sync/artifact/assets.json`, then
+   re-run `build.mjs`. The store sanitises SVGs, so its size differs from the file on disk.
+5. `read` `project/design-system.json` on the artifact first, and keep any key the
+   page added (asset records a person dropped, `sections`). Then publish the changed
+   files with `root: .design-sync/.cache/artifact` and the index **last**.
+   `project/components/index.d.ts` needs `contentType: "text/plain"`, because `.ts`
+   is not a served type.
+
+Authored inputs live in `.design-sync/artifact/`: `README.md` (the brand book),
+`components.json` (group, summary and card height per component, plus `single` for
+overlays), `cover.html`, `logos.md`, `icons.md`, and the two logo SVGs. The SVGs are
+rendered from `src/Logo.tsx`. The tokens come from `packages/tokens/generated/tokens.css`,
+the light `:root` block only, named exactly as the CSS variables the bundle reads.
+React is the legacy build's React 19 (`_vendor/react.js`, which also sets
+`window.ReactDOM`), shipped as `components/lib/react.js`.
 
 ## How this repo builds
 
