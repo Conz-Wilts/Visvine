@@ -90,8 +90,8 @@ screen is wrong** — fix the design, don't caption it.
   enforced by the server; the UI does not recite them.
 - Surfaces are flat: hairline sections, no cards, shadows only on things that
   float.
-- **Every value is a design token** (`packages/tokens`, reference in
-  `packages/ui/DESIGN.md`). Paint with the role utilities — `bg-surface`,
+- **Every value is a design token** (`packages/tokens`; the whole system —
+  token names, scales, components, native mirroring — is `packages/ui/DESIGN.md`). Paint with the role utilities — `bg-surface`,
   `text-fg-muted`, `border-line-subtle`, `bg-accent`, `text-danger`,
   `bg-hue-blue-wash` — or `color` / `palette` from `@visvine/tokens` where a
   class cannot go. Never a Tailwind palette class, never a hex:
