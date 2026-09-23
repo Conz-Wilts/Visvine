@@ -1,0 +1,102 @@
+/*
+ * The stylesheet a Claude Design build of @visvine/ui renders with — the web
+ * app's globals.css cut to what the components and a screen built from them
+ * need. Compiled by Tailwind (see buildCmd in config.json) into
+ * .design-sync/.cache/visvine.css, which the converter ships as _ds_bundle.css.
+ */
+@import "tailwindcss";
+@import "../../../tokens/generated/tokens.css";
+@import "../../../tokens/generated/theme.css";
+
+/* Every class the components use, and every class the web app uses — the
+   product's own utility vocabulary, so a design built with it resolves. */
+@source "../../src";
+@source "../../../../apps/web/app";
+@source "../../../../apps/web/features";
+@source "../../../../apps/web/components";
+@source "../previews";
+
+/* Every colour role on the three properties a design paints with, whether or
+   not the app happens to use that pairing today. */
+@source inline("{hover:,}{bg,text,border}-{surface,surface-subtle,surface-muted,surface-backdrop,fg,fg-secondary,fg-muted,fg-subtle,fg-inverse,fg-link,line,line-subtle,accent,accent-strong,accent-soft,brand,admin}");
+@source inline("{hover:,}{bg,text,border}-{danger,warning,success,info}{,-strong,-bright,-wash,-line}");
+@source inline("{bg,text,border}-hue-{red,orange,amber,yellow,green,teal,cyan,sky,blue,indigo,violet,pink,gray}{,-fg,-wash,-line}");
+@source inline("{bg,text}-type-{space,subspace,person,event,resource,index,section,channel,connector,agent,tool,model,other}{,-fg,-wash}");
+@source inline("{p,px,py,pt,pb,pl,pr,m,mx,my,mt,mb,ml,mr,gap,gap-x,gap-y,space-y,space-x}-{0,0.5,1,1.5,2,2.5,3,4,5,6,8,10,12,16}");
+@source inline("rounded{,-xs,-sm,-md,-lg,-xl,-2xl,-3xl,-full}");
+@source inline("text-{xs,sm,base,lg,xl,2xl,3xl,4xl,5xl,6xl}");
+@source inline("font-{light,normal,medium,semibold,bold,ui}");
+/* The layout glue a screen is built from, so a design's own layout resolves too. */
+@source inline("{sm:,md:,lg:,}grid-cols-{1,2,3,4,5,6,7,8,9,10,11,12}");
+@source inline("col-span-{1,2,3,4,5,6,7,8,9,10,11,12}");
+@source inline("{w,h,size,min-h,max-h}-{0,1,2,3,4,5,6,8,10,12,14,16,20,24,28,32,36,40,44,48,52,56,60,64,72,80,96,full,screen}");
+@source inline("max-w-{xs,sm,md,lg,xl,2xl,3xl,4xl,5xl,6xl,7xl,full,none,prose}");
+@source inline("{border,border-t,border-b,border-l,border-r,border-x,border-y}{,-0,-2}");
+@source inline("{divide-x,divide-y,ring,ring-1,ring-2,ring-offset-1,ring-offset-2,truncate,line-clamp-2,line-clamp-3}");
+
+:root {
+  color-scheme: light;
+}
+
+html, body {
+  font-family: var(--vv-font-family-ui);
+  background: var(--vv-color-surface-backdrop);
+  color: var(--vv-color-fg);
+  accent-color: var(--vv-color-accent);
+}
+
+/* The wordmark face. Marketing only — never inside the product. */
+.font-brand {
+  font-family: var(--vv-font-family-brand) !important;
+}
+
+/* Plain classes, not @theme: Tailwind would rewrite the colours. Floating
+   chrome (menus, popovers) takes float; docked chrome on the page takes strip. */
+.shadow-float {
+  box-shadow: var(--vv-shadow-float);
+}
+.shadow-strip {
+  box-shadow: var(--vv-shadow-strip);
+}
+
+.bg-glass {
+  background: var(--vv-color-surface-backdrop);
+  background-attachment: fixed;
+}
+.bg-glass-float {
+  background: var(--vv-color-surface-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+@layer base {
+  a {
+    color: var(--vv-color-fg-secondary);
+    transition: color var(--vv-motion-duration-fast) ease-in-out;
+  }
+  a:hover {
+    color: var(--vv-color-fg);
+  }
+}
+
+@keyframes card-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.card-rise {
+  animation: card-rise var(--vv-motion-duration-slow) var(--vv-motion-ease-enter) both;
+}
+
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.5); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(128, 128, 128, 0.75); }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .card-rise {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "projectId": "b0a4df49-bfe7-4444-b7c6-e5750bceadb2",
+  "pkg": "@visvine/ui",
+  "globalName": "VisvineUI",
+  "shape": "package",
+  "entry": "./src/index.ts",
+  "buildCmd": "ln -sfn ../.ds-sync/node_modules .design-sync/node_modules && .ds-sync/node_modules/.bin/tailwindcss -i .design-sync/styles/visvine.css -o .design-sync/.cache/visvine.css",
+  "tsconfig": "./tsconfig.json",
+  "cssEntry": ".design-sync/.cache/visvine.css",
+  "tokensPkg": "@visvine/tokens",
+  "extraFonts": [
+    ".design-sync/styles/fonts.css"
+  ],
+  "tokensGlob": "generated/tokens.css",
+  "docsMap": {
+    "UIProvider": ".design-sync/groups/setup.md",
+    "Button": ".design-sync/groups/actions.md",
+    "Input": ".design-sync/groups/forms.md",
+    "Textarea": ".design-sync/groups/forms.md",
+    "Select": ".design-sync/groups/forms.md",
+    "Checkbox": ".design-sync/groups/forms.md",
+    "Toggle": ".design-sync/groups/forms.md",
+    "SearchInput": ".design-sync/groups/forms.md",
+    "Field": ".design-sync/groups/forms.md",
+    "Modal": ".design-sync/groups/overlays.md",
+    "ConfirmDialog": ".design-sync/groups/overlays.md",
+    "ToastHost": ".design-sync/groups/overlays.md",
+    "SearchMenuInput": ".design-sync/groups/overlays.md",
+    "SearchMenuList": ".design-sync/groups/overlays.md",
+    "SearchMenuEmpty": ".design-sync/groups/overlays.md",
+    "Tabs": ".design-sync/groups/navigation.md",
+    "Chip": ".design-sync/groups/display.md",
+    "Avatar": ".design-sync/groups/display.md",
+    "PersonSilhouette": ".design-sync/groups/display.md",
+    "TypeSilhouette": ".design-sync/groups/display.md",
+    "Alert": ".design-sync/groups/display.md",
+    "EmptyState": ".design-sync/groups/status.md",
+    "PageError": ".design-sync/groups/status.md",
+    "LoadingText": ".design-sync/groups/status.md",
+    "Skeleton": ".design-sync/groups/status.md",
+    "ContentReveal": ".design-sync/groups/status.md",
+    "Stack": ".design-sync/groups/layout.md",
+    "Row": ".design-sync/groups/layout.md",
+    "SettingsSection": ".design-sync/groups/layout.md"
+  },
+  "dtsPropsFor": {
+    "Button": "variant?: \"brand\" | \"neutral\" | \"danger\" | \"danger-text\" | \"ghost\";\n/** Applies to ghost only, brand/neutral/danger share one size. */\nsize?: \"sm\" | \"md\";\nloading?: boolean;\n/** Replaces the label while loading. */\nloadingText?: string;\nchildren: React.ReactNode;\nonClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;\ntype?: \"button\" | \"submit\" | \"reset\";\ndisabled?: boolean;\ntitle?: string;\nclassName?: string;\nid?: string;\nstyle?: React.CSSProperties;\n\"aria-label\"?: string;",
+    "Input": "/** Every native <input> prop is forwarded. */\ntype?: string;\nvalue?: string | number;\ndefaultValue?: string | number;\nonChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;\nonKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;\nplaceholder?: string;\nmaxLength?: number;\nmin?: number | string;\nmax?: number | string;\nstep?: number | string;\nreadOnly?: boolean;\nclassName?: string;\nid?: string;\nstyle?: React.CSSProperties;\nname?: string;\ndisabled?: boolean;\nrequired?: boolean;\nautoFocus?: boolean;\nonFocus?: (e: React.FocusEvent) => void;\nonBlur?: (e: React.FocusEvent) => void;\n\"aria-label\"?: string;\nref?: React.Ref<HTMLInputElement>;",
+    "Textarea": "/** Every native <textarea> prop is forwarded. */\nvalue?: string;\ndefaultValue?: string;\nonChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;\nonKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;\nplaceholder?: string;\nrows?: number;\nmaxLength?: number;\nreadOnly?: boolean;\nclassName?: string;\nid?: string;\nstyle?: React.CSSProperties;\nname?: string;\ndisabled?: boolean;\nrequired?: boolean;\nautoFocus?: boolean;\nonFocus?: (e: React.FocusEvent) => void;\nonBlur?: (e: React.FocusEvent) => void;\n\"aria-label\"?: string;\nref?: React.Ref<HTMLTextAreaElement>;",
+    "Select": "/** Every native <select> prop is forwarded, <option> elements are the children. */\nvalue?: string;\ndefaultValue?: string;\nonChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;\nchildren?: React.ReactNode;\n/** Applies to the wrapper, so width utilities (w-full, w-48) work. */\nclassName?: string;\nid?: string;\nstyle?: React.CSSProperties;\nname?: string;\ndisabled?: boolean;\nrequired?: boolean;\nautoFocus?: boolean;\nonFocus?: (e: React.FocusEvent) => void;\nonBlur?: (e: React.FocusEvent) => void;\n\"aria-label\"?: string;",
+    "Stack": "gap?: 0 | 0.5 | 1 | 1.5 | 2 | 2.5 | 3 | 4 | 5 | 6 | 8 | 10 | 12;\nalign?: \"start\" | \"center\" | \"end\" | \"stretch\" | \"baseline\";\njustify?: \"start\" | \"center\" | \"end\" | \"between\";\n/** Let items wrap onto a new line (rows only). */\nwrap?: boolean;\n/** The element to render (default div), e.g. \"ul\", \"section\", \"form\". */\nas?: React.ElementType;\nclassName?: string;\nstyle?: React.CSSProperties;\nchildren?: React.ReactNode;",
+    "Row": "/** Row defaults align to \"center\". */\ngap?: 0 | 0.5 | 1 | 1.5 | 2 | 2.5 | 3 | 4 | 5 | 6 | 8 | 10 | 12;\nalign?: \"start\" | \"center\" | \"end\" | \"stretch\" | \"baseline\";\njustify?: \"start\" | \"center\" | \"end\" | \"between\";\n/** Let items wrap onto a new line (rows only). */\nwrap?: boolean;\n/** The element to render (default div), e.g. \"ul\", \"section\", \"form\". */\nas?: React.ElementType;\nclassName?: string;\nstyle?: React.CSSProperties;\nchildren?: React.ReactNode;",
+    "Tabs": "options: { id: string; label: string; icon?: React.ReactNode }[];\nvalue: string;\nonChange: (id: string) => void;\n/** Extra classes for the outer container (e.g. to override height). */\nclassName?: string;\n/** sm: compact chrome rows, md: page-level default, lg: the page's own top nav (48px row, 3px underline). */\nsize?: \"sm\" | \"md\" | \"lg\";\n/** Accessible name for the tab list, when nothing on screen names it. */\nlabel?: string;",
+    "EmptyState": "title: string;\ndescription?: string;\naction?: { label: string; href?: string; onClick?: () => void };\nicon?: React.ReactNode;\n/** page fills the viewport below the header so the text and action sit on its middle. */\nsize?: \"sm\" | \"md\" | \"page\";\n/** solid paints the action as a brand button, the default keeps it a text link. */\nactionStyle?: \"solid\" | \"link\";",
+    "ToastHost": "/** From useToasts(): const { toasts, push, dismiss } = useToasts(), push(tone, message). */\ntoasts: { id: number; tone: \"success\" | \"error\" | \"warning\" | \"info\"; message: React.ReactNode }[];\nonDismiss: (id: number) => void;",
+    "UIProvider": "/** The app's link component, defaults to a plain <a>. */\nlink?: React.ComponentType<{ href: string; className?: string; style?: React.CSSProperties; children?: React.ReactNode; onClick?: () => void }>;\n/** The app's image component, defaults to a plain <img>. */\nimage?: React.ComponentType<{ src: string; alt: string; width: number; height: number; className?: string; style?: React.CSSProperties }>;\nchildren: React.ReactNode;"
+  },
+  "overrides": {
+    "ConfirmDialog": {
+      "cardMode": "single",
+      "viewport": "720x480"
+    },
+    "Modal": {
+      "cardMode": "single",
+      "viewport": "720x520"
+    },
+    "ToastHost": {
+      "cardMode": "single",
+      "viewport": "720x420"
+    },
+    "Button": {
+      "cardMode": "column"
+    },
+    "Alert": {
+      "cardMode": "column"
+    },
+    "SearchInput": {
+      "cardMode": "column"
+    },
+    "Toggle": {
+      "cardMode": "column"
+    },
+    "Row": {
+      "cardMode": "column"
+    },
+    "Stack": {
+      "cardMode": "column"
+    },
+    "ContentReveal": {
+      "cardMode": "column"
+    },
+    "EmptyState": {
+      "cardMode": "column"
+    },
+    "LoadingText": {
+      "cardMode": "column"
+    },
+    "PageError": {
+      "cardMode": "column"
+    },
+    "Skeleton": {
+      "cardMode": "column"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}

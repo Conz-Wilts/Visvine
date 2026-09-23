@@ -1,0 +1,93 @@
+/* The two families the tokens name: Open Sauce One (ui) and ABC Ginto Rounded
+   (brand, the Visvine-* files). Open Sauce One is SIL OFL 1.1. */
+@font-face {
+  font-family: 'Open Sauce One';
+  src: url('../../../tokens/assets/fonts/web/OpenSauceOne-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Open Sauce One';
+  src: url('../../../tokens/assets/fonts/web/OpenSauceOne-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Open Sauce One';
+  src: url('../../../tokens/assets/fonts/web/OpenSauceOne-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Open Sauce One';
+  src: url('../../../tokens/assets/fonts/web/OpenSauceOne-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Open Sauce One';
+  src: url('../../../tokens/assets/fonts/web/OpenSauceOne-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('../../../tokens/assets/fonts/web/Visvine-Hairline.woff2') format('woff2');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('../../../tokens/assets/fonts/web/Visvine-Thin.woff2') format('woff2');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('../../../tokens/assets/fonts/web/Visvine-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('../../../tokens/assets/fonts/web/Visvine-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('../../../tokens/assets/fonts/web/Visvine-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('../../../tokens/assets/fonts/web/Visvine-Bold.woff2') format('woff2');
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('../../../tokens/assets/fonts/web/Visvine-Black.woff2') format('woff2');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('../../../tokens/assets/fonts/web/Visvine-Ultra.woff2') format('woff2');
+  font-weight: 950;
+  font-style: normal;
+  font-display: swap;
+}
