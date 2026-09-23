@@ -1,5 +1,5 @@
 /**
- * A file already in the Drive becomes an event's poster.
+ * A file already in the Drive becomes an event's poster, or a person's photo.
  *
  * Uploading a cover from a browser is one path (POST /api/upload) and it starts
  * from bytes the person just picked. This is the other one: the bytes are
@@ -21,7 +21,7 @@
 import { ApiError } from '@/lib/api/route'
 import prisma from '@/lib/prisma'
 import { downloadResourceFile, getMediaUrl, uploadProfileImage } from '@/lib/gcs'
-import { mediaPrefixBare } from '@/lib/storage/objectPaths'
+import { mediaPrefixBare, type MediaEntityType } from '@/lib/storage/objectPaths'
 
 export interface CoverFromResourceInput {
   spaceId: string
@@ -42,6 +42,27 @@ export async function coverUrlFromResource(input: CoverFromResourceInput): Promi
   if (!eventId.startsWith('event:') || eventId.length <= 'event:'.length) {
     throw new ApiError(400, `Not an event id: '${eventId}'`)
   }
+  return imageUrlFromResource({ spaceId, kind: 'event', entityId: eventId, resourceId })
+}
+
+export interface ImageFromResourceInput {
+  spaceId: string
+  /** Whose image this is — decides the media prefix, and so what collects it. */
+  kind: MediaEntityType
+  /** The node id (or, for `space`, the space id) the variants are keyed by. */
+  entityId: string
+  /** A Drive file in `spaceId`, of fileType 'image'. */
+  resourceId: string
+}
+
+/**
+ * Re-encode a Drive image into an entity's image variants — an event's poster,
+ * a person's photo, an organisation's logo — and return the URL to store. The
+ * caller owns the record and its write gate; this owns the tenant check on the
+ * file and the prefix.
+ */
+export async function imageUrlFromResource(input: ImageFromResourceInput): Promise<string> {
+  const { spaceId, kind, entityId, resourceId } = input
 
   const resource = await prisma.resource.findUnique({
     where: { id: resourceId },
@@ -61,9 +82,9 @@ export async function coverUrlFromResource(input: CoverFromResourceInput): Promi
   }
 
   const bytes = await downloadResourceFile(resource.gcsPath)
-  const prefix = mediaPrefixBare('event', eventId)
+  const prefix = mediaPrefixBare(kind, entityId)
   await uploadProfileImage(prefix, bytes)
-  // The cache-buster is what makes replacing a cover visible: the variant paths
-  // are fixed, so without it the browser keeps the old poster.
+  // The cache-buster is what makes replacing an image visible: the variant
+  // paths are fixed, so without it the browser keeps the old one.
   return `${getMediaUrl(`${prefix}/avatar-lg.webp`)}?v=${Date.now()}`
 }

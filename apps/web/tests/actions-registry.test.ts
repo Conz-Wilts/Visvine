@@ -153,8 +153,10 @@ test('every action has a scope in the catalogue, and reads outnumber writes', ()
     assert.ok(def.description.length > 120, `${def.name}'s guidance is too thin to act on`)
   }
 
+  // Every kind is created through an action (the apps create nothing), so the
+  // surface carries a write per kind — but reading is still a large share of it.
   const reads = actions.filter((a) => a.scope === 'context:read').length
-  assert.ok(reads > actions.length / 3, 'a context surface that mostly writes is the wrong shape')
+  assert.ok(reads > actions.length / 4, 'a context surface that mostly writes is the wrong shape')
 
   // A name nothing answers must resolve to nothing, not to a default.
   assert.equal(scopeForAction('no_such_action'), null)
@@ -201,12 +203,15 @@ test('the load-bearing scope splits hold across both doors', () => {
   assert.ok('parent_id' in actionByName('create_space')!.input, 'a sub-space is create_space with a parent')
 
   // No app screen creates anything, so every kind has an action. Each writes.
-  for (const name of ['create_channel', 'create_section', 'add_type', 'create_event']) {
+  for (const name of ['create_channel', 'create_section', 'add_type', 'create_event', 'upload_file', 'request_upload', 'set_image']) {
     assert.equal(scopeForAction(name), 'context:write', name)
   }
   // An event is made by create_event alone, with its defaults.
   const addTypes = actionByName('add_context')!.input.type as unknown as { options: string[] }
   assert.ok(!addTypes.options.includes('event'), 'add_context never makes an event')
+
+  // A chat attachment reaches upload_file as ChatGPT's file param.
+  assert.deepEqual(actionByName('upload_file')!.mcpMeta, { 'openai/fileParams': ['file'] })
 })
 
 test('one catalogue carries every action, authoring included', () => {

@@ -72,6 +72,12 @@ export interface ActionDef<Shape extends z.ZodRawShape = z.ZodRawShape> {
    * the contract it shares with other actions, written once and read with it.
    */
   guides?: readonly string[]
+  /**
+   * `_meta` for the action's named MCP tool — what a client reads beside the
+   * schema. Today only `openai/fileParams`, which tells ChatGPT to hand a file
+   * the person attached to the chat to this argument as a download link.
+   */
+  mcpMeta?: Record<string, unknown>
   run: (caller: ActionCaller, args: z.infer<z.ZodObject<Shape>>) => Promise<unknown>
 }
 

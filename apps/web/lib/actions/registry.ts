@@ -15,10 +15,11 @@ import { AGENT_ACTIONS } from '@/lib/actions/defs/agents'
 import { VM_ACTIONS } from '@/lib/actions/defs/vm'
 import { SPACE_ACTIONS } from '@/lib/actions/defs/spaces'
 import { CHANNEL_ACTIONS } from '@/lib/actions/defs/channels'
+import { DRIVE_ACTIONS } from '@/lib/actions/defs/drive'
 import type { ActionDef } from '@/lib/actions/types'
 import type { McpScope } from '@/lib/mcp/scopes'
 
-const ALL: readonly ActionDef[] = [...CONTEXT_ACTIONS, ...SPACE_ACTIONS, ...CHANNEL_ACTIONS, ...APP_ACTIONS, ...AGENT_ACTIONS, ...VM_ACTIONS]
+const ALL: readonly ActionDef[] = [...CONTEXT_ACTIONS, ...SPACE_ACTIONS, ...CHANNEL_ACTIONS, ...DRIVE_ACTIONS, ...APP_ACTIONS, ...AGENT_ACTIONS, ...VM_ACTIONS]
 
 const BY_NAME: ReadonlyMap<string, ActionDef> = new Map(ALL.map((a) => [a.name, a]))
 

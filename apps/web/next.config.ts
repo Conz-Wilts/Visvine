@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
   // here and again by wrangler for the edge — the egress decision has to be the
   // same code in both places or it is two decisions.
   transpilePackages: ["@visvine/vm-policy"],
+  experimental: {
+    // The proxy buffers every request body and cuts it off here, silently —
+    // at the 10MB default a 20MB Drive upload reached its route truncated. Just
+    // above lib/resources/service.ts#MAX_RESOURCE_BYTES, plus multipart framing.
+    proxyClientMaxBodySize: "26mb",
+  },
   // Native/CJS packages the bundler must leave alone. The QuickJS build is the
   // load-bearing one: the singlefile variant base64-inlines its wasm into a CJS
   // module precisely so `output: "standalone"` has a file to trace. Bundling it

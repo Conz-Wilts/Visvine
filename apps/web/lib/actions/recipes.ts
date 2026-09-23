@@ -549,6 +549,7 @@ const RECIPES: Recipe[] = [
     ],
     mustKnow: () => [
       'Use the exact field keys — email, companyName, linkedinUrl, url — they are what match an entity to its identity across spaces. An unrecognised key is silently dropped.',
+      "A photo or logo is a Drive image: pass its `resource_id` as `image_resource_id`, or set_image on an entity that exists. An image attached to the chat goes in with upload_file first.",
       'A "space" type is a company/collective/investor recorded as a CARD in the directory. It never provisions a new space — starting a space or a sub-space is create_space (the `create_space` intent).',
       'Links between entities are never authored directly: a markdown link to an entity\'s note inside a SHARED note body is what creates the edge. Always use the leading-slash form — every tool hands back a ready-made `mention` string; paste it verbatim.',
       'Events are not created here — they are records with dates, RSVPs and a page of their own: use create_event (see the `run_event` intent). Channels and sections are create_channel and create_section; a new type is add_type.',
@@ -626,6 +627,7 @@ const RECIPES: Recipe[] = [
     ],
     mustKnow: () => [
       'A Drive image is used by `resource_id`, never by URL — create_event/update_event copy the bytes inside the space into the event\'s own image variants.',
+      'A picture the person attached to THIS chat is not in the Drive yet: upload_file puts it there (as `file` when your client passes attachments, or `url`), and request_upload gives a link for one you can only see. Either returns the `resource_id` to use.',
       'Only an image can be a cover. A PDF poster has to be exported to PNG/JPEG and uploaded before it can be one.',
       'The event is a DRAFT until you publish it, and a draft is visible only to its hosts and space admins. Publishing at visibility:"public" puts it on the open web at /e/<slug> — never do that without being asked to.',
       'You become a host of anything you create, which is what lets you edit it afterwards with update_event.',

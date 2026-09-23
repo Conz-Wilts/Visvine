@@ -46,6 +46,11 @@ const PUBLIC_PATHS = [
   // session. Listed here so the SAME paths work on the app host too — that is
   // the same-origin fallback while TOOLS_ORIGIN is unset.
   "/api/tools/runtime",
+  // A file an AI chat asked for: the upload token in the path is the
+  // credential (lib/resources/uploadToken.ts) — a sandbox's curl and a phone
+  // with no session both reach it.
+  "/api/uploads/",
+  "/drop/",
   ...(isDevAuthEnabled() ? ["/dev", "/api/dev"] : []),
 ];
 

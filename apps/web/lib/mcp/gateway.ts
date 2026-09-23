@@ -185,6 +185,7 @@ export function registerActionTools(server: McpServer): void {
           `\`action: "${def.name}"\` and no \`input\`.`,
         inputSchema: schemaOf(def),
         annotations: actionAnnotations(def),
+        ...(def.mcpMeta ? { _meta: def.mcpMeta } : {}),
       },
       (args: unknown, extra: ToolExtra) =>
         withCaller(extra, async (caller) => {

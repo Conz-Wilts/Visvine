@@ -78,6 +78,7 @@ import {
 } from '@/lib/connectors/service'
 import { setSpaceSecret, storedSecretNames, SECRET_MAX_CHARS } from '@/lib/connectors/secretStore'
 import { listFolders } from '@/lib/resources/folders'
+import { setNodeImageFromResource } from '@/lib/directory/nodeImage'
 import { getEvent, getEventsData } from '@/lib/eventRepo'
 import { buildNewEvent } from '@/lib/events/build'
 import { createEventRecord, eventAuthorFor, updateEventRecord } from '@/lib/events/write'
@@ -920,7 +921,7 @@ export const CONTEXT_ACTIONS = [
         'and so never appear in list_files or search_context. Each file reports `resource_id` (the handle other ' +
         'tools take), its folder, its type and, for a document, the `readable` path to pass to read_file. ' +
         'This is the surface to open when someone points you at "the files for X": read the plan or brief with ' +
-        "read_file, then use the picture with create_event's cover_resource_id. Download URLs are deliberately " +
+        "read_file, then use the picture with create_event's cover_resource_id or set_image. A file is added with upload_file. Download URLs are deliberately " +
         'not returned — a file is used by id, inside the space, never by handing out a link to its bytes.',
       input: {
         space_id: spaceArg,
@@ -1064,7 +1065,7 @@ export const CONTEXT_ACTIONS = [
       name: 'add_context',
       scope: 'context:write',
       summary:
-        'Create a directory entity — a person, organisation record, resource or event — and its canonical note. Not a new space: that is create_space.',
+        'Create a directory entity — a person, organisation record or resource — and its canonical note. Not a new space: that is create_space.',
       description:
         'Create a directory entity — a typed node plus its context note, in one step. Call list_context first: ' +
         'its `types` catalog shows which types this space has enabled, their exact field keys, and live ' +
@@ -1113,6 +1114,10 @@ export const CONTEXT_ACTIONS = [
           .string()
           .optional()
           .describe('type "space" only: the id of an existing space this record stands for. Omit for a plain record — this never creates a space (create_space does).'),
+        image_resource_id: z
+          .string()
+          .optional()
+          .describe("A Drive image (list_drive, or upload_file's resource_id) to use as the person's photo or the organisation's logo"),
       },
       run: async (ctx, args) => {
         const context = await requireSpaceContext(ctx, args.space_id)
@@ -1143,6 +1148,22 @@ export const CONTEXT_ACTIONS = [
         const visibilityError = wantPrivate
           ? await makeNotePrivate(args.space_id, result.notePath!, { userId: ctx.userId, name: ctx.name })
           : null
+        // The entity exists either way; a picture that could not be used is
+        // reported, and set_image retries it.
+        let imageError: string | null = null
+        if (args.image_resource_id) {
+          try {
+            await setNodeImageFromResource({
+              spaceId: args.space_id,
+              nodeId: result.node.id,
+              resourceId: args.image_resource_id,
+              actor: { id: ctx.userId, name: ctx.name, email: ctx.email },
+            })
+          } catch (err) {
+            if (!(err instanceof Error && 'status' in err)) throw err
+            imageError = err.message
+          }
+        }
         return {
           node_id: result.node.id,
           type: result.node.type,
@@ -1152,6 +1173,7 @@ export const CONTEXT_ACTIONS = [
           mention: mentionFor(result.node.name, result.notePath),
           identity_resolution: result.resolution,
           note_error: result.noteError,
+          ...(imageError ? { image_error: imageError } : {}),
           ...(context.isPersonalSpace
             ? {}
             : {

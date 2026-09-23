@@ -279,6 +279,7 @@ There is no Create button, no draft surface, no `/events/new`.
 | Tool | `create_tool` → `write_tool` → `publish_tool` |
 | Channel, section | `create_channel`, `create_section` (`lib/actions/defs/channels.ts`) |
 | Type | `add_type` |
+| A file (image, PDF, document) | `upload_file`, or `request_upload` for a chat attachment the model can only see |
 | Connector, model | `edit_context` on `connectors/<name>.md` / `models/<name>.md`; the key is pasted, or the sign-in pressed, on the connector's or model's own page — a credential never passes through the AI |
 
 **A build asks first.** Every recipe that makes something carries an intake
@@ -885,6 +886,20 @@ the prefix `/api/upload` writes and `purgeNodeObjects` collects). A file is used
 by id **inside** the tenant: a signed download URL is a bearer capability and is
 never handed to a caller, which is why that action queries `Resource` rows
 directly rather than through `listResources`.
+
+**Files come in through the actions too.** `upload_file` takes one of a
+public `url`, a chat client's attached `file` (ChatGPT's `openai/fileParams`,
+declared through `ActionDef.mcpMeta`), or small `content_base64`; the server
+fetches links through `publicFetch.ts#fetchPublicBytes`, every hop SSRF-gated.
+A file the model can only SEE (an image in a Claude chat) goes through
+`request_upload`: a 15-minute token (`lib/resources/uploadToken.ts`, its own
+audience) behind two doors, `PUT /api/uploads/<token>` for a sandbox's curl and
+the `/drop/<token>` page for the person. Every door lands in
+`lib/resources/receive.ts#receiveFile` — membership and Drive gates re-asked at
+upload time, the name settled from type or bytes (`shared/incomingName.ts`).
+`set_image` / `add_context`'s `image_resource_id` make a Drive image a person's
+photo or an organisation's logo (`lib/directory/nodeImage.ts`, the same gates
+as `PATCH /api/nodes/<id>`).
 
 An event created this way is a **draft** unless `status: 'published'`; at
 `visibility: 'public'` it is on the open web at `/e/<slug>`. Marketing copy
