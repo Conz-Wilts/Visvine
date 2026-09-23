@@ -25,7 +25,7 @@
 @source inline("{p,px,py,pt,pb,pl,pr,m,mx,my,mt,mb,ml,mr,gap,gap-x,gap-y,space-y,space-x}-{0,0.5,1,1.5,2,2.5,3,4,5,6,8,10,12,16}");
 @source inline("rounded{,-xs,-sm,-md,-lg,-xl,-2xl,-3xl,-full}");
 @source inline("text-{xs,sm,base,lg,xl,2xl,3xl,4xl,5xl,6xl}");
-@source inline("font-{light,normal,medium,semibold,bold,ui}");
+@source inline("font-{thin,extralight,light,normal,medium,semibold,bold,extrabold,black,ui,brand}");
 /* The layout glue a screen is built from, so a design's own layout resolves too. */
 @source inline("{sm:,md:,lg:,}grid-cols-{1,2,3,4,5,6,7,8,9,10,11,12}");
 @source inline("col-span-{1,2,3,4,5,6,7,8,9,10,11,12}");

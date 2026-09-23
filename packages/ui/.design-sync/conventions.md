@@ -20,7 +20,8 @@ class (`gray-500`) or a hex:
 | Status (meaning) | `text-danger`, `bg-danger-wash`, `border-danger-line`; same for `warning`, `success`, `info` |
 | Categorical (kinds, no meaning) | `bg-hue-blue-wash text-hue-blue-fg`: red orange amber yellow green teal cyan sky blue indigo violet pink gray |
 | Entity types | `bg-type-person`, `text-type-event-fg`, `bg-type-agent-wash`… |
-| Type | `text-xs`…`text-2xl`, `font-medium`, `font-semibold` |
+| Type | `text-xs`…`text-2xl`, `font-medium`, `font-semibold` (Open Sauce One, the UI face) |
+| Brand face | `font-brand`: ABC Ginto Rounded, the Visvine wordmark face, weights 100–950 (`font-black` for the logo). Marketing pages and the wordmark only. Never inside the product, where a heading in it reads as an ad |
 | Space / radius | `gap-3`, `p-4`, `space-y-8`; `rounded-lg`, `rounded-full` |
 | Float | `shadow-float` (menus, popovers only) |
 
