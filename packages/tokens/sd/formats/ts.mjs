@@ -18,7 +18,7 @@ function nest(pairs) {
   return out;
 }
 
-const roleKey = (r) => (r.name.length === 1 ? [r.name[0], 'default'] : r.name);
+const roleKey = (r) => r.path.slice(1);
 
 export function indexTs(model) {
   const color = (mode) =>

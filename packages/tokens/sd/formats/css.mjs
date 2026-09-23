@@ -12,9 +12,20 @@ const fontStack = (families) =>
 
 const block = (selector, lines) => (lines.length ? `${selector} {\n${lines.map((l) => `  ${l}`).join('\n')}\n}\n` : '');
 
+/** Each built-in type's swatch as three roles: `type-event`, `type-event-fg`, `type-event-wash`. */
+const typeRoles = (model) =>
+  model.types.flatMap((t) =>
+    ['default', 'fg', 'wash'].map((leaf) => ({
+      name: leaf === 'default' ? ['type', t.name] : ['type', t.name, leaf],
+      light: t.light[leaf],
+      dark: t.dark[leaf],
+    })),
+  );
+
 export function tokensCss(model) {
   const root = [];
-  for (const r of model.roles) root.push(`${cssVar(['color', ...r.name])}: ${r.light};`);
+  const colors = [...model.roles, ...typeRoles(model)];
+  for (const r of colors) root.push(`${cssVar(['color', ...r.name])}: ${r.light};`);
   for (const s of model.space) root.push(`${cssVar(['space', s.key])}: ${rem(s.value)};`);
   for (const r of model.radius) root.push(`${cssVar(['radius', r.key])}: ${r.key === 'full' ? `${r.value}px` : rem(r.value)};`);
   for (const f of model.fontFamily) root.push(`${cssVar(['font', 'family', f.key])}: ${fontStack(f.value)};`);
@@ -25,7 +36,7 @@ export function tokensCss(model) {
   for (const e of model.ease) root.push(`${cssVar(['motion', 'ease', e.key])}: ${cubicBezierCss(e.value)};`);
   for (const z of model.z) root.push(`${cssVar(['z', z.key])}: ${z.value};`);
 
-  const dark = model.roles
+  const dark = colors
     .filter((r) => r.dark !== r.light)
     .map((r) => `${cssVar(['color', ...r.name])}: ${r.dark};`);
 
@@ -54,7 +65,9 @@ const TEXT_SCALE = { xs: 12, sm: 14, base: 16, lg: 18, xl: 20, '2xl': 24, '3xl':
 export function themeCss(model) {
   const lines = [];
   lines.push('/* Colour: utilities are named for the role — bg-surface, text-fg-muted, border-line-subtle, bg-accent, text-danger. */');
-  for (const r of model.roles) lines.push(`--color-${r.name.join('-')}: var(${cssVar(['color', ...r.name])});`);
+  for (const r of [...model.roles, ...typeRoles(model)]) {
+    lines.push(`--color-${r.name.join('-')}: var(${cssVar(['color', ...r.name])});`);
+  }
 
   lines.push('', '/* Radius: the same names Tailwind uses, now read from the tokens. */');
   for (const r of model.radius) {

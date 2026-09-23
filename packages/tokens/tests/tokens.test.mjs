@@ -67,6 +67,14 @@ test('a type\'s fg is readable on white and on its own wash', () => {
   }
 });
 
+test('a categorical hue\'s fg is readable on white and on its own wash', () => {
+  for (const r of model.roles.filter((r) => r.name[0] === 'hue' && r.name[2] === 'fg')) {
+    const wash = role(`hue.${r.name[1]}.wash`).light;
+    assert.ok(contrast(r.light, '#ffffff') >= 4.5, `${r.name.join('.')} on white`);
+    assert.ok(contrast(r.light, wash) >= 4.5, `${r.name.join('.')} on its wash`);
+  }
+});
+
 test('the logo green is fixed and is the default accent', () => {
   assert.equal(role('brand').light, '#78d870');
   assert.equal(role('brand').dark, '#78d870');

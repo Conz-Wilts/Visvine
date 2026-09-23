@@ -334,6 +334,86 @@ export const color = {
     "wash": "#eff6ff",
     "line": "#bfdbfe"
   },
+  "hue": {
+    "red": {
+      "default": "#ef4444",
+      "fg": "#b91c1c",
+      "wash": "#fef2f2",
+      "line": "#fecaca"
+    },
+    "orange": {
+      "default": "#f97316",
+      "fg": "#c2410c",
+      "wash": "#fff7ed",
+      "line": "#fed7aa"
+    },
+    "amber": {
+      "default": "#f59e0b",
+      "fg": "#b45309",
+      "wash": "#fffbeb",
+      "line": "#fde68a"
+    },
+    "yellow": {
+      "default": "#eab308",
+      "fg": "#a16207",
+      "wash": "#fefce8",
+      "line": "#fef08a"
+    },
+    "green": {
+      "default": "#22c55e",
+      "fg": "#15803d",
+      "wash": "#f0fdf4",
+      "line": "#bbf7d0"
+    },
+    "teal": {
+      "default": "#14b8a6",
+      "fg": "#0f766e",
+      "wash": "#f0fdfa",
+      "line": "#99f6e4"
+    },
+    "cyan": {
+      "default": "#06b6d4",
+      "fg": "#0e7490",
+      "wash": "#ecfeff",
+      "line": "#a5f3fc"
+    },
+    "sky": {
+      "default": "#0ea5e9",
+      "fg": "#0369a1",
+      "wash": "#f0f9ff",
+      "line": "#bae6fd"
+    },
+    "blue": {
+      "default": "#3b82f6",
+      "fg": "#1d4ed8",
+      "wash": "#eff6ff",
+      "line": "#bfdbfe"
+    },
+    "indigo": {
+      "default": "#6366f1",
+      "fg": "#4338ca",
+      "wash": "#eef2ff",
+      "line": "#c7d2fe"
+    },
+    "violet": {
+      "default": "#8b5cf6",
+      "fg": "#6d28d9",
+      "wash": "#f5f3ff",
+      "line": "#ddd6fe"
+    },
+    "pink": {
+      "default": "#ec4899",
+      "fg": "#be185d",
+      "wash": "#fdf2f8",
+      "line": "#fbcfe8"
+    },
+    "gray": {
+      "default": "#6b7280",
+      "fg": "#374151",
+      "wash": "#f9fafb",
+      "line": "#e5e7eb"
+    }
+  },
   "type": {
     "space": {
       "default": "#78d870",
@@ -463,6 +543,86 @@ export const colorDark = {
     "wash": "#172554",
     "line": "#1e3a8a"
   },
+  "hue": {
+    "red": {
+      "default": "#f87171",
+      "fg": "#fca5a5",
+      "wash": "#450a0a",
+      "line": "#991b1b"
+    },
+    "orange": {
+      "default": "#fb923c",
+      "fg": "#fdba74",
+      "wash": "#431407",
+      "line": "#9a3412"
+    },
+    "amber": {
+      "default": "#fbbf24",
+      "fg": "#fcd34d",
+      "wash": "#451a03",
+      "line": "#92400e"
+    },
+    "yellow": {
+      "default": "#facc15",
+      "fg": "#fde047",
+      "wash": "#422006",
+      "line": "#854d0e"
+    },
+    "green": {
+      "default": "#4ade80",
+      "fg": "#86efac",
+      "wash": "#052e16",
+      "line": "#166534"
+    },
+    "teal": {
+      "default": "#2dd4bf",
+      "fg": "#5eead4",
+      "wash": "#042f2e",
+      "line": "#115e59"
+    },
+    "cyan": {
+      "default": "#22d3ee",
+      "fg": "#67e8f9",
+      "wash": "#083344",
+      "line": "#155e75"
+    },
+    "sky": {
+      "default": "#38bdf8",
+      "fg": "#7dd3fc",
+      "wash": "#082f49",
+      "line": "#075985"
+    },
+    "blue": {
+      "default": "#60a5fa",
+      "fg": "#93c5fd",
+      "wash": "#172554",
+      "line": "#1e40af"
+    },
+    "indigo": {
+      "default": "#818cf8",
+      "fg": "#a5b4fc",
+      "wash": "#1e1b4b",
+      "line": "#3730a3"
+    },
+    "violet": {
+      "default": "#a78bfa",
+      "fg": "#c4b5fd",
+      "wash": "#2e1065",
+      "line": "#5b21b6"
+    },
+    "pink": {
+      "default": "#f472b6",
+      "fg": "#f9a8d4",
+      "wash": "#500724",
+      "line": "#9d174d"
+    },
+    "gray": {
+      "default": "#9ca3af",
+      "fg": "#d1d5db",
+      "wash": "#030712",
+      "line": "#1f2937"
+    }
+  },
   "type": {
     "space": {
       "default": "#78d870",
@@ -591,6 +751,86 @@ export const cssVars = {
     "bright": "var(--vv-color-info-bright)",
     "wash": "var(--vv-color-info-wash)",
     "line": "var(--vv-color-info-line)"
+  },
+  "hue": {
+    "red": {
+      "default": "var(--vv-color-hue-red)",
+      "fg": "var(--vv-color-hue-red-fg)",
+      "wash": "var(--vv-color-hue-red-wash)",
+      "line": "var(--vv-color-hue-red-line)"
+    },
+    "orange": {
+      "default": "var(--vv-color-hue-orange)",
+      "fg": "var(--vv-color-hue-orange-fg)",
+      "wash": "var(--vv-color-hue-orange-wash)",
+      "line": "var(--vv-color-hue-orange-line)"
+    },
+    "amber": {
+      "default": "var(--vv-color-hue-amber)",
+      "fg": "var(--vv-color-hue-amber-fg)",
+      "wash": "var(--vv-color-hue-amber-wash)",
+      "line": "var(--vv-color-hue-amber-line)"
+    },
+    "yellow": {
+      "default": "var(--vv-color-hue-yellow)",
+      "fg": "var(--vv-color-hue-yellow-fg)",
+      "wash": "var(--vv-color-hue-yellow-wash)",
+      "line": "var(--vv-color-hue-yellow-line)"
+    },
+    "green": {
+      "default": "var(--vv-color-hue-green)",
+      "fg": "var(--vv-color-hue-green-fg)",
+      "wash": "var(--vv-color-hue-green-wash)",
+      "line": "var(--vv-color-hue-green-line)"
+    },
+    "teal": {
+      "default": "var(--vv-color-hue-teal)",
+      "fg": "var(--vv-color-hue-teal-fg)",
+      "wash": "var(--vv-color-hue-teal-wash)",
+      "line": "var(--vv-color-hue-teal-line)"
+    },
+    "cyan": {
+      "default": "var(--vv-color-hue-cyan)",
+      "fg": "var(--vv-color-hue-cyan-fg)",
+      "wash": "var(--vv-color-hue-cyan-wash)",
+      "line": "var(--vv-color-hue-cyan-line)"
+    },
+    "sky": {
+      "default": "var(--vv-color-hue-sky)",
+      "fg": "var(--vv-color-hue-sky-fg)",
+      "wash": "var(--vv-color-hue-sky-wash)",
+      "line": "var(--vv-color-hue-sky-line)"
+    },
+    "blue": {
+      "default": "var(--vv-color-hue-blue)",
+      "fg": "var(--vv-color-hue-blue-fg)",
+      "wash": "var(--vv-color-hue-blue-wash)",
+      "line": "var(--vv-color-hue-blue-line)"
+    },
+    "indigo": {
+      "default": "var(--vv-color-hue-indigo)",
+      "fg": "var(--vv-color-hue-indigo-fg)",
+      "wash": "var(--vv-color-hue-indigo-wash)",
+      "line": "var(--vv-color-hue-indigo-line)"
+    },
+    "violet": {
+      "default": "var(--vv-color-hue-violet)",
+      "fg": "var(--vv-color-hue-violet-fg)",
+      "wash": "var(--vv-color-hue-violet-wash)",
+      "line": "var(--vv-color-hue-violet-line)"
+    },
+    "pink": {
+      "default": "var(--vv-color-hue-pink)",
+      "fg": "var(--vv-color-hue-pink-fg)",
+      "wash": "var(--vv-color-hue-pink-wash)",
+      "line": "var(--vv-color-hue-pink-line)"
+    },
+    "gray": {
+      "default": "var(--vv-color-hue-gray)",
+      "fg": "var(--vv-color-hue-gray-fg)",
+      "wash": "var(--vv-color-hue-gray-wash)",
+      "line": "var(--vv-color-hue-gray-line)"
+    }
   }
 } as const;
 
