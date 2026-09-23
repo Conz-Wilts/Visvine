@@ -33,6 +33,6 @@ struct Wordmark: View {
         Text("Visvine")
             .font(.custom("Visvine-Medium", size: size))
             .tracking(-0.02 * size)
-            .foregroundStyle(Color(hex: 0x78D870))
+            .foregroundStyle(VVColor.brand)
     }
 }

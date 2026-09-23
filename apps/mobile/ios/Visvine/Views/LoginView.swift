@@ -14,17 +14,17 @@ struct LoginView: View {
                 Wordmark(size: 30, stacked: true)
 
                 if let error = auth.authErrorMessage {
-                    Text(error).font(.system(size: 14)).foregroundStyle(c.error)
-                        .multilineTextAlignment(.center).padding(.top, 16).padding(.horizontal, 24)
+                    Text(error).font(.system(size: VVFontSize.s14)).foregroundStyle(c.danger)
+                        .multilineTextAlignment(.center).padding(.top, VVSpace.x4).padding(.horizontal, VVSpace.x6)
                 }
 
                 Button(action: signIn) {
                     Text("Continue with Google")
-                        .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity).padding(.vertical, 16)
-                        .background(c.accent, in: RoundedRectangle(cornerRadius: 8))
+                        .font(.system(size: VVFontSize.s16, weight: .semibold)).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity).padding(.vertical, VVSpace.x4)
+                        .background(c.accent, in: RoundedRectangle(cornerRadius: VVRadius.lg))
                 }
-                .padding(.top, 48)
+                .padding(.top, VVSpace.x12)
 
                 if AppConfig.devAuthEnabled {
                     NavigationLink {
@@ -32,23 +32,23 @@ struct LoginView: View {
                     } label: {
                         HStack {
                             VisvineIcon(.tool)
-                            Text("Dev login (skip Google)").font(.system(size: 14, weight: .semibold))
+                            Text("Dev login (skip Google)").font(.system(size: VVFontSize.s14, weight: .semibold))
                         }
-                        .foregroundStyle(c.textSecondary)
-                        .frame(maxWidth: .infinity).padding(.vertical, 14)
-                        .background(c.bgSecondary, in: RoundedRectangle(cornerRadius: 8))
+                        .foregroundStyle(c.fgSecondary)
+                        .frame(maxWidth: .infinity).padding(.vertical, VVSpace.x3_5)
+                        .background(c.surfaceSubtle, in: RoundedRectangle(cornerRadius: VVRadius.lg))
                     }
-                    .padding(.top, 12)
+                    .padding(.top, VVSpace.x3)
                 }
 
                 Text("By signing in, you agree to our Terms of Service and Privacy Policy")
-                    .font(.system(size: 12)).foregroundStyle(c.textMuted)
-                    .multilineTextAlignment(.center).padding(.top, 32).padding(.horizontal, 16)
+                    .font(.system(size: VVFontSize.s12)).foregroundStyle(c.fgMuted)
+                    .multilineTextAlignment(.center).padding(.top, VVSpace.x8).padding(.horizontal, VVSpace.x4)
                 Spacer()
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, VVSpace.x6)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(c.bgPrimary)
+            .background(c.surface)
         }
     }
 

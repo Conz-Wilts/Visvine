@@ -98,28 +98,28 @@ struct EventsListView: View {
             } else {
                 ScrollView {
                     if let error = model.error {
-                        Text(error).foregroundStyle(c.error).font(.system(size: 14))
+                        Text(error).foregroundStyle(c.danger).font(.system(size: VVFontSize.s14))
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            .padding(.horizontal, VVSpace.x4).padding(.vertical, VVSpace.x3)
                     }
                     let items = model.filtered(query: search.query)
                     if items.isEmpty {
                         EmptyStateView(text: "No events found", icon: .calendar)
                     } else {
-                        LazyVStack(alignment: .leading, spacing: 32) {
+                        LazyVStack(alignment: .leading, spacing: VVSpace.x8) {
                             ForEach(sections(for: items)) { section in
                                 sectionView(section)
                             }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
+                        .padding(.horizontal, VVSpace.x4)
+                        .padding(.top, VVSpace.x2)
                         .padding(.bottom, 120)
                     }
                 }
                 .refreshable { await model.refresh(spaceId: space.current?.id) }
             }
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .task(id: space.current?.id) { await model.load(spaceId: space.current?.id) }
         .searchScope("Search events")
     }
@@ -128,12 +128,12 @@ struct EventsListView: View {
         let c = theme.colors
         VStack(alignment: .leading, spacing: 0) {
             Text(section.title.uppercased())
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: VVFontSize.s11, weight: .semibold))
                 .kerning(0.9)
-                .foregroundStyle(c.textMuted)
+                .foregroundStyle(c.fgMuted)
             ForEach(Array(section.events.enumerated()), id: \.element.id) { index, event in
                 if index > 0 {
-                    Rectangle().fill(c.borderSubtle).frame(height: 1)
+                    Rectangle().fill(c.lineSubtle).frame(height: 1)
                 }
                 NavigationLink(value: AppRoute.eventDetail(eventId: event.id, title: event.title)) {
                     EventRow(event: event, featured: section.featured, past: section.past)
@@ -166,18 +166,18 @@ private struct EventRow: View {
             attendees > 0 ? "\(attendees) going" : nil,
         ].compactMap { $0 }.joined(separator: " · ")
 
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: VVSpace.x1) {
             Text(event.title)
                 .font(.system(size: featured ? 20 : 17, weight: .semibold))
-                .foregroundStyle(c.textPrimary)
+                .foregroundStyle(c.fg)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
 
             Group {
                 if let countdown {
-                    Text("\(Text(countdown).font(.system(size: 14, weight: .semibold)).foregroundStyle(c.accentDark))\(Text(" · \(facts)").font(.system(size: 14)).foregroundStyle(c.textSecondary))")
+                    Text("\(Text(countdown).font(.system(size: VVFontSize.s14, weight: .semibold)).foregroundStyle(c.accentStrong))\(Text(" · \(facts)").font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgSecondary))")
                 } else {
-                    Text(facts).font(.system(size: 14)).foregroundStyle(c.textSecondary)
+                    Text(facts).font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgSecondary)
                 }
             }
             .lineLimit(2)
@@ -185,15 +185,15 @@ private struct EventRow: View {
 
             if let description = event.description, !description.isEmpty {
                 Text(description)
-                    .font(.system(size: 14))
-                    .foregroundStyle(c.textSecondary)
+                    .font(.system(size: VVFontSize.s14))
+                    .foregroundStyle(c.fgSecondary)
                     .lineLimit(featured ? 3 : 2)
                     .multilineTextAlignment(.leading)
-                    .padding(.top, 4)
+                    .padding(.top, VVSpace.x1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 20)
+        .padding(.vertical, VVSpace.x5)
         .opacity(past ? 0.7 : 1)
     }
 }

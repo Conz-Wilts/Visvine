@@ -64,20 +64,20 @@ struct ConversationView: View {
             if model.loading {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.messages.isEmpty {
-                VStack(spacing: 4) {
-                    VisvineIcon(.message, size: 32).foregroundStyle(c.textMuted)
-                        .frame(width: 64, height: 64).background(c.bgTertiary, in: Circle()).padding(.bottom, 8)
-                    Text("No messages yet").font(.system(size: 16, weight: .medium)).foregroundStyle(c.textMuted)
-                    Text("Start the conversation!").font(.system(size: 14)).foregroundStyle(c.textLight)
+                VStack(spacing: VVSpace.x1) {
+                    VisvineIcon(.message, size: 32).foregroundStyle(c.fgMuted)
+                        .frame(width: 64, height: 64).background(c.surfaceMuted, in: Circle()).padding(.bottom, VVSpace.x2)
+                    Text("No messages yet").font(.system(size: VVFontSize.s16, weight: .medium)).foregroundStyle(c.fgMuted)
+                    Text("Start the conversation!").font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgSubtle)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(spacing: 12) {
+                        LazyVStack(spacing: VVSpace.x3) {
                             ForEach(model.messages) { message in bubble(message).id(message.id) }
                         }
-                        .padding(16)
+                        .padding(VVSpace.x4)
                     }
                     .onChange(of: model.messages.count) {
                         if let last = model.messages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
@@ -85,7 +85,7 @@ struct ConversationView: View {
                 }
             }
         }
-        .background(c.bgSecondary)
+        .background(c.surfaceSubtle)
         .safeAreaInset(edge: .bottom) { composer }
         .navigationTitle(conversationName ?? "Chat")
         .navigationBarTitleDisplayMode(.inline)
@@ -93,31 +93,31 @@ struct ConversationView: View {
         .task { await model.startRealtime() }
         .overlay(alignment: .top) {
             if let error = model.error {
-                Text(error).foregroundStyle(c.error).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(c.bgTertiary)
+                Text(error).foregroundStyle(c.danger).padding(VVSpace.x3).frame(maxWidth: .infinity, alignment: .leading).background(c.surfaceMuted)
             }
         }
     }
 
     private var composer: some View {
         let c = theme.colors
-        return HStack(alignment: .bottom, spacing: 8) {
+        return HStack(alignment: .bottom, spacing: VVSpace.x2) {
             TextField("Type a message...", text: $input, axis: .vertical)
                 .lineLimit(1...5)
-                .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 22))
-                .foregroundStyle(c.textPrimary)
+                .padding(.horizontal, VVSpace.x4).padding(.vertical, VVSpace.x2_5)
+                .background(c.surfaceMuted, in: RoundedRectangle(cornerRadius: 22))
+                .foregroundStyle(c.fg)
             Button { send() } label: {
                 Group {
                     if model.sending { ProgressView().tint(.white) }
                     else { VisvineIcon(.arrowUp, size: 18).foregroundStyle(.white) }
                 }
                 .frame(width: 40, height: 40)
-                .background(input.trimmingCharacters(in: .whitespaces).isEmpty ? c.borderDefault : c.accent, in: Circle())
+                .background(input.trimmingCharacters(in: .whitespaces).isEmpty ? c.line : c.accent, in: Circle())
             }
             .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty || model.sending)
         }
-        .padding(12)
-        .background(c.bgPrimary)
+        .padding(VVSpace.x3)
+        .background(c.surface)
     }
 
     private func send() {
@@ -131,7 +131,7 @@ struct ConversationView: View {
 
     private func bubble(_ message: Message) -> some View {
         let isOwn = message.isOwn
-        return HStack(alignment: .bottom, spacing: 8) {
+        return HStack(alignment: .bottom, spacing: VVSpace.x2) {
             if !isOwn {
                 PersonAvatar(name: message.sender.name, imageUrl: message.sender.image, size: 32)
             }

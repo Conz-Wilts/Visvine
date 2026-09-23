@@ -22,11 +22,11 @@ struct MessagesHubView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("New message")
-                .padding(.trailing, 12)
+                .padding(.trailing, VVSpace.x3)
             }
             contactsList
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .searchScope("Search messages")
         .task { await conversations.load() }
         .task { await conversations.startRealtime() }
@@ -35,8 +35,8 @@ struct MessagesHubView: View {
     @ViewBuilder private var contactsList: some View {
         let c = theme.colors
         if let error = conversations.error {
-            Text(error).foregroundStyle(c.error).font(.system(size: 14))
-                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 12)
+            Text(error).foregroundStyle(c.danger).font(.system(size: VVFontSize.s14))
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, VVSpace.x4).padding(.vertical, VVSpace.x3)
         }
         if conversations.loading {
             ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)

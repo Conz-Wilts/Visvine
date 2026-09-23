@@ -14,7 +14,7 @@ struct ScreenHeader: View {
 
     var body: some View {
         let c = theme.colors
-        HStack(spacing: 10) {
+        HStack(spacing: VVSpace.x2_5) {
             if showSpaceSelector, let current = space.current {
                 Button {
                     withAnimation(.smooth(duration: 0.3)) { space.switcherOpen = true }
@@ -24,7 +24,7 @@ struct ScreenHeader: View {
                 Text(title)
                     .font(.system(size: 28, weight: .bold))
                     .tracking(-0.4)
-                    .foregroundStyle(c.textPrimary)
+                    .foregroundStyle(c.fg)
                     .lineLimit(1)
             } else {
                 Wordmark(size: 18)
@@ -35,9 +35,9 @@ struct ScreenHeader: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, VVSpace.x4)
         .frame(height: 64)
-        .background(c.bgPrimary)
+        .background(c.surface)
     }
 }
 
@@ -49,24 +49,24 @@ struct SpaceMark: View {
 
     var body: some View {
         let c = theme.colors
-        HStack(spacing: 10) {
+        HStack(spacing: VVSpace.x2_5) {
             SpaceAvatar(name: space.name, imageUrl: space.image, size: 40)
             VStack(alignment: .leading, spacing: 0) {
                 if let parent {
                     Text(parent.name)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(c.textMuted)
+                        .font(.system(size: VVFontSize.s12, weight: .medium))
+                        .foregroundStyle(c.fgMuted)
                         .lineLimit(1)
                 }
                 Text(space.name)
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(c.textPrimary)
+                    .foregroundStyle(c.fg)
                     .lineLimit(1)
             }
             .frame(maxWidth: 200, alignment: .leading)
             .fixedSize(horizontal: true, vertical: false)
             VisvineIcon(.chevronRight, size: 12)
-                .foregroundStyle(c.textMuted)
+                .foregroundStyle(c.fgMuted)
         }
         .contentShape(Rectangle())
         .accessibilityLabel("Space: \(space.name)")

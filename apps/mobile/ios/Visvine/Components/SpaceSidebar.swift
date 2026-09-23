@@ -23,7 +23,7 @@ struct SpaceSidebar: View {
                 panel
                     .frame(width: width)
                     .frame(maxHeight: .infinity)
-                    .background(theme.colors.bgPrimary, in: UnevenRoundedRectangle(bottomTrailingRadius: 36, topTrailingRadius: 36, style: .continuous))
+                    .background(theme.colors.surface, in: UnevenRoundedRectangle(bottomTrailingRadius: 36, topTrailingRadius: 36, style: .continuous))
                     .ignoresSafeArea(edges: .vertical)
                     .offset(x: shown ? min(0, drag) : -width - 20)
                     .gesture(
@@ -46,25 +46,25 @@ struct SpaceSidebar: View {
         let c = theme.colors
         return VStack(alignment: .leading, spacing: 0) {
             Text("Spaces")
-                .font(.system(size: 30, weight: .bold))
+                .font(.system(size: VVFontSize.s30, weight: .bold))
                 .tracking(-0.4)
-                .foregroundStyle(c.textPrimary)
+                .foregroundStyle(c.fg)
                 .padding(.horizontal, 22)
                 .padding(.top, 72)
-                .padding(.bottom, 14)
+                .padding(.bottom, VVSpace.x3_5)
             ScrollView {
-                VStack(spacing: 4) {
+                VStack(spacing: VVSpace.x1) {
                     ForEach(space.tree) { house($0) }
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, VVSpace.x2)
             }
             .scrollBounceBehavior(.basedOnSize)
-            Rectangle().fill(c.borderSubtle).frame(height: 0.5)
+            Rectangle().fill(c.lineSubtle).frame(height: 0.5)
             VStack(spacing: 0) {
                 footer(.compass, "Discover spaces") { close(); onDiscover() }
                 footer(.settings, "Settings") { close(); onSettings() }
             }
-            .padding(.top, 8)
+            .padding(.top, VVSpace.x2)
             .padding(.bottom, 34)
         }
     }
@@ -80,7 +80,7 @@ struct SpaceSidebar: View {
                     }
                 } label: {
                     VisvineIcon(.chevronRight, size: 20)
-                        .foregroundStyle(c.textMuted)
+                        .foregroundStyle(c.fgMuted)
                         .rotationEffect(.degrees(open ? 90 : 0))
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
@@ -92,9 +92,9 @@ struct SpaceSidebar: View {
         if open {
             HStack(alignment: .top, spacing: 0) {
                 // The spine: a hairline down from under the house's square.
-                Rectangle().fill(c.borderDefault).frame(width: 1)
-                    .padding(.leading, 38).padding(.trailing, 10).padding(.vertical, 6)
-                VStack(spacing: 2) {
+                Rectangle().fill(c.line).frame(width: 1)
+                    .padding(.leading, 38).padding(.trailing, VVSpace.x2_5).padding(.vertical, VVSpace.x1_5)
+                VStack(spacing: VVSpace.x0_5) {
                     ForEach(branch.rooms) { row($0, size: 34, rooms: 0) { EmptyView() } }
                 }
             }
@@ -110,21 +110,21 @@ struct SpaceSidebar: View {
                 space.setCurrent(item)
                 close()
             } label: {
-                HStack(spacing: 14) {
+                HStack(spacing: VVSpace.x3_5) {
                     SpaceAvatar(name: item.name, imageUrl: item.image, size: size)
                         .padding(3)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: VVSpace.x0_5) {
                         Text(item.name)
                             .font(.system(size: size > 40 ? 18 : 16, weight: .semibold))
-                            .foregroundStyle(c.textPrimary)
+                            .foregroundStyle(c.fg)
                             .lineLimit(1)
                         if let line = subtitle(item, rooms: rooms) {
-                            Text(line).font(.system(size: 14)).foregroundStyle(c.textMuted).lineLimit(1)
+                            Text(line).font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgMuted).lineLimit(1)
                         }
                     }
                     Spacer(minLength: 4)
                     if active {
-                        VisvineIcon(.check, size: 22).foregroundStyle(c.accentDark)
+                        VisvineIcon(.check, size: 22).foregroundStyle(c.accentStrong)
                     }
                 }
                 .contentShape(Rectangle())
@@ -132,9 +132,9 @@ struct SpaceSidebar: View {
             .buttonStyle(.plain)
             trailing()
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(active ? c.textPrimary.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, VVSpace.x2_5)
+        .padding(.vertical, VVSpace.x1_5)
+        .background(active ? c.fg.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     /// State is data, joined by `·`: private, and how many rooms.
@@ -148,9 +148,9 @@ struct SpaceSidebar: View {
     private func footer(_ icon: VisvineIconName, _ label: String, action: @escaping () -> Void) -> some View {
         let c = theme.colors
         return Button(action: action) {
-            HStack(spacing: 16) {
-                VisvineIcon(icon, size: 22).foregroundStyle(c.textSecondary).frame(width: 26)
-                Text(label).font(.system(size: 18)).foregroundStyle(c.textPrimary)
+            HStack(spacing: VVSpace.x4) {
+                VisvineIcon(icon, size: 22).foregroundStyle(c.fgSecondary).frame(width: 26)
+                Text(label).font(.system(size: VVFontSize.s18)).foregroundStyle(c.fg)
                 Spacer()
             }
             .padding(.horizontal, 22)

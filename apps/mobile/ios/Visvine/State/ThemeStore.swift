@@ -2,8 +2,8 @@ import Foundation
 import Observation
 
 /// App-scoped theming state — the native equivalent of ThemeProvider. Holds the
-/// selected hue, derives `DynamicColors`, and persists the choice in
-/// UserDefaults (key `nb_color_theme`).
+/// selected accent, derives `DynamicColors`, and persists the choice in
+/// UserDefaults (key `nb_color_theme`, the web's localStorage key).
 @MainActor
 @Observable
 final class ThemeStore {
@@ -13,20 +13,19 @@ final class ThemeStore {
     private let prefs = PreferencesStore.shared
 
     init() {
-        let storedId = PreferencesStore.shared.themeId ?? COLOR_THEMES[0].id
-        let theme = themeBy(id: storedId)
-        themeId = theme.id
-        colors = buildColors(theme: theme)
+        let accent = VVAccent.named(PreferencesStore.shared.themeId)
+        themeId = accent.id
+        colors = buildColors(accent: accent)
     }
 
-    var theme: ColorTheme { themeBy(id: themeId) }
-    var themes: [ColorTheme] { COLOR_THEMES }
+    var theme: VVAccent { VVAccent.named(themeId) }
+    var themes: [VVAccent] { VVAccent.all }
 
     func setTheme(_ id: String) {
-        let theme = themeBy(id: id)
-        guard theme.id == id else { return }
+        let accent = VVAccent.named(id)
+        guard accent.id == id else { return }
         themeId = id
-        colors = buildColors(theme: theme)
+        colors = buildColors(accent: accent)
         prefs.themeId = id
     }
 }

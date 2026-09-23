@@ -14,21 +14,21 @@ struct EmptyStateView: View {
 
     var body: some View {
         let c = theme.colors
-        VStack(spacing: 12) {
+        VStack(spacing: VVSpace.x3) {
             if let icon {
-                VisvineIcon(icon, size: 24).foregroundStyle(c.textMuted)
+                VisvineIcon(icon, size: 24).foregroundStyle(c.fgMuted)
             }
             Text(text)
-                .font(.system(size: 15))
-                .foregroundStyle(c.textMuted)
+                .font(.system(size: VVFontSize.s15))
+                .foregroundStyle(c.fgMuted)
                 .multilineTextAlignment(.center)
             if let actionLabel, let action {
                 Button(action: action) {
-                    Text(actionLabel).font(.system(size: 14, weight: .semibold)).foregroundStyle(c.accentDark)
+                    Text(actionLabel).font(.system(size: VVFontSize.s14, weight: .semibold)).foregroundStyle(c.accentStrong)
                 }
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 48)
+        .padding(.vertical, VVSpace.x12)
     }
 }

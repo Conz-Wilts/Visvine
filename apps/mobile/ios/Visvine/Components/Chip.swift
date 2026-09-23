@@ -11,11 +11,11 @@ struct Chip: View {
         let c = theme.colors
         Button(action: action) {
             Text(label)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(on ? c.bgPrimary : c.textPrimary)
+                .font(.system(size: VVFontSize.s16, weight: .semibold))
+                .foregroundStyle(on ? c.surface : c.fg)
                 .padding(.horizontal, 18)
                 .frame(height: 40)
-                .background(on ? c.textPrimary : .clear, in: Capsule())
+                .background(on ? c.fg : .clear, in: Capsule())
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)

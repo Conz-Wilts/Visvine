@@ -11,40 +11,40 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Appearance")
-                    .font(.system(size: 11, weight: .semibold)).kerning(0.9)
-                    .foregroundStyle(c.textMuted)
-                    .padding(.bottom, 4)
+                    .font(.system(size: VVFontSize.s11, weight: .semibold)).kerning(0.9)
+                    .foregroundStyle(c.fgMuted)
+                    .padding(.bottom, VVSpace.x1)
 
                 // Theme colour
                 HStack {
                     VisvineIcon(.palette).foregroundStyle(c.accent)
-                    Text("Theme Colour").font(.system(size: 16)).foregroundStyle(c.textPrimary)
+                    Text("Theme Colour").font(.system(size: VVFontSize.s16)).foregroundStyle(c.fg)
                     Spacer()
-                    Text(theme.theme.name).font(.system(size: 14)).foregroundStyle(c.textMuted)
+                    Text(theme.theme.name).font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgMuted)
                 }
-                .padding(.top, 14)
+                .padding(.top, VVSpace.x3_5)
 
-                LazyVGrid(columns: columns, spacing: 16) {
+                LazyVGrid(columns: columns, spacing: VVSpace.x4) {
                     ForEach(theme.themes) { item in
                         let active = theme.themeId == item.id
-                        VStack(spacing: 6) {
+                        VStack(spacing: VVSpace.x1_5) {
                             ZStack {
-                                Circle().fill(item.accent).frame(width: active ? 36 : 32, height: active ? 36 : 32)
-                                    .overlay(active ? Circle().stroke(item.accentDark, lineWidth: 2) : nil)
+                                Circle().fill(item.base).frame(width: active ? 36 : 32, height: active ? 36 : 32)
+                                    .overlay(active ? Circle().stroke(item.strong, lineWidth: 2) : nil)
                                 if active { VisvineIcon(.check, size: 14).foregroundStyle(.white) }
                             }
-                            Text(item.name).font(.system(size: 11)).foregroundStyle(c.textMuted)
+                            Text(item.name).font(.system(size: VVFontSize.s11)).foregroundStyle(c.fgMuted)
                         }
                         .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
                         .onTapGesture { theme.setTheme(item.id) }
                     }
                 }
-                .padding(.top, 16)
+                .padding(.top, VVSpace.x4)
             }
-            .padding(16)
+            .padding(VVSpace.x4)
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
     }

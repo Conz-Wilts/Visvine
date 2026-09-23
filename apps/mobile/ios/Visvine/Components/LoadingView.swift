@@ -7,10 +7,10 @@ struct LoadingView: View {
     var fullScreen: Bool = false
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: VVSpace.x3) {
             ProgressView().tint(theme.colors.accent)
             if let message {
-                Text(message).foregroundStyle(theme.colors.textMuted).font(.system(size: 16))
+                Text(message).foregroundStyle(theme.colors.fgMuted).font(.system(size: VVFontSize.s16))
             }
         }
         .frame(maxWidth: fullScreen ? .infinity : nil, maxHeight: fullScreen ? .infinity : nil)

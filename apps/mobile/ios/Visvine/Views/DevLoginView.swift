@@ -40,36 +40,36 @@ struct DevLoginView: View {
         let c = theme.colors
         VStack(alignment: .leading, spacing: 0) {
             Text("Pick a seeded user. Available because devAuthEnabled is on and the backend has ENABLE_DEV_AUTH=true.")
-                .font(.system(size: 13)).foregroundStyle(c.textMuted)
-                .padding(.horizontal, 16).padding(.bottom, 8)
+                .font(.system(size: VVFontSize.s13)).foregroundStyle(c.fgMuted)
+                .padding(.horizontal, VVSpace.x4).padding(.bottom, VVSpace.x2)
 
             if model.loading {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.users.isEmpty {
                 Text(model.error ?? "No anchor users found. Run `pnpm db:seed` against your local DB.")
-                    .font(.system(size: 14)).foregroundStyle(c.textMuted).padding(16)
+                    .font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgMuted).padding(VVSpace.x4)
                 Spacer()
             } else {
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(Array(model.users.enumerated()), id: \.element.id) { index, user in
-                            if index > 0 { Rectangle().fill(c.borderSubtle).frame(height: 1) }
+                            if index > 0 { Rectangle().fill(c.lineSubtle).frame(height: 1) }
                             Button {
                                 Task { await model.signIn(user, auth: auth) }
                             } label: {
                                 HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(user.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(c.textPrimary)
-                                        Text(user.email).font(.system(size: 13)).foregroundStyle(c.textMuted)
+                                    VStack(alignment: .leading, spacing: VVSpace.x0_5) {
+                                        Text(user.name).font(.system(size: VVFontSize.s15, weight: .semibold)).foregroundStyle(c.fg)
+                                        Text(user.email).font(.system(size: VVFontSize.s13)).foregroundStyle(c.fgMuted)
                                     }
                                     Spacer()
                                     if model.signingInId == user.id {
                                         ProgressView().tint(c.accent)
                                     } else {
-                                        VisvineIcon(.chevronRight).foregroundStyle(c.textMuted)
+                                        VisvineIcon(.chevronRight).foregroundStyle(c.fgMuted)
                                     }
                                 }
-                                .padding(.horizontal, 16).padding(.vertical, 14)
+                                .padding(.horizontal, VVSpace.x4).padding(.vertical, VVSpace.x3_5)
                                 .contentShape(Rectangle())
                                 .opacity(model.signingInId == user.id ? 0.5 : 1)
                             }
@@ -80,7 +80,7 @@ struct DevLoginView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(c.bgPrimary)
+        .background(c.surface)
         .navigationTitle("Dev login")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load() }

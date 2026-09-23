@@ -118,12 +118,12 @@ struct AgentChatView: View {
             } else {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(spacing: 10) {
+                        LazyVStack(spacing: VVSpace.x2_5) {
                             header
                             if model.nextCursor != nil {
                                 Button { Task { await model.loadOlder() } } label: {
                                     if model.loadingOlder { ProgressView().tint(c.accent) }
-                                    else { Text("Earlier").font(.system(size: 13, weight: .medium)).foregroundStyle(c.accentDark) }
+                                    else { Text("Earlier").font(.system(size: VVFontSize.s13, weight: .medium)).foregroundStyle(c.accentStrong) }
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -144,14 +144,14 @@ struct AgentChatView: View {
                                 MessageBubble(text: live, isOwn: false, agent: true).id("live")
                             } else if let working = model.working {
                                 Text(working)
-                                    .font(.system(size: 13)).foregroundStyle(c.textMuted)
+                                    .font(.system(size: VVFontSize.s13)).foregroundStyle(c.fgMuted)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .lineLimit(1)
                                     .id("working")
                             }
                             Color.clear.frame(height: 8).id("bottom")
                         }
-                        .padding(16)
+                        .padding(VVSpace.x4)
                     }
                     .onChange(of: model.messages.count) { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
                     .onChange(of: model.live) { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
@@ -159,7 +159,7 @@ struct AgentChatView: View {
                 }
             }
         }
-        .background(c.bgSecondary)
+        .background(c.surfaceSubtle)
         .safeAreaInset(edge: .bottom) { composer }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
@@ -167,38 +167,38 @@ struct AgentChatView: View {
         .onDisappear { model.cancel() }
         .overlay(alignment: .top) {
             if let error = model.error {
-                Text(error).font(.system(size: 13)).foregroundStyle(c.error)
-                    .padding(12).frame(maxWidth: .infinity, alignment: .leading).background(c.bgTertiary)
+                Text(error).font(.system(size: VVFontSize.s13)).foregroundStyle(c.danger)
+                    .padding(VVSpace.x3).frame(maxWidth: .infinity, alignment: .leading).background(c.surfaceMuted)
             }
         }
     }
 
     private var header: some View {
         let c = theme.colors
-        return VStack(spacing: 6) {
+        return VStack(spacing: VVSpace.x1_5) {
             PersonAvatar(name: title, size: 56, glyph: .bot)
-            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(c.textPrimary)
+            Text(title).font(.system(size: VVFontSize.s13, weight: .semibold)).foregroundStyle(c.fg)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, VVSpace.x3)
     }
 
     private var composer: some View {
         let c = theme.colors
         let canSend = !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !model.sending
-        return HStack(alignment: .bottom, spacing: 8) {
-            HStack(alignment: .bottom, spacing: 6) {
+        return HStack(alignment: .bottom, spacing: VVSpace.x2) {
+            HStack(alignment: .bottom, spacing: VVSpace.x1_5) {
                 TextField("Message", text: $input, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($focused)
-                    .foregroundStyle(c.textPrimary)
+                    .foregroundStyle(c.fg)
                 Button { focused = true } label: {
-                    VisvineIcon(.mic, size: 18).foregroundStyle(c.textMuted)
+                    VisvineIcon(.mic, size: 18).foregroundStyle(c.fgMuted)
                 }
                 .buttonStyle(.plain)
                 .padding(.bottom, 1)
             }
-            .padding(.horizontal, 14).padding(.vertical, 9)
-            .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .padding(.horizontal, VVSpace.x3_5).padding(.vertical, 9)
+            .background(c.surfaceMuted, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             if canSend {
                 Button { send() } label: {
                     VisvineIcon(.arrowUp, size: 18).foregroundStyle(.white)
@@ -208,8 +208,8 @@ struct AgentChatView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(12)
-        .background(c.bgPrimary)
+        .padding(VVSpace.x3)
+        .background(c.surface)
     }
 
     private func send() {

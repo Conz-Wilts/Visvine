@@ -68,7 +68,7 @@ struct HomeView: View {
                 }
             }
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .task(id: space.current?.id) {
             section = .feed
             await model.load(spaceId: space.current?.id)
@@ -80,12 +80,12 @@ struct HomeView: View {
         return ScrollView {
                 LazyVStack(spacing: 0) {
                     if let error = model.error {
-                        Text(error).foregroundStyle(c.error).font(.system(size: 14))
+                        Text(error).foregroundStyle(c.danger).font(.system(size: VVFontSize.s14))
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            .padding(.horizontal, VVSpace.x4).padding(.vertical, VVSpace.x3)
                     }
                     if model.loading {
-                        ProgressView().tint(c.accent).frame(maxWidth: .infinity).padding(.vertical, 48)
+                        ProgressView().tint(c.accent).frame(maxWidth: .infinity).padding(.vertical, VVSpace.x12)
                     } else if posts.isEmpty {
                         EmptyStateView(text: search.query.isEmpty ? "Nothing in this space's feed yet" : "No posts found", icon: .message)
                     } else {
@@ -94,10 +94,10 @@ struct HomeView: View {
                                 .onAppear {
                                     if post.id == model.posts.last?.id { Task { await model.loadMore(spaceId: space.current?.id) } }
                                 }
-                            Hairline().padding(.horizontal, 16)
+                            Hairline().padding(.horizontal, VVSpace.x4)
                         }
                         if model.loadingMore {
-                            ProgressView().tint(c.accent).frame(maxWidth: .infinity).padding(.vertical, 16)
+                            ProgressView().tint(c.accent).frame(maxWidth: .infinity).padding(.vertical, VVSpace.x4)
                         }
                     }
                     // Room for the floating bar.
@@ -121,20 +121,20 @@ struct HomeView: View {
     /// offered to an admin, or to anyone whose grants reach a note of it.
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            GlassEffectContainer(spacing: 10) {
-                HStack(spacing: 10) {
+            GlassEffectContainer(spacing: VVSpace.x2_5) {
+                HStack(spacing: VVSpace.x2_5) {
                     Chip(label: "Feed", on: section == .feed) { section = .feed }
                     Chip(label: "Events", on: section == .events) { section = .events }
                     if let root = model.context, space.current?.isAdmin == true || root.noteCount > 0 {
                         Chip(label: "Context", on: section == .context) { section = .context }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, VVSpace.x4)
+                .padding(.vertical, VVSpace.x2)
             }
         }
         .scrollClipDisabled()
-        .padding(.bottom, 4)
+        .padding(.bottom, VVSpace.x1)
     }
 }
 
@@ -148,28 +148,28 @@ private struct FeedPostRow: View {
     var body: some View {
         let c = theme.colors
         let lines = post.message.text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true)
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: VVSpace.x2) {
+            HStack(spacing: VVSpace.x2) {
                 PersonAvatar(name: post.message.sender.name, imageUrl: post.message.sender.image, size: 28)
-                Text("\(Text(post.message.sender.name).fontWeight(.semibold).foregroundStyle(c.textSecondary))\(Text(" in ").foregroundStyle(c.textMuted))\(Text(post.channel.name).fontWeight(.semibold).foregroundStyle(c.textSecondary))\(Text(" · \(DateFormatting.relativeShort(post.message.createdAt))").foregroundStyle(c.textMuted))")
-                    .font(.system(size: 14))
+                Text("\(Text(post.message.sender.name).fontWeight(.semibold).foregroundStyle(c.fgSecondary))\(Text(" in ").foregroundStyle(c.fgMuted))\(Text(post.channel.name).fontWeight(.semibold).foregroundStyle(c.fgSecondary))\(Text(" · \(DateFormatting.relativeShort(post.message.createdAt))").foregroundStyle(c.fgMuted))")
+                    .font(.system(size: VVFontSize.s14))
                     .lineLimit(1)
             }
             if let title = lines.first {
-                Text(String(title)).font(.system(size: 20, weight: .bold)).foregroundStyle(c.textPrimary).lineLimit(2)
+                Text(String(title)).font(.system(size: VVFontSize.s20, weight: .bold)).foregroundStyle(c.fg).lineLimit(2)
             }
             if lines.count > 1 {
-                Text(String(lines[1])).font(.system(size: 16)).foregroundStyle(c.textSecondary).lineLimit(2)
+                Text(String(lines[1])).font(.system(size: VVFontSize.s16)).foregroundStyle(c.fgSecondary).lineLimit(2)
             }
-            HStack(spacing: 6) {
+            HStack(spacing: VVSpace.x1_5) {
                 VisvineIcon(.message, size: 20)
-                if !post.comments.isEmpty { Text("\(post.comments.count)").font(.system(size: 15)) }
+                if !post.comments.isEmpty { Text("\(post.comments.count)").font(.system(size: VVFontSize.s15)) }
             }
-            .foregroundStyle(c.textSecondary)
-            .padding(.top, 4)
+            .foregroundStyle(c.fgSecondary)
+            .padding(.top, VVSpace.x1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
+        .padding(.horizontal, VVSpace.x4)
+        .padding(.vertical, VVSpace.x4)
     }
 }

@@ -9,28 +9,28 @@ struct ConversationRow: View {
 
     var body: some View {
         let c = theme.colors
-        HStack(spacing: 12) {
+        HStack(spacing: VVSpace.x3) {
             PersonAvatar(name: name, imageUrl: conversation.avatarUrl, size: 48)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: VVSpace.x0_5) {
                 HStack {
-                    Text(name).font(.system(size: 16, weight: .semibold)).foregroundStyle(c.textPrimary).lineLimit(1)
+                    Text(name).font(.system(size: VVFontSize.s16, weight: .semibold)).foregroundStyle(c.fg).lineLimit(1)
                     Spacer()
                     if let last = conversation.lastMessage {
-                        Text(DateFormatting.relativeShort(last.createdAt)).font(.system(size: 12)).foregroundStyle(c.textMuted)
+                        Text(DateFormatting.relativeShort(last.createdAt)).font(.system(size: VVFontSize.s12)).foregroundStyle(c.fgMuted)
                     }
                 }
                 HStack {
                     let preview = conversation.lastMessage.map { "\($0.sender.name): \($0.text)" } ?? "No messages yet"
-                    Text(preview).font(.system(size: 14)).foregroundStyle(c.textMuted).lineLimit(1)
+                    Text(preview).font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgMuted).lineLimit(1)
                     Spacer()
                     if conversation.unreadCount > 0 {
-                        Text("\(conversation.unreadCount)").font(.system(size: 12, weight: .semibold)).foregroundStyle(c.bgPrimary)
-                            .padding(.horizontal, 8).padding(.vertical, 2).background(c.accent, in: RoundedRectangle(cornerRadius: 6))
+                        Text("\(conversation.unreadCount)").font(.system(size: VVFontSize.s12, weight: .semibold)).foregroundStyle(c.surface)
+                            .padding(.horizontal, VVSpace.x2).padding(.vertical, VVSpace.x0_5).background(c.accent, in: RoundedRectangle(cornerRadius: VVRadius.md))
                     }
                 }
             }
         }
-        .padding(16)
+        .padding(VVSpace.x4)
         .contentShape(Rectangle())
     }
 }

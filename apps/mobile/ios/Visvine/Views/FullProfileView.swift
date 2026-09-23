@@ -59,18 +59,18 @@ struct FullProfileView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         hero(profile)
-                        if let bio = profile.bio, !bio.isEmpty { section("About") { Text(bio).foregroundStyle(c.textSecondary).font(.system(size: 14)) } }
+                        if let bio = profile.bio, !bio.isEmpty { section("About") { Text(bio).foregroundStyle(c.fgSecondary).font(.system(size: VVFontSize.s14)) } }
                         if let tags = profile.tags, !tags.isEmpty { section("Skills") { skills(tags) } }
                         if hasContact(profile) { section("Contact") { contact(profile) } }
                     }
-                    .padding(.bottom, 40)
+                    .padding(.bottom, VVSpace.x10)
                 }
                 .refreshable { await model.refresh(personId: personId) }
             } else {
                 errorState
             }
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .navigationTitle(model.profile?.name ?? initialName ?? "Profile")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load(personId: personId) }
@@ -78,48 +78,48 @@ struct FullProfileView: View {
 
     private func hero(_ profile: FullProfile) -> some View {
         let c = theme.colors
-        return VStack(spacing: 12) {
+        return VStack(spacing: VVSpace.x3) {
             ZStack(alignment: .bottomTrailing) {
                 if let imageUrl = profile.imageUrl, let url = URL(string: imageUrl) {
                     AsyncImage(url: url) { phase in
                         if let img = phase.image { img.resizable().scaledToFill() } else { avatarFallback(profile.name) }
                     }
-                    .frame(width: 120, height: 120).clipShape(RoundedRectangle(cornerRadius: 16))
+                    .frame(width: 120, height: 120).clipShape(RoundedRectangle(cornerRadius: VVRadius.xl2))
                 } else {
                     avatarFallback(profile.name)
                 }
                 if profile.openToWork == true {
                     VisvineIcon(.check, size: 12).foregroundStyle(.white)
-                        .frame(width: 24, height: 24).background(Color(hex: 0x10B981), in: Circle())
-                        .overlay(Circle().stroke(c.bgPrimary, lineWidth: 3))
+                        .frame(width: 24, height: 24).background(VVColor.successBright, in: Circle())
+                        .overlay(Circle().stroke(c.surface, lineWidth: 3))
                 }
             }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(profile.name).font(.system(size: 24, weight: .bold)).foregroundStyle(c.textPrimary)
-                if let p = profile.pronouns { Text("(\(p))").font(.system(size: 14)).foregroundStyle(c.textMuted) }
+            HStack(alignment: .firstTextBaseline, spacing: VVSpace.x1_5) {
+                Text(profile.name).font(.system(size: VVFontSize.s24, weight: .bold)).foregroundStyle(c.fg)
+                if let p = profile.pronouns { Text("(\(p))").font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgMuted) }
             }
-            if let subtitle = profile.subtitle { Text(subtitle).font(.system(size: 15)).foregroundStyle(c.textSecondary).multilineTextAlignment(.center) }
+            if let subtitle = profile.subtitle { Text(subtitle).font(.system(size: VVFontSize.s15)).foregroundStyle(c.fgSecondary).multilineTextAlignment(.center) }
 
             if !isOwner {
-                HStack(spacing: 8) {
+                HStack(spacing: VVSpace.x2) {
                     // Rounded squares, not pills, and painted rather than
                     // outlined — the pair Button.tsx draws for brand + neutral.
                     Button { } label: {
-                        Text("Connect").font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 12)
-                            .background(c.accent, in: RoundedRectangle(cornerRadius: 8))
+                        Text("Connect").font(.system(size: VVFontSize.s14, weight: .semibold))
+                            .foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, VVSpace.x3)
+                            .background(c.accent, in: RoundedRectangle(cornerRadius: VVRadius.lg))
                     }
                     Button {
                         if let email = profile.email, let url = URL(string: "mailto:\(email)") { openURL(url) }
                     } label: {
-                        Text("Message").font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(c.textSecondary).frame(maxWidth: .infinity).padding(.vertical, 12)
-                            .background(c.bgSecondary, in: RoundedRectangle(cornerRadius: 8))
+                        Text("Message").font(.system(size: VVFontSize.s14, weight: .semibold))
+                            .foregroundStyle(c.fgSecondary).frame(maxWidth: .infinity).padding(.vertical, VVSpace.x3)
+                            .background(c.surfaceSubtle, in: RoundedRectangle(cornerRadius: VVRadius.lg))
                     }
                 }
             }
 
-            HStack(spacing: 6) {
+            HStack(spacing: VVSpace.x1_5) {
                 if let year = profile.createdAt?.prefix(4), let y = Int(year) {
                     chip(icon: .calendar, text: "Member since \(y)")
                 }
@@ -128,7 +128,7 @@ struct FullProfileView: View {
                 }
             }
         }
-        .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 24)
+        .padding(.horizontal, VVSpace.x4).padding(.top, VVSpace.x4).padding(.bottom, VVSpace.x6)
         .frame(maxWidth: .infinity)
     }
 
@@ -137,17 +137,17 @@ struct FullProfileView: View {
             theme.colors.accent
             Text(profileInitials(name)).foregroundStyle(.white).font(.system(size: 40, weight: .bold))
         }
-        .frame(width: 120, height: 120).clipShape(RoundedRectangle(cornerRadius: 16))
+        .frame(width: 120, height: 120).clipShape(RoundedRectangle(cornerRadius: VVRadius.xl2))
     }
 
     private func chip(icon: VisvineIconName, text: String) -> some View {
         let c = theme.colors
-        return HStack(spacing: 4) {
+        return HStack(spacing: VVSpace.x1) {
             VisvineIcon(icon, size: 12)
-            Text(text).font(.system(size: 12, weight: .medium))
+            Text(text).font(.system(size: VVFontSize.s12, weight: .medium))
         }
-        .foregroundStyle(c.textSecondary).padding(.horizontal, 8).padding(.vertical, 4)
-        .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 6))
+        .foregroundStyle(c.fgSecondary).padding(.horizontal, VVSpace.x2).padding(.vertical, VVSpace.x1)
+        .background(c.surfaceMuted, in: RoundedRectangle(cornerRadius: VVRadius.md))
     }
 
     private func skills(_ tags: [String]) -> some View {
@@ -155,9 +155,9 @@ struct FullProfileView: View {
         // One shape for every label in the app: a rounded square, painted or
         // plain, never a tinted wash inside a border of the same hue.
         return FlexWrap(tags) { tag in
-            Text(tag).font(.system(size: 11, weight: .semibold)).foregroundStyle(c.textSecondary)
-                .padding(.horizontal, 8).padding(.vertical, 5)
-                .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 6))
+            Text(tag).font(.system(size: VVFontSize.s11, weight: .semibold)).foregroundStyle(c.fgSecondary)
+                .padding(.horizontal, VVSpace.x2).padding(.vertical, 5)
+                .background(c.surfaceMuted, in: RoundedRectangle(cornerRadius: VVRadius.md))
         }
     }
 
@@ -174,23 +174,23 @@ struct FullProfileView: View {
     private func contactRow(_ icon: VisvineIconName, _ label: String, _ action: @escaping () -> Void) -> some View {
         let c = theme.colors
         return Button(action: action) {
-            HStack(spacing: 12) {
-                VisvineIcon(icon).foregroundStyle(c.textMuted)
-                Text(label).font(.system(size: 14)).foregroundStyle(c.textSecondary).lineLimit(1)
+            HStack(spacing: VVSpace.x3) {
+                VisvineIcon(icon).foregroundStyle(c.fgMuted)
+                Text(label).font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgSecondary).lineLimit(1)
                 Spacer()
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, VVSpace.x2_5)
         }
     }
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         let c = theme.colors
         return VStack(alignment: .leading, spacing: 0) {
-            Rectangle().fill(c.borderSubtle).frame(height: 1)
+            Rectangle().fill(c.lineSubtle).frame(height: 1)
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .semibold)).kerning(0.9).foregroundStyle(c.textMuted)
-                .padding(.horizontal, 16).padding(.top, 20).padding(.bottom, 8)
-            content().padding(.horizontal, 16).padding(.bottom, 20)
+                .font(.system(size: VVFontSize.s11, weight: .semibold)).kerning(0.9).foregroundStyle(c.fgMuted)
+                .padding(.horizontal, VVSpace.x4).padding(.top, VVSpace.x5).padding(.bottom, VVSpace.x2)
+            content().padding(.horizontal, VVSpace.x4).padding(.bottom, VVSpace.x5)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -201,13 +201,13 @@ struct FullProfileView: View {
 
     private var errorState: some View {
         let c = theme.colors
-        return VStack(spacing: 8) {
-            Text("Profile unavailable").font(.system(size: 16, weight: .bold)).foregroundStyle(c.textPrimary)
-            Text(model.error ?? "This person may have been removed.").font(.system(size: 14)).foregroundStyle(c.textMuted).multilineTextAlignment(.center)
+        return VStack(spacing: VVSpace.x2) {
+            Text("Profile unavailable").font(.system(size: VVFontSize.s16, weight: .bold)).foregroundStyle(c.fg)
+            Text(model.error ?? "This person may have been removed.").font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgMuted).multilineTextAlignment(.center)
             Button("Try again") { Task { await model.load(personId: personId) } }
-                .font(.system(size: 14, weight: .semibold)).foregroundStyle(c.accentDark).padding(.top, 8)
+                .font(.system(size: VVFontSize.s14, weight: .semibold)).foregroundStyle(c.accentStrong).padding(.top, VVSpace.x2)
         }
-        .padding(24)
+        .padding(VVSpace.x6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -222,7 +222,7 @@ struct FlexWrap<Data: RandomAccessCollection, Content: View>: View where Data.El
     var body: some View {
         // iOS 16+: SwiftUI Layout could be used; a simple wrapping HStack via
         // `FlowLayout` is overkill here — use a LazyVGrid adaptive grid.
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 60), spacing: 6, alignment: .leading)], alignment: .leading, spacing: 6) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 60), spacing: VVSpace.x1_5, alignment: .leading)], alignment: .leading, spacing: VVSpace.x1_5) {
             ForEach(Array(data), id: \.self) { content($0) }
         }
     }

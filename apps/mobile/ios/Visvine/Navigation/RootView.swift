@@ -11,7 +11,7 @@ struct RootView: View {
     var body: some View {
         let c = theme.colors
         ZStack {
-            c.bgPrimary.ignoresSafeArea()
+            c.surface.ignoresSafeArea()
 
             switch killSwitch.state {
             case .disabled(let message):
@@ -43,10 +43,10 @@ private struct BlockingScreen: View {
 
     var body: some View {
         let c = theme.colors
-        VStack(spacing: 8) {
-            Text(title).font(.system(size: 20, weight: .bold)).foregroundStyle(c.textPrimary)
-            Text(message).font(.system(size: 15)).foregroundStyle(c.textMuted).multilineTextAlignment(.center)
+        VStack(spacing: VVSpace.x2) {
+            Text(title).font(.system(size: VVFontSize.s20, weight: .bold)).foregroundStyle(c.fg)
+            Text(message).font(.system(size: VVFontSize.s15)).foregroundStyle(c.fgMuted).multilineTextAlignment(.center)
         }
-        .padding(32)
+        .padding(VVSpace.x8)
     }
 }

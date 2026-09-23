@@ -60,9 +60,9 @@ struct ConversationsListView: View {
         VStack(spacing: 0) {
             ScreenHeader(showSpaceSelector: false, onProfile: onProfile)
             if let error = model.error {
-                Text(error).foregroundStyle(c.error).font(.system(size: 14))
+                Text(error).foregroundStyle(c.danger).font(.system(size: VVFontSize.s14))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16).padding(.vertical, 12)
+                    .padding(.horizontal, VVSpace.x4).padding(.vertical, VVSpace.x3)
             }
             if model.loading {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -91,7 +91,7 @@ struct ConversationsListView: View {
                 }
             }
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .task { await model.load() }
         .task { await model.startRealtime() }
     }

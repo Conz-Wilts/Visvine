@@ -59,9 +59,9 @@ struct DiscoverView: View {
             ScreenHeader(onProfile: onProfile)
             SegmentedNav(items: ["Spaces", "Events"], selected: $segment)
             if let error = model.error {
-                Text(error).foregroundStyle(c.error).font(.system(size: 14))
+                Text(error).foregroundStyle(c.danger).font(.system(size: VVFontSize.s14))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .padding(.horizontal, VVSpace.x4).padding(.vertical, VVSpace.x2)
             }
             if model.loading {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -75,7 +75,7 @@ struct DiscoverView: View {
                 .refreshable { await model.load() }
             }
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .searchScope("Search Discover")
         .task { await model.load() }
     }
@@ -138,19 +138,19 @@ private struct SpaceDiscoverRow: View {
 
     var body: some View {
         let c = theme.colors
-        HStack(spacing: 12) {
+        HStack(spacing: VVSpace.x3) {
             SpaceAvatar(name: space.name, imageUrl: space.image, size: 44)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(space.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(c.textPrimary).lineLimit(1)
+            VStack(alignment: .leading, spacing: VVSpace.x0_5) {
+                Text(space.name).font(.system(size: VVFontSize.s16, weight: .semibold)).foregroundStyle(c.fg).lineLimit(1)
                 if let line = space.description, !line.isEmpty {
-                    Text(line).font(.system(size: 13)).foregroundStyle(c.textMuted).lineLimit(2)
+                    Text(line).font(.system(size: VVFontSize.s13)).foregroundStyle(c.fgMuted).lineLimit(2)
                 }
             }
             Spacer(minLength: 8)
             door
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, VVSpace.x4)
+        .padding(.vertical, VVSpace.x3)
     }
 
     @ViewBuilder private var door: some View {
@@ -158,24 +158,24 @@ private struct SpaceDiscoverRow: View {
         switch state {
         case .open:
             Button(action: onJoin) {
-                Text("Join").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                    .padding(.horizontal, 16).frame(height: 32)
-                    .background(c.accentDark, in: Capsule())
+                Text("Join").font(.system(size: VVFontSize.s14, weight: .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, VVSpace.x4).frame(height: 32)
+                    .background(c.accentStrong, in: Capsule())
             }
             .buttonStyle(.plain)
         case .joining:
             ProgressView().tint(c.accent).frame(width: 64, height: 32)
         case .asked:
-            Text("Asked").font(.system(size: 14, weight: .medium)).foregroundStyle(c.textMuted)
+            Text("Asked").font(.system(size: VVFontSize.s14, weight: .medium)).foregroundStyle(c.fgMuted)
         case .joined:
             Button(action: onOpen) {
-                Text("Open").font(.system(size: 14, weight: .semibold)).foregroundStyle(c.textPrimary)
-                    .padding(.horizontal, 16).frame(height: 32)
-                    .background(c.bgTertiary, in: Capsule())
+                Text("Open").font(.system(size: VVFontSize.s14, weight: .semibold)).foregroundStyle(c.fg)
+                    .padding(.horizontal, VVSpace.x4).frame(height: 32)
+                    .background(c.surfaceMuted, in: Capsule())
             }
             .buttonStyle(.plain)
         case .current:
-            VisvineIcon(.check, size: 18).foregroundStyle(c.accentDark)
+            VisvineIcon(.check, size: 18).foregroundStyle(c.accentStrong)
         }
     }
 }
@@ -187,23 +187,23 @@ private struct DiscoverEventRow: View {
 
     var body: some View {
         let c = theme.colors
-        HStack(spacing: 14) {
+        HStack(spacing: VVSpace.x3_5) {
             VStack(spacing: 0) {
                 Text(DateFormatting.monthShort(event.startAt).uppercased())
-                    .font(.system(size: 11, weight: .bold)).foregroundStyle(c.accentDark)
+                    .font(.system(size: VVFontSize.s11, weight: .bold)).foregroundStyle(c.accentStrong)
                 Text(DateFormatting.dayOfMonth(event.startAt))
-                    .font(.system(size: 20, weight: .bold)).foregroundStyle(c.textPrimary)
+                    .font(.system(size: VVFontSize.s20, weight: .bold)).foregroundStyle(c.fg)
             }
             .frame(width: 48, height: 52)
-            .background(c.accentLight, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(c.accentSoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
-                Text(event.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(c.textPrimary).lineLimit(2)
-                Text(detail).font(.system(size: 13)).foregroundStyle(c.textMuted).lineLimit(1)
+                Text(event.title).font(.system(size: VVFontSize.s16, weight: .semibold)).foregroundStyle(c.fg).lineLimit(2)
+                Text(detail).font(.system(size: VVFontSize.s13)).foregroundStyle(c.fgMuted).lineLimit(1)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, VVSpace.x4)
+        .padding(.vertical, VVSpace.x3)
         .contentShape(Rectangle())
     }
 

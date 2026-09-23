@@ -55,7 +55,7 @@ Visvine/
 ├── Repositories/    Auth/Space/Directory/Events/Messages/Profile/Feed/Agents/Activity/Actions
 ├── Auth/            AuthManager (session+deep link), OAuthService (ASWebAuth…)
 ├── State/           SpaceStore, ThemeStore, SearchStore (@Observable)
-├── Theme/           8 hues (buildColors), DynamicColors
+├── Theme/           Tokens.generated.swift (packages/tokens — do not edit), DynamicColors
 ├── Util/            search heuristic, date formatting
 ├── Components/      ScreenHeader, SearchOverlay, SpaceAvatar, PersonAvatar, SegmentedNav,
 │                    MessageBubble, ConversationRow, Hairline/DateSeparator/LinkRow, glass

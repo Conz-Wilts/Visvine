@@ -17,9 +17,9 @@ struct ToolsView: View {
         VStack(spacing: 0) {
             ScreenHeader(onProfile: onProfile)
             if let error {
-                Text(error).foregroundStyle(c.error).font(.system(size: 14))
+                Text(error).foregroundStyle(c.danger).font(.system(size: VVFontSize.s14))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .padding(.horizontal, VVSpace.x4).padding(.vertical, VVSpace.x2)
             }
             if loading {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -38,18 +38,18 @@ struct ToolsView: View {
                 .refreshable { await load() }
             }
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .task(id: space.current?.id) { await load() }
     }
 
     private func row(_ tool: InstalledTool) -> some View {
         let c = theme.colors
         return HStack {
-            Text(tool.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(c.textPrimary).lineLimit(1)
+            Text(tool.title).font(.system(size: VVFontSize.s16, weight: .semibold)).foregroundStyle(c.fg).lineLimit(1)
             Spacer()
-            VisvineIcon(.chevronRight, size: 16).foregroundStyle(c.textMuted)
+            VisvineIcon(.chevronRight, size: 16).foregroundStyle(c.fgMuted)
         }
-        .padding(.horizontal, 16).padding(.vertical, 14)
+        .padding(.horizontal, VVSpace.x4).padding(.vertical, VVSpace.x3_5)
         .contentShape(Rectangle())
     }
 

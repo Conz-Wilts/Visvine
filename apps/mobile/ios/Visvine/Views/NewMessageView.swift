@@ -42,19 +42,19 @@ struct NewMessageView: View {
     var body: some View {
         let c = theme.colors
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                VisvineIcon(.search, size: 16).foregroundStyle(c.textMuted)
+            HStack(spacing: VVSpace.x2_5) {
+                VisvineIcon(.search, size: 16).foregroundStyle(c.fgMuted)
                 TextField("Search people", text: $query)
-                    .foregroundStyle(c.textPrimary)
+                    .foregroundStyle(c.fg)
                     .autocorrectionDisabled()
             }
-            .padding(.horizontal, 14).frame(height: 40)
-            .background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .padding(16)
+            .padding(.horizontal, VVSpace.x3_5).frame(height: 40)
+            .background(c.surfaceMuted, in: RoundedRectangle(cornerRadius: VVRadius.xl, style: .continuous))
+            .padding(VVSpace.x4)
 
             if let error = model.error {
-                Text(error).foregroundStyle(c.error).font(.system(size: 14))
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.bottom, 8)
+                Text(error).foregroundStyle(c.danger).font(.system(size: VVFontSize.s14))
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, VVSpace.x4).padding(.bottom, VVSpace.x2)
             }
             if model.loading && model.people.isEmpty {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -69,13 +69,13 @@ struct NewMessageView: View {
                             Button {
                                 Task { if let conversation = await model.open(person) { opened = conversation } }
                             } label: {
-                                HStack(spacing: 12) {
+                                HStack(spacing: VVSpace.x3) {
                                     PersonAvatar(name: person.name, imageUrl: person.image, size: 40)
-                                    Text(person.name).font(.system(size: 16, weight: .medium)).foregroundStyle(c.textPrimary)
+                                    Text(person.name).font(.system(size: VVFontSize.s16, weight: .medium)).foregroundStyle(c.fg)
                                     Spacer()
                                     if model.opening == person.id { ProgressView().tint(c.accent) }
                                 }
-                                .padding(.horizontal, 16).frame(height: 56)
+                                .padding(.horizontal, VVSpace.x4).frame(height: 56)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -85,7 +85,7 @@ struct NewMessageView: View {
                 }
             }
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .navigationTitle("New message")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: query) {

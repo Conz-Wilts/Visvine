@@ -73,15 +73,18 @@ struct NotePropertyRows: View {
             VStack(alignment: .leading, spacing: 0) {
                 Hairline()
                 if let type = doc.type {
-                    entry("Type") { chip(type, c.accentBg, c.accentDark) }
+                    entry("Type") {
+                        let swatch = VVTypeColor.named(type)
+                        chip(type, swatch.wash, swatch.fg)
+                    }
                 }
                 ForEach(rows) { row in
                     entry(row.label) { value(row) }
                 }
                 if !doc.tags.isEmpty {
                     entry("Tags") {
-                        FlowRow(spacing: 6) {
-                            ForEach(doc.tags, id: \.self) { chip("#" + $0, c.bgTertiary, c.textSecondary) }
+                        FlowRow(spacing: VVSpace.x1_5) {
+                            ForEach(doc.tags, id: \.self) { chip("#" + $0, c.surfaceMuted, c.fgSecondary) }
                         }
                     }
                 }
@@ -91,24 +94,24 @@ struct NotePropertyRows: View {
     }
 
     private func entry(_ label: String, @ViewBuilder _ content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: VVSpace.x1) {
             Text(label.uppercased())
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: VVFontSize.s11, weight: .semibold))
                 .tracking(0.6)
-                .foregroundStyle(theme.colors.textMuted)
+                .foregroundStyle(theme.colors.fgMuted)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 8)
+        .padding(.vertical, VVSpace.x2)
     }
 
     @ViewBuilder private func value(_ row: Row) -> some View {
         let c = theme.colors
-        let text = Text(display(row)).font(.system(size: 16))
+        let text = Text(display(row)).font(.system(size: VVFontSize.s16))
         if let url = link(row) {
-            Link(destination: url) { text.foregroundStyle(c.accentDark) }
+            Link(destination: url) { text.foregroundStyle(c.accentStrong) }
         } else {
-            text.foregroundStyle(c.textPrimary).textSelection(.enabled)
+            text.foregroundStyle(c.fg).textSelection(.enabled)
         }
     }
 
@@ -146,11 +149,11 @@ struct NotePropertyRows: View {
 
     private func chip(_ text: String, _ bg: Color, _ fg: Color) -> some View {
         Text(text)
-            .font(.system(size: 13, weight: .medium))
+            .font(.system(size: VVFontSize.s13, weight: .medium))
             .foregroundStyle(fg)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, VVSpace.x2)
             .padding(.vertical, 3)
-            .background(bg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .background(bg, in: RoundedRectangle(cornerRadius: VVRadius.md, style: .continuous))
     }
 }
 

@@ -52,21 +52,25 @@ platform's `scripts/build-icons.mjs`. Generated output is committed. See
 ## What the screens look like
 
 The web app is the source of truth for the surface as well as the features, so
-both clients follow the same quiet-surface rules `apps/web` does:
+both clients follow the same quiet-surface rules `apps/web` does. Every value
+comes from the design tokens (`packages/tokens`, generated into
+`Tokens.generated.swift` and `Tokens.kt` by `pnpm tokens:build`; reference in
+`packages/ui/DESIGN.md`), under the same names as the web's utilities:
 
-- **No cards.** A group of rows is opened by a 1px `borderSubtle` hairline on the
-  flat `bgPrimary` surface — not wrapped in a rounded, tinted block.
-- **One label shape:** a rounded square (6dp/pt), painted in its own colour or
-  plain on `bgTertiary`. No pills, and no tinted wash inside a border of the same
-  hue.
-- **Buttons are rounded squares** (8dp/pt), painted: accent for the primary,
-  `bgSecondary` for its quiet half. None of them cast a shadow.
+- **No cards.** A group of rows is opened by a 1px `lineSubtle` hairline on the
+  flat `surface` — not wrapped in a rounded, tinted block.
+- **One label shape:** a rounded square (`VVRadius.md`, 6), painted in its own
+  colour or plain on `surfaceMuted`. No pills, and no tinted wash inside a border
+  of the same hue.
+- **Buttons are rounded squares** (`VVRadius.lg`, 8), painted: accent for the
+  primary, `surfaceSubtle` for its quiet half. None of them cast a shadow.
 - **Shadows are for things that float** — the glass tab bar and the search
   overlay, and nothing else.
 - **Empty states** are a line of muted text, optionally a small icon and a text
   link in the accent. No tile behind the icon.
 - **The app is light-only**, like the web app: `UIUserInterfaceStyle: Light` on
-  iOS, `forceDarkAllowed=false` on Android, one palette in `buildColors`.
+  iOS, `forceDarkAllowed=false` on Android. The tokens carry a provisional dark
+  theme that neither app switches on.
 
 The directory card is the one deliberate exception to "no cards": it is the same
 object `NodeCard.tsx` draws on the web, ring and all — square identity media,

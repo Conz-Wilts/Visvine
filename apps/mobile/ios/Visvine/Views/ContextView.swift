@@ -33,10 +33,10 @@ struct ContextFolderView: View {
                     line(row)
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, VVSpace.x1)
             .padding(.bottom, 140)
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .navigationTitle(embedded ? "" : (node.path.isEmpty ? "Context" : node.label))
         .navigationBarTitleDisplayMode(embedded ? .inline : .large)
         .searchScope("Search context")
@@ -53,23 +53,23 @@ struct ContextFolderView: View {
         let content = HStack(spacing: 0) {
             guides(row)
             VisvineIcon(n.isFolder ? (expanded ? .folderOpen : .folder) : .fileText, size: 19)
-                .foregroundStyle(n.isFolder ? c.accentDark : c.textMuted)
+                .foregroundStyle(n.isFolder ? c.accentStrong : c.fgMuted)
                 .frame(width: Self.glyph)
             Text(highlighted(n.label))
                 .font(.system(size: 17, weight: n.isFolder ? .semibold : .regular))
-                .foregroundStyle(c.textPrimary)
+                .foregroundStyle(c.fg)
                 .lineLimit(1)
-                .padding(.leading, 12)
+                .padding(.leading, VVSpace.x3)
             Spacer(minLength: 8)
             if n.isFolder {
-                Text("\(n.noteCount)").font(.system(size: 14)).foregroundStyle(c.textMuted)
+                Text("\(n.noteCount)").font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgMuted)
                 VisvineIcon(.chevronRight, size: 12)
-                    .foregroundStyle(c.textLight)
+                    .foregroundStyle(c.fgSubtle)
                     .rotationEffect(.degrees(expanded ? 90 : 0))
-                    .padding(.leading, 8)
+                    .padding(.leading, VVSpace.x2)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, VVSpace.x4)
         .frame(height: Self.rowHeight)
         .contentShape(Rectangle())
 
@@ -87,7 +87,7 @@ struct ContextFolderView: View {
     /// The guide columns: a continuing line for every ancestor that has
     /// siblings below it, then this row's own tick or elbow.
     private func guides(_ row: Row) -> some View {
-        let color = theme.colors.borderDefault
+        let color = theme.colors.line
         return HStack(spacing: 0) {
             ForEach(Array(row.lastAt.enumerated()), id: \.offset) { i, last in
                 let own = i == row.lastAt.count - 1
@@ -147,8 +147,8 @@ struct ContextFolderView: View {
     private func highlighted(_ label: String) -> AttributedString {
         var s = AttributedString(label)
         guard !query.isEmpty, let r = s.range(of: query, options: .caseInsensitive) else { return s }
-        s[r].backgroundColor = theme.colors.accentLight
-        s[r].foregroundColor = theme.colors.accentDark
+        s[r].backgroundColor = theme.colors.accentSoft
+        s[r].foregroundColor = theme.colors.accentStrong
         return s
     }
 }
@@ -206,19 +206,19 @@ struct ContextNoteView: View {
                 if let content, let doc {
                     if mode == 0 { context(doc) } else { raw(content) }
                 } else if let error {
-                    Text(error).foregroundStyle(c.error)
+                    Text(error).foregroundStyle(c.danger)
                 } else {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 48)
+                    ProgressView().frame(maxWidth: .infinity).padding(.top, VVSpace.x12)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, VVSpace.x4)
             .padding(.bottom, 120)
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            SegmentedNav(items: ["Context", "Raw"], selected: $mode).background(c.bgPrimary)
+            SegmentedNav(items: ["Context", "Raw"], selected: $mode).background(c.surface)
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .environment(\.openURL, OpenURLAction(handler: open))
@@ -243,16 +243,16 @@ struct ContextNoteView: View {
 
     @ViewBuilder private func context(_ doc: NoteDocument) -> some View {
         let c = theme.colors
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: VVSpace.x4) {
+            VStack(alignment: .leading, spacing: VVSpace.x1_5) {
                 Text(doc.title ?? title)
                     .font(.custom("Visvine-Medium", size: 30, relativeTo: .largeTitle))
-                    .foregroundStyle(c.textPrimary)
+                    .foregroundStyle(c.fg)
                 if let d = doc.description {
-                    Text(d).font(.system(size: 16)).foregroundStyle(c.textMuted)
+                    Text(d).font(.system(size: VVFontSize.s16)).foregroundStyle(c.fgMuted)
                 }
             }
-            .padding(.top, 8)
+            .padding(.top, VVSpace.x2)
             NotePropertyRows(doc: doc)
             if !doc.blocks.isEmpty { NoteBlocksView(blocks: doc.blocks) }
             ForEach(Array(doc.children.enumerated()), id: \.offset) { _, section in
@@ -291,11 +291,11 @@ struct ContextNoteView: View {
     private func group(_ heading: String, @ViewBuilder _ rows: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(heading.uppercased())
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: VVFontSize.s11, weight: .semibold))
                 .tracking(0.6)
-                .foregroundStyle(theme.colors.textMuted)
-                .padding(.top, 12)
-                .padding(.bottom, 6)
+                .foregroundStyle(theme.colors.fgMuted)
+                .padding(.top, VVSpace.x3)
+                .padding(.bottom, VVSpace.x1_5)
             Hairline()
             rows()
         }
@@ -303,18 +303,18 @@ struct ContextNoteView: View {
 
     private func row(_ title: String, _ detail: String?, icon: VisvineIconName) -> some View {
         let c = theme.colors
-        return HStack(alignment: .top, spacing: 12) {
-            VisvineIcon(icon, size: 17).foregroundStyle(c.textMuted).padding(.top, 2)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 16, weight: .medium)).foregroundStyle(c.textPrimary)
+        return HStack(alignment: .top, spacing: VVSpace.x3) {
+            VisvineIcon(icon, size: 17).foregroundStyle(c.fgMuted).padding(.top, VVSpace.x0_5)
+            VStack(alignment: .leading, spacing: VVSpace.x0_5) {
+                Text(title).font(.system(size: VVFontSize.s16, weight: .medium)).foregroundStyle(c.fg)
                 if let detail, !detail.isEmpty {
-                    Text(detail).font(.system(size: 14)).foregroundStyle(c.textMuted).lineLimit(2)
+                    Text(detail).font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgMuted).lineLimit(2)
                 }
             }
             Spacer(minLength: 8)
-            VisvineIcon(.chevronRight, size: 12).foregroundStyle(c.textLight).padding(.top, 4)
+            VisvineIcon(.chevronRight, size: 12).foregroundStyle(c.fgSubtle).padding(.top, VVSpace.x1)
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, VVSpace.x2_5)
         .contentShape(Rectangle())
     }
 
@@ -322,13 +322,13 @@ struct ContextNoteView: View {
 
     private func raw(_ content: String) -> some View {
         Text(content)
-            .font(.system(size: 14, design: .monospaced))
-            .foregroundStyle(theme.colors.textPrimary)
+            .font(.system(size: VVFontSize.s14, design: .monospaced))
+            .foregroundStyle(theme.colors.fg)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(theme.colors.bgSecondary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .padding(.top, 8)
+            .padding(VVSpace.x3)
+            .background(theme.colors.surfaceSubtle, in: RoundedRectangle(cornerRadius: VVRadius.lg, style: .continuous))
+            .padding(.top, VVSpace.x2)
     }
 
     // MARK: links

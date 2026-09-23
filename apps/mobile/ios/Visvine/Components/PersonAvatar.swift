@@ -32,12 +32,12 @@ struct PersonAvatar: View {
     private var fallback: some View {
         let c = theme.colors
         return ZStack {
-            shape.fill(c.accentLight)
+            shape.fill(c.accentSoft)
             if let glyph {
-                VisvineIcon(glyph, size: max(12, size * 0.45)).foregroundStyle(c.accentDark)
+                VisvineIcon(glyph, size: max(12, size * 0.45)).foregroundStyle(c.accentStrong)
             } else {
                 Text(name.isEmpty ? "?" : avatarInitials(name))
-                    .foregroundStyle(c.accentDark)
+                    .foregroundStyle(c.accentStrong)
                     .font(.system(size: max(10, size * 0.38), weight: .semibold))
             }
         }

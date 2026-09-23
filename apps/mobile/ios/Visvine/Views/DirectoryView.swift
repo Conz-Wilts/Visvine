@@ -2,13 +2,7 @@ import SwiftUI
 import Observation
 
 private func typeColor(_ type: String) -> Color {
-    switch type.lowercased() {
-    case "person": return Color(hex: 0x2563EB)
-    case "space": return Color(hex: 0x78D870)
-    case "resource": return Color(hex: 0xF59E0B)
-    case "event": return Color(hex: 0x9333EA)
-    default: return Color(hex: 0x6B7280)
-    }
+    VVTypeColor.named(type).base
 }
 
 private func capitalizeFirst(_ s: String) -> String {
@@ -89,7 +83,7 @@ struct DirectoryView: View {
 
     var onProfile: () -> Void
 
-    private let columns = [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)]
+    private let columns = [GridItem(.flexible(), spacing: VVSpace.x4), GridItem(.flexible(), spacing: VVSpace.x4)]
 
     var body: some View {
         let c = theme.colors
@@ -100,26 +94,26 @@ struct DirectoryView: View {
             } else {
                 ScrollView {
                     if let error = model.error {
-                        Text(error).foregroundStyle(c.error).font(.system(size: 14))
+                        Text(error).foregroundStyle(c.danger).font(.system(size: VVFontSize.s14))
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16).padding(.vertical, 12)
+                            .padding(.horizontal, VVSpace.x4).padding(.vertical, VVSpace.x3)
                     }
                     filters
                     let items = model.filtered(query: search.query)
                     if items.isEmpty {
                         emptyState
                     } else {
-                        LazyVGrid(columns: columns, spacing: 16) {
+                        LazyVGrid(columns: columns, spacing: VVSpace.x4) {
                             ForEach(items) { member in card(member) }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, VVSpace.x4)
                         .padding(.bottom, 120)
                     }
                 }
                 .refreshable { await model.refresh(spaceId: space.current?.id) }
             }
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .task(id: space.current?.id) { await model.load(spaceId: space.current?.id) }
         .searchScope("Search people")
         .sheet(item: $sheet) { which in filterSheet(which).environment(theme) }
@@ -128,27 +122,27 @@ struct DirectoryView: View {
     // MARK: Filters
     private var filters: some View {
         let c = theme.colors
-        return HStack(spacing: 8) {
+        return HStack(spacing: VVSpace.x2) {
             pill(label: "Type", count: model.selectedTypes.count) { sheet = .type }
             pill(label: "Tag", count: model.selectedTags.count) { sheet = .tag }
             Button { model.sortAscending.toggle() } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: VVSpace.x1_5) {
                     VisvineIcon(model.sortAscending ? .arrowDown : .arrowUp, size: 12)
-                    Text(model.sortAscending ? "A–Z" : "Z–A").font(.system(size: 13, weight: .semibold))
+                    Text(model.sortAscending ? "A–Z" : "Z–A").font(.system(size: VVFontSize.s13, weight: .semibold))
                 }
-                .foregroundStyle(c.textSecondary).padding(.horizontal, 10).padding(.vertical, 8)
+                .foregroundStyle(c.fgSecondary).padding(.horizontal, VVSpace.x2_5).padding(.vertical, VVSpace.x2)
             }
             if model.hasFilters {
                 Button { model.clearAll() } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: VVSpace.x1) {
                         VisvineIcon(.xmark, size: 12)
-                        Text("Clear").font(.system(size: 12, weight: .semibold))
-                    }.foregroundStyle(c.textMuted)
+                        Text("Clear").font(.system(size: VVFontSize.s12, weight: .semibold))
+                    }.foregroundStyle(c.fgMuted)
                 }
             }
             Spacer()
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, VVSpace.x4).padding(.vertical, VVSpace.x3)
     }
 
     /// A filter trigger, drawn the way DirectoryToolbar draws one: no border,
@@ -158,12 +152,12 @@ struct DirectoryView: View {
         let c = theme.colors
         let active = count > 0
         return Button(action: action) {
-            HStack(spacing: 6) {
-                Text(label + (active ? " · \(count)" : "")).font(.system(size: 13, weight: .semibold))
+            HStack(spacing: VVSpace.x1_5) {
+                Text(label + (active ? " · \(count)" : "")).font(.system(size: VVFontSize.s13, weight: .semibold))
                 VisvineIcon(.chevronDown, size: 12)
             }
-            .foregroundStyle(active ? c.accentDark : c.textSecondary)
-            .padding(.horizontal, 10).padding(.vertical, 8)
+            .foregroundStyle(active ? c.accentStrong : c.fgSecondary)
+            .padding(.horizontal, VVSpace.x2_5).padding(.vertical, VVSpace.x2)
         }
     }
 
@@ -174,7 +168,7 @@ struct DirectoryView: View {
         NavigationStack {
             List {
                 if values.isEmpty {
-                    Text("None available").foregroundStyle(c.textMuted)
+                    Text("None available").foregroundStyle(c.fgMuted)
                 }
                 ForEach(values, id: \.self) { value in
                     let active = isType ? model.selectedTypes.contains(value) : model.selectedTags.contains(value)
@@ -182,10 +176,10 @@ struct DirectoryView: View {
                         if isType { model.toggleType(value) } else { model.toggleTag(value) }
                     } label: {
                         HStack {
-                            Text(isType ? capitalizeFirst(value) : value).foregroundStyle(c.textPrimary)
+                            Text(isType ? capitalizeFirst(value) : value).foregroundStyle(c.fg)
                             Spacer()
                             VisvineIcon(active ? .checkSquare : .square)
-                                .foregroundStyle(active ? c.accent : c.textMuted)
+                                .foregroundStyle(active ? c.accent : c.fgMuted)
                         }
                     }
                 }
@@ -227,7 +221,7 @@ struct DirectoryView: View {
                     }
                 } else {
                     color
-                    Text(avatarInitials(member.name)).foregroundStyle(.white).font(.system(size: 24, weight: .bold))
+                    Text(avatarInitials(member.name)).foregroundStyle(.white).font(.system(size: VVFontSize.s24, weight: .bold))
                 }
             }
             .aspectRatio(1, contentMode: .fill)
@@ -236,25 +230,25 @@ struct DirectoryView: View {
 
             VStack(spacing: 0) {
                 Text(member.name)
-                    .font(.system(size: 16, weight: .semibold)).foregroundStyle(c.textPrimary)
+                    .font(.system(size: VVFontSize.s16, weight: .semibold)).foregroundStyle(c.fg)
                     .lineLimit(1)
                 Text((subtitle?.isEmpty == false ? subtitle : nil) ?? " ")
-                    .font(.system(size: 13)).foregroundStyle(c.textSecondary)
+                    .font(.system(size: VVFontSize.s13)).foregroundStyle(c.fgSecondary)
                     .lineLimit(2).multilineTextAlignment(.center)
                     .frame(height: 35, alignment: .top)
-                    .padding(.top, 6)
+                    .padding(.top, VVSpace.x1_5)
                 Text(capitalizeFirst(member.type))
-                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(color, in: RoundedRectangle(cornerRadius: 6))
-                    .padding(.top, 14)
+                    .font(.system(size: VVFontSize.s11, weight: .semibold)).foregroundStyle(.white)
+                    .padding(.horizontal, VVSpace.x2).padding(.vertical, VVSpace.x1)
+                    .background(color, in: RoundedRectangle(cornerRadius: VVRadius.md))
+                    .padding(.top, VVSpace.x3_5)
             }
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 12).padding(.top, 12).padding(.bottom, 16)
+            .padding(.horizontal, VVSpace.x3).padding(.top, VVSpace.x3).padding(.bottom, VVSpace.x4)
         }
-        .background(c.bgPrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(color, lineWidth: 4))
+        .background(c.surface)
+        .clipShape(RoundedRectangle(cornerRadius: VVRadius.xl2))
+        .overlay(RoundedRectangle(cornerRadius: VVRadius.xl2).stroke(color, lineWidth: 4))
     }
 
     private var emptyState: some View {

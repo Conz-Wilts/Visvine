@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// One bubble. Mine on the right in the accent; another person's on the left
-/// on `bgPrimary`; an agent's on the left on `bgTertiary`. Radius 18 with a
+/// on `surface`; an agent's on the left on `surfaceMuted`. Radius 18 with a
 /// tighter tail corner, like Messages.
 struct MessageBubble: View {
     @Environment(ThemeStore.self) private var theme
@@ -15,22 +15,22 @@ struct MessageBubble: View {
 
     var body: some View {
         let c = theme.colors
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: VVSpace.x2) {
             if isOwn { Spacer(minLength: 48) }
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: VVSpace.x1) {
                 if let senderName, !isOwn {
-                    Text(senderName).font(.system(size: 12, weight: .semibold)).foregroundStyle(c.textMuted)
+                    Text(senderName).font(.system(size: VVFontSize.s12, weight: .semibold)).foregroundStyle(c.fgMuted)
                 }
                 Text(text)
-                    .font(.system(size: 16))
-                    .foregroundStyle(isOwn ? .white : (failed ? c.textMuted : c.textPrimary))
+                    .font(.system(size: VVFontSize.s16))
+                    .foregroundStyle(isOwn ? .white : (failed ? c.fgMuted : c.fg))
                     .textSelection(.enabled)
                 if let time {
-                    Text(time).font(.system(size: 10)).foregroundStyle(isOwn ? Color.white.opacity(0.7) : c.textLight)
+                    Text(time).font(.system(size: VVFontSize.s10)).foregroundStyle(isOwn ? Color.white.opacity(0.7) : c.fgSubtle)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, VVSpace.x3_5)
+            .padding(.vertical, VVSpace.x2_5)
             .background(fill(c), in: BubbleShape(tail: isOwn ? .right : .left))
             if !isOwn { Spacer(minLength: 48) }
         }
@@ -38,7 +38,7 @@ struct MessageBubble: View {
 
     private func fill(_ c: DynamicColors) -> Color {
         if isOwn { return c.accent }
-        return agent ? c.bgTertiary : c.bgPrimary
+        return agent ? c.surfaceMuted : c.surface
     }
 }
 

@@ -37,11 +37,11 @@ struct EventDetailView: View {
             } else if let event = model.event {
                 body(for: event)
             } else {
-                Text(model.error ?? "Event not found").foregroundStyle(c.textSecondary)
+                Text(model.error ?? "Event not found").foregroundStyle(c.fgSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .navigationTitle(model.event?.title ?? title ?? "Event")
         .navigationBarTitleDisplayMode(.inline)
         .task { await model.load(eventId: eventId) }
@@ -55,16 +55,16 @@ struct EventDetailView: View {
             VStack(spacing: 0) {
                 // Header — the countdown leads the facts line, exactly as the
                 // feed row this page opened from renders it.
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(event.title).font(.system(size: 24, weight: .bold)).foregroundStyle(c.textPrimary)
+                VStack(alignment: .leading, spacing: VVSpace.x1_5) {
+                    Text(event.title).font(.system(size: VVFontSize.s24, weight: .bold)).foregroundStyle(c.fg)
                     if let countdown = DateFormatting.startsInLabel(event.startAt) {
-                        Text(countdown).font(.system(size: 14, weight: .semibold)).foregroundStyle(c.accentDark)
+                        Text(countdown).font(.system(size: VVFontSize.s14, weight: .semibold)).foregroundStyle(c.accentStrong)
                     }
                     if let description = event.description, !description.isEmpty {
-                        Text(description).font(.system(size: 15)).foregroundStyle(c.textSecondary).padding(.top, 6)
+                        Text(description).font(.system(size: VVFontSize.s15)).foregroundStyle(c.fgSecondary).padding(.top, VVSpace.x1_5)
                     }
                 }
-                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 20)
+                .padding(.horizontal, VVSpace.x4).padding(.top, VVSpace.x2).padding(.bottom, VVSpace.x5)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Facts
@@ -78,63 +78,63 @@ struct EventDetailView: View {
                 // Attendance
                 section {
                     sectionTitle("Attendance")
-                    HStack(alignment: .top, spacing: 24) {
+                    HStack(alignment: .top, spacing: VVSpace.x6) {
                         stat("RSVPs", "\(analytics.rsvpCount)")
                         stat("Checked in", "\(analytics.checkinCount)")
                         if let capacity = event.capacity { stat("Spots left", "\(capacity - analytics.rsvpCount)") }
                     }
-                    .padding(.top, 4)
+                    .padding(.top, VVSpace.x1)
                     if event.capacity != nil {
-                        Text("\(rsvpPct)% capacity").font(.system(size: 13)).foregroundStyle(c.textMuted).padding(.top, 8)
+                        Text("\(rsvpPct)% capacity").font(.system(size: VVFontSize.s13)).foregroundStyle(c.fgMuted).padding(.top, VVSpace.x2)
                     }
                 }
 
                 if (event.visibility ?? "space") != "public" {
-                    HStack(spacing: 8) {
+                    HStack(spacing: VVSpace.x2) {
                         VisvineIcon(event.visibility == "private" ? .lock : .people, size: 14)
-                        Text(event.visibility == "private" ? "Private event" : "Space members only").font(.system(size: 14))
+                        Text(event.visibility == "private" ? "Private event" : "Space members only").font(.system(size: VVFontSize.s14))
                     }
-                    .foregroundStyle(c.textMuted)
+                    .foregroundStyle(c.fgMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16).padding(.top, 16)
+                    .padding(.horizontal, VVSpace.x4).padding(.top, VVSpace.x4)
                 }
 
                 Button { } label: {
-                    Text("RSVP to Event").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-                        .frame(maxWidth: .infinity).padding(.vertical, 14)
-                        .background(c.accent, in: RoundedRectangle(cornerRadius: 8))
+                    Text("RSVP to Event").font(.system(size: VVFontSize.s15, weight: .semibold)).foregroundStyle(.white)
+                        .frame(maxWidth: .infinity).padding(.vertical, VVSpace.x3_5)
+                        .background(c.accent, in: RoundedRectangle(cornerRadius: VVRadius.lg))
                 }
-                .padding(.horizontal, 16).padding(.top, 24)
+                .padding(.horizontal, VVSpace.x4).padding(.top, VVSpace.x6)
             }
-            .padding(.bottom, 24)
+            .padding(.bottom, VVSpace.x6)
         }
     }
 
     /// A block of rows on the flat surface, opened by a hairline.
     private func section(@ViewBuilder _ content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Rectangle().fill(theme.colors.borderSubtle).frame(height: 1)
-            VStack(alignment: .leading, spacing: 12) { content() }
-                .padding(.horizontal, 16)
+        VStack(alignment: .leading, spacing: VVSpace.x3) {
+            Rectangle().fill(theme.colors.lineSubtle).frame(height: 1)
+            VStack(alignment: .leading, spacing: VVSpace.x3) { content() }
+                .padding(.horizontal, VVSpace.x4)
         }
-        .padding(.top, 4).padding(.bottom, 16)
+        .padding(.top, VVSpace.x1).padding(.bottom, VVSpace.x4)
     }
 
     private func sectionTitle(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: VVFontSize.s11, weight: .semibold))
             .kerning(0.9)
-            .foregroundStyle(theme.colors.textMuted)
+            .foregroundStyle(theme.colors.fgMuted)
     }
 
     private func infoRow(_ icon: VisvineIconName, _ label: String, _ value: String, subtext: String? = nil) -> some View {
         let c = theme.colors
-        return HStack(alignment: .top, spacing: 12) {
-            VisvineIcon(icon, size: 16).foregroundStyle(c.textMuted).padding(.top, 2)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label).font(.system(size: 12)).foregroundStyle(c.textMuted)
-                Text(value).font(.system(size: 15, weight: .medium)).foregroundStyle(c.textPrimary)
-                if let subtext { Text(subtext).font(.system(size: 14)).foregroundStyle(c.textMuted) }
+        return HStack(alignment: .top, spacing: VVSpace.x3) {
+            VisvineIcon(icon, size: 16).foregroundStyle(c.fgMuted).padding(.top, VVSpace.x0_5)
+            VStack(alignment: .leading, spacing: VVSpace.x0_5) {
+                Text(label).font(.system(size: VVFontSize.s12)).foregroundStyle(c.fgMuted)
+                Text(value).font(.system(size: VVFontSize.s15, weight: .medium)).foregroundStyle(c.fg)
+                if let subtext { Text(subtext).font(.system(size: VVFontSize.s14)).foregroundStyle(c.fgMuted) }
             }
             Spacer()
         }
@@ -143,9 +143,9 @@ struct EventDetailView: View {
     /// A number and what it counts. No tile behind it — the figure is the mark.
     private func stat(_ label: String, _ value: String) -> some View {
         let c = theme.colors
-        return VStack(alignment: .leading, spacing: 2) {
-            Text(value).font(.system(size: 24, weight: .bold)).foregroundStyle(c.textPrimary)
-            Text(label).font(.system(size: 12)).foregroundStyle(c.textMuted)
+        return VStack(alignment: .leading, spacing: VVSpace.x0_5) {
+            Text(value).font(.system(size: VVFontSize.s24, weight: .bold)).foregroundStyle(c.fg)
+            Text(label).font(.system(size: VVFontSize.s12)).foregroundStyle(c.fgMuted)
         }
     }
 }

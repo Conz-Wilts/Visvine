@@ -55,7 +55,7 @@ struct EditProfileView: View {
                 form
             }
         }
-        .background(c.bgPrimary)
+        .background(c.surface)
         .navigationTitle("Edit Profile")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -85,47 +85,47 @@ struct EditProfileView: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 sectionLabel("Personal Information")
-                VStack(spacing: 16) {
+                VStack(spacing: VVSpace.x4) {
                     field("Name", text: $model.form.name, placeholder: "Your full name")
                     field("Title", text: $model.form.title, placeholder: "Your job title")
                     field("Company", text: $model.form.company, placeholder: "Your company")
                     field("Location", text: $model.form.location, placeholder: "City, Country")
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, VVSpace.x1)
 
                 sectionLabel("Contact Information")
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Email").font(.system(size: 14, weight: .medium)).foregroundStyle(c.textSecondary)
-                    TextField("", text: .constant(model.form.email)).disabled(true).foregroundStyle(c.textLight)
-                        .padding(.horizontal, 14).padding(.vertical, 12)
-                        .background(c.bgSecondary, in: RoundedRectangle(cornerRadius: 8))
-                    Text("Email cannot be changed").font(.system(size: 12)).foregroundStyle(c.textLight)
+                VStack(alignment: .leading, spacing: VVSpace.x1) {
+                    Text("Email").font(.system(size: VVFontSize.s14, weight: .medium)).foregroundStyle(c.fgSecondary)
+                    TextField("", text: .constant(model.form.email)).disabled(true).foregroundStyle(c.fgSubtle)
+                        .padding(.horizontal, VVSpace.x3_5).padding(.vertical, VVSpace.x3)
+                        .background(c.surfaceSubtle, in: RoundedRectangle(cornerRadius: VVRadius.lg))
+                    Text("Email cannot be changed").font(.system(size: VVFontSize.s12)).foregroundStyle(c.fgSubtle)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, VVSpace.x1)
             }
-            .padding(16)
+            .padding(VVSpace.x4)
         }
     }
 
     private func sectionLabel(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Rectangle().fill(theme.colors.borderSubtle).frame(height: 1)
+            Rectangle().fill(theme.colors.lineSubtle).frame(height: 1)
             Text(text.uppercased())
-                .font(.system(size: 11, weight: .semibold)).kerning(0.9)
-                .foregroundStyle(theme.colors.textMuted)
-                .padding(.top, 20).padding(.bottom, 10)
+                .font(.system(size: VVFontSize.s11, weight: .semibold)).kerning(0.9)
+                .foregroundStyle(theme.colors.fgMuted)
+                .padding(.top, VVSpace.x5).padding(.bottom, VVSpace.x2_5)
         }
     }
 
     private func field(_ label: String, text: Binding<String>, placeholder: String) -> some View {
         let c = theme.colors
-        return VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.system(size: 14, weight: .medium)).foregroundStyle(c.textSecondary)
+        return VStack(alignment: .leading, spacing: VVSpace.x1_5) {
+            Text(label).font(.system(size: VVFontSize.s14, weight: .medium)).foregroundStyle(c.fgSecondary)
             TextField(placeholder, text: text)
                 .onChange(of: text.wrappedValue) { model.hasChanges = true }
-                .padding(.horizontal, 14).padding(.vertical, 12)
-                .foregroundStyle(c.textPrimary)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(c.borderDefault, lineWidth: 1))
+                .padding(.horizontal, VVSpace.x3_5).padding(.vertical, VVSpace.x3)
+                .foregroundStyle(c.fg)
+                .overlay(RoundedRectangle(cornerRadius: VVRadius.lg).stroke(c.line, lineWidth: 1))
         }
     }
 }
