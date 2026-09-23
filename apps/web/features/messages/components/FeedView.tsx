@@ -10,8 +10,8 @@
 
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MessageCircleIcon, PencilIcon, PinIcon, SmileIcon, StarIcon, Trash2Icon } from '@/features/shared/icons';
-import Avatar from '@/components/ui/Avatar';
-import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
+import { Avatar } from '@visvine/ui';
+import LinkPreviewCard from '@/features/shared/components/LinkPreviewCard';
 import MessageComposer from './MessageComposer';
 import { MarkdownMessage, EmojiPicker, MessageImageGrid, MessageFiles } from './MessageRow';
 import { formatChatTimestamp } from '@/lib/date';

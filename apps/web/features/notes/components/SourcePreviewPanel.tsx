@@ -13,7 +13,7 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 import { notesApi } from '../lib/notesApi'
 import { formatBytes } from '@/lib/utils'
-import PageError from '@/components/ui/PageError'
+import { PageError } from '@visvine/ui'
 
 const PAGE_CHARS = 20_000
 

@@ -7,12 +7,12 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useDesktopChrome } from '@/features/desktop/lib/chrome';
 import { ITEM_GAP, ROW_INSET } from '@/features/shared/components/layout/railRow';
 import PanelSearch from '@/features/shared/components/layout/PanelSearch';
-import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
+import { useEscapeKey } from '@visvine/ui';
 import { LIST_AVATAR_CENTER, LIST_AVATAR_PX, LockedSubspaceRow, NewSpaceRow, NewSubspaceRow, SpaceListRow, SubspaceRow } from '@/features/spaces/components/SpaceListRow';
 import NewSpaceDialog from '@/features/spaces/components/NewSpaceDialog';
 import RequestSubspaceAccessDialog from '@/features/spaces/components/RequestSubspaceAccessDialog';
 import type { LockedSubspace } from '@/lib/spaces/subspaceAccess';
-import { TreeSpine } from '@/components/ui/TreeChrome';
+import { TreeSpine } from '@/features/shared/components/TreeChrome';
 import { scoreName } from '@/lib/rankName';
 import { spaceBranches } from '@/lib/spaces/subspaces';
 

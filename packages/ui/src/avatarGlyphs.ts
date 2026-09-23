@@ -1,5 +1,6 @@
 /**
- * Shared avatar utility functions used across messaging, directory, and space components.
+ * The avatar's glyphs and helpers: what Avatar and the silhouettes draw, and
+ * what the app's canvas renderers draw to match them.
  */
 
 /**

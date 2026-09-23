@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Button from './Button';
 import Input from './Input';
-import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
+import { useEscapeKey } from './hooks/useEscapeKey';
 
 /**
  * Confirmation modal for destructive or irreversible actions — replaces

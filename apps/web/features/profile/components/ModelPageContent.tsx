@@ -23,8 +23,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from '@/features/shared/components/SpaceLink';
 import { KeyRoundIcon, PencilIcon, TriangleAlertIcon } from '@/features/shared/icons';
-import { Skeleton } from '@/components/ui';
-import Toggle from '@/components/ui/Toggle';
+import { Skeleton, Toggle } from '@visvine/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';

@@ -30,7 +30,7 @@ import {
   TREE_NESTED_CHILD_INDENT as NESTED_CHILD_INDENT,
   TREE_ROW_BLEED as ROW_BLEED,
   type TreeGuideKind as Guide,
-} from '@/components/ui/TreeChrome'
+} from '@/features/shared/components/TreeChrome'
 import { isEntityFolderIndex } from '@/lib/notes/entities'
 import { filterTree, folderPathsIn } from '@/lib/notes/shared/context'
 import { tierRoot } from '@/lib/notes/shared/rootTiers'

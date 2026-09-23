@@ -15,8 +15,7 @@
 // All filter state lives in the passed-in useDirectoryBrowse() instance.
 
 import { type ReactNode } from 'react';
-import SearchInput from '@/components/ui/SearchInput';
-import Chip from '@/components/ui/Chip';
+import { SearchInput, Chip } from '@visvine/ui';
 import { tagPalette } from '@/lib/tagColors';
 import type { SpaceAlias } from '@/lib/types';
 import type { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';

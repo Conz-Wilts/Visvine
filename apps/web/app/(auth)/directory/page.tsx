@@ -7,7 +7,7 @@ import NodeGrid from '@/features/directory/components/NodeGrid';
 import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
 import DirectoryTableView from '@/features/directory/components/table/DirectoryTableView';
 import ResourcesView from '@/features/resources/components/ResourcesView';
-import ContentReveal from '@/components/ui/ContentReveal';
+import { ContentReveal } from '@visvine/ui';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useViewportPane } from '@/app/(auth)/AuthLayoutClient';
 import { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';

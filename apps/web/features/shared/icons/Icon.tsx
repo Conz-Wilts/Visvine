@@ -13,7 +13,7 @@
  */
 import type { IconName } from '@/lib/icons/names';
 import { ICONS } from './generated/registry';
-import type { IconProps } from './IconBase';
+import { type IconProps } from '@visvine/ui';
 
 export function Icon({ name, ...props }: IconProps & { name: string }) {
   const Glyph = ICONS[name as IconName];

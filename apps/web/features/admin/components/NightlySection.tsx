@@ -6,9 +6,7 @@
 // the two switches — a clean always applies every safe fix to the whole space.
 
 import { useEffect, useState } from 'react';
-import { SettingsSection } from '@/components/ui';
-import Select from '@/components/ui/Select';
-import Toggle from '@/components/ui/Toggle';
+import { SettingsSection, Select, Toggle } from '@visvine/ui';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
 import type { CleanScheduleSettings } from '@/lib/notes/shared/cleanSchedule';

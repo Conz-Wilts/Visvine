@@ -19,7 +19,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
-import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { ConfirmDialog, PageError } from '@visvine/ui';
 import { RotateCcwIcon, Trash2Icon } from '@/features/shared/icons'
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
@@ -30,7 +30,6 @@ import { NoteEditor } from './NoteEditor'
 import type { NoteMode } from './NoteModeToggle'
 import '../notes.css'
 import { XIcon } from '@/features/shared/icons';
-import PageError from '@/components/ui/PageError'
 
 type TrashedNote = { path: string; title: string; content: string; deletedAt: number }
 

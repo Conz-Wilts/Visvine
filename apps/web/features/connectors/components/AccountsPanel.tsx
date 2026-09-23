@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, ConfirmDialog, Skeleton } from '@/components/ui';
-import Toggle from '@/components/ui/Toggle';
+import { Alert, Button, ConfirmDialog, Skeleton, Toggle } from '@visvine/ui';
 import ConnectorLogo from '@/features/connectors/components/ConnectorLogo';
 import { fetchJson } from '@/lib/fetchJson';
 import { inflightFetch, invalidateRequestCache } from '@/features/shared/lib/requestCache';

@@ -1,9 +1,10 @@
+'use client';
+
 import type { CSSProperties } from 'react';
-import Image from 'next/image';
-import { getInitials } from '@/lib/avatarUtils';
-import { isOptimizableImageUrl } from '@/lib/mediaUrl';
+import { getInitials } from './avatarGlyphs';
 import PersonSilhouette from './PersonSilhouette';
-import { SpaceIcon } from '@/features/shared/icons';
+import { SpaceIcon } from './icons';
+import { useUIAdapters } from './UIProvider';
 
 // Square avatars (rounded-xl/lg) — matches profile imagery across the app
 // (directory, full-profile overlay, mutual-connection cards).
@@ -17,7 +18,7 @@ const SIZE_CLASSES = {
   xl: 'h-12 w-12 rounded-xl',
 };
 
-/** Intrinsic pixel size per built-in size (next/image width/height). */
+/** Intrinsic pixel size per built-in size (the image's width and height). */
 const SIZE_PX: Record<keyof typeof SIZE_CLASSES, number> = {
   xs: 24,
   sm: 32,
@@ -56,7 +57,7 @@ interface AvatarProps {
    */
   sizeClassName?: string;
   /**
-   * Intrinsic pixel size for next/image when `sizeClassName` overrides the
+   * Intrinsic pixel size for the image when `sizeClassName` overrides the
    * built-in size map (which otherwise derives it). Square avatars only need
    * one number.
    */
@@ -76,19 +77,11 @@ export default function Avatar({
   pixelSize,
   style,
 }: AvatarProps) {
+  const { Image } = useUIAdapters();
   const cls = sizeClassName ?? SIZE_CLASSES[size];
   if (imageUrl) {
-    // Local blob previews / inline data URLs can't go through next/image.
-    if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) {
-      return (
-        <img
-          src={imageUrl}
-          alt={name}
-          className={`${cls} object-cover shrink-0 ${className}`}
-          style={style}
-        />
-      );
-    }
+    // The app's image component decides how it is fetched (an optimiser, a CDN);
+    // the avatar only says what and how big.
     const px = pixelSize ?? SIZE_PX[size];
     return (
       <Image
@@ -96,14 +89,8 @@ export default function Avatar({
         alt={name}
         width={px}
         height={px}
-        // The optimizer re-encodes what the upload already wrote as WebP, and
-        // at the default 75 that second pass is what shows on a face.
-        quality={90}
         className={`${cls} object-cover shrink-0 ${className}`}
         style={style}
-        // Hosts outside next.config remotePatterns (e.g. the server-only GCS
-        // CDN hostname) render unoptimized rather than throwing.
-        unoptimized={!isOptimizableImageUrl(imageUrl)}
       />
     );
   }

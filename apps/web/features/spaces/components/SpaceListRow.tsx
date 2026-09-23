@@ -5,7 +5,7 @@ import type { LockedSubspace } from '@/lib/spaces/subspaceAccess';
 import { END_ROW_H, LABEL_ML, ROW_CLASS, ROW_TEXT } from '@/features/shared/components/layout/railRow';
 import { ChevronRightIcon, LockIcon, PlusIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
-import { TREE_ROW_BLEED, TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
+import { TREE_ROW_BLEED, TreeSpineJoin, type TreeGuideKind } from '@/features/shared/components/TreeChrome';
 
 /** A sub-space row is shorter than its parent's: a line of a list under it. */
 const SUBSPACE_ROW_H = 44;

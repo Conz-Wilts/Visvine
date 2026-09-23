@@ -4,6 +4,8 @@
    bg-surface, text-fg-muted, border-line-subtle, bg-accent, text-danger. */
 @import "@visvine/tokens/tokens.css";
 @import "@visvine/tokens/theme.css";
+/* The shared components live in a workspace package Tailwind would not scan. */
+@source "../../../packages/ui/src";
 
 /* ─── Open Sauce One — local font faces ─── */
 /* Self-hosted, like the Visvine faces below, and for the same two reasons: it is

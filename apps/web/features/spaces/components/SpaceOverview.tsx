@@ -11,7 +11,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
-import PageError from '@/components/ui/PageError';
+import { PageError, getInitials, PersonSilhouette, Chip } from '@visvine/ui';
 import Link from '@/features/shared/components/SpaceLink';
 import { CalendarIcon, CheckIcon, ChevronRightIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -20,9 +20,6 @@ import { isGlobalSpace } from '@/lib/spaces/shared/global';
 import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import { hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, type NodeTypeConfig } from '@/lib/types';
-import { getInitials } from '@/lib/avatarUtils';
-import PersonSilhouette from '@/components/ui/PersonSilhouette';
-import { Chip } from '@/components/ui';
 import { AboutText, SectionCard, StatItem } from '@/features/profile/components/profileCards';
 import { formatEventDateShort, formatEventTime } from '@/lib/eventUtils';
 import { FileTypeIcon, FILE_LABEL } from '@/features/resources/components/resourceUi';

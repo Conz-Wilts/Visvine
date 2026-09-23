@@ -31,25 +31,26 @@ rather than repeating it.
 ```
 apps/web/app/          routes; app/api/* handlers only — no domain logic
 apps/web/features/<domain>/{components,hooks,lib}   domain UI
-apps/web/components/ui/                             the ONLY shared UI
 apps/web/lib/          domain + server logic (the real code lives here)
 apps/web/lib/actions/  every action the platform offers — the MCP registry
                        and POST /api/actions/<name>
 apps/web/tests/        node:test + tsx, one file per concern
 apps/web/prisma/       schema.prisma (52 models), seed, migrations
+packages/tokens/       design tokens (DTCG) → CSS, TS, Swift, Kotlin
+packages/ui/           @visvine/ui — the ONLY shared UI, built on the tokens
 scripts/               repo-level db/env tooling
 ```
 
-`@/*` → `apps/web/*`. An eslint boundary rule enforces that only
-`@/components/ui` is shared; domain UI lives in `@/features/<domain>/components`.
+`@/*` → `apps/web/*`. An eslint boundary rule enforces that shared UI comes
+from `@visvine/ui`; domain UI lives in `@/features/<domain>/components`.
 
 ## Conventions
 
 - **Route handlers are thin.** Use `lib/api/route.ts`: `requireApiSession`,
   `requireSpaceAdmin`, `parseBody(request, zodSchema)`, `ApiError(status, msg)`.
   Each returns a value or a `NextResponse` — check `instanceof NextResponse`.
-- Reuse `lib/fetchJson.ts`, `lib/date.ts`, `components/ui/Modal.tsx`,
-  `lib/logger.ts` rather than re-rolling them.
+- Reuse `lib/fetchJson.ts`, `lib/date.ts`, `@visvine/ui` (`Modal`, `Button`,
+  `Tabs`, `useToasts`…), `lib/logger.ts` rather than re-rolling them.
 - **One read per fact.** A client read that outlives a mount goes through
   `features/shared/lib/requestCache.ts` (`swrFetch` / `cachedFetch`, or
   `inflightFetch` for must-be-fresh lists) so a sibling, a tab toggle or a
@@ -87,8 +88,15 @@ screen is wrong** — fix the design, don't caption it.
 - **How it works belongs in `docs/` and code comments**, never on the page.
   The guarantees a feature keeps (gates, scope, what it never writes) are
   enforced by the server; the UI does not recite them.
-- Surfaces are flat: hairline sections, no cards, tokens not `gray-*`, shadows
-  only on things that float.
+- Surfaces are flat: hairline sections, no cards, shadows only on things that
+  float.
+- **Every value is a design token** (`packages/tokens`, reference in
+  `packages/ui/DESIGN.md`). Paint with the role utilities — `bg-surface`,
+  `text-fg-muted`, `border-line-subtle`, `bg-accent`, `text-danger`,
+  `bg-hue-blue-wash` — or `color` / `palette` from `@visvine/tokens` where a
+  class cannot go. Never a Tailwind palette class, never a hex:
+  `tests/design-tokens.test.ts` fails on both. A new value is a token first
+  (`pnpm tokens:build` regenerates web, desktop, iOS and Android).
 
 ## A space is a tenant, and may hold sub-spaces
 

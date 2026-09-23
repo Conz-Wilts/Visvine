@@ -2,7 +2,7 @@
 
 import Link from '@/features/shared/components/SpaceLink';
 import { useMemo } from 'react';
-import { Alert, Skeleton } from '@/components/ui';
+import { Alert, Skeleton } from '@visvine/ui';
 import { clockEntries, groupAgents, whoLabel } from '@/lib/agents/shared/roster';
 import StatusDot from './StatusDot';
 import { fmtAgo, fmtUntil, statusLine, terminalLabel } from '../lib/rowState';

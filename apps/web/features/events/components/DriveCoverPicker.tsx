@@ -12,8 +12,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import Modal from '@/components/ui/Modal';
-import { Alert } from '@/components/ui';
+import { Modal, Alert } from '@visvine/ui';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { useResources } from '@/features/resources/hooks/useResources';
 import { FolderIcon, LoaderCircleIcon, SearchIcon } from '@/features/shared/icons';

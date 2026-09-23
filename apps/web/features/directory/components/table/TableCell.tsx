@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
-import Chip from '@/components/ui/Chip';
+import { Chip } from '@visvine/ui';
 import { ExternalLinkIcon } from '@/features/shared/icons';
 import { tagPalette } from '@/lib/tagColors';
 import { cellHref, editValue, formatCell, parseCellInput, type TableColumn } from '@/lib/directory/table';

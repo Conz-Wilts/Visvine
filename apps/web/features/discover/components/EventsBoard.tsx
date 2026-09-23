@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import Link from '@/features/shared/components/SpaceLink';
-import { EmptyState, Skeleton } from '@/components/ui';
+import { EmptyState, Skeleton } from '@visvine/ui';
 import { useCardTilt } from '@/features/directory/hooks/useCardTilt';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { MapPinIcon, VideoIcon } from '@/features/shared/icons';

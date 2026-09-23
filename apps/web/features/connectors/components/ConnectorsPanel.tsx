@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
-import { Avatar, Button, ConfirmDialog, SearchInput, Skeleton, Alert } from '@/components/ui';
+import { Avatar, Button, ConfirmDialog, SearchInput, Skeleton, Alert } from '@visvine/ui';
 import { ArrowLeftIcon, Trash2Icon } from '@/features/shared/icons';
 import ConnectorLogo from './ConnectorLogo';
 import ConnectorToolPermissions from './ConnectorToolPermissions';

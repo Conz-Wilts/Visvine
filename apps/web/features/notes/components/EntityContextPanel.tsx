@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RadioIcon, XIcon } from '@/features/shared/icons';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter'
-import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
+import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@visvine/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { useNodeProfile, patchCachedNodeProfile } from '@/features/shared/hooks/useNodeProfile'
 import { findAlias, nodeTypeLabel } from '@/lib/types'

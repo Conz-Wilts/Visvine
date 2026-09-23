@@ -19,8 +19,8 @@ import type {
   SerializedMessage,
   SerializedReplyTo,
 } from '@/lib/messages/types';
-import Avatar from '@/components/ui/Avatar';
-import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
+import { Avatar } from '@visvine/ui';
+import LinkPreviewCard from '@/features/shared/components/LinkPreviewCard';
 import Link from '@/features/shared/components/SpaceLink';
 import { FILE_LABEL, FileTypeIcon } from '@/features/resources/components/resourceUi';
 import { formatBytes } from '@/lib/utils';

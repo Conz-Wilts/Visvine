@@ -19,7 +19,7 @@ import {
 } from '@/features/tools/components/manage/ToolsConsole';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
-import { LoadingText, Alert, SettingsSection } from '@/components/ui';
+import { LoadingText, Alert, SettingsSection } from '@visvine/ui';
 import { Space } from '@/lib/types';
 
 // Each section owns one job, and the job is one noun: General is the space's own

@@ -10,9 +10,8 @@ import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { invalidateEventDetail, loadEventDetail } from '@/features/events/lib/eventDetail';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { EventComposer } from '@/features/events/components/EventComposer';
-import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { ConfirmDialog, PageError } from '@visvine/ui';
 import type { NBEvent } from '@/lib/types';
-import PageError from '@/components/ui/PageError';
 
 export default function EditEventPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = use(params);

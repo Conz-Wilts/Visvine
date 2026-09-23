@@ -1,6 +1,6 @@
 'use client';
 
-import Avatar from '@/components/ui/Avatar';
+import { Avatar } from '@visvine/ui';
 
 interface SpaceAvatarProps {
   name: string;

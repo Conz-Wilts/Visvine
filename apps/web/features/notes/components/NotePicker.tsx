@@ -26,8 +26,8 @@ import {
   type PickerLeaf,
   type PickerRow,
 } from '@/lib/notes/shared/pickerTree'
-import { SEARCH_MENU_PANEL, SearchMenuEmpty, SearchMenuInput, SearchMenuList, searchMenuRowState } from '@/components/ui/SearchMenu'
-import { TreeFileIcon, TreeFolderIcon, TreeGuide, TreeStem } from '@/components/ui/TreeChrome'
+import { SEARCH_MENU_PANEL, SearchMenuEmpty, SearchMenuInput, SearchMenuList, searchMenuRowState } from '@visvine/ui'
+import { TreeFileIcon, TreeFolderIcon, TreeGuide, TreeStem } from '@/features/shared/components/TreeChrome'
 
 interface NoteRef {
   path: string

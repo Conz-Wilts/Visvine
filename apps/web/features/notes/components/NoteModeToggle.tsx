@@ -1,11 +1,11 @@
 'use client'
 
-import { ViewToggle, type ViewToggleOption } from '@/components/ui'
+import { Tabs, type TabOption } from '@visvine/ui'
 
 export type NoteMode = 'wysiwyg' | 'raw'
 
 // The Editor/Raw pill for the profile Context tab's note editor.
-const MODE_OPTIONS: ViewToggleOption<NoteMode>[] = [
+const MODE_OPTIONS: TabOption<NoteMode>[] = [
   {
     id: 'wysiwyg',
     label: 'Editor',
@@ -35,5 +35,5 @@ export function NoteModeToggle({
   onChange: (mode: NoteMode) => void
   size?: 'md' | 'sm'
 }) {
-  return <ViewToggle options={MODE_OPTIONS} value={value} onChange={onChange} size={size} />
+  return <Tabs options={MODE_OPTIONS} value={value} onChange={onChange} size={size} />
 }

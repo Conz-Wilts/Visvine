@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { VIEW_ENTER_EASE, VIEW_ENTER_MS, VIEW_ENTER_SHIFT_PX } from '@/lib/motion';
+import { VIEW_ENTER_EASE, VIEW_ENTER_MS, VIEW_ENTER_SHIFT_PX } from './motion';
 
 /** How long the curtain may stay down before it opens on whatever is there. */
 const STUCK_MS = 2500;

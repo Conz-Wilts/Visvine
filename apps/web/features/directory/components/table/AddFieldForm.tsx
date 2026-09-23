@@ -8,8 +8,7 @@
 // fixed then, because a stored value only means what it meant when typed.
 
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Input } from '@/components/ui';
-import Select from '@/components/ui/Select';
+import { Alert, Button, Input, Select } from '@visvine/ui';
 import { TRACKED_FIELD_KINDS } from '@/lib/directory/table';
 import type { TrackedFieldKind } from '@/lib/types';
 

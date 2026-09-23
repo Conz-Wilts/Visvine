@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Avatar } from '@/components/ui';
-import Toggle from '@/components/ui/Toggle';
+import { Avatar, Toggle } from '@visvine/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSubscriber } from '@/lib/agents/service';
 

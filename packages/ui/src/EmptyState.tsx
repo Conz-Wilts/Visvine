@@ -1,4 +1,6 @@
-import Link from '@/features/shared/components/SpaceLink';
+'use client';
+
+import { useUIAdapters } from './UIProvider';
 
 interface EmptyStateAction {
   label: string;
@@ -26,6 +28,7 @@ interface EmptyStateProps {
  * page.
  */
 export default function EmptyState({ title, description, action, icon, size = 'md', actionStyle = 'link' }: EmptyStateProps) {
+  const { Link } = useUIAdapters();
   const box = size === 'sm' ? 'py-8' : size === 'page' ? 'min-h-[60vh] py-12' : 'py-12';
   const actionClass =
     actionStyle === 'solid'

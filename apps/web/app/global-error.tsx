@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import './globals.css';
-import PageError from '@/components/ui/PageError';
+import { PageError } from '@visvine/ui';
 
 /**
  * The last boundary: an error thrown by the root layout itself, where

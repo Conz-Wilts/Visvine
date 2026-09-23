@@ -5,8 +5,7 @@ import { VirtuosoGrid, type GridComponents } from 'react-virtuoso'
 import NodeCard from './NodeCard'
 import type { DirectoryItem } from '@/lib/types'
 import type { NodeTypeConfig, SpaceAlias } from '@/lib/types'
-import { EmptyState, Skeleton } from '@/components/ui'
-import { prefersReducedMotion } from '@/lib/motion'
+import { EmptyState, Skeleton, prefersReducedMotion } from '@visvine/ui'
 
 const GRID_STYLE: React.CSSProperties = {
   display: 'grid',

@@ -39,8 +39,7 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { TableVirtuoso, type TableComponents } from 'react-virtuoso';
-import Avatar from '@/components/ui/Avatar';
-import { ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
+import { Avatar, ConfirmDialog, EmptyState, Skeleton } from '@visvine/ui';
 import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon } from '@/features/shared/icons';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
 import AddColumnMenu from './AddColumnMenu';

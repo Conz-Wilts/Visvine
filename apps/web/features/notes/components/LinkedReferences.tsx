@@ -12,7 +12,7 @@
 
 import { useMemo, useState, type ReactNode } from 'react'
 import { ChevronRightIcon, LockIcon, SearchIcon } from '@/features/shared/icons'
-import { SearchInput } from '@/components/ui'
+import { SearchInput } from '@visvine/ui'
 import type {
   References,
   LinkedReference,

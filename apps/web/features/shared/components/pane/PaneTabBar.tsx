@@ -21,8 +21,7 @@ import {
   useDockVisuallyOpen,
 } from '@/features/shared/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W, useContextTreeVisible } from '@/features/notes/components/ContextSidebar';
-import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
-import { TAB_MOTION, TAB_MOTION_EASE, TAB_SET_MOTION_MS } from '@/components/ui/tabMotion';
+import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff, TAB_MOTION, TAB_MOTION_EASE, TAB_SET_MOTION_MS } from '@visvine/ui';
 import { usePaneChromeState, type PaneChromeState, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import PaneTopScrollbarMask from './PaneTopScrollbarMask';
 import { SHELL_PANE_TOP } from '@/features/shared/contexts/ThemeContext';

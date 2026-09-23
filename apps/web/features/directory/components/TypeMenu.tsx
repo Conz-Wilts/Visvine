@@ -19,16 +19,7 @@
 import { useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
-import Chip from '@/components/ui/Chip';
-import {
-  SEARCH_MENU_PANEL,
-  SEARCH_MENU_ROW,
-  SearchMenuEmpty,
-  SearchMenuInput,
-  SearchMenuList,
-  searchMenuRowState,
-  useSearchMenuCursor,
-} from '@/components/ui/SearchMenu';
+import { Chip, SEARCH_MENU_PANEL, SEARCH_MENU_ROW, SearchMenuEmpty, SearchMenuInput, SearchMenuList, searchMenuRowState, useSearchMenuCursor } from '@visvine/ui';
 import { ChevronDownIcon } from '@/features/shared/icons';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
 import { pluralTypeName } from '@/lib/types/plural';

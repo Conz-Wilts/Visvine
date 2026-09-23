@@ -141,6 +141,9 @@ importers:
       '@visvine/tokens':
         specifier: workspace:*
         version: link:../../packages/tokens
+      '@visvine/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@visvine/vm-policy':
         specifier: workspace:*
         version: link:../../packages/vm-policy
@@ -267,6 +270,34 @@ importers:
       style-dictionary:
         specifier: ^5.5.5
         version: 5.5.5
+
+  packages/ui:
+    dependencies:
+      '@visvine/tokens':
+        specifier: workspace:*
+        version: link:../tokens
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.4(@types/react@19.2.18)
+      '@visvine/config':
+        specifier: workspace:*
+        version: link:../config
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
+      typescript:
+        specifier: ^5
+        version: 5.9.3
 
   packages/vm-policy: {}
 

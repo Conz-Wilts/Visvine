@@ -14,7 +14,7 @@
     "lib/tools/protocol.ts",
     "lib/tools/sdkDocs.ts"
   ],
-  "project": ["app/**", "components/**", "features/**", "lib/**", "scripts/**", "tests/**"],
+  "project": ["app/**", "features/**", "lib/**", "scripts/**", "tests/**"],
   // Tool SOURCE files the verify scripts read off disk and feed to the
   // server-side Tool compiler. Nothing imports them, and nothing should:
   // `@visvine/tool-kit` only resolves through the frame's import map at run

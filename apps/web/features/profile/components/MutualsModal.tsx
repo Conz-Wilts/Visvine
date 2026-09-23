@@ -3,8 +3,7 @@
 /** Everyone you and this person both stand beside, one row each. */
 
 import { useEffect, useState } from 'react';
-import Modal from '@/components/ui/Modal';
-import Avatar from '@/components/ui/Avatar';
+import { Modal, Avatar } from '@visvine/ui';
 import SpaceLink from '@/features/shared/components/SpaceLink';
 import { fetchJson } from '@/lib/fetchJson';
 import type { Mutual } from '@/app/api/profile/[personId]/mutuals/route';

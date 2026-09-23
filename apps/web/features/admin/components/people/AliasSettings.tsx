@@ -16,9 +16,8 @@
 
 import { useState } from 'react';
 import { PlusIcon, Trash2Icon, XIcon } from '@/features/shared/icons';
-import { Avatar, Button, ConfirmDialog, Input } from '@/components/ui';
+import { Avatar, Button, ConfirmDialog, Input, Toggle } from '@visvine/ui';
 import ColorPicker from '../ColorPicker';
-import Toggle from '@/components/ui/Toggle';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { aliasNameError, MAX_ALIAS_NAME } from '@/lib/notes/shared/aliases';
 import type { AliasInfo } from '@/lib/notes/aliases';

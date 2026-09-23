@@ -5,7 +5,7 @@ import { useSpaceRouter } from "@/features/shared/hooks/useSpaceRouter";
 import Image from "next/image";
 import { signOut } from "@/features/auth/lib/auth-client";
 import { useAuth } from "@/features/auth/contexts/AuthContext";
-import PersonSilhouette from "@/components/ui/PersonSilhouette";
+import { PersonSilhouette } from "@visvine/ui";
 import { selfProfileHref } from "@/features/profile/lib/selfView";
 import { END_ROW_H, HEAD_CELL_W, ITEM_GAP, MARK_PX, Row } from "@/features/shared/components/layout/railRow";
 import { motion } from "@visvine/tokens";

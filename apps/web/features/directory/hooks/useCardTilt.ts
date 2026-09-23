@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { prefersReducedMotion } from '@/lib/motion'
+import { prefersReducedMotion } from '@visvine/ui'
 
 /**
  * Pointer-following tilt for a card: it lifts on hover and the edge the pointer

@@ -28,7 +28,7 @@
 // gutter would eat a third of it.
 
 import { useMemo, useRef, useState } from 'react'
-import Chip, { CHIP_ACCENT_HOVER, chipClass } from '@/components/ui/Chip'
+import { Chip, CHIP_ACCENT_HOVER, chipClass } from '@visvine/ui'
 import { findAlias, getNodeTypeConfig, nodeTypeLabel } from '@/lib/types'
 import { tagKey, tagPalette } from '@/lib/tagColors'
 import type { SpaceAlias, NodeTypeConfig } from '@/lib/types'

@@ -16,9 +16,7 @@ import { formatBytes } from '@/lib/utils';
 import { isHttpUrl } from '@/lib/links/shared/unfurl';
 import type { LibraryFilter, LibraryItem, LibraryPage } from '@/lib/resources/shared/library';
 import { FILE_LABEL, FileTypeIcon } from '@/features/resources/components/resourceUi';
-import ContentReveal from '@/components/ui/ContentReveal';
-import SearchInput from '@/components/ui/SearchInput';
-import ViewToggle from '@/components/ui/ViewToggle';
+import { ContentReveal, SearchInput, Tabs } from '@visvine/ui';
 import { GlobeIcon, UploadIcon } from '@/features/shared/icons';
 
 const FILTERS: { id: LibraryFilter; label: string }[] = [
@@ -251,7 +249,7 @@ export default function ResourcesView() {
           size="lg"
           className="w-full max-w-[420px] flex-1 sm:min-w-[280px]"
         />
-        <ViewToggle options={FILTERS} value={filter} onChange={setFilter} />
+        <Tabs options={FILTERS} value={filter} onChange={setFilter} />
         <div className="ml-auto flex items-center gap-2">
           <form
             onSubmit={(e) => { e.preventDefault(); void addLink(link.trim()); }}

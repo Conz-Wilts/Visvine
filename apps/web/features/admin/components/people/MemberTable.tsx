@@ -12,7 +12,7 @@
 
 import { useMemo, useState } from 'react';
 import { ChevronRightIcon, Trash2Icon, UsersIcon } from '@/features/shared/icons';
-import { Avatar, Button, Chip, ConfirmDialog, SearchInput } from '@/components/ui';
+import { Avatar, Button, Chip, ConfirmDialog, SearchInput } from '@visvine/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import { formatDate } from '@/lib/date';
 import { notesApi } from '@/features/notes/lib/notesApi';

@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { LockIcon } from '@/features/shared/icons';
-import { Textarea } from '@/components/ui'
+import { Textarea } from '@visvine/ui';
 
 /** Height that puts this block's MIDDLE on the viewport's middle. The block
  *  starts wherever the pane's chrome leaves it — below the shell band and the

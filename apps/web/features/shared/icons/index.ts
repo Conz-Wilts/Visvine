@@ -13,7 +13,7 @@
  */
 export * from './generated/icons';
 export { Icon } from './Icon';
-export { IconBase } from './IconBase';
+export { IconBase } from '@visvine/ui';
 // The names themselves are NOT re-exported here. They are React-free and live
 // in `@/lib/icons/names`, which is what route handlers and zod schemas import —
 // re-exporting them through a module that pulls in 146 components would make it

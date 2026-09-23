@@ -49,7 +49,7 @@ import {
   type IndexChild,
 } from '@/lib/notes/shared/indexNote'
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext'
-import { TAB_MOTION_MS } from '@/components/ui/tabMotion'
+import { TAB_MOTION_MS } from '@visvine/ui'
 import type { NoteFrontmatter, NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 
 const AUTOSAVE_MS = 350

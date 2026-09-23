@@ -7,7 +7,7 @@
  * keeps its own look while the field semantics stay in one place.
  */
 
-import Select from '@/components/ui/Select';
+import { Select } from '@visvine/ui';
 import type { FormField } from '@/lib/types';
 
 export interface RegistrationFieldClasses {

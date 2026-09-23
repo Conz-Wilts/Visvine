@@ -30,7 +30,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from '@/features/shared/components/SpaceLink';
 import { CheckIcon, CopyIcon, ExternalLinkIcon, TriangleAlertIcon, UploadIcon } from '@/features/shared/icons';
-import { Button, Modal, Skeleton, Textarea } from '@/components/ui';
+import { Button, Modal, Skeleton, Textarea } from '@visvine/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import ShareWithRooms, { type ShareValue } from '@/features/shared/components/ShareWithRooms';
 import { setAuthoredToolShare } from '@/features/tools/lib/client';

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import Modal from "@/components/ui/Modal";
+import { Modal } from "@visvine/ui";
 import SignInCard from "@/features/auth/components/SignInCard";
 
 /**

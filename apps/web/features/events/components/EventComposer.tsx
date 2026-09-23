@@ -1,7 +1,7 @@
 'use client';
 
 import { useSpaceHref } from '@/features/shared/contexts/SpaceContext';
-import { Alert, Button, Modal } from '@/components/ui';
+import { Alert, Button, Modal, Select, Checkbox } from '@visvine/ui';
 import { palette } from '@visvine/tokens';
 
 /**
@@ -21,7 +21,6 @@ import type { NBEvent, EventVisibility, FormField } from '@/lib/types';
 import { VenueAutocomplete } from './VenueAutocomplete';
 import { CustomDateTimePicker } from './CustomDateTimePicker';
 import { DriveCoverPicker } from './DriveCoverPicker';
-import Select from '@/components/ui/Select';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { invalidateEventDetail } from '@/features/events/lib/eventDetail';
 import { ArrowLeftIcon, CalendarPlusIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, ExternalLinkIcon, FolderIcon, GlobeIcon, ImagePlusIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PlusIcon, SparklesIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
@@ -582,11 +581,10 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
                           ))}
                         </Select>
                         <label className="flex items-center gap-1.5 text-xs font-medium text-fg-muted cursor-pointer flex-shrink-0">
-                          <input
-                            type="checkbox"
+                          <Checkbox
+                            size="sm"
                             checked={q.required}
-                            onChange={(e) => updateQuestion(q.id, { required: e.target.checked })}
-                            className="w-3.5 h-3.5 rounded border-line text-accent focus:ring-accent"
+                            onChange={(required) => updateQuestion(q.id, { required })}
                           />
                           Required
                         </label>

@@ -18,8 +18,7 @@
 
 import TypeMenu, { menuTypes } from '@/features/directory/components/TypeMenu';
 import TagMenu from '@/features/directory/components/TagMenu';
-import Chip from '@/components/ui/Chip';
-import SearchInput from '@/components/ui/SearchInput';
+import { Chip, SearchInput } from '@visvine/ui';
 import { tagPalette } from '@/lib/tagColors';
 import type { SpaceAlias } from '@/lib/types';
 import type { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';

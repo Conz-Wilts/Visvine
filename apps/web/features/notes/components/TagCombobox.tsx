@@ -9,15 +9,7 @@
 
 import { useRef, useState, useMemo, type ReactNode } from 'react'
 import { clsx } from 'clsx'
-import Chip from '@/components/ui/Chip'
-import {
-  SEARCH_MENU_PANEL,
-  SEARCH_MENU_ROW,
-  SearchMenuInput,
-  SearchMenuList,
-  searchMenuRowState,
-  useSearchMenuCursor,
-} from '@/components/ui/SearchMenu'
+import { Chip, SEARCH_MENU_PANEL, SEARCH_MENU_ROW, SearchMenuInput, SearchMenuList, searchMenuRowState, useSearchMenuCursor } from '@visvine/ui'
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside'
 import { TAG_SWATCHES, resolveTagBase, tagKey, tagPalette } from '@/lib/tagColors'
 

@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Chip, Input } from '@/components/ui';
-import Select from '@/components/ui/Select';
+import { Chip, Input, Select } from '@visvine/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { LOCAL_RUNTIMES, localModelRef } from '@/lib/agents/local';

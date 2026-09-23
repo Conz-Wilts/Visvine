@@ -2,7 +2,7 @@
 
 import Link from '@/features/shared/components/SpaceLink';
 import { clsx } from 'clsx';
-import { Chip } from '@/components/ui';
+import { Chip } from '@visvine/ui';
 import type { ToolDegraded } from '@/lib/tools/protocol';
 import { color } from '@visvine/tokens';
 

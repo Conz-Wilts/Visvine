@@ -22,7 +22,7 @@
 
 import { useEffect, useState } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
-import { Alert, Button, SettingsSection } from '@/components/ui';
+import { Alert, Button, SettingsSection } from '@visvine/ui';
 import { fetchJson } from '@/lib/fetchJson';
 
 interface McpConnectInfo {

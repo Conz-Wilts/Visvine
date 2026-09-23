@@ -22,7 +22,7 @@ import { humanizeFolderName, isIndexPath } from '@/lib/notes/shared/indexNote';
 import type { AccessRequest } from '@/lib/notes/shared/contextTypes';
 import type { TreeNode } from '@/lib/notes/shared/types';
 import { notesApi } from '@/features/notes/lib/notesApi';
-import { Button, chipClass, chipStyle } from '@/components/ui';
+import { Button, chipClass, chipStyle } from '@visvine/ui';
 
 export interface SpaceMember {
   id: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { prefersReducedMotion } from "@/lib/motion";
+import { prefersReducedMotion } from "@visvine/ui";
 import { motion } from "@visvine/tokens";
 
 interface SidebarContextValue {

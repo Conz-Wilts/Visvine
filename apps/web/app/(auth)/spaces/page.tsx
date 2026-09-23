@@ -5,7 +5,7 @@ import Link from '@/features/shared/components/SpaceLink';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { spaceMark } from '@/lib/spaces/subspaces';
-import { Button, EmptyState } from '@/components/ui';
+import { Button, EmptyState } from '@visvine/ui';
 
 export default function SpacesPage() {
   const { spaces, joinedSpaces, currentSpace, setCurrentSpace, leaveSpace } = useSpace();

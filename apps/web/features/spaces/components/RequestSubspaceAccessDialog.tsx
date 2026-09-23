@@ -17,7 +17,7 @@
 //   reads "Join", the membership lands active, and the dialog walks in.
 
 import { useState } from 'react';
-import { Modal, Button } from '@/components/ui';
+import { Modal, Button } from '@visvine/ui';
 import { CheckIcon, LockIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { invalidateRequestCache } from '@/features/shared/lib/requestCache';

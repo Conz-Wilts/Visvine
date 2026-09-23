@@ -1,4 +1,4 @@
-import { THEME_ACCENT, PERSON_SILHOUETTE_PATH } from '@/lib/avatarUtils';
+import { THEME_ACCENT, PERSON_SILHOUETTE_PATH } from './avatarGlyphs';
 import { palette } from '@visvine/tokens';
 
 interface PersonSilhouetteProps {

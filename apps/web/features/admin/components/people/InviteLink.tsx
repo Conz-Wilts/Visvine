@@ -10,7 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { useCopied } from '@/features/shared/hooks/useCopied';
-import { Alert, Button, ConfirmDialog } from '@/components/ui';
+import { Alert, Button, ConfirmDialog } from '@visvine/ui';
 import { useConsoleAction } from '@/features/admin/components/console/ConsoleSaveContext';
 import { fetchJson } from '@/lib/fetchJson';
 import { primeRequestCache, swrFetch } from '@/features/shared/lib/requestCache';

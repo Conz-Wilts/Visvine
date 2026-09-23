@@ -10,6 +10,7 @@
  * attendee PATCH/DELETE/bulk routes. Host/admin gating is enforced server-side.
  */
 
+import { Checkbox } from '@visvine/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import type { NBEvent, NBAttendee, RSVPStatus } from '@/lib/types';
@@ -268,11 +269,10 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
               return (
                 <li key={a.id} className="hover:bg-accent-soft/40 transition-colors">
                   <div className="flex items-center gap-3 px-4 py-3">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selected.has(a.id)}
                       onChange={() => toggleSel(a.id)}
-                      className="w-4 h-4 rounded border-line text-accent focus:ring-accent"
+                      aria-label={`Select ${a.name || a.email || 'guest'}`}
                     />
                     <div
                       className={`min-w-0 flex-1 ${details.length > 0 ? 'cursor-pointer' : ''}`}

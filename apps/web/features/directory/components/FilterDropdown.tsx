@@ -2,13 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
-import {
-  DROPDOWN_TRIGGER_CLASS,
-  DROPDOWN_TRIGGER_ACTIVE_STYLE,
-  DROPDOWN_TRIGGER_IDLE_STYLE,
-} from '@/components/ui/Dropdown';
-import Chip from '@/components/ui/Chip';
-import { SEARCH_MENU_PANEL, SearchMenuEmpty, SearchMenuInput, SearchMenuList } from '@/components/ui/SearchMenu';
+import { DROPDOWN_TRIGGER_CLASS, DROPDOWN_TRIGGER_ACTIVE_STYLE, DROPDOWN_TRIGGER_IDLE_STYLE, Chip, SEARCH_MENU_PANEL, SearchMenuEmpty, SearchMenuInput, SearchMenuList } from '@visvine/ui';
 
 // ── Multi-select filter dropdown ──────────────────────────────────────────────
 interface SubOption {

@@ -10,7 +10,7 @@
 // one is not worth a line of the page, let alone the tab it used to have.
 
 import { useState } from 'react';
-import { Avatar, Button, ConfirmDialog, SettingsSection } from '@/components/ui';
+import { Avatar, Button, ConfirmDialog, SettingsSection } from '@visvine/ui';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import AccessRequests from './AccessRequests';
 import { usePeopleSection } from './PeopleDataContext';

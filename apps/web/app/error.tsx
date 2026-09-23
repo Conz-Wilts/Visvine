@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import PageError from '@/components/ui/PageError';
+import { PageError } from '@visvine/ui';
 
 /**
  * The app-wide error boundary. Anything that throws during a render lands here,

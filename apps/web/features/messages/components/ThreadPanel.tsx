@@ -3,7 +3,7 @@
 import type { Dispatch, KeyboardEvent, MutableRefObject, RefObject, SetStateAction } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowLeftIcon, HashIcon, LogOutIcon, PencilIcon, SearchIcon, StarIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
-import Avatar from '@/components/ui/Avatar';
+import { Avatar } from '@visvine/ui';
 import { ChannelIcon, ChannelIconPicker } from './ChannelIcon';
 import MessageComposer from './MessageComposer';
 import MessageRow from './MessageRow';

@@ -26,12 +26,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom'
 import { BotIcon, CheckIcon, ChevronDownIcon, Link2Icon, LockIcon, LockOpenIcon, UsersIcon, UsersRoundIcon, XIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
-import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey'
+import { useEscapeKey, Avatar, Toggle } from '@visvine/ui';
 import { useCopied } from '@/features/shared/hooks/useCopied'
 import { noteHref } from '@/lib/notes/entities'
 import { humanizeFolderName } from '@/lib/notes/shared/indexNote'
-import Avatar from '@/components/ui/Avatar'
-import Toggle from '@/components/ui/Toggle'
 import {
   ACCESS_LEVELS,
   levelDisplayLabel,

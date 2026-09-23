@@ -1,5 +1,6 @@
 /**
- * The web app paints with the design tokens (packages/tokens) and nothing else.
+ * The web app and @visvine/ui paint with the design tokens (packages/tokens)
+ * and nothing else.
  *
  * The failure this guards is quiet: a raw `text-red-600` or a `#6b7280` renders
  * fine, passes every typecheck, and is one more value the next palette change
@@ -16,7 +17,8 @@ import path from 'node:path'
 
 // tsx compiles this to CJS, so `__dirname` is what resolves here.
 const WEB = path.join(__dirname, '..')
-const ROOTS = ['app', 'components', 'features', 'lib']
+// The app, and the shared component package it is built from.
+const ROOTS = ['app', 'features', 'lib', '../../packages/ui/src']
 
 /**
  * Files that carry colours on purpose. The Tool kit and its bridge keep the
@@ -31,6 +33,7 @@ const ALLOWED = [
   'lib/tools/compile.ts',
   'features/auth/components/SignInCard.tsx', // Google's own four colours
   'features/admin/components/ColorPicker.tsx', // the hue slider's rainbow
+  'lib/types/recolor.ts', // the colours types shipped with before the palette: history, not paint
 ]
 
 function sourceFiles(): string[] {

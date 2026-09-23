@@ -12,7 +12,7 @@ import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { CompassIcon, FeedIcon } from "@/features/shared/icons";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import { BAND_MOTION, FRAME_BG, FRAME_LINE, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
-import Modal from "@/components/ui/Modal";
+import { Modal } from "@visvine/ui";
 import UserMenu from "@/features/auth/components/UserMenu";
 import SpaceSelector from "@/features/spaces/components/SpaceSelector";
 import SpaceSwitcherPanel from "@/features/spaces/components/SpaceSwitcherPanel";

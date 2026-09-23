@@ -7,6 +7,7 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/config/package.json ./packages/config/
 COPY packages/tokens/package.json ./packages/tokens/
+COPY packages/ui/package.json ./packages/ui/
 COPY apps/web/package.json ./apps/web/
 # Every workspace importer in the lockfile must be present for --frozen-lockfile
 # to validate; the filter keeps Electron and the rest of the desktop tree out.

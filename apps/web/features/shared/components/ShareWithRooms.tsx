@@ -10,7 +10,7 @@
 // join). It is a warning, not a refusal: the save still happens on Confirm.
 
 import { useEffect, useMemo, useState } from 'react';
-import { Button } from '@/components/ui';
+import { Button, Checkbox } from '@visvine/ui';
 import { TriangleAlertIcon } from '@/features/shared/icons';
 import { swrFetch } from '@/features/shared/lib/requestCache';
 import { fetchJson } from '@/lib/fetchJson';
@@ -104,13 +104,12 @@ export default function ShareWithRooms({
           {rooms?.map((room) => (
             <li key={room.id}>
               <label className="flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={picked.has(room.id)}
                   disabled={saving}
-                  onChange={(e) => {
+                  onChange={(on) => {
                     const copy = new Set(picked);
-                    if (e.target.checked) copy.add(room.id);
+                    if (on) copy.add(room.id);
                     else copy.delete(room.id);
                     setPicked(copy);
                   }}

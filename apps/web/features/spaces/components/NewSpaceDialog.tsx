@@ -16,7 +16,7 @@
 // here, on the switcher that already owns "which space am I in".
 
 import { useState } from 'react';
-import { Modal, Input, Button } from '@/components/ui';
+import { Modal, Input, Button } from '@visvine/ui';
 import { XIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { ensureRootIndexNote } from '@/features/notes/lib/rootIndex';

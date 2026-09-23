@@ -22,7 +22,7 @@ import {
   useConnectionsRailVisible,
   useContextPanel,
 } from '@/features/shared/contexts/ContextPanelContext';
-import ContentReveal from '@/components/ui/ContentReveal';
+import { ContentReveal } from '@visvine/ui';
 import { TabBarSlotGate } from '@/features/shared/contexts/TabBarSlotContext';
 import { entityOwnerPathOf } from '@/lib/notes/entities';
 import {

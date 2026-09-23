@@ -17,7 +17,7 @@
 // reads the same either way.
 
 import { useMemo, useState } from 'react';
-import { TreeSpine, TreeSpineJoin, type TreeGuideKind } from '@/components/ui/TreeChrome';
+import { TreeSpine, TreeSpineJoin, type TreeGuideKind } from '@/features/shared/components/TreeChrome';
 import { ChevronLeftIcon, PlusIcon, SettingsIcon } from '@/features/shared/icons';
 import type { AliasInfo } from '@/lib/notes/aliases';
 import { AliasSettings, EveryoneSettings, NewAliasForm } from './AliasSettings';

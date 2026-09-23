@@ -7,7 +7,7 @@
 // of the move (/api/notes/move-preview), so it names exactly the people, teams
 // and boundaries the move will change rather than warning in general.
 
-import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { ConfirmDialog } from '@visvine/ui'
 import type { MoveAsk } from '../lib/useContextTree'
 import type { MovePreviewSubject } from '../lib/notesApi'
 

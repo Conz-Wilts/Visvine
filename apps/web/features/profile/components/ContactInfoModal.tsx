@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { EarthIcon, LinkedinIcon, MailIcon, PencilIcon, PhoneIcon, TwitterIcon } from '@/features/shared/icons';
-import Modal from '@/components/ui/Modal';
+import { Modal } from '@visvine/ui';
 import type { FullProfile } from '@/lib/types/profile';
 
 /**

@@ -1,6 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
+import { FOCUS_RING } from './focus';
 
 interface ToggleProps {
   checked: boolean;
@@ -34,7 +35,7 @@ export default function Toggle({
       onClick={() => onChange(!checked)}
       className={clsx(
         'relative inline-flex h-6 w-10 flex-shrink-0 items-center rounded-full transition-colors duration-200',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+        FOCUS_RING,
         'disabled:cursor-not-allowed disabled:opacity-50',
         checked ? 'bg-accent' : 'bg-surface-muted',
         !label && className,

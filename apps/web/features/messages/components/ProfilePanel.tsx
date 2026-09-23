@@ -6,10 +6,9 @@
  * actions.
  */
 
-import { ViewToggle } from '@/components/ui';
+import { Tabs, Avatar } from '@visvine/ui';
 import { HashIcon, LogOutIcon, MessageCircleIcon, FeedIcon, PencilIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
 import type { ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
-import Avatar from '@/components/ui/Avatar';
 
 export interface ProfilePanelProps {
   conversation: ConversationSummary;
@@ -53,7 +52,7 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
       {isAdmin && onChangeViewMode && (
         <div className="section-y-1.5 px-5 pb-4">
           <SectionLabel>View style</SectionLabel>
-          <ViewToggle
+          <Tabs
             size="sm"
             value={viewMode}
             onChange={(mode) => { if (mode !== viewMode) onChangeViewMode(mode); }}

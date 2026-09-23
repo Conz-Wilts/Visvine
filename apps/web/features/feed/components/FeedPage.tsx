@@ -1,11 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
+import { ConfirmDialog, EmptyState, Skeleton, Avatar } from '@visvine/ui';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import Link from '@/features/shared/components/SpaceLink';
 import { HouseIcon, PlusIcon } from '@/features/shared/icons';
-import Avatar from '@/components/ui/Avatar';
 import { inSpace } from '@/lib/spaces/shared/spaceUrl';
 import { badgeKey, type FeedPlace } from '@/lib/messages/shared/feed';
 import { useFeed } from '../hooks/useFeed';

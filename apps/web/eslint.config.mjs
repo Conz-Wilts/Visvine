@@ -3,8 +3,8 @@ import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 
 const COMPONENTS_BOUNDARY = {
-  group: ["@/components/*", "!@/components/ui", "!@/components/ui/*"],
-  message: "Only @/components/ui is shared. Domain UI belongs in @/features/<domain>/components.",
+  group: ["@/components", "@/components/*"],
+  message: "Shared UI is @visvine/ui (packages/ui). Domain UI belongs in @/features/<domain>/components.",
 };
 
 // We own our icons: every glyph is a file in assets/icons/, codegen'd into

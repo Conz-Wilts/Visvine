@@ -16,8 +16,8 @@ import { hexToPalette } from '@/lib/profileTheme';
 import { findAlias, nodeTypeLabel, type NBNode } from '@/lib/types';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
 import { fetchJson } from '@/lib/fetchJson';
-import Chip from '@/components/ui/Chip';
-import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
+import { Chip } from '@visvine/ui';
+import LinkPreviewCard from '@/features/shared/components/LinkPreviewCard';
 import type { SerializedLinkPreview } from '@/lib/messages/types';
 
 // A resource created via the modal carries an internal `/slug` url — only an

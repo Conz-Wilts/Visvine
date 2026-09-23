@@ -1,27 +1,23 @@
 'use client';
 
 /**
- * The marketplace's notice channel: a stack of `Alert`s in the bottom-right.
+ * Toasts: a stack of Alerts in the bottom-right, for the answer to something a
+ * person just pressed that arrives after the thing they pressed has gone — a
+ * dialog that closed, a row that moved. An inline notice would be attached to
+ * nothing, so it sits by the cursor instead, out of the layout.
  *
- * Installing, upgrading and publishing all answer with something the person who
- * pressed the button has to read — a refusal in the server's own words, a type
- * claim that became a tab, a version that is now in the review queue — and every
- * one of those happens after a dialog has closed. An inline banner would either
- * be attached to a row that just disappeared or push the list around; this keeps
- * the answer next to the cursor and out of the layout.
- *
- * Built on the existing `Alert` primitive rather than a new one: the four tones
- * and their dismiss affordance already exist, and a toast is that component in a
- * fixed position.
+ *   const toasts = useToasts();
+ *   toasts.push('success', 'Installed');
+ *   <ToastHost toasts={toasts.toasts} onDismiss={toasts.dismiss} />
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Alert } from '@/components/ui';
+import Alert from './Alert';
 
 export type ToastTone = 'success' | 'error' | 'warning' | 'info';
 
-interface Toast {
+export interface Toast {
   id: number;
   tone: ToastTone;
   message: ReactNode;
@@ -31,7 +27,7 @@ interface Toast {
  *  the reader missed is a refusal they will hit again. */
 const DISMISS_AFTER_MS = 6000;
 
-interface ToastApi {
+export interface ToastApi {
   toasts: Toast[];
   push: (tone: ToastTone, message: ReactNode) => void;
   dismiss: (id: number) => void;
@@ -46,17 +42,14 @@ export function useToasts(): ToastApi {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
-  const push = useCallback(
-    (tone: ToastTone, message: ReactNode) => {
-      const id = nextId.current++;
-      setToasts((current) => [...current, { id, tone, message }]);
-      if (tone === 'error') return;
-      timers.current.push(
-        window.setTimeout(() => setToasts((current) => current.filter((t) => t.id !== id)), DISMISS_AFTER_MS),
-      );
-    },
-    [],
-  );
+  const push = useCallback((tone: ToastTone, message: ReactNode) => {
+    const id = nextId.current++;
+    setToasts((current) => [...current, { id, tone, message }]);
+    if (tone === 'error') return;
+    timers.current.push(
+      window.setTimeout(() => setToasts((current) => current.filter((t) => t.id !== id)), DISMISS_AFTER_MS),
+    );
+  }, []);
 
   // Timers outlive the component otherwise, and each one closes over setState.
   useEffect(() => {
@@ -68,8 +61,8 @@ export function useToasts(): ToastApi {
 }
 
 /**
- * Portalled to `document.body` for the same reason `Modal` is: the shell chrome
- * carries a transform, and `position: fixed` inside a transformed ancestor
+ * Portalled to `document.body` for the same reason `Modal` is: shell chrome may
+ * carry a transform, and `position: fixed` inside a transformed ancestor
  * resolves against that ancestor instead of the viewport.
  */
 export function ToastHost({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
@@ -84,7 +77,7 @@ export function ToastHost({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (
       aria-live="polite"
     >
       {toasts.map((toast) => (
-        <div key={toast.id} className="pointer-events-auto shadow-float">
+        <div key={toast.id} className="pointer-events-auto bg-surface shadow-float">
           <Alert variant={toast.tone} onDismiss={() => onDismiss(toast.id)}>
             {toast.message}
           </Alert>

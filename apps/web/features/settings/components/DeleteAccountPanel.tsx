@@ -9,7 +9,7 @@
 // what that service does, no more.
 
 import { useState } from 'react';
-import { Alert, Button, Input, Modal, SettingsSection } from '@/components/ui';
+import { Alert, Button, Input, Modal, SettingsSection } from '@visvine/ui';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 

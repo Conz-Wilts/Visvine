@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
-import { Button, Modal } from '@/components/ui';
+import { Button, Modal } from '@visvine/ui';
 import { selfJoinAliases, type Space } from '@/lib/types';
 
 /** "How do you identify?" — the role picker a space asks on the way in. */

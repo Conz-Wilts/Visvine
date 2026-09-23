@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { XIcon } from '@/features/shared/icons';
-import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
+import { XIcon } from './icons';
+import { useEscapeKey } from './hooks/useEscapeKey';
 
 // Viewport-scaled width presets: a floor in rem, growth as a share of screen
 // width on large monitors, and a sane upper bound.

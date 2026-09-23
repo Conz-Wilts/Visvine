@@ -2,8 +2,7 @@
 
 import React, { useState } from 'react';
 import { LockIcon, ShieldCheckIcon, UsersIcon } from '@/features/shared/icons';
-import Modal from '@/components/ui/Modal';
-import { getInitials } from '@/lib/avatarUtils';
+import { Modal, getInitials } from '@visvine/ui';
 import type { ThemePalette } from '@/lib/profileTheme';
 
 export interface ProfileSpace {

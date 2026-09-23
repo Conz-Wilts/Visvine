@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Field, Input, Modal } from '@/components/ui';
-import Select from '@/components/ui/Select';
+import { Button, Field, Input, Modal, Select } from '@visvine/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary } from '@/lib/agents/service';
 

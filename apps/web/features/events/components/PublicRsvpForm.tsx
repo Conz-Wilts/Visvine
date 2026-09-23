@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import type { RSVPResponse, FormField } from '@/lib/types';
 import { CalendarPlusIcon, CheckIcon, LoaderCircleIcon } from '@/features/shared/icons';
-import Select from '@/components/ui/Select';
+import { Select } from '@visvine/ui';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { RegistrationField } from '@/features/events/components/RegistrationField';
 import { missingRequiredAnswers, RESPONSE_LABELS } from '@/lib/eventUtils';

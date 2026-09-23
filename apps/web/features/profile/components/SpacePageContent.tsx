@@ -35,11 +35,7 @@ import { hexToPalette } from '@/lib/profileTheme';
 import { findAlias, getNodeGlyph, nodeTypeLabel } from '@/lib/types';
 import { fieldsForType, readFields } from '@/lib/types/typeFields';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
-import { getInitials } from '@/lib/avatarUtils';
-import Chip from '@/components/ui/Chip';
-import PersonSilhouette from '@/components/ui/PersonSilhouette';
-import TypeSilhouette from '@/components/ui/TypeSilhouette';
-import PageError from '@/components/ui/PageError';
+import { getInitials, Chip, PersonSilhouette, TypeSilhouette, PageError } from '@visvine/ui';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
 import { StatItem, SectionCard, RailCard, hostname } from './profileCards';
 

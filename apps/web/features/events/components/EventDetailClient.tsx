@@ -21,14 +21,13 @@ import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { GuestManager } from '@/features/events/components/GuestManager';
-import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { ConfirmDialog, PersonSilhouette, Select, PageError } from '@visvine/ui';
 import PageTabBar, { type PageTab, type TabConfig } from '@/features/shared/components/pane/PageTabBar';
 import { HANDOFF_KEY, useDockEdgeClass } from '@/features/shared/components/pane/PaneTabBar';
 import { TabBarSlotProvider } from '@/features/shared/contexts/TabBarSlotContext';
 import { copyToClipboard } from '@/lib/utils';
 import { useTheme } from '@/features/shared/contexts/ThemeContext';
 import { type ThemePalette } from '@/lib/profileTheme';
-import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import {
   formatEventDateRange, formatEventDateShort, formatEventTime, getEventStatus,
   missingRequiredAnswers, startsInLabel, RESPONSE_LABELS,
@@ -37,8 +36,6 @@ import { RegistrationField } from '@/features/events/components/RegistrationFiel
 import type { NBEvent, RSVPResponse } from '@/lib/types';
 import { useMapLink } from '../hooks/useMapLink';
 import { CalendarPlusIcon, CheckIcon, CircleQuestionMarkIcon, ClipboardListIcon, ClockIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, SpaceIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
-import Select from '@/components/ui/Select';
-import PageError from '@/components/ui/PageError';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { invalidateEventDetail, loadEventDetail, type EventDetail, type EventStats, type GuestPreview, type ViewerRsvp } from '@/features/events/lib/eventDetail';
 import { AboutText } from '@/features/profile/components/profileCards';

@@ -24,16 +24,15 @@ import type { SpaceAlias, Space, NodeTypeConfig } from '@/lib/types';
 import { isNodeTypeEnabled, nodeTypeToolKey } from '@/lib/featureAccess';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { FEATURES } from '@/features/shared/lib/features';
-import { Alert, Button, ConfirmDialog, Input, SearchInput } from '@/components/ui';
+import { Alert, Button, ConfirmDialog, Input, SearchInput, Select } from '@visvine/ui';
 import ColorPicker from './ColorPicker';
 import { ChevronDownIcon, Trash2Icon } from '@/features/shared/icons';
-import Select from '@/components/ui/Select';
 import { patchInstall } from '@/features/tools/lib/client';
 import { pageClaimantsFor } from '@/lib/tools/typePages';
 import type { InstalledToolDto } from '@/lib/tools/installs';
 import { useConsoleSave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { usePeopleSection } from '@/features/admin/components/people/PeopleDataContext';
-import { TreeSpine } from '@/components/ui/TreeChrome';
+import { TreeSpine } from '@/features/shared/components/TreeChrome';
 import AliasList, {
   AliasBackRow,
   AliasLabel,

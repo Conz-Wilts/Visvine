@@ -21,7 +21,7 @@ import Link from '@/features/shared/components/SpaceLink';
 import { useHeader } from '@/features/shared/contexts/HeaderContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { canAccessFeature, toolRailKey } from '@/features/shared/lib/features';
-import { Skeleton } from '@/components/ui';
+import { Skeleton } from '@visvine/ui';
 import type { SpaceFeatureConfig } from '@/lib/types';
 import ToolFrame from './ToolFrame';
 

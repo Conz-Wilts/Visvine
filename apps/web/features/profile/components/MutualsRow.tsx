@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
 import { swrFetch } from '@/features/shared/lib/requestCache';
-import Avatar from '@/components/ui/Avatar';
+import { Avatar } from '@visvine/ui';
 import SpaceLink from '@/features/shared/components/SpaceLink';
 import type { Mutual } from '@/app/api/profile/[personId]/mutuals/route';
 

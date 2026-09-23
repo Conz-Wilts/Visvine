@@ -2,15 +2,16 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion } from '@visvine/tokens';
+import { FOCUS_RING } from './focus';
 
-export interface ViewToggleOption<T extends string> {
+export interface TabOption<T extends string> {
   id: T
   label: string
   icon?: React.ReactNode
 }
 
-interface ViewToggleProps<T extends string> {
-  options: ViewToggleOption<T>[]
+interface TabsProps<T extends string> {
+  options: TabOption<T>[]
   value: T
   onChange: (id: T) => void
   /** Extra classes for the outer container (e.g. to override height). */
@@ -22,6 +23,8 @@ interface ViewToggleProps<T extends string> {
    * with the same nav line as one inside it.
    */
   size?: 'md' | 'sm' | 'lg'
+  /** Accessible name for the tab list, when nothing on screen names it. */
+  label?: string
 }
 
 function measureBtn(btn: HTMLButtonElement, container: HTMLDivElement) {
@@ -31,13 +34,13 @@ function measureBtn(btn: HTMLButtonElement, container: HTMLDivElement) {
 }
 
 /**
- * Segmented view selector drawn as a row of words with a 2px accent underline
- * sliding beneath the active one — the same signal the pane tab bar uses, at
- * toolbar scale, so a view switch never reads as a bordered control. The
- * option set may change at runtime (options appearing/disappearing); the
- * underline re-measures and slides to wherever the active option lands.
+ * Tabs: a row of words with a 2px accent underline sliding beneath the active
+ * one — the same signal the pane tab bar uses, so switching a view never reads
+ * as a bordered control. The option set may change at runtime (options
+ * appearing/disappearing); the underline re-measures and slides to wherever the
+ * active option lands.
  */
-export default function ViewToggle<T extends string>({ options, value, onChange, className = '', size = 'md' }: ViewToggleProps<T>) {
+export default function Tabs<T extends string>({ options, value, onChange, className = '', size = 'md', label }: TabsProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [pillStyle, setPillStyle] = useState<{ left: number; width: number } | null>(null)
@@ -67,6 +70,8 @@ export default function ViewToggle<T extends string>({ options, value, onChange,
   return (
     <div
       ref={containerRef}
+      role="tablist"
+      aria-label={label}
       className={`relative flex items-center ${size === 'lg' ? '' : 'gap-1'} ${
         size === 'sm' ? 'h-9' : 'h-12'
       } ${className}`}
@@ -88,11 +93,14 @@ export default function ViewToggle<T extends string>({ options, value, onChange,
       {options.map((o, i) => (
         <button
           key={o.id}
+          type="button"
+          role="tab"
+          aria-selected={value === o.id}
           ref={(el) => {
             buttonRefs.current[i] = el
           }}
           onClick={() => onChange(o.id)}
-          className={`relative z-10 flex h-full items-center gap-1.5 transition-colors duration-200 ${
+          className={`relative z-10 flex h-full items-center gap-1.5 transition-colors duration-200 ${FOCUS_RING} ${
             size === 'sm'
               ? 'px-2.5 text-[11px] font-semibold'
               : size === 'lg'

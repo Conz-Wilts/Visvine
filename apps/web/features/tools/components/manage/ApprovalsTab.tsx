@@ -16,8 +16,7 @@
  */
 
 import { useState } from 'react';
-import { Chip, EmptyState, Skeleton, Textarea } from '@/components/ui';
-import Button from '@/components/ui/Button';
+import { Chip, EmptyState, Skeleton, Textarea, Button } from '@visvine/ui';
 import { ClipboardListIcon } from '@/features/shared/icons';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import { reviewSpaceVersion } from '@/features/tools/lib/client';

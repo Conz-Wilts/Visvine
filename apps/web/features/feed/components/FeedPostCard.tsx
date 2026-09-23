@@ -1,9 +1,8 @@
 'use client';
 
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
-import Avatar from '@/components/ui/Avatar';
-import Chip from '@/components/ui/Chip';
-import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
+import { Avatar, Chip } from '@visvine/ui';
+import LinkPreviewCard from '@/features/shared/components/LinkPreviewCard';
 import { HeartIcon, MessageCircleIcon, PencilIcon, SmileIcon, Trash2Icon } from '@/features/shared/icons';
 import { CommentRow } from '@/features/messages/components/FeedView';
 import { EmojiPicker, MarkdownMessage, MessageImageGrid, MessageFiles } from '@/features/messages/components/MessageRow';

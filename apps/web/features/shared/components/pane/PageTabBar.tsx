@@ -5,8 +5,7 @@ import { createPortal } from 'react-dom';
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { useShellBand } from '@/features/desktop/lib/chrome';
-import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
-import { TAB_MOTION } from '@/components/ui/tabMotion';
+import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff, TAB_MOTION } from '@visvine/ui';
 import { motion as motionTokens } from '@visvine/tokens';
 
 export type PageTab = 'about' | 'context' | 'raw' | 'preview';

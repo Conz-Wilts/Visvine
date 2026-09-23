@@ -14,16 +14,7 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { clsx } from 'clsx'
-import Chip from '@/components/ui/Chip'
-import {
-  SEARCH_MENU_PANEL,
-  SEARCH_MENU_ROW,
-  SearchMenuEmpty,
-  SearchMenuInput,
-  SearchMenuList,
-  searchMenuRowState,
-  useSearchMenuCursor,
-} from '@/components/ui/SearchMenu'
+import { Chip, SEARCH_MENU_PANEL, SEARCH_MENU_ROW, SearchMenuEmpty, SearchMenuInput, SearchMenuList, searchMenuRowState, useSearchMenuCursor } from '@visvine/ui'
 import { scoreText } from '@/lib/fuzzy'
 import type { NodeTypeConfig } from '@/lib/types'
 

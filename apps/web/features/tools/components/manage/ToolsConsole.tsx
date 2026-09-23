@@ -16,13 +16,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ToastHost, useToasts, type ToastTone } from '@visvine/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchApprovalQueue, fetchInstalls } from '@/features/tools/lib/client';
 import type { ApprovalQueueItem, InstallSummary } from '@/lib/tools/api';
 import { invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import ApprovalsTab from './ApprovalsTab';
 import InstalledTab from './InstalledTab';
-import { ToastHost, useToasts, type ToastTone } from './Toasts';
 
 const toolKeys = {
   installs: (spaceId: string) => `tools:installs:${spaceId}`,

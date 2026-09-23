@@ -1,4 +1,4 @@
-import { THEME_ACCENT, NODE_GLYPH_PATHS, NODE_GLYPH_FILL_RULE, type NodeGlyph } from '@/lib/avatarUtils';
+import { THEME_ACCENT, NODE_GLYPH_PATHS, NODE_GLYPH_FILL_RULE, type NodeGlyph } from './avatarGlyphs';
 import { palette } from '@visvine/tokens';
 
 interface TypeSilhouetteProps {

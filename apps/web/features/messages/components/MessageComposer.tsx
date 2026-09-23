@@ -5,7 +5,7 @@ import { fetchJson } from '@/lib/fetchJson';
 import { AtSignIcon, ImagePlusIcon, Link2Icon, PlusIcon, SendIcon, SmileIcon, XIcon } from '@/features/shared/icons';
 import { FileTypeIcon } from '@/features/resources/components/resourceUi';
 import { resourceRawPath } from '@/lib/resources/shared/fileNode';
-import Avatar from '@/components/ui/Avatar';
+import { Avatar } from '@visvine/ui';
 
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import type { ComposerPayload, SerializedMessageFile, SerializedReplyTo } from '@/lib/messages/types';

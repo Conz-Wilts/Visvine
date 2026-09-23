@@ -5,7 +5,7 @@ import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import Link from '@/features/shared/components/SpaceLink';
 import { clsx } from 'clsx';
 import { RefreshCwIcon } from '@/features/shared/icons';
-import { Button, Skeleton } from '@/components/ui';
+import { Button, Skeleton } from '@visvine/ui';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import type { BridgeTarget, ToolSubject } from '@/lib/tools/protocol';
 import { useTheme } from '@/features/shared/contexts/ThemeContext';

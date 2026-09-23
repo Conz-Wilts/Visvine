@@ -40,7 +40,7 @@ import { FIELD, GHOST_BUTTON, SAVE_BUTTON, Section, SecretEditor, type SecretSta
 import { timeAgo } from '@/lib/date';
 import { SANDBOX_LIMITS, type AllowRule, type ConnectorPerimeter } from '@/lib/connectors/config';
 import { connectorConnectPath } from '@/lib/connectors/connectUrl';
-import { Skeleton } from '@/components/ui';
+import { Skeleton } from '@visvine/ui';
 
 interface ConnectorDetail {
   name: string;

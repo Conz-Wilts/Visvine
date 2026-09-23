@@ -35,7 +35,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from '@/features/shared/components/SpaceLink';
 import { CheckIcon, CopyIcon, FileCode2Icon, RotateCwIcon, TriangleAlertIcon } from '@/features/shared/icons';
 import { useCopied } from '@/features/shared/hooks/useCopied';
-import { Skeleton } from '@/components/ui';
+import { Skeleton } from '@visvine/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { FetchJsonError } from '@/lib/fetchJson';
 import { entityContextHref } from '@/lib/notes/entities';

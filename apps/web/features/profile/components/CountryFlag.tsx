@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { matchCountryInLocation } from '@/lib/countries';
-import CountryFlagIcon from '@/components/ui/CountryFlagIcon';
+import CountryFlagIcon from '@/features/shared/components/CountryFlagIcon';
 
 /**
  * Small country flag derived from a free-text location ("Auckland, New

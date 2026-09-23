@@ -3,7 +3,7 @@
 
 import type { ComponentType } from 'react';
 import type { IconName } from '@/lib/icons/names';
-import type { IconProps } from '../IconBase';
+import type { IconProps } from '@visvine/ui';
 import {
   ArrowDownIcon,
   ArrowLeftIcon,

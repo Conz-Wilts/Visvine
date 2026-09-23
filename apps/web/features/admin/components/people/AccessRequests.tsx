@@ -9,7 +9,7 @@
 
 import { useState } from 'react';
 import { FileTextIcon, FolderIcon, UsersIcon } from '@/features/shared/icons';
-import { Avatar, Button, ConfirmDialog, SettingsSection } from '@/components/ui';
+import { Avatar, Button, ConfirmDialog, SettingsSection } from '@visvine/ui';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { timeAgo } from '@/lib/date';
 import { describeOutcome, requestTargetLabel } from '@/lib/notes/shared/accessRequests';

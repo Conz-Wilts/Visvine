@@ -6,7 +6,7 @@ import { CameraIcon, LoaderCircleIcon } from '@/features/shared/icons';
 import EditModal from './EditModal';
 import ModalFooter from './ModalFooter';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
-import PersonSilhouette from '@/components/ui/PersonSilhouette';
+import { PersonSilhouette } from '@visvine/ui';
 import type { FullProfile } from '@/lib/types/profile';
 
 interface Props {

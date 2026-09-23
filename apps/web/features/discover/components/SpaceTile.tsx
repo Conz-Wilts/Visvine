@@ -3,8 +3,8 @@
 import Link from '@/features/shared/components/SpaceLink';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { useCardTilt } from '@/features/directory/hooks/useCardTilt';
-import { CountryFlagIcon } from '@/components/ui';
-import TypeSilhouette from '@/components/ui/TypeSilhouette';
+import { TypeSilhouette } from '@visvine/ui';
+import CountryFlagIcon from '@/features/shared/components/CountryFlagIcon';
 import { getNodeTypeConfig } from '@/lib/types';
 import { spaceCountryCode } from '@/lib/discover/filters';
 import type { Space } from '@/lib/types';

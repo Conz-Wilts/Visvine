@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Chip, EmptyState } from '@/components/ui';
+import { Chip, EmptyState } from '@visvine/ui';
 import { spaceMark } from '@/lib/spaces/subspaces';
 import { tagPalette } from '@/lib/tagColors';
 import { filterSpaces, sectorOptions } from '@/lib/discover/filters';

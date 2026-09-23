@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
-import { Alert, Button } from '@/components/ui';
+import { Alert, Button } from '@visvine/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import type { MachineEvent } from '@/lib/agents/shared/trace';
 import { fmtAgo } from '../lib/rowState';

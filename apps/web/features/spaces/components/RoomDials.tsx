@@ -10,8 +10,7 @@
 
 import { useState } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { Alert, ConfirmDialog } from '@/components/ui';
-import Toggle from '@/components/ui/Toggle';
+import { Alert, ConfirmDialog, Toggle } from '@visvine/ui';
 import type { Space } from '@/lib/types';
 import {
   DOORS,

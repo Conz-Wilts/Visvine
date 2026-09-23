@@ -20,7 +20,7 @@
 // a chip wrapping a colour picker). Reach for <Chip> first.
 
 import { clsx } from 'clsx';
-import { XIcon } from '@/features/shared/icons';
+import { XIcon } from './icons';
 import type { CSSProperties, ReactNode } from 'react';
 
 export type ChipTone = 'solid' | 'muted' | 'dashed';

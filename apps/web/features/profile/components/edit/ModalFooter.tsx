@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui';
+import { Button } from '@visvine/ui';
 
 interface ModalFooterProps {
   onCancel: () => void;

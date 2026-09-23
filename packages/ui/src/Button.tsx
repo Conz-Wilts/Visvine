@@ -1,4 +1,5 @@
 import { clsx } from 'clsx';
+import { FOCUS_RING } from './focus';
 
 type ButtonVariant = 'ghost' | 'brand' | 'neutral' | 'danger' | 'danger-text';
 type ButtonSize = 'sm' | 'md';
@@ -60,8 +61,10 @@ export default function Button({
   return (
     <button
       disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={clsx(
         'font-medium transition-colors',
+        FOCUS_RING,
         VARIANT_CLASSES[variant],
         sizeClass,
         className,

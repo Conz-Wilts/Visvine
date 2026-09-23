@@ -14,7 +14,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
-import { Alert } from '@/components/ui';
+import { Alert } from '@visvine/ui';
 import TableToolbar from './TableToolbar';
 import TypeMenu, { menuTypes } from '@/features/directory/components/TypeMenu';
 import DirectoryTable from './DirectoryTable';

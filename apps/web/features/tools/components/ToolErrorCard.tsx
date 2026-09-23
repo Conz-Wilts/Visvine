@@ -3,7 +3,7 @@
 import { ExternalLinkIcon, RefreshCwIcon, TriangleAlertIcon } from '@/features/shared/icons';
 import Link from '@/features/shared/components/SpaceLink';
 import { clsx } from 'clsx';
-import { Button } from '@/components/ui';
+import { Button } from '@visvine/ui';
 
 /**
  * What a Tool's pane shows when the Tool is the thing that broke.

@@ -1,9 +1,7 @@
 'use client';
 
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import Avatar from '@/components/ui/Avatar';
-import Chip from '@/components/ui/Chip';
-import Modal from '@/components/ui/Modal';
+import { Avatar, Chip, Modal } from '@visvine/ui';
 import {
   AtSignIcon,
   BoldIcon,

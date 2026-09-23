@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { ChevronDownIcon } from '@/features/shared/icons';
+import { ChevronDownIcon } from './icons';
 
 type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement>;
 

@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { clsx } from 'clsx';
-import { Alert, Button, Chip, ConfirmDialog, Field, LoadingText, Textarea } from '@/components/ui';
+import { Alert, Button, Chip, ConfirmDialog, Field, LoadingText, Textarea, ToastHost, useToasts } from '@visvine/ui';
 import { Trash2Icon } from '@/features/shared/icons';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import CodeDiff from '@/features/tools/components/CodeDiff';
@@ -154,17 +154,9 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
   const [deciding, setDeciding] = useState<'approved' | 'rejected' | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [toast, setToast] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
-
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showToast = useCallback((text: string, tone: 'success' | 'error') => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ text, tone });
-    toastTimer.current = setTimeout(() => setToast(null), 5000);
-  }, []);
-  useEffect(() => () => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-  }, []);
+  const toasts = useToasts();
+  const { push } = toasts;
+  const showToast = useCallback((text: string, tone: 'success' | 'error') => push(tone, text), [push]);
 
   // Land on the oldest waiting submission, which is what a queue is for. Only
   // while nothing is chosen, so a refresh after a verdict doesn't yank the
@@ -475,19 +467,7 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
         onClose={() => setConfirmingDelete(false)}
       />
 
-      {toast && (
-        <div
-          role="status"
-          className={clsx(
-            'fixed bottom-6 right-6 z-50 max-w-sm rounded-xl px-4 py-3 text-sm shadow-float',
-            toast.tone === 'success'
-              ? 'bg-success text-white'
-              : 'bg-danger text-white',
-          )}
-        >
-          {toast.text}
-        </div>
-      )}
+      <ToastHost toasts={toasts.toasts} onDismiss={toasts.dismiss} />
     </div>
   );
 }

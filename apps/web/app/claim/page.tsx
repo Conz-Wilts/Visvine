@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import { getShadowProfilePreview } from "@/lib/crm/claimService";
-import PersonSilhouette from "@/components/ui/PersonSilhouette";
+import { PersonSilhouette } from "@visvine/ui";
 import { ClaimActions } from "./ClaimActions";
 
 interface ClaimPageProps {

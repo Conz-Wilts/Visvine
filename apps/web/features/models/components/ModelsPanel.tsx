@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
-import { Alert, Button, Skeleton } from '@/components/ui';
+import { Alert, Button, Skeleton } from '@visvine/ui';
 import ConnectorLogo from '@/features/connectors/components/ConnectorLogo';
 import { fetchJson } from '@/lib/fetchJson';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';

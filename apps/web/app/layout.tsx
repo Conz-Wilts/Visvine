@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { color } from "@visvine/tokens";
+import AppUIProvider from "@/features/shared/components/AppUIProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // The theme boot script ((auth)/layout.tsx) sets the accent attribute on <html> before hydration.
     <html lang="en" suppressHydrationWarning>
       <body className="text-fg-secondary antialiased">
-        {children}
+        <AppUIProvider>{children}</AppUIProvider>
       </body>
     </html>
   );

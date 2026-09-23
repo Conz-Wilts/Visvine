@@ -6,8 +6,9 @@ const nextConfig: NextConfig = {
   // be compiled by both bundlers that need it. @visvine/vm-policy is compiled
   // here and again by wrangler for the edge — the egress decision has to be the
   // same code in both places or it is two decisions. @visvine/tokens is the
-  // generated design tokens, the same values every platform is built from.
-  transpilePackages: ["@visvine/tokens", "@visvine/vm-policy"],
+  // generated design tokens, the same values every platform is built from, and
+  // @visvine/ui the shared components built on them.
+  transpilePackages: ["@visvine/tokens", "@visvine/ui", "@visvine/vm-policy"],
   experimental: {
     // The proxy buffers every request body and cuts it off here, silently —
     // at the 10MB default a 20MB Drive upload reached its route truncated. Just

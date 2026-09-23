@@ -18,7 +18,7 @@
 import Link from '@/features/shared/components/SpaceLink';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { getNodeTypeConfig } from '@/lib/types';
-import { Alert, SettingsSection } from '@/components/ui';
+import { Alert, SettingsSection } from '@visvine/ui';
 import AliasList from './AliasList';
 import InviteLink from './InviteLink';
 import MemberTable from './MemberTable';

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import Modal from '@/components/ui/Modal';
+import { Modal } from '@visvine/ui';
 
 interface EditModalProps {
   title: string;

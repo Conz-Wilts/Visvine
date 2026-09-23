@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Skeleton } from '@/components/ui';
+import { Alert, Skeleton } from '@visvine/ui';
 import { BanIcon, ChevronDownIcon, ChevronRightIcon, CircleCheckIcon, HandIcon } from '@/features/shared/icons';
 import { fetchJson } from '@/lib/fetchJson';
 import { TOOL_PERMISSIONS, type ToolPermission } from '@/lib/connectors/toolPolicy';

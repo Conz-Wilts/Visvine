@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Button, Input, Modal, Textarea } from '@/components/ui';
+import { Button, Input, Modal, Textarea } from '@visvine/ui';
 import { fetchJsonBody } from '@/lib/fetchJson';
 
 export default function ChangeProposalDialog({

@@ -14,15 +14,7 @@
 import { useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
-import Chip from '@/components/ui/Chip';
-import {
-  SEARCH_MENU_PANEL,
-  SEARCH_MENU_ROW,
-  SearchMenuInput,
-  SearchMenuList,
-  searchMenuRowState,
-  useSearchMenuCursor,
-} from '@/components/ui/SearchMenu';
+import { Chip, SEARCH_MENU_PANEL, SEARCH_MENU_ROW, SearchMenuInput, SearchMenuList, searchMenuRowState, useSearchMenuCursor } from '@visvine/ui';
 import { ChevronDownIcon } from '@/features/shared/icons';
 
 export interface MenuTag {

@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { Chip } from '@/components/ui';
+import { Chip } from '@visvine/ui';
 import type { PerimeterDiff, ToolPerimeter } from '@/lib/tools/perimeter';
 import { color } from '@visvine/tokens';
 

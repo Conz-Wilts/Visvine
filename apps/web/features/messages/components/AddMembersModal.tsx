@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Avatar, Button, SearchInput, Modal } from '@/components/ui';
+import { Avatar, Button, SearchInput, Modal } from '@visvine/ui';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

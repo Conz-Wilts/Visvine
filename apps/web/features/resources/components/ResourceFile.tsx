@@ -22,9 +22,7 @@ import {
 } from '@/features/resources/components/resourceUi';
 import { formatBytes } from '@/lib/utils';
 import { formatDate, timeAgo as relativeTimeAgo } from '@/lib/date';
-import PersonSilhouette from '@/components/ui/PersonSilhouette';
-import Chip from '@/components/ui/Chip';
-import PageError from '@/components/ui/PageError';
+import { PersonSilhouette, Chip, PageError } from '@visvine/ui';
 import type { Resource, ResourceComment, ResourceChange } from '@/lib/types';
 import { CheckIcon, DownloadIcon, GitPullRequestIcon, InfoIcon, LoaderCircleIcon, MessageSquareIcon, SendIcon, XIcon } from '@/features/shared/icons';
 

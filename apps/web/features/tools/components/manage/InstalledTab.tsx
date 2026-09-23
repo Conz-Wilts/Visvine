@@ -21,10 +21,7 @@
 import { useState } from 'react';
 import Link from '@/features/shared/components/SpaceLink';
 import { BlocksIcon, CircleArrowUpIcon, ExternalLinkIcon, TriangleAlertIcon } from '@/features/shared/icons';
-import { Chip, ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
-import Button from '@/components/ui/Button';
-import Select from '@/components/ui/Select';
-import Toggle from '@/components/ui/Toggle';
+import { Chip, ConfirmDialog, EmptyState, Skeleton, Button, Select, Toggle } from '@visvine/ui';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import { fetchVersion, patchInstall, uninstallTool } from '@/features/tools/lib/client';
 import { describeRequirements } from '@/lib/tools/requirements';
