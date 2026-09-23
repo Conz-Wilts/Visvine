@@ -99,7 +99,7 @@ export default function ProfileSections({ nodeId, isOwner, scrollMargin, accent 
               onAdd={hasBody(section.kind) ? undefined : () => setEditingEntry({ section, entry: null })}
               action={isOwner && visible.length > 1 ? (
                 <button type="button" {...sectionOrder.gripProps(section.id)}
-                        className="p-1.5 rounded-lg text-text-muted hover:bg-surface-2 hover:text-text-primary cursor-grab touch-none">
+                        className="p-1.5 rounded-lg text-fg-muted hover:bg-surface-subtle hover:text-fg cursor-grab touch-none">
                   <GripVerticalIcon className="w-4 h-4" />
                 </button>
               ) : undefined}
@@ -115,7 +115,7 @@ export default function ProfileSections({ nodeId, isOwner, scrollMargin, accent 
 
       {isOwner && sections.length < MAX_SECTIONS && (
         <button type="button" onClick={() => setEditingSection('new')}
-                className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-border-subtle px-5 py-4 text-sm font-semibold text-text-secondary hover:bg-surface-2 hover:text-text-primary transition-colors">
+                className="flex items-center justify-center gap-2 rounded-2xl border border-dashed border-line-subtle px-5 py-4 text-sm font-semibold text-fg-secondary hover:bg-surface-subtle hover:text-fg transition-colors">
           <PlusIcon className="w-4 h-4" /> Add section
         </button>
       )}
@@ -152,11 +152,11 @@ function SectionContents({ section, isOwner, accent, onEditEntry, onRemoveEntry,
   if (hasBody(section.kind)) {
     return section.body
       ? <AboutText text={section.body} accent={accent} />
-      : <p className="text-base text-text-muted">Nothing here yet.</p>;
+      : <p className="text-base text-fg-muted">Nothing here yet.</p>;
   }
 
   if (section.entries.length === 0) {
-    return <p className="text-base text-text-muted">Nothing here yet.</p>;
+    return <p className="text-base text-fg-muted">Nothing here yet.</p>;
   }
 
   const ordered = rows.order
@@ -164,7 +164,7 @@ function SectionContents({ section, isOwner, accent, onEditEntry, onRemoveEntry,
     .filter((e): e is ProfileSectionEntryView => !!e);
 
   return (
-    <ul {...rows.listProps} className="divide-y divide-border-subtle">
+    <ul {...rows.listProps} className="divide-y divide-line-subtle">
       {ordered.map((entry) => (
         <SectionRow key={entry.id} {...rows.rowProps(entry.id)} entry={entry} kind={kindOf(section.kind).kind}
                     isOwner={isOwner} dragging={rows.dragging === entry.id}

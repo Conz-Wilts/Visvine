@@ -47,7 +47,7 @@ export function DropZone({ token }: { token: string }) {
           void send(Array.from(e.dataTransfer.files));
         }}
         className={`flex h-40 w-full items-center justify-center rounded-lg border border-dashed text-sm transition-colors ${
-          over ? 'border-brand-green bg-brand-green/5 text-text-primary' : 'border-border-default text-text-muted hover:bg-surface-2'
+          over ? 'border-accent bg-accent/5 text-fg' : 'border-line text-fg-muted hover:bg-surface-subtle'
         }`}
       >
         Drop files or choose
@@ -64,13 +64,13 @@ export function DropZone({ token }: { token: string }) {
         }}
       />
       {rows.length > 0 && (
-        <ul className="divide-y divide-border-subtle border-t border-border-subtle">
+        <ul className="divide-y divide-line-subtle border-t border-line-subtle">
           {rows.map((r) => (
             <li key={r.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <span className="truncate text-text-primary">{r.name}</span>
+              <span className="truncate text-fg">{r.name}</span>
               <span
                 className={`shrink-0 text-xs ${
-                  r.state === 'failed' ? 'text-red-600 dark:text-red-400' : r.state === 'done' ? 'text-emerald-600 dark:text-emerald-400' : 'text-text-muted'
+                  r.state === 'failed' ? 'text-danger dark:text-danger-bright' : r.state === 'done' ? 'text-success dark:text-success-bright' : 'text-fg-muted'
                 }`}
                 title={r.error}
               >

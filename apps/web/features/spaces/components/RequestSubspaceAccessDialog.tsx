@@ -76,12 +76,12 @@ export default function RequestSubspaceAccessDialog({
   return (
     <Modal onClose={onClose} maxWidth="max-w-xs" ariaLabel={space.name}>
       <div className="flex flex-col items-center gap-4 p-6 text-center">
-        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-3 text-text-secondary">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-muted text-fg-secondary">
           {sent ? <CheckIcon className="h-5 w-5" /> : <LockIcon className="h-5 w-5" />}
         </span>
 
         <div>
-          <h2 className="text-base font-semibold text-text-primary">
+          <h2 className="text-base font-semibold text-fg">
             {sent
               ? 'Request sent'
               : open
@@ -89,11 +89,11 @@ export default function RequestSubspaceAccessDialog({
                 : `You don’t have access to ${space.name}`}
           </h2>
           {(open || (inviteOnly && !sent)) && (
-            <p className="mt-1 text-sm text-text-muted">{open ? `Open to ${parentName}` : 'Invite only'}</p>
+            <p className="mt-1 text-sm text-fg-muted">{open ? `Open to ${parentName}` : 'Invite only'}</p>
           )}
         </div>
 
-        {error && <p className="text-sm text-red-700">{error}</p>}
+        {error && <p className="text-sm text-danger-strong">{error}</p>}
 
         {sent || inviteOnly ? (
           <Button variant="neutral" className="w-full" onClick={onClose}>

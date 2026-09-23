@@ -151,7 +151,7 @@ export default function ConsoleShell({
           onKeyDown={(e) => handleKeyDown(e, idx)}
           className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
             handoff ? 'tabbar-label-enter' : ''
-          } ${active === s.id ? 'text-brand-black' : 'text-brand-grey hover:text-brand-black'}`}
+          } ${active === s.id ? 'text-fg' : 'text-fg-muted hover:text-fg'}`}
         >
           {tabLabel(s)}
         </button>
@@ -159,7 +159,7 @@ export default function ConsoleShell({
 
       {/* Animated green underline indicator */}
       <div
-        className={`absolute bottom-0 ${shellTabsHost ? 'h-[3px]' : 'h-0.5'} bg-brand-green ${motion}`}
+        className={`absolute bottom-0 ${shellTabsHost ? 'h-[3px]' : 'h-0.5'} bg-accent ${motion}`}
         style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
       />
     </div>
@@ -193,7 +193,7 @@ export default function ConsoleShell({
     <div className="sticky -top-6 -mt-6 -ml-6 z-20">
       <PaneTopScrollbarMask />
       <div aria-hidden className="h-6 bg-glass" />
-      <div className="flex w-full items-center border-b border-border-subtle bg-glass pl-8 pr-1">
+      <div className="flex w-full items-center border-b border-line-subtle bg-glass pl-8 pr-1">
         {tablist}
         {saveStatus}
       </div>

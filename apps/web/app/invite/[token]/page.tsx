@@ -48,16 +48,16 @@ export default async function InvitePage({
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-0 px-4">
-      <div className="w-full max-w-md rounded-xl border border-border-subtle bg-surface-1 p-8">
+      <div className="w-full max-w-md rounded-xl border border-line-subtle bg-surface p-8">
         {invalid ? (
           <div className="text-center">
-            <h1 className="text-lg font-semibold text-text-primary">Invite unavailable</h1>
-            <p className="mt-2 text-sm text-text-muted">
+            <h1 className="text-lg font-semibold text-fg">Invite unavailable</h1>
+            <p className="mt-2 text-sm text-fg-muted">
               This invite link is invalid or has been revoked. Ask the space for a fresh link.
             </p>
             <a
               href="/discover"
-              className="mt-6 inline-block rounded-lg bg-brand-green px-4 py-2 text-sm font-medium text-white"
+              className="mt-6 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
             >
               Discover spaces
             </a>
@@ -71,16 +71,16 @@ export default async function InvitePage({
                 className="h-16 w-16 rounded-2xl object-cover"
               />
             ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-green/10 text-xl font-semibold text-brand-dark-green">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/10 text-xl font-semibold text-accent-strong">
                 {space!.name.trim().charAt(0).toUpperCase()}
               </div>
             )}
-            <p className="mt-4 text-xs uppercase tracking-wide text-text-muted">You&apos;re invited to join</p>
-            <h1 className="mt-1 text-xl font-semibold text-text-primary">{space!.name}</h1>
+            <p className="mt-4 text-xs uppercase tracking-wide text-fg-muted">You&apos;re invited to join</p>
+            <h1 className="mt-1 text-xl font-semibold text-fg">{space!.name}</h1>
             {space!.description && (
-              <p className="mt-2 text-sm text-text-muted">{space!.description}</p>
+              <p className="mt-2 text-sm text-fg-muted">{space!.description}</p>
             )}
-            <p className="mt-3 text-xs text-text-muted">
+            <p className="mt-3 text-xs text-fg-muted">
               {space!._count.members} member{space!._count.members === 1 ? '' : 's'}
               {space!.location ? ` · ${space!.location}` : ''}
             </p>

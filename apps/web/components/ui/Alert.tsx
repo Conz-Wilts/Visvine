@@ -15,17 +15,17 @@ interface AlertProps {
 // a tinted box: it sits in the flow of the page and says one thing. The rule
 // carries the severity; the text carries the message.
 const RULE_CLASSES: Record<AlertVariant, string> = {
-  error: 'border-red-500 text-red-700',
-  info: 'border-blue-500 text-blue-700',
-  warning: 'border-amber-500 text-amber-700',
-  success: 'border-green-600 text-green-700',
+  error: 'border-danger-bright text-danger-strong',
+  info: 'border-info-bright text-info',
+  warning: 'border-warning-bright text-warning',
+  success: 'border-success text-success',
 };
 
 const DISMISS_CLASSES: Record<AlertVariant, string> = {
-  error: 'text-red-600 hover:text-red-800',
-  info: 'text-blue-600 hover:text-blue-800',
-  warning: 'text-amber-600 hover:text-amber-800',
-  success: 'text-green-600 hover:text-green-800',
+  error: 'text-danger hover:text-danger-strong',
+  info: 'text-info hover:text-info-strong',
+  warning: 'text-warning hover:text-warning-strong',
+  success: 'text-success hover:text-success-strong',
 };
 
 export default function Alert({ variant = 'error', children, onDismiss, inline = false, className }: AlertProps) {

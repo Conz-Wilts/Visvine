@@ -90,7 +90,7 @@ function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
   return (
     <div
       ref={tiltRef}
-      className="bg-surface-1 rounded-2xl overflow-hidden cursor-pointer group flex flex-col w-full relative z-0 hover:z-10 transition-[box-shadow,transform] duration-200 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_16px_32px_rgba(0,0,0,0.16),0_0_20px_4px_var(--card-glow-strong)]"
+      className="bg-surface rounded-2xl overflow-hidden cursor-pointer group flex flex-col w-full relative z-0 hover:z-10 transition-[box-shadow,transform] duration-200 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_16px_32px_rgba(0,0,0,0.16),0_0_20px_4px_var(--card-glow-strong)]"
       style={cardStyle}
       onClick={() => onClick?.(item)}
     >
@@ -112,7 +112,7 @@ function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
             unoptimized={!isOptimizableImageUrl(displayImageUrl)}
             className={
               contained
-                ? 'object-contain p-6 bg-surface-2'
+                ? 'object-contain p-6 bg-surface-subtle'
                 : 'object-cover object-center group-hover:scale-[1.03] transition-transform duration-300'
             }
           />
@@ -136,13 +136,13 @@ function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
 
       {/* Content — centred on the card's axis, name over tagline over chip */}
       <div className="px-4 pt-4 pb-4 flex flex-col flex-1 min-h-0 items-center text-center">
-        <h3 className="font-semibold text-text-primary text-base leading-tight line-clamp-1 w-full">
+        <h3 className="font-semibold text-fg text-base leading-tight line-clamp-1 w-full">
           {displayName}
         </h3>
 
         {/* Reserve a compact second line so chips align without leaving a large
             gap below short descriptions. */}
-        <p className="mt-2 w-full text-[13px] font-normal leading-[1.35] text-text-secondary line-clamp-2 min-h-[28px]">
+        <p className="mt-2 w-full text-[13px] font-normal leading-[1.35] text-fg-secondary line-clamp-2 min-h-[28px]">
           {displaySubtitle ?? ''}
         </p>
 

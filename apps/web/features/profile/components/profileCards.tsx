@@ -29,8 +29,8 @@ export function StatItem({ value, label, onClick, accent }: {
 }) {
   const inner = (
     <>
-      <b className="text-[15px] font-bold font-open-sauce text-text-primary tabular-nums">{value}</b>
-      <span className="text-[13px] text-text-muted">{label}</span>
+      <b className="text-[15px] font-bold font-open-sauce text-fg tabular-nums">{value}</b>
+      <span className="text-[13px] text-fg-muted">{label}</span>
     </>
   );
   return onClick ? (
@@ -64,14 +64,14 @@ export function SectionCard({ id, title, size = 'md', ruled = false, card = fals
 }) {
   return (
     <section id={id} className={`${card
-      ? 'rounded-2xl border border-border-subtle bg-surface-1 px-5 py-5 shadow-strip sm:px-6 sm:py-6'
-      : `border-border-subtle ${ruled ? 'border-t last:border-b py-5' : 'border-t pt-5 first:border-t-0 first:pt-0'}`
+      ? 'rounded-2xl border border-line-subtle bg-surface px-5 py-5 shadow-strip sm:px-6 sm:py-6'
+      : `border-line-subtle ${ruled ? 'border-t last:border-b py-5' : 'border-t pt-5 first:border-t-0 first:pt-0'}`
     } ${scrollMargin ?? ''}`}>
       <div className="flex items-center justify-between gap-2 pb-3">
-        <h2 className={`flex items-center gap-2 ${size === 'lg' ? 'text-xl' : 'text-[15px]'} font-bold font-open-sauce text-text-primary`}>
+        <h2 className={`flex items-center gap-2 ${size === 'lg' ? 'text-xl' : 'text-[15px]'} font-bold font-open-sauce text-fg`}>
           {icon && <span style={{ color: accent }}>{icon}</span>}
           {title}
-          {badge !== undefined && <span className="text-[13px] font-medium text-text-muted">{badge}</span>}
+          {badge !== undefined && <span className="text-[13px] font-medium text-fg-muted">{badge}</span>}
         </h2>
         {action}
         {isOwner && (onAdd || onEdit) && (
@@ -96,7 +96,7 @@ function EditIconButton({ onClick, add, label, className }: {
 }) {
   return (
     <button type="button" onClick={onClick} aria-label={label} title={label}
-            className={`w-9 h-9 flex-none grid place-items-center rounded-full text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors ${className ?? ''}`}>
+            className={`w-9 h-9 flex-none grid place-items-center rounded-full text-fg-secondary hover:text-fg hover:bg-surface-subtle transition-colors ${className ?? ''}`}>
       {add ? <PlusIcon className="w-5 h-5" /> : <PencilIcon className="w-[18px] h-[18px]" />}
     </button>
   );
@@ -104,8 +104,8 @@ function EditIconButton({ onClick, add, label, className }: {
 
 export function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border-t border-border-subtle pt-4 first:border-t-0 first:pt-0">
-      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted mb-3">{title}</div>
+    <div className="border-t border-line-subtle pt-4 first:border-t-0 first:pt-0">
+      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-fg-muted mb-3">{title}</div>
       {children}
     </div>
   );
@@ -121,7 +121,7 @@ export function AboutText({ text, accent, limit = 280, className }: {
   const shown = long && !open ? text.slice(0, limit).trimEnd() + '…' : text;
   return (
     <div>
-      <p className={`text-[15px] text-text-secondary leading-relaxed whitespace-pre-line ${className ?? ''}`}>{shown}</p>
+      <p className={`text-[15px] text-fg-secondary leading-relaxed whitespace-pre-line ${className ?? ''}`}>{shown}</p>
       {long && (
         <button onClick={() => setOpen((v) => !v)} className="mt-2 text-[13px] font-bold hover:underline" style={{ color: accent }}>
           {open ? 'Show less' : 'Read more'}

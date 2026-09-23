@@ -53,6 +53,7 @@ import { TagCombobox } from './TagCombobox'
 import { PropertyRows } from './PropertyRows'
 import type { PickerEntity } from './NotePicker'
 import '../notes.css'
+import { color } from '@visvine/tokens';
 
 const PERSONAL_ID_PREFIX = 'me:'
 
@@ -593,7 +594,7 @@ export function EntityContextPanel({
         {/* Only a real image earns the avatar slot — a placeholder silhouette
             would just re-introduce visual chrome the header is shedding. */}
         {node.image_url && (
-          <span className="h-20 w-20 flex-none overflow-hidden rounded-xl border border-border-subtle bg-surface-1">
+          <span className="h-20 w-20 flex-none overflow-hidden rounded-xl border border-line-subtle bg-surface">
             <img src={node.image_url} alt={node.name} className="h-full w-full object-cover" />
           </span>
         )}
@@ -616,13 +617,13 @@ export function EntityContextPanel({
               if (e.key === 'Escape') setNameDraft(null)
             }}
             aria-label="Entity name"
-            className="min-w-0 flex-1 rounded-md bg-transparent text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary outline-none ring-1 ring-border-default font-open-sauce"
+            className="min-w-0 flex-1 rounded-md bg-transparent text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-fg outline-none ring-1 ring-line font-open-sauce"
           />
         ) : (
           <h2
             onClick={canEditTags && !nameSaving ? () => setNameDraft(displayName) : undefined}
             title={canEditTags ? 'Click to rename' : undefined}
-            className={`min-w-0 flex-1 truncate text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary font-open-sauce${canEditTags ? ' cursor-text rounded-md transition hover:bg-surface-2' : ''}`}
+            className={`min-w-0 flex-1 truncate text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-fg font-open-sauce${canEditTags ? ' cursor-text rounded-md transition hover:bg-surface-subtle' : ''}`}
           >
             {displayName}
           </h2>
@@ -631,8 +632,8 @@ export function EntityContextPanel({
       </div>
 
       {isReplica && pubs?.asTarget && (
-        <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
-          <RadioIcon className="h-4 w-4 shrink-0 text-brand-green" />
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-line-subtle bg-surface-subtle px-3 py-2 text-sm text-fg-secondary">
+          <RadioIcon className="h-4 w-4 shrink-0 text-accent" />
           <span>
             Published from <span className="font-medium">{pubs.asTarget.sourceSpaceName}</span> — kept in
             sync with its source, read-only here. Unlink it from Share to make it an editable copy.
@@ -699,7 +700,7 @@ export function EntityContextPanel({
             onClick={() => subPath !== null && router.replace(entityContextHref(nodeId), { scroll: false })}
             aria-current={subPath === null ? 'page' : undefined}
             className={chipClass({ tone: subPath === null ? 'solid' : 'muted', size: 'lg', className: subPath === null ? '' : CHIP_ACCENT_HOVER })}
-            style={{ ['--accent' as string]: theme.dark, ...(subPath === null ? { backgroundColor: theme.dark, color: '#fff' } : {}) }}
+            style={{ ['--accent' as string]: theme.dark, ...(subPath === null ? { backgroundColor: theme.dark, color: color.fg.inverse } : {}) }}
           >
             Context
           </button>
@@ -712,7 +713,7 @@ export function EntityContextPanel({
                 onClick={() => !active && folder && router.replace(entityContextHref(nodeId, n.path.slice(folder.length + 1)), { scroll: false })}
                 aria-current={active ? 'page' : undefined}
                 className={chipClass({ tone: active ? 'solid' : 'muted', size: 'lg', className: active ? '' : CHIP_ACCENT_HOVER })}
-                style={{ ['--accent' as string]: theme.dark, ...(active ? { backgroundColor: theme.dark, color: '#fff' } : {}) }}
+                style={{ ['--accent' as string]: theme.dark, ...(active ? { backgroundColor: theme.dark, color: color.fg.inverse } : {}) }}
               >
                 {n.title}
               </button>
@@ -733,10 +734,10 @@ export function EntityContextPanel({
       {!showEditor && headerCard}
 
       {error && (
-        <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
+        <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between border-l-2 border-danger-bright pl-3 py-1 text-sm text-danger-strong">
           <span>{error}</span>
           <button onClick={() => setError(null)} aria-label="Dismiss"
-                  className="ml-2 text-red-400 hover:text-red-600">
+                  className="ml-2 text-danger-bright hover:text-danger">
             <XIcon className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -744,7 +745,7 @@ export function EntityContextPanel({
       {loadingNote ? (
         <PanelSkeleton />
       ) : readFailed ? (
-        <div className="mx-auto max-w-3xl border-l-2 border-red-500 pl-3 py-1 text-center text-sm text-red-700">
+        <div className="mx-auto max-w-3xl border-l-2 border-danger-bright pl-3 py-1 text-center text-sm text-danger-strong">
           {shownRead.status === 'error' ? shownRead.message : null}
         </div>
       ) : showEditor ? (
@@ -783,8 +784,8 @@ export function EntityContextPanel({
         </>
       ) : (
         <div className="flex flex-col items-center gap-2 py-14 text-center">
-          <p className="text-base font-semibold text-text-secondary">No shared context for {node.name} yet.</p>
-          <p className="text-sm text-text-muted">Members with write access can start this entity&apos;s context note.</p>
+          <p className="text-base font-semibold text-fg-secondary">No shared context for {node.name} yet.</p>
+          <p className="text-sm text-fg-muted">Members with write access can start this entity&apos;s context note.</p>
         </div>
       )}
       {share.slot}
@@ -803,10 +804,10 @@ export function EntityContextPanel({
 function PanelSkeleton() {
   return (
     <div className="mx-auto max-w-3xl animate-pulse space-y-3 py-6">
-      <div className="h-4 w-2/3 rounded bg-surface-2" />
-      <div className="h-4 w-full rounded bg-surface-2" />
-      <div className="h-4 w-5/6 rounded bg-surface-2" />
-      <div className="h-4 w-1/2 rounded bg-surface-2" />
+      <div className="h-4 w-2/3 rounded bg-surface-subtle" />
+      <div className="h-4 w-full rounded bg-surface-subtle" />
+      <div className="h-4 w-5/6 rounded bg-surface-subtle" />
+      <div className="h-4 w-1/2 rounded bg-surface-subtle" />
     </div>
   )
 }

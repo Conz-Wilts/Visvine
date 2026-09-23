@@ -99,7 +99,7 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
           className="w-full max-w-[420px] flex-1 sm:min-w-[280px]"
         />
 
-        <div className="hidden h-6 w-px shrink-0 bg-border-subtle sm:block" />
+        <div className="hidden h-6 w-px shrink-0 bg-line-subtle sm:block" />
 
         <TypeMenu
           types={types}
@@ -130,7 +130,7 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
             <FilterChip
               key={`alias-${alias}`}
               label={alias}
-              color={aliases.find(a => a.name === alias)?.color ?? 'var(--color-brand-green)'}
+              color={aliases.find(a => a.name === alias)?.color ?? 'var(--vv-color-accent)'}
               onRemove={() => setFilterAliases(without(filterAliases, alias))}
             />
           ))}
@@ -145,7 +145,7 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
           <button
             type="button"
             onClick={clearAll}
-            className="ml-1 text-[13px] font-medium text-text-muted transition-colors hover:text-text-secondary"
+            className="ml-1 text-[13px] font-medium text-fg-muted transition-colors hover:text-fg-secondary"
           >
             Clear all
           </button>

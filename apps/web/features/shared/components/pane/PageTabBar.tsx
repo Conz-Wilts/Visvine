@@ -7,6 +7,7 @@ import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext'
 import { useShellBand } from '@/features/desktop/lib/chrome';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
 import { TAB_MOTION } from '@/components/ui/tabMotion';
+import { motion as motionTokens } from '@visvine/tokens';
 
 export type PageTab = 'about' | 'context' | 'raw' | 'preview';
 
@@ -155,7 +156,7 @@ export default function PageTabBar({
           onKeyDown={(e) => handleKeyDown(e, idx)}
           className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
             handoff ? 'tabbar-label-enter' : ''
-          } text-brand-black`}
+          } text-fg`}
         >
           {tab.label}
         </button>
@@ -163,7 +164,7 @@ export default function PageTabBar({
 
       {/* Animated green underline indicator */}
       <div
-        className={`absolute bottom-0 ${shellTabsHost ? 'h-[3px]' : 'h-0.5'} bg-brand-green ${motion}`}
+        className={`absolute bottom-0 ${shellTabsHost ? 'h-[3px]' : 'h-0.5'} bg-accent ${motion}`}
         style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
       />
     </div>
@@ -205,7 +206,7 @@ export default function PageTabBar({
             height: TAB_ROW_H,
             // `translate`, not `transform`: Tailwind v4's translate-y-*
             // utilities set the standalone CSS translate property.
-            transition: armed ? 'translate 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : undefined,
+            transition: armed ? `translate ${motionTokens.duration.base}ms ${motionTokens.easeCss.standard}` : undefined,
           }}
         />
       </div>
@@ -241,7 +242,7 @@ export default function PageTabBar({
           below is transparent, so the toolbar tray it hosts reads as a pill
           hanging off the nav line with the page visible beside it, not as a
           second full-width bar. */}
-      <div className="flex w-full items-center border-b border-border-subtle bg-glass pl-8 pr-1">
+      <div className="flex w-full items-center border-b border-line-subtle bg-glass pl-8 pr-1">
         {tablist}
       </div>
 

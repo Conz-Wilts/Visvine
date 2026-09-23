@@ -24,7 +24,7 @@ const SIZES = {
     clear: 'h-3.5 w-3.5',
   },
   lg: {
-    frame: 'gap-2.5 rounded-xl px-4 py-3 border border-border-subtle',
+    frame: 'gap-2.5 rounded-xl px-4 py-3 border border-line-subtle',
     // A whole-pixel line: 15px at the default 1.5 is 22.5, which left the box
     // 48.5px tall and put everything centred beside it on a half pixel, where
     // Windows rendered small digits at two different baselines.
@@ -35,7 +35,7 @@ const SIZES = {
 } as const;
 
 const SearchIcon = ({ className }: { className: string }) => (
-  <svg className={clsx('shrink-0 text-text-muted', className)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg className={clsx('shrink-0 text-fg-muted', className)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
   </svg>
 );
@@ -69,8 +69,8 @@ export default function SearchInput({
   return (
     <div
       className={clsx(
-        'flex items-center bg-surface-1 ring-1 ring-border-subtle transition-[box-shadow,background-color]',
-        'focus-within:ring-border-default',
+        'flex items-center bg-surface ring-1 ring-line-subtle transition-[box-shadow,background-color]',
+        'focus-within:ring-line',
         s.frame,
         className,
       )}
@@ -82,7 +82,7 @@ export default function SearchInput({
         placeholder={placeholder}
         autoFocus={autoFocus}
         className={clsx(
-          'flex-1 bg-transparent text-text-primary placeholder:text-text-muted focus:outline-none',
+          'flex-1 bg-transparent text-fg placeholder:text-fg-muted focus:outline-none',
           s.input,
         )}
       />
@@ -90,7 +90,7 @@ export default function SearchInput({
         <button
           type="button"
           onClick={() => onChange('')}
-          className="text-text-muted hover:text-text-primary"
+          className="text-fg-muted hover:text-fg"
           aria-label="Clear search"
         >
           <ClearIcon className={s.clear} />

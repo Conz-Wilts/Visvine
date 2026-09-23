@@ -354,7 +354,7 @@ export default function MessageComposer({
 
   return (
     <footer
-      className={`relative w-full ${slim ? 'px-3 pb-3 pt-2' : 'px-4 pb-4 pt-2 md:px-6'} ${isDragging ? 'bg-brand-green/5' : ''}`}
+      className={`relative w-full ${slim ? 'px-3 pb-3 pt-2' : 'px-4 pb-4 pt-2 md:px-6'} ${isDragging ? 'bg-accent/5' : ''}`}
       onDragOver={(e) => { if (!canAttach) return; e.preventDefault(); setIsDragging(true); }}
       onDragLeave={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node)) return;
@@ -363,24 +363,24 @@ export default function MessageComposer({
       onDrop={handleDrop}
     >
       {isDragging && (
-        <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand-green bg-surface-1/80 text-sm font-medium text-brand-green">
+        <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent bg-surface/80 text-sm font-medium text-accent">
           Drop to attach
         </div>
       )}
       {/* Slim (channel) composer spans the full Slack-style feed width. */}
       <div className={slim ? 'w-full' : 'contents'}>
       {typingLabel && (
-        <p className="mb-1.5 px-1 text-xs text-text-muted italic">{typingLabel}</p>
+        <p className="mb-1.5 px-1 text-xs text-fg-muted italic">{typingLabel}</p>
       )}
 
       {/* Reply preview */}
       {replyTo && (
-        <div className="mb-2 flex items-center gap-2 border-l-4 border-border-default py-0.5 pl-3">
-          <p className="min-w-0 flex-1 truncate text-[13px] text-text-muted">
-            Replying to <span className="font-bold text-text-secondary">{replyTo.senderName}</span>
+        <div className="mb-2 flex items-center gap-2 border-l-4 border-line py-0.5 pl-3">
+          <p className="min-w-0 flex-1 truncate text-[13px] text-fg-muted">
+            Replying to <span className="font-bold text-fg-secondary">{replyTo.senderName}</span>
             {'  '}{replyTo.text}
           </p>
-          <button type="button" onClick={onCancelReply} className="shrink-0 text-text-muted hover:text-text-secondary">
+          <button type="button" onClick={onCancelReply} className="shrink-0 text-fg-muted hover:text-fg-secondary">
             <XIcon className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -394,15 +394,15 @@ export default function MessageComposer({
               {file.fileType === 'image' ? (
                 <img src={file.url} alt="" className="h-16 w-16 rounded-lg object-cover" />
               ) : (
-                <div className="flex h-16 max-w-[200px] items-center gap-2 rounded-lg border border-border-subtle bg-surface-1 px-3">
+                <div className="flex h-16 max-w-[200px] items-center gap-2 rounded-lg border border-line-subtle bg-surface px-3">
                   <FileTypeIcon type={file.fileType} />
-                  <span className="truncate text-sm text-text-primary">{file.name}</span>
+                  <span className="truncate text-sm text-fg">{file.name}</span>
                 </div>
               )}
               <button
                 type="button"
                 onClick={() => setFiles((prev) => prev.filter((f) => f.id !== file.id))}
-                className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900/80 text-white"
+                className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-fg/80 text-white"
                 aria-label={`Remove ${file.name}`}
               >
                 <XIcon className="h-3 w-3" />
@@ -410,39 +410,39 @@ export default function MessageComposer({
             </div>
           ))}
           {uploading && (
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-surface-3">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-surface-muted">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
             </div>
           )}
         </div>
       )}
-      {uploadError && <p className="mb-1.5 px-1 text-xs text-red-600">{uploadError}</p>}
+      {uploadError && <p className="mb-1.5 px-1 text-xs text-danger">{uploadError}</p>}
 
       {/* Link input */}
       {showLinkInput && (
-        <div className="mb-2 flex items-center gap-2 rounded-lg bg-surface-3/60 px-3 py-2">
-          <Link2Icon className="h-4 w-4 shrink-0 text-text-muted" />
+        <div className="mb-2 flex items-center gap-2 rounded-lg bg-surface-muted/60 px-3 py-2">
+          <Link2Icon className="h-4 w-4 shrink-0 text-fg-muted" />
           <input
             value={linkUrl}
             onChange={(e) => setLinkUrl(e.target.value)}
             placeholder="URL"
-            className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-fg placeholder:text-fg-muted focus:outline-none"
             autoFocus
           />
           <input
             value={linkText}
             onChange={(e) => setLinkText(e.target.value)}
             placeholder="Display text (optional)"
-            className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-fg placeholder:text-fg-muted focus:outline-none"
           />
           <button
             type="button"
             onClick={insertLink}
-            className="rounded-md bg-brand-green px-2.5 py-1 text-xs font-medium text-white"
+            className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white"
           >
             Add
           </button>
-          <button type="button" onClick={() => setShowLinkInput(false)} className="text-text-muted">
+          <button type="button" onClick={() => setShowLinkInput(false)} className="text-fg-muted">
             <XIcon className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -451,25 +451,25 @@ export default function MessageComposer({
       <div className="relative">
         {/* Mention suggestions dropdown */}
         {showMentions && mentionSuggestions.length > 0 && (
-          <div className="absolute bottom-full left-0 mb-1 w-72 rounded-lg border border-border-subtle bg-surface-1 shadow-float z-50 overflow-hidden max-h-48 overflow-y-auto">
+          <div className="absolute bottom-full left-0 mb-1 w-72 rounded-lg border border-line-subtle bg-surface shadow-float z-50 overflow-hidden max-h-48 overflow-y-auto">
             {mentionSuggestions.map((result, i) => (
               <button
                 key={result.id}
                 type="button"
                 onClick={() => insertMention(result)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 transition-colors text-left ${
-                  i === selectedMentionIndex ? 'bg-surface-2' : 'hover:bg-surface-2'
+                  i === selectedMentionIndex ? 'bg-surface-subtle' : 'hover:bg-surface-subtle'
                 }`}
               >
                 <Avatar name={result.name} imageUrl={result.imageUrl} size="sm" />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-text-primary truncate">{result.name}</p>
+                  <p className="text-sm font-medium text-fg truncate">{result.name}</p>
                   {result.subtitle && (
-                    <p className="text-xs text-text-muted truncate">{result.subtitle}</p>
+                    <p className="text-xs text-fg-muted truncate">{result.subtitle}</p>
                   )}
                 </div>
                 <span className={`ml-auto shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white ${
-                  result.type === 'event' ? 'bg-red-600' : 'bg-blue-600'
+                  result.type === 'event' ? 'bg-type-event-fg' : 'bg-type-person-fg'
                 }`}>
                   {result.type === 'event' ? 'Event' : 'Person'}
                 </span>
@@ -480,7 +480,7 @@ export default function MessageComposer({
 
         {/* Slim feed-style bar (Channels): avatar · photo · text · send */}
         {slim && (
-          <div className="flex items-end gap-2 rounded-xl border border-border-subtle bg-surface-1 px-3 py-2 transition-colors focus-within:border-border-default">
+          <div className="flex items-end gap-2 rounded-xl border border-line-subtle bg-surface px-3 py-2 transition-colors focus-within:border-line">
             {currentUser && (
               <div className="shrink-0 self-center">
                 <Avatar name={currentUser.name} imageUrl={currentUser.image} size="sm" />
@@ -499,11 +499,11 @@ export default function MessageComposer({
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="shrink-0 self-center rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-brand-green"
+                  className="shrink-0 self-center rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-surface-subtle hover:text-accent"
                   aria-label="Attach files"
                 >
                   {uploading
-                    ? <span className="block h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+                    ? <span className="block h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
                     : <PlusIcon className="h-5 w-5" />}
                 </button>
               </>
@@ -517,13 +517,13 @@ export default function MessageComposer({
               rows={1}
               placeholder={placeholder ?? 'Message…'}
               disabled={disabled}
-              className="custom-scrollbar max-h-[140px] min-h-[28px] flex-1 resize-none self-center bg-transparent py-1 text-[15px] leading-relaxed text-text-primary outline-none placeholder:text-text-muted disabled:opacity-50"
+              className="custom-scrollbar max-h-[140px] min-h-[28px] flex-1 resize-none self-center bg-transparent py-1 text-[15px] leading-relaxed text-fg outline-none placeholder:text-fg-muted disabled:opacity-50"
             />
             <button
               type="button"
               onClick={handleSubmit}
               disabled={disabled || uploading || (!text.trim() && files.length === 0)}
-              className="shrink-0 self-center rounded-full bg-brand-green p-2 text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
+              className="shrink-0 self-center rounded-full bg-accent p-2 text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
               aria-label="Send"
             >
               <SendIcon className="h-4 w-4" />
@@ -533,7 +533,7 @@ export default function MessageComposer({
 
         {/* Full composer: one hairline field with the textarea + toolbar row below */}
         {!slim && (
-        <div className="rounded-xl border border-border-subtle bg-surface-1 transition-colors focus-within:border-border-default">
+        <div className="rounded-xl border border-line-subtle bg-surface transition-colors focus-within:border-line">
           {/* Textarea */}
           <textarea
             ref={textareaRef}
@@ -544,7 +544,7 @@ export default function MessageComposer({
             rows={1}
             placeholder={placeholder ?? 'Message…'}
             disabled={disabled}
-            className="max-h-36 min-h-[40px] w-full resize-none bg-transparent px-5 pt-3 pb-1 text-[15px] leading-snug text-text-primary placeholder:text-text-muted focus:outline-none disabled:opacity-50"
+            className="max-h-36 min-h-[40px] w-full resize-none bg-transparent px-5 pt-3 pb-1 text-[15px] leading-snug text-fg placeholder:text-fg-muted focus:outline-none disabled:opacity-50"
           />
 
           {/* Bottom toolbar row */}
@@ -557,8 +557,8 @@ export default function MessageComposer({
                   onClick={() => setShowAttachMenu((v) => !v)}
                   className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                     showAttachMenu
-                      ? 'bg-brand-green/10 text-brand-green'
-                      : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'
+                      ? 'bg-accent/10 text-accent'
+                      : 'text-fg-muted hover:bg-surface-muted hover:text-fg-secondary'
                   }`}
                   title="Attach"
                 >
@@ -567,23 +567,23 @@ export default function MessageComposer({
 
                 {/* Attachment popup menu */}
                 {showAttachMenu && (
-                  <div className="absolute bottom-full left-0 mb-1 w-44 rounded-lg border border-border-subtle bg-surface-1 py-1 shadow-float z-50">
+                  <div className="absolute bottom-full left-0 mb-1 w-44 rounded-lg border border-line-subtle bg-surface py-1 shadow-float z-50">
                     {canAttach && (
                       <button
                         type="button"
                         onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
-                        className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-text-primary hover:bg-surface-2 transition-colors"
+                        className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-fg hover:bg-surface-subtle transition-colors"
                       >
-                        <ImagePlusIcon className="h-4 w-4 text-text-muted" />
+                        <ImagePlusIcon className="h-4 w-4 text-fg-muted" />
                         Upload file
                       </button>
                     )}
                     <button
                       type="button"
                       onClick={() => { setShowLinkInput((v) => !v); setShowAttachMenu(false); }}
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-text-primary hover:bg-surface-2 transition-colors"
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-fg hover:bg-surface-subtle transition-colors"
                     >
-                      <Link2Icon className="h-4 w-4 text-text-muted" />
+                      <Link2Icon className="h-4 w-4 text-fg-muted" />
                       Add link
                     </button>
                   </div>
@@ -605,8 +605,8 @@ export default function MessageComposer({
                   onClick={() => setShowEmojiPicker((v) => !v)}
                   className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                     showEmojiPicker
-                      ? 'bg-brand-green/10 text-brand-green'
-                      : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'
+                      ? 'bg-accent/10 text-accent'
+                      : 'text-fg-muted hover:bg-surface-muted hover:text-fg-secondary'
                   }`}
                   title="Emoji"
                 >
@@ -615,7 +615,7 @@ export default function MessageComposer({
 
                 {showEmojiPicker && (
                   <div className="absolute bottom-full left-0 mb-2 z-50">
-                    <Suspense fallback={<div className="h-[400px] w-[350px] rounded-lg bg-surface-1 shadow-float" />}>
+                    <Suspense fallback={<div className="h-[400px] w-[350px] rounded-lg bg-surface shadow-float" />}>
                       <EmojiPicker
                         onEmojiClick={(data) => {
                           insertEmoji(data.emoji);
@@ -643,7 +643,7 @@ export default function MessageComposer({
                     setTimeout(() => { textarea.focus(); textarea.setSelectionRange(pos + 1, pos + 1); }, 0);
                   }
                 }}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-surface-3 hover:text-text-secondary transition-colors"
+                className="flex h-7 w-7 items-center justify-center rounded-md text-fg-muted hover:bg-surface-muted hover:text-fg-secondary transition-colors"
                 title="Mention someone"
               >
                 <AtSignIcon className="h-5 w-5" />
@@ -655,7 +655,7 @@ export default function MessageComposer({
               type="button"
               onClick={handleSubmit}
               disabled={disabled || uploading || (!text.trim() && files.length === 0)}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-brand-green transition-colors hover:bg-brand-green/10 disabled:text-text-muted disabled:hover:bg-transparent"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-accent transition-colors hover:bg-accent/10 disabled:text-fg-muted disabled:hover:bg-transparent"
               title="Send"
             >
               <SendIcon className="h-4.5 w-4.5" />

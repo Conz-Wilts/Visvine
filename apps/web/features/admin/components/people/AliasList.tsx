@@ -60,7 +60,7 @@ export function AliasBackRow({ label, onBack, children }: {
       <button
         type="button"
         onClick={onBack}
-        className="-ml-1.5 inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs font-medium text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+        className="-ml-1.5 inline-flex items-center gap-1 rounded-lg px-1.5 py-1 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
       >
         <ChevronLeftIcon className="h-3.5 w-3.5" />
         {label}
@@ -84,10 +84,10 @@ export function NewAliasRow({ nested, onClick }: { nested?: TreeGuideKind; onCli
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); }
       }}
-      className="flex cursor-pointer items-center gap-3.5 py-2.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
+      className="flex cursor-pointer items-center gap-3.5 py-2.5 text-fg-muted transition-colors hover:bg-surface-subtle hover:text-fg"
     >
       {nested && <TreeSpineJoin kind={nested} />}
-      <span className="grid h-4 w-4 shrink-0 place-items-center rounded border border-dashed border-border-default">
+      <span className="grid h-4 w-4 shrink-0 place-items-center rounded border border-dashed border-line">
         <PlusIcon className="h-2.5 w-2.5" />
       </span>
       <span className="text-base font-medium">Create new alias</span>
@@ -108,10 +108,10 @@ export function AliasLabel({ name, color }: {
     <span className="inline-flex min-w-0 items-center gap-3.5">
       <span
         className="h-5 w-5 shrink-0 rounded"
-        style={{ background: color ?? 'var(--color-text-muted)' }}
+        style={{ background: color ?? 'var(--vv-color-fg-muted)' }}
         aria-hidden
       />
-      <span className="truncate text-base font-semibold text-text-primary">{name}</span>
+      <span className="truncate text-base font-semibold text-fg">{name}</span>
     </span>
   );
 }
@@ -143,7 +143,7 @@ export function AliasRow({ label, meta, action = 'Permissions', nested, onOpen }
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); }
       }}
-      className={`flex cursor-pointer items-center gap-3.5 transition-colors hover:bg-surface-2 ${
+      className={`flex cursor-pointer items-center gap-3.5 transition-colors hover:bg-surface-subtle ${
         nested ? 'py-2.5' : 'py-4'
       }`}
     >
@@ -153,9 +153,9 @@ export function AliasRow({ label, meta, action = 'Permissions', nested, onOpen }
           holds it, and what holding it opens. Holders' names belong in the
           panel — a row that truncates them says less than one that doesn't
           try. */}
-      <span className="flex-1 whitespace-nowrap text-xs text-text-muted">{meta}</span>
+      <span className="flex-1 whitespace-nowrap text-xs text-fg-muted">{meta}</span>
       {action && (
-        <span className="mr-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary">
+        <span className="mr-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg">
           <SettingsIcon className="h-3.5 w-3.5" />
           {action}
         </span>
@@ -196,7 +196,7 @@ export default function AliasList({ mode, typeColor, newOpen, onNewStart, onNewD
   }, [data]);
   const everyoneGrants = (data?.overview?.grants ?? []).filter((g) => g.subjectType === 'space').length;
 
-  if (data === null) return <p className="text-xs text-text-muted">Loading…</p>;
+  if (data === null) return <p className="text-xs text-fg-muted">Loading…</p>;
 
   // Read back off the fresh snapshot every render: a rename or a delete inside
   // the panel reloads the lot, and the panel has to follow rather than hold a
@@ -228,7 +228,7 @@ export default function AliasList({ mode, typeColor, newOpen, onNewStart, onNewD
       <div>
         <AliasBackRow label="Aliases" onBack={close}>
           <AliasLabel name="Person" color={typeColor} />
-          <span className="text-xs text-text-muted">every member of this space, always</span>
+          <span className="text-xs text-fg-muted">every member of this space, always</span>
         </AliasBackRow>
         <EveryoneSettings spaceId={spaceId} data={data} busy={busy} run={run} />
       </div>
@@ -240,7 +240,7 @@ export default function AliasList({ mode, typeColor, newOpen, onNewStart, onNewD
       <div>
         <AliasBackRow label="Aliases" onBack={close}>
           <AliasLabel name={showing.name} color={showing.color} />
-          <span className="text-xs text-text-muted">
+          <span className="text-xs text-fg-muted">
             {peopleCount(showing.holders.length)} · {grantCount(grantsByAlias.get(showing.id) ?? 0)}
           </span>
         </AliasBackRow>

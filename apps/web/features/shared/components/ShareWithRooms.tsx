@@ -80,16 +80,16 @@ export default function ShareWithRooms({
     <label className="flex cursor-pointer items-start gap-2 text-sm">
       <input type="radio" name={`share-${what}`} className="mt-1" checked={mode === m} onChange={() => setMode(m)} disabled={saving} />
       <span>
-        <span className="font-medium text-text-primary">{label}</span>
-        <span className="block text-xs text-text-muted">{hint}</span>
+        <span className="font-medium text-fg">{label}</span>
+        <span className="block text-xs text-fg-muted">{hint}</span>
       </span>
     </label>
   );
 
   return (
-    <div className="rounded-lg border border-border-subtle px-3 py-3">
-      <p className="text-sm font-medium text-text-primary">Share with sub-spaces</p>
-      <p className="mb-3 text-xs text-text-muted">
+    <div className="rounded-lg border border-line-subtle px-3 py-3">
+      <p className="text-sm font-medium text-fg">Share with sub-spaces</p>
+      <p className="mb-3 text-xs text-fg-muted">
         A room this {what} reaches uses it as its own, with this space&apos;s keys and accounts; nothing in the room can change it.
       </p>
       <div className="grid gap-2">
@@ -99,8 +99,8 @@ export default function ShareWithRooms({
       </div>
       {mode === 'some' && (
         <ul className="mt-2 grid gap-1 pl-6">
-          {rooms === null && <li className="text-xs text-text-muted">Loading rooms…</li>}
-          {rooms?.length === 0 && <li className="text-xs text-text-muted">This space has no sub-spaces yet.</li>}
+          {rooms === null && <li className="text-xs text-fg-muted">Loading rooms…</li>}
+          {rooms?.length === 0 && <li className="text-xs text-fg-muted">This space has no sub-spaces yet.</li>}
           {rooms?.map((room) => (
             <li key={room.id}>
               <label className="flex cursor-pointer items-center gap-2 text-sm">
@@ -115,8 +115,8 @@ export default function ShareWithRooms({
                     setPicked(copy);
                   }}
                 />
-                <span className="text-text-primary">{room.name}</span>
-                <span className="text-xs text-text-muted">
+                <span className="text-fg">{room.name}</span>
+                <span className="text-xs text-fg-muted">
                   {room.listing === 'world' ? 'listed to everyone' : room.listing === 'house' ? 'listed here' : 'secret'}
                 </span>
               </label>
@@ -127,14 +127,14 @@ export default function ShareWithRooms({
       {warnings.length > 0 && (
         <ul className="mt-3 grid gap-1">
           {warnings.map((w) => (
-            <li key={w.room.id} className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400">
+            <li key={w.room.id} className="flex items-start gap-2 text-xs text-warning dark:text-warning-bright">
               <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
               <span><span className="font-medium">{w.room.name}:</span> {w.text}</span>
             </li>
           ))}
         </ul>
       )}
-      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
       <div className="mt-3 flex justify-end">
         <Button size="sm" variant={warnings.length ? 'danger-text' : 'brand'} disabled={!dirty || saving} onClick={() => void save()}>
           {saving ? 'Saving…' : warnings.length ? 'Share anyway' : 'Save'}

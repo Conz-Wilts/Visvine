@@ -64,7 +64,7 @@ export default function NightlySection({ spaceId }: { spaceId: string }) {
               <option key={h} value={h}>{hourLabel(h)}</option>
             ))}
           </Select>
-          <span className="text-xs text-text-muted">{schedule.timezone || 'UTC'}</span>
+          <span className="text-xs text-fg-muted">{schedule.timezone || 'UTC'}</span>
         </div>
         <div>
           <Toggle
@@ -73,7 +73,7 @@ export default function NightlySection({ spaceId }: { spaceId: string }) {
             label="Clean"
           />
           {schedule.enabled && schedule.runAs && !schedule.runAs.isAdmin && (
-            <p className="mt-1 text-xs text-red-600">
+            <p className="mt-1 text-xs text-danger">
               {schedule.runAs.name} is no longer an admin. Turn it off and on again to run as yourself.
             </p>
           )}
@@ -85,7 +85,7 @@ export default function NightlySection({ spaceId }: { spaceId: string }) {
             label="Embed new or edited notes"
           />
           {schedule.embedEnabled && !schedule.embedKeyed && (
-            <p className="mt-1 text-xs text-text-muted">No embedding key on this deployment.</p>
+            <p className="mt-1 text-xs text-fg-muted">No embedding key on this deployment.</p>
           )}
         </div>
       </div>

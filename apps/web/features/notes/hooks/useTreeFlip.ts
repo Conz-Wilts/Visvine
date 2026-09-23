@@ -28,10 +28,11 @@
 
 import { useLayoutEffect, useRef } from 'react'
 import type { DragProbe } from './useTreeDrag'
+import { motion } from '@visvine/tokens'
 
 const FLIP_ID = 'tree-flip'
 const DURATION = 200
-const EASING = 'cubic-bezier(0.25, 1, 0.5, 1)'
+const EASING = motion.easeCss.settle
 
 export function useTreeFlip(
   scrollRef: React.RefObject<HTMLDivElement | null>,

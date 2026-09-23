@@ -47,7 +47,7 @@ import ToolFrame from './ToolFrame';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 
 const STRIP_BUTTON =
-  'inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2';
+  'inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-subtle';
 
 /**
  * Where this Tool stands with the people who decide about it, in one phrase.
@@ -154,13 +154,13 @@ export default function ToolPreview({ name }: { name: string }) {
       {/* ══ STRIP — what this is, whether it builds, and the two iteration acts ══ */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-          <h1 className="truncate font-title text-lg font-semibold text-text-primary">{tool.title}</h1>
-          <span className="font-mono text-[12px] text-text-muted">{tool.name}</span>
+          <h1 className="truncate font-title text-lg font-semibold text-fg">{tool.title}</h1>
+          <span className="font-mono text-[12px] text-fg-muted">{tool.name}</span>
           <span className={`${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>
             {status.label}
           </span>
-          <span className="text-[12px] text-text-muted">preview · working copy</span>
-          <span className="text-[12px] text-text-muted">{reachLabel(tool)}</span>
+          <span className="text-[12px] text-fg-muted">preview · working copy</span>
+          <span className="text-[12px] text-fg-muted">{reachLabel(tool)}</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
@@ -205,21 +205,21 @@ export default function ToolPreview({ name }: { name: string }) {
  */
 function NotBuilding({ tool }: { tool: AuthoredToolDetail }) {
   return (
-    <div className="flex flex-col gap-3 border-l-2 border-red-500 pl-4 py-1">
+    <div className="flex flex-col gap-3 border-l-2 border-danger-bright pl-4 py-1">
       <div className="flex items-center gap-2">
-        <TriangleAlertIcon className="h-4 w-4 shrink-0 text-red-600" />
-        <h2 className="text-sm font-semibold text-text-primary">
+        <TriangleAlertIcon className="h-4 w-4 shrink-0 text-danger" />
+        <h2 className="text-sm font-semibold text-fg">
           {tool.build ? 'This tool does not compile' : 'This tool has never compiled'}
         </h2>
       </div>
       <BuildDiagnostics build={tool.build} />
       {!tool.build && (
-        <p className="text-sm text-text-muted">
+        <p className="text-sm text-fg-muted">
           Nothing has been written to{' '}
           <code className="font-mono text-[12px]">{TOOL_SOURCE_FILES.ui.authorName}</code> yet.
         </p>
       )}
-      <p className="text-[12px] text-text-muted">
+      <p className="text-[12px] text-fg-muted">
         Every save recompiles. Fix the source and press Reload — the preview comes back as soon as it builds.
       </p>
     </div>
@@ -244,11 +244,11 @@ function PreviewUnavailable({
   return (
     <div className="flex items-center justify-center px-6 py-24">
       <div className="max-w-md px-6 py-8 text-center">
-        <TriangleAlertIcon className="mx-auto h-5 w-5 text-amber-500" />
-        <h1 className="mt-3 text-lg font-semibold text-text-primary">
+        <TriangleAlertIcon className="mx-auto h-5 w-5 text-warning-bright" />
+        <h1 className="mt-3 text-lg font-semibold text-fg">
           {status === 403 ? 'Tools are off for you here' : 'Nothing to preview'}
         </h1>
-        <p className="mt-2 text-sm text-text-secondary">
+        <p className="mt-2 text-sm text-fg-secondary">
           {status === 403
             ? 'An admin has switched the Tools surface off for this space, or restricted it to admins.'
             : status === 404
@@ -257,7 +257,7 @@ function PreviewUnavailable({
         </p>
         <Link
           href="/admin?section=tools"
-          className="mt-5 inline-flex items-center rounded-lg bg-brand-green px-3.5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          className="mt-5 inline-flex items-center rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
         >
           Tools in this space
         </Link>

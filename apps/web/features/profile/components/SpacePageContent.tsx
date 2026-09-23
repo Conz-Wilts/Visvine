@@ -103,7 +103,7 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
         {/* Contained, not cropped: a logo with whitespace must not be zoomed
             to fill, so the object-fit differs from the member-space page
             whose image is a cover photo. */}
-        <div className="relative w-48 h-48 sm:w-60 sm:h-60 aspect-square flex-none rounded-lg overflow-hidden bg-surface-2">
+        <div className="relative w-48 h-48 sm:w-60 sm:h-60 aspect-square flex-none rounded-lg overflow-hidden bg-surface-subtle">
           {node.image_url ? (
             <Image src={node.image_url} alt={node.name} fill sizes="240px" quality={90}
                    unoptimized={!isOptimizableImageUrl(node.image_url)}
@@ -121,11 +121,11 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
         <section className="flex-1 min-w-0 sm:min-h-60 flex flex-col">
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 my-auto py-4">
             <div className="min-w-0 flex-1">
-              <h1 className="text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{node.name}</h1>
+              <h1 className="text-[26px] sm:text-3xl font-bold text-fg leading-tight tracking-tight font-open-sauce">{node.name}</h1>
               <div className="mt-2"><Chip tone="solid" color={theme.base}>{typeLabel}</Chip></div>
-              {node.subtitle && <p className="mt-1.5 text-[15px] text-text-secondary max-w-[60ch]">{node.subtitle}</p>}
+              {node.subtitle && <p className="mt-1.5 text-[15px] text-fg-secondary max-w-[60ch]">{node.subtitle}</p>}
 
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-fg-muted">
                 {node.location && (
                   <span className="inline-flex items-center gap-1.5"><MapPinIcon className="w-3.5 h-3.5" />{node.location}</span>
                 )}
@@ -142,22 +142,22 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
             </div>
 
             <button onClick={sharePage}
-              className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-lg text-[13px] font-semibold text-text-secondary hover:bg-surface-3 hover:text-text-primary transition-colors flex-none">
+              className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-lg text-[13px] font-semibold text-fg-secondary hover:bg-surface-muted hover:text-fg transition-colors flex-none">
               {copied ? <CheckIcon className="w-4 h-4" /> : <Share2Icon className="w-4 h-4" />}
               <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
             </button>
           </div>
 
           {/* stat strip — what this graph knows, plus what the record claims */}
-          <div className="flex flex-wrap items-center gap-x-7 gap-y-2 pt-4 border-t border-border-subtle">
+          <div className="flex flex-wrap items-center gap-x-7 gap-y-2 pt-4 border-t border-line-subtle">
             <StatItem value={people.length} label={people.length === 1 ? 'Person' : 'People'}
                       onClick={people.length > 0 ? onConnectionsClick : undefined} accent={theme.dark} />
             <StatItem value={connectionCount} label={connectionCount === 1 ? 'Connection' : 'Connections'}
                       onClick={connectionCount > 0 ? onConnectionsClick : undefined} accent={theme.dark} />
             {statedMembers && (
               <span className="inline-flex items-baseline gap-1.5">
-                <b className="text-[15px] font-bold font-open-sauce text-text-primary tabular-nums">{statedMembers}</b>
-                <span className="text-[13px] text-text-muted">Members</span>
+                <b className="text-[15px] font-bold font-open-sauce text-fg tabular-nums">{statedMembers}</b>
+                <span className="text-[13px] text-fg-muted">Members</span>
               </span>
             )}
           </div>
@@ -170,8 +170,8 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
         <div className="min-w-0 flex flex-col gap-5">
           <SectionCard id="about" title="About">
             {about
-              ? <p className="text-[15px] text-text-secondary leading-relaxed whitespace-pre-line max-w-[72ch]">{about}</p>
-              : <p className="text-sm text-text-muted italic">No description yet.</p>}
+              ? <p className="text-[15px] text-fg-secondary leading-relaxed whitespace-pre-line max-w-[72ch]">{about}</p>
+              : <p className="text-sm text-fg-muted italic">No description yet.</p>}
           </SectionCard>
 
           {people.length > 0 && (
@@ -179,16 +179,16 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {people.slice(0, 12).map((person) => (
                   <Link key={person.id} href={`/directory/${encodeURIComponent(person.id)}`}
-                        className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-2 transition-colors">
+                        className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-subtle transition-colors">
                     <span className="w-10 h-10 flex-none rounded-xl overflow-hidden">
                       {person.image_url
                         ? <img src={person.image_url} alt={person.name} className="w-full h-full object-cover" />
                         : <PersonSilhouette color={getTypeColor(person.type, currentSpace?.nodeTypes)} />}
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-sm font-semibold text-text-primary truncate">{person.name}</span>
+                      <span className="block text-sm font-semibold text-fg truncate">{person.name}</span>
                       {person.subtitle && (
-                        <span className="block text-xs text-text-muted truncate">{person.subtitle}</span>
+                        <span className="block text-xs text-fg-muted truncate">{person.subtitle}</span>
                       )}
                     </span>
                   </Link>
@@ -270,8 +270,8 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
 function KV({ label, value }: { label: string; value: string }) {
   return (
     <div className="text-sm">
-      <div className="text-xs text-text-muted">{label}</div>
-      <div className="font-semibold text-text-primary">{value}</div>
+      <div className="text-xs text-fg-muted">{label}</div>
+      <div className="font-semibold text-fg">{value}</div>
     </div>
   );
 }

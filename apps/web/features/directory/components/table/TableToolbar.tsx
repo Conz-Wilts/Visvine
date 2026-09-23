@@ -47,7 +47,7 @@ export default function TableToolbar({ browse, typeKey, typeMenu, searchPlacehol
   const all = typeKey === 'all';
   const typeAliases = all ? aliases : aliases.filter((a) => a.nodeType.toLowerCase() === typeKey);
 
-  const aliasColor = (name: string) => typeAliases.find((a) => a.name === name)?.color ?? 'var(--color-brand-green)';
+  const aliasColor = (name: string) => typeAliases.find((a) => a.name === name)?.color ?? 'var(--vv-color-accent)';
   const tagColor = (tag: string) => tagPalette(tag, tagColors).base;
 
   const without = (set: Set<string>, value: string) => {
@@ -89,7 +89,7 @@ export default function TableToolbar({ browse, typeKey, typeMenu, searchPlacehol
         <button
           type="button"
           onClick={() => { setFilterAliases(new Set()); setFilterTags(new Set()); }}
-          className="text-[12px] font-medium text-text-muted transition-colors hover:text-text-secondary"
+          className="text-[12px] font-medium text-fg-muted transition-colors hover:text-fg-secondary"
         >
           Clear
         </button>

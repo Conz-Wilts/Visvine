@@ -30,11 +30,11 @@ export default function SpaceField({ value, onChange }: Props) {
 
   if (picked) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-border-subtle px-3 py-2">
+      <div className="flex items-center gap-2 rounded-xl border border-line-subtle px-3 py-2">
         <SpaceAvatar name={picked.name} imageUrl={picked.imageUrl} size="sm" />
-        <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{picked.name}</span>
+        <span className="min-w-0 flex-1 truncate text-sm text-fg">{picked.name}</span>
         <button type="button" onClick={() => onChange(null, '')} aria-label="Remove space"
-                className="p-1 rounded-lg text-text-muted hover:bg-surface-2 hover:text-text-primary">
+                className="p-1 rounded-lg text-fg-muted hover:bg-surface-subtle hover:text-fg">
           <XIcon className="w-4 h-4" />
         </button>
       </div>
@@ -43,21 +43,21 @@ export default function SpaceField({ value, onChange }: Props) {
 
   return (
     <div className="relative">
-      <div className="flex items-center gap-2 rounded-xl border border-border-subtle px-3 py-2">
-        <SearchIcon className="w-4 h-4 flex-none text-text-muted" />
+      <div className="flex items-center gap-2 rounded-xl border border-line-subtle px-3 py-2">
+        <SearchIcon className="w-4 h-4 flex-none text-fg-muted" />
         <input value={query} onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
                onFocus={() => setOpen(true)} placeholder="Search your spaces"
-               className="min-w-0 flex-1 bg-transparent text-sm text-text-primary focus:outline-none" />
+               className="min-w-0 flex-1 bg-transparent text-sm text-fg focus:outline-none" />
       </div>
       {open && matches.length > 0 && (
-        <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-xl border border-border-subtle bg-surface-1 py-1 shadow-strip">
+        <ul className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-xl border border-line-subtle bg-surface py-1 shadow-strip">
           {matches.map((space) => (
             <li key={space.id}>
               <button type="button"
                       onClick={() => { onChange(space.id, space.name); setOpen(false); setQuery(''); }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-2">
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-surface-subtle">
                 <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="sm" />
-                <span className="min-w-0 truncate text-sm text-text-primary">{space.name}</span>
+                <span className="min-w-0 truncate text-sm text-fg">{space.name}</span>
               </button>
             </li>
           ))}

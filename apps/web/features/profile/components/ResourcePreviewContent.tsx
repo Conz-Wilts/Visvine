@@ -71,18 +71,18 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
   return (
     <div className="profile-content-fade flex flex-col gap-5">
       {/* ══ HEADER — resource identity + link actions ══ */}
-      <section className="bg-surface-1 border border-border-subtle rounded-2xl px-5 sm:px-8 py-5 sm:py-6">
+      <section className="bg-surface border border-line-subtle rounded-2xl px-5 sm:px-8 py-5 sm:py-6">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div className="min-w-0 flex-1">
             <Chip tone="solid" color={theme.base}>
               {nodeTypeLabel(node.type, node.alias, currentSpace?.aliases, currentSpace?.nodeTypes)}
             </Chip>
 
-            <h1 className="mt-1.5 text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{node.name}</h1>
+            <h1 className="mt-1.5 text-[26px] sm:text-3xl font-bold text-fg leading-tight tracking-tight font-open-sauce">{node.name}</h1>
 
-            {description && <p className="mt-1.5 text-[15px] text-text-secondary max-w-[72ch] whitespace-pre-line">{description}</p>}
+            {description && <p className="mt-1.5 text-[15px] text-fg-secondary max-w-[72ch] whitespace-pre-line">{description}</p>}
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-fg-muted">
               {externalUrl && (
                 <a href={externalUrl} target="_blank" rel="noopener noreferrer"
                    className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
@@ -118,7 +118,7 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
       {externalUrl ? (
         <>
           {unfurlLoading ? (
-            <div className="h-28 rounded-xl border border-border-subtle bg-surface-2/60 animate-pulse" />
+            <div className="h-28 rounded-xl border border-line-subtle bg-surface-subtle/60 animate-pulse" />
           ) : unfurl?.preview ? (
             <LinkPreviewCard preview={unfurl.preview} className="max-w-xl" />
           ) : null}
@@ -131,23 +131,23 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
                   title={node.name}
                   sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                   referrerPolicy="no-referrer"
-                  className="w-full h-[70vh] rounded-2xl border border-border-subtle bg-surface-1"
+                  className="w-full h-[70vh] rounded-2xl border border-line-subtle bg-surface"
                 />
-                <p className="text-xs text-text-muted">
+                <p className="text-xs text-fg-muted">
                   If the preview doesn&apos;t load, the site blocks embedding — use Open site.
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-text-muted">
+              <p className="text-sm text-fg-muted">
                 This site doesn&apos;t allow embedding — use Open site to view it.
               </p>
             )
           )}
         </>
       ) : (
-        <div className="flex flex-col items-center justify-center gap-2 py-16 rounded-2xl border border-border-subtle bg-surface-1 text-center">
-          <Link2OffIcon className="w-6 h-6 text-text-muted" />
-          <p className="text-sm text-text-muted">No link attached to this resource.</p>
+        <div className="flex flex-col items-center justify-center gap-2 py-16 rounded-2xl border border-line-subtle bg-surface text-center">
+          <Link2OffIcon className="w-6 h-6 text-fg-muted" />
+          <p className="text-sm text-fg-muted">No link attached to this resource.</p>
         </div>
       )}
     </div>

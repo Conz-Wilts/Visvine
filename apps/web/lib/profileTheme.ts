@@ -1,3 +1,5 @@
+import { palette } from '@visvine/tokens';
+
 export interface ThemePalette {
   id: string;
   name: string;
@@ -7,14 +9,14 @@ export interface ThemePalette {
 }
 
 export const PALETTES: ThemePalette[] = [
-  { id: 'green',  name: 'Forest',   base: '#78d870', light: '#eaf9ec', dark: '#2f7a3e' },
-  { id: 'blue',   name: 'Ocean',    base: '#3b82f6', light: '#eff6ff', dark: '#1d4ed8' },
-  { id: 'purple', name: 'Violet',   base: '#8b5cf6', light: '#f5f3ff', dark: '#6d28d9' },
-  { id: 'orange', name: 'Ember',    base: '#f97316', light: '#fff7ed', dark: '#c2410c' },
-  { id: 'rose',   name: 'Rose',     base: '#f43f5e', light: '#fff1f2', dark: '#be123c' },
-  { id: 'teal',   name: 'Teal',     base: '#14b8a6', light: '#f0fdfa', dark: '#0f766e' },
-  { id: 'amber',  name: 'Gold',     base: '#f59e0b', light: '#fffbeb', dark: '#b45309' },
-  { id: 'slate',  name: 'Midnight', base: '#64748b', light: '#f8fafc', dark: '#334155' },
+  { id: 'green',  name: 'Forest',   base: palette.visvine[400], light: palette.visvine[50], dark: palette.visvine[700] },
+  { id: 'blue',   name: 'Ocean',    base: palette.blue[500],    light: palette.blue[50],    dark: palette.blue[700] },
+  { id: 'purple', name: 'Violet',   base: palette.violet[500],  light: palette.violet[50],  dark: palette.violet[700] },
+  { id: 'orange', name: 'Ember',    base: palette.orange[500],  light: palette.orange[50],  dark: palette.orange[700] },
+  { id: 'rose',   name: 'Rose',     base: palette.rose[500],    light: palette.rose[50],    dark: palette.rose[700] },
+  { id: 'teal',   name: 'Teal',     base: palette.teal[500],    light: palette.teal[50],    dark: palette.teal[700] },
+  { id: 'amber',  name: 'Gold',     base: palette.amber[500],   light: palette.amber[50],   dark: palette.amber[700] },
+  { id: 'slate',  name: 'Midnight', base: palette.slate[500],   light: palette.slate[50],   dark: palette.slate[700] },
 ];
 
 export function getPalette(id: string | undefined | null): ThemePalette {

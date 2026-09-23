@@ -34,8 +34,9 @@ import { tagKey, tagPalette } from '@/lib/tagColors'
 import type { SpaceAlias, NodeTypeConfig } from '@/lib/types'
 import { TagCombobox } from './TagCombobox'
 import { TypePicker } from './TypePicker'
+import { color } from '@visvine/tokens'
 
-const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-text-muted'
+const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-fg-muted'
 
 interface NoteMetaRowsProps {
   /** The note's frontmatter type, named and coloured by the space console. */
@@ -191,7 +192,7 @@ export function NoteMetaRows({
               >
                 <button type="button" onClick={() => setAddingTag((v) => !v)}
                         className={chipClass({ tone: 'dashed', size: 'xl', className: CHIP_ACCENT_HOVER })}
-                        style={{ ['--accent' as string]: typeConfig?.color ?? '#2f8d72' }}>
+                        style={{ ['--accent' as string]: typeConfig?.color ?? color.type.other.default }}>
                   + Add tag
                 </button>
               </TagCombobox>

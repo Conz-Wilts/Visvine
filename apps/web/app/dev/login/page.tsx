@@ -3,6 +3,7 @@ import { isDevAuthEnabled } from "@/lib/dev-auth";
 import { safeRelativePath } from "@/lib/redirects";
 import prisma from "@/lib/prisma";
 import { findAliasByRef, personAliases, type SpaceAlias } from "@/lib/types/context";
+import { color } from "@visvine/tokens";
 
 export const dynamic = "force-dynamic";
 
@@ -98,8 +99,8 @@ const styles = {
     fontFamily: "system-ui, sans-serif",
   },
   h1: { fontSize: 24, fontWeight: 600, marginBottom: 8 },
-  note: { color: "#666", marginBottom: 24, lineHeight: 1.5 },
-  empty: { color: "#888" },
+  note: { color: color.fg.muted, marginBottom: 24, lineHeight: 1.5 },
+  empty: { color: color.fg.subtle },
   list: { listStyle: "none", padding: 0, margin: 0 },
   item: { marginBottom: 8 },
   row: { display: "flex", gap: 8, alignItems: "stretch" },
@@ -109,14 +110,14 @@ const styles = {
     height: "100%",
     textAlign: "left" as const,
     padding: "12px 16px",
-    border: "1px solid #ddd",
+    border: `1px solid ${color.line.default}`,
     borderRadius: 6,
-    background: "#fff",
+    background: color.surface.default,
     cursor: "pointer",
     display: "flex",
     flexDirection: "column" as const,
     gap: 2,
   },
   name: { fontWeight: 600, fontSize: 15 },
-  meta: { fontSize: 13, color: "#666" },
+  meta: { fontSize: 13, color: color.fg.muted },
 };

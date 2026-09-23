@@ -199,7 +199,7 @@ function DirectoryPane() {
         <div className="w-full px-6 pt-7 pb-8">
           <div className="flex flex-col gap-5">
             {error && (
-              <div className="border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
+              <div className="border-l-2 border-danger-bright pl-3 py-1 text-sm text-danger-strong">
                 {error}
               </div>
             )}

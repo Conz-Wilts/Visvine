@@ -237,15 +237,15 @@ export default function MachinePane({
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex items-center gap-3">
-        <p className="min-w-0 flex-1 truncate text-[13px] text-text-secondary">
+        <p className="min-w-0 flex-1 truncate text-[13px] text-fg-secondary">
           {machine ? (
             <>
-              <span className="font-medium text-text-primary">Machine</span> {STATE_LABEL[machine.state] ?? machine.state} · {machine.instanceType}
+              <span className="font-medium text-fg">Machine</span> {STATE_LABEL[machine.state] ?? machine.state} · {machine.instanceType}
               {machine.lastActiveAt ? ` · active ${fmtAgo(machine.lastActiveAt)}` : ''}
             </>
           ) : (
             <>
-              <span className="font-medium text-text-primary">Machine</span> none yet — leased the first time this agent runs a command
+              <span className="font-medium text-fg">Machine</span> none yet — leased the first time this agent runs a command
             </>
           )}
         </p>
@@ -276,7 +276,7 @@ export default function MachinePane({
               ref={screenRef}
               src={`data:image/jpeg;base64,${frame}`}
               alt="The agent's screen"
-              className={`w-full rounded-md border border-border-subtle bg-black ${inControl ? 'cursor-crosshair ring-2 ring-brand-green' : ''}`}
+              className={`w-full rounded-md border border-line-subtle bg-black ${inControl ? 'cursor-crosshair ring-2 ring-accent' : ''}`}
               draggable={false}
               tabIndex={inControl ? 0 : -1}
               onClick={(event) => {
@@ -297,12 +297,12 @@ export default function MachinePane({
               }}
             />
           ) : (
-            <p className="rounded-md border border-border-subtle bg-surface-2 px-4 py-8 text-center text-[13px] text-text-muted">
+            <p className="rounded-md border border-line-subtle bg-surface-subtle px-4 py-8 text-center text-[13px] text-fg-muted">
               No screen — the machine has no browser open. The terminal below is live.
             </p>
           )}
           <div className="flex items-center gap-3">
-            <p className="min-w-0 flex-1 text-[12px] text-text-muted">
+            <p className="min-w-0 flex-1 text-[12px] text-fg-muted">
               {inControl ? 'You have the keyboard — click and type on the screen. The agent keeps running.' : 'Take control to click and type on the machine yourself.'}
             </p>
             {frame && (
@@ -316,19 +316,19 @@ export default function MachinePane({
 
       <div
         ref={tailRef}
-        className="max-h-72 overflow-y-auto rounded-md bg-surface-2 px-3 py-2 font-mono text-[12px] leading-5 text-text-secondary"
+        className="max-h-72 overflow-y-auto rounded-md bg-surface-subtle px-3 py-2 font-mono text-[12px] leading-5 text-fg-secondary"
         aria-live="polite"
       >
         {terminal.length === 0 ? (
-          <p className="text-text-muted">{watching ? 'Connected. Nothing has happened yet.' : machine ? 'Nothing recorded yet.' : 'The terminal appears here once the machine exists.'}</p>
+          <p className="text-fg-muted">{watching ? 'Connected. Nothing has happened yet.' : machine ? 'Nothing recorded yet.' : 'The terminal appears here once the machine exists.'}</p>
         ) : (
           terminal.map((event, i) => {
             const text = describe(event);
             const label = KIND_LABEL[event.kind] ?? event.kind;
             const bad = event.kind === 'error' || event.kind === 'egress_denied' || (event.kind === 'exit' && Number(event.payload?.exitCode) !== 0);
             return (
-              <div key={`${event.seq}-${event.at}-${i}`} className={`whitespace-pre-wrap break-words ${bad ? 'text-red-600' : event.kind === 'output' ? '' : 'text-text-primary'}`}>
-                <span className="text-text-muted">{clock(event.at)} </span>
+              <div key={`${event.seq}-${event.at}-${i}`} className={`whitespace-pre-wrap break-words ${bad ? 'text-danger' : event.kind === 'output' ? '' : 'text-fg'}`}>
+                <span className="text-fg-muted">{clock(event.at)} </span>
                 {label && event.kind !== 'exec' && <span className={event.kind === 'output' ? '' : 'italic'}>{label} </span>}
                 {text}
               </div>
@@ -340,19 +340,19 @@ export default function MachinePane({
       {!watching && stored.length > 0 && (
         <button
           type="button"
-          className="self-start text-[12px] text-text-muted hover:text-text-primary hover:underline"
+          className="self-start text-[12px] text-fg-muted hover:text-fg hover:underline"
           onClick={() => setHistoryOpen((o) => !o)}
         >
           {historyOpen ? 'Showing' : 'Show'} the last {stored.length} machine events{historyOpen ? '' : ' …'}
         </button>
       )}
       {!watching && historyOpen && (
-        <ul className="flex flex-col divide-y divide-border-subtle">
+        <ul className="flex flex-col divide-y divide-line-subtle">
           {stored.map((event) => (
             <li key={event.id ?? `${event.seq}`} className="flex gap-3 py-1 text-[12px]">
-              <span className="shrink-0 font-mono text-text-muted">{clock(event.at)}</span>
-              <span className="shrink-0 text-text-primary">{KIND_LABEL[event.kind] || event.kind}</span>
-              <span className="min-w-0 flex-1 truncate font-mono text-text-secondary">{describe(event)}</span>
+              <span className="shrink-0 font-mono text-fg-muted">{clock(event.at)}</span>
+              <span className="shrink-0 text-fg">{KIND_LABEL[event.kind] || event.kind}</span>
+              <span className="min-w-0 flex-1 truncate font-mono text-fg-secondary">{describe(event)}</span>
             </li>
           ))}
         </ul>

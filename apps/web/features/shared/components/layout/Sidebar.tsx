@@ -24,6 +24,7 @@ import {
   RAIL_CELL_VAR,
   Row,
 } from "@/features/shared/components/layout/railRow";
+import { color, motion } from "@visvine/tokens";
 
 /*
  * The rail is the shell's chrome, and it carries everything that is not a
@@ -69,7 +70,7 @@ const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the cont
 const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full height
 // The rail's width, opening and closing — and the motion of anything that
 // must stay glued to its edge.
-const RAIL_MOTION_MS = 300;
+const RAIL_MOTION_MS = motion.duration.base;
 // After the rail has shut under a panel, the pointer is given this much
 // longer before where it stands is judged (Sidebar#beginSlide).
 const LEAVE_GRACE_MS = 150;
@@ -79,7 +80,7 @@ const LEAVE_FAR_PX = 200;
 // A pointer left nearer than that may drift this much further away before
 // that counts as walking off.
 const LEAVE_SLACK_PX = 40;
-const RAIL_MOTION = `${RAIL_MOTION_MS}ms cubic-bezier(0.25, 0.1, 0.25, 1)`;
+const RAIL_MOTION = `${RAIL_MOTION_MS}ms ${motion.easeCss.gentle}`;
 export default function Sidebar() {
   const pathname = useRoutePathname();
   const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
@@ -346,7 +347,7 @@ export default function Sidebar() {
           paddingRight: ROW_INSET,
           // The one hairline between the surfaces that are yours and the ones
           // the space switched on — the same seam the foot uses.
-          borderTopColor: "var(--shell-border, #e5e7eb)",
+          borderTopColor: "var(--vv-color-line-subtle)",
         }}
       >
         <div className="flex flex-col" style={{ gap: ITEM_GAP }}>
@@ -368,7 +369,7 @@ export default function Sidebar() {
                   <span
                     title={`${label} is missing something it needs in this space — it runs with those parts switched off.`}
                     className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full"
-                    style={{ background: "#f59e0b", boxShadow: "0 0 0 2px rgba(255,255,255,0.9)" }}
+                    style={{ background: color.warning.bright, boxShadow: `0 0 0 2px ${color.surface.default}` }}
                   />
                 ) : undefined
               }
@@ -389,7 +390,7 @@ export default function Sidebar() {
             gap: ITEM_GAP,
             paddingLeft: ROW_INSET,
             paddingRight: ROW_INSET,
-            borderTopColor: "var(--shell-border, #e5e7eb)",
+            borderTopColor: "var(--vv-color-line-subtle)",
           }}
         >
           <Row
@@ -422,7 +423,7 @@ export default function Sidebar() {
         style={{
           paddingLeft: ROW_INSET,
           paddingRight: ROW_INSET,
-          borderTopColor: "var(--shell-border, #e5e7eb)",
+          borderTopColor: "var(--vv-color-line-subtle)",
         }}
       >
         <UserMenu expanded={expanded} reduced={reduced} />
@@ -520,7 +521,7 @@ export default function Sidebar() {
             // hairline, and its rounded corner where it reaches the band.
             // Closed it is 0px wide, where a radius cannot bend: its edges
             // would draw a straight line past the sheet's own curve.
-            background: "var(--color-surface-1)",
+            background: "var(--vv-color-surface)",
             borderLeft: docked ? FRAME_LINE : undefined,
             // The seam between the docked list and the content beside it. It
             // lives here rather than on the panel because the panel is exactly
@@ -586,15 +587,15 @@ export default function Sidebar() {
           onClose={() => setMoreOpen(false)}
           ariaLabel="More tools"
           maxWidth="max-w-xs"
-          panelClassName="relative rounded-xl bg-surface-1 shadow-float"
-          panelStyle={{ animation: "moreModalIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both" }}
+          panelClassName="relative rounded-xl bg-surface shadow-float"
+          panelStyle={{ animation: `moreModalIn 0.25s ${motion.easeCss.overshoot} both` }}
         >
           <div className="relative flex items-center justify-center px-6 pt-5 pb-3">
-            <h2 className="font-semibold text-text-primary text-base">More tools</h2>
+            <h2 className="font-semibold text-fg text-base">More tools</h2>
             <button
               onClick={() => setMoreOpen(false)}
               aria-label="Close"
-              className="absolute right-4 w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:bg-surface-3 hover:text-text-primary transition-colors"
+              className="absolute right-4 w-8 h-8 rounded-full flex items-center justify-center text-fg-muted hover:bg-surface-muted hover:text-fg transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -611,8 +612,8 @@ export default function Sidebar() {
                 <li key={href}>
                   <Link
                     href={href}
-                    className={`flex items-center gap-4 rounded-[10px] px-4 py-3 transition-colors hover:bg-surface-3 ${
-                      active ? "font-semibold text-text-primary" : "text-text-secondary"
+                    className={`flex items-center gap-4 rounded-[10px] px-4 py-3 transition-colors hover:bg-surface-muted ${
+                      active ? "font-semibold text-fg" : "text-fg-secondary"
                     }`}
                   >
                     <span className="flex h-7 w-7 items-center justify-center [&>svg]:h-6 [&>svg]:w-6">{icon}</span>

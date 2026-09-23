@@ -47,22 +47,22 @@ export default function ChangeProposalDialog({
     >
         <div className="space-y-3 p-6">
           <div>
-            <label className="text-xs text-text-muted block mb-1">Name</label>
+            <label className="text-xs text-fg-muted block mb-1">Name</label>
             <Input value={proposedBy} onChange={e => setProposedBy(e.target.value)} />
           </div>
           <div>
-            <label className="text-xs text-text-muted block mb-1">Current</label>
-            <p className="text-sm text-text-secondary">{originalValue || '—'}</p>
+            <label className="text-xs text-fg-muted block mb-1">Current</label>
+            <p className="text-sm text-fg-secondary">{originalValue || '—'}</p>
           </div>
           <div>
-            <label className="text-xs text-text-muted block mb-1">Proposed</label>
+            <label className="text-xs text-fg-muted block mb-1">Proposed</label>
             <Input value={proposedValue} onChange={e => setProposedValue(e.target.value)} />
           </div>
           <div>
-            <label className="text-xs text-text-muted block mb-1">Reason</label>
+            <label className="text-xs text-fg-muted block mb-1">Reason</label>
             <Textarea rows={2} value={reason} onChange={e => setReason(e.target.value)} />
           </div>
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-danger-bright">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="neutral" onClick={onClose}>
               Cancel

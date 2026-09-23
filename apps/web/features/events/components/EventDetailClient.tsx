@@ -42,6 +42,7 @@ import PageError from '@/components/ui/PageError';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { invalidateEventDetail, loadEventDetail, type EventDetail, type EventStats, type GuestPreview, type ViewerRsvp } from '@/features/events/lib/eventDetail';
 import { AboutText } from '@/features/profile/components/profileCards';
+import { color } from '@visvine/tokens';
 
 // The Context tab pulls in Tiptap + the notes stack; load it only when a note
 // tab renders (same rationale as the directory profile's deferred panel).
@@ -135,8 +136,8 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
     id: userTheme.id,
     name: userTheme.name,
     base: userTheme.accent,
-    dark: userTheme.accentDark,
-    light: userTheme.accentLight,
+    dark: userTheme.accentStrong,
+    light: userTheme.accentSoft,
   }), [userTheme]);
 
   const publicSlug = event?.slug ?? eventId.replace(/^event:/, '');
@@ -204,24 +205,24 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
       {/* breadcrumb */}
       {manage ? (
         <Link href={`/events/${encodeURIComponent(eventId)}`}
-              className="inline-flex items-center gap-1 text-sm font-semibold text-text-muted hover:text-text-primary transition mb-4">
+              className="inline-flex items-center gap-1 text-sm font-semibold text-fg-muted hover:text-fg transition mb-4">
           ‹ Back to event
         </Link>
       ) : (
-        <Link href="/events" className="inline-flex items-center gap-1 text-sm font-semibold text-text-muted hover:text-text-primary transition mb-4">
+        <Link href="/events" className="inline-flex items-center gap-1 text-sm font-semibold text-fg-muted hover:text-fg transition mb-4">
           ‹ Events
         </Link>
       )}
 
       {/* manager tabs */}
       {manage && (
-        <nav className="flex gap-1 border-b border-border-subtle mb-6 overflow-x-auto" aria-label="Event management">
+        <nav className="flex gap-1 border-b border-line-subtle mb-6 overflow-x-auto" aria-label="Event management">
           {(['overview', 'guests', 'form'] as const).map((tab) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
                     aria-current={activeTab === tab ? 'true' : undefined}
                     className="relative px-3.5 py-3 text-sm font-semibold capitalize whitespace-nowrap transition"
                     style={{ color: activeTab === tab ? theme.dark : undefined }}>
-              <span className={activeTab === tab ? '' : 'text-text-muted'}>
+              <span className={activeTab === tab ? '' : 'text-fg-muted'}>
                 {tab}{tab === 'guests' && stats ? ` · ${stats.total}` : ''}
               </span>
               {activeTab === tab && <span className="absolute left-3.5 right-3.5 bottom-0 h-[3px] rounded-t" style={{ background: theme.base }} />}
@@ -252,11 +253,11 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                 should look like it might work. */}
             {readOnly && (
               <InfoCard>
-                <p className="flex items-start gap-2 text-sm text-text-secondary">
+                <p className="flex items-start gap-2 text-sm text-fg-secondary">
                   <SpaceIcon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: theme.dark }} />
                   <span>
-                    From <span className="font-medium text-text-primary">{ownerSpace?.name ?? 'a sub-space'}</span>
-                    {ownerParent ? <>, a sub-space of <span className="font-medium text-text-primary">{ownerParent.name}</span></> : null}
+                    From <span className="font-medium text-fg">{ownerSpace?.name ?? 'a sub-space'}</span>
+                    {ownerParent ? <>, a sub-space of <span className="font-medium text-fg">{ownerParent.name}</span></> : null}
                     {' '}— shown here as it is now. To RSVP or take part, join that space
                     {event.visibility === 'public' ? <> or use the <a href={publicUrl} className="font-semibold hover:underline" style={{ color: theme.dark }}>public page</a></> : null}.
                   </span>
@@ -283,7 +284,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
             {/* GUESTS — attendee list lives in the poster column, under the edit box */}
             {event.guestListVisible !== false && goingCount > 0 && (
               <InfoCard>
-                <h2 className="flex items-center gap-2 text-[15px] font-bold font-title text-text-primary mb-3">
+                <h2 className="flex items-center gap-2 text-[15px] font-bold font-title text-fg mb-3">
                   <UsersIcon className="w-[18px] h-[18px]" style={{ color: theme.dark }} />
                   {goingCount} going
                 </h2>
@@ -291,13 +292,13 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                   <div className="flex flex-wrap gap-2">
                     {guests.slice(0, 12).map((g, i) => <GuestChip key={`${g.name}-${i}`} guest={g} />)}
                     {guests.length > 12 && (
-                      <span className="inline-flex items-center py-1.5 text-[13px] font-semibold text-text-muted">
+                      <span className="inline-flex items-center py-1.5 text-[13px] font-semibold text-fg-muted">
                         +{guests.length - 12} more
                       </span>
                     )}
                   </div>
                 ) : (
-                  <p className="text-sm text-text-muted">{goingCount} {goingCount === 1 ? 'person is' : 'people are'} going.</p>
+                  <p className="text-sm text-fg-muted">{goingCount} {goingCount === 1 ? 'person is' : 'people are'} going.</p>
                 )}
               </InfoCard>
             )}
@@ -309,7 +310,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
             <div>
               {(isDraft || liveStatus === 'live' || isPast || isFull || waitlistOpen) && (
                 <div className="flex flex-wrap items-center gap-3 mb-2">
-                  {isDraft && <Pill fg="#b45309">Draft</Pill>}
+                  {isDraft && <Pill fg={color.warning.default}>Draft</Pill>}
                   {liveStatus === 'live' && (
                     <Pill fg={theme.dark}>
                       <span className="relative flex h-1.5 w-1.5 mr-1">
@@ -319,18 +320,18 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                       Happening now
                     </Pill>
                   )}
-                  {isPast && <Pill fg="#334155">Past event</Pill>}
-                  {isFull && !isPast && <Pill fg="#be123c">Sold out</Pill>}
-                  {waitlistOpen && !isPast && <Pill fg="#b45309">Waitlist open</Pill>}
+                  {isPast && <Pill fg={color.fg.secondary}>Past event</Pill>}
+                  {isFull && !isPast && <Pill fg={color.danger.strong}>Sold out</Pill>}
+                  {waitlistOpen && !isPast && <Pill fg={color.warning.default}>Waitlist open</Pill>}
                 </div>
               )}
 
-              <h1 className="text-2xl sm:text-3xl font-bold text-text-primary leading-tight font-title">{event.title}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-fg leading-tight font-title">{event.title}</h1>
             </div>
 
             {/* analytics strip (manage view) */}
             {manage && stats && (
-              <div className="flex items-stretch divide-x divide-border-subtle py-2">
+              <div className="flex items-stretch divide-x divide-line-subtle py-2">
                 <StatCell value={event.analytics?.views ?? 0} label="Views" />
                 <StatCell value={stats.going ?? stats.registered} label="Going" />
                 <StatCell value={stats.waitlisted} label="Waitlisted" />
@@ -341,15 +342,15 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
             {/* WHEN & WHERE */}
             <InfoCard>
               <div className="flex items-center gap-3.5">
-                <div className="flex flex-col items-center w-12 rounded-lg overflow-hidden bg-surface-2 flex-none">
+                <div className="flex flex-col items-center w-12 rounded-lg overflow-hidden bg-surface-subtle flex-none">
                   <span className="w-full text-center text-[10px] font-bold text-white py-0.5" style={{ background: theme.base }}>{month}</span>
-                  <span className="text-lg font-bold font-title text-text-primary leading-tight py-0.5">{day}</span>
+                  <span className="text-lg font-bold font-title text-fg leading-tight py-0.5">{day}</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-bold text-text-primary">
+                  <div className="text-sm font-bold text-fg">
                     {formatEventDateRange(event.startAt, event.endAt, event.timezone)}
                   </div>
-                  <div className="text-xs text-text-muted mt-0.5">
+                  <div className="text-xs text-fg-muted mt-0.5">
                     {liveStatus === 'upcoming' &&
                       (startsInLabel(event.startAt) ??
                         // No countdown and no date is a schedule waiting to be
@@ -367,7 +368,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
 
               {(event.location?.label || isVirtual || isHybrid) && (
                 <>
-                  <div className="h-px bg-border-subtle my-4" />
+                  <div className="h-px bg-line-subtle my-4" />
                   <div className="flex items-start gap-3.5">
                     <div className="w-12 grid place-items-center flex-none">
                       {isVirtual ? <VideoIcon className="w-5 h-5" style={{ color: theme.dark }} /> : <MapPinIcon className="w-5 h-5" style={{ color: theme.dark }} />}
@@ -375,7 +376,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                     <div className="min-w-0 flex-1">
                       {isVirtual ? (
                         <>
-                          <div className="text-sm font-bold text-text-primary">Virtual event</div>
+                          <div className="text-sm font-bold text-fg">Virtual event</div>
                           {virtualLink ? (
                             viewerGoing ? (
                               <a href={virtualLink} target="_blank" rel="noopener noreferrer"
@@ -383,27 +384,27 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                                 {virtualLink}
                               </a>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-xs text-text-muted">
+                              <span className="inline-flex items-center gap-1 text-xs text-fg-muted">
                                 <LockIcon className="w-3 h-3" /> Link visible after you RSVP
                               </span>
                             )
                           ) : (
-                            <span className="text-xs text-text-muted">Link to be shared by the host</span>
+                            <span className="text-xs text-fg-muted">Link to be shared by the host</span>
                           )}
                         </>
                       ) : (
                         <>
                           {mapLink ? (
                             <a href={mapLink} target="_blank" rel="noopener noreferrer"
-                               className="text-sm font-bold text-text-primary hover:underline">
+                               className="text-sm font-bold text-fg hover:underline">
                               {event.location?.label}
                             </a>
                           ) : (
-                            <div className="text-sm font-bold text-text-primary">{event.location?.label || 'Location TBA'}</div>
+                            <div className="text-sm font-bold text-fg">{event.location?.label || 'Location TBA'}</div>
                           )}
-                          {event.location?.address && <div className="text-xs text-text-muted mt-0.5">{event.location.address}</div>}
+                          {event.location?.address && <div className="text-xs text-fg-muted mt-0.5">{event.location.address}</div>}
                           {isHybrid && (
-                            <span className="inline-flex items-center gap-1 mt-1 text-xs text-text-muted">
+                            <span className="inline-flex items-center gap-1 mt-1 text-xs text-fg-muted">
                               <VideoIcon className="w-3 h-3" /> Also streamed online
                             </span>
                           )}
@@ -444,7 +445,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
             {/* ABOUT */}
             {event.description && (
               <InfoCard>
-                <h2 className="text-[15px] font-bold font-title text-text-primary mb-2">About this event</h2>
+                <h2 className="text-[15px] font-bold font-title text-fg mb-2">About this event</h2>
                 <AboutText text={event.description} accent={theme.dark} limit={480} />
               </InfoCard>
             )}
@@ -464,10 +465,10 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
 
       {/* sticky mobile RSVP bar */}
       {activeTab === 'overview' && !readOnly && !isPast && !isDraft && !viewerGoing && (
-        <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-3 px-4 py-3 bg-surface-1/90 backdrop-blur border-t border-border-subtle">
+        <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-3 px-4 py-3 bg-surface/90 backdrop-blur border-t border-line-subtle">
           <div className="min-w-0">
-            <div className="text-[13px] font-bold text-text-primary truncate">{event.title}</div>
-            <div className="text-xs text-text-muted">{month} {day} · {formatEventTime(event.startAt)}</div>
+            <div className="text-[13px] font-bold text-fg truncate">{event.title}</div>
+            <div className="text-xs text-fg-muted">{month} {day} · {formatEventTime(event.startAt)}</div>
           </div>
           <button
             onClick={() => document.getElementById('rsvp-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
@@ -569,9 +570,9 @@ function RsvpCard({
     // drawn in the event's colour — a single hairline, no wash.
     <div className="rounded-xl border px-5 py-4" style={{ borderColor: theme.base }}>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[15px] font-bold font-title text-text-primary">Registration</h2>
+        <h2 className="text-[15px] font-bold font-title text-fg">Registration</h2>
         {capacity != null && !isPast && (
-          <span className="text-xs font-semibold" style={{ color: spotsLeft !== null && spotsLeft <= capacity * 0.2 ? '#be123c' : theme.dark }}>
+          <span className="text-xs font-semibold" style={{ color: spotsLeft !== null && spotsLeft <= capacity * 0.2 ? color.danger.strong : theme.dark }}>
             {spotsLeft === 0
               ? 'Event full'
               : spotsLeft !== null && spotsLeft <= capacity * 0.2
@@ -581,7 +582,7 @@ function RsvpCard({
         )}
       </div>
       {capacity != null && !isPast && (
-        <div className="w-full h-1.5 rounded-full bg-surface-3 overflow-hidden mb-4">
+        <div className="w-full h-1.5 rounded-full bg-surface-muted overflow-hidden mb-4">
           <div className="h-full rounded-full transition-all duration-300" style={{ width: `${pct}%`, background: theme.base }} />
         </div>
       )}
@@ -591,14 +592,14 @@ function RsvpCard({
 
   if (isDraft) {
     return card(
-      <p className="text-sm text-text-muted">This event is still a draft — publish it from the editor to open registrations.</p>,
+      <p className="text-sm text-fg-muted">This event is still a draft — publish it from the editor to open registrations.</p>,
     );
   }
   if (isPast) {
-    return card(<p className="text-sm text-text-muted">This event has ended.</p>);
+    return card(<p className="text-sm text-fg-muted">This event has ended.</p>);
   }
   if (!event.form.enabled) {
-    return card(<p className="text-sm text-text-muted">RSVPs are closed for this event.</p>);
+    return card(<p className="text-sm text-fg-muted">RSVPs are closed for this event.</p>);
   }
 
   // Existing response states
@@ -637,15 +638,15 @@ function RsvpCard({
             <div className="text-sm font-bold" style={{ color: theme.dark }}>
               You&apos;re going{viewer.plusOnes > 0 ? ` +${viewer.plusOnes}` : ''}
             </div>
-            <div className="text-xs text-text-muted">See you there.</div>
+            <div className="text-xs text-fg-muted">See you there.</div>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <a href={`/api/events/${encodeURIComponent(eventId)}/ics?spaceId=${spaceId}`} target="_blank" rel="noopener noreferrer"
-             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-[13px] font-bold bg-surface-2 text-text-primary border border-border-default hover:bg-surface-3 transition">
+             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-[13px] font-bold bg-surface-subtle text-fg border border-line hover:bg-surface-muted transition">
             <CalendarPlusIcon className="w-4 h-4" /> Add to calendar
           </a>
-          <button onClick={() => setEditing(true)} className="text-[13px] font-semibold text-text-muted hover:text-text-primary transition">
+          <button onClick={() => setEditing(true)} className="text-[13px] font-semibold text-fg-muted hover:text-fg transition">
             Change response
           </button>
         </div>
@@ -655,7 +656,7 @@ function RsvpCard({
 
   if (isFull) {
     return card(
-      <button disabled className="w-full h-11 rounded-xl text-sm font-bold bg-surface-3 text-text-muted cursor-not-allowed">
+      <button disabled className="w-full h-11 rounded-xl text-sm font-bold bg-surface-muted text-fg-muted cursor-not-allowed">
         Event full
       </button>,
     );
@@ -669,8 +670,8 @@ function RsvpCard({
           <button key={r} type="button" onClick={() => setResponse(r)}
                   className="px-3 py-2.5 rounded-lg text-sm font-bold border transition-all"
                   style={response === r
-                    ? { borderColor: theme.base, background: theme.base, color: '#fff' }
-                    : { borderColor: 'var(--color-border-default, #d1d5db)' }}>
+                    ? { borderColor: theme.base, background: theme.base, color: color.fg.inverse }
+                    : { borderColor: 'var(--vv-color-line)' }}>
             {RESPONSE_LABELS[r]}
           </button>
         ))}
@@ -678,7 +679,7 @@ function RsvpCard({
 
       {(event.allowPlusOnes ?? 0) > 0 && response === 'going' && (
         <label className="flex items-center justify-between gap-3">
-          <span className="text-sm text-text-secondary font-medium">Bringing guests?</span>
+          <span className="text-sm text-fg-secondary font-medium">Bringing guests?</span>
           <Select value={plusOnes} onChange={(e) => setPlusOnes(parseInt(e.target.value, 10))}>
             {Array.from({ length: (event.allowPlusOnes ?? 0) + 1 }, (_, i) => (
               <option key={i} value={i}>{i === 0 ? 'Just me' : `+${i}`}</option>
@@ -696,10 +697,10 @@ function RsvpCard({
               value={answers[f.id]}
               onChange={(v) => setAnswers((prev) => ({ ...prev, [f.id]: v }))}
               classes={{
-                field: 'flex flex-col gap-1 text-xs font-semibold text-text-muted',
-                input: 'w-full px-3.5 py-2.5 border border-border-default rounded-xl bg-surface-1 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/40 transition',
-                checkbox: 'flex items-center gap-2.5 text-sm text-text-secondary',
-                checkboxInput: 'w-4 h-4 rounded border-border-default',
+                field: 'flex flex-col gap-1 text-xs font-semibold text-fg-muted',
+                input: 'w-full px-3.5 py-2.5 border border-line rounded-xl bg-surface text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:ring-2 focus:ring-accent/40 transition',
+                checkbox: 'flex items-center gap-2.5 text-sm text-fg-secondary',
+                checkboxInput: 'w-4 h-4 rounded border-line',
               }}
               checkboxInputStyle={{ accentColor: theme.base }}
             />
@@ -708,9 +709,9 @@ function RsvpCard({
       )}
 
       {event.form.requireApproval && (
-        <p className="text-xs text-text-muted">RSVPs need host approval before they&apos;re confirmed.</p>
+        <p className="text-xs text-fg-muted">RSVPs need host approval before they&apos;re confirmed.</p>
       )}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-danger">{error}</p>}
 
       <div className="flex items-center gap-3">
         <button onClick={submit} disabled={submitting || !sessionName}
@@ -720,7 +721,7 @@ function RsvpCard({
           {response === 'declined' ? 'Send response' : 'RSVP'}
         </button>
         {viewer && (
-          <button onClick={() => setEditing(false)} className="text-[13px] font-semibold text-text-muted hover:text-text-primary transition">
+          <button onClick={() => setEditing(false)} className="text-[13px] font-semibold text-fg-muted hover:text-fg transition">
             Cancel
           </button>
         )}
@@ -734,10 +735,10 @@ function ResponseState({ icon, title, sub, theme, onChange, changeLabel = 'Chang
 }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="flex-none text-text-muted">{icon}</span>
+      <span className="flex-none text-fg-muted">{icon}</span>
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-bold text-text-primary">{title}</div>
-        <div className="text-xs text-text-muted">{sub}</div>
+        <div className="text-sm font-bold text-fg">{title}</div>
+        <div className="text-xs text-fg-muted">{sub}</div>
       </div>
       <button onClick={onChange} className="flex-none text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
         {changeLabel}
@@ -755,11 +756,11 @@ function FormTab({ event, publicSlug, publicUrl, theme, copyStatus, onCopy }: {
   return (
     <div className="max-w-2xl flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-[15px] font-bold font-title text-text-primary">
+        <h2 className="flex items-center gap-2 text-[15px] font-bold font-title text-fg">
           <ClipboardListIcon className="w-[18px] h-[18px]" style={{ color: theme.dark }} /> RSVP form
         </h2>
         <button onClick={onCopy}
-                className="inline-flex items-center gap-2 h-9 px-3 rounded-lg text-[13px] font-bold text-text-secondary hover:bg-surface-3 hover:text-text-primary transition">
+                className="inline-flex items-center gap-2 h-9 px-3 rounded-lg text-[13px] font-bold text-fg-secondary hover:bg-surface-muted hover:text-fg transition">
           <Link2Icon className="w-4 h-4" /> {copyStatus || 'Copy form link'}
         </button>
       </div>
@@ -767,20 +768,20 @@ function FormTab({ event, publicSlug, publicUrl, theme, copyStatus, onCopy }: {
       <InfoCard>
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-text-primary">Form status</span>
+            <span className="text-sm font-semibold text-fg">Form status</span>
             <span className="text-[12px] font-semibold"
-                  style={{ color: event.form.enabled ? theme.dark : 'var(--color-text-muted, #6b7280)' }}>
+                  style={{ color: event.form.enabled ? theme.dark : 'var(--vv-color-fg-muted)' }}>
               {event.form.enabled ? 'Enabled' : 'Disabled'}
             </span>
           </div>
 
           {event.form.requireApproval && (
-            <p className="text-sm text-text-muted">Requires approval — RSVPs stay pending until you approve them.</p>
+            <p className="text-sm text-fg-muted">Requires approval — RSVPs stay pending until you approve them.</p>
           )}
 
           {event.form.domainAllowlist && event.form.domainAllowlist.length > 0 && (
             <div>
-              <p className="text-sm font-semibold text-text-primary mb-2">Allowed email domains</p>
+              <p className="text-sm font-semibold text-fg mb-2">Allowed email domains</p>
               <div className="flex flex-wrap gap-2">
                 {event.form.domainAllowlist.map((domain) => (
                   <span key={domain} className="inline-flex items-center h-6 px-2.5 rounded-full text-[11.5px] font-semibold border"
@@ -793,7 +794,7 @@ function FormTab({ event, publicSlug, publicUrl, theme, copyStatus, onCopy }: {
           )}
 
           <div>
-            <p className="text-sm font-semibold text-text-primary mb-1">Public RSVP URL</p>
+            <p className="text-sm font-semibold text-fg mb-1">Public RSVP URL</p>
             <Link href={`/e/${publicSlug}`} className="text-sm hover:underline break-all" style={{ color: theme.dark }}>
               {publicUrl}
             </Link>
@@ -801,12 +802,12 @@ function FormTab({ event, publicSlug, publicUrl, theme, copyStatus, onCopy }: {
 
           {event.form.schema.length > 0 && (
             <div>
-              <p className="text-sm font-semibold text-text-primary mb-2">Form fields ({event.form.schema.length})</p>
+              <p className="text-sm font-semibold text-fg mb-2">Form fields ({event.form.schema.length})</p>
               <ul className="flex flex-col gap-1.5">
                 {event.form.schema.map((field) => (
-                  <li key={field.id} className="flex items-center gap-2 text-sm text-text-secondary">
+                  <li key={field.id} className="flex items-center gap-2 text-sm text-fg-secondary">
                     <span className="w-1.5 h-1.5 rounded-full flex-none" style={{ background: theme.base }} />
-                    {field.label} <span className="text-text-muted">({field.type})</span>
+                    {field.label} <span className="text-fg-muted">({field.type})</span>
                     {field.required && <span style={{ color: theme.dark }}>*</span>}
                   </li>
                 ))}
@@ -822,7 +823,7 @@ function FormTab({ event, publicSlug, publicUrl, theme, copyStatus, onCopy }: {
 /* ── small presentational helpers ─────────────────────────────────────────── */
 
 function InfoCard({ children }: { children: React.ReactNode }) {
-  return <div className="border-t border-border-subtle pt-4 first:border-t-0 first:pt-0">{children}</div>;
+  return <div className="border-t border-line-subtle pt-4 first:border-t-0 first:pt-0">{children}</div>;
 }
 
 /** A status word in its colour — Draft, Happening now, Sold out. No capsule. */
@@ -837,8 +838,8 @@ function Pill({ fg, children }: { fg: string; children: React.ReactNode }) {
 function StatCell({ value, label }: { value: number; label: string }) {
   return (
     <div className="flex-1 min-w-0 text-center px-2">
-      <b className="block text-base font-bold font-title text-text-primary leading-tight">{value}</b>
-      <span className="block text-[11px] text-text-muted">{label}</span>
+      <b className="block text-base font-bold font-title text-fg leading-tight">{value}</b>
+      <span className="block text-[11px] text-fg-muted">{label}</span>
     </div>
   );
 }
@@ -847,7 +848,7 @@ function ToolbarBtn({ icon, label, onClick, danger }: { icon: React.ReactNode; l
   return (
     <button onClick={onClick}
             className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition text-left ${
-              danger ? 'text-red-500 hover:bg-red-50' : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary'
+              danger ? 'text-danger-bright hover:bg-danger-wash' : 'text-fg-secondary hover:bg-surface-subtle hover:text-fg'
             }`}>
       {icon} {label}
     </button>
@@ -863,16 +864,16 @@ function GuestChip({ guest }: { guest: GuestPreview }) {
       <span className="truncate max-w-[14ch]">{guest.name}</span>
     </>
   );
-  const cls = 'inline-flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full text-[13px] font-semibold bg-surface-2 text-text-secondary border border-border-subtle transition';
+  const cls = 'inline-flex items-center gap-1.5 pl-1.5 pr-3 py-1 rounded-full text-[13px] font-semibold bg-surface-subtle text-fg-secondary border border-line-subtle transition';
   return guest.personId
-    ? <Link href={`/directory/${encodeURIComponent(guest.personId)}`} className={`${cls} hover:border-border-default hover:-translate-y-0.5`}>{inner}</Link>
+    ? <Link href={`/directory/${encodeURIComponent(guest.personId)}`} className={`${cls} hover:border-line hover:-translate-y-0.5`}>{inner}</Link>
     : <span className={cls}>{inner}</span>;
 }
 
 function CenteredNote({ text }: { text: string }) {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-      <p className="text-center text-text-muted">{text}</p>
+      <p className="text-center text-fg-muted">{text}</p>
     </div>
   );
 }
@@ -880,14 +881,14 @@ function CenteredNote({ text }: { text: string }) {
 function EventSkeleton() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 animate-pulse">
-      <div className="h-4 w-16 rounded bg-surface-3 mb-6" />
+      <div className="h-4 w-16 rounded bg-surface-muted mb-6" />
       <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6">
-        <div className="aspect-square rounded-2xl bg-surface-3" />
+        <div className="aspect-square rounded-2xl bg-surface-muted" />
         <div className="flex flex-col gap-4">
-          <div className="h-8 w-3/4 rounded bg-surface-3" />
-          <div className="h-16 rounded-2xl bg-surface-3" />
-          <div className="h-16 rounded-2xl bg-surface-3" />
-          <div className="h-40 rounded-2xl bg-surface-3" />
+          <div className="h-8 w-3/4 rounded bg-surface-muted" />
+          <div className="h-16 rounded-2xl bg-surface-muted" />
+          <div className="h-16 rounded-2xl bg-surface-muted" />
+          <div className="h-40 rounded-2xl bg-surface-muted" />
         </div>
       </div>
     </div>

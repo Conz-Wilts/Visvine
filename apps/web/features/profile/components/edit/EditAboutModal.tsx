@@ -40,7 +40,7 @@ export default function EditAboutModal({ open, onClose, bio, onSave }: Props) {
             rows={8}
             maxLength={2600}
             placeholder="About you"
-            className="w-full min-h-[max(10rem,32vh)] px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30 resize-y"
+            className="w-full min-h-[max(10rem,32vh)] px-3 py-2 border border-line-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent-strong/30 resize-y"
           />
         </div>
         <ModalFooter onCancel={onClose} saving={saving} />

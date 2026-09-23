@@ -109,9 +109,9 @@ export function TrashPreviewPanel({ id, mode = 'wysiwyg' }: { id: string; mode?:
   if (!spaceId || loading) {
     return (
       <div className="mx-auto max-w-3xl animate-pulse space-y-3 py-6">
-        <div className="h-4 w-2/3 rounded bg-surface-2" />
-        <div className="h-4 w-full rounded bg-surface-2" />
-        <div className="h-4 w-1/2 rounded bg-surface-2" />
+        <div className="h-4 w-2/3 rounded bg-surface-subtle" />
+        <div className="h-4 w-full rounded bg-surface-subtle" />
+        <div className="h-4 w-1/2 rounded bg-surface-subtle" />
       </div>
     )
   }
@@ -137,8 +137,8 @@ export function TrashPreviewPanel({ id, mode = 'wysiwyg' }: { id: string; mode?:
         title="Put this note back where it was"
         className={
           inBar
-            ? 'flex h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap text-brand-grey outline-none transition-colors duration-150 hover:text-brand-black disabled:opacity-50'
-            : 'flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary transition hover:bg-surface-2 disabled:opacity-50'
+            ? 'flex h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap text-fg-muted outline-none transition-colors duration-150 hover:text-fg disabled:opacity-50'
+            : 'flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-fg-secondary transition hover:bg-surface-subtle disabled:opacity-50'
         }
       >
         <RotateCcwIcon className={inBar ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
@@ -151,8 +151,8 @@ export function TrashPreviewPanel({ id, mode = 'wysiwyg' }: { id: string; mode?:
         title="Delete this note permanently"
         className={
           inBar
-            ? 'flex h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap text-brand-grey outline-none transition-colors duration-150 hover:text-red-600 disabled:opacity-50'
-            : 'flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-red-600 transition hover:bg-surface-2 disabled:opacity-50'
+            ? 'flex h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap text-fg-muted outline-none transition-colors duration-150 hover:text-danger disabled:opacity-50'
+            : 'flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-danger transition hover:bg-surface-subtle disabled:opacity-50'
         }
       >
         <Trash2Icon className={inBar ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
@@ -168,11 +168,11 @@ export function TrashPreviewPanel({ id, mode = 'wysiwyg' }: { id: string; mode?:
     <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">
       {/* leading-[1.25]: `truncate` hides overflow, so a tighter line box would
           shave the font's descenders off the title. */}
-      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary font-open-sauce">
+      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-fg font-open-sauce">
         {title}
       </h2>
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-text-muted">
-        <span className="rounded-md bg-surface-2 px-2 py-px text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-fg-muted">
+        <span className="rounded-md bg-surface-subtle px-2 py-px text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
           In Trash
         </span>
         <span className="min-w-0 truncate">{note.path}</span>
@@ -186,10 +186,10 @@ export function TrashPreviewPanel({ id, mode = 'wysiwyg' }: { id: string; mode?:
   return (
     <div className="pb-10">
       {error && (
-        <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
+        <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between border-l-2 border-danger-bright pl-3 py-1 text-sm text-danger-strong">
           <span>{error}</span>
           <button onClick={() => setError(null)} aria-label="Dismiss"
-                  className="ml-2 text-red-400 hover:text-red-600">
+                  className="ml-2 text-danger-bright hover:text-danger">
             <XIcon className="h-3.5 w-3.5" />
           </button>
         </div>

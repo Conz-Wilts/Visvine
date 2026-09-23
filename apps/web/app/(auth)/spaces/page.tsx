@@ -28,10 +28,10 @@ export default function SpacesPage() {
 
         {/* One line of chrome: the count on the left, Discover on the right */}
         <div className="flex items-center justify-between gap-4 pt-2 pb-2">
-          <p className="text-sm text-text-muted">
+          <p className="text-sm text-fg-muted">
             {joinedSpaces.length} {joinedSpaces.length === 1 ? 'space' : 'spaces'}
           </p>
-          <Link href="/discover" className="text-sm font-semibold text-brand-dark-green hover:underline">
+          <Link href="/discover" className="text-sm font-semibold text-accent-strong hover:underline">
             Discover spaces
           </Link>
         </div>
@@ -44,7 +44,7 @@ export default function SpacesPage() {
             action={{ label: 'Discover spaces', href: '/discover' }}
           />
         ) : (
-          <ul className="divide-y divide-border-subtle">
+          <ul className="divide-y divide-line-subtle">
             {joinedSpaces.map((space) => {
               const isActive = currentSpace?.id === space.id;
               const parent = space.parentId ? spaces.find((s) => s.id === space.parentId) : null;
@@ -65,14 +65,14 @@ export default function SpacesPage() {
                     <div className="flex items-baseline gap-2">
                       <Link
                         href={`/spaces/${encodeURIComponent(space.id)}`}
-                        className="truncate text-[15px] font-semibold text-text-primary hover:underline"
+                        className="truncate text-[15px] font-semibold text-fg hover:underline"
                       >
                         {space.name}
                       </Link>
-                      {isActive && <span className="shrink-0 text-xs font-semibold text-brand-dark-green">Current</span>}
+                      {isActive && <span className="shrink-0 text-xs font-semibold text-accent-strong">Current</span>}
                     </div>
-                    <p className="truncate text-[13px] text-text-muted">{facts}</p>
-                    {space.description && <p className="mt-0.5 truncate text-[13px] text-text-secondary">{space.description}</p>}
+                    <p className="truncate text-[13px] text-fg-muted">{facts}</p>
+                    {space.description && <p className="mt-0.5 truncate text-[13px] text-fg-secondary">{space.description}</p>}
                   </div>
 
                   <div className="flex shrink-0 items-center gap-3">
@@ -83,19 +83,19 @@ export default function SpacesPage() {
                     )}
                     {confirmLeave === space.id ? (
                       <span className="flex items-center gap-2 text-xs">
-                        <button onClick={() => setConfirmLeave(null)} className="font-medium text-text-muted hover:text-text-secondary">
+                        <button onClick={() => setConfirmLeave(null)} className="font-medium text-fg-muted hover:text-fg-secondary">
                           Cancel
                         </button>
                         <button
                           onClick={() => handleLeave(space.id)}
                           disabled={leaving === space.id}
-                          className="font-medium text-red-500 hover:text-red-600 disabled:opacity-60"
+                          className="font-medium text-danger-bright hover:text-danger disabled:opacity-60"
                         >
                           {leaving === space.id ? 'Leaving…' : 'Leave'}
                         </button>
                       </span>
                     ) : (
-                      <button onClick={() => setConfirmLeave(space.id)} className="text-xs text-text-muted hover:text-red-500">
+                      <button onClick={() => setConfirmLeave(space.id)} className="text-xs text-fg-muted hover:text-danger-bright">
                         Leave
                       </button>
                     )}

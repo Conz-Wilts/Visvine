@@ -3,10 +3,11 @@
 import { clsx } from 'clsx';
 import { Chip } from '@/components/ui';
 import type { PerimeterDiff, ToolPerimeter } from '@/lib/tools/perimeter';
+import { color } from '@visvine/tokens';
 
 /** Added and removed paint semantically, not in the space's accent. */
-const ADDED_COLOR = '#16a34a';
-const REMOVED_COLOR = '#dc2626';
+const ADDED_COLOR = color.success.default;
+const REMOVED_COLOR = color.danger.default;
 
 /**
  * The five dimensions in the order a reviewer should read them: what it can
@@ -63,12 +64,12 @@ export default function PerimeterSummary({
     <dl className={clsx('space-y-2', className)}>
       {rows.map((row) => (
         <div key={row.key} className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-          <dt className="w-24 shrink-0 text-xs font-semibold uppercase tracking-wide text-text-muted">
+          <dt className="w-24 shrink-0 text-xs font-semibold uppercase tracking-wide text-fg-muted">
             {row.label}
           </dt>
           <dd className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             {row.entries.length === 0 ? (
-              <span className="text-sm text-text-muted">nothing</span>
+              <span className="text-sm text-fg-muted">nothing</span>
             ) : (
               row.entries.map((entry) => (
                 <Chip

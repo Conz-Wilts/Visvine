@@ -41,23 +41,23 @@ export default function BuildDiagnostics({ build }: { build: BuildSummary | null
   return (
     <div className="flex flex-col gap-2">
       {configError && (
-        <p className="min-w-0 break-words border-l-2 border-red-500 pl-3 py-1 text-xs text-red-700">
+        <p className="min-w-0 break-words border-l-2 border-danger-bright pl-3 py-1 text-xs text-danger-strong">
           <span className="font-mono">index.md</span> {configError}
         </p>
       )}
       {errors.length > 0 && (
-        <ul className="flex flex-col gap-1 border-l-2 border-red-500 pl-3 py-1">
+        <ul className="flex flex-col gap-1 border-l-2 border-danger-bright pl-3 py-1">
           {errors.map((d, i) => (
-            <li key={i} className="min-w-0 break-words font-mono text-[12px] leading-relaxed text-red-700">
+            <li key={i} className="min-w-0 break-words font-mono text-[12px] leading-relaxed text-danger-strong">
               {toolDiagnosticLine(d)}
             </li>
           ))}
         </ul>
       )}
       {warnings.length > 0 && (
-        <ul className="flex flex-col gap-1 border-l-2 border-amber-500 pl-3 py-1">
+        <ul className="flex flex-col gap-1 border-l-2 border-warning-bright pl-3 py-1">
           {warnings.map((d, i) => (
-            <li key={i} className="min-w-0 break-words font-mono text-[12px] leading-relaxed text-amber-800">
+            <li key={i} className="min-w-0 break-words font-mono text-[12px] leading-relaxed text-warning-strong">
               {toolDiagnosticLine(d)}
             </li>
           ))}

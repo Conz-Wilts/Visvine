@@ -81,11 +81,11 @@ export default function SpaceImageUpload({
       {/* Preview state */}
       {preview ? (
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium text-text-primary">Preview</p>
+          <p className="text-sm font-medium text-fg">Preview</p>
 
           {/* Preview frame */}
           <div className="flex items-center gap-4">
-            <div className="relative rounded-xl overflow-hidden ring-2 ring-border-default"
+            <div className="relative rounded-xl overflow-hidden ring-2 ring-line"
               style={{ width: size === 'xl' ? 64 : 48, height: size === 'xl' ? 64 : 48 }}>
               <img
                 src={preview}
@@ -94,13 +94,13 @@ export default function SpaceImageUpload({
               />
             </div>
             <div className="flex flex-col gap-1">
-              <p className="text-xs text-text-muted">Looks good?</p>
+              <p className="text-xs text-fg-muted">Looks good?</p>
               <div className="flex gap-2">
                 <button
                   type="button"
                   disabled={uploading}
                   onClick={handleSave}
-                  className="px-3 py-1.5 text-xs font-medium bg-brand-green text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-3 py-1.5 text-xs font-medium bg-accent text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-1.5"
                 >
                   {uploading && (
                     <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -111,7 +111,7 @@ export default function SpaceImageUpload({
                   type="button"
                   disabled={uploading}
                   onClick={handleDiscard}
-                  className="px-3 py-1.5 text-xs font-medium border border-border-default text-text-primary rounded-lg hover:bg-surface-2 transition-colors disabled:opacity-50"
+                  className="px-3 py-1.5 text-xs font-medium border border-line text-fg rounded-lg hover:bg-surface-subtle transition-colors disabled:opacity-50"
                 >
                   Discard
                 </button>
@@ -119,7 +119,7 @@ export default function SpaceImageUpload({
             </div>
           </div>
 
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p className="text-xs text-danger">{error}</p>}
         </div>
       ) : (
         /* Normal state */
@@ -143,11 +143,11 @@ export default function SpaceImageUpload({
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              className="text-sm font-medium text-text-primary hover:underline transition-colors text-left"
+              className="text-sm font-medium text-fg hover:underline transition-colors text-left"
             >
               {hasExisting ? 'Change image' : 'Upload image'}
             </button>
-            <p className="text-xs text-text-muted">JPEG, PNG, WebP, HEIC up to 10MB</p>
+            <p className="text-xs text-fg-muted">JPEG, PNG, WebP, HEIC up to 10MB</p>
           </div>
         </div>
       )}

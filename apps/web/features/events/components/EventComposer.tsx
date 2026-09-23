@@ -2,6 +2,7 @@
 
 import { useSpaceHref } from '@/features/shared/contexts/SpaceContext';
 import { Alert, Button, Modal } from '@/components/ui';
+import { palette } from '@visvine/tokens';
 
 /**
  * EventComposer — the single-screen, poster-first editor for an event that
@@ -58,7 +59,10 @@ interface EventComposerProps {
   onDelete?: () => void;
 }
 
-const THEME_COLORS = ['#78d870', '#2563eb', '#9333ea', '#ef4444', '#f59e0b', '#0ea5e9', '#ec4899', '#111827'];
+const THEME_COLORS = [
+  palette.visvine[400], palette.blue[600], palette.purple[600], palette.red[500],
+  palette.amber[500], palette.sky[500], palette.pink[500], palette.gray[900],
+];
 
 const VISIBILITY_OPTIONS: { value: EventVisibility; label: string; icon: React.ReactNode; description: string }[] = [
   { value: 'space', label: 'Space', icon: <UsersIcon className="w-4 h-4" />, description: 'Members of this space' },
@@ -67,7 +71,7 @@ const VISIBILITY_OPTIONS: { value: EventVisibility; label: string; icon: React.R
 ];
 
 function inputClass() {
-  return 'w-full px-4 py-3 rounded-lg bg-surface-2 text-text-primary placeholder:text-text-muted focus:outline-none focus:bg-surface-1 focus:ring-1 focus:ring-border-default transition-colors';
+  return 'w-full px-4 py-3 rounded-lg bg-surface-subtle text-fg placeholder:text-fg-muted focus:outline-none focus:bg-surface focus:ring-1 focus:ring-line transition-colors';
 }
 
 function randomId(len: number): string {
@@ -298,7 +302,7 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
       <div className="flex items-center justify-between mb-5">
         <button
           onClick={() => router.back()}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-grey hover:text-brand-black transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-fg-muted hover:text-fg transition-colors"
         >
           <ArrowLeftIcon className="w-4 h-4" /> Back
         </button>
@@ -364,13 +368,13 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
       {/* theme swatches when no cover image */}
       {!coverImageUrl && (
         <div className="flex items-center gap-2 mt-3">
-          <span className="text-xs text-brand-grey mr-1">Theme</span>
+          <span className="text-xs text-fg-muted mr-1">Theme</span>
           {THEME_COLORS.map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => setThemeColor(c)}
-              className={`w-6 h-6 rounded-full border-2 transition-transform ${themeColor === c ? 'border-brand-black scale-110' : 'border-transparent'}`}
+              className={`w-6 h-6 rounded-full border-2 transition-transform ${themeColor === c ? 'border-fg scale-110' : 'border-transparent'}`}
               style={{ backgroundColor: c }}
               aria-label={`Theme ${c}`}
             />
@@ -384,7 +388,7 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Event name"
-        className="w-full mt-6 px-0 py-1 text-3xl font-bold text-brand-black placeholder:text-brand-grey/50 bg-transparent border-0 focus:outline-none focus:ring-0"
+        className="w-full mt-6 px-0 py-1 text-3xl font-bold text-fg placeholder:text-fg-muted/50 bg-transparent border-0 focus:outline-none focus:ring-0"
       />
 
       {/* date & time */}
@@ -404,11 +408,11 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
         />
         <CustomDateTimePicker label="Ends" value={endAt} onChange={(v) => setEndAt(v)} placeholder="End date & time" />
       </div>
-      <p className="mt-1.5 text-xs text-brand-grey">Times shown in {timezone}</p>
+      <p className="mt-1.5 text-xs text-fg-muted">Times shown in {timezone}</p>
 
       {/* location */}
       <div className="mt-5">
-        <label className="block text-sm font-medium text-brand-black mb-2">Location</label>
+        <label className="block text-sm font-medium text-fg mb-2">Location</label>
         <div className="flex gap-2 mb-3 justify-center">
           {([
             { value: 'in-person', label: 'In person', icon: <MapPinIcon className="w-4 h-4" /> },
@@ -421,8 +425,8 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
               onClick={() => setEventType(opt.value)}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-md border text-sm font-medium transition-colors ${
                 eventType === opt.value
-                  ? 'bg-brand-green text-white border-brand-green'
-                  : 'bg-brand-white text-brand-grey border-border-subtle hover:border-brand-green hover:text-brand-black'
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-surface-subtle text-fg-muted border-line-subtle hover:border-accent hover:text-fg'
               }`}
             >
               {opt.icon}
@@ -446,7 +450,7 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
 
       {/* description */}
       <div className="mt-5">
-        <label className="block text-sm font-medium text-brand-black mb-2">Description</label>
+        <label className="block text-sm font-medium text-fg mb-2">Description</label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -457,20 +461,20 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
       </div>
 
       {/* more options */}
-      <div className="mt-6 border-t border-border-subtle">
+      <div className="mt-6 border-t border-line-subtle">
         <button
           type="button"
           onClick={() => setDetailsOpen((o) => !o)}
-          className="w-full flex items-center justify-between py-3.5 transition-colors hover:text-text-primary"
+          className="w-full flex items-center justify-between py-3.5 transition-colors hover:text-fg"
         >
-          <span className="text-sm font-semibold text-brand-black">More options</span>
-          {detailsOpen ? <ChevronUpIcon className="w-4 h-4 text-brand-grey" /> : <ChevronDownIcon className="w-4 h-4 text-brand-grey" />}
+          <span className="text-sm font-semibold text-fg">More options</span>
+          {detailsOpen ? <ChevronUpIcon className="w-4 h-4 text-fg-muted" /> : <ChevronDownIcon className="w-4 h-4 text-fg-muted" />}
         </button>
         {detailsOpen && (
           <div className="pb-5 space-y-5">
             {/* visibility */}
             <div>
-              <label className="block text-sm font-medium text-brand-black mb-2.5">Who can RSVP?</label>
+              <label className="block text-sm font-medium text-fg mb-2.5">Who can RSVP?</label>
               <div className="-mx-3">
                 {VISIBILITY_OPTIONS.map((opt) => (
                   <button
@@ -478,14 +482,14 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
                     type="button"
                     onClick={() => setVisibility(opt.value)}
                     className={`flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left transition-colors ${
-                      visibility === opt.value ? 'bg-surface-3' : 'hover:bg-surface-2'
+                      visibility === opt.value ? 'bg-surface-muted' : 'hover:bg-surface-subtle'
                     }`}
                   >
-                    <div className={`flex items-center gap-2 text-sm ${visibility === opt.value ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary'}`}>
+                    <div className={`flex items-center gap-2 text-sm ${visibility === opt.value ? 'font-semibold text-fg' : 'font-medium text-fg-secondary'}`}>
                       {opt.icon}
                       {opt.label}
                     </div>
-                    <span className="text-xs text-brand-grey">{opt.description}</span>
+                    <span className="text-xs text-fg-muted">{opt.description}</span>
                   </button>
                 ))}
               </div>
@@ -493,7 +497,7 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
 
             {/* capacity */}
             <div>
-              <label className="block text-sm font-medium text-brand-black mb-2">Capacity</label>
+              <label className="block text-sm font-medium text-fg mb-2">Capacity</label>
               <input
                 type="number"
                 min={1}
@@ -516,7 +520,7 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
 
             {/* +guests */}
             <div>
-              <label className="block text-sm font-medium text-brand-black mb-2">Allow guests to bring up to</label>
+              <label className="block text-sm font-medium text-fg mb-2">Allow guests to bring up to</label>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -526,7 +530,7 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
                   onChange={(e) => setAllowPlusOnes(Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0)))}
                   className={`${inputClass()} w-24`}
                 />
-                <span className="text-sm text-brand-grey">extra {allowPlusOnes === 1 ? 'guest' : 'guests'}</span>
+                <span className="text-sm text-fg-muted">extra {allowPlusOnes === 1 ? 'guest' : 'guests'}</span>
               </div>
             </div>
 
@@ -536,11 +540,11 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
             <Toggle label='Allow "Maybe"' hint="Let guests reply Maybe as well as Going" value={allowMaybe} onChange={setAllowMaybe} />
 
             {/* registration questions */}
-            <div className="pt-4 border-t border-border-subtle">
-              <label className="block text-sm font-medium text-brand-black">Registration questions</label>
-              <p className="mt-0.5 text-xs text-brand-grey">Guests answer these when they RSVP. Name and email are always collected.</p>
+            <div className="pt-4 border-t border-line-subtle">
+              <label className="block text-sm font-medium text-fg">Registration questions</label>
+              <p className="mt-0.5 text-xs text-fg-muted">Guests answer these when they RSVP. Name and email are always collected.</p>
               {questions.length > 0 && (
-                <div className="mt-3 divide-y divide-border-subtle">
+                <div className="mt-3 divide-y divide-line-subtle">
                   {questions.map((q) => (
                     <div key={q.id} className="py-3 space-y-2.5">
                       <div className="flex items-center gap-2">
@@ -548,12 +552,12 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
                           value={q.label}
                           onChange={(e) => updateQuestion(q.id, { label: e.target.value })}
                           placeholder="Your question…"
-                          className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg bg-surface-2 text-text-primary placeholder:text-text-muted focus:outline-none focus:bg-surface-1 focus:ring-1 focus:ring-border-default transition-colors"
+                          className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg bg-surface-subtle text-fg placeholder:text-fg-muted focus:outline-none focus:bg-surface focus:ring-1 focus:ring-line transition-colors"
                         />
                         <button
                           type="button"
                           onClick={() => removeQuestion(q.id)}
-                          className="p-2 text-brand-grey hover:text-red-600 transition-colors flex-shrink-0"
+                          className="p-2 text-fg-muted hover:text-danger transition-colors flex-shrink-0"
                           aria-label="Remove question"
                         >
                           <XIcon className="w-4 h-4" />
@@ -564,7 +568,7 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
                           value={q.optionsText}
                           onChange={(e) => updateQuestion(q.id, { optionsText: e.target.value })}
                           placeholder="Options, separated by commas"
-                          className="w-full px-3 py-2 text-sm rounded-lg bg-surface-2 text-text-primary placeholder:text-text-muted focus:outline-none focus:bg-surface-1 focus:ring-1 focus:ring-border-default transition-colors"
+                          className="w-full px-3 py-2 text-sm rounded-lg bg-surface-subtle text-fg placeholder:text-fg-muted focus:outline-none focus:bg-surface focus:ring-1 focus:ring-line transition-colors"
                         />
                       )}
                       <div className="flex items-center justify-between gap-3">
@@ -577,12 +581,12 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
                             <option key={t.value} value={t.value}>{t.label}</option>
                           ))}
                         </Select>
-                        <label className="flex items-center gap-1.5 text-xs font-medium text-brand-grey cursor-pointer flex-shrink-0">
+                        <label className="flex items-center gap-1.5 text-xs font-medium text-fg-muted cursor-pointer flex-shrink-0">
                           <input
                             type="checkbox"
                             checked={q.required}
                             onChange={(e) => updateQuestion(q.id, { required: e.target.checked })}
-                            className="w-3.5 h-3.5 rounded border-border-default text-brand-green focus:ring-brand-green"
+                            className="w-3.5 h-3.5 rounded border-line text-accent focus:ring-accent"
                           />
                           Required
                         </label>
@@ -594,7 +598,7 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
               <button
                 type="button"
                 onClick={addQuestion}
-                className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-green hover:opacity-80 transition-opacity"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:opacity-80 transition-opacity"
               >
                 <PlusIcon className="w-4 h-4" /> Add question
               </button>
@@ -604,14 +608,14 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
       </div>
 
       {/* sticky publish bar */}
-      <div className="fixed bottom-0 inset-x-0 z-30 border-t border-border-subtle bg-surface-1/95 backdrop-blur">
+      <div className="fixed bottom-0 inset-x-0 z-30 border-t border-line-subtle bg-surface/95 backdrop-blur">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             {onDelete && (
               <button
                 type="button"
                 onClick={onDelete}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:text-red-700 transition-colors"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-danger hover:text-danger-strong transition-colors"
               >
                 <Trash2Icon className="w-4 h-4" />
                 Delete event
@@ -622,7 +626,7 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
           <button
             onClick={handlePublish}
             disabled={publishing || uploading}
-            className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-brand-green rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
+            className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-accent rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
           >
             {publishing ? <LoaderCircleIcon className="w-4 h-4 animate-spin" /> : <SparklesIcon className="w-4 h-4" />}
             {initialStatus === 'published' ? 'Save changes' : 'Publish event'}
@@ -656,25 +660,25 @@ export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposer
 }
 
 function SaveIndicator({ state }: { state: 'idle' | 'saving' | 'saved' | 'error' }) {
-  if (state === 'idle') return <span className="text-xs text-brand-grey">Draft</span>;
-  if (state === 'saving') return <span className="inline-flex items-center gap-1.5 text-xs text-brand-grey"><LoaderCircleIcon className="w-3.5 h-3.5 animate-spin" /> Saving…</span>;
-  if (state === 'error') return <span className="text-xs text-red-600">Couldn’t save — keep editing</span>;
-  return <span className="inline-flex items-center gap-1.5 text-xs text-brand-green"><CheckIcon className="w-3.5 h-3.5" /> Saved</span>;
+  if (state === 'idle') return <span className="text-xs text-fg-muted">Draft</span>;
+  if (state === 'saving') return <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted"><LoaderCircleIcon className="w-3.5 h-3.5 animate-spin" /> Saving…</span>;
+  if (state === 'error') return <span className="text-xs text-danger">Couldn’t save — keep editing</span>;
+  return <span className="inline-flex items-center gap-1.5 text-xs text-accent"><CheckIcon className="w-3.5 h-3.5" /> Saved</span>;
 }
 
 function Toggle({ label, hint, value, onChange }: { label: string; hint: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <label className="flex items-center justify-between gap-4 cursor-pointer">
       <div>
-        <span className="text-sm font-medium text-brand-black">{label}</span>
-        <p className="text-xs text-brand-grey">{hint}</p>
+        <span className="text-sm font-medium text-fg">{label}</span>
+        <p className="text-xs text-fg-muted">{hint}</p>
       </div>
       <button
         type="button"
         onClick={() => onChange(!value)}
-        className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${value ? 'bg-brand-green' : 'bg-gray-200'}`}
+        className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${value ? 'bg-accent' : 'bg-line-subtle'}`}
       >
-        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-surface-1 rounded-full shadow transition-transform ${value ? 'translate-x-5' : ''}`} />
+        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-surface rounded-full shadow transition-transform ${value ? 'translate-x-5' : ''}`} />
       </button>
     </label>
   );
@@ -696,8 +700,8 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
   return (
     <Modal onClose={onClose} title="You’re live" maxWidth="max-w-sm">
       <div className="flex flex-col gap-4 p-6">
-        <div className="flex items-center gap-2 rounded-lg bg-surface-2 py-1.5 pl-3 pr-1.5">
-          <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{publicUrl}</span>
+        <div className="flex items-center gap-2 rounded-lg bg-surface-subtle py-1.5 pl-3 pr-1.5">
+          <span className="min-w-0 flex-1 truncate text-sm text-fg">{publicUrl}</span>
           <Button variant="brand" onClick={copyLink} className="inline-flex items-center gap-1.5 !px-3 !py-1.5">
             {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <Link2Icon className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy'}
@@ -709,7 +713,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
             href={`/api/events/${event.id}/ics?spaceId=${encodeURIComponent(spaceId)}`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-surface-2 px-4 py-2.5 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-3"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-surface-subtle px-4 py-2.5 text-sm font-semibold text-fg-secondary transition-colors hover:bg-surface-muted"
           >
             <CalendarPlusIcon className="h-4 w-4" /> Calendar
           </a>
@@ -717,7 +721,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
             href={path}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-surface-2 px-4 py-2.5 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-3"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-surface-subtle px-4 py-2.5 text-sm font-semibold text-fg-secondary transition-colors hover:bg-surface-muted"
           >
             <ExternalLinkIcon className="h-4 w-4" /> View page
           </a>

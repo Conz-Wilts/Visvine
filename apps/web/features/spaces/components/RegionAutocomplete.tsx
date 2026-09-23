@@ -100,19 +100,19 @@ export default function RegionAutocomplete({
         className={className}
       />
       {open && (
-        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-border-default bg-surface-1 shadow-float">
+        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-line bg-surface shadow-float">
           {suggestions.map((s, i) => (
             <li
               key={s.placeId}
               onMouseDown={(e) => { e.preventDefault(); pick(s); }}
               onMouseEnter={() => setHighlighted(i)}
               className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm transition-colors"
-              style={{ background: i === highlighted ? 'var(--color-surface-2)' : 'transparent' }}
+              style={{ background: i === highlighted ? 'var(--vv-color-surface-subtle)' : 'transparent' }}
             >
-              <MapPinIcon className="h-3.5 w-3.5 flex-none text-text-muted" />
+              <MapPinIcon className="h-3.5 w-3.5 flex-none text-fg-muted" />
               <span className="min-w-0 truncate">
-                <span className="font-medium text-text-primary">{s.name}</span>
-                {s.detail && <span className="text-text-muted">, {s.detail}</span>}
+                <span className="font-medium text-fg">{s.name}</span>
+                {s.detail && <span className="text-fg-muted">, {s.detail}</span>}
               </span>
             </li>
           ))}

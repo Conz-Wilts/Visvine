@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { prefersReducedMotion } from "@/lib/motion";
+import { motion } from "@visvine/tokens";
 
 interface SidebarContextValue {
   /** Whether the rail is open. The rail has no switch: it opens under the
@@ -32,8 +33,8 @@ export const DOCK_MS = 320;
 /** Closing is faster than opening: an arriving panel glides in, but a leaving
  *  one should be out of the way before the destination's content (the grid's
  *  card cascade) is mid-animation beside it. */
-export const DOCK_CLOSE_MS = 200;
-export const DOCK_EASE = "cubic-bezier(0.25, 0.1, 0.25, 1)";
+export const DOCK_CLOSE_MS = motion.duration.quick;
+export const DOCK_EASE = motion.easeCss.gentle;
 
 const SidebarContext = createContext<SidebarContextValue>({
   expanded: false,

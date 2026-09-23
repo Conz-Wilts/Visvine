@@ -101,7 +101,7 @@ export const CommentRow = memo(function CommentRow({
     return (
       <div className="flex gap-2.5 py-1.5">
         <div className="w-7 shrink-0" />
-        <p className="text-xs italic text-text-muted">This comment was deleted</p>
+        <p className="text-xs italic text-fg-muted">This comment was deleted</p>
       </div>
     );
   }
@@ -113,12 +113,12 @@ export const CommentRow = memo(function CommentRow({
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[13px]">
-          <span className="font-semibold text-text-primary">{comment.isOwn ? 'You' : comment.sender.name}</span>
-          <span className="ml-1.5 text-[11px] text-text-muted">{formatChatTimestamp(comment.createdAt)}</span>
+          <span className="font-semibold text-fg">{comment.isOwn ? 'You' : comment.sender.name}</span>
+          <span className="ml-1.5 text-[11px] text-fg-muted">{formatChatTimestamp(comment.createdAt)}</span>
         </p>
-        <div className="text-[14px] leading-relaxed text-text-primary [&_p]:whitespace-pre-wrap">
+        <div className="text-[14px] leading-relaxed text-fg [&_p]:whitespace-pre-wrap">
           <MarkdownMessage text={comment.text} />
-          {comment.editedAt && <span className="ml-1 text-[11px] italic text-text-muted">(edited)</span>}
+          {comment.editedAt && <span className="ml-1 text-[11px] italic text-fg-muted">(edited)</span>}
         </div>
         <MessageImageGrid images={comment.images} />
         <MessageFiles files={comment.files} />
@@ -131,8 +131,8 @@ export const CommentRow = memo(function CommentRow({
                 onClick={() => void onReaction(comment.id, r.emoji)}
                 className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] transition-colors ${
                   r.reacted
-                    ? 'border-brand-green/30 bg-brand-green/10 text-text-primary'
-                    : 'border-border-subtle bg-surface-1 text-text-muted hover:bg-surface-2'
+                    ? 'border-accent/30 bg-accent/10 text-fg'
+                    : 'border-line-subtle bg-surface text-fg-muted hover:bg-surface-subtle'
                 }`}
               >
                 <span>{r.emoji}</span>
@@ -144,11 +144,11 @@ export const CommentRow = memo(function CommentRow({
       </div>
 
       {/* Hover actions */}
-      <div className="absolute -top-1 right-0 z-10 hidden items-center gap-0.5 rounded-lg border border-border-subtle bg-surface-1 px-0.5 py-0.5 shadow-float group-hover:flex">
+      <div className="absolute -top-1 right-0 z-10 hidden items-center gap-0.5 rounded-lg border border-line-subtle bg-surface px-0.5 py-0.5 shadow-float group-hover:flex">
         <button
           type="button"
           onClick={() => setShowEmojiPicker(true)}
-          className="rounded-md p-1 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
+          className="rounded-md p-1 text-fg-muted hover:bg-surface-subtle hover:text-fg-secondary"
           title="React"
         >
           <SmileIcon className="h-3.5 w-3.5" />
@@ -157,7 +157,7 @@ export const CommentRow = memo(function CommentRow({
           <button
             type="button"
             onClick={() => void onDelete(comment.id)}
-            className="rounded-md p-1 text-text-muted hover:bg-red-50 hover:text-red-500"
+            className="rounded-md p-1 text-fg-muted hover:bg-danger-wash hover:text-danger-bright"
             title="Delete"
           >
             <Trash2Icon className="h-3.5 w-3.5" />
@@ -228,7 +228,7 @@ const PostCard = memo(function PostCard({
 
   return (
     <article
-      className="group relative border-b border-border-subtle px-4 py-4 last:border-b-0"
+      className="group relative border-b border-line-subtle px-4 py-4 last:border-b-0"
       onMouseLeave={() => setShowEmojiPicker(false)}
       data-message-id={post.id}
     >
@@ -237,16 +237,16 @@ const PostCard = memo(function PostCard({
         <Avatar name={post.sender.name} imageUrl={post.sender.image} size="md" />
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-baseline gap-x-2">
-            <span className="text-[15px] font-semibold text-text-primary">{post.isOwn ? 'You' : post.sender.name}</span>
-            <span className="text-[11px] text-text-muted">{formatChatTimestamp(post.createdAt)}</span>
+            <span className="text-[15px] font-semibold text-fg">{post.isOwn ? 'You' : post.sender.name}</span>
+            <span className="text-[11px] text-fg-muted">{formatChatTimestamp(post.createdAt)}</span>
             {context}
             {post.pinnedAt && (
-              <span className="inline-flex items-center gap-0.5 rounded-md bg-brand-green px-2 py-0.5 text-[10px] font-medium text-white">
+              <span className="inline-flex items-center gap-0.5 rounded-md bg-accent px-2 py-0.5 text-[10px] font-medium text-white">
                 <PinIcon className="h-2.5 w-2.5" /> Pinned
               </span>
             )}
             {post.starred && (
-              <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-medium text-white">
+              <span className="inline-flex items-center gap-0.5 rounded-md bg-warning-bright px-2 py-0.5 text-[10px] font-medium text-white">
                 <StarIcon className="h-2.5 w-2.5 fill-current" /> Saved
               </span>
             )}
@@ -256,9 +256,9 @@ const PostCard = memo(function PostCard({
 
       {/* Body */}
       {isDeleted ? (
-        <p className="mt-2 text-sm italic text-text-muted">This post was deleted</p>
+        <p className="mt-2 text-sm italic text-fg-muted">This post was deleted</p>
       ) : isEditing ? (
-        <div className="mt-2 w-full section-y-2 rounded-xl border border-brand-green/30 bg-surface-2/60 px-3 py-2">
+        <div className="mt-2 w-full section-y-2 rounded-xl border border-accent/30 bg-surface-subtle/60 px-3 py-2">
           <textarea
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
@@ -267,27 +267,27 @@ const PostCard = memo(function PostCard({
               if (e.key === 'Escape') setIsEditing(false);
             }}
             autoFocus
-            className="w-full resize-none bg-transparent text-sm leading-relaxed text-text-primary focus:outline-none"
+            className="w-full resize-none bg-transparent text-sm leading-relaxed text-fg focus:outline-none"
             rows={3}
           />
           <div className="flex items-center gap-2 text-xs">
-            <button type="button" onClick={submitEdit} className="font-medium text-brand-dark-green">Save</button>
-            <button type="button" onClick={() => setIsEditing(false)} className="text-text-muted">Cancel</button>
+            <button type="button" onClick={submitEdit} className="font-medium text-accent-strong">Save</button>
+            <button type="button" onClick={() => setIsEditing(false)} className="text-fg-muted">Cancel</button>
           </div>
         </div>
       ) : (
         <div className="mt-2">
           {/* Orphaned reply degraded to a card — keep its quote context */}
           {post.replyTo && (
-            <p className="mb-1 truncate border-l-4 border-border-default py-0.5 pl-3 text-[13px] text-text-muted">
-              <span className="font-bold text-text-secondary">{post.replyTo.senderName}</span>
+            <p className="mb-1 truncate border-l-4 border-line py-0.5 pl-3 text-[13px] text-fg-muted">
+              <span className="font-bold text-fg-secondary">{post.replyTo.senderName}</span>
               {'  '}{post.replyTo.text}
             </p>
           )}
           {post.text && (
-            <div className="text-[15px] leading-relaxed text-text-primary [&_a]:underline [&_p]:whitespace-pre-wrap">
+            <div className="text-[15px] leading-relaxed text-fg [&_a]:underline [&_p]:whitespace-pre-wrap">
               <MarkdownMessage text={post.text} />
-              {post.editedAt && <span className="ml-1 text-[11px] italic text-text-muted">(edited)</span>}
+              {post.editedAt && <span className="ml-1 text-[11px] italic text-fg-muted">(edited)</span>}
             </div>
           )}
           <MessageImageGrid images={post.images} />
@@ -308,8 +308,8 @@ const PostCard = memo(function PostCard({
               onClick={() => void onReaction(post.id, r.emoji)}
               className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs transition-colors ${
                 r.reacted
-                  ? 'border-brand-green/30 bg-brand-green/10 text-text-primary'
-                  : 'border-border-subtle bg-surface-1 text-text-muted hover:bg-surface-2'
+                  ? 'border-accent/30 bg-accent/10 text-fg'
+                  : 'border-line-subtle bg-surface text-fg-muted hover:bg-surface-subtle'
               }`}
             >
               <span>{r.emoji}</span>
@@ -319,7 +319,7 @@ const PostCard = memo(function PostCard({
           <button
             type="button"
             onClick={() => setShowCommentInput((v) => !v)}
-            className="flex items-center gap-1 rounded-md border border-border-subtle bg-surface-1 px-2 py-0.5 text-xs text-text-muted transition-colors hover:bg-surface-2"
+            className="flex items-center gap-1 rounded-md border border-line-subtle bg-surface px-2 py-0.5 text-xs text-fg-muted transition-colors hover:bg-surface-subtle"
           >
             <MessageCircleIcon className="h-3 w-3" />
             {comments.length > 0
@@ -331,7 +331,7 @@ const PostCard = memo(function PostCard({
 
       {/* Comments */}
       {comments.length > 0 && (
-        <div className="mt-2 border-t border-border-subtle pt-1">
+        <div className="mt-2 border-t border-line-subtle pt-1">
           {comments.map((comment) => (
             <CommentRow key={comment.id} comment={comment} onReaction={onReaction} onDelete={onDelete} />
           ))}
@@ -347,13 +347,13 @@ const PostCard = memo(function PostCard({
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submitComment(); } }}
             placeholder="Write a comment…"
             disabled={sendingComment}
-            className="min-w-0 flex-1 rounded-lg bg-surface-2 px-3.5 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:bg-surface-1 focus:outline-none focus:ring-1 focus:ring-border-default disabled:opacity-50"
+            className="min-w-0 flex-1 rounded-lg bg-surface-subtle px-3.5 py-1.5 text-sm text-fg placeholder:text-fg-muted focus:bg-surface focus:outline-none focus:ring-1 focus:ring-line disabled:opacity-50"
           />
           <button
             type="button"
             onClick={() => void submitComment()}
             disabled={!commentText.trim() || sendingComment}
-            className="shrink-0 rounded-md bg-brand-green px-3.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
+            className="shrink-0 rounded-md bg-accent px-3.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
           >
             Reply
           </button>
@@ -362,11 +362,11 @@ const PostCard = memo(function PostCard({
 
       {/* Hover toolbar */}
       {!isDeleted && !isEditing && (
-        <div className="absolute -top-3 right-3 z-10 hidden items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-1 px-1 py-0.5 shadow-float group-hover:flex">
+        <div className="absolute -top-3 right-3 z-10 hidden items-center gap-0.5 rounded-xl border border-line-subtle bg-surface px-1 py-0.5 shadow-float group-hover:flex">
           <button
             type="button"
             onClick={() => setShowEmojiPicker(true)}
-            className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
+            className="rounded-md p-1.5 text-fg-muted hover:bg-surface-subtle hover:text-fg-secondary"
             title="React"
           >
             <SmileIcon className="h-4 w-4" />
@@ -374,7 +374,7 @@ const PostCard = memo(function PostCard({
           <button
             type="button"
             onClick={() => void onToggleStar(post.id)}
-            className={`rounded-md p-1.5 hover:bg-surface-2 ${post.starred ? 'text-amber-500' : 'text-text-muted hover:text-text-secondary'}`}
+            className={`rounded-md p-1.5 hover:bg-surface-subtle ${post.starred ? 'text-warning-bright' : 'text-fg-muted hover:text-fg-secondary'}`}
             title={post.starred ? 'Remove from saved' : 'Save for later'}
           >
             <StarIcon className={`h-4 w-4 ${post.starred ? 'fill-current' : ''}`} />
@@ -383,7 +383,7 @@ const PostCard = memo(function PostCard({
             <button
               type="button"
               onClick={() => { setIsEditing(true); setEditText(post.text); }}
-              className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
+              className="rounded-md p-1.5 text-fg-muted hover:bg-surface-subtle hover:text-fg-secondary"
               title="Edit"
             >
               <PencilIcon className="h-4 w-4" />
@@ -393,7 +393,7 @@ const PostCard = memo(function PostCard({
             <button
               type="button"
               onClick={() => void onDelete(post.id)}
-              className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-500"
+              className="rounded-md p-1.5 text-fg-muted hover:bg-danger-wash hover:text-danger-bright"
               title="Delete"
             >
               <Trash2Icon className="h-4 w-4" />
@@ -465,12 +465,12 @@ export default function FeedView({
         {messagesLoading && (
           <div className="section-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="rounded-2xl border border-border-subtle bg-surface-1 px-4 py-3">
+              <div key={i} className="rounded-2xl border border-line-subtle bg-surface px-4 py-3">
                 <div className="flex items-center gap-2.5">
-                  <div className="h-9 w-9 shrink-0 animate-pulse rounded-xl bg-surface-3" />
-                  <div className="h-3 w-40 animate-pulse rounded bg-surface-3" />
+                  <div className="h-9 w-9 shrink-0 animate-pulse rounded-xl bg-surface-muted" />
+                  <div className="h-3 w-40 animate-pulse rounded bg-surface-muted" />
                 </div>
-                <div className="mt-3 h-3 animate-pulse rounded bg-surface-3" style={{ width: `${85 - i * 15}%` }} />
+                <div className="mt-3 h-3 animate-pulse rounded bg-surface-muted" style={{ width: `${85 - i * 15}%` }} />
               </div>
             ))}
           </div>
@@ -478,9 +478,9 @@ export default function FeedView({
 
         {!messagesLoading && feed.length === 0 && (
           <div className="flex justify-center py-10">
-            <div className="rounded-2xl bg-surface-2 px-5 py-4 text-center text-sm text-text-muted">
-              <p className="font-medium text-text-secondary">No posts yet</p>
-              <p className="mt-0.5 text-xs text-text-muted">Share the first post to get things going!</p>
+            <div className="rounded-2xl bg-surface-subtle px-5 py-4 text-center text-sm text-fg-muted">
+              <p className="font-medium text-fg-secondary">No posts yet</p>
+              <p className="mt-0.5 text-xs text-fg-muted">Share the first post to get things going!</p>
             </div>
           </div>
         )}
@@ -502,12 +502,12 @@ export default function FeedView({
         {!messagesLoading && hasMoreMessages && (
           <div className="flex justify-center py-2">
             {loadingOlderMessages ? (
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
             ) : (
               <button
                 type="button"
                 onClick={() => void onLoadOlder()}
-                className="rounded-md bg-surface-2 px-4 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-3"
+                className="rounded-md bg-surface-subtle px-4 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-muted"
               >
                 Load older posts
               </button>

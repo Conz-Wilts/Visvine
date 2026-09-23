@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import SignInModal from "@/features/auth/components/SignInModal";
-import { BRAND } from "@/lib/brand";
 import { useSession } from "@/features/auth/lib/auth-client";
+import { color } from "@visvine/tokens";
 
 type SignInMode = "signin" | "signup";
 
@@ -52,7 +52,7 @@ export default function MarketingShell({
       <div className="flex flex-col items-center gap-8">
         <h1
           className="text-5xl sm:text-6xl font-semibold tracking-tight"
-          style={{ color: BRAND }}
+          style={{ color: color.brand.default }}
         >
           Visvine
         </h1>
@@ -62,14 +62,14 @@ export default function MarketingShell({
               type="button"
               onClick={() => openSignIn("signup")}
               className="rounded-md px-6 py-2.5 text-sm font-medium text-white shadow-sm hover:opacity-90 active:scale-[0.99] transition"
-              style={{ backgroundColor: BRAND }}
+              style={{ backgroundColor: color.brand.default }}
             >
               Create account
             </button>
             <button
               type="button"
               onClick={() => openSignIn("signin")}
-              className="rounded-md border border-neutral-300 px-6 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 active:scale-[0.99] transition"
+              className="rounded-md border border-line px-6 py-2.5 text-sm font-medium text-fg-secondary hover:bg-surface-subtle active:scale-[0.99] transition"
             >
               Login
             </button>

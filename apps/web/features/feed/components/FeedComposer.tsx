@@ -30,7 +30,7 @@ const MAX_FILES = 10;
 
 interface Mention { id: string; name: string; imageUrl?: string | null; subtitle?: string | null }
 
-const tool = 'flex h-9 w-9 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary disabled:opacity-40';
+const tool = 'flex h-9 w-9 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg disabled:opacity-40';
 
 function readDraft(): { title: string; body: string } {
   try {
@@ -260,24 +260,24 @@ export default function FeedComposer({
       ariaLabel="Create post"
       maxWidth="max-w-2xl"
       closeOnBackdrop={!text && files.length === 0}
-      panelClassName="relative flex max-h-[88vh] min-h-[min(34rem,88vh)] flex-col rounded-2xl bg-surface-1 shadow-float"
+      panelClassName="relative flex max-h-[88vh] min-h-[min(34rem,88vh)] flex-col rounded-2xl bg-surface shadow-float"
     >
-      <header className="flex shrink-0 items-center justify-between border-b border-border-subtle px-6 py-4">
-        <h2 className="text-lg font-semibold text-text-primary">Create post</h2>
-        <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary">
+      <header className="flex shrink-0 items-center justify-between border-b border-line-subtle px-6 py-4">
+        <h2 className="text-lg font-semibold text-fg">Create post</h2>
+        <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg">
           <XIcon className="h-5 w-5" />
         </button>
       </header>
 
       <div
-        className={`relative flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-4 pt-5 ${dragging ? 'bg-brand-green/5' : ''}`}
+        className={`relative flex min-h-0 flex-1 flex-col overflow-y-auto px-6 pb-4 pt-5 ${dragging ? 'bg-accent/5' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false); }}
         onDrop={(e) => { e.preventDefault(); setDragging(false); void upload(Array.from(e.dataTransfer.files)); }}
       >
         <div className="flex items-center gap-3">
           <Avatar name={user.name} imageUrl={user.image} size="md" />
-          <span className="truncate text-[15px] font-semibold text-text-primary">{user.name}</span>
+          <span className="truncate text-[15px] font-semibold text-fg">{user.name}</span>
           {badge && <Chip color={badge.color} size="sm" className="shrink-0">{badge.name}</Chip>}
         </div>
 
@@ -288,7 +288,7 @@ export default function FeedComposer({
           placeholder="Title"
           aria-label="Title"
           maxLength={200}
-          className="mt-5 w-full bg-transparent text-[26px] font-bold leading-tight text-text-primary outline-none placeholder:text-text-muted/70"
+          className="mt-5 w-full bg-transparent text-[26px] font-bold leading-tight text-fg outline-none placeholder:text-fg-muted/70"
         />
         <textarea
           ref={bodyRef}
@@ -303,22 +303,22 @@ export default function FeedComposer({
           aria-label="Post"
           autoFocus
           rows={4}
-          className="mt-3 w-full flex-1 resize-none bg-transparent text-[16px] leading-[1.7] text-text-primary outline-none placeholder:text-text-muted"
+          className="mt-3 w-full flex-1 resize-none bg-transparent text-[16px] leading-[1.7] text-fg outline-none placeholder:text-fg-muted"
         />
 
         {mentions.length > 0 && (
-          <ul className="mt-1 w-72 overflow-hidden rounded-xl border border-border-subtle bg-surface-1 py-1 shadow-float">
+          <ul className="mt-1 w-72 overflow-hidden rounded-xl border border-line-subtle bg-surface py-1 shadow-float">
             {mentions.map((person, i) => (
               <li key={person.id}>
                 <button
                   type="button"
                   onMouseDown={(e) => { e.preventDefault(); insertMention(person); }}
-                  className={`flex w-full items-center gap-3 px-3 py-2 text-left ${i === mentionAt ? 'bg-surface-2' : 'hover:bg-surface-2'}`}
+                  className={`flex w-full items-center gap-3 px-3 py-2 text-left ${i === mentionAt ? 'bg-surface-subtle' : 'hover:bg-surface-subtle'}`}
                 >
                   <Avatar name={person.name} imageUrl={person.imageUrl} size="sm" />
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-text-primary">{person.name}</span>
-                    {person.subtitle && <span className="block truncate text-xs text-text-muted">{person.subtitle}</span>}
+                    <span className="block truncate text-sm font-medium text-fg">{person.name}</span>
+                    {person.subtitle && <span className="block truncate text-xs text-fg-muted">{person.subtitle}</span>}
                   </span>
                 </button>
               </li>
@@ -333,9 +333,9 @@ export default function FeedComposer({
                 {file.fileType === 'image' ? (
                   <img src={file.url} alt="" className="h-24 w-24 rounded-xl object-cover" />
                 ) : (
-                  <div className="flex h-24 w-48 items-center gap-2 rounded-xl border border-border-subtle px-3">
+                  <div className="flex h-24 w-48 items-center gap-2 rounded-xl border border-line-subtle px-3">
                     <FileTypeIcon type={file.fileType} />
-                    <span className="line-clamp-2 text-sm text-text-primary">{file.name}</span>
+                    <span className="line-clamp-2 text-sm text-fg">{file.name}</span>
                   </div>
                 )}
                 <button
@@ -349,23 +349,23 @@ export default function FeedComposer({
               </div>
             ))}
             {uploading && (
-              <div className="flex h-24 w-24 items-center justify-center rounded-xl bg-surface-3">
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+              <div className="flex h-24 w-24 items-center justify-center rounded-xl bg-surface-muted">
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
               </div>
             )}
           </div>
         )}
 
         {dragging && (
-          <div className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand-green text-sm font-medium text-brand-green">
+          <div className="pointer-events-none absolute inset-3 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent text-sm font-medium text-accent">
             Drop to attach
           </div>
         )}
       </div>
 
-      {problem && <p className="px-6 pb-2 text-xs text-red-600">{problem}</p>}
+      {problem && <p className="px-6 pb-2 text-xs text-danger">{problem}</p>}
 
-      <footer className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border-subtle px-4 py-3">
+      <footer className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-line-subtle px-4 py-3">
         <div className="flex items-center">
           <input ref={photoRef} type="file" accept="image/*" multiple onChange={pick} className="hidden" />
           <input ref={fileRef} type="file" multiple onChange={pick} className="hidden" />
@@ -381,7 +381,7 @@ export default function FeedComposer({
             </button>
             {emoji && (
               <div className="absolute bottom-full left-0 z-50 mb-2">
-                <Suspense fallback={<div className="h-[380px] w-[340px] rounded-xl bg-surface-1 shadow-float" />}>
+                <Suspense fallback={<div className="h-[380px] w-[340px] rounded-xl bg-surface shadow-float" />}>
                   <EmojiPicker
                     onEmojiClick={(data) => { splice(() => data.emoji); setEmoji(false); }}
                     width={340}
@@ -397,7 +397,7 @@ export default function FeedComposer({
           <button type="button" className={tool} title="Mention" onClick={() => { splice(() => '@'); searchMentions(''); }}>
             <AtSignIcon className="h-5 w-5" />
           </button>
-          <span className="mx-1 h-5 w-px bg-border-subtle" aria-hidden />
+          <span className="mx-1 h-5 w-px bg-line-subtle" aria-hidden />
           <button type="button" className={tool} title="Bold" onClick={() => wrap('**')}>
             <BoldIcon className="h-[18px] w-[18px]" />
           </button>
@@ -417,18 +417,18 @@ export default function FeedComposer({
               disabled={targets.length < 2 || locked}
               aria-haspopup="listbox"
               aria-expanded={picking}
-              className="flex min-w-0 max-w-[16rem] items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[14px] text-text-secondary transition-colors enabled:hover:bg-surface-3 disabled:cursor-default"
+              className="flex min-w-0 max-w-[16rem] items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[14px] text-fg-secondary transition-colors enabled:hover:bg-surface-muted disabled:cursor-default"
             >
-              <span className="truncate font-medium text-text-primary">{target.space.name}</span>
-              <span className="text-text-muted">·</span>
+              <span className="truncate font-medium text-fg">{target.space.name}</span>
+              <span className="text-fg-muted">·</span>
               <span className="truncate">{target.channel.name}</span>
-              {targets.length > 1 && !locked && <ChevronDownIcon className="h-4 w-4 shrink-0 text-text-muted" />}
+              {targets.length > 1 && !locked && <ChevronDownIcon className="h-4 w-4 shrink-0 text-fg-muted" />}
             </button>
             {picking && (
-              <div role="listbox" aria-label="Post in" className="absolute bottom-full right-0 z-50 mb-2 max-h-80 w-72 overflow-y-auto rounded-xl border border-border-subtle bg-surface-1 py-1.5 shadow-float">
+              <div role="listbox" aria-label="Post in" className="absolute bottom-full right-0 z-50 mb-2 max-h-80 w-72 overflow-y-auto rounded-xl border border-line-subtle bg-surface py-1.5 shadow-float">
                 {spaces.map((space) => (
                   <div key={space.id} className="py-1">
-                    <p className="truncate px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">{space.name}</p>
+                    <p className="truncate px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">{space.name}</p>
                     {targets.filter((t) => t.space.id === space.id).map((t) => {
                       const on = t.conversationId === target.conversationId;
                       return (
@@ -438,11 +438,11 @@ export default function FeedComposer({
                           role="option"
                           aria-selected={on}
                           onClick={() => { onTarget(t.conversationId); setPicking(false); }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text-primary hover:bg-surface-2"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-fg hover:bg-surface-subtle"
                         >
-                          <HashIcon className="h-4 w-4 shrink-0 text-text-muted" />
+                          <HashIcon className="h-4 w-4 shrink-0 text-fg-muted" />
                           <span className="min-w-0 flex-1 truncate">{t.channel.name}</span>
-                          {on && <CheckIcon className="h-4 w-4 shrink-0 text-brand-green" />}
+                          {on && <CheckIcon className="h-4 w-4 shrink-0 text-accent" />}
                         </button>
                       );
                     })}
@@ -455,7 +455,7 @@ export default function FeedComposer({
             type="button"
             onClick={() => void publish()}
             disabled={!ready}
-            className="shrink-0 rounded-full bg-brand-green px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="shrink-0 rounded-full bg-accent px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             {publishing ? 'Publishing…' : 'Publish'}
           </button>

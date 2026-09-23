@@ -95,17 +95,17 @@ export default function ConversationListPanel({
   // The list's own header: channel search up top, wherever the list lives.
   const channelControls = (
     <div className="px-3 pb-2 pt-3">
-      <div className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 transition-colors focus-within:bg-surface-1 focus-within:ring-1 focus-within:ring-border-default">
-        <SearchIcon className="h-4 w-4 shrink-0 text-text-muted" />
+      <div className="flex items-center gap-2 rounded-lg bg-surface-subtle px-3 py-2 transition-colors focus-within:bg-surface focus-within:ring-1 focus-within:ring-line">
+        <SearchIcon className="h-4 w-4 shrink-0 text-fg-muted" />
         <input
           ref={sidebarSearchRef}
           value={conversationSearch}
           onChange={(e) => setConversationSearch(e.target.value)}
           placeholder="Search channels…"
-          className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+          className="flex-1 bg-transparent text-sm text-fg placeholder:text-fg-muted focus:outline-none"
         />
         {conversationSearch && (
-          <button type="button" onClick={() => setConversationSearch('')} className="text-text-muted hover:text-text-secondary">
+          <button type="button" onClick={() => setConversationSearch('')} className="text-fg-muted hover:text-fg-secondary">
             <XIcon className="h-3.5 w-3.5" />
           </button>
         )}
@@ -125,10 +125,10 @@ export default function ConversationListPanel({
             <div className="section-y-1 px-3 py-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 rounded-2xl p-3">
-                  <div className="h-10 w-10 shrink-0 animate-pulse rounded-xl bg-surface-3" />
+                  <div className="h-10 w-10 shrink-0 animate-pulse rounded-xl bg-surface-muted" />
                   <div className="flex-1 section-y-2">
-                    <div className="h-3 w-2/3 animate-pulse rounded bg-surface-3" />
-                    <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-3" />
+                    <div className="h-3 w-2/3 animate-pulse rounded bg-surface-muted" />
+                    <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-muted" />
                   </div>
                 </div>
               ))}
@@ -158,26 +158,26 @@ export default function ConversationListPanel({
                           autoFocus
                           disabled={sectionActionBusy}
                           maxLength={80}
-                          className="w-full rounded-lg border border-border-default bg-surface-1 px-3 py-2 text-[15px] text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none disabled:opacity-50"
+                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-[15px] text-fg placeholder:text-fg-muted focus:border-accent/40 focus:outline-none disabled:opacity-50"
                         />
                       </form>
                     ) : (
-                      <div className="group flex w-full items-center gap-1.5 rounded-lg px-2 py-2 transition-colors hover:bg-surface-2">
+                      <div className="group flex w-full items-center gap-1.5 rounded-lg px-2 py-2 transition-colors hover:bg-surface-subtle">
                         <button
                           type="button"
                           onClick={() => toggleSectionCollapsed(section.key)}
                           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                         >
                           {collapsed
-                            ? <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted" strokeWidth={2.5} />
-                            : <ChevronDownIcon className="h-4 w-4 shrink-0 text-text-muted" strokeWidth={2.5} />}
-                          <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-[15px] font-semibold text-text-secondary group-hover:text-text-primary">
+                            ? <ChevronRightIcon className="h-4 w-4 shrink-0 text-fg-muted" strokeWidth={2.5} />
+                            : <ChevronDownIcon className="h-4 w-4 shrink-0 text-fg-muted" strokeWidth={2.5} />}
+                          <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-[15px] font-semibold text-fg-secondary group-hover:text-fg">
                             {section.icon && <Icon name={section.icon} className="h-4 w-4 shrink-0" strokeWidth={2} />}
                             <span className="truncate">{section.name}</span>
                           </span>
                         </button>
                         {collapsed && sectionUnread > 0 && (
-                          <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                          <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                             {sectionUnread > 99 ? '99+' : sectionUnread}
                           </span>
                         )}
@@ -187,7 +187,7 @@ export default function ConversationListPanel({
                               type="button"
                               title="Rename section"
                               onClick={() => { setEditingSectionId(section.key); setEditingSectionName(section.name); }}
-                              className="rounded p-0.5 text-text-muted hover:text-text-secondary"
+                              className="rounded p-0.5 text-fg-muted hover:text-fg-secondary"
                             >
                               <PencilIcon className="h-3 w-3" />
                             </button>
@@ -196,7 +196,7 @@ export default function ConversationListPanel({
                               title="Delete section"
                               disabled={sectionActionBusy}
                               onClick={() => void deleteSection(section.key)}
-                              className="rounded p-0.5 text-text-muted hover:text-red-500 disabled:opacity-50"
+                              className="rounded p-0.5 text-fg-muted hover:text-danger-bright disabled:opacity-50"
                             >
                               <Trash2Icon className="h-3 w-3" />
                             </button>
@@ -215,21 +215,21 @@ export default function ConversationListPanel({
                               type="button"
                               onClick={() => onSelectConversation(conversation.id)}
                               className={`group flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors duration-150 ${
-                                isActive ? 'bg-surface-3' : 'hover:bg-surface-2'
+                                isActive ? 'bg-surface-muted' : 'hover:bg-surface-subtle'
                               }`}
                             >
                               <ChannelIcon
                                 icon={conversation.icon}
                                 fallback={conversation.viewMode === 'FEED' ? 'feed' : 'hash'}
-                                className={`h-[18px] w-[18px] ${isActive || hasUnread ? 'text-text-primary' : 'text-text-muted'}`}
+                                className={`h-[18px] w-[18px] ${isActive || hasUnread ? 'text-fg' : 'text-fg-muted'}`}
                               />
                               <p className={`min-w-0 flex-1 truncate text-[15px] ${
-                                isActive || hasUnread ? 'font-semibold text-text-primary'
-                                : 'font-normal text-text-secondary'}`}>
+                                isActive || hasUnread ? 'font-semibold text-fg'
+                                : 'font-normal text-fg-secondary'}`}>
                                 {conversation.name}
                               </p>
                               {hasUnread && (
-                                <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                                   {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
                                 </span>
                               )}
@@ -239,19 +239,19 @@ export default function ConversationListPanel({
                         {section.browsable.length > 0 && (
                           <>
                             {!hasSections && (
-                              <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                              <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
                                 Browse channels
                               </p>
                             )}
                             {section.browsable.map((channel) => (
                               <div
                                 key={channel.id}
-                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 transition-colors hover:bg-surface-2"
+                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 transition-colors hover:bg-surface-subtle"
                               >
-                                <ChannelIcon icon={channel.icon} fallback={channel.viewMode === 'FEED' ? 'feed' : 'hash'} className="mt-0.5 h-[18px] w-[18px] self-start text-text-muted" />
+                                <ChannelIcon icon={channel.icon} fallback={channel.viewMode === 'FEED' ? 'feed' : 'hash'} className="mt-0.5 h-[18px] w-[18px] self-start text-fg-muted" />
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate text-[15px] font-normal text-text-secondary">{channel.name}</p>
-                                  <p className="truncate text-xs text-text-muted">
+                                  <p className="truncate text-[15px] font-normal text-fg-secondary">{channel.name}</p>
+                                  <p className="truncate text-xs text-fg-muted">
                                     {channel.description || `${channel.memberCount} member${channel.memberCount === 1 ? '' : 's'}`}
                                   </p>
                                 </div>
@@ -259,7 +259,7 @@ export default function ConversationListPanel({
                                   type="button"
                                   onClick={() => void onJoinChannel(channel.id)}
                                   disabled={joiningChannelId === channel.id}
-                                  className="shrink-0 rounded-md border border-brand-green/40 px-3 py-1 text-xs font-semibold text-brand-dark-green transition-colors hover:bg-brand-green/10 disabled:opacity-50"
+                                  className="shrink-0 rounded-md border border-accent/40 px-3 py-1 text-xs font-semibold text-accent-strong transition-colors hover:bg-accent/10 disabled:opacity-50"
                                 >
                                   {joiningChannelId === channel.id ? 'Joining…' : 'Join'}
                                 </button>
@@ -293,7 +293,7 @@ export default function ConversationListPanel({
         host as HTMLElement,
       )
     : (
-      <aside className="flex w-full min-h-0 flex-col overflow-hidden border-r border-border-subtle md:w-80 md:shrink-0">
+      <aside className="flex w-full min-h-0 flex-col overflow-hidden border-r border-line-subtle md:w-80 md:shrink-0">
         {inbox}
       </aside>
     );

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, ReactNode } from 'react';
 import { createSafeContext } from './createSafeContext';
-import { COLOR_THEMES, THEME_STORAGE_KEY, type ColorTheme } from '../lib/colorThemes';
+import { ACCENT_ATTRIBUTE, COLOR_THEMES, THEME_STORAGE_KEY, type ColorTheme } from '../lib/colorThemes';
 
 // The content region is one flat white surface that runs edge to edge: no
 // frame, no inset, no rounded card. These three values describe that geometry
@@ -26,13 +26,6 @@ export const SHELL_PANE_TOP = 24;
  *  it reads `useDesktopChrome().bandH` (features/desktop/lib/chrome.ts), not this. */
 export const SHELL_TOP_BAR_H = 48;
 
-// Shell chrome vars — the sidebar rail, which is the shell's only chrome.
-// Consumed via var(--shell-*) in Sidebar. The list is what the unmount cleanup
-// below iterates.
-const SHELL_VARS = [
-  '--shell-bg', '--shell-fg-strong', '--shell-border', '--shell-fg-muted',
-] as const;
-
 interface ThemeContextValue {
   theme: ColorTheme;
   setTheme: (themeId: string) => void;
@@ -42,52 +35,14 @@ interface ThemeContextValue {
 const [ThemeContext, useTheme] = createSafeContext<ThemeContextValue>('Theme');
 export { useTheme };
 
+/** The accent is an attribute: tokens.css holds every hue's colours under
+ *  `[data-accent="<id>"]`. The date picker's glyph takes a CSS filter, which no
+ *  colour token can express, so that one is still written as a property. */
 function applyAll(theme: ColorTheme) {
   const root = document.documentElement;
-
-  // Accent color vars
-  root.style.setProperty('--color-brand-green', theme.accent);
-  root.style.setProperty('--color-brand-dark-green', theme.accentDark);
-  root.style.setProperty('--color-brand-light-bg', theme.accentLight);
-  root.style.setProperty('--color-brand-bg', '#ffffff');
+  root.setAttribute(ACCENT_ATTRIBUTE, theme.id);
   root.style.setProperty('--theme-picker-filter', theme.pickerFilter);
   root.style.setProperty('--theme-picker-filter-hover', theme.pickerFilterHover);
-  root.style.setProperty('--theme-accent-color', theme.accent);
-
-  // The page backdrop. Plain white, always — the shell paints nothing of its
-  // own over it, and the Tool kit publishes it as `--vv-backdrop`.
-  root.style.setProperty('--app-backdrop', '#ffffff');
-
-  // Shell chrome. The rail paints nothing of its own — the body's backdrop
-  // shows through — and --shell-border is the one line it draws: the hairline
-  // down its right edge, so where the rail ends and the page begins is visible
-  // rather than guessed at.
-  const shell: Record<(typeof SHELL_VARS)[number], string> = {
-    '--shell-bg': 'transparent',
-    '--shell-fg-strong': '#111827',
-    // The rail's resting ink: every row sits muted until it is the current
-    // surface (fg-strong + semibold) or under the pointer.
-    '--shell-fg-muted': '#111827',
-    '--shell-border': '#e5e7eb',
-  };
-  SHELL_VARS.forEach(v => root.style.setProperty(v, shell[v]));
-
-  // Structural color vars
-  root.style.setProperty('--color-brand-black', '#111827');
-  root.style.setProperty('--color-brand-grey', '#4b5563');
-  root.style.setProperty('--color-brand-white', '#F9FAFB');
-  // surface-1 is the one opaque surface (floats, cards, inputs). surface-2/3
-  // are ink tints, not greys: over the white backdrop they render as
-  // #f9fafb/#f3f4f6, and over any tinted surface they tint it rather than
-  // painting a grey slab.
-  root.style.setProperty('--surface-1', '#ffffff');
-  root.style.setProperty('--surface-2', 'rgba(17, 24, 39, 0.025)');
-  root.style.setProperty('--surface-3', 'rgba(17, 24, 39, 0.05)');
-  root.style.setProperty('--border-subtle', '#e5e7eb');
-  root.style.setProperty('--border-default', '#d1d5db');
-  root.style.setProperty('--text-primary', '#111827');
-  root.style.setProperty('--text-secondary', '#374151');
-  root.style.setProperty('--text-muted', '#4b5563');
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -101,13 +56,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     return () => {
       const root = document.documentElement;
-      root.style.removeProperty('--app-backdrop');
-      ['--color-brand-green','--color-brand-dark-green','--color-brand-light-bg',
-       '--color-brand-bg','--theme-picker-filter','--theme-picker-filter-hover',
-       '--theme-accent-color','--color-brand-black','--color-brand-grey','--color-brand-white',
-       '--surface-1','--surface-2','--surface-3','--border-subtle','--border-default',
-       '--text-primary','--text-secondary','--text-muted', ...SHELL_VARS]
-        .forEach(v => root.style.removeProperty(v));
+      root.removeAttribute(ACCENT_ATTRIBUTE);
+      root.style.removeProperty('--theme-picker-filter');
+      root.style.removeProperty('--theme-picker-filter-hover');
     };
   }, []);
 

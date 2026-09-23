@@ -100,19 +100,19 @@ export default function ModelsPanel({ space }: {
         </div>
       ) : (
         rows.length > 0 && (
-          <ul className="divide-y divide-border-subtle border-t border-border-subtle">
+          <ul className="divide-y divide-line-subtle border-t border-line-subtle">
             {rows.map((m) => {
               const status = statusOf(m);
               return (
                 <li key={m.path} className="py-0.5">
                   <button
                     onClick={() => open(m.name)}
-                    className="-mx-3 flex min-h-11 w-[calc(100%+1.5rem)] items-center gap-3 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-surface-2"
+                    className="-mx-3 flex min-h-11 w-[calc(100%+1.5rem)] items-center gap-3 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-surface-subtle"
                   >
                     <ConnectorLogo entry={modelCatalogEntryFor(m.recipe, m.provider)} size="sm" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-text-primary">{m.modelId ?? m.title ?? m.name}</p>
-                      <p className="truncate text-xs text-text-muted">{m.providerLabel} · {m.name}</p>
+                      <p className="truncate text-sm font-semibold text-fg">{m.modelId ?? m.title ?? m.name}</p>
+                      <p className="truncate text-xs text-fg-muted">{m.providerLabel} · {m.name}</p>
                     </div>
                     {status && <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>{status.label}</span>}
                   </button>
@@ -161,15 +161,15 @@ function YourPlan({ enabled }: { enabled: Record<LocalRuntimeId, boolean> }) {
   const runtimes = LOCAL_RUNTIMES.filter((r) => enabled[r.id]);
   if (!bridge) return null;
   return (
-    <section className="flex flex-col border-t border-border-subtle pt-4">
+    <section className="flex flex-col border-t border-line-subtle pt-4">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="min-w-0 text-sm font-semibold text-text-primary">Your plan</h3>
+        <h3 className="min-w-0 text-sm font-semibold text-fg">Your plan</h3>
         <Button variant="neutral" size="sm" className={ACTION_SLOT} disabled={busy !== null} onClick={() => void refresh()}>
           {busy === 'refresh' ? 'Checking…' : 'Check'}
         </Button>
       </div>
-      {notice && <p className="mt-2 text-xs text-text-muted">{notice}</p>}
-      <ul className="mt-2 divide-y divide-border-subtle border-t border-border-subtle">
+      {notice && <p className="mt-2 text-xs text-fg-muted">{notice}</p>}
+      <ul className="mt-2 divide-y divide-line-subtle border-t border-line-subtle">
           {runtimes.map((r) => {
             const s = statuses?.find((x) => x.id === r.id) ?? null;
             const state = !statuses
@@ -183,8 +183,8 @@ function YourPlan({ enabled }: { enabled: Record<LocalRuntimeId, boolean> }) {
               <li key={r.id} className="py-0.5">
                 <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-text-primary">{r.label}</p>
-                    <p className="truncate text-xs text-text-muted" title={r.policy}>
+                    <p className="truncate text-sm font-semibold text-fg">{r.label}</p>
+                    <p className="truncate text-xs text-fg-muted" title={r.policy}>
                       {s?.detail ?? (s?.installed ? `${r.binary} ${s.version ?? ''}${s.authMethod ? ` · ${s.authMethod}` : ''}` : r.policy)}
                     </p>
                   </div>

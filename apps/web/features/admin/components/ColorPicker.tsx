@@ -8,6 +8,7 @@
 // on `onClose` (a press outside, Escape or Enter) rather than on every frame.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { palette } from '@visvine/tokens';
 
 function hexToHsl(hex: string): [number, number, number] {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -44,7 +45,7 @@ export default function ColorPicker({ color, onChange, onClose }: {
   onChange: (c: string) => void;
   onClose: () => void;
 }) {
-  const safeHex = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#6b7280';
+  const safeHex = /^#[0-9a-fA-F]{6}$/.test(color) ? color : palette.gray[500];
   const [h, s, l] = hexToHsl(safeHex);
 
   const [hue, setHue] = useState(h);
@@ -111,7 +112,7 @@ export default function ColorPicker({ color, onChange, onClose }: {
   return (
     <div
       ref={rootRef}
-      className="flex w-56 flex-col gap-3 rounded-xl border border-border-subtle bg-surface-1 p-3 shadow-float"
+      className="flex w-56 flex-col gap-3 rounded-xl border border-line-subtle bg-surface p-3 shadow-float"
       onClick={e => e.stopPropagation()}
     >
       <div
@@ -157,9 +158,9 @@ export default function ColorPicker({ color, onChange, onClose }: {
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="h-7 w-7 shrink-0 rounded-md border border-border-default" style={{ background: current }} />
+        <span className="h-7 w-7 shrink-0 rounded-md border border-line" style={{ background: current }} />
         <input
-          className="min-w-0 flex-1 rounded-md border border-border-default bg-surface-2 px-2 py-1.5 font-mono text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-brand-green/40"
+          className="min-w-0 flex-1 rounded-md border border-line bg-surface-subtle px-2 py-1.5 font-mono text-xs text-fg focus:outline-none focus:ring-1 focus:ring-accent/40"
           value={hexInput}
           onChange={e => {
             setHexInput(e.target.value);

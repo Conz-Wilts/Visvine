@@ -263,7 +263,7 @@ export function NotePicker({
       onMouseDown={onClose}
     >
       <div
-        className="w-full max-w-xl overflow-hidden rounded-2xl border border-border-subtle bg-surface-1 shadow-float"
+        className="w-full max-w-xl overflow-hidden rounded-2xl border border-line-subtle bg-surface shadow-float"
         onMouseDown={(e) => e.stopPropagation()}
       >
         {body}
@@ -306,7 +306,7 @@ function PickerTreeRow({
       {ancestors.map((g, j) => (
         <span key={j} className="flex shrink-0" aria-hidden>
           <span className="relative w-3 self-stretch">
-            {g === 'mid' && <span className="absolute inset-y-0 left-0 w-px bg-border-default/70" />}
+            {g === 'mid' && <span className="absolute inset-y-0 left-0 w-px bg-line/70" />}
           </span>
           <span className="w-[14px]" />
         </span>
@@ -320,13 +320,13 @@ function PickerTreeRow({
           aria-expanded={open}
           onMouseDown={(e) => e.preventDefault()}
           onClick={onToggle}
-          className="relative flex shrink-0 items-center px-1.5 text-text-muted hover:text-text-primary"
+          className="relative flex shrink-0 items-center px-1.5 text-fg-muted hover:text-fg"
         >
           {open && node.children.length > 0 && <TreeStem />}
           <TreeFolderIcon open={open} />
         </button>
       ) : (
-        <span className="flex shrink-0 items-center px-1.5 text-text-muted">
+        <span className="flex shrink-0 items-center px-1.5 text-fg-muted">
           <TreeFileIcon />
         </span>
       )}
@@ -337,7 +337,7 @@ function PickerTreeRow({
         onClick={onChoose}
         className="flex min-w-0 flex-1 items-center py-1.5 text-left"
       >
-        <span className={clsx('truncate', node.kind === 'folder' ? 'font-medium text-text-secondary' : 'text-text-primary')}>
+        <span className={clsx('truncate', node.kind === 'folder' ? 'font-medium text-fg-secondary' : 'text-fg')}>
           {title}
         </span>
       </button>

@@ -24,14 +24,14 @@ export default function LinkPreviewCard({
       href={preview.url}
       target="_blank"
       rel="noopener noreferrer"
-      className={`block rounded-xl border border-border-subtle bg-surface-2/60 overflow-hidden hover:bg-surface-2 transition-colors ${className}`}
+      className={`block rounded-xl border border-line-subtle bg-surface-subtle/60 overflow-hidden hover:bg-surface-subtle transition-colors ${className}`}
     >
       {preview.imageUrl && !summary && (
         <img src={preview.imageUrl} alt="" className="max-h-56 w-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
       )}
       <div className="flex gap-3 px-3 py-2">
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 text-[11px] font-medium text-text-muted">
+          <p className="flex items-center gap-1.5 text-[11px] font-medium text-fg-muted">
             {preview.faviconUrl && (
               <img
                 src={preview.faviconUrl}
@@ -45,10 +45,10 @@ export default function LinkPreviewCard({
             <span className="truncate">{site}</span>
           </p>
           {preview.title && (
-            <p className="mt-0.5 text-sm font-medium text-text-primary line-clamp-2">{preview.title}</p>
+            <p className="mt-0.5 text-sm font-medium text-fg line-clamp-2">{preview.title}</p>
           )}
           {preview.description && (
-            <p className="mt-0.5 text-xs text-text-muted line-clamp-2">{preview.description}</p>
+            <p className="mt-0.5 text-xs text-fg-muted line-clamp-2">{preview.description}</p>
           )}
         </div>
         {preview.imageUrl && summary && (

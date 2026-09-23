@@ -139,7 +139,7 @@ function EditButton({ onClick, label }: { onClick: () => void; label: string }) 
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="shrink-0 rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
+      className="shrink-0 rounded-md p-1.5 text-fg-muted transition-colors hover:bg-surface-subtle hover:text-fg"
     >
       <PencilIcon className="h-3.5 w-3.5" />
     </button>
@@ -149,7 +149,7 @@ function EditButton({ onClick, label }: { onClick: () => void; label: string }) 
 function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <p className="flex items-start gap-1.5 text-xs text-red-600">
+    <p className="flex items-start gap-1.5 text-xs text-danger">
       <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
       <span className="min-w-0 break-words">{message}</span>
     </p>
@@ -157,15 +157,15 @@ function FormError({ message }: { message: string | null }) {
 }
 
 const METHOD_COLORS: Record<string, string> = {
-  GET: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  POST: 'bg-blue-50 text-blue-700 ring-blue-200',
-  PUT: 'bg-amber-50 text-amber-700 ring-amber-200',
-  PATCH: 'bg-amber-50 text-amber-700 ring-amber-200',
-  DELETE: 'bg-red-50 text-red-700 ring-red-200',
+  GET: 'bg-hue-green-wash text-hue-green-fg ring-hue-green-line',
+  POST: 'bg-hue-blue-wash text-hue-blue-fg ring-hue-blue-line',
+  PUT: 'bg-hue-amber-wash text-hue-amber-fg ring-hue-amber-line',
+  PATCH: 'bg-hue-amber-wash text-hue-amber-fg ring-hue-amber-line',
+  DELETE: 'bg-hue-red-wash text-hue-red-fg ring-hue-red-line',
 };
 
 function MethodBadge({ method }: { method: string }) {
-  const color = METHOD_COLORS[method.toUpperCase()] ?? 'bg-surface-3 text-text-secondary ring-border-subtle';
+  const color = METHOD_COLORS[method.toUpperCase()] ?? 'bg-surface-muted text-fg-secondary ring-line-subtle';
   return (
     <span className={`inline-flex shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[11px] font-semibold ring-1 ring-inset ${color}`}>
       {method.toUpperCase()}
@@ -205,8 +205,8 @@ function SecretTemplate({
             title={stored ? `Replace or clear ${secretName}` : `${secretName} is not stored — set it`}
             className={`mx-0.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px] font-semibold transition-colors ${
               stored
-                ? 'bg-brand-light-bg text-brand-dark-green hover:bg-brand-green/20'
-                : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                ? 'bg-accent-soft text-accent-strong hover:bg-accent/20'
+                : 'bg-warning-wash text-warning hover:bg-warning-wash'
             }`}
           >
             <KeyRoundIcon className="h-3 w-3" />
@@ -275,7 +275,7 @@ function PerimeterEditor({
           onChange={(e) => setTimeoutMs(e.target.value)}
           className={`${FIELD} sm:w-32`}
         />
-        <span className="text-xs text-text-muted">ms</span>
+        <span className="text-xs text-fg-muted">ms</span>
       </div>
       <FormError message={error} />
       <EditActions saving={saving} onCancel={onDone} />
@@ -328,7 +328,7 @@ function EnvEditor({
               type="button"
               onClick={() => setRows((all) => all.filter((_, j) => j !== i))}
               aria-label="Remove variable"
-              className="shrink-0 rounded-lg border border-border-default p-1.5 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+              className="shrink-0 rounded-lg border border-line p-1.5 text-fg-muted transition-colors hover:border-danger-line hover:bg-danger-wash hover:text-danger"
             >
               <Trash2Icon className="h-3.5 w-3.5" />
             </button>
@@ -342,7 +342,7 @@ function EnvEditor({
           >
             <PlusIcon className="h-3 w-3" /> Add variable
           </button>
-          <span className="text-xs text-text-muted">
+          <span className="text-xs text-fg-muted">
             Use <code className="font-mono">{'{{secret:NAME}}'}</code>, never a raw value.
           </span>
         </span>
@@ -466,18 +466,18 @@ function ConnectionsSection({
     >
       <div className="flex flex-col gap-3">
         {connectedMessage && (
-          <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">{connectedMessage}</p>
+          <p className="text-xs font-medium text-success dark:text-success-bright">{connectedMessage}</p>
         )}
         {connectErrorMessage && (
-          <p className="text-xs font-medium text-red-600 dark:text-red-400">{connectErrorMessage}</p>
+          <p className="text-xs font-medium text-danger dark:text-danger-bright">{connectErrorMessage}</p>
         )}
-        <p className="text-xs text-text-muted">{explainer}</p>
+        <p className="text-xs text-fg-muted">{explainer}</p>
         {rows === null ? (
           <Skeleton className="h-10 w-full rounded-lg" />
         ) : rows.length === 0 ? (
-          <p className="text-sm text-text-muted">No account connected.</p>
+          <p className="text-sm text-fg-muted">No account connected.</p>
         ) : (
-          <ul className="flex flex-col divide-y divide-border-subtle">
+          <ul className="flex flex-col divide-y divide-line-subtle">
             {rows.map((row, i) => {
               const target = targetOf(row);
               const canRevoke = row.isMine || (isAdmin && target !== null);
@@ -487,22 +487,22 @@ function ConnectionsSection({
                 <li key={key} className="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
-                      <span className="font-medium text-text-primary">{who}</span>
-                      <span className="text-text-muted">
+                      <span className="font-medium text-fg">{who}</span>
+                      <span className="text-fg-muted">
                         acts as{' '}
-                        <span className="font-mono text-[12px] text-text-secondary">
+                        <span className="font-mono text-[12px] text-fg-secondary">
                           {row.actsAs ?? 'unknown account'}
                         </span>
                       </span>
                       {row.isShared && row.connectedBy && (
-                        <span className="text-text-muted">· connected by {row.connectedBy}</span>
+                        <span className="text-fg-muted">· connected by {row.connectedBy}</span>
                       )}
-                      <span className="text-text-muted">
+                      <span className="text-fg-muted">
                         · {timeAgo(new Date(row.connectedAt).getTime(), { style: 'short' })}
                       </span>
                       {row.broken && (
                         <span
-                          className="rounded-md bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white"
+                          className="rounded-md bg-danger px-2 py-0.5 text-[11px] font-semibold text-white"
                           title={row.broken.reason ?? undefined}
                         >
                           broken
@@ -516,7 +516,7 @@ function ConnectionsSection({
                     )}
                     {canRevoke && confirming === key && (
                       <span className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="text-text-muted">
+                        <span className="text-fg-muted">
                           {row.isShared
                             ? 'Every member and agent loses this account.'
                             : 'Disconnect this account?'}
@@ -533,7 +533,7 @@ function ConnectionsSection({
                           type="button"
                           onClick={() => void disconnect(row, key)}
                           disabled={busy === key}
-                          className="rounded-lg bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                          className="rounded-lg bg-danger px-2.5 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                         >
                           {busy === key ? 'Disconnecting…' : 'Disconnect'}
                         </button>
@@ -541,7 +541,7 @@ function ConnectionsSection({
                     )}
                   </div>
                   {row.broken && (
-                    <p className="flex items-start gap-1.5 text-xs text-red-600">
+                    <p className="flex items-start gap-1.5 text-xs text-danger">
                       <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
                       <span className="min-w-0 break-words">
                         {row.broken.reason ?? 'The connection stopped working.'} Reconnect to repair it.
@@ -669,7 +669,7 @@ function WebhookSection({ spaceId, name }: { spaceId: string; name: string }) {
       }
     >
       <div className="flex flex-col gap-3">
-        <p className="text-xs text-text-muted">
+        <p className="text-xs text-fg-muted">
           Point the provider at this address. Every delivery it accepts becomes an event for each
           active agent whose live note says <span className="font-mono">on.webhook: {name}</span>.
           The URL is a credential — anyone holding it can post here.
@@ -697,7 +697,7 @@ function WebhookSection({ spaceId, name }: { spaceId: string; name: string }) {
 
             {confirming && (
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-text-muted">
+                <span className="text-fg-muted">
                   Rotating mints a new URL; the provider must be re-pointed and the old one stops at once.
                 </span>
                 <button type="button" onClick={() => setConfirming(false)} disabled={rotating} className={GHOST_BUTTON}>
@@ -707,7 +707,7 @@ function WebhookSection({ spaceId, name }: { spaceId: string; name: string }) {
                   type="button"
                   onClick={() => void rotate()}
                   disabled={rotating}
-                  className="rounded-lg bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  className="rounded-lg bg-danger px-2.5 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
                   {rotating ? 'Rotating…' : 'Rotate URL'}
                 </button>
@@ -715,15 +715,15 @@ function WebhookSection({ spaceId, name }: { spaceId: string; name: string }) {
             )}
 
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
-              <dt className="text-text-muted">Verified by</dt>
-              <dd className="text-text-primary">
+              <dt className="text-fg-muted">Verified by</dt>
+              <dd className="text-fg">
                 {signatureLabel}
-                {info.header && <span className="ml-1 font-mono text-[11px] text-text-muted">{info.header}</span>}
+                {info.header && <span className="ml-1 font-mono text-[11px] text-fg-muted">{info.header}</span>}
               </dd>
               {info.secretName && (
                 <>
-                  <dt className="text-text-muted">Secret</dt>
-                  <dd className={secretMissing ? 'text-red-600' : 'text-text-primary'}>
+                  <dt className="text-fg-muted">Secret</dt>
+                  <dd className={secretMissing ? 'text-danger' : 'text-fg'}>
                     <span className="font-mono text-[12px]">{info.secretName}</span>
                     {secretMissing ? ' — not set; every delivery will be refused' : ' — set'}
                   </dd>
@@ -731,12 +731,12 @@ function WebhookSection({ spaceId, name }: { spaceId: string; name: string }) {
               )}
               {info.idHeader && (
                 <>
-                  <dt className="text-text-muted">Dedupe on</dt>
-                  <dd className="font-mono text-[12px] text-text-primary">{info.idHeader}</dd>
+                  <dt className="text-fg-muted">Dedupe on</dt>
+                  <dd className="font-mono text-[12px] text-fg">{info.idHeader}</dd>
                 </>
               )}
-              <dt className="text-text-muted">Listening</dt>
-              <dd className="text-text-primary">
+              <dt className="text-fg-muted">Listening</dt>
+              <dd className="text-fg">
                 {info.recipients.length === 0
                   ? 'No active agent names this connector in on.webhook — deliveries are accepted and dropped.'
                   : info.recipients.map((r) => (
@@ -746,17 +746,17 @@ function WebhookSection({ spaceId, name }: { spaceId: string; name: string }) {
             </dl>
 
             <div>
-              <p className="pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Recent deliveries</p>
+              <p className="pb-1 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">Recent deliveries</p>
               {events === null ? (
                 <Skeleton className="h-6 w-full rounded" />
               ) : events.length === 0 ? (
-                <p className="text-sm text-text-muted">Nothing received yet.</p>
+                <p className="text-sm text-fg-muted">Nothing received yet.</p>
               ) : (
-                <ul className="flex flex-col divide-y divide-border-subtle">
+                <ul className="flex flex-col divide-y divide-line-subtle">
                   {events.map((ev) => (
                     <li key={ev.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-1.5 text-xs">
-                      <span className="min-w-0 truncate font-mono text-[12px] text-text-primary">{ev.summary}</span>
-                      <span className="shrink-0 text-text-muted">
+                      <span className="min-w-0 truncate font-mono text-[12px] text-fg">{ev.summary}</span>
+                      <span className="shrink-0 text-fg-muted">
                         → {ev.agentName} · {ev.consumedBy ? 'run' : 'pending'} ·{' '}
                         {timeAgo(new Date(ev.createdAt).getTime(), { style: 'short' })}
                       </span>
@@ -835,13 +835,13 @@ function ConnectorConsole({
           className={`${FIELD} resize-y font-mono text-[12px] leading-relaxed`}
         />
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[11px] text-text-muted">
+          <span className="font-mono text-[11px] text-fg-muted">
             JavaScript · return the answer · ⌘↵ to run
           </span>
           <button
             type="submit"
             disabled={running || code.trim().length === 0}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             <PlayIcon className="h-3.5 w-3.5" />
             {running ? 'Running…' : 'Run'}
@@ -851,11 +851,11 @@ function ConnectorConsole({
 
       {runs.map((entry, i) => (
         <div key={runs.length - i} className="flex flex-col gap-1.5">
-          <pre className="overflow-x-auto rounded-lg bg-surface-2 px-3 py-2 font-mono text-[12px] text-text-muted">
+          <pre className="overflow-x-auto rounded-lg bg-surface-subtle px-3 py-2 font-mono text-[12px] text-fg-muted">
             {entry.code}
           </pre>
           {entry.error ? (
-            <div className="flex items-start gap-2 border-l-2 border-red-500 pl-3 py-1 text-xs text-red-700">
+            <div className="flex items-start gap-2 border-l-2 border-danger-bright pl-3 py-1 text-xs text-danger-strong">
               <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 break-words">{entry.error}</span>
             </div>
@@ -875,34 +875,34 @@ function RunOutput({ result }: { result: RunResult }) {
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span
           className={`rounded-md px-2 py-0.5 font-mono font-semibold ${
-            result.ok ? 'bg-brand-light-bg text-brand-dark-green' : 'bg-red-50 text-red-700'
+            result.ok ? 'bg-accent-soft text-accent-strong' : 'bg-danger-wash text-danger-strong'
           }`}
         >
           {result.timed_out ? 'timeout' : result.ok ? 'ok' : 'error'}
         </span>
-        <span className="text-text-muted">{result.duration_ms} ms</span>
-        {result.truncated && <span className="text-text-muted">· truncated</span>}
+        <span className="text-fg-muted">{result.duration_ms} ms</span>
+        {result.truncated && <span className="text-fg-muted">· truncated</span>}
       </div>
       {result.denials.length > 0 && (
-        <ul className="flex flex-col gap-1 border-l-2 border-amber-500 pl-3 py-1 text-xs text-amber-800">
+        <ul className="flex flex-col gap-1 border-l-2 border-warning-bright pl-3 py-1 text-xs text-warning-strong">
           {result.denials.map((denial, i) => (
             <li key={i} className="break-words">{denial}</li>
           ))}
         </ul>
       )}
       {result.error && (
-        <div className="flex items-start gap-2 border-l-2 border-red-500 pl-3 py-1 text-xs text-red-700">
+        <div className="flex items-start gap-2 border-l-2 border-danger-bright pl-3 py-1 text-xs text-danger-strong">
           <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 break-words font-mono">{result.error.message}</span>
         </div>
       )}
       {returned !== null && (
-        <pre className="max-h-80 overflow-auto rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 font-mono text-[12px] leading-relaxed text-text-primary">
+        <pre className="max-h-80 overflow-auto rounded-lg border border-line-subtle bg-surface-subtle px-3 py-2 font-mono text-[12px] leading-relaxed text-fg">
           {returned}
         </pre>
       )}
       {result.logs && (
-        <pre className="max-h-40 overflow-auto rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 font-mono text-[12px] leading-relaxed text-text-muted">
+        <pre className="max-h-40 overflow-auto rounded-lg border border-line-subtle bg-surface-subtle px-3 py-2 font-mono text-[12px] leading-relaxed text-fg-muted">
           {result.logs}
         </pre>
       )}
@@ -923,25 +923,25 @@ function RunOutput({ result }: { result: RunResult }) {
  */
 function CallLog({ calls }: { calls: ConnectorCall[] }) {
   if (calls.length === 0) {
-    return <p className="text-sm text-text-muted">No runs yet.</p>;
+    return <p className="text-sm text-fg-muted">No runs yet.</p>;
   }
   return (
-    <ul className="flex flex-col divide-y divide-border-subtle">
+    <ul className="flex flex-col divide-y divide-line-subtle">
       {calls.map((call, i) => {
         const failed = !/^exit 0\b/.test(call.outcome);
         return (
           <li key={`${call.at}-${i}`} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
-              <span className="font-medium text-text-primary">{call.by}</span>
-              <span className="text-text-muted">{timeAgo(call.at, { style: 'short' })}</span>
+              <span className="font-medium text-fg">{call.by}</span>
+              <span className="text-fg-muted">{timeAgo(call.at, { style: 'short' })}</span>
               <span
-                className={`ml-auto shrink-0 font-mono ${failed ? 'text-red-600' : 'text-text-muted'}`}
+                className={`ml-auto shrink-0 font-mono ${failed ? 'text-danger' : 'text-fg-muted'}`}
               >
                 {call.outcome}
               </span>
             </div>
             {call.code && (
-              <p className="truncate font-mono text-[12px] text-text-secondary" title={call.code}>
+              <p className="truncate font-mono text-[12px] text-fg-secondary" title={call.code}>
                 {call.code}
               </p>
             )}
@@ -1108,7 +1108,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
   }
 
   if (error || !connector) {
-    return <p className="py-10 text-center text-sm text-text-muted">{error ?? 'Connector not found'}</p>;
+    return <p className="py-10 text-center text-sm text-fg-muted">{error ?? 'Connector not found'}</p>;
   }
 
   const status = statusOf(connector);
@@ -1128,11 +1128,11 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
           {/* The same mark the console's Connectors list shows for this row —
               the service's logo, or the plug for one the space wrote itself. */}
           <ConnectorLogo name={connector.name} recipe={connector.recipe} size="lg" />
-          <h1 className="truncate font-title text-xl font-semibold text-text-primary">
+          <h1 className="truncate font-title text-xl font-semibold text-fg">
             {connector.name}
           </h1>
           {connector.alias && (
-            <span className="font-mono text-[12px] text-text-muted">{connector.alias}</span>
+            <span className="font-mono text-[12px] text-fg-muted">{connector.alias}</span>
           )}
           <span className={`${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>
             {status.label}
@@ -1144,7 +1144,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
             onClick={runTest}
             disabled={testing || !runnable}
             title={runnable ? undefined : status.hint}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-subtle disabled:opacity-50"
           >
             <PlayIcon className="h-3.5 w-3.5" />
             {testing ? 'Testing…' : 'Test'}
@@ -1154,7 +1154,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
 
       {/* ══ SHARED — the parent's connector, read here ══ */}
       {connector.shared && (
-        <p className="mb-5 flex items-start gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
+        <p className="mb-5 flex items-start gap-2 rounded-lg border border-line-subtle bg-surface-subtle px-3 py-2 text-sm text-fg-secondary">
           <span className="min-w-0">
             Shared from <span className="font-medium">{connector.sharedFrom?.name ?? 'the parent space'}</span> —
             agents here run it with that space&apos;s keys and accounts. Its note, switch and secrets are changed there.
@@ -1186,7 +1186,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
       {/* The status hint, or the last Test verdict — one line, never both. */}
       {test ? (
         <p
-          className={`flex items-start gap-2 pb-5 text-xs ${test.ok ? 'text-brand-dark-green' : 'text-red-600'}`}
+          className={`flex items-start gap-2 pb-5 text-xs ${test.ok ? 'text-accent-strong' : 'text-danger'}`}
         >
           {test.ok ? (
             <CheckIcon className="mt-px h-3.5 w-3.5 shrink-0" />
@@ -1197,8 +1197,8 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
         </p>
       ) : (
         status.tone !== 'ok' && (
-          <p className="flex items-start gap-2 pb-5 text-xs text-text-muted">
-            <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <p className="flex items-start gap-2 pb-5 text-xs text-fg-muted">
+            <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0 text-warning-bright" />
             {status.hint}
           </p>
         )
@@ -1206,13 +1206,13 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
 
       {/* ══ PARSE ERROR — the note exists but nothing below it is live ══ */}
       {connector.invalid && (
-        <div className="mb-5 flex items-start gap-2.5 border-l-2 border-red-500 pl-3 py-1">
-          <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+        <div className="mb-5 flex items-start gap-2.5 border-l-2 border-danger-bright pl-3 py-1">
+          <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
           <div className="min-w-0">
-            <p className="break-words text-sm text-red-700">{connector.invalid}</p>
+            <p className="break-words text-sm text-danger-strong">{connector.invalid}</p>
             <Link
               href={`/directory/${encodeURIComponent(nodeId)}?tab=raw`}
-              className="mt-1 inline-block text-xs font-semibold text-red-700 underline"
+              className="mt-1 inline-block text-xs font-semibold text-danger-strong underline"
             >
               Fix it in the Raw tab
             </Link>
@@ -1242,11 +1242,11 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
           ) : (
             <div className="flex flex-col gap-3">
               {connector.hosts.length === 0 ? (
-                <p className="text-sm text-text-muted">No hosts — commands run without network.</p>
+                <p className="text-sm text-fg-muted">No hosts — commands run without network.</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {connector.hosts.map((host) => (
-                    <span key={host} className="font-mono text-[13px] text-text-primary">
+                    <span key={host} className="font-mono text-[13px] text-fg">
                       {host}
                     </span>
                   ))}
@@ -1259,7 +1259,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
                     return (
                       <li key={rule} className="flex items-center gap-2">
                         <MethodBadge method={method} />
-                        <span className="min-w-0 truncate font-mono text-[13px] text-text-primary">
+                        <span className="min-w-0 truncate font-mono text-[13px] text-fg">
                           {rest.join(' ')}
                         </span>
                       </li>
@@ -1296,13 +1296,13 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
               onDone={() => openEditor(null)}
             />
           ) : Object.keys(env).length === 0 ? (
-            <p className="text-sm text-text-muted">No variables.</p>
+            <p className="text-sm text-fg-muted">No variables.</p>
           ) : (
             <>
               <ul className="flex flex-col gap-1.5">
                 {Object.entries(env).map(([key, value]) => (
-                  <li key={key} className="min-w-0 break-all font-mono text-[13px] text-text-primary">
-                    <span className="text-text-muted">{key}=</span>
+                  <li key={key} className="min-w-0 break-all font-mono text-[13px] text-fg">
+                    <span className="text-fg-muted">{key}=</span>
                     <SecretTemplate
                       text={value}
                       statusOfSecret={(secretName) =>
@@ -1348,8 +1348,8 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
       {isAdmin && connector.perimeter && spaceId && (
         <Section title="Console" meta="runs for real">
           {!runnable ? (
-            <p className="flex items-start gap-2 text-sm text-text-muted">
-              <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <p className="flex items-start gap-2 text-sm text-fg-muted">
+              <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-warning-bright" />
               <span>
                 {connector.invalid
                   ? 'Fix the frontmatter before running.'

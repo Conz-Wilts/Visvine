@@ -21,7 +21,7 @@ import { LevelSelect } from './shared';
 function TargetChip({ path, contextName }: { path: string; contextName: string }) {
   const Icon = path === '' ? UsersIcon : path.endsWith('.md') ? FileTextIcon : FolderIcon;
   return (
-    <span className="inline-flex max-w-full items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5 align-middle text-[11px] font-medium text-text-secondary">
+    <span className="inline-flex max-w-full items-center gap-1 rounded-md bg-surface-subtle px-1.5 py-0.5 align-middle text-[11px] font-medium text-fg-secondary">
       <Icon className="h-3 w-3 shrink-0 opacity-70" />
       <span className="truncate">{requestTargetLabel(path, contextName)}</span>
     </span>
@@ -57,20 +57,20 @@ export default function AccessRequests() {
   return (
     <>
       <SettingsSection title={`Wants access (${pending.length})`}>
-        <div className="divide-y divide-border-subtle">
+        <div className="divide-y divide-line-subtle">
           {pending.map((request) => (
             <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
               <div className="flex min-w-0 flex-1 items-start gap-3">
                 <Avatar name={request.requesterName ?? 'Member'} imageUrl={request.requesterImage ?? null} size="sm" />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-baseline gap-x-1.5 text-sm">
-                    <span className="font-medium text-text-primary">{request.requesterName ?? 'Member'}</span>
-                    <span className="text-text-muted">wants access to</span>
+                    <span className="font-medium text-fg">{request.requesterName ?? 'Member'}</span>
+                    <span className="text-fg-muted">wants access to</span>
                     <TargetChip path={request.resourcePath} contextName={contextName} />
-                    <span className="text-xs text-text-muted">· {timeAgo(request.requestedAt, { style: 'short' })}</span>
+                    <span className="text-xs text-fg-muted">· {timeAgo(request.requestedAt, { style: 'short' })}</span>
                   </div>
                   {request.message && (
-                    <p className="mt-1 border-l-2 border-border-default pl-2 text-xs italic text-text-secondary">
+                    <p className="mt-1 border-l-2 border-line pl-2 text-xs italic text-fg-secondary">
                       {request.message}
                     </p>
                   )}
@@ -104,20 +104,20 @@ export default function AccessRequests() {
         </div>
 
         {resolved.length > 0 && (
-          <div className="mt-4 space-y-1.5 border-t border-border-subtle pt-3">
+          <div className="mt-4 space-y-1.5 border-t border-line-subtle pt-3">
             {resolved.map((request) => (
-              <div key={request.id} className="flex items-center gap-2 text-xs text-text-muted">
+              <div key={request.id} className="flex items-center gap-2 text-xs text-fg-muted">
                 <span
                   className={`inline-flex h-5 shrink-0 items-center rounded-md px-2 font-semibold ${
                     request.status === 'approved'
-                      ? 'bg-brand-green text-white'
-                      : 'bg-surface-2 text-text-muted'
+                      ? 'bg-accent text-white'
+                      : 'bg-surface-subtle text-fg-muted'
                   }`}
                 >
                   {request.status === 'approved' ? 'Approved' : 'Denied'}
                 </span>
                 <span className="min-w-0 truncate">
-                  <span className="font-medium text-text-secondary">{request.requesterName ?? 'Member'}</span>
+                  <span className="font-medium text-fg-secondary">{request.requesterName ?? 'Member'}</span>
                   {' · '}
                   {describeOutcome(request, contextName)}
                   {request.resolvedAt && <> · {timeAgo(request.resolvedAt, { style: 'short' })}</>}
@@ -135,7 +135,7 @@ export default function AccessRequests() {
           denyRequest && (
             <>
               {denyRequest.requesterName ?? 'This member'} won’t get{' '}
-              <span className="font-medium text-text-primary">
+              <span className="font-medium text-fg">
                 {requestTargetLabel(denyRequest.resourcePath, contextName)}
               </span>
               .

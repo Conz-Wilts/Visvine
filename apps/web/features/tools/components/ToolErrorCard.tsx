@@ -40,10 +40,10 @@ export default function ToolErrorCard({
         className,
       )}
     >
-      <TriangleAlertIcon className="h-5 w-5 text-amber-600" />
+      <TriangleAlertIcon className="h-5 w-5 text-warning" />
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-text-primary">{title} stopped working</p>
-        <p className="mx-auto max-w-[46ch] text-sm text-text-muted">{message}</p>
+        <p className="text-sm font-semibold text-fg">{title} stopped working</p>
+        <p className="mx-auto max-w-[46ch] text-sm text-fg-muted">{message}</p>
       </div>
       <div className="mt-1 flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={onReload} className="inline-flex items-center gap-1.5">
@@ -52,7 +52,7 @@ export default function ToolErrorCard({
         </Button>
         <Link
           href={reportHref}
-          className="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary"
+          className="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium text-fg-secondary hover:text-fg"
         >
           <ExternalLinkIcon className="h-3.5 w-3.5" />
           {reportLabel}

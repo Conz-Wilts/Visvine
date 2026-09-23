@@ -124,7 +124,7 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
       }}
     >
     <aside
-      className={`pointer-events-auto flex h-full w-full flex-col bg-glass-float transition-transform duration-300 [transition-timing-function:cubic-bezier(0.25,0.1,0.25,1)] motion-reduce:transition-none ${
+      className={`pointer-events-auto flex h-full w-full flex-col bg-glass-float transition-transform duration-300 ease-gentle motion-reduce:transition-none ${
         slidIn ? 'translate-x-0' : 'translate-x-full'
       }`}
       aria-label="Connections"

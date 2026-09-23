@@ -36,8 +36,8 @@ export function TreeGuide({ guide, active = false }: { guide: TreeGuideKind; act
   // A guide on the path to the open row is tinted, so the branch you are
   // inside reads as a trail from the root down rather than as identical grey
   // lines at every level.
-  const line = active ? 'bg-brand-green/60' : 'bg-border-default/70';
-  const edge = active ? 'border-brand-green/60' : 'border-border-default/70';
+  const line = active ? 'bg-accent/60' : 'bg-line/70';
+  const edge = active ? 'border-accent/60' : 'border-line/70';
   return (
     <span data-tree-guide className="relative flex w-3 shrink-0 self-stretch" aria-hidden="true">
       {/* `tree-line` marks the vertical strokes so a spine being revealed can
@@ -96,7 +96,7 @@ export function TreeSpine({ children, animate = false, stem: stemPx = 18 }: {
       <span
         aria-hidden
         style={{ ...stem, top: -stemPx, height: stemPx }}
-        className="tree-line pointer-events-none absolute left-0 w-px bg-border-default/70"
+        className="tree-line pointer-events-none absolute left-0 w-px bg-line/70"
       />
       {rows.length > 0 && (
         <div className="relative">
@@ -105,7 +105,7 @@ export function TreeSpine({ children, animate = false, stem: stemPx = 18 }: {
           <span
             aria-hidden
             style={run}
-            className="tree-line pointer-events-none absolute inset-y-0 left-0 z-[1] w-px bg-border-default/70"
+            className="tree-line pointer-events-none absolute inset-y-0 left-0 z-[1] w-px bg-line/70"
           />
           {rows.map((child, i) => (
             <div key={keyOf(child, i)} className="tree-spine-row" style={row(i)}>
@@ -161,9 +161,9 @@ export function TreeSpineJoin({ kind }: { kind: TreeGuideKind }) {
   return (
     <span className="relative -my-2.5 flex w-3 shrink-0 self-stretch" aria-hidden>
       {kind === 'last' ? (
-        <span className="tree-line absolute left-0 top-0 h-1/2 w-3 rounded-bl-[6px] border-b border-l border-border-default/70" />
+        <span className="tree-line absolute left-0 top-0 h-1/2 w-3 rounded-bl-[6px] border-b border-l border-line/70" />
       ) : (
-        <span className="absolute left-0 top-1/2 h-px w-3 bg-border-default/70" />
+        <span className="absolute left-0 top-1/2 h-px w-3 bg-line/70" />
       )}
     </span>
   );
@@ -178,7 +178,7 @@ export function TreeGuideRun({ active = false }: { active?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`absolute bottom-0 left-0 top-0 w-px ${active ? 'bg-brand-green/60' : 'bg-border-default/70'}`}
+      className={`absolute bottom-0 left-0 top-0 w-px ${active ? 'bg-accent/60' : 'bg-line/70'}`}
     />
   );
 }
@@ -194,7 +194,7 @@ export function TreeStem({ active = false }: { active?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`absolute bottom-0 left-[14px] top-[calc(50%+10px)] w-px ${active ? 'bg-brand-green/60' : 'bg-border-default/70'}`}
+      className={`absolute bottom-0 left-[14px] top-[calc(50%+10px)] w-px ${active ? 'bg-accent/60' : 'bg-line/70'}`}
     />
   );
 }

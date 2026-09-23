@@ -9,7 +9,7 @@ interface ProfileSkeletonLoaderProps {
   mode?: 'sidebar' | 'fullpage';
 }
 
-const block = 'rounded bg-surface-3';
+const block = 'rounded bg-surface-muted';
 
 // The placeholder is a fixed stack of blocks, so on a short window it stands
 // taller than the surface — and taller than the profile that replaces it. That
@@ -37,8 +37,8 @@ export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps
       style={{ maxHeight: `calc(100dvh - ${bandH + SKELETON_CHROME_PX}px)` }}
     >
       {/* ══ IDENTITY HERO — avatar beside identity + spaces ══ */}
-      <section className="rounded-2xl border border-border-subtle bg-surface-1 px-5 py-5 shadow-strip sm:px-7 sm:py-7 flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">
-        <div className="w-44 h-44 sm:w-56 sm:h-56 flex-none rounded-2xl bg-surface-3" />
+      <section className="rounded-2xl border border-line-subtle bg-surface px-5 py-5 shadow-strip sm:px-7 sm:py-7 flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">
+        <div className="w-44 h-44 sm:w-56 sm:h-56 flex-none rounded-2xl bg-surface-muted" />
         <div className="min-w-0 flex-1 flex flex-col lg:flex-row lg:items-start gap-6 sm:pt-2">
           <div className="min-w-0 flex-1 space-y-3">
             <div className={`h-8 w-56 ${block}`} />          {/* name */}
@@ -46,12 +46,12 @@ export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps
             <div className={`h-4 w-80 max-w-full ${block}`} /> {/* location · website · contact */}
             <div className={`h-4 w-16 ${block}`} />          {/* spaces */}
             <div className="flex items-center gap-2 pt-1">   {/* actions */}
-              <div className="h-10 w-32 rounded-lg bg-surface-3" />
-              <div className="h-10 w-36 rounded-lg bg-surface-3" />
+              <div className="h-10 w-32 rounded-lg bg-surface-muted" />
+              <div className="h-10 w-36 rounded-lg bg-surface-muted" />
             </div>
           </div>
           <div className="lg:w-72 flex items-center gap-3">  {/* spaces */}
-            <div className="w-10 h-10 rounded-lg bg-surface-3" />
+            <div className="w-10 h-10 rounded-lg bg-surface-muted" />
             <div className="space-y-1.5">
               <div className={`h-4 w-28 ${block}`} />
               <div className={`h-3 w-24 ${block}`} />
@@ -75,7 +75,7 @@ export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps
           <SkeletonCard>
             {[0, 1].map((i) => (
               <div key={i} className="flex gap-4">
-                <div className="w-9 h-9 flex-none rounded-xl bg-surface-3" />
+                <div className="w-9 h-9 flex-none rounded-xl bg-surface-muted" />
                 <div className="flex-1 space-y-2 pt-0.5">
                   <div className={`h-4 w-40 ${block}`} />
                   <div className={`h-3.5 w-28 ${block}`} />
@@ -91,7 +91,7 @@ export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps
           {/* Profile strength */}
           <SkeletonCard>
             <div className="flex items-center gap-3.5">
-              <div className="w-14 h-14 flex-none rounded-full bg-surface-3" />
+              <div className="w-14 h-14 flex-none rounded-full bg-surface-muted" />
               <div className="flex-1 space-y-2">
                 <div className={`h-3.5 w-full ${block}`} />
                 <div className={`h-3.5 w-2/3 ${block}`} />
@@ -104,8 +104,8 @@ export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps
             <div className={`h-4 w-40 ${block}`} />
             <div className={`h-4 w-32 ${block}`} />
             <div className="flex gap-2 pt-1">
-              <div className="w-9 h-9 rounded-xl bg-surface-3" />
-              <div className="w-9 h-9 rounded-xl bg-surface-3" />
+              <div className="w-9 h-9 rounded-xl bg-surface-muted" />
+              <div className="w-9 h-9 rounded-xl bg-surface-muted" />
             </div>
           </SkeletonCard>
         </div>
@@ -117,7 +117,7 @@ export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps
 /** A section matching SectionCard/RailCard — a title on a hairline, then lines. */
 function SkeletonCard({ children }: { children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-border-subtle bg-surface-1 px-5 py-5 shadow-strip sm:px-6 sm:py-6">
+    <section className="rounded-2xl border border-line-subtle bg-surface px-5 py-5 shadow-strip sm:px-6 sm:py-6">
       <div className={`h-5 w-32 mb-4 ${block}`} />
       <div className="space-y-2.5">{children}</div>
     </section>

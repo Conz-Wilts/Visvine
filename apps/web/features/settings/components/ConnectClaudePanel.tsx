@@ -63,7 +63,7 @@ function McpServerUrlRow({ url, label = 'MCP server address' }: { url: string | 
     <div className="flex items-center gap-3">
       <p
         aria-label={label}
-        className="min-w-0 flex-1 select-all break-all text-lg text-text-primary"
+        className="min-w-0 flex-1 select-all break-all text-lg text-fg"
       >
         {url ?? 'Loading…'}
       </p>

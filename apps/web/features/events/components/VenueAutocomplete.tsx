@@ -106,22 +106,22 @@ export function VenueAutocomplete({
         className={className}
       />
       {value.address && value.placeId && (
-        <p className="mt-1.5 flex items-center gap-1.5 text-xs text-text-muted">
+        <p className="mt-1.5 flex items-center gap-1.5 text-xs text-fg-muted">
           <MapPinIcon className="w-3 h-3 flex-none" /> <span className="truncate">{value.address}</span>
         </p>
       )}
       {open && (
-        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-border-default bg-surface-1 shadow-float">
+        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-line bg-surface shadow-float">
           {suggestions.map((s, i) => (
             <li
               key={s.placeId}
               onMouseDown={(e) => { e.preventDefault(); void pick(s); }}
               onMouseEnter={() => setHighlighted(i)}
               className="flex cursor-pointer flex-col px-3 py-2 text-sm transition-colors"
-              style={{ background: i === highlighted ? 'var(--color-surface-2)' : 'transparent' }}
+              style={{ background: i === highlighted ? 'var(--vv-color-surface-subtle)' : 'transparent' }}
             >
-              <span className="font-medium text-text-primary">{s.name}</span>
-              {s.detail && <span className="text-xs text-text-muted">{s.detail}</span>}
+              <span className="font-medium text-fg">{s.name}</span>
+              {s.detail && <span className="text-xs text-fg-muted">{s.detail}</span>}
             </li>
           ))}
         </ul>

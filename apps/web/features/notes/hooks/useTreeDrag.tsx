@@ -39,6 +39,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { motion } from '@visvine/tokens'
 
 /** A row the tree can move: a note, a folder (with everything under it), or a
  *  structural folder that is PLACED rather than moved — a built-in folder or
@@ -97,7 +98,7 @@ const MAX_SCROLL = 14
 /** How far the lift stands in from the panel's edges. */
 const INSET = 6
 const SETTLE_MS = 180
-const SETTLE_EASING = 'cubic-bezier(0.25, 1, 0.5, 1)'
+const SETTLE_EASING = motion.easeCss.settle
 
 /** Where the pointer puts the item: a folder, and a place in it (null = the
  *  folder is shut, so there is nowhere to show one). */
@@ -543,12 +544,12 @@ export function useTreeDrag(options: Options) {
             <div
               ref={holderRef}
               style={{ height: box.height }}
-              className={`tree-lift relative overflow-hidden rounded-[10px] bg-surface-1 ring-1 ${
-                refused ? 'opacity-80 ring-border-default' : 'ring-brand-green/50'
+              className={`tree-lift relative overflow-hidden rounded-[10px] bg-surface ring-1 ${
+                refused ? 'opacity-80 ring-line' : 'ring-accent/50'
               }`}
             />
             {refused && (
-              <div className="mt-1.5 rounded-lg border border-border-subtle bg-surface-1 px-2.5 py-1.5 text-xs leading-snug text-text-muted shadow-float">
+              <div className="mt-1.5 rounded-lg border border-line-subtle bg-surface px-2.5 py-1.5 text-xs leading-snug text-fg-muted shadow-float">
                 {reason}
               </div>
             )}

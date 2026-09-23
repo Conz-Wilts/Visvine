@@ -13,7 +13,7 @@ export default async function ChannelConversationPage({
 
   if (!user) {
     return (
-      <div className="flex h-full items-center justify-center text-text-muted">
+      <div className="flex h-full items-center justify-center text-fg-muted">
         No user found. Add a user to the database to use channels.
       </div>
     );

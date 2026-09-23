@@ -133,24 +133,24 @@ export function CustomDateTimePicker({
 
   return (
     <div ref={containerRef} className="relative">
-      <label className="block text-sm font-medium text-brand-black mb-2">
+      <label className="block text-sm font-medium text-fg mb-2">
         {label}
-        {required && <span className="text-brand-green"> *</span>}
+        {required && <span className="text-accent"> *</span>}
       </label>
 
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 border border-border-subtle rounded-xl bg-brand-white text-left font-medium focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all cursor-pointer hover:border-brand-green flex items-center justify-between gap-2"
+        className="w-full px-4 py-3 border border-line-subtle rounded-xl bg-surface-subtle text-left font-medium focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-all cursor-pointer hover:border-accent flex items-center justify-between gap-2"
       >
-        <span className={selectedDate ? 'text-brand-black' : 'text-brand-grey'}>
+        <span className={selectedDate ? 'text-fg' : 'text-fg-muted'}>
           {formatDisplayValue() || placeholder}
         </span>
-        <CalendarIcon className="w-5 h-5 text-brand-green flex-shrink-0" />
+        <CalendarIcon className="w-5 h-5 text-accent flex-shrink-0" />
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-2 p-4 bg-brand-white border border-border-subtle rounded-xl shadow-float w-[300px]">
+        <div className="absolute z-50 mt-2 p-4 bg-surface-subtle border border-line-subtle rounded-xl shadow-float w-[300px]">
           {/* Calendar */}
           <div className="space-y-3">
             {/* Month navigation */}
@@ -158,26 +158,26 @@ export function CustomDateTimePicker({
               <button
                 type="button"
                 onClick={() => navigateMonth('prev')}
-                className="p-1.5 hover:bg-brand-light-bg rounded-lg transition-colors"
+                className="p-1.5 hover:bg-accent-soft rounded-lg transition-colors"
               >
-                <ChevronLeftIcon className="w-4 h-4 text-brand-green" />
+                <ChevronLeftIcon className="w-4 h-4 text-accent" />
               </button>
-              <h3 className="text-sm font-bold text-brand-black">
+              <h3 className="text-sm font-bold text-fg">
                 {currentMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
               </h3>
               <button
                 type="button"
                 onClick={() => navigateMonth('next')}
-                className="p-1.5 hover:bg-brand-light-bg rounded-lg transition-colors"
+                className="p-1.5 hover:bg-accent-soft rounded-lg transition-colors"
               >
-                <ChevronRightIcon className="w-4 h-4 text-brand-green" />
+                <ChevronRightIcon className="w-4 h-4 text-accent" />
               </button>
             </div>
 
             {/* Week days */}
             <div className="grid grid-cols-7 gap-0.5">
               {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day) => (
-                <div key={day} className="text-center text-[10px] font-semibold text-brand-grey py-1">
+                <div key={day} className="text-center text-[10px] font-semibold text-fg-muted py-1">
                   {day}
                 </div>
               ))}
@@ -194,9 +194,9 @@ export function CustomDateTimePicker({
                   className={`
                     h-8 rounded-lg text-xs font-semibold transition-all
                     ${!day ? 'invisible' : ''}
-                    ${isSelected(day || 0) ? 'bg-brand-green text-brand-white' : ''}
-                    ${!isSelected(day || 0) && isToday(day || 0) ? 'bg-brand-light-bg text-brand-green' : ''}
-                    ${!isSelected(day || 0) && !isToday(day || 0) ? 'text-brand-black hover:bg-brand-light-bg' : ''}
+                    ${isSelected(day || 0) ? 'bg-accent text-fg-inverse' : ''}
+                    ${!isSelected(day || 0) && isToday(day || 0) ? 'bg-accent-soft text-accent' : ''}
+                    ${!isSelected(day || 0) && !isToday(day || 0) ? 'text-fg hover:bg-accent-soft' : ''}
                   `}
                 >
                   {day}
@@ -205,10 +205,10 @@ export function CustomDateTimePicker({
             </div>
 
             {/* Time selection */}
-            <div className="pt-3 border-t border-border-subtle">
+            <div className="pt-3 border-t border-line-subtle">
               <div className="flex items-center gap-1.5 mb-2">
-                <ClockIcon className="w-3.5 h-3.5 text-brand-green" />
-                <span className="text-xs font-semibold text-brand-black">Time</span>
+                <ClockIcon className="w-3.5 h-3.5 text-accent" />
+                <span className="text-xs font-semibold text-fg">Time</span>
               </div>
               
               <div className="flex items-center justify-center gap-2">
@@ -225,12 +225,12 @@ export function CustomDateTimePicker({
                         handleTimeChange(val, selectedTime.minutes);
                       }
                     }}
-                    className="w-full px-2 py-1.5 border border-border-subtle rounded-md bg-brand-white text-brand-black text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-brand-green focus:border-brand-green"
+                    className="w-full px-2 py-1.5 border border-line-subtle rounded-md bg-surface-subtle text-fg text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                   />
-                  <p className="text-[10px] text-brand-grey text-center mt-0.5">Hour</p>
+                  <p className="text-[10px] text-fg-muted text-center mt-0.5">Hour</p>
                 </div>
 
-                <span className="text-lg font-bold text-brand-grey pb-4">:</span>
+                <span className="text-lg font-bold text-fg-muted pb-4">:</span>
 
                 {/* Minutes */}
                 <div className="flex-1 min-w-0">
@@ -245,9 +245,9 @@ export function CustomDateTimePicker({
                         handleTimeChange(selectedTime.hours, val);
                       }
                     }}
-                    className="w-full px-2 py-1.5 border border-border-subtle rounded-md bg-brand-white text-brand-black text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-brand-green focus:border-brand-green"
+                    className="w-full px-2 py-1.5 border border-line-subtle rounded-md bg-surface-subtle text-fg text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
                   />
-                  <p className="text-[10px] text-brand-grey text-center mt-0.5">Min</p>
+                  <p className="text-[10px] text-fg-muted text-center mt-0.5">Min</p>
                 </div>
 
                 {/* AM/PM toggle */}
@@ -261,8 +261,8 @@ export function CustomDateTimePicker({
                       }}
                       className={`px-2 py-1 text-xs font-bold rounded-sm transition-all ${
                         selectedTime.hours < 12
-                          ? 'bg-brand-green text-brand-white'
-                          : 'bg-brand-light-bg text-brand-black hover:bg-brand-light-bg'
+                          ? 'bg-accent text-fg-inverse'
+                          : 'bg-accent-soft text-fg hover:bg-accent-soft'
                       }`}
                     >
                       AM
@@ -275,8 +275,8 @@ export function CustomDateTimePicker({
                       }}
                       className={`px-2 py-1 text-xs font-bold rounded-sm transition-all ${
                         selectedTime.hours >= 12
-                          ? 'bg-brand-green text-brand-white'
-                          : 'bg-brand-light-bg text-brand-black hover:bg-brand-light-bg'
+                          ? 'bg-accent text-fg-inverse'
+                          : 'bg-accent-soft text-fg hover:bg-accent-soft'
                       }`}
                     >
                       PM
@@ -287,7 +287,7 @@ export function CustomDateTimePicker({
             </div>
 
             {/* Quick time presets */}
-            <div className="flex gap-1.5 pt-2 border-t border-border-subtle">
+            <div className="flex gap-1.5 pt-2 border-t border-line-subtle">
               {[
                 { label: '9 AM', hours: 9 },
                 { label: '12 PM', hours: 12 },
@@ -297,7 +297,7 @@ export function CustomDateTimePicker({
                   key={preset.label}
                   type="button"
                   onClick={() => handleTimeChange(preset.hours, 0)}
-                  className="flex-1 px-2 py-1.5 text-[10px] font-semibold text-brand-green bg-brand-light-bg rounded-md hover:bg-brand-light-bg transition-colors"
+                  className="flex-1 px-2 py-1.5 text-[10px] font-semibold text-accent bg-accent-soft rounded-md hover:bg-accent-soft transition-colors"
                 >
                   {preset.label}
                 </button>
@@ -308,7 +308,7 @@ export function CustomDateTimePicker({
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="w-full px-3 py-2 text-xs font-semibold text-brand-white bg-brand-green rounded-lg hover:opacity-90 transition-all"
+              className="w-full px-3 py-2 text-xs font-semibold text-fg-inverse bg-accent rounded-lg hover:opacity-90 transition-all"
             >
               Done
             </button>

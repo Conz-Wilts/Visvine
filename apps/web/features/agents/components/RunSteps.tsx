@@ -64,17 +64,17 @@ function machineLine(event: MachineEvent): { text: string; tone: 'cmd' | 'out' |
 }
 
 const MACHINE_TONE: Record<'cmd' | 'out' | 'bad' | 'meta', string> = {
-  cmd: 'text-text-primary',
-  out: 'text-text-secondary',
-  bad: 'text-red-600',
-  meta: 'text-text-muted italic',
+  cmd: 'text-fg',
+  out: 'text-fg-secondary',
+  bad: 'text-danger',
+  meta: 'text-fg-muted italic',
 };
 
 function MachineRecord({ events }: { events: MachineEvent[] }) {
   const lines = events.map(machineLine).filter((l): l is NonNullable<typeof l> => l !== null);
   if (lines.length === 0) return null;
   return (
-    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface-2 px-3 py-2 font-mono text-[12px] leading-5">
+    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface-subtle px-3 py-2 font-mono text-[12px] leading-5">
       {lines.map((l, i) => (
         <div key={i} className={MACHINE_TONE[l.tone]}>
           {l.text}
@@ -85,7 +85,7 @@ function MachineRecord({ events }: { events: MachineEvent[] }) {
 }
 
 function Chevron({ open }: { open: boolean }) {
-  return <ChevronRightIcon className={`h-3.5 w-3.5 shrink-0 text-text-muted transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />;
+  return <ChevronRightIcon className={`h-3.5 w-3.5 shrink-0 text-fg-muted transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />;
 }
 
 /** One call: the verb, what it touched, how long. Opens onto its result. */
@@ -112,29 +112,29 @@ function Subtask({ step, live, now }: { step: Step; live: boolean; now: number }
             setOpen((o) => !o);
           }
         }}
-        className={`flex h-8 items-center gap-2 rounded px-2 text-[12.5px] ${expandable ? 'cursor-pointer hover:bg-surface-2' : ''}`}
+        className={`flex h-8 items-center gap-2 rounded px-2 text-[12.5px] ${expandable ? 'cursor-pointer hover:bg-surface-subtle' : ''}`}
       >
-        <span className={`shrink-0 ${failed ? 'text-red-600' : 'text-text-muted'}`}>{TOOL_VERB[step.tool ?? '']?.verb ?? step.tool ?? 'Did'}</span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-text-secondary" title={step.detail}>
+        <span className={`shrink-0 ${failed ? 'text-danger' : 'text-fg-muted'}`}>{TOOL_VERB[step.tool ?? '']?.verb ?? step.tool ?? 'Did'}</span>
+        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-fg-secondary" title={step.detail}>
           {path ? (
-            <Link className="hover:text-brand-dark-green hover:underline" href={hrefForNotePath(path, null)} onClick={(e) => e.stopPropagation()}>
+            <Link className="hover:text-accent-strong hover:underline" href={hrefForNotePath(path, null)} onClick={(e) => e.stopPropagation()}>
               {step.detail}
             </Link>
           ) : (
             step.detail
           )}
         </span>
-        {took !== null && <span className="shrink-0 text-[11.5px] tabular-nums text-text-muted">{duration(took)}</span>}
+        {took !== null && <span className="shrink-0 text-[11.5px] tabular-nums text-fg-muted">{duration(took)}</span>}
       </div>
       {open && (
         <div className="px-2 pb-2">
           {hasMachine ? (
             <>
               <MachineRecord events={step.machine!} />
-              {result && failed && <p className="mt-1 font-mono text-[12px] text-red-600">{result.split('\n')[0]}</p>}
+              {result && failed && <p className="mt-1 font-mono text-[12px] text-danger">{result.split('\n')[0]}</p>}
             </>
           ) : (
-            <p className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface-2 px-3 py-2 font-mono text-[12px] leading-5 text-text-secondary">
+            <p className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-surface-subtle px-3 py-2 font-mono text-[12px] leading-5 text-fg-secondary">
               {result}
             </p>
           )}
@@ -154,24 +154,24 @@ function GroupRow({ group, n, live, now, defaultOpen }: { group: StepGroup; n: n
   const expandable = group.subtasks.length > 0 || !!more || group.notes.length > 0;
 
   return (
-    <li className="border-b border-border-subtle">
+    <li className="border-b border-line-subtle">
       <button
         type="button"
         aria-expanded={expandable ? open : undefined}
         disabled={!expandable}
         onClick={() => setOpen((o) => !o)}
-        className={`flex h-11 w-full items-center gap-3 px-1 text-left ${expandable ? 'hover:bg-surface-2' : 'cursor-default'}`}
+        className={`flex h-11 w-full items-center gap-3 px-1 text-left ${expandable ? 'hover:bg-surface-subtle' : 'cursor-default'}`}
       >
-        <span className="flex w-5 shrink-0 justify-center text-[12px] tabular-nums text-text-muted">{running ? <StatusDot tone="live" /> : n}</span>
-        <span className={`min-w-0 flex-1 truncate text-[13.5px] text-text-primary`}>{group.title}</span>
-        {group.subtasks.length > 0 && <span className={`shrink-0 text-[12px] tabular-nums ${group.state === 'failed' ? 'text-red-600' : 'text-text-muted'}`}>{group.subtasks.length}</span>}
+        <span className="flex w-5 shrink-0 justify-center text-[12px] tabular-nums text-fg-muted">{running ? <StatusDot tone="live" /> : n}</span>
+        <span className={`min-w-0 flex-1 truncate text-[13.5px] text-fg`}>{group.title}</span>
+        {group.subtasks.length > 0 && <span className={`shrink-0 text-[12px] tabular-nums ${group.state === 'failed' ? 'text-danger' : 'text-fg-muted'}`}>{group.subtasks.length}</span>}
         {expandable && <Chevron open={open} />}
       </button>
       {open && expandable && (
         <div className="pb-2 pl-8">
-          {more && <p className="whitespace-pre-wrap break-words px-2 pb-1.5 text-[12.5px] text-text-muted">{more}</p>}
+          {more && <p className="whitespace-pre-wrap break-words px-2 pb-1.5 text-[12.5px] text-fg-muted">{more}</p>}
           {group.notes.map((note, i) => (
-            <p key={i} className="px-2 pb-1 text-[12px] text-amber-700">
+            <p key={i} className="px-2 pb-1 text-[12px] text-warning">
               {note}
             </p>
           ))}
@@ -220,7 +220,7 @@ export default function RunSteps({
   }, [live, groups.length, calls]);
 
   if (groups.length === 0) {
-    return <p className="text-[13px] text-text-muted">{emptyText ?? (live ? 'Starting…' : 'Nothing recorded.')}</p>;
+    return <p className="text-[13px] text-fg-muted">{emptyText ?? (live ? 'Starting…' : 'Nothing recorded.')}</p>;
   }
 
   return (

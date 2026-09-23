@@ -64,7 +64,7 @@ export default function InviteLink({ spaceId }: { spaceId: string }) {
       <div className="flex items-center gap-2">
         <p
           aria-label="Invite link"
-          className="min-w-0 flex-1 select-all truncate rounded-xl bg-surface-2 px-3.5 py-2.5 text-sm text-text-secondary"
+          className="min-w-0 flex-1 select-all truncate rounded-xl bg-surface-subtle px-3.5 py-2.5 text-sm text-fg-secondary"
         >
           {url === null ? 'Loading…' : url}
         </p>
@@ -77,7 +77,7 @@ export default function InviteLink({ spaceId }: { spaceId: string }) {
           type="button"
           onClick={() => setConfirmRegenerate(true)}
           disabled={url === null}
-          className="text-xs font-medium text-text-muted transition-colors hover:text-text-primary disabled:opacity-50"
+          className="text-xs font-medium text-fg-muted transition-colors hover:text-fg disabled:opacity-50"
         >
           Regenerate
         </button>

@@ -68,12 +68,12 @@ export function DriveCoverPicker({ spaceId, eventId, onClose, onPicked }: Props)
     <Modal onClose={onClose} title="Drive" size="lg">
       <div className="p-6">
         <div className="relative mb-4">
-          <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-brand-grey" />
+          <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search pictures"
-            className="w-full pl-9 pr-3 py-2 text-sm bg-transparent border border-border-subtle rounded-lg focus:outline-none focus:border-brand-black"
+            className="w-full pl-9 pr-3 py-2 text-sm bg-transparent border border-line-subtle rounded-lg focus:outline-none focus:border-fg"
           />
         </div>
 
@@ -81,10 +81,10 @@ export function DriveCoverPicker({ spaceId, eventId, onClose, onPicked }: Props)
 
         {images === null ? (
           <div className="py-12 flex justify-center">
-            <LoaderCircleIcon className="w-5 h-5 animate-spin text-brand-grey" />
+            <LoaderCircleIcon className="w-5 h-5 animate-spin text-fg-muted" />
           </div>
         ) : shown.length === 0 ? (
-          <p className="py-12 text-sm text-brand-grey text-center">
+          <p className="py-12 text-sm text-fg-muted text-center">
             {images.length === 0
               ? 'No pictures yet.'
               : 'Nothing matches that.'}
@@ -99,7 +99,7 @@ export function DriveCoverPicker({ spaceId, eventId, onClose, onPicked }: Props)
                 disabled={applying !== null}
                 className="group text-left disabled:opacity-50"
               >
-                <div className="relative aspect-[16/9] rounded-lg overflow-hidden bg-surface-2 border border-border-subtle">
+                <div className="relative aspect-[16/9] rounded-lg overflow-hidden bg-surface-subtle border border-line-subtle">
                   {file.fileUrl && (
                     <img src={file.fileUrl} alt={file.name} className="w-full h-full object-cover" />
                   )}
@@ -110,9 +110,9 @@ export function DriveCoverPicker({ spaceId, eventId, onClose, onPicked }: Props)
                     </div>
                   )}
                 </div>
-                <p className="mt-1.5 text-xs text-brand-black truncate">{file.name}</p>
+                <p className="mt-1.5 text-xs text-fg truncate">{file.name}</p>
                 {file.folderId && (
-                  <p className="text-[11px] text-brand-grey inline-flex items-center gap-1">
+                  <p className="text-[11px] text-fg-muted inline-flex items-center gap-1">
                     <FolderIcon className="w-3 h-3" />
                     {folderName.get(file.folderId) ?? 'Folder'}
                   </p>

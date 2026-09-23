@@ -141,7 +141,7 @@ export default function ActivateAgentDialog({
       }
     >
       <div className="flex flex-col gap-4 px-6 py-4 text-sm">
-        <p className="font-mono text-[13px] text-text-muted">{reach.join(' · ')}</p>
+        <p className="font-mono text-[13px] text-fg-muted">{reach.join(' · ')}</p>
 
         <Field label="Runs">
           <Select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
@@ -173,7 +173,7 @@ export default function ActivateAgentDialog({
                     </option>
                   ))}
                 </Select>
-                <span className="text-text-muted">:</span>
+                <span className="text-fg-muted">:</span>
                 <Select value={atMinute} onChange={(e) => setAt(`${atHour}:${e.target.value}`)} aria-label="Minute" className="flex-1">
                   {(MINUTES.includes(atMinute) ? MINUTES : [...MINUTES, atMinute].sort()).map((m) => (
                     <option key={m} value={m}>
@@ -216,18 +216,18 @@ export default function ActivateAgentDialog({
         )}
 
         {!showTriggers ? (
-          <button type="button" className="self-start text-[13px] font-semibold text-brand-dark-green hover:underline" onClick={() => setShowTriggers(true)}>
+          <button type="button" className="self-start text-[13px] font-semibold text-accent-strong hover:underline" onClick={() => setShowTriggers(true)}>
             + Triggers
           </button>
         ) : (
-          <div className="flex flex-col gap-3 border-t border-border-subtle pt-4">
+          <div className="flex flex-col gap-3 border-t border-line-subtle pt-4">
             <Field label="On changes under">
               <textarea
                 value={contextGlobs}
                 onChange={(e) => setContextGlobs(e.target.value)}
                 rows={2}
                 placeholder={'people/**\nupdates/*.md'}
-                className="w-full rounded-lg bg-surface-2 px-2.5 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:ring-1 focus:ring-border-default"
+                className="w-full rounded-lg bg-surface-subtle px-2.5 py-1.5 font-mono text-[13px] text-fg outline-none focus:ring-1 focus:ring-line"
               />
             </Field>
             <Field label="On webhook from">
@@ -249,7 +249,7 @@ export default function ActivateAgentDialog({
           </div>
         )}
 
-        {error && <p className="border-l-2 border-red-500 pl-3 text-[13px] text-red-700">{error}</p>}
+        {error && <p className="border-l-2 border-danger-bright pl-3 text-[13px] text-danger-strong">{error}</p>}
       </div>
     </Modal>
   );

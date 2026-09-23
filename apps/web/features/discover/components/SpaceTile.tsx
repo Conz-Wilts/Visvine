@@ -67,7 +67,7 @@ export default function SpaceTile({
       onClick={() => router.push(href)}
       onKeyDown={(e) => { if (e.key === 'Enter') router.push(href); }}
       style={style}
-      className="group relative z-0 flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl bg-surface-1 transition-[box-shadow,transform] duration-200 hover:z-10 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_16px_32px_rgba(0,0,0,0.16),0_0_20px_4px_var(--card-glow-strong)]"
+      className="group relative z-0 flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl bg-surface transition-[box-shadow,transform] duration-200 hover:z-10 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_16px_32px_rgba(0,0,0,0.16),0_0_20px_4px_var(--card-glow-strong)]"
     >
       <div className="aspect-square w-full shrink-0 overflow-hidden">
         {mark.imageUrl ? (
@@ -88,11 +88,11 @@ export default function SpaceTile({
         <Link
           href={href}
           onClick={(e) => e.stopPropagation()}
-          className="line-clamp-1 text-base font-semibold leading-tight text-text-primary"
+          className="line-clamp-1 text-base font-semibold leading-tight text-fg"
         >
           {space.name}
         </Link>
-        <p className="flex max-w-full items-center justify-center gap-1.5 text-[13px] leading-[1.35] text-text-muted">
+        <p className="flex max-w-full items-center justify-center gap-1.5 text-[13px] leading-[1.35] text-fg-muted">
           {country && <CountryFlagIcon code={country} className="h-[11px] w-[15px] shrink-0" />}
           <span className="truncate">{facts}</span>
         </p>

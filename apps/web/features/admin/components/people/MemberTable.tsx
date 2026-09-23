@@ -105,14 +105,14 @@ export default function MemberTable() {
       <div>
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border-subtle text-left">
-              <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Member</th>
-              <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Aliases</th>
-              <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Context access</th>
-              <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Joined</th>
+            <tr className="border-b border-line-subtle text-left">
+              <th className="pb-2 pr-4 text-xs font-normal text-fg-muted">Member</th>
+              <th className="pb-2 pr-4 text-xs font-normal text-fg-muted">Aliases</th>
+              <th className="pb-2 pr-4 text-xs font-normal text-fg-muted">Context access</th>
+              <th className="pb-2 pr-4 text-xs font-normal text-fg-muted">Joined</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border-subtle">
+          <tbody className="divide-y divide-line-subtle">
             {rows.map((member) => {
               const standing = reachByMember.get(member.userId);
               return (
@@ -139,7 +139,7 @@ export default function MemberTable() {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-8 text-center text-sm text-text-muted">
+                <td colSpan={4} className="py-8 text-center text-sm text-fg-muted">
                   {query ? 'Nobody matches your search' : 'Nobody here yet'}
                 </td>
               </tr>
@@ -149,7 +149,7 @@ export default function MemberTable() {
       </div>
 
       {hidden > 0 && (
-        <div className="flex items-center justify-between gap-3 text-xs text-text-muted">
+        <div className="flex items-center justify-between gap-3 text-xs text-fg-muted">
           <span>
             {rows.length} of {filtered.length}
             {query ? ' matching' : ''}
@@ -158,7 +158,7 @@ export default function MemberTable() {
             <button
               type="button"
               onClick={() => setShown((n) => n + PAGE)}
-              className="font-medium text-text-secondary transition-colors hover:text-text-primary"
+              className="font-medium text-fg-secondary transition-colors hover:text-fg"
             >
               Show {Math.min(PAGE, hidden)} more
             </button>
@@ -166,7 +166,7 @@ export default function MemberTable() {
               <button
                 type="button"
                 onClick={() => setShown(filtered.length)}
-                className="transition-colors hover:text-text-primary"
+                className="transition-colors hover:text-fg"
               >
                 Show all {filtered.length}
               </button>
@@ -211,23 +211,23 @@ function MemberRow({ member, held, summary, level, open, onToggle, children }: {
     <>
       <tr
         onClick={onToggle}
-        className={`cursor-pointer transition ${open ? 'bg-surface-2' : 'hover:bg-surface-2'}`}
+        className={`cursor-pointer transition ${open ? 'bg-surface-subtle' : 'hover:bg-surface-subtle'}`}
       >
         <td className="py-3 pr-4">
           <div className="flex items-center gap-2.5">
             <ChevronRightIcon
-              className={`h-3.5 w-3.5 shrink-0 text-text-muted transition-transform ${open ? 'rotate-90' : ''}`}
+              className={`h-3.5 w-3.5 shrink-0 text-fg-muted transition-transform ${open ? 'rotate-90' : ''}`}
             />
             <Avatar name={member.user.name} imageUrl={member.user.image} size="sm" />
             <div className="min-w-0">
-              <div className="truncate font-medium text-text-primary">{member.user.name}</div>
-              <div className="truncate text-xs text-text-muted">{member.user.email}</div>
+              <div className="truncate font-medium text-fg">{member.user.name}</div>
+              <div className="truncate text-xs text-fg-muted">{member.user.email}</div>
             </div>
           </div>
         </td>
         <td className="py-3 pr-4">
           {held.length === 0 ? (
-            <span className="text-xs text-text-muted">—</span>
+            <span className="text-xs text-fg-muted">—</span>
           ) : (
             <div className="flex flex-wrap gap-1">
               {held.map((a) => (
@@ -240,19 +240,19 @@ function MemberRow({ member, held, summary, level, open, onToggle, children }: {
         </td>
         <td className="py-3 pr-4 whitespace-nowrap text-xs">
           {held.some((a) => a.admin) ? (
-            <span className="text-brand-gold">Admin — everything</span>
+            <span className="text-admin">Admin — everything</span>
           ) : (
-            <span className={level >= LEVEL_EDIT ? 'text-text-primary' : level > 0 ? 'text-text-secondary' : 'text-text-muted'}>
+            <span className={level >= LEVEL_EDIT ? 'text-fg' : level > 0 ? 'text-fg-secondary' : 'text-fg-muted'}>
               {summary}
             </span>
           )}
         </td>
-        <td className="py-3 whitespace-nowrap text-xs text-text-secondary">
+        <td className="py-3 whitespace-nowrap text-xs text-fg-secondary">
           {joinedLabel(member.joinedAt)}
         </td>
       </tr>
       {open && (
-        <tr className="bg-surface-2/60">
+        <tr className="bg-surface-subtle/60">
           <td colSpan={4} className="px-2 pb-5 pt-1 sm:px-9">
             {children}
           </td>
@@ -266,7 +266,7 @@ function MemberRow({ member, held, summary, level, open, onToggle, children }: {
 function Block({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
-      <h5 className="mb-1.5 text-xs font-medium text-text-muted">
+      <h5 className="mb-1.5 text-xs font-medium text-fg-muted">
         {title}
         {hint && <span className="ml-1.5 font-normal opacity-80">{hint}</span>}
       </h5>
@@ -328,7 +328,7 @@ function MemberAccess({ spaceId, member, data, reach, busy, run, onRemove }: {
     <div className="space-y-4">
       <Block title="Aliases" hint="— click to give or take away">
         {data.aliases.length === 0 ? (
-          <p className="text-xs text-text-muted">This space has no aliases yet. Make one on Types, under Person.</p>
+          <p className="text-xs text-fg-muted">This space has no aliases yet. Make one on Types, under Person.</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {data.aliases.map((alias) => (
@@ -351,17 +351,17 @@ function MemberAccess({ spaceId, member, data, reach, busy, run, onRemove }: {
           {inherited.map(({ grant, via }) => (
             <div
               key={grant.id}
-              className="flex items-center gap-2.5 rounded-lg px-1 py-1 text-sm text-text-primary"
+              className="flex items-center gap-2.5 rounded-lg px-1 py-1 text-sm text-fg"
             >
               <PathLabel path={grant.resourcePath} contextName={data.contextName} paths={data.paths} />
               <ViaChip via={via} />
-              <span className="w-16 shrink-0 text-right text-xs font-medium text-text-secondary">
+              <span className="w-16 shrink-0 text-right text-xs font-medium text-fg-secondary">
                 {levelDisplayLabel(levelName(grant.level))}
               </span>
             </div>
           ))}
           {inherited.length === 0 && direct.length === 0 && !isAdmin && (
-            <p className="px-1 text-xs text-text-muted">
+            <p className="px-1 text-xs text-fg-muted">
               Nothing reaches {member.user.name.split(' ')[0]} yet — give them an alias above, or a folder or note below.
             </p>
           )}

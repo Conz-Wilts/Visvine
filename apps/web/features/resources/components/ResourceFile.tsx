@@ -128,7 +128,7 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
 
   if (loading) {
     return (
-      <div className={`flex ${className} items-center justify-center text-sm text-text-muted`}>
+      <div className={`flex ${className} items-center justify-center text-sm text-fg-muted`}>
         <LoaderCircleIcon className="w-5 h-5 animate-spin mr-2" /> Loading resource…
       </div>
     );
@@ -142,7 +142,7 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
     );
   }
 
-  const badge = FILE_BADGE[resource.fileType] ?? 'bg-surface-2 text-text-muted border-border-subtle';
+  const badge = FILE_BADGE[resource.fileType] ?? 'bg-surface-subtle text-fg-muted border-line-subtle';
   const label = FILE_LABEL[resource.fileType] ?? resource.fileType.toUpperCase();
 
   return (
@@ -153,10 +153,10 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
           <FileTypeIcon type={resource.fileType} className="h-14 w-14 flex-none" />
           <div className="min-w-0">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-bold text-text-primary font-title leading-tight truncate">{resource.name}</h1>
+              <h1 className="text-lg sm:text-xl font-bold text-fg font-title leading-tight truncate">{resource.name}</h1>
               <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border flex-none ${badge}`}>{label}</span>
             </div>
-            <div className="flex items-center gap-1.5 mt-1 text-xs text-text-muted flex-wrap">
+            <div className="flex items-center gap-1.5 mt-1 text-xs text-fg-muted flex-wrap">
               {detail?.uploader && (
                 <>
                   <span className="inline-flex items-center gap-1.5">
@@ -165,8 +165,8 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
                       : <span className="w-4 h-4 rounded-md overflow-hidden"><PersonSilhouette /></span>}
                     Uploaded by{' '}
                     {detail.uploader.personId
-                      ? <Link href={`/directory/${encodeURIComponent(detail.uploader.personId)}`} className="font-semibold text-text-secondary hover:underline">{detail.uploader.name}</Link>
-                      : <span className="font-semibold text-text-secondary">{detail.uploader.name}</span>}
+                      ? <Link href={`/directory/${encodeURIComponent(detail.uploader.personId)}`} className="font-semibold text-fg-secondary hover:underline">{detail.uploader.name}</Link>
+                      : <span className="font-semibold text-fg-secondary">{detail.uploader.name}</span>}
                   </span>
                   <span>·</span>
                 </>
@@ -174,7 +174,7 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
               <span>{new Date(resource.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</span>
               {resource.fileSize ? <><span>·</span><span>{formatBytes(resource.fileSize)}</span></> : null}
               <span>·</span>
-              <button onClick={() => setTab('comments')} className="inline-flex items-center gap-1 font-semibold text-text-secondary hover:underline">
+              <button onClick={() => setTab('comments')} className="inline-flex items-center gap-1 font-semibold text-fg-secondary hover:underline">
                 <MessageSquareIcon className="w-3 h-3" /> {comments.length}
               </button>
             </div>
@@ -213,13 +213,13 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
           })()}
           {isSpreadsheet && selectedCell && (
             <button onClick={() => setShowPropose(true)}
-                    className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-[13px] font-bold text-brand-dark-green bg-brand-light-bg border border-brand-green/40 hover:bg-brand-green/15 transition">
+                    className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-[13px] font-bold text-accent-strong bg-accent-soft border border-accent/40 hover:bg-accent/15 transition">
               <GitPullRequestIcon className="w-4 h-4" /> Propose change · {selectedCell}
             </button>
           )}
           {resource.fileUrl && (
             <a href={resource.fileUrl} target="_blank" rel="noopener noreferrer"
-               className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl text-[13px] font-bold text-white bg-brand-green hover:opacity-95 active:scale-[0.99] transition">
+               className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl text-[13px] font-bold text-white bg-accent hover:opacity-95 active:scale-[0.99] transition">
               <DownloadIcon className="w-4 h-4" /> <span className="hidden sm:inline">Download</span>
             </a>
           )}
@@ -227,11 +227,11 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
       </div>
 
       {/* ── body: viewer + activity panel ── */}
-      <div className="flex flex-1 min-h-0 flex-col lg:flex-row overflow-y-auto lg:overflow-hidden border-t border-border-subtle">
+      <div className="flex flex-1 min-h-0 flex-col lg:flex-row overflow-y-auto lg:overflow-hidden border-t border-line-subtle">
         {/* viewer */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-[60vh] lg:min-h-0 bg-surface-2">
+        <div className="flex flex-col flex-1 min-w-0 min-h-[60vh] lg:min-h-0 bg-surface-subtle">
           {resource.fileType === 'docx' ? (
-            <div className="flex flex-1 overflow-hidden bg-surface-1"><DocxViewer resourceId={resource.id} /></div>
+            <div className="flex flex-1 overflow-hidden bg-surface"><DocxViewer resourceId={resource.id} /></div>
           ) : !resource.fileUrl ? (
             <FileUnavailable />
           ) : resource.fileType === 'pdf' ? (
@@ -241,7 +241,7 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
               <img src={resource.fileUrl} alt={resource.name} className="max-w-full max-h-full object-contain rounded-xl shadow" />
             </div>
           ) : isSpreadsheet ? (
-            <div className="flex-1 overflow-hidden flex flex-col bg-surface-1">
+            <div className="flex-1 overflow-hidden flex flex-col bg-surface">
               <SpreadsheetViewer
                 key={resource.id}
                 resourceId={resource.id}
@@ -254,14 +254,14 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 p-12 text-center">
               <FileTypeIcon type={resource.fileType} className="h-16 w-16" />
-              <p className="text-sm font-semibold text-text-primary">{resource.name}</p>
-              <p className="text-xs text-text-muted">No preview available for this file type.</p>
+              <p className="text-sm font-semibold text-fg">{resource.name}</p>
+              <p className="text-xs text-fg-muted">No preview available for this file type.</p>
               <a href={resource.fileUrl} target="_blank" rel="noopener noreferrer"
-                 className="mt-1 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white bg-brand-green hover:opacity-95 transition">
+                 className="mt-1 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white bg-accent hover:opacity-95 transition">
                 <DownloadIcon className="w-4 h-4" /> Download
               </a>
               {resource.indexState === 'indexed' && (
-                <p className="text-xs text-text-tertiary">
+                <p className="text-xs text-fg-subtle">
                   Its contents are indexed and searchable from the context.
                 </p>
               )}
@@ -270,8 +270,8 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
         </div>
 
         {/* activity panel */}
-        <aside className="flex flex-col w-full lg:w-[360px] flex-none border-t lg:border-t-0 lg:border-l border-border-subtle lg:min-h-0">
-          <div className="flex gap-1 px-3 pt-2 border-b border-border-subtle">
+        <aside className="flex flex-col w-full lg:w-[360px] flex-none border-t lg:border-t-0 lg:border-l border-line-subtle lg:min-h-0">
+          <div className="flex gap-1 px-3 pt-2 border-b border-line-subtle">
             <PanelTabBtn active={tab === 'comments'} onClick={() => setTab('comments')}
                          icon={<MessageSquareIcon className="w-3.5 h-3.5" />} label="Comments" count={comments.length} />
             {isSpreadsheet && (
@@ -321,16 +321,16 @@ function PanelTabBtn({ active, onClick, icon, label, count, highlight }: {
 }) {
   return (
     <button onClick={onClick}
-            className={`relative flex items-center gap-1.5 px-3 py-2.5 text-[13px] font-semibold transition ${active ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}>
+            className={`relative flex items-center gap-1.5 px-3 py-2.5 text-[13px] font-semibold transition ${active ? 'text-fg' : 'text-fg-muted hover:text-fg-secondary'}`}>
       {icon} {label}
       {count != null && count > 0 && (
         <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10.5px] font-bold ${
-          highlight ? 'bg-amber-500 text-white' : 'bg-surface-3 text-text-muted'
+          highlight ? 'bg-warning-bright text-white' : 'bg-surface-muted text-fg-muted'
         }`}>
           {count}
         </span>
       )}
-      {active && <span className="absolute left-2 right-2 bottom-0 h-[3px] rounded-t bg-brand-green" />}
+      {active && <span className="absolute left-2 right-2 bottom-0 h-[3px] rounded-t bg-accent" />}
     </button>
   );
 }
@@ -362,44 +362,44 @@ function CommentsTab({ comments, selectedCell, onSelectCell, resourceId, authorN
     <div className="flex flex-col h-full">
       <div className="flex-1 p-4 space-y-3">
         {comments.length === 0 ? (
-          <p className="py-10 text-center text-sm text-text-muted">
+          <p className="py-10 text-center text-sm text-fg-muted">
             No comments yet — ask a question or leave a note for the space.
           </p>
         ) : (
           comments.map((c) => (
-            <div key={c.id} className="rounded-2xl border border-border-subtle p-3">
+            <div key={c.id} className="rounded-2xl border border-line-subtle p-3">
               <div className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-md overflow-hidden flex-none">
                   <PersonSilhouette />
                 </span>
-                <b className="text-[13px] font-bold text-text-primary truncate">{c.author}</b>
-                <span className="text-[11px] text-text-muted ml-auto flex-none">{timeAgo(c.createdAt)}</span>
+                <b className="text-[13px] font-bold text-fg truncate">{c.author}</b>
+                <span className="text-[11px] text-fg-muted ml-auto flex-none">{timeAgo(c.createdAt)}</span>
               </div>
               {c.cellRef && (
                 <button onClick={() => onSelectCell?.(c.cellRef ?? null)} disabled={!onSelectCell}
-                        className="mt-1.5 inline-flex items-center h-5 px-2 rounded-md text-[10.5px] font-bold bg-brand-green text-white disabled:cursor-default">
+                        className="mt-1.5 inline-flex items-center h-5 px-2 rounded-md text-[10.5px] font-bold bg-accent text-white disabled:cursor-default">
                   {c.cellRef}
                 </button>
               )}
-              <p className="mt-1.5 text-[13px] text-text-secondary leading-relaxed whitespace-pre-line">{c.content}</p>
+              <p className="mt-1.5 text-[13px] text-fg-secondary leading-relaxed whitespace-pre-line">{c.content}</p>
             </div>
           ))
         )}
       </div>
 
-      <div className="p-3 border-t border-border-subtle">
+      <div className="p-3 border-t border-line-subtle">
         {selectedCell && (
-          <div className="flex items-center justify-between mb-2 text-[11px] text-text-muted">
-            <span>Commenting on cell <b className="text-brand-dark-green">{selectedCell}</b></span>
-            {onSelectCell && <button onClick={() => onSelectCell(null)} className="hover:text-text-primary">Clear</button>}
+          <div className="flex items-center justify-between mb-2 text-[11px] text-fg-muted">
+            <span>Commenting on cell <b className="text-accent-strong">{selectedCell}</b></span>
+            {onSelectCell && <button onClick={() => onSelectCell(null)} className="hover:text-fg">Clear</button>}
           </div>
         )}
         <div className="flex items-end gap-2">
           <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)}
                     placeholder="Add a comment…"
-                    className="flex-1 px-3 py-2 border border-border-default rounded-xl bg-surface-1 text-sm text-text-primary placeholder:text-text-muted resize-none focus:outline-none focus:ring-2 focus:ring-brand-green/40 focus:border-brand-green transition" />
+                    className="flex-1 px-3 py-2 border border-line rounded-xl bg-surface text-sm text-fg placeholder:text-fg-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition" />
           <button onClick={post} disabled={posting || !text.trim()}
-                  className="h-9 w-9 grid place-items-center rounded-xl text-white bg-brand-green hover:opacity-95 disabled:opacity-50 transition flex-none">
+                  className="h-9 w-9 grid place-items-center rounded-xl text-white bg-accent hover:opacity-95 disabled:opacity-50 transition flex-none">
             {posting ? <LoaderCircleIcon className="w-4 h-4 animate-spin" /> : <SendIcon className="w-4 h-4" />}
           </button>
         </div>
@@ -415,7 +415,7 @@ function ChangesTab({ changes, canReview, onReview }: {
 }) {
   if (changes.length === 0) {
     return (
-      <p className="px-4 py-10 text-center text-sm text-text-muted">
+      <p className="px-4 py-10 text-center text-sm text-fg-muted">
         No proposed changes — select a cell in the spreadsheet to propose an edit.
       </p>
     );
@@ -423,29 +423,29 @@ function ChangesTab({ changes, canReview, onReview }: {
   return (
     <div className="p-4 space-y-3">
       {changes.map((c) => (
-        <div key={c.id} className="rounded-2xl border border-border-subtle p-3">
+        <div key={c.id} className="rounded-2xl border border-line-subtle p-3">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center h-5 px-2 rounded-md text-[10.5px] font-bold bg-brand-green text-white">
+            <span className="inline-flex items-center h-5 px-2 rounded-md text-[10.5px] font-bold bg-accent text-white">
               {c.cellRef}
             </span>
             <StatusBadge status={c.status} />
-            <span className="text-[11px] text-text-muted ml-auto">{timeAgo(c.createdAt)}</span>
+            <span className="text-[11px] text-fg-muted ml-auto">{timeAgo(c.createdAt)}</span>
           </div>
           <div className="mt-2 text-[13px]">
             {c.originalValue != null && c.originalValue !== '' && (
-              <span className="line-through text-text-muted mr-2">{c.originalValue}</span>
+              <span className="line-through text-fg-muted mr-2">{c.originalValue}</span>
             )}
-            <b className="font-bold text-brand-dark-green">{c.proposedValue}</b>
+            <b className="font-bold text-accent-strong">{c.proposedValue}</b>
           </div>
-          {c.reason && <p className="mt-1 text-xs text-text-muted italic">&ldquo;{c.reason}&rdquo;</p>}
+          {c.reason && <p className="mt-1 text-xs text-fg-muted italic">&ldquo;{c.reason}&rdquo;</p>}
           {canReview && c.status === 'pending' && (
             <div className="flex gap-2 mt-2.5">
               <button onClick={() => onReview(c.id, 'approved')}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs font-bold text-white bg-brand-green hover:opacity-95 transition">
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs font-bold text-white bg-accent hover:opacity-95 transition">
                 <CheckIcon className="w-3.5 h-3.5" /> Approve
               </button>
               <button onClick={() => onReview(c.id, 'rejected')}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs font-bold text-text-secondary bg-surface-2 border border-border-default hover:bg-surface-3 transition">
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs font-bold text-fg-secondary bg-surface-subtle border border-line hover:bg-surface-muted transition">
                 <XIcon className="w-3.5 h-3.5" /> Reject
               </button>
             </div>
@@ -458,12 +458,12 @@ function ChangesTab({ changes, canReview, onReview }: {
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    pending: 'bg-amber-500 text-white border-amber-500',
-    approved: 'bg-green-600 text-white border-green-600',
-    rejected: 'bg-rose-600 text-white border-rose-600',
+    pending: 'bg-warning-bright text-white border-warning-bright',
+    approved: 'bg-success text-white border-success',
+    rejected: 'bg-danger text-white border-danger',
   };
   return (
-    <span className={`inline-flex items-center h-5 px-2 rounded-md text-[10.5px] font-semibold border capitalize ${styles[status] ?? 'bg-surface-2 text-text-muted border-border-default'}`}>
+    <span className={`inline-flex items-center h-5 px-2 rounded-md text-[10.5px] font-semibold border capitalize ${styles[status] ?? 'bg-surface-subtle text-fg-muted border-line'}`}>
       {status}
     </span>
   );
@@ -478,21 +478,21 @@ function DetailsTab({ resource, uploader }: { resource: Resource; uploader: Uplo
       <DetailRow label="Uploaded" value={new Date(resource.createdAt).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })} />
       {uploader && (
         <div>
-          <div className="text-xs text-text-muted mb-1">Uploaded by</div>
+          <div className="text-xs text-fg-muted mb-1">Uploaded by</div>
           <div className="flex items-center gap-2">
             {uploader.image
               ? <img src={uploader.image} alt="" className="w-6 h-6 rounded-md object-cover" />
               : <span className="w-6 h-6 rounded-md overflow-hidden"><PersonSilhouette /></span>}
             {uploader.personId
-              ? <Link href={`/directory/${encodeURIComponent(uploader.personId)}`} className="text-sm font-semibold text-text-primary hover:underline">{uploader.name}</Link>
-              : <span className="text-sm font-semibold text-text-primary">{uploader.name}</span>}
+              ? <Link href={`/directory/${encodeURIComponent(uploader.personId)}`} className="text-sm font-semibold text-fg hover:underline">{uploader.name}</Link>
+              : <span className="text-sm font-semibold text-fg">{uploader.name}</span>}
           </div>
         </div>
       )}
       {meta.originalFilename && <DetailRow label="Original filename" value={meta.originalFilename} />}
       {meta.sheetNames && meta.sheetNames.length > 0 && (
         <div>
-          <div className="text-xs text-text-muted mb-1.5">Sheets</div>
+          <div className="text-xs text-fg-muted mb-1.5">Sheets</div>
           <div className="flex flex-wrap gap-1.5">
             {meta.sheetNames.map((s) => (
               <Chip key={s} tone="muted" size="md">{s}</Chip>
@@ -507,8 +507,8 @@ function DetailsTab({ resource, uploader }: { resource: Resource; uploader: Uplo
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-xs text-text-muted">{label}</div>
-      <div className="text-sm font-semibold text-text-primary break-words">{value}</div>
+      <div className="text-xs text-fg-muted">{label}</div>
+      <div className="text-sm font-semibold text-fg break-words">{value}</div>
     </div>
   );
 }

@@ -23,6 +23,7 @@ import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import { reviewSpaceVersion } from '@/features/tools/lib/client';
 import { timeAgo } from '@/lib/date';
 import type { ApprovalQueueItem } from '@/lib/tools/api';
+import { color } from '@visvine/tokens';
 
 export default function ApprovalsTab({
   spaceId,
@@ -100,33 +101,33 @@ function QueueRow({
   };
 
   return (
-    <section className="border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
+    <section className="border-t border-line-subtle pt-5 first:border-t-0 first:pt-0">
       <header className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-text-primary">{item.title}</h3>
-            <Chip tone="solid" size="sm" color="#d97706">
+            <h3 className="truncate text-sm font-semibold text-fg">{item.title}</h3>
+            <Chip tone="solid" size="sm" color={color.warning.default}>
               v{item.version} · Waiting
             </Chip>
           </div>
-          <p className="truncate font-mono text-[11px] text-text-muted">
+          <p className="truncate font-mono text-[11px] text-fg-muted">
             {item.name} · {item.author.name ?? 'someone who has since left'} ·{' '}
             {timeAgo(item.submittedAt)}
           </p>
           {item.description && (
-            <p className="mt-1 line-clamp-2 text-sm text-text-secondary">{item.description}</p>
+            <p className="mt-1 line-clamp-2 text-sm text-fg-secondary">{item.description}</p>
           )}
         </div>
       </header>
 
       {item.releaseNotes && (
-        <p className="mt-3 border-l-2 border-border-default pl-3 text-sm text-text-secondary">
-          <span className="font-medium text-text-primary">What changed</span> — {item.releaseNotes}
+        <p className="mt-3 border-l-2 border-line pl-3 text-sm text-fg-secondary">
+          <span className="font-medium text-fg">What changed</span> — {item.releaseNotes}
         </p>
       )}
       {item.reviewNote && (
-        <p className="mt-2 border-l-2 border-border-default pl-3 text-sm text-text-secondary">
-          <span className="font-medium text-text-primary">Note to you</span> — {item.reviewNote}
+        <p className="mt-2 border-l-2 border-line pl-3 text-sm text-fg-secondary">
+          <span className="font-medium text-fg">Note to you</span> — {item.reviewNote}
         </p>
       )}
 
@@ -137,7 +138,7 @@ function QueueRow({
         perimeter={item.perimeter}
         diff={item.previousVersion ? item.perimeterDiff : undefined}
       />
-      <p className="mt-2 text-xs text-text-muted">
+      <p className="mt-2 text-xs text-fg-muted">
         {item.previousVersion
           ? `Compared with v${item.previousVersion.version}, the last version this space approved.`
           : 'The first version of this tool — everything it declares is new here.'}

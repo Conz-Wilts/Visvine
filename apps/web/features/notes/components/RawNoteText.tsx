@@ -28,8 +28,8 @@ interface RawNoteTextProps {
 }
 
 const TYPOGRAPHY = 'font-mono text-sm leading-relaxed whitespace-pre-wrap break-words'
-const HELD = 'rounded-sm bg-surface-3 text-text-muted [box-decoration-break:clone] [-webkit-box-decoration-break:clone] transition-colors duration-300'
-const REFUSED = 'rounded-sm bg-red-500/15 text-red-700 [box-decoration-break:clone] [-webkit-box-decoration-break:clone]'
+const HELD = 'rounded-sm bg-surface-muted text-fg-muted [box-decoration-break:clone] [-webkit-box-decoration-break:clone] transition-colors duration-300'
+const REFUSED = 'rounded-sm bg-danger-bright/15 text-danger-strong [box-decoration-break:clone] [-webkit-box-decoration-break:clone]'
 
 export function RawNoteText({ value, onChange, heldKeys, readOnly, className, textareaRef }: RawNoteTextProps) {
   const spans = useMemo(() => heldSpans(value, heldKeys), [value, heldKeys])
@@ -89,7 +89,7 @@ export function RawNoteText({ value, onChange, heldKeys, readOnly, className, te
 
   return (
     <div className={`relative ${className ?? ''}`}>
-      <pre aria-hidden className={`pointer-events-none absolute inset-0 m-0 overflow-hidden text-text-primary ${TYPOGRAPHY}`}>
+      <pre aria-hidden className={`pointer-events-none absolute inset-0 m-0 overflow-hidden text-fg ${TYPOGRAPHY}`}>
         {painted.map((part, i) =>
           part.held ? (
             <span key={i} className={refused ? REFUSED : HELD}>
@@ -110,7 +110,7 @@ export function RawNoteText({ value, onChange, heldKeys, readOnly, className, te
         onBlur={() => setRefused(false)}
         readOnly={readOnly}
         spellCheck={false}
-        className={`relative block h-full w-full resize-none overflow-hidden bg-transparent text-transparent caret-text-primary focus:outline-none ${TYPOGRAPHY}`}
+        className={`relative block h-full w-full resize-none overflow-hidden bg-transparent text-transparent caret-fg focus:outline-none ${TYPOGRAPHY}`}
       />
     </div>
   )

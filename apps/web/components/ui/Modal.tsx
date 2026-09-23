@@ -65,7 +65,7 @@ export default function Modal({
   closeOnEscape = true,
   overlayClassName = 'items-center justify-center p-4 bg-black/40',
   overlayStyle,
-  panelClassName = 'bg-surface-1 rounded-xl shadow-float flex flex-col max-h-[90vh]',
+  panelClassName = 'bg-surface rounded-xl shadow-float flex flex-col max-h-[90vh]',
   panelStyle,
   ariaLabel,
 }: ModalProps) {
@@ -86,12 +86,12 @@ export default function Modal({
     >
       <div className={`w-full ${maxWidth ?? SIZE_CLASSES[size]} ${panelClassName}`} style={panelStyle}>
         {title != null && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle flex-shrink-0">
-            <h2 className="text-base font-semibold text-text-primary">{title}</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-line-subtle flex-shrink-0">
+            <h2 className="text-base font-semibold text-fg">{title}</h2>
             <button
               onClick={onClose}
               aria-label="Close"
-              className="p-1.5 rounded-lg text-text-muted hover:bg-surface-3 hover:text-text-primary transition-colors"
+              className="p-1.5 rounded-lg text-fg-muted hover:bg-surface-muted hover:text-fg transition-colors"
             >
               <XIcon className="w-4 h-4" />
             </button>

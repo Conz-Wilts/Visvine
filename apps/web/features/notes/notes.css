@@ -68,14 +68,14 @@
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: -0.02em;
-  color: var(--color-text-primary, #111827);
+  color: var(--vv-color-fg);
 }
 
 /* In-body H1s (the title lives above the body, but a note may still use one as a
  * section heading) need explicit styling: .note-prose only defines h2/h3, and
  * Tailwind's preflight flattens unstyled headings to body size. */
 .notes-editor h1 {
-  color: #000;
+  color: var(--vv-color-fg);
   font-size: 1.5rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -100,7 +100,7 @@
   display: block;
   height: 1px;
   margin-bottom: 20px;
-  background: var(--color-border-subtle);
+  background: var(--vv-color-line-subtle);
 }
 /* The filter narrows both groups at once. Quiet field, no border at rest —
  * it sits under the note body, not over it. */
@@ -118,7 +118,7 @@
   width: 15px;
   height: 15px;
   flex-shrink: 0;
-  color: var(--color-text-muted, #4b5563);
+  color: var(--vv-color-fg-muted);
 }
 .notes-ref-group {
   margin-top: 28px;
@@ -129,7 +129,7 @@
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: var(--color-text-primary, #1f2937);
+  color: var(--vv-color-fg);
 }
 /* The whole head is the disclosure control: chevron, label, count. */
 .notes-ref-head-btn {
@@ -148,7 +148,7 @@
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-  color: var(--color-text-muted, #4b5563);
+  color: var(--vv-color-fg-muted);
   transition: transform 0.14s ease;
 }
 .notes-ref-chevron-open {
@@ -157,7 +157,7 @@
 .notes-ref-count {
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-text-muted, #4b5563);
+  color: var(--vv-color-fg-muted);
 }
 /* Shows the rest of a group that opened at its preview length. */
 .notes-ref-more {
@@ -167,11 +167,11 @@
   background: transparent;
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-text-muted, #4b5563);
+  color: var(--vv-color-fg-muted);
   cursor: pointer;
 }
 .notes-ref-more:hover {
-  color: var(--color-text-primary, #1f2937);
+  color: var(--vv-color-fg);
 }
 .notes-ref-item {
   margin-bottom: 2px;
@@ -188,11 +188,11 @@
   transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 .notes-ref-block:hover {
-  border-color: var(--color-border-subtle, #e5e7eb);
-  background: color-mix(in srgb, var(--color-border-subtle, #e5e7eb) 22%, transparent);
+  border-color: var(--vv-color-line-subtle);
+  background: color-mix(in srgb, var(--vv-color-line-subtle) 22%, transparent);
 }
 .notes-ref-block:focus-visible {
-  outline: 2px solid var(--color-brand-dark-green, #2f7a3e);
+  outline: 2px solid var(--vv-color-accent-strong);
   outline-offset: 2px;
 }
 .notes-ref-head-row {
@@ -211,7 +211,7 @@
   line-height: 1.35;
   letter-spacing: -0.005em;
   font-weight: 600;
-  color: var(--color-text-primary, #111827);
+  color: var(--vv-color-fg);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -229,11 +229,11 @@
   padding: 8px 16px;
   border: none;
   border-radius: 10px;
-  background: var(--theme-accent-color, #78d870);
+  background: var(--vv-color-accent);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
-  color: #fff;
+  color: var(--vv-color-fg-inverse);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.12s ease, background-color 0.12s ease;
@@ -244,22 +244,22 @@
   opacity: 1;
 }
 .notes-ref-link-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--theme-accent-color, #78d870) 85%, #000);
+  background: color-mix(in srgb, var(--vv-color-accent) 85%, black);
 }
 .notes-ref-link-btn:disabled {
   opacity: 1;
   cursor: default;
-  background: var(--color-text-muted, #4b5563);
+  background: var(--vv-color-fg-muted);
 }
 .notes-ref-link-error {
   font-size: 12px;
-  color: var(--color-danger, #b91c1c);
+  color: var(--vv-color-danger-strong);
 }
 /* The reference's date rides the head row beside the source title. A rule
  * between every row is what turned a long list into clutter. */
 .notes-ref-date {
   font-size: 13px;
-  color: var(--color-text-muted, #4b5563);
+  color: var(--vv-color-fg-muted);
 }
 /* Clamped: an excerpt is the passage the mention sits in, and a long paragraph
  * buries the next reference under it. The source note holds the rest. */
@@ -272,17 +272,17 @@
   margin: 0;
   font-size: 14px;
   line-height: 1.6;
-  color: var(--color-text-primary, #1f2937);
+  color: var(--vv-color-fg);
 }
 .notes-ref-mention {
-  color: var(--color-brand-dark-green, #2f7a3e);
+  color: var(--vv-color-accent-strong);
   font-weight: 500;
 }
 /* A filter hit inside a title or excerpt — tinted ground, not a colour change,
  * so it reads differently from the note's own name. */
 .notes-ref-hit {
   border-radius: 3px;
-  background: color-mix(in srgb, var(--theme-accent-color, #78d870) 34%, transparent);
+  background: color-mix(in srgb, var(--vv-color-accent) 34%, transparent);
   color: inherit;
 }
 /* A reference from a note the viewer can't read: the bars are decoration
@@ -306,7 +306,7 @@
   width: 24px;
   height: 24px;
   transform: translateY(-50%);
-  color: var(--color-text-muted, #4b5563);
+  color: var(--vv-color-fg-muted);
 }
 .notes-ref-locked-lines {
   display: flex;
@@ -318,7 +318,7 @@
 .notes-ref-locked-line {
   height: 9px;
   border-radius: 5px;
-  background: color-mix(in srgb, var(--color-text-muted, #4b5563) 32%, transparent);
+  background: color-mix(in srgb, var(--vv-color-fg-muted) 32%, transparent);
 }
 .notes-ref-locked-foot {
   display: flex;
@@ -330,15 +330,15 @@
   padding: 5px 12px;
   border: none;
   border-radius: 8px;
-  background: var(--theme-accent-color, #78d870);
+  background: var(--vv-color-accent);
   font-size: 12px;
   font-weight: 600;
-  color: #fff;
+  color: var(--vv-color-fg-inverse);
   cursor: pointer;
   transition: background-color 0.12s ease;
 }
 .notes-ref-get-access:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--theme-accent-color, #78d870) 85%, #000);
+  background: color-mix(in srgb, var(--vv-color-accent) 85%, black);
 }
 .notes-ref-get-access:disabled {
   cursor: default;
@@ -347,13 +347,13 @@
 .notes-ref-locked-pending {
   font-size: 12px;
   font-weight: 600;
-  color: var(--color-text-muted, #4b5563);
+  color: var(--vv-color-fg-muted);
 }
 
 /* Internal note links — plain styled links; `[[` is only the typing shortcut
  * that opens the picker, never shown around rendered links. */
 .notes-editor a.note-link {
-  color: var(--color-link);
+  color: var(--vv-color-fg-link);
   text-decoration: none;
   font-weight: 500;
   cursor: pointer;
@@ -364,7 +364,7 @@
 
 /* A link whose target note doesn't exist — flagged the same way the graph does. */
 .notes-editor a.broken-link {
-  color: #ef4444;
+  color: var(--vv-color-danger-bright);
   text-decoration: underline dotted;
 }
 
@@ -393,7 +393,7 @@
   color: inherit;
 }
 .notes-editor .entity-link {
-  color: var(--color-link);
+  color: var(--vv-color-fg-link);
   font-weight: 500;
   cursor: pointer;
 }
@@ -403,13 +403,13 @@
 
 .notes-editor a[href^='http'],
 .notes-editor a[href^='mailto'] {
-  color: var(--color-link);
+  color: var(--vv-color-fg-link);
 }
 
 /* Inline Roam-style #hashtag pills (decoration-only; text stays plain markdown). */
 .notes-editor .hashtag {
-  background: var(--color-brand-light-bg, #eaf9ec);
-  color: var(--color-brand-dark-green, #2f7a3e);
+  background: var(--vv-color-accent-soft);
+  color: var(--vv-color-accent-strong);
   border-radius: 9999px;
   padding: 0.05em 0.4em;
   font-weight: 500;
@@ -439,7 +439,7 @@
  * toolbar tray returning from its slide-up. Applied only after a completed
  * swap — never on a note's initial mount. */
 .notes-mode-enter {
-  animation: notes-mode-drop 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: notes-mode-drop 0.24s var(--vv-motion-ease-standard);
 }
 @keyframes notes-mode-drop {
   from {
@@ -466,13 +466,13 @@
 }
 .notes-editor th,
 .notes-editor td {
-  border: 1px solid var(--color-border-default, #d1d5db);
+  border: 1px solid var(--vv-color-line);
   padding: 0.35rem 0.6rem;
   text-align: left;
   vertical-align: top;
 }
 .notes-editor th {
-  background: var(--color-surface-2, #f9fafb);
+  background: var(--vv-color-surface-subtle);
   font-weight: 600;
 }
 
@@ -501,10 +501,10 @@
   transition: background-color 0.12s ease;
 }
 .notes-child:hover {
-  background: color-mix(in srgb, var(--color-border-subtle, #e5e7eb) 22%, transparent);
+  background: color-mix(in srgb, var(--vv-color-line-subtle) 22%, transparent);
 }
 .notes-child:focus-visible {
-  outline: 2px solid var(--color-brand-dark-green, #2f7a3e);
+  outline: 2px solid var(--vv-color-accent-strong);
   outline-offset: 2px;
 }
 .notes-child-title {
@@ -516,7 +516,7 @@
   font-size: 15px;
   font-weight: 600;
   line-height: 1.5;
-  color: var(--color-text-primary, #111827);
+  color: var(--vv-color-fg);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -528,7 +528,7 @@
   text-overflow: ellipsis;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--color-text-secondary, #4b5563);
+  color: var(--vv-color-fg-secondary);
 }
 /* An OKF section inside the listing — `Subdirectories`, then a heading per
  * type. Quiet and small: the sections are a grouping aid, not a second title. */
@@ -541,5 +541,5 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--color-text-muted, #4b5563);
+  color: var(--vv-color-fg-muted);
 }

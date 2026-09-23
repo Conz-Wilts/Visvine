@@ -16,7 +16,7 @@ export default function AgentTrail({ view, onView, onShare }: { view: AgentView;
   const { tabTrailHost } = useContextPanel();
   const item = (active: boolean) =>
     `flex h-12 shrink-0 items-center gap-1.5 px-3 text-sm font-medium whitespace-nowrap outline-none transition-colors duration-150 ${
-      active ? 'text-brand-black' : 'text-brand-grey hover:text-brand-black'
+      active ? 'text-fg' : 'text-fg-muted hover:text-fg'
     }`;
   const buttons = (
     <>

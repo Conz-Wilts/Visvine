@@ -145,7 +145,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
               <button
                 type="button"
                 onClick={() => { onChange(new Set()); onChangeSub?.(new Set()); }}
-                className="shrink-0 text-[11px] text-brand-green font-semibold hover:underline"
+                className="shrink-0 text-[11px] text-accent font-semibold hover:underline"
               >
                 Clear
               </button>
@@ -157,7 +157,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
 
           {filteredOptions.map(opt => {
             const checked = selected.has(opt.value);
-            const color = getColor ? getColor(opt.value) : 'var(--color-brand-green)';
+            const color = getColor ? getColor(opt.value) : 'var(--vv-color-accent)';
             const hasSubs = opt.subOptions && opt.subOptions.length > 0;
             const subExpanded = opt.forceExpand || expandedSubs.has(opt.value);
 
@@ -171,7 +171,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
                     <button
                       type="button"
                       onClick={() => toggleExpanded(opt.value)}
-                      className="flex items-center justify-center shrink-0 pl-4 pr-1 py-2.5 text-text-muted hover:text-text-secondary transition-colors"
+                      className="flex items-center justify-center shrink-0 pl-4 pr-1 py-2.5 text-fg-muted hover:text-fg-secondary transition-colors"
                       title={subExpanded ? 'Hide aliases' : 'Show aliases'}
                     >
                       <svg
@@ -185,7 +185,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
                   <button
                     type="button"
                     onClick={() => toggle(opt.value)}
-                    className="flex-1 flex items-center gap-3 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors"
+                    className="flex-1 flex items-center gap-3 py-2.5 text-sm text-fg-secondary hover:bg-surface-subtle transition-colors"
                     style={{ paddingLeft: '0.5rem', paddingRight: '1rem' }}
                   >
                     {getColor ? (
@@ -193,16 +193,16 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
                         <Chip color={color}>{opt.label}</Chip>
                       </span>
                     ) : (
-                      <span className={`flex-1 text-left ${checked ? 'font-medium text-text-primary' : ''}`}>{opt.label}</span>
+                      <span className={`flex-1 text-left ${checked ? 'font-medium text-fg' : ''}`}>{opt.label}</span>
                     )}
                     {opt.count !== undefined && (
-                      <span className="text-xs text-text-muted tabular-nums">{opt.count}</span>
+                      <span className="text-xs text-fg-muted tabular-nums">{opt.count}</span>
                     )}
                     <span
                       className="flex h-4 w-4 shrink-0 items-center justify-center rounded transition-colors"
                       style={checked
                         ? { backgroundColor: color, borderColor: color, border: `1.5px solid ${color}` }
-                        : { border: '1.5px solid var(--border-default, #d1d5db)', backgroundColor: 'var(--surface-1, #fff)' }
+                        : { border: '1.5px solid var(--vv-color-line)', backgroundColor: 'var(--vv-color-surface)' }
                       }
                     >
                       {checked && (
@@ -224,23 +224,23 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
                           key={sub.value}
                           type="button"
                           onClick={() => toggleSub(sub.value)}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-text-secondary hover:bg-surface-2 transition-colors"
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-fg-secondary hover:bg-surface-subtle transition-colors"
                         >
                           {getColor ? (
                             <span className="flex min-w-0 flex-1 justify-start">
                               <Chip color={subColor} size="xs">{sub.label}</Chip>
                             </span>
                           ) : (
-                            <span className={`flex-1 text-left ${subChecked ? 'font-medium text-text-primary' : ''}`}>{sub.label}</span>
+                            <span className={`flex-1 text-left ${subChecked ? 'font-medium text-fg' : ''}`}>{sub.label}</span>
                           )}
                           {sub.count !== undefined && (
-                            <span className="text-xs text-text-muted tabular-nums">{sub.count}</span>
+                            <span className="text-xs text-fg-muted tabular-nums">{sub.count}</span>
                           )}
                           <span
                             className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded transition-colors"
                             style={subChecked
                               ? { backgroundColor: subColor, borderColor: subColor, border: `1.5px solid ${subColor}` }
-                              : { border: '1.5px solid var(--border-default, #d1d5db)', backgroundColor: 'var(--surface-1, #fff)' }
+                              : { border: '1.5px solid var(--vv-color-line)', backgroundColor: 'var(--vv-color-surface)' }
                             }
                           >
                             {subChecked && (

@@ -4,6 +4,7 @@ import Link from '@/features/shared/components/SpaceLink';
 import { clsx } from 'clsx';
 import { Chip } from '@/components/ui';
 import type { ToolDegraded } from '@/lib/tools/protocol';
+import { color } from '@visvine/tokens';
 
 /** How each missing dimension is named to a reader. */
 const GROUPS: ReadonlyArray<readonly [key: keyof ToolDegraded['missing'], label: string]> = [
@@ -37,23 +38,23 @@ export default function DegradedBanner({
   return (
     <div
       className={clsx(
-        'flex flex-wrap items-center gap-x-3 gap-y-2 border-l-2 border-amber-500 pl-3 py-1 text-sm text-amber-800',
+        'flex flex-wrap items-center gap-x-3 gap-y-2 border-l-2 border-warning-bright pl-3 py-1 text-sm text-warning-strong',
         className,
       )}
     >
       <span className="font-medium">Running with limits — this space is missing:</span>
       {groups.map(([key, label]) => (
         <span key={key} className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs uppercase tracking-wide text-amber-700">{label}</span>
+          <span className="text-xs uppercase tracking-wide text-warning">{label}</span>
           {degraded.missing[key].map((name) => (
-            <Chip key={name} tone="solid" size="sm" color="#b45309">
+            <Chip key={name} tone="solid" size="sm" color={color.warning.default}>
               {name}
             </Chip>
           ))}
         </span>
       ))}
       {isAdmin && (
-        <Link href="/admin?section=tools" className="ml-auto font-medium text-amber-900 underline">
+        <Link href="/admin?section=tools" className="ml-auto font-medium text-warning-strong underline">
           Manage install
         </Link>
       )}

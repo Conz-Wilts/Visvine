@@ -8,6 +8,7 @@ import { useAuth } from "@/features/auth/contexts/AuthContext";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
 import { selfProfileHref } from "@/features/profile/lib/selfView";
 import { END_ROW_H, HEAD_CELL_W, ITEM_GAP, MARK_PX, Row } from "@/features/shared/components/layout/railRow";
+import { motion } from "@visvine/tokens";
 
 /**
  * The account band — the rail's last rows (Sidebar). You sit at the foot of the
@@ -64,7 +65,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
   if (isPending) {
     return (
       <div className="flex items-center justify-center" style={{ width: HEAD_CELL_W, height: END_ROW_H }}>
-        <div className="rounded-[10px] bg-surface-3 animate-pulse" style={{ width: MARK_PX, height: MARK_PX }} />
+        <div className="rounded-[10px] bg-surface-muted animate-pulse" style={{ width: MARK_PX, height: MARK_PX }} />
       </div>
     );
   }
@@ -140,7 +141,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
         style={{
           height: open ? stackH : 0,
           opacity: open ? 1 : 0,
-          transition: reduced ? "none" : `height ${dur} cubic-bezier(0.25, 0.1, 0.25, 1), opacity ${dur} ease`,
+          transition: reduced ? "none" : `height ${dur} ${motion.easeCss.gentle}, opacity ${dur} ease`,
         }}
         aria-hidden={!open}
       >
@@ -178,7 +179,7 @@ export default function UserMenu({ expanded, reduced }: { expanded: boolean; red
           onClick={profileHref ? undefined : () => { setPinned((v) => !v); setOpen(true); }}
           icon={
             // MARK_PX: the same square as the space at the rail's head.
-            <span className="overflow-hidden rounded-[10px] border-2 border-brand-green" style={{ width: MARK_PX, height: MARK_PX }}>
+            <span className="overflow-hidden rounded-[10px] border-2 border-accent" style={{ width: MARK_PX, height: MARK_PX }}>
               {user.image ? (
                 <Image src={user.image} alt="" width={MARK_PX} height={MARK_PX} className="h-full w-full object-cover" />
               ) : (

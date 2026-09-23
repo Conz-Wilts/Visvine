@@ -46,7 +46,7 @@ interface AvatarProps {
   className?: string;
   /**
    * What to render when there's no image: a person silhouette (default) or the
-   * entity's initials on a brand-green tile (used for spaces).
+   * entity's initials on an accent tile (used for spaces).
    */
   fallback?: 'silhouette' | 'initials' | 'space';
   /**
@@ -114,7 +114,7 @@ export default function Avatar({
       <div
         role="img"
         aria-label={name}
-        className={`${cls} shrink-0 bg-brand-green flex items-center justify-center text-white ${className}`}
+        className={`${cls} shrink-0 bg-accent flex items-center justify-center text-white ${className}`}
         style={style}
       >
         <SpaceIcon className="w-[55%] h-[55%]" />
@@ -127,7 +127,7 @@ export default function Avatar({
       <div
         role="img"
         aria-label={name}
-        className={`${cls}${textCls} shrink-0 bg-brand-green flex items-center justify-center font-semibold text-white ${className}`}
+        className={`${cls}${textCls} shrink-0 bg-accent flex items-center justify-center font-semibold text-white ${className}`}
         style={style}
       >
         {getInitials(name)}

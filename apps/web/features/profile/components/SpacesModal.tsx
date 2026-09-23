@@ -48,7 +48,7 @@ export default function SpacesModal({ open, onClose, spaces, isOwner, theme, onT
         <div className="flex flex-col gap-5 px-6 py-4">
           {managed.length > 0 && (
             <section>
-              <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted mb-2.5">
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-fg-muted mb-2.5">
                 Manages · {managed.length}
               </h3>
               <div className="flex flex-col">
@@ -67,7 +67,7 @@ export default function SpacesModal({ open, onClose, spaces, isOwner, theme, onT
 
           {memberOf.length > 0 && (isOwner || memberOf.some((c) => c.visible)) && (
             <section>
-              <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted mb-2.5">
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-fg-muted mb-2.5">
                 Member of · {isOwner ? memberOf.length : memberOf.filter((c) => c.visible).length}
               </h3>
               <div className="flex flex-col">
@@ -78,8 +78,8 @@ export default function SpacesModal({ open, onClose, spaces, isOwner, theme, onT
                               aria-label={`Show ${c.name} on profile`}
                               onClick={() => toggle(c)}
                               className="relative w-9 h-5 flex-none rounded-full transition-colors disabled:opacity-50"
-                              style={{ background: c.showOnProfile ? theme.base : 'var(--surface-3, #e5e7eb)' }}>
-                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-surface-1 shadow transition-all ${c.showOnProfile ? 'left-[18px]' : 'left-0.5'}`} />
+                              style={{ background: c.showOnProfile ? theme.base : 'var(--vv-color-surface-muted)' }}>
+                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-surface shadow transition-all ${c.showOnProfile ? 'left-[18px]' : 'left-0.5'}`} />
                       </button>
                     ) : null}
                   />
@@ -89,7 +89,7 @@ export default function SpacesModal({ open, onClose, spaces, isOwner, theme, onT
           )}
 
           {spaces.length === 0 && (
-            <p className="py-6 text-center text-sm text-text-muted">No spaces</p>
+            <p className="py-6 text-center text-sm text-fg-muted">No spaces</p>
           )}
         </div>
     </Modal>
@@ -111,14 +111,14 @@ function SpaceRow({ space: c, theme, trailing, dimmed }: {
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="text-[13.5px] font-semibold text-text-primary truncate">{c.name}</span>
+          <span className="text-[13.5px] font-semibold text-fg truncate">{c.name}</span>
           {c.visibility === 'private' && (
-            <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-text-muted bg-surface-2 border border-border-subtle rounded px-1.5 h-[18px] flex-none">
+            <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-fg-muted bg-surface-subtle border border-line-subtle rounded px-1.5 h-[18px] flex-none">
               <LockIcon className="w-2.5 h-2.5" /> Private
             </span>
           )}
         </div>
-        <span className="inline-flex items-center gap-1 text-xs text-text-muted">
+        <span className="inline-flex items-center gap-1 text-xs text-fg-muted">
           <UsersIcon className="w-3 h-3" /> {c.memberCount} {c.memberCount === 1 ? 'member' : 'members'}
         </span>
       </div>

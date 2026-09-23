@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { searchLocations } from '@/lib/locationData';
 
 const inputClass =
-  'w-full rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted ' +
-  'transition-colors focus:bg-surface-1 focus:outline-none focus:ring-1 focus:ring-border-default';
+  'w-full rounded-lg bg-surface-subtle px-3 py-2 text-sm text-fg placeholder:text-fg-muted ' +
+  'transition-colors focus:bg-surface focus:outline-none focus:ring-1 focus:ring-line';
 
 /**
  * A city picker over the bundled location list: type, arrow through the
@@ -72,7 +72,7 @@ export function LocationAutocomplete({
         autoComplete="off"
       />
       {open && (
-        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto overflow-hidden rounded-lg border border-border-default bg-surface-1 shadow-float">
+        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto overflow-hidden rounded-lg border border-line bg-surface shadow-float">
           {suggestions.map((loc, i) => {
             const [city, country] = loc.includes(', ') ? loc.split(/, (.+)/) : [loc, ''];
             return (
@@ -80,11 +80,11 @@ export function LocationAutocomplete({
                 key={loc}
                 onMouseDown={() => pick(loc)}
                 className="flex cursor-pointer items-baseline gap-2 px-3 py-2 text-sm transition-colors"
-                style={{ background: i === highlighted ? 'var(--color-surface-2)' : 'transparent' }}
+                style={{ background: i === highlighted ? 'var(--vv-color-surface-subtle)' : 'transparent' }}
                 onMouseEnter={() => setHighlighted(i)}
               >
-                <span className="font-medium text-text-primary">{city}</span>
-                {country && <span className="text-xs text-text-muted">{country}</span>}
+                <span className="font-medium text-fg">{city}</span>
+                {country && <span className="text-xs text-fg-muted">{country}</span>}
               </li>
             );
           })}

@@ -53,7 +53,7 @@ const GLYPH = "[&>svg]:h-7 [&>svg]:w-7";
 // the rail is open). The block appears under the pointer only — square-cornered,
 // edge to edge, so shut it is a square tile of the rail rather than a pill.
 export const ROW_CLASS =
-  "relative z-10 flex w-full items-center transition-colors duration-150 hover:bg-surface-3";
+  "relative z-10 flex w-full items-center transition-colors duration-150 hover:bg-surface-muted";
 // Sign out is the one row that undoes something, so it says so under the
 // pointer: the same red the danger buttons use, on the row's own hover block.
 // It carries no colour at rest — a red row in the band would read as an alert
@@ -62,8 +62,8 @@ export const ROW_CLASS =
 // is a square tile of the rail, flush against the hairlines either side.
 const RAIL_TILE =
   "before:absolute before:inset-0 before:-z-10 before:transition-colors before:duration-150";
-export const RAIL_ROW_CLASS = `relative z-10 flex w-full items-center transition-colors duration-150 ${RAIL_TILE} hover:before:bg-surface-3`;
-const ROW_DANGER_CLASS = `relative z-10 flex w-full items-center transition-colors duration-150 ${RAIL_TILE} hover:before:bg-red-50 hover:text-red-600`;
+export const RAIL_ROW_CLASS = `relative z-10 flex w-full items-center transition-colors duration-150 ${RAIL_TILE} hover:before:bg-surface-muted`;
+const ROW_DANGER_CLASS = `relative z-10 flex w-full items-center transition-colors duration-150 ${RAIL_TILE} hover:before:bg-danger-wash hover:text-danger`;
 export const ROW_TEXT = "text-[15px] whitespace-nowrap";
 // A name fades in once the rail is open and is gone before it shuts. The
 // rail's width takes 300ms, and a label revealed BY that width reads as sliding
@@ -83,7 +83,7 @@ function labelFade(show: boolean, reduced: boolean) {
 // Active is carried by weight and colour, not by a coloured pill: the current
 // surface is the dark, semibold row; everything else sits muted until hovered.
 function rowColor(active: boolean) {
-  return active ? "var(--shell-fg-strong, #111827)" : "var(--shell-fg-muted, #111827)";
+  return active ? "var(--vv-color-fg)" : "var(--vv-color-fg)";
 }
 
 /**

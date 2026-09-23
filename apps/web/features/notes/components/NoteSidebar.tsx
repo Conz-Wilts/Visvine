@@ -479,7 +479,7 @@ export function NoteSidebar({
       className={`relative flex h-full flex-col overflow-hidden ${
         /* bare = docked into the Sidebar column, which draws its own seam;
            floating = the tree beside a note, divided from it by one hairline */
-        bare ? '' : 'border-r border-border-subtle'
+        bare ? '' : 'border-r border-line-subtle'
       }`}
     >
       {/* overscroll-contain: hitting either end of the tree must not chain the
@@ -545,7 +545,7 @@ export function NoteSidebar({
           )}
 
           {noMatches && (
-            <p className="px-3 py-4 text-sm text-text-muted">No notes match “{query.trim()}”.</p>
+            <p className="px-3 py-4 text-sm text-fg-muted">No notes match “{query.trim()}”.</p>
           )}
 
           {/* Trash sits at the very bottom of every context, below the whole tree
@@ -570,9 +570,9 @@ export function NoteSidebar({
         <button
           type="button"
           onClick={() => setNotice(null)}
-          className="dropdown-pop absolute inset-x-3 bottom-3 z-10 rounded-xl border border-border-subtle border-l-2 border-l-red-500 bg-surface-1 px-3 py-2 text-left text-sm leading-snug text-text-secondary shadow-float"
+          className="dropdown-pop absolute inset-x-3 bottom-3 z-10 rounded-xl border border-line-subtle border-l-2 border-l-danger-bright bg-surface px-3 py-2 text-left text-sm leading-snug text-fg-secondary shadow-float"
         >
-          <span className="font-medium text-text-primary">Couldn’t move it. </span>
+          <span className="font-medium text-fg">Couldn’t move it. </span>
           {notice}
         </button>
       )}
@@ -612,13 +612,13 @@ function TrashFolder({
 }) {
   return (
     <div className="mt-1" data-drop-none>
-      <div data-flip-key=":trash:" className={`group/trash flex items-center pr-1.5 transition hover:bg-surface-2 ${ROW_BLEED}`}>
+      <div data-flip-key=":trash:" className={`group/trash flex items-center pr-1.5 transition hover:bg-surface-subtle ${ROW_BLEED}`}>
         <button
           type="button"
           aria-label={open ? 'Collapse trash' : 'Expand trash'}
           aria-expanded={open}
           onClick={onToggle}
-          className="relative flex shrink-0 items-center self-stretch pl-1.5 pr-1.5 text-text-muted hover:text-text-primary"
+          className="relative flex shrink-0 items-center self-stretch pl-1.5 pr-1.5 text-fg-muted hover:text-fg"
         >
           {open && (
             <TreeStem />
@@ -628,11 +628,11 @@ function TrashFolder({
         <button
           type="button"
           onClick={onToggle}
-          className="flex min-w-[8rem] flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] text-text-secondary"
+          className="flex min-w-[8rem] flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] text-fg-secondary"
         >
           <span className="truncate font-medium">Trash</span>
           {entries.length > 0 && (
-            <span className="shrink-0 text-[11px] font-semibold text-text-muted">{entries.length}</span>
+            <span className="shrink-0 text-[11px] font-semibold text-fg-muted">{entries.length}</span>
           )}
         </button>
         <RowMenu
@@ -648,7 +648,7 @@ function TrashFolder({
       <Branch open={open}>
         <div className={CHILD_INDENT}>
           {entries.length === 0 ? (
-            <div className="py-1.5 pl-3 text-[13px] text-text-muted">Trash is empty.</div>
+            <div className="py-1.5 pl-3 text-[13px] text-fg-muted">Trash is empty.</div>
           ) : (
             entries.map((entry, i) => (
               <TrashRow
@@ -662,7 +662,7 @@ function TrashFolder({
             ))
           )}
           {entries.length > 0 && (
-            <div className="py-1 pl-3 text-[11px] text-text-muted">
+            <div className="py-1 pl-3 text-[11px] text-fg-muted">
               Deleted notes are removed for good after {TRASH_RETENTION_DAYS} days.
             </div>
           )}
@@ -692,17 +692,17 @@ function TrashRow({
   // before you can choose between Restore and Delete forever.
   const label = (
     <>
-      <span className="shrink-0 text-text-muted">
+      <span className="shrink-0 text-fg-muted">
         <FileIcon />
       </span>
-      <span className="truncate text-text-secondary">{entry.title || entry.name}</span>
-      <span className="shrink-0 text-[11px] text-text-muted">
+      <span className="truncate text-fg-secondary">{entry.title || entry.name}</span>
+      <span className="shrink-0 text-[11px] text-fg-muted">
         {left === 0 ? 'today' : `${left}d`}
       </span>
     </>
   )
   return (
-    <div className={`group flex items-center pr-1.5 transition hover:bg-surface-2 ${ROW_BLEED}`}>
+    <div className={`group flex items-center pr-1.5 transition hover:bg-surface-subtle ${ROW_BLEED}`}>
       <GuideLine guide={guide} />
       {onOpen ? (
         <button
@@ -865,10 +865,10 @@ function TierSeam() {
     <div className="relative h-2" aria-hidden="true">
       {/* The branch's own stroke, continued through the seam: the guide column
           is where GuideLine puts it on every row above and below. */}
-      <span className="tree-line absolute left-0 top-0 h-full w-px bg-border-default/70" />
+      <span className="tree-line absolute left-0 top-0 h-full w-px bg-line/70" />
       {/* Meets that stroke on the left and runs to the tree's right edge, so
           the hairline has no loose end. */}
-      <span className="absolute inset-x-0 top-1/2 h-px bg-border-subtle" />
+      <span className="absolute inset-x-0 top-1/2 h-px bg-line-subtle" />
     </div>
   )
 }
@@ -879,7 +879,7 @@ function EmptyBranchRow() {
   return (
     <div className="flex items-center">
       <GuideLine guide="last" />
-      <span className="py-1.5 pl-1.5 text-[13px] italic text-text-muted">Empty</span>
+      <span className="py-1.5 pl-1.5 text-[13px] italic text-fg-muted">Empty</span>
     </div>
   )
 }
@@ -900,10 +900,10 @@ function DropPreviewRow({ item, guide, settled }: { item: MovableItem; guide: Gu
     >
       <GuideLine guide={guide} />
       <span className={`flex min-w-[8rem] flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-[15px] ${settled ? '' : 'invisible'}`}>
-        <span className="shrink-0 text-brand-green">
+        <span className="shrink-0 text-accent">
           {item.kind === 'note' ? <FileIcon /> : <FolderIcon />}
         </span>
-        <span className="truncate font-medium text-text-primary">{item.label}</span>
+        <span className="truncate font-medium text-fg">{item.label}</span>
       </span>
     </div>
   )
@@ -1025,7 +1025,7 @@ function FolderRow(props: {
         {...(!open && !leaf && !isDragged ? { 'data-spring-folder': props.node.path } : {})}
         onPointerDown={draggable ? (e) => drag!.press(item, e) : undefined}
         className={`group/folder flex items-center pr-1.5 transition ${ROW_BLEED} ${
-          selected ? 'bg-brand-green/15' : 'hover:bg-surface-2'
+          selected ? 'bg-accent/15' : 'hover:bg-surface-subtle'
         } ${isDragged ? 'tree-row-held' : ''} ${justLanded ? 'tree-row-land' : ''}`}
       >
         {props.guide && <GuideLine guide={props.guide} active={props.guideActive} />}
@@ -1039,7 +1039,7 @@ function FolderRow(props: {
         {leaf ? (
           <span
             className={`flex shrink-0 items-center self-stretch pl-1.5 pr-1.5 ${
-              selected ? 'text-brand-green' : 'text-text-muted'
+              selected ? 'text-accent' : 'text-fg-muted'
             }`}
           >
             <FileIcon />
@@ -1051,7 +1051,7 @@ function FolderRow(props: {
           aria-expanded={open}
           onClick={() => setOpen()}
           className={`relative flex shrink-0 items-center self-stretch pl-1.5 pr-1.5 ${
-            selected ? 'text-brand-green' : 'text-text-muted hover:text-text-primary'
+            selected ? 'text-accent' : 'text-fg-muted hover:text-fg'
           }`}
         >
           {/* The stem: an open folder's children hang off a line that drops
@@ -1087,19 +1087,19 @@ function FolderRow(props: {
             openPath(indexPath)
           }}
           className={`flex min-w-[8rem] flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] ${
-            selected ? 'text-text-primary' : 'text-text-secondary'
+            selected ? 'text-fg' : 'text-fg-secondary'
           }`}
         >
           <span className={`truncate font-medium ${selected ? 'font-semibold' : ''}`}>
             {folderLabel}
           </span>
           {badge?.restricted && (
-            <span className="shrink-0 text-text-muted" title="Restricted folder â€” access is granted here, not inherited">
+            <span className="shrink-0 text-fg-muted" title="Restricted folder â€” access is granted here, not inherited">
               <LockIcon />
             </span>
           )}
           {badge?.level && (
-            <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+            <span className="shrink-0 rounded-full bg-surface-subtle px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
               {badge.level}
             </span>
           )}
@@ -1240,7 +1240,7 @@ function RowMenu({
         aria-expanded={!!pos}
         onClick={toggle}
         className={`shrink-0 rounded p-1 transition ${
-          selected ? 'text-text-secondary hover:text-text-primary' : 'text-text-muted hover:text-text-secondary'
+          selected ? 'text-fg-secondary hover:text-fg' : 'text-fg-muted hover:text-fg-secondary'
         } ${pos ? 'opacity-100' : `opacity-0 ${hoverClass}`}`}
       >
         <KebabIcon />
@@ -1250,7 +1250,7 @@ function RowMenu({
           <div
             ref={menuRef}
             role="menu"
-            className="dropdown-pop fixed z-[100] rounded-xl border border-border-subtle bg-surface-1 py-[5px] shadow-float"
+            className="dropdown-pop fixed z-[100] rounded-xl border border-line-subtle bg-surface py-[5px] shadow-float"
             style={{ top: pos.top, left: pos.left, width: ROW_MENU_W }}
           >
             {items.map((item) => (
@@ -1262,8 +1262,8 @@ function RowMenu({
                   close()
                   item.onClick()
                 }}
-                className={`flex w-full items-center gap-2 px-3 text-left text-[13px] transition-colors hover:bg-surface-2 ${
-                  item.danger ? 'text-red-500' : 'text-text-secondary'
+                className={`flex w-full items-center gap-2 px-3 text-left text-[13px] transition-colors hover:bg-surface-subtle ${
+                  item.danger ? 'text-danger-bright' : 'text-fg-secondary'
                 }`}
                 style={{ height: ROW_MENU_ITEM_H }}
               >
@@ -1324,7 +1324,7 @@ function NoteRow({
       {...(place ? { 'data-slot-parent': place.folder, 'data-slot-index': place.index } : {})}
       onPointerDown={draggable ? (e) => drag!.press(item, e) : undefined}
       className={`group flex items-center pr-1.5 transition ${ROW_BLEED} ${
-        selected ? 'bg-brand-green/15' : 'hover:bg-surface-2'
+        selected ? 'bg-accent/15' : 'hover:bg-surface-subtle'
       } ${isDragged ? 'tree-row-held' : ''} ${justLanded ? 'tree-row-land' : ''}`}
     >
       {guide && <GuideLine guide={guide} active={guideActive} />}
@@ -1337,15 +1337,15 @@ function NoteRow({
           guide ? 'pl-1.5' : 'pl-2'
         }`}
       >
-        <span className={`shrink-0 ${selected ? 'text-brand-green' : 'text-text-muted'}`}>
+        <span className={`shrink-0 ${selected ? 'text-accent' : 'text-fg-muted'}`}>
           <FileIcon />
         </span>
-        <span className={`truncate ${selected ? 'font-semibold text-text-primary' : 'text-text-primary'}`}>
+        <span className={`truncate ${selected ? 'font-semibold text-fg' : 'text-fg'}`}>
           {title}
         </span>
         {restrictedBadge && (
           <span
-            className={`shrink-0 ${selected ? 'text-brand-green' : 'text-text-muted'}`}
+            className={`shrink-0 ${selected ? 'text-accent' : 'text-fg-muted'}`}
             title="Private note â€” access from its folders is cut off"
           >
             <LockIcon />

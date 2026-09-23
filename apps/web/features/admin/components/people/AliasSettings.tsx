@@ -23,6 +23,7 @@ import { notesApi } from '@/features/notes/lib/notesApi';
 import { aliasNameError, MAX_ALIAS_NAME } from '@/lib/notes/shared/aliases';
 import type { AliasInfo } from '@/lib/notes/aliases';
 import { GrantEditor, type PeopleData } from './shared';
+import { palette } from '@visvine/tokens';
 
 export type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
@@ -50,7 +51,7 @@ function deleteBody(holders: number, grants: number) {
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h5 className="mb-1.5 text-xs font-medium text-text-muted">{title}</h5>
+      <h5 className="mb-1.5 text-xs font-medium text-fg-muted">{title}</h5>
       {children}
     </div>
   );
@@ -119,7 +120,7 @@ function NameField({ alias, taken, busy, onRename }: {
           if (e.key === 'Escape') setValue(alias.name);
         }}
       />
-      {problem && <p className="mt-1 text-xs text-red-600">{problem}</p>}
+      {problem && <p className="mt-1 text-xs text-danger">{problem}</p>}
     </div>
   );
 }
@@ -182,7 +183,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run, half }: Setting
               data-color-trigger
               onClick={() => setPicking((o) => !o)}
               title={alias.system ? `${alias.name} is built in` : 'Change colour'}
-              className="block h-7 w-7 rounded-lg border-2 border-border-default transition-transform hover:scale-110 disabled:cursor-default disabled:hover:scale-100"
+              className="block h-7 w-7 rounded-lg border-2 border-line transition-transform hover:scale-110 disabled:cursor-default disabled:hover:scale-100"
               style={{ background: color }}
               aria-label={`Colour of ${alias.name}`}
             />
@@ -200,8 +201,8 @@ export function AliasSettings({ spaceId, alias, data, busy, run, half }: Setting
             )}
           </div>
           {alias.system ? (
-            <p className="min-w-0 flex-1 text-xs text-text-muted">
-              <span className="font-medium text-brand-gold">{alias.name}</span> is built in: it
+            <p className="min-w-0 flex-1 text-xs text-fg-muted">
+              <span className="font-medium text-admin">{alias.name}</span> is built in: it
               can&apos;t be renamed, recoloured or deleted.
             </p>
           ) : (
@@ -217,7 +218,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run, half }: Setting
                 onClick={() => setConfirmDelete(true)}
                 disabled={busy}
                 title={`Delete ${alias.name}`}
-                className="shrink-0 rounded-full p-1 text-text-muted transition hover:text-red-500 disabled:opacity-40"
+                className="shrink-0 rounded-full p-1 text-fg-muted transition hover:text-danger-bright disabled:opacity-40"
               >
                 <Trash2Icon className="h-3.5 w-3.5" />
               </button>
@@ -247,12 +248,12 @@ export function AliasSettings({ spaceId, alias, data, busy, run, half }: Setting
           loudest thing it can mean. */}
       <div className="flex flex-wrap items-center gap-3">
         {alias.system ? (
-          <p className="min-w-0 flex-1 text-xs text-text-muted">
-            <span className="font-medium text-brand-gold">{alias.name}</span> is built in: its
+          <p className="min-w-0 flex-1 text-xs text-fg-muted">
+            <span className="font-medium text-admin">{alias.name}</span> is built in: its
             holders manage this space, and it can&apos;t stop owning it.
           </p>
         ) : (
-          <label className="flex shrink-0 items-center gap-2 text-xs text-text-secondary">
+          <label className="flex shrink-0 items-center gap-2 text-xs text-fg-secondary">
             <Toggle
               checked={alias.admin}
               disabled={busy}
@@ -268,7 +269,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run, half }: Setting
           {alias.holders.map((holder) => (
             <span
               key={holder.userId}
-              className="inline-flex items-center gap-1.5 rounded-full bg-surface-2 py-0.5 pl-1 pr-1 text-xs font-medium text-text-secondary"
+              className="inline-flex items-center gap-1.5 rounded-full bg-surface-subtle py-0.5 pl-1 pr-1 text-xs font-medium text-fg-secondary"
             >
               <Avatar name={holder.name} imageUrl={holder.image} size="xs" />
               <span className="max-w-[12rem] truncate">{holder.name}</span>
@@ -277,13 +278,13 @@ export function AliasSettings({ spaceId, alias, data, busy, run, half }: Setting
                 title={`Take ${alias.name} away from ${holder.name}`}
                 disabled={busy}
                 onClick={() => act({ action: 'removeHolder', name: alias.name, userId: holder.userId })}
-                className="rounded-full p-0.5 text-text-muted transition hover:text-red-500 disabled:opacity-40"
+                className="rounded-full p-0.5 text-fg-muted transition hover:text-danger-bright disabled:opacity-40"
               >
                 <XIcon className="h-3 w-3" />
               </button>
             </span>
           ))}
-          {alias.holders.length === 0 && <span className="text-xs text-text-muted">Nobody yet.</span>}
+          {alias.holders.length === 0 && <span className="text-xs text-fg-muted">Nobody yet.</span>}
 
           {candidates.length > 0 && (
             <div className="relative">
@@ -291,12 +292,12 @@ export function AliasSettings({ spaceId, alias, data, busy, run, half }: Setting
                 type="button"
                 disabled={busy}
                 onClick={() => setAdding((o) => !o)}
-                className="inline-flex items-center gap-1 rounded-md border border-dashed border-border-default px-2.5 py-1 text-xs font-medium text-text-muted transition hover:text-text-primary disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-md border border-dashed border-line px-2.5 py-1 text-xs font-medium text-fg-muted transition hover:text-fg disabled:opacity-40"
               >
                 <PlusIcon className="h-3 w-3" /> Give to
               </button>
               {adding && (
-                <div className="absolute left-0 top-full z-50 mt-1 flex max-h-72 w-64 flex-col rounded-xl border border-border-subtle bg-surface-1 py-1 shadow-float">
+                <div className="absolute left-0 top-full z-50 mt-1 flex max-h-72 w-64 flex-col rounded-xl border border-line-subtle bg-surface py-1 shadow-float">
                   {candidates.length > 8 && (
                     <div className="px-2 pb-1 pt-0.5">
                       <Input
@@ -320,13 +321,13 @@ export function AliasSettings({ spaceId, alias, data, busy, run, half }: Setting
                           setCandidateQuery('');
                           act({ action: 'addHolder', name: alias.name, userId: m.userId });
                         }}
-                        className="block w-full truncate px-3 py-1.5 text-left text-sm text-text-secondary transition-colors hover:bg-surface-2"
+                        className="block w-full truncate px-3 py-1.5 text-left text-sm text-fg-secondary transition-colors hover:bg-surface-subtle"
                       >
                         {m.user.name}
                       </button>
                     ))}
                     {shownCandidates.length === 0 && (
-                      <p className="px-3 py-1.5 text-xs text-text-muted">Nobody matches.</p>
+                      <p className="px-3 py-1.5 text-xs text-fg-muted">Nobody matches.</p>
                     )}
                   </div>
                 </div>
@@ -368,7 +369,7 @@ export function NewAliasForm({ spaceId, taken, busy, run, onDone }: {
   onDone: () => void;
 }) {
   const [name, setName] = useState('');
-  const [color, setColor] = useState('#6b7280');
+  const [color, setColor] = useState<string>(palette.gray[500]);
   const [picking, setPicking] = useState(false);
 
   const problem = name.trim() ? aliasNameError(name, taken) : null;
@@ -388,7 +389,7 @@ export function NewAliasForm({ spaceId, taken, busy, run, onDone }: {
             type="button"
             data-color-trigger
             onClick={() => setPicking((p) => !p)}
-            className="h-8 w-8 rounded-lg border-2 border-border-default transition-transform hover:scale-110"
+            className="h-8 w-8 rounded-lg border-2 border-line transition-transform hover:scale-110"
             style={{ background: color }}
             title="Pick colour"
             aria-label="Pick colour"
@@ -413,7 +414,7 @@ export function NewAliasForm({ spaceId, taken, busy, run, onDone }: {
           }}
         />
       </div>
-      {problem && <p className="text-xs text-red-600">{problem}</p>}
+      {problem && <p className="text-xs text-danger">{problem}</p>}
       <div className="flex justify-end gap-2">
         <Button variant="neutral" onClick={onDone} className="!px-3 !py-1.5 !text-xs">
           Cancel

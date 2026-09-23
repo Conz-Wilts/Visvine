@@ -40,7 +40,7 @@ interface TableCellProps {
 // and the ring inside the cell's own edges: the cell lights up, nothing
 // floats over the grid.
 const INPUT_CLASS =
-  'h-full w-full bg-surface-1 px-4 text-sm text-text-primary outline-none ring-1 ring-inset ring-[var(--color-brand-green)]';
+  'h-full w-full bg-surface px-4 text-sm text-fg outline-none ring-1 ring-inset ring-[var(--vv-color-accent)]';
 
 export default function TableCell({ column, value, aliasColor, typeLabel, tagColors, onSave, suggest, autoEdit = false, onDone }: TableCellProps) {
   const [draft, setDraft] = useState<string | null>(autoEdit ? editValue(value, column) : null);
@@ -112,7 +112,7 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
           }}
           aria-label={column.label}
           title={error ?? undefined}
-          className="h-4 w-4 cursor-pointer accent-[var(--color-brand-green)] disabled:cursor-default"
+          className="h-4 w-4 cursor-pointer accent-[var(--vv-color-accent)] disabled:cursor-default"
         />
       </div>
     );
@@ -124,7 +124,7 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
       value: draft,
       disabled: saving,
       title: error ?? undefined,
-      className: clsx(INPUT_CLASS, error && 'ring-red-500'),
+      className: clsx(INPUT_CLASS, error && 'ring-danger-bright'),
       onKeyDown: (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -199,10 +199,10 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
         target="_blank"
         rel="noopener noreferrer"
         onClick={(e) => e.stopPropagation()}
-        className="group/link inline-flex min-w-0 items-center gap-1 truncate text-text-primary underline decoration-border-default decoration-1 underline-offset-[3px] transition-colors hover:decoration-text-muted"
+        className="group/link inline-flex min-w-0 items-center gap-1 truncate text-fg underline decoration-line decoration-1 underline-offset-[3px] transition-colors hover:decoration-fg-muted"
       >
         <span className="truncate">{text}</span>
-        <ExternalLinkIcon className="h-3 w-3 shrink-0 text-text-muted opacity-0 transition-opacity group-hover/link:opacity-100" />
+        <ExternalLinkIcon className="h-3 w-3 shrink-0 text-fg-muted opacity-0 transition-opacity group-hover/link:opacity-100" />
       </a>
     );
   } else {
@@ -217,9 +217,9 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
       onKeyDown={editable ? (e) => { if (e.key === 'Enter') begin(); } : undefined}
       title={error ?? (editable ? undefined : text || undefined)}
       className={clsx(
-        'flex h-full min-w-0 items-center px-4 text-sm text-text-primary',
+        'flex h-full min-w-0 items-center px-4 text-sm text-fg',
         column.kind === 'number' && 'justify-end',
-        editable && 'cursor-text rounded-md outline-none focus-visible:ring-1 focus-visible:ring-border-default',
+        editable && 'cursor-text rounded-md outline-none focus-visible:ring-1 focus-visible:ring-line',
         saving && 'opacity-60',
       )}
     >

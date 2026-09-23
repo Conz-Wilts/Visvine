@@ -81,7 +81,7 @@ export default function PaneTopScrollbarMask({
       // SHELL_FRAME_* geometry (see AuthLayoutClient) rather than a fixed
       // utility, so the mask tracks the content surface exactly.
       className={`pointer-events-none fixed z-40 ${transparent ? '' : 'bg-glass'} ${
-        border ? 'border-b border-border-subtle' : ''
+        border ? 'border-b border-line-subtle' : ''
       }`}
       style={{
         height: resolvedHeight,

@@ -66,18 +66,18 @@ export default function RunsForSection({
     });
 
   if (viewerIsAuthor && others.length === 0) return null;
-  const field = 'h-8 rounded-lg border border-border-default bg-surface-1 px-2 text-[13px] text-text-primary disabled:opacity-40';
+  const field = 'h-8 rounded-lg border border-line bg-surface px-2 text-[13px] text-fg disabled:opacity-40';
 
   return (
     <section>
-      <h4 className="mb-1 text-sm font-semibold text-text-primary">Runs for</h4>
-      {error && <p className="pb-1 text-[12px] text-red-600">{error}</p>}
+      <h4 className="mb-1 text-sm font-semibold text-fg">Runs for</h4>
+      {error && <p className="pb-1 text-[12px] text-danger">{error}</p>}
       <ul className="-mx-2 flex flex-col">
         {!viewerIsAuthor && (
           <li className="flex flex-col gap-2 rounded-xl px-2 py-1.5">
             <div className="flex items-center gap-2.5">
               <Avatar name={viewerName} imageUrl={viewerImage} size="sm" className="shrink-0" />
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">You</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">You</span>
               <Toggle
                 checked={!!mine}
                 disabled={busy}
@@ -117,18 +117,18 @@ export default function RunsForSection({
           </li>
         )}
         {others.map((person) => (
-          <li key={person.userId} className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-surface-2">
+          <li key={person.userId} className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-surface-subtle">
             <Avatar name={person.name ?? 'A member'} imageUrl={person.image} size="sm" className="shrink-0" />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-text-primary">{person.name ?? 'A member'}</div>
+              <div className="truncate text-sm font-medium text-fg">{person.name ?? 'A member'}</div>
               {(person.at || person.model) && (
-                <div className="truncate text-[11px] text-text-muted">{[person.at, person.model].filter(Boolean).join(' · ')}</div>
+                <div className="truncate text-[11px] text-fg-muted">{[person.at, person.model].filter(Boolean).join(' · ')}</div>
               )}
             </div>
             {canManage && (
               <button
                 type="button"
-                className="shrink-0 rounded-lg px-2 py-1 text-[12px] text-text-muted hover:bg-surface-3 hover:text-red-600 disabled:opacity-40"
+                className="shrink-0 rounded-lg px-2 py-1 text-[12px] text-fg-muted hover:bg-surface-muted hover:text-danger disabled:opacity-40"
                 disabled={busy}
                 onClick={() => send('DELETE', { userId: person.userId })}
               >

@@ -8,27 +8,28 @@
  */
 
 import { useState, useEffect } from 'react';
+import { color } from '@visvine/tokens';
 
 const FILE_BG: Record<string, string> = {
-  pdf:      'bg-red-100 text-red-600',
-  xlsx:     'bg-green-100 text-green-600',
-  csv:      'bg-emerald-100 text-emerald-600',
-  docx:     'bg-blue-100 text-blue-600',
-  image:    'bg-purple-100 text-purple-600',
-  markdown: 'bg-slate-100 text-slate-600',
-  json:     'bg-amber-100 text-amber-600',
-  text:     'bg-slate-100 text-slate-600',
+  pdf:      'bg-hue-red-wash text-hue-red-fg',
+  xlsx:     'bg-hue-green-wash text-hue-green-fg',
+  csv:      'bg-hue-teal-wash text-hue-teal-fg',
+  docx:     'bg-hue-blue-wash text-hue-blue-fg',
+  image:    'bg-hue-violet-wash text-hue-violet-fg',
+  markdown: 'bg-hue-gray-wash text-hue-gray-fg',
+  json:     'bg-hue-amber-wash text-hue-amber-fg',
+  text:     'bg-hue-gray-wash text-hue-gray-fg',
 };
 
 export const FILE_BADGE: Record<string, string> = {
-  pdf:      'bg-red-50 text-red-700 border-red-200',
-  xlsx:     'bg-green-50 text-green-700 border-green-200',
-  csv:      'bg-emerald-50 text-emerald-700 border-emerald-200',
-  docx:     'bg-blue-50 text-blue-700 border-blue-200',
-  image:    'bg-purple-50 text-purple-700 border-purple-200',
-  markdown: 'bg-slate-50 text-slate-700 border-slate-200',
-  json:     'bg-amber-50 text-amber-700 border-amber-200',
-  text:     'bg-slate-50 text-slate-700 border-slate-200',
+  pdf:      'bg-hue-red-wash text-hue-red-fg border-hue-red-line',
+  xlsx:     'bg-hue-green-wash text-hue-green-fg border-hue-green-line',
+  csv:      'bg-hue-teal-wash text-hue-teal-fg border-hue-teal-line',
+  docx:     'bg-hue-blue-wash text-hue-blue-fg border-hue-blue-line',
+  image:    'bg-hue-violet-wash text-hue-violet-fg border-hue-violet-line',
+  markdown: 'bg-hue-gray-wash text-hue-gray-fg border-hue-gray-line',
+  json:     'bg-hue-amber-wash text-hue-amber-fg border-hue-amber-line',
+  text:     'bg-hue-gray-wash text-hue-gray-fg border-hue-gray-line',
 };
 
 export const FILE_LABEL: Record<string, string> = {
@@ -44,10 +45,10 @@ export const FILE_LABEL: Record<string, string> = {
  * `failed` is actionable and says so.
  */
 export const INDEX_STATE_LABEL: Record<string, { label: string; className: string }> = {
-  pending:     { label: 'Indexing…',   className: 'bg-amber-50 text-amber-700 border-amber-200' },
-  indexed:     { label: 'Searchable',  className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  unsupported: { label: 'Stored only', className: 'bg-surface-2 text-text-tertiary border-border-subtle' },
-  failed:      { label: 'Not indexed', className: 'bg-red-50 text-red-700 border-red-200' },
+  pending:     { label: 'Indexing…',   className: 'bg-warning-wash text-warning border-warning-line' },
+  indexed:     { label: 'Searchable',  className: 'bg-success-wash text-success border-success-line' },
+  unsupported: { label: 'Stored only', className: 'bg-surface-subtle text-fg-subtle border-line-subtle' },
+  failed:      { label: 'Not indexed', className: 'bg-danger-wash text-danger-strong border-danger-line' },
 };
 
 /** Shown where a viewer would go when the file has no reachable object — a
@@ -55,8 +56,8 @@ export const INDEX_STATE_LABEL: Record<string, { label: string; className: strin
 export function FileUnavailable() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
-      <p className="text-sm font-medium text-text-primary">This file isn&apos;t available to preview</p>
-      <p className="text-xs text-text-tertiary">
+      <p className="text-sm font-medium text-fg">This file isn&apos;t available to preview</p>
+      <p className="text-xs text-fg-subtle">
         Its stored link has expired. Re-upload the file to restore it.
       </p>
     </div>
@@ -64,7 +65,7 @@ export function FileUnavailable() {
 }
 
 export function FileTypeIcon({ type, className = '' }: { type: string; className?: string }) {
-  const colors = FILE_BG[type] ?? 'bg-surface-3 text-text-muted';
+  const colors = FILE_BG[type] ?? 'bg-surface-muted text-fg-muted';
   const iconClass = 'h-5 w-5';
   const content = type === 'image' ? (
     <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -106,8 +107,8 @@ export function DocxViewer({ resourceId }: { resourceId: string }) {
   }, [resourceId]);
 
   if (loading) return (
-    <div className="flex flex-1 items-center justify-center text-sm text-text-muted">
-      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-green mr-3" />
+    <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
+      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-accent mr-3" />
       Loading preview…
     </div>
   );
@@ -116,8 +117,8 @@ export function DocxViewer({ resourceId }: { resourceId: string }) {
   // script or inline event handler is inert regardless of server-side scrubbing.
   // A minimal style block gives it readable typography without the app's CSS.
   const srcDoc = `<!doctype html><html><head><meta charset="utf-8">`
-    + `<style>body{font:14px/1.6 system-ui,sans-serif;color:#111;margin:0;padding:24px}`
-    + `img{max-width:100%}table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:4px 8px}</style>`
+    + `<style>body{font:14px/1.6 system-ui,sans-serif;color:${color.fg.default};margin:0;padding:24px}`
+    + `img{max-width:100%}table{border-collapse:collapse}td,th{border:1px solid ${color.line.default};padding:4px 8px}</style>`
     + `</head><body>${html}</body></html>`;
   return (
     <iframe

@@ -20,10 +20,10 @@ function SubjectList({ title, tone, subjects, detail }: {
   detail: (s: MovePreviewSubject) => string
 }) {
   if (subjects.length === 0) return null
-  const mark = tone === 'gain' ? 'bg-brand-green' : tone === 'loss' ? 'bg-red-500' : 'bg-text-muted'
+  const mark = tone === 'gain' ? 'bg-accent' : tone === 'loss' ? 'bg-danger-bright' : 'bg-fg-muted'
   return (
     <div>
-      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
+      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
         <span className={`h-1.5 w-1.5 rounded-full ${mark}`} />
         {title}
       </p>
@@ -31,10 +31,10 @@ function SubjectList({ title, tone, subjects, detail }: {
         {subjects.map((s) => (
           <li
             key={`${s.subjectType}:${s.subjectId}`}
-            className="flex items-baseline justify-between gap-3 rounded-lg bg-surface-2 px-3 py-1.5"
+            className="flex items-baseline justify-between gap-3 rounded-lg bg-surface-subtle px-3 py-1.5"
           >
-            <span className="min-w-0 truncate font-medium text-text-primary">{s.name}</span>
-            <span className="shrink-0 text-xs text-text-muted">{detail(s)}</span>
+            <span className="min-w-0 truncate font-medium text-fg">{s.name}</span>
+            <span className="shrink-0 text-xs text-fg-muted">{detail(s)}</span>
           </li>
         ))}
       </ul>
@@ -89,7 +89,7 @@ export function MoveAccessDialog({ ask }: { ask: MoveAsk | null }) {
           {notes.length > 0 && (
             <ul className="flex flex-col gap-1.5">
               {notes.map((n) => (
-                <li key={n} className="border-l-2 border-border-default pl-3">{n}</li>
+                <li key={n} className="border-l-2 border-line pl-3">{n}</li>
               ))}
             </ul>
           )}

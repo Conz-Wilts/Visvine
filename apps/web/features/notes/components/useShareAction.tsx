@@ -34,7 +34,7 @@ export function useShareAction({ onOpen, title }: { onOpen: () => void; title: s
           type="button"
           onClick={onOpen}
           title={title}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary transition hover:bg-surface-2"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-fg-secondary transition hover:bg-surface-subtle"
         >
           <Share2Icon className="h-3.5 w-3.5" />
           Share
@@ -49,7 +49,7 @@ export function useShareAction({ onOpen, title }: { onOpen: () => void; title: s
         type="button"
         onClick={onOpen}
         title={title}
-        className="flex h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap text-brand-grey outline-none transition-colors duration-150 hover:text-brand-black"
+        className="flex h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap text-fg-muted outline-none transition-colors duration-150 hover:text-fg"
       >
         <Share2Icon className="h-4 w-4" />
         Share

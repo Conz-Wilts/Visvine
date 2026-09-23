@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
 
 function Caption({ children }: { children: React.ReactNode }) {
-  return <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{children}</p>;
+  return <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">{children}</p>;
 }
 
 function clock(seconds: number): string {
@@ -72,14 +72,14 @@ export default function RunPane({
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex items-center gap-3">
         <StatusDot tone={running ? 'live' : run?.status === 'failed' ? 'bad' : 'ok'} />
-        <p className={`min-w-0 flex-1 truncate text-[13px] font-medium ${run?.status === 'failed' ? 'text-red-600' : 'text-text-primary'}`}>{line}</p>
+        <p className={`min-w-0 flex-1 truncate text-[13px] font-medium ${run?.status === 'failed' ? 'text-danger' : 'text-fg'}`}>{line}</p>
         {picker}
       </div>
-      {error && <p className="pl-5 text-[12px] text-amber-700">{error} — retrying</p>}
-      {run?.errorMessage && <p className="border-l-2 border-red-500 pl-3 text-[13px] text-red-700">{run.errorMessage}</p>}
+      {error && <p className="pl-5 text-[12px] text-warning">{error} — retrying</p>}
+      {run?.errorMessage && <p className="border-l-2 border-danger-bright pl-3 text-[13px] text-danger-strong">{run.errorMessage}</p>}
 
       {run?.transcriptHidden ? (
-        <p className="text-[13px] text-text-muted">The steps are visible to the agent&apos;s author and admins only.</p>
+        <p className="text-[13px] text-fg-muted">The steps are visible to the agent&apos;s author and admins only.</p>
       ) : (
         <RunSteps events={run?.events ?? []} machine={run?.machine?.events ?? null} live={running} />
       )}
@@ -87,12 +87,12 @@ export default function RunPane({
       {run?.machine?.refusals.length ? (
         <div>
           <Caption>Refused · {run.machine.refusals.length}</Caption>
-          <ul className="mt-1 flex flex-col gap-0.5 font-mono text-[12px] text-red-700">
+          <ul className="mt-1 flex flex-col gap-0.5 font-mono text-[12px] text-danger-strong">
             {run.machine.refusals.map((r) => (
               <li key={r.id} className="break-words">
                 {r.method} {r.host}
                 {r.path && r.path !== '/' ? r.path : ''}
-                {r.reason ? <span className="text-text-muted"> — {r.reason}</span> : null}
+                {r.reason ? <span className="text-fg-muted"> — {r.reason}</span> : null}
               </li>
             ))}
           </ul>
@@ -107,7 +107,7 @@ export default function RunPane({
           <ul className="mt-1 flex flex-col gap-0.5 font-mono text-[12px]">
             {run.input.writes.map((path) => (
               <li key={path} className="break-words">
-                <Link className="hover:text-brand-dark-green hover:underline" href={hrefForNotePath(path, null)}>
+                <Link className="hover:text-accent-strong hover:underline" href={hrefForNotePath(path, null)}>
                   {path}
                 </Link>
               </li>

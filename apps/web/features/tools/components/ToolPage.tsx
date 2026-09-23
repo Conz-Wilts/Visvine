@@ -50,7 +50,7 @@ export default function ToolPage({ slug }: { slug: string }) {
   useEffect(() => {
     setHeaderContent(
       title ? (
-        <span className="block truncate text-center text-sm font-medium text-text-primary">{title}</span>
+        <span className="block truncate text-center text-sm font-medium text-fg">{title}</span>
       ) : null,
     );
     return () => setHeaderContent(null);
@@ -86,14 +86,14 @@ function ToolNotFound({ slug }: { slug: string }) {
   return (
     <div className="flex h-full items-center justify-center p-6">
       <div className="max-w-md px-6 py-8 text-center">
-        <h1 className="text-lg font-semibold text-text-primary">No tool here</h1>
-        <p className="mt-2 text-sm text-text-secondary">
-          This space has no tool at <span className="font-mono text-text-primary">/t/{slug}</span>. It may have
+        <h1 className="text-lg font-semibold text-fg">No tool here</h1>
+        <p className="mt-2 text-sm text-fg-secondary">
+          This space has no tool at <span className="font-mono text-fg">/t/{slug}</span>. It may have
           been uninstalled or switched off.
         </p>
         <Link
           href="/admin?section=tools"
-          className="mt-5 inline-flex items-center rounded-lg bg-brand-green px-3.5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          className="mt-5 inline-flex items-center rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
         >
           Space Console
         </Link>

@@ -244,14 +244,14 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const needs = { ...agent.readiness.needs, needs: agent.readiness.needs.needs.filter((n) => n.status !== 'no_model') };
   const statusText = [line.text, others > 0 ? `runs for ${others + 1}` : null].filter(Boolean).join(' · ');
   const iconButton =
-    'grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted hover:bg-surface-2 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40';
+    'grid h-8 w-8 shrink-0 place-items-center rounded-lg text-fg-muted hover:bg-surface-subtle hover:text-fg disabled:cursor-not-allowed disabled:opacity-40';
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 pb-16">
       <AgentTrail view={view} onView={go} onShare={() => setSharing(true)} />
       <header className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <h1 className="min-w-0 flex-1 truncate text-[20px] font-semibold leading-tight text-text-primary">{agent.title || agent.name}</h1>
+          <h1 className="min-w-0 flex-1 truncate text-[20px] font-semibold leading-tight text-fg">{agent.title || agent.name}</h1>
           {!localRuntime && (
             <Toggle
               checked={agent.activation.active}
@@ -269,16 +269,16 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         <div className="flex items-center gap-2.5">
           <StatusDot tone={line.tone} />
           {canManage && !localRuntime && !line.problem ? (
-            <button type="button" className="min-w-0 truncate text-left text-[13px] text-text-secondary hover:text-text-primary" onClick={() => setActivating(true)}>
+            <button type="button" className="min-w-0 truncate text-left text-[13px] text-fg-secondary hover:text-fg" onClick={() => setActivating(true)}>
               {statusText}
             </button>
           ) : (
-            <p className={`min-w-0 truncate text-[13px] ${line.problem ? (line.tone === 'bad' ? 'text-red-600' : 'text-amber-700') : 'text-text-secondary'}`} title={line.text}>
+            <p className={`min-w-0 truncate text-[13px] ${line.problem ? (line.tone === 'bad' ? 'text-danger' : 'text-warning') : 'text-fg-secondary'}`} title={line.text}>
               {statusText}
             </p>
           )}
         </div>
-        {blocker && <p className="pl-[18px] text-[13px] text-amber-700">{blocker.text}</p>}
+        {blocker && <p className="pl-[18px] text-[13px] text-warning">{blocker.text}</p>}
         <div className="pl-[18px] empty:hidden">
           <AgentNeeds needs={needs} isAdmin={isAdmin} onEditSettings={() => go('config')} />
           {agent.readiness.runAs && <ConnectorReadinessNotices items={agent.readiness.runAs} mine={false} who={agent.readiness.runAsName} isAdmin={isAdmin} />}
@@ -301,7 +301,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
       </header>
 
       {spaceId && view === 'config' && (
-        <main className="min-w-0 border-t border-border-subtle pt-3">
+        <main className="min-w-0 border-t border-line-subtle pt-3">
           <AgentConfig
             spaceId={spaceId}
             agent={agent}
@@ -315,7 +315,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
       )}
 
       {view === 'history' && (
-        <main className="min-w-0 border-t border-border-subtle pt-5">
+        <main className="min-w-0 border-t border-line-subtle pt-5">
           <AgentHistory
             agentName={name}
             runs={runs}
@@ -328,7 +328,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
       )}
 
       {view === 'run' && (localRun !== null || shownRun) && spaceId && (
-        <main className="min-w-0 border-t border-border-subtle pt-5">
+        <main className="min-w-0 border-t border-line-subtle pt-5">
           {localRun !== null ? (
             <LocalRunPane
               key={localRun}
@@ -353,7 +353,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
               runId={shownRun.id}
               who={whoOf(shownRun)}
               picker={
-                <button type="button" className="shrink-0 rounded-md px-1.5 py-1 text-[12px] text-text-muted hover:bg-surface-2 hover:text-text-primary" onClick={() => go('history')}>
+                <button type="button" className="shrink-0 rounded-md px-1.5 py-1 text-[12px] text-fg-muted hover:bg-surface-subtle hover:text-fg" onClick={() => go('history')}>
                   {fmtAgo(shownRun.startedAt)}
                 </button>
               }

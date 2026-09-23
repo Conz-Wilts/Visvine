@@ -26,17 +26,17 @@ export default function AgentNeeds({
 }) {
   if (needs.needs.length === 0) return null;
   return (
-    <ul className="flex flex-col gap-1 text-[13px] text-amber-700">
+    <ul className="flex flex-col gap-1 text-[13px] text-warning">
       {needs.needs.map((n) => {
         const canFix = n.who === 'member' || isAdmin;
         let fix: React.ReactNode;
         if (!canFix) {
-          fix = <span className="text-text-muted"> — a space admin sets this up</span>;
+          fix = <span className="text-fg-muted"> — a space admin sets this up</span>;
         } else if (n.status === 'undeclared') {
           fix = (
             <>
               {' — '}
-              <button type="button" className="font-semibold text-brand-dark-green hover:underline" onClick={onEditSettings}>
+              <button type="button" className="font-semibold text-accent-strong hover:underline" onClick={onEditSettings}>
                 add it to the brief
               </button>
             </>
@@ -48,18 +48,18 @@ export default function AgentNeeds({
             <>
               {' — '}
               {external ? (
-                <a href={n.href} className="font-semibold text-brand-dark-green hover:underline">
+                <a href={n.href} className="font-semibold text-accent-strong hover:underline">
                   {label}
                 </a>
               ) : (
-                <Link href={n.href} className="font-semibold text-brand-dark-green hover:underline">
+                <Link href={n.href} className="font-semibold text-accent-strong hover:underline">
                   {label}
                 </Link>
               )}
             </>
           );
         } else {
-          fix = <span className="text-text-muted"> — {n.fix}</span>;
+          fix = <span className="text-fg-muted"> — {n.fix}</span>;
         }
         return (
           <li key={`${n.status}:${n.need}`} title={n.fix}>

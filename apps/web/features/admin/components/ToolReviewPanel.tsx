@@ -18,6 +18,7 @@ import type {
   ReviewQueueResponse,
   ToolVersionSummary,
 } from '@/lib/tools/api';
+import { color } from '@visvine/tokens';
 
 /**
  * The Visvine super admin's Tool review queue.
@@ -43,10 +44,10 @@ const FILES = [
 ] as const;
 
 const STATUS_COLOR: Record<string, string> = {
-  approved: '#16a34a',
-  rejected: '#dc2626',
-  pending: '#d97706',
-  withdrawn: '#6b7280',
+  approved: color.success.default,
+  rejected: color.danger.default,
+  pending: color.warning.default,
+  withdrawn: color.fg.muted,
 };
 
 export interface ToolReviewQueue {
@@ -130,16 +131,16 @@ function VersionRow({
       aria-current={selected}
       className={clsx(
         'w-full rounded-xl px-3 py-2.5 text-left transition-colors',
-        selected ? 'bg-surface-2 ring-1 ring-border-default' : 'hover:bg-surface-2',
+        selected ? 'bg-surface-subtle ring-1 ring-line' : 'hover:bg-surface-subtle',
       )}
     >
       <span className="flex items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
           {version.title}
         </span>
-        <span className="shrink-0 font-mono text-xs text-text-muted">v{version.version}</span>
+        <span className="shrink-0 font-mono text-xs text-fg-muted">v{version.version}</span>
       </span>
-      <span className="mt-0.5 block truncate text-xs text-text-muted">{subtitle}</span>
+      <span className="mt-0.5 block truncate text-xs text-fg-muted">{subtitle}</span>
     </button>
   );
 }
@@ -272,7 +273,7 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
             ) : queue.error ? (
               <Alert variant="error">{queue.error}</Alert>
             ) : queue.items.length === 0 ? (
-              <p className="text-sm text-text-muted">Nothing is waiting for review.</p>
+              <p className="text-sm text-fg-muted">Nothing is waiting for review.</p>
             ) : (
               <div className="space-y-1">
                 {queue.items.map((item) => (
@@ -307,13 +308,13 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                       and stored sanitized — this renders, it does not re-check. */}
                   {version.surfaces.rail && (
                     <span
-                      className="shrink-0 text-text-primary"
+                      className="shrink-0 text-fg"
                       title={version.iconSvg ? 'This tool ships its own icon' : 'Built-in icon'}
                     >
                       <ToolIcon name={version.surfaces.rail.icon} svg={version.iconSvg} />
                     </span>
                   )}
-                  <h2 className="text-base font-semibold text-text-primary">{version.title}</h2>
+                  <h2 className="text-base font-semibold text-fg">{version.title}</h2>
                   {version.marketplaceStatus && (
                     <Chip tone="solid" size="sm" color={STATUS_COLOR[version.marketplaceStatus]}>
                       listing {version.marketplaceStatus}
@@ -336,17 +337,17 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                     disabled={deleting}
                     aria-label={`Delete ${version.title} v${version.version} from the registry`}
                     title="Delete this version from the registry"
-                    className="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
+                    className="ml-auto grid h-8 w-8 shrink-0 place-items-center rounded-lg text-fg-muted transition-colors hover:bg-danger-bright/10 hover:text-danger-bright disabled:opacity-50"
                   >
                     <Trash2Icon className="h-4 w-4" />
                   </button>
                 </div>
                 {version.description && (
-                  <p className="mt-1 text-sm text-text-secondary">{version.description}</p>
+                  <p className="mt-1 text-sm text-fg-secondary">{version.description}</p>
                 )}
                 {/* Who is asking, from where, and how long it has waited — the
                     provenance a reviewer needs before reading a line of code. */}
-                <dl className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+                <dl className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
                   <dd className="font-mono">{version.key}</dd>
                   <dd>·</dd>
                   <dd className="font-mono">v{version.version}</dd>
@@ -365,8 +366,8 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                   it is the claim the diff either bears out or doesn't. */}
               {version.releaseNotes && (
                 <section>
-                  <h3 className="mb-1 text-sm font-semibold text-text-primary">Release notes</h3>
-                  <p className="whitespace-pre-line rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-secondary">
+                  <h3 className="mb-1 text-sm font-semibold text-fg">Release notes</h3>
+                  <p className="whitespace-pre-line rounded-lg bg-surface-subtle px-3 py-2 text-sm text-fg-secondary">
                     {version.releaseNotes}
                   </p>
                 </section>
@@ -382,10 +383,10 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
               )}
 
               <section>
-                <h3 className="mb-2 text-sm font-semibold text-text-primary">
+                <h3 className="mb-2 text-sm font-semibold text-fg">
                   Declared reach
                   {detail.previous && (
-                    <span className="ml-2 font-normal text-text-muted">
+                    <span className="ml-2 font-normal text-fg-muted">
                       against v{detail.previous.version}
                     </span>
                   )}
@@ -395,7 +396,7 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
 
               {/* One line before three diffs: a reviewer should know whether
                   this is a typo fix or a new Tool before scrolling. */}
-              <p className="rounded-lg bg-surface-2 px-3 py-2 font-mono text-xs text-text-secondary">
+              <p className="rounded-lg bg-surface-subtle px-3 py-2 font-mono text-xs text-fg-secondary">
                 {detail.previous ? summary : `First submission · ${summary}`}
               </p>
 
@@ -411,7 +412,7 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
               </section>
 
               {pendingDecision ? (
-                <section className="space-y-3 border-t border-border-subtle pt-4">
+                <section className="space-y-3 border-t border-line-subtle pt-4">
                   {/* The note is the author's only channel back — a rejection
                       with nothing in here is a verdict with no reason. */}
                   <Field label="Note to the author (optional)">
@@ -442,7 +443,7 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                     >
                       Reject
                     </Button>
-                    <p className="text-xs text-text-muted">
+                    <p className="text-xs text-fg-muted">
                       Approving lets any space install this version and offers it as an upgrade to
                       spaces already running an older one — it never changes code under them.
                     </p>
@@ -480,8 +481,8 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
           className={clsx(
             'fixed bottom-6 right-6 z-50 max-w-sm rounded-xl px-4 py-3 text-sm shadow-float',
             toast.tone === 'success'
-              ? 'bg-green-600 text-white'
-              : 'bg-red-600 text-white',
+              ? 'bg-success text-white'
+              : 'bg-danger text-white',
           )}
         >
           {toast.text}

@@ -342,7 +342,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
 
   if (shownRead.status === 'error') {
     return (
-      <div className="mx-auto max-w-3xl border-l-2 border-red-500 pl-3 py-1 text-center text-sm text-red-700">
+      <div className="mx-auto max-w-3xl border-l-2 border-danger-bright pl-3 py-1 text-center text-sm text-danger-strong">
         {shownRead.message}
       </div>
     )
@@ -393,7 +393,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">
       {/* leading-[1.25], not tighter: `truncate` hides overflow, so a line box
           shorter than the font's ascent+descent shaves the p/g/y descenders. */}
-      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary font-open-sauce">
+      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-fg font-open-sauce">
         {title}
       </h2>
       <NoteMetaRows
@@ -425,16 +425,16 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         }}
       />
       {access?.parent && (
-        <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
-          <SpaceIcon className="h-4 w-4 shrink-0 text-brand-green" />
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-line-subtle bg-surface-subtle px-3 py-2 text-sm text-fg-secondary">
+          <SpaceIcon className="h-4 w-4 shrink-0 text-accent" />
           <span>
             Shared from <span className="font-medium">{access.parent.name}</span>, the space this one sits inside — read-only here.
           </span>
         </div>
       )}
       {isReplica && pubs?.asTarget && (
-        <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
-          <RadioIcon className="h-4 w-4 shrink-0 text-brand-green" />
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-line-subtle bg-surface-subtle px-3 py-2 text-sm text-fg-secondary">
+          <RadioIcon className="h-4 w-4 shrink-0 text-accent" />
           <span>
             Published from <span className="font-medium">{pubs.asTarget.sourceSpaceName}</span> — kept in
             sync with its source, read-only here. Unlink it from Share to make it an editable copy.
@@ -448,10 +448,10 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   return (
     <div className="pb-10">
       {error && (
-        <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
+        <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between border-l-2 border-danger-bright pl-3 py-1 text-sm text-danger-strong">
           <span>{error}</span>
           <button onClick={() => setError(null)} aria-label="Dismiss"
-                  className="ml-2 text-red-400 hover:text-red-600">
+                  className="ml-2 text-danger-bright hover:text-danger">
             <XIcon className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -500,10 +500,10 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
 function PanelSkeleton() {
   return (
     <div className="mx-auto max-w-3xl animate-pulse space-y-3 py-6">
-      <div className="h-4 w-2/3 rounded bg-surface-2" />
-      <div className="h-4 w-full rounded bg-surface-2" />
-      <div className="h-4 w-5/6 rounded bg-surface-2" />
-      <div className="h-4 w-1/2 rounded bg-surface-2" />
+      <div className="h-4 w-2/3 rounded bg-surface-subtle" />
+      <div className="h-4 w-full rounded bg-surface-subtle" />
+      <div className="h-4 w-5/6 rounded bg-surface-subtle" />
+      <div className="h-4 w-1/2 rounded bg-surface-subtle" />
     </div>
   )
 }

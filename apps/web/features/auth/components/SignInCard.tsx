@@ -38,22 +38,22 @@ export default function SignInCard({
     : null;
 
   return (
-    <div className="w-full max-w-sm bg-surface-1 rounded-xl shadow-float p-8 sm:p-10 flex flex-col items-center text-center">
+    <div className="w-full max-w-sm bg-surface rounded-xl shadow-float p-8 sm:p-10 flex flex-col items-center text-center">
       {/* Logo */}
       <span className="inline-flex items-center gap-2">
         <img src="/images/brand-icon.png" alt="" className="w-7 h-7 rounded-lg" />
-        <span className="font-brand font-medium text-lg text-brand-green tracking-tight">Visvine</span>
+        <span className="font-brand font-medium text-lg text-accent tracking-tight">Visvine</span>
       </span>
 
       {/* Heading */}
-      <h1 className="mt-6 text-2xl font-bold text-text-primary leading-tight">
+      <h1 className="mt-6 text-2xl font-bold text-fg leading-tight">
         {isSignup ? "Create your account" : "Sign in"}
       </h1>
 
       <div className="mt-7 w-full">
         <a
           href={`/api/auth/signin/google?callbackUrl=${cb}`}
-          className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-lg border border-border-subtle bg-surface-1 hover:bg-surface-2 active:scale-[0.98] transition-all text-sm font-medium text-text-secondary"
+          className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-lg border border-line-subtle bg-surface hover:bg-surface-subtle active:scale-[0.98] transition-all text-sm font-medium text-fg-secondary"
         >
           <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -68,7 +68,7 @@ export default function SignInCard({
       {formError && (
         <p
           role="alert"
-          className="mt-4 w-full border-l-2 border-red-500 pl-3 py-1 text-left text-sm text-red-600"
+          className="mt-4 w-full border-l-2 border-danger-bright pl-3 py-1 text-left text-sm text-danger"
         >
           {formError}
         </p>
@@ -77,7 +77,7 @@ export default function SignInCard({
       {devAuthEnabled && (
         <a
           href={`/dev/login?callbackUrl=${cb}`}
-          className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-medium text-text-muted hover:bg-surface-2 hover:text-text-secondary transition-all"
+          className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-medium text-fg-muted hover:bg-surface-subtle hover:text-fg-secondary transition-all"
         >
           Dev login (skip auth)
         </a>

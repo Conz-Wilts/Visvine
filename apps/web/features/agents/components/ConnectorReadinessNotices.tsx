@@ -30,20 +30,20 @@ export default function ConnectorReadinessNotices({
   const adminLink = isAdmin ? (
     <>
       {' — '}
-      <Link href="/admin?section=connectors" className="font-semibold text-brand-dark-green hover:underline">
+      <Link href="/admin?section=connectors" className="font-semibold text-accent-strong hover:underline">
         open Connectors
       </Link>
     </>
   ) : null;
   const owner = who ?? 'its author';
   return (
-    <ul className="flex flex-col gap-1 text-[13px] text-amber-700">
+    <ul className="flex flex-col gap-1 text-[13px] text-warning">
       {issues.map((r) => {
         const provider = r.auth?.provider ?? r.connector;
         const connect = r.connectUrl ? (
           <>
             {' — '}
-            <a href={r.connectUrl} className="font-semibold text-brand-dark-green hover:underline">
+            <a href={r.connectUrl} className="font-semibold text-accent-strong hover:underline">
               connect it
             </a>
           </>
@@ -56,7 +56,7 @@ export default function ConnectorReadinessNotices({
                 <>
                   {r.connector} needs your {r.accountService} account
                   {' — '}
-                  <Link href="/settings?section=accounts" className="font-semibold text-brand-dark-green hover:underline">
+                  <Link href="/settings?section=accounts" className="font-semibold text-accent-strong hover:underline">
                     connect it
                   </Link>
                 </>

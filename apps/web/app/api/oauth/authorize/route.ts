@@ -23,6 +23,7 @@ import {
 } from '@/lib/mcp/clients'
 import { oauthIssuer, isCanonicalResource, mcpResourceUrl } from '@/lib/mcp/config'
 import { negotiateScopes, serializeScopes, SCOPE_DESCRIPTIONS } from '@/lib/mcp/scopes'
+import { color, palette, radius } from '@visvine/tokens'
 
 export const runtime = 'nodejs'
 
@@ -142,7 +143,7 @@ export async function GET(req: NextRequest) {
   // URL says it is. Showing the origin lets the user judge it for themselves.
   const provenance =
     client.source === 'client-id-document'
-      ? `<p style="color:#555;font-size:.9rem">Identified by <strong>${esc(
+      ? `<p style="color:${color.fg.muted};font-size:.9rem">Identified by <strong>${esc(
           new URL(client.clientId).origin,
         )}</strong>, which publishes this application's details.</p>`
       : ''
@@ -152,13 +153,13 @@ export async function GET(req: NextRequest) {
   // as an escape hatch — otherwise "connect as the other dev user" means going
   // and clearing a cookie by hand.
   const switchUser = isDevAuthEnabled()
-    ? `<p style="color:#555;font-size:.9rem"><a href="/dev/login?callbackUrl=${esc(
+    ? `<p style="color:${color.fg.muted};font-size:.9rem"><a href="/dev/login?callbackUrl=${esc(
         encodeURIComponent(url.pathname + url.search),
-      )}" style="color:#1f6f54">Authorize as a different dev user</a></p>`
+      )}" style="color:${color.fg.link}">Authorize as a different dev user</a></p>`
     : ''
 
   const page = `<!doctype html><meta charset="utf-8"><title>Authorize ${esc(clientName)}</title>
-<body style="font-family:system-ui;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#14342b">
+<body style="font-family:system-ui;max-width:32rem;margin:4rem auto;padding:0 1rem;color:${color.fg.default}">
   <h1 style="font-size:1.4rem">Authorize access</h1>
   <p><strong>${esc(clientName)}</strong> wants to access
      <strong>Visvine</strong> as
@@ -167,7 +168,7 @@ export async function GET(req: NextRequest) {
   ${provenance}
   <p>It will be able to:</p>
   <ul>${scopes.map((s) => `<li>${esc(SCOPE_DESCRIPTIONS[s])}</li>`).join('')}</ul>
-  <p style="color:#555;font-size:.9rem">Only within the spaces you belong to, and only as far as your
+  <p style="color:${color.fg.muted};font-size:.9rem">Only within the spaces you belong to, and only as far as your
      own access in each one allows.</p>
   <form method="post" action="/api/oauth/authorize" style="display:flex;gap:.75rem;margin-top:1.5rem">
     ${hidden('client_id', clientId)}
@@ -177,9 +178,9 @@ export async function GET(req: NextRequest) {
     ${hidden('code_challenge', codeChallenge)}
     ${hidden('resource', resource ?? '')}
     <button name="decision" value="approve" type="submit"
-      style="background:#1f6f54;color:#fff;border:0;border-radius:8px;padding:.6rem 1.2rem;font-size:1rem;cursor:pointer">Approve</button>
+      style="background:${color.accent.strong};color:${color.fg.inverse};border:0;border-radius:${radius.lg}px;padding:.6rem 1.2rem;font-size:1rem;cursor:pointer">Approve</button>
     <button name="decision" value="deny" type="submit"
-      style="background:#eee;color:#333;border:0;border-radius:8px;padding:.6rem 1.2rem;font-size:1rem;cursor:pointer">Deny</button>
+      style="background:${palette.gray[100]};color:${color.fg.secondary};border:0;border-radius:${radius.lg}px;padding:.6rem 1.2rem;font-size:1rem;cursor:pointer">Deny</button>
   </form>
 </body>`
 

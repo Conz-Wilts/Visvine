@@ -14,7 +14,7 @@ interface ToggleProps {
 
 /**
  * Standard toggle switch — one size everywhere (40×24px track, 16px thumb).
- * The on-colour uses the brand-green token, which follows the active theme.
+ * The on-colour is the accent, which follows the chosen hue.
  */
 export default function Toggle({
   checked,
@@ -34,9 +34,9 @@ export default function Toggle({
       onClick={() => onChange(!checked)}
       className={clsx(
         'relative inline-flex h-6 w-10 flex-shrink-0 items-center rounded-full transition-colors duration-200',
-        'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green/40',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
         'disabled:cursor-not-allowed disabled:opacity-50',
-        checked ? 'bg-brand-green' : 'bg-surface-3',
+        checked ? 'bg-accent' : 'bg-surface-muted',
         !label && className,
       )}
     >
@@ -54,7 +54,7 @@ export default function Toggle({
   return (
     <label className={clsx('flex items-center gap-3', disabled ? 'cursor-not-allowed' : 'cursor-pointer', className)}>
       {switchEl}
-      <span className="text-sm text-text-secondary">{label}</span>
+      <span className="text-sm text-fg-secondary">{label}</span>
     </label>
   );
 }

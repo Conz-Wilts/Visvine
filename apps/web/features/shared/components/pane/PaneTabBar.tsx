@@ -27,6 +27,7 @@ import { usePaneChromeState, type PaneChromeState, type PaneTabItem } from '@/fe
 import PaneTopScrollbarMask from './PaneTopScrollbarMask';
 import { SHELL_PANE_TOP } from '@/features/shared/contexts/ThemeContext';
 import { useShellBand } from '@/features/desktop/lib/chrome';
+import { motion as motionTokens } from '@visvine/tokens';
 
 /** Height the attached region reserves: the floating toolbar card (44px), the
  *  gap detaching it from the nav line, and room below for its shadow — the
@@ -265,7 +266,7 @@ function PaneTabBarInner({
               onKeyDown={(e) => handleKeyDown(e, idx)}
               className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
                 handoff ? 'tabbar-label-enter' : ''
-              } text-brand-black`}
+              } text-fg`}
             >
               {tab.label}
             </button>
@@ -277,7 +278,7 @@ function PaneTabBarInner({
             <span
               key={g.label}
               aria-hidden
-              className="tabbar-label-exit pointer-events-none absolute top-0 flex h-12 items-center px-4 text-sm font-medium whitespace-nowrap text-brand-black"
+              className="tabbar-label-exit pointer-events-none absolute top-0 flex h-12 items-center px-4 text-sm font-medium whitespace-nowrap text-fg"
               style={{ left: g.left, animationDuration: `${TAB_SET_MOTION_MS}ms` }}
             >
               {g.label}
@@ -287,7 +288,7 @@ function PaneTabBarInner({
       {/* Animated green underline indicator. During a tab-set change it
           slows to the FLIP's duration so it travels with the sliding word. */}
       <div
-        className={`absolute bottom-0 h-[3px] rounded-full bg-brand-green ${motion}`}
+        className={`absolute bottom-0 h-[3px] rounded-full bg-accent ${motion}`}
         style={{
           left: indicatorStyle.left,
           width: indicatorStyle.width,
@@ -310,14 +311,14 @@ function PaneTabBarInner({
             onClick={() => onSelect('raw')}
             aria-pressed={rawOn}
             title="Edit the raw markdown"
-            className="relative flex h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none text-brand-black"
+            className="relative flex h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none text-fg"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
             </svg>
             Raw
             {rawOn && (
-              <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-brand-green" />
+              <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-accent" />
             )}
           </button>
         )}
@@ -327,12 +328,12 @@ function PaneTabBarInner({
             onClick={() => setConnectionsOpen(!connectionsOpen)}
             aria-pressed={connectionsOpen}
             title="What this note connects to"
-            className={`relative hidden h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none xl:flex text-brand-black`}
+            className={`relative hidden h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none xl:flex text-fg`}
           >
             <WaypointsIcon className="h-4 w-4" />
             Connections
             {connectionsOpen && (
-              <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-brand-green" />
+              <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] rounded-full bg-accent" />
             )}
           </button>
         )}
@@ -401,8 +402,8 @@ function PaneTabBarInner({
               // `translate`, not `transform`: Tailwind v4's translate-y-*
               // utilities set the standalone CSS translate property.
               transition: armed
-                ? 'padding 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), translate 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                : 'padding 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
+                ? `padding ${motionTokens.duration.base}ms ${motionTokens.easeCss.gentle}, translate ${motionTokens.duration.base}ms ${motionTokens.easeCss.standard}`
+                : `padding ${motionTokens.duration.base}ms ${motionTokens.easeCss.gentle}`,
             }}
           />
         </div>

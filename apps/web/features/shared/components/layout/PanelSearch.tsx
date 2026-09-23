@@ -23,9 +23,9 @@ export default function PanelSearch({
   return (
     <label
       className="flex flex-shrink-0 cursor-text items-center gap-3 border-b px-5"
-      style={{ height: END_ROW_H, borderBottomColor: "var(--shell-border, #e5e7eb)" }}
+      style={{ height: END_ROW_H, borderBottomColor: "var(--vv-color-line-subtle)" }}
     >
-      <svg className="h-5 w-5 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="h-5 w-5 shrink-0 text-fg-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
       </svg>
       <input
@@ -35,7 +35,7 @@ export default function PanelSearch({
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         tabIndex={tabbable ? 0 : -1}
-        className="min-w-0 flex-1 bg-transparent text-[15px] text-text-primary placeholder:text-text-muted focus:outline-none"
+        className="min-w-0 flex-1 bg-transparent text-[15px] text-fg placeholder:text-fg-muted focus:outline-none"
       />
     </label>
   );

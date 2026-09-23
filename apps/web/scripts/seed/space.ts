@@ -25,6 +25,7 @@
  * reserved-for-documentation placeholders.
  */
 
+import { color, palette } from '@visvine/tokens'
 import { ADMIN_ALIAS, ADMIN_ALIAS_ID, ADMIN_ALIAS_NAME } from '../../lib/types/context'
 
 export const SPACE_ID = 'visvine-hq'
@@ -121,8 +122,8 @@ export const ANCHORS: Anchor[] = [
  * into note frontmatter by a seed layer.
  */
 export const NODE_TYPES = [
-  { name: 'Person', color: '#2563eb', shape: 'rectangle' },
-  { name: 'Space', color: '#78d870', shape: 'square' },
+  { name: 'Person', color: color.type.person.default, shape: 'rectangle' },
+  { name: 'Space', color: color.type.space.default, shape: 'square' },
   // An organisation that runs on Visvine is a RECORD here, not a tenant of
   // this space: it has a directory card and a context note
   // (spaces/<slug>/index.md, the org namespace — see lib/notes/entities.ts)
@@ -130,31 +131,31 @@ export const NODE_TYPES = [
   // folds onto `space` in TYPE_SYNONYMS so the entity machinery is unchanged;
   // declaring the type here is what makes this spelling win in
   // findNodeTypeConfig and paints it its own colour.
-  { name: 'Company', color: '#0891b2', shape: 'square' },
-  { name: 'Event', color: '#ef4444', shape: 'rectangle' },
-  { name: 'Resource', color: '#f97316', shape: 'circle' },
-  { name: 'Note', color: '#8b5cf6', shape: 'rectangle' },
+  { name: 'Company', color: palette.cyan[600], shape: 'square' },
+  { name: 'Event', color: color.type.event.default, shape: 'rectangle' },
+  { name: 'Resource', color: color.type.resource.default, shape: 'circle' },
+  { name: 'Note', color: palette.violet[500], shape: 'rectangle' },
   // The segment vocabulary — how we cut the customer base. (Blackbird's space
   // called the same shape a Sector.)
-  { name: 'Segment', color: '#f97316', shape: 'rectangle' },
-  { name: 'Journal', color: '#ec4899', shape: 'rectangle' },
-  { name: 'Meeting', color: '#14b8a6', shape: 'rectangle' },
+  { name: 'Segment', color: palette.orange[500], shape: 'rectangle' },
+  { name: 'Journal', color: palette.pink[500], shape: 'rectangle' },
+  { name: 'Meeting', color: palette.teal[500], shape: 'rectangle' },
   // Structural/document built-ins the demo layers create nodes for (channels,
   // sections, connectors, agents). Because this list is explicit, omitting one
   // hides it from the console's Types page even though DEFAULT_NODE_TYPES knows
-  // it — so every kind a seed script writes is declared. Colours match
-  // lib/types/context.ts DEFAULT_NODE_TYPES. `Tool` stays out on purpose: it is
+  // it — so every kind a seed script writes is declared. Built-in types take
+  // the design tokens' type palette, as DEFAULT_NODE_TYPES does. `Tool` stays out on purpose: it is
   // a RESERVED machine type (lib/types/nodeTypeRegistry.ts) the console must
   // never offer to a note picker.
-  { name: 'Section', color: '#0ea5e9', shape: 'square' },
-  { name: 'Channel', color: '#ec4899', shape: 'rectangle' },
-  { name: 'Connector', color: '#4f46e5', shape: 'rectangle' },
-  { name: 'Agent', color: '#0d9488', shape: 'rectangle' },
+  { name: 'Section', color: color.type.section.default, shape: 'square' },
+  { name: 'Channel', color: color.type.channel.default, shape: 'rectangle' },
+  { name: 'Connector', color: color.type.connector.default, shape: 'rectangle' },
+  { name: 'Agent', color: color.type.agent.default, shape: 'rectangle' },
   // Note-only vocabulary: `type: Deal` on a pipeline note, `type: Decision` on
   // a product decision. Scoped to notes, the way the draft-context surface
   // would have created them.
-  { name: 'Deal', color: '#b45309', shape: 'rectangle', scope: 'note' },
-  { name: 'Decision', color: '#7c3aed', shape: 'rectangle', scope: 'note' },
+  { name: 'Deal', color: palette.amber[700], shape: 'rectangle', scope: 'note' },
+  { name: 'Decision', color: palette.violet[600], shape: 'rectangle', scope: 'note' },
 ]
 
 // ---- aliases ----------------------------------------------------------------
@@ -207,7 +208,7 @@ export const ALIASES: SeedAlias[] = [
   },
   {
     name: 'Team',
-    color: '#7c3aed',
+    color: palette.violet[600],
     nodeType: 'Person',
     admin: false,
     system: false,
@@ -215,7 +216,7 @@ export const ALIASES: SeedAlias[] = [
   },
   {
     name: 'Champion',
-    color: '#16a34a',
+    color: palette.green[600],
     nodeType: 'Person',
     admin: false,
     system: false,
@@ -223,7 +224,7 @@ export const ALIASES: SeedAlias[] = [
   },
   {
     name: 'Advisor',
-    color: '#0ea5e9',
+    color: palette.sky[500],
     nodeType: 'Person',
     admin: false,
     system: false,
@@ -231,17 +232,17 @@ export const ALIASES: SeedAlias[] = [
   },
   {
     name: 'Board',
-    color: '#d97706',
+    color: palette.amber[600],
     nodeType: 'Person',
     admin: false,
     system: false,
     grants: [['data/revenue-roll-up.md', VIEW]],
   },
-  { name: 'Customer', color: '#0891b2', nodeType: 'Company', admin: false, system: false, grants: [] },
-  { name: 'Design Partner', color: '#0d9488', nodeType: 'Company', admin: false, system: false, grants: [] },
-  { name: 'Prospect', color: '#f59e0b', nodeType: 'Company', admin: false, system: false, grants: [] },
-  { name: 'Investor', color: '#db2777', nodeType: 'Company', admin: false, system: false, grants: [] },
-  { name: 'Partner', color: '#6366f1', nodeType: 'Company', admin: false, system: false, grants: [] },
+  { name: 'Customer', color: palette.cyan[600], nodeType: 'Company', admin: false, system: false, grants: [] },
+  { name: 'Design Partner', color: palette.teal[600], nodeType: 'Company', admin: false, system: false, grants: [] },
+  { name: 'Prospect', color: palette.amber[500], nodeType: 'Company', admin: false, system: false, grants: [] },
+  { name: 'Investor', color: palette.pink[600], nodeType: 'Company', admin: false, system: false, grants: [] },
+  { name: 'Partner', color: palette.indigo[500], nodeType: 'Company', admin: false, system: false, grants: [] },
 ]
 
 /** What every member reaches without holding anything — the "Everyone" card. */

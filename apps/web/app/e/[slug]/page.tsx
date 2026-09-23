@@ -13,6 +13,7 @@ import { formatEventDateRange, normalizeStatus, occupiedSpots } from '@/lib/even
 import { PublicRsvpForm } from '@/features/events/components/PublicRsvpForm';
 import { CalendarIcon, MapPinIcon, UsersIcon, VideoIcon } from '@/features/shared/icons';
 import type { Metadata } from 'next';
+import { color } from '@visvine/tokens';
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -41,10 +42,10 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
   const userAgent = (await headers()).get('user-agent') ?? undefined;
   // Always the brand green — per-event theme colors made event pages clash
   // with the rest of the app (matches EventDetailClient).
-  const themeColor = '#78d870';
+  const themeColor = color.brand.default;
 
   return (
-    <div className="min-h-screen bg-brand-light-bg/30">
+    <div className="min-h-screen bg-accent-soft/30">
       <div className="max-w-xl mx-auto px-4 py-8 sm:py-12">
         {/* cover */}
         <div
@@ -58,18 +59,18 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
           )}
         </div>
 
-        <h1 className="mt-6 text-3xl font-bold text-brand-black">{event.title}</h1>
+        <h1 className="mt-6 text-3xl font-bold text-fg">{event.title}</h1>
 
-        <div className="mt-4 space-y-2.5 text-brand-black">
+        <div className="mt-4 space-y-2.5 text-fg">
           {when && (
             <div className="flex items-start gap-3">
-              <CalendarIcon className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" />
+              <CalendarIcon className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
               <span className="font-medium">{when}</span>
             </div>
           )}
           {(event.location?.label || isVirtual) && (
             <div className="flex items-start gap-3">
-              {isVirtual ? <VideoIcon className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" /> : <MapPinIcon className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" />}
+              {isVirtual ? <VideoIcon className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" /> : <MapPinIcon className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />}
               {!isVirtual && mapLinks ? (
                 <a href={preferredMapLink(mapLinks, userAgent)} target="_blank" rel="noopener noreferrer" className="hover:underline">
                   {event.location?.label}
@@ -80,7 +81,7 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
             </div>
           )}
           <div className="flex items-start gap-3">
-            <UsersIcon className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" />
+            <UsersIcon className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
             <span>
               {going} going
               {event.capacity
@@ -93,7 +94,7 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
         </div>
 
         {event.description && (
-          <p className="mt-5 text-brand-grey whitespace-pre-wrap leading-relaxed">{event.description}</p>
+          <p className="mt-5 text-fg-muted whitespace-pre-wrap leading-relaxed">{event.description}</p>
         )}
 
         <div className="mt-7">
@@ -110,21 +111,21 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
 
         {guestNames.length > 0 && (
           <div className="mt-7">
-            <h2 className="text-sm font-semibold text-brand-black mb-2">Who&apos;s going</h2>
+            <h2 className="text-sm font-semibold text-fg mb-2">Who&apos;s going</h2>
             <div className="flex flex-wrap gap-2">
               {guestNames.slice(0, 30).map((n, i) => (
-                <span key={i} className="px-2.5 py-1 rounded-md bg-surface-2 text-sm text-text-primary">
+                <span key={i} className="px-2.5 py-1 rounded-md bg-surface-subtle text-sm text-fg">
                   {n}
                 </span>
               ))}
               {guestNames.length > 30 && (
-                <span className="px-3 py-1 text-sm text-brand-grey">+{guestNames.length - 30} more</span>
+                <span className="px-3 py-1 text-sm text-fg-muted">+{guestNames.length - 30} more</span>
               )}
             </div>
           </div>
         )}
 
-        <p className="mt-10 text-center text-xs text-brand-grey">Powered by Visvine</p>
+        <p className="mt-10 text-center text-xs text-fg-muted">Powered by Visvine</p>
       </div>
     </div>
   );

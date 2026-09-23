@@ -16,11 +16,11 @@ export const dynamic = "force-dynamic";
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-surface-2 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-surface-1 rounded-xl shadow-float p-8 sm:p-10 flex flex-col items-center text-center">
+    <div className="min-h-screen bg-surface-subtle flex items-center justify-center p-4">
+      <div className="w-full max-w-sm bg-surface rounded-xl shadow-float p-8 sm:p-10 flex flex-col items-center text-center">
         <span className="inline-flex items-center gap-2">
           <img src="/images/brand-icon.png" alt="" className="w-7 h-7 rounded-lg" />
-          <span className="font-brand font-medium text-lg text-brand-green tracking-tight">Visvine</span>
+          <span className="font-brand font-medium text-lg text-accent tracking-tight">Visvine</span>
         </span>
         {children}
       </div>
@@ -37,7 +37,7 @@ export default async function DesktopSignInPage({
   if (!isWellFormedChallenge(challenge)) {
     return (
       <Shell>
-        <p className="mt-6 text-sm text-text-muted">Start again from the Visvine app.</p>
+        <p className="mt-6 text-sm text-fg-muted">Start again from the Visvine app.</p>
       </Shell>
     );
   }
@@ -50,12 +50,12 @@ export default async function DesktopSignInPage({
 
   return (
     <Shell>
-      <h1 className="mt-6 text-2xl font-bold text-text-primary leading-tight">Open Visvine</h1>
-      <p className="mt-2 text-sm text-text-muted">{session.email}</p>
+      <h1 className="mt-6 text-2xl font-bold text-fg leading-tight">Open Visvine</h1>
+      <p className="mt-2 text-sm text-fg-muted">{session.email}</p>
 
       <a
         href={`visvine-desktop://auth?handoff=${encodeURIComponent(handoff)}`}
-        className="mt-7 w-full inline-flex items-center justify-center px-4 py-3.5 rounded-lg bg-brand-green text-white text-sm font-medium hover:opacity-90 active:translate-y-[1px] transition-all"
+        className="mt-7 w-full inline-flex items-center justify-center px-4 py-3.5 rounded-lg bg-accent text-white text-sm font-medium hover:opacity-90 active:translate-y-[1px] transition-all"
       >
         Open the app
       </a>
@@ -65,7 +65,7 @@ export default async function DesktopSignInPage({
           asked to show the account chooser rather than reuse this one. */}
       <a
         href={`/api/auth/signin/google?callbackUrl=${encodeURIComponent(here)}&prompt=select_account`}
-        className="mt-4 text-sm text-text-muted hover:text-text-primary underline underline-offset-4"
+        className="mt-4 text-sm text-fg-muted hover:text-fg underline underline-offset-4"
       >
         Use a different account
       </a>

@@ -68,11 +68,11 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-t border-border-subtle py-5">
+    <section className="border-t border-line-subtle py-5">
       <header className="flex items-center justify-between gap-3 pb-3">
         <h2 className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-sm font-semibold text-text-primary">{title}</span>
-          {meta && <span className="shrink-0 font-mono text-[11px] text-text-muted">{meta}</span>}
+          <span className="truncate text-sm font-semibold text-fg">{title}</span>
+          {meta && <span className="shrink-0 font-mono text-[11px] text-fg-muted">{meta}</span>}
         </h2>
         {action}
       </header>
@@ -82,7 +82,7 @@ function Section({
 }
 
 const HEADER_BUTTON =
-  'inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-subtle disabled:cursor-not-allowed disabled:opacity-50';
 
 // ── Build ────────────────────────────────────────────────────────────────────
 
@@ -96,7 +96,7 @@ function fmtBytes(bytes: number): string {
 function BuildReport({ build }: { build: BuildSummary | null }) {
   if (!build) {
     return (
-      <p className="text-sm text-text-muted">
+      <p className="text-sm text-fg-muted">
         This tool has never compiled — nothing has been written to{' '}
         <code className="font-mono text-[12px]">{TOOL_SOURCE_FILES.ui.authorName}</code> yet.
       </p>
@@ -108,14 +108,14 @@ function BuildReport({ build }: { build: BuildSummary | null }) {
       <BuildDiagnostics build={build} />
 
       {build.ok && build.errors.length === 0 && (
-        <p className="flex items-center gap-2 text-sm text-text-primary">
-          <CheckIcon className="h-4 w-4 shrink-0 text-brand-dark-green" />
+        <p className="flex items-center gap-2 text-sm text-fg">
+          <CheckIcon className="h-4 w-4 shrink-0 text-accent-strong" />
           Compiles — {fmtBytes(build.sizeBytes)} of bundle, built{' '}
           {timeAgo(new Date(build.updatedAt).getTime(), { style: 'short' })}.
         </p>
       )}
 
-      <p className="text-[12px] text-text-muted">
+      <p className="text-[12px] text-fg-muted">
         Every save recompiles. An authoring agent reads these same lines back from{' '}
         <code className="font-mono">write_tool</code>.
       </p>
@@ -140,28 +140,28 @@ const VERSION_TONES: Record<ToolVersionSummary['status'], Tone> = {
 function VersionTrail({ versions }: { versions: ToolVersionSummary[] }) {
   if (versions.length === 0) {
     return (
-      <p className="text-sm text-text-muted">
+      <p className="text-sm text-fg-muted">
         Never published. Publishing snapshots the working copy as an immutable version and queues it for a
         Visvine super-admin, who reads the declared reach and a code diff before anyone can install it.
       </p>
     );
   }
   return (
-    <ul className="flex flex-col divide-y divide-border-subtle">
+    <ul className="flex flex-col divide-y divide-line-subtle">
       {versions.map((version) => (
         <li key={version.id} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
-            <span className="font-mono font-semibold text-text-primary">v{version.version}</span>
+            <span className="font-mono font-semibold text-fg">v{version.version}</span>
             <span className={`${TONE_CHIP} ${TONE_CLASSES[VERSION_TONES[version.status]]}`}>
               {version.status}
             </span>
-            <span className="text-text-muted">
+            <span className="text-fg-muted">
               {version.author.name ?? 'someone'} · {timeAgo(new Date(version.submittedAt).getTime(), { style: 'short' })}
             </span>
-            <span className="ml-auto shrink-0 font-mono text-text-muted">{fmtBytes(version.sizeBytes)}</span>
+            <span className="ml-auto shrink-0 font-mono text-fg-muted">{fmtBytes(version.sizeBytes)}</span>
           </div>
           {version.reviewNote && (
-            <p className="min-w-0 break-words text-[12px] text-text-secondary">
+            <p className="min-w-0 break-words text-[12px] text-fg-secondary">
               Reviewer: {version.reviewNote}
             </p>
           )}
@@ -230,11 +230,11 @@ function PublishDialog({
       <div className="flex flex-col gap-4 px-6 py-4 text-sm">
         {tool.config ? (
           <div>
-            <p className="pb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Reach</p>
+            <p className="pb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Reach</p>
             <PerimeterSummary perimeter={tool.config.perimeter} />
           </div>
         ) : (
-          <p className="border-l-2 border-red-500 pl-3 text-[13px] text-red-700">The config does not parse.</p>
+          <p className="border-l-2 border-danger-bright pl-3 text-[13px] text-danger-strong">The config does not parse.</p>
         )}
 
         <Textarea
@@ -245,7 +245,7 @@ function PublishDialog({
           placeholder="Note for the reviewer"
         />
 
-        {error && <p className="border-l-2 border-red-500 pl-3 text-[13px] text-red-700">{error}</p>}
+        {error && <p className="border-l-2 border-danger-bright pl-3 text-[13px] text-danger-strong">{error}</p>}
       </div>
     </Modal>
   );
@@ -383,10 +383,10 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
     const status = error?.status ?? 0;
     return (
       <div className="py-16 text-center">
-        <h2 className="text-lg font-semibold text-text-primary">
+        <h2 className="text-lg font-semibold text-fg">
           {status === 403 ? 'Tools are off for you here' : 'No tool here'}
         </h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-text-secondary">
+        <p className="mx-auto mt-2 max-w-md text-sm text-fg-secondary">
           {status === 403
             ? 'An admin has switched the Tools surface off for this space, or restricted it to admins.'
             : status === 404
@@ -409,8 +409,8 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
       {/* ══ HEADER — what it is, whether it works, and what you can do with it ══ */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h1 className="truncate font-title text-xl font-semibold text-text-primary">{tool.title}</h1>
-          <span className="font-mono text-[12px] text-text-muted">{tool.name}</span>
+          <h1 className="truncate font-title text-xl font-semibold text-fg">{tool.title}</h1>
+          <span className="font-mono text-[12px] text-fg-muted">{tool.name}</span>
           <span className={`${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>
             {status.label}
           </span>
@@ -421,7 +421,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
             Preview
           </Link>
           <button type="button" onClick={copyMcpHint} className={HEADER_BUTTON}>
-            {copied ? <CheckIcon className="h-3.5 w-3.5 text-brand-dark-green" /> : <CopyIcon className="h-3.5 w-3.5" />}
+            {copied ? <CheckIcon className="h-3.5 w-3.5 text-accent-strong" /> : <CopyIcon className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy MCP hint'}
           </button>
           {isAdmin && (
@@ -446,12 +446,12 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
       </div>
 
       {notice && (
-        <p className="mb-5 rounded-2xl bg-surface-2 px-4 py-2.5 text-[13px] text-text-primary">{notice}</p>
+        <p className="mb-5 rounded-2xl bg-surface-subtle px-4 py-2.5 text-[13px] text-fg">{notice}</p>
       )}
 
       {status.tone !== 'ok' && (
-        <p className="flex items-start gap-2 pb-5 text-xs text-text-muted">
-          <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
+        <p className="flex items-start gap-2 pb-5 text-xs text-fg-muted">
+          <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0 text-warning-bright" />
           <span className="min-w-0 break-words">{status.hint}</span>
         </p>
       )}
@@ -474,7 +474,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
             onSave={saveShare}
             what="tool"
           />
-          <p className="mt-1 text-xs text-text-muted">
+          <p className="mt-1 text-xs text-fg-muted">
             A room it reaches runs the version this space runs, over the room&apos;s own notes; the room can turn it off but not remove it.
           </p>
         </div>
@@ -485,39 +485,39 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
         {config ? (
           <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2">
             <div>
-              <dt className="text-text-muted">Title</dt>
-              <dd className="text-text-primary">{config.title}</dd>
+              <dt className="text-fg-muted">Title</dt>
+              <dd className="text-fg">{config.title}</dd>
             </div>
             <div>
-              <dt className="text-text-muted">Version</dt>
-              <dd className="font-mono text-text-primary">
+              <dt className="text-fg-muted">Version</dt>
+              <dd className="font-mono text-fg">
                 {config.version === 0 ? 'unpublished' : config.version}
               </dd>
             </div>
             <div className="sm:col-span-2">
-              <dt className="text-text-muted">Description</dt>
-              <dd className="text-text-primary">
-                {config.description || <span className="text-text-muted">none — the marketplace card shows this</span>}
+              <dt className="text-fg-muted">Description</dt>
+              <dd className="text-fg">
+                {config.description || <span className="text-fg-muted">none — the marketplace card shows this</span>}
               </dd>
             </div>
             <div>
-              <dt className="text-text-muted">Rail row</dt>
-              <dd className="text-text-primary">
+              <dt className="text-fg-muted">Rail row</dt>
+              <dd className="text-fg">
                 {config.surfaces.rail ? (
                   <>
                     {config.surfaces.rail.label}{' '}
-                    <span className="font-mono text-[12px] text-text-muted">{config.surfaces.rail.icon}</span>
+                    <span className="font-mono text-[12px] text-fg-muted">{config.surfaces.rail.icon}</span>
                   </>
                 ) : (
-                  <span className="text-text-muted">none — no page of its own</span>
+                  <span className="text-fg-muted">none — no page of its own</span>
                 )}
               </dd>
             </div>
             <div>
-              <dt className="text-text-muted">Type surfaces</dt>
-              <dd className="text-text-primary">
+              <dt className="text-fg-muted">Type surfaces</dt>
+              <dd className="text-fg">
                 {config.surfaces.types.length === 0 ? (
-                  <span className="text-text-muted">none</span>
+                  <span className="text-fg-muted">none</span>
                 ) : (
                   config.surfaces.types.map((claim) => `${claim.type} (${claim.mode})`).join(', ')
                 )}
@@ -525,7 +525,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
             </div>
           </dl>
         ) : (
-          <p className="text-sm text-text-muted">
+          <p className="text-sm text-fg-muted">
             The frontmatter does not parse, so there is no configuration to read. Fix it on the{' '}
             <Link className="underline" href={`/directory/${encodeURIComponent(nodeId)}?tab=raw`}>
               Raw
@@ -539,7 +539,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
       {config && (
         <Section title="Perimeter" meta="what it may touch">
           <PerimeterSummary perimeter={config.perimeter} />
-          <p className="mt-3 text-[12px] text-text-muted">
+          <p className="mt-3 text-[12px] text-fg-muted">
             The bridge refuses anything not named here, and never widens the viewer&apos;s own grants — a tool
             can only ever show someone what they could already read.
           </p>
@@ -550,23 +550,23 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
       {config && (
         <Section title="In this space" meta={missing.length > 0 ? `${missing.length} missing` : 'satisfied'}>
           {requirements === null ? (
-            <p className="text-sm text-text-muted">Nothing declared to check.</p>
+            <p className="text-sm text-fg-muted">Nothing declared to check.</p>
           ) : missing.length === 0 ? (
-            <p className="flex items-center gap-2 text-sm text-text-primary">
-              <CheckIcon className="h-4 w-4 shrink-0 text-brand-dark-green" />
+            <p className="flex items-center gap-2 text-sm text-fg">
+              <CheckIcon className="h-4 w-4 shrink-0 text-accent-strong" />
               Everything this tool names exists here.
             </p>
           ) : (
             <>
               <ul className="flex flex-col gap-1.5">
                 {missing.map((line) => (
-                  <li key={line} className="flex items-start gap-2 text-[13px] text-amber-800">
-                    <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
+                  <li key={line} className="flex items-start gap-2 text-[13px] text-warning-strong">
+                    <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0 text-warning-bright" />
                     <span className="min-w-0 break-words">{line}</span>
                   </li>
                 ))}
               </ul>
-              <p className="mt-3 text-[12px] text-text-muted">
+              <p className="mt-3 text-[12px] text-fg-muted">
                 Missing dependencies never block an install: the tool runs degraded behind a banner and
                 unsatisfied reads come back empty.
               </p>
@@ -577,7 +577,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
 
       {/* ══ FILES — the notes, opened where they are actually edited ══ */}
       <Section title="Files" meta={tool.path}>
-        <ul className="flex flex-col divide-y divide-border-subtle">
+        <ul className="flex flex-col divide-y divide-line-subtle">
           {(
             [
               ['index.md', null, 'config and docs'],
@@ -591,13 +591,13 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
                   is never a second surface with its own editor. */}
               <Link
                 href={entityContextHref(nodeId, sub)}
-                className="font-mono text-[13px] font-medium text-text-primary underline decoration-border-default underline-offset-2 hover:decoration-brand-green"
+                className="font-mono text-[13px] font-medium text-fg underline decoration-line underline-offset-2 hover:decoration-accent"
               >
                 {file}
               </Link>
-              <span className="text-[12px] text-text-muted">{blurb}</span>
+              <span className="text-[12px] text-fg-muted">{blurb}</span>
               {tool.sources[file] === null && (
-                <span className="ml-auto shrink-0 rounded-md bg-amber-500 px-2 py-0.5 text-[11px] font-semibold text-white">
+                <span className="ml-auto shrink-0 rounded-md bg-warning-bright px-2 py-0.5 text-[11px] font-semibold text-white">
                   not written
                 </span>
               )}
@@ -613,7 +613,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
       >
         <VersionTrail versions={versions} />
         {!isAdmin && versions.length === 0 && (
-          <p className="mt-3 text-[12px] text-text-muted">
+          <p className="mt-3 text-[12px] text-fg-muted">
             Members author tools; publishing one is a space admin&apos;s call.
           </p>
         )}

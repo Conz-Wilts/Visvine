@@ -225,18 +225,18 @@ function ManageConnections({ spaceId, name, returnTo }: { spaceId: string; name:
   const whose = state.mode === 'space' ? 'Space account' : 'Your account';
   return (
     <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-      <span className="text-text-muted">{whose}:</span>
+      <span className="text-fg-muted">{whose}:</span>
       {mine ? (
         <span>
           connected as <span className="font-mono text-xs">{mine.actsAs ?? 'unknown account'}</span>
         </span>
       ) : (
-        <span className="text-text-muted">not connected</span>
+        <span className="text-fg-muted">not connected</span>
       )}
       {mine?.broken && (
-        <span className="text-red-600">stopped working{mine.broken.reason ? ` — ${mine.broken.reason}` : ''}</span>
+        <span className="text-danger">stopped working{mine.broken.reason ? ` — ${mine.broken.reason}` : ''}</span>
       )}
-      <a href={connectorConnectPath(spaceId, name, returnTo)} className="font-medium text-text-primary underline underline-offset-2">
+      <a href={connectorConnectPath(spaceId, name, returnTo)} className="font-medium text-fg underline underline-offset-2">
         {mine ? 'Reconnect' : 'Connect'}
       </a>
     </div>
@@ -558,7 +558,7 @@ export default function ConnectorsPanel({
       <div className="flex flex-col gap-5">
         <button
           onClick={() => setManage(null)}
-          className="flex items-center gap-2 self-start text-sm text-text-secondary transition-colors hover:text-text-primary"
+          className="flex items-center gap-2 self-start text-sm text-fg-secondary transition-colors hover:text-fg"
         >
           <ArrowLeftIcon className="h-4 w-4" />
           Connectors
@@ -568,12 +568,12 @@ export default function ConnectorsPanel({
           <ConnectorLogo name={connected.name} recipe={connected.recipe} />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="truncate text-base font-semibold text-text-primary">
+              <h2 className="truncate text-base font-semibold text-fg">
                 {connected.title ?? connected.name}
               </h2>
               {status && <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>{status.label}</span>}
             </div>
-            <p className="truncate text-xs text-text-muted">
+            <p className="truncate text-xs text-fg-muted">
               {service ? `${service.name} · ${connected.name}` : connected.name}
               {siblings.length > 1 && ` · one of ${siblings.length} in this space`}
             </p>
@@ -592,19 +592,19 @@ export default function ConnectorsPanel({
         </div>
 
         {connected.shared && (
-          <p className="text-sm text-text-muted">
-            Shared from <span className="font-medium text-text-secondary">{connected.sharedFrom?.name ?? 'the parent space'}</span> —
+          <p className="text-sm text-fg-muted">
+            Shared from <span className="font-medium text-fg-secondary">{connected.sharedFrom?.name ?? 'the parent space'}</span> —
             runs here with that space&apos;s keys and accounts. Its note, switch and secrets are changed there.
           </p>
         )}
 
         {(connected.description ?? about) && (
-          <p className="text-sm text-text-secondary">{connected.description ?? about}</p>
+          <p className="text-sm text-fg-secondary">{connected.description ?? about}</p>
         )}
 
         {connected.invalid && <Alert>Not working: {connected.invalid}</Alert>}
         {!connected.enabled && (
-          <p className="text-sm text-text-muted">
+          <p className="text-sm text-fg-muted">
             Disabled. The note and its secrets are untouched — every run is refused until it is
             switched back on.
           </p>
@@ -621,21 +621,21 @@ export default function ConnectorsPanel({
           <ConnectorToolPermissions spaceId={spaceId} name={connected.name} />
         )}
 
-        <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1 border-t border-border-subtle pt-4 text-[13px] text-text-secondary">
+        <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1 border-t border-line-subtle pt-4 text-[13px] text-fg-secondary">
           {connected.login && (
             <>
-              <dt className="text-text-muted">Signs in at</dt>
+              <dt className="text-fg-muted">Signs in at</dt>
               <dd className="min-w-0 break-words">
                 {connected.login.url}
-                <span className="block text-xs text-text-muted">An agent with this connector calls sign_in on its machine; the password is typed there and never shown to it.</span>
+                <span className="block text-xs text-fg-muted">An agent with this connector calls sign_in on its machine; the password is typed there and never shown to it.</span>
               </dd>
             </>
           )}
-          <dt className="text-text-muted">Reaches</dt>
+          <dt className="text-fg-muted">Reaches</dt>
           <dd className="min-w-0 break-words">
             {connected.hosts.length > 0 ? connected.hosts.join(', ') : 'Nothing — no hosts declared'}
           </dd>
-          <dt className="text-text-muted">Secrets</dt>
+          <dt className="text-fg-muted">Secrets</dt>
           <dd className="min-w-0 break-words">
             {connected.secrets.length === 0 ? (
               'None'
@@ -643,7 +643,7 @@ export default function ConnectorsPanel({
               connected.secrets.map((secret, i) => (
                 <span key={secret}>
                   {i > 0 && ', '}
-                  <span className={connected.missingSecrets.includes(secret) ? 'text-amber-700' : undefined}>
+                  <span className={connected.missingSecrets.includes(secret) ? 'text-warning' : undefined}>
                     {secret}
                     {connected.missingSecrets.includes(secret) && ' (not stored)'}
                   </span>
@@ -651,12 +651,12 @@ export default function ConnectorsPanel({
               ))
             )}
           </dd>
-          <dt className="text-text-muted">Note</dt>
+          <dt className="text-fg-muted">Note</dt>
           <dd className="min-w-0 break-words font-mono text-xs">{connected.path}</dd>
         </dl>
 
         {!connected.shared && (
-          <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-4">
+          <div className="flex items-center justify-between gap-3 border-t border-line-subtle pt-4">
             <Button
               variant="danger"
               size="sm"
@@ -705,8 +705,8 @@ export default function ConnectorsPanel({
           Dismiss closes it with nothing written. */}
       {!readOnly && (tab === 'mine' || tab === 'catalog') && requests.length > 0 && (
         <section className="flex flex-col">
-          <h3 className="text-sm font-semibold text-text-primary">Requested ({requests.length})</h3>
-          <ul className="mt-2 divide-y divide-border-subtle border-t border-border-subtle">
+          <h3 className="text-sm font-semibold text-fg">Requested ({requests.length})</h3>
+          <ul className="mt-2 divide-y divide-line-subtle border-t border-line-subtle">
             {requests.map((r) => {
               const service = CONNECTOR_CATALOG.find((e) => e.id === r.recipe) ?? null;
               const busy = asking === r.id;
@@ -715,10 +715,10 @@ export default function ConnectorsPanel({
                   <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
                     {service ? <ConnectorLogo entry={service} /> : <Avatar name={r.requesterName ?? '?'} size="sm" />}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-text-primary">
+                      <p className="truncate text-sm font-semibold text-fg">
                         {service ? catalogRowLabel(service) : r.recipe}
                       </p>
-                      <p className="truncate text-xs text-text-muted">
+                      <p className="truncate text-xs text-fg-muted">
                         {r.requesterName ?? 'A member'} · {timeAgo(r.requestedAt)}
                         {r.message ? ` · “${r.message}”` : ''}
                       </p>
@@ -747,7 +747,7 @@ export default function ConnectorsPanel({
 
       {outcome && (
         <p
-          className={`text-sm ${outcome.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}
+          className={`text-sm ${outcome.ok ? 'text-success dark:text-success-bright' : 'text-danger dark:text-danger-bright'}`}
         >
           {outcome.message}
         </p>
@@ -760,9 +760,9 @@ export default function ConnectorsPanel({
           {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
         </div>
       ) : tab !== 'catalog' ? (
-        <div className="border-t border-border-subtle pt-2">
+        <div className="border-t border-line-subtle pt-2">
           {(tab === 'connected' ? connected : tab === 'disconnected' ? notConnected : mine).length === 0 && (tab === 'connected' || mineHidden.length === 0) && (
-            <p className="py-8 text-center text-sm text-text-muted">
+            <p className="py-8 text-center text-sm text-fg-muted">
               {query
                 ? `Nothing matches “${query}”.`
                 : tab === 'connected'
@@ -775,25 +775,25 @@ export default function ConnectorsPanel({
 
           {/* One row per CONNECTOR, not per service: two Drives are two rows,
               each with its own key, its own on/off and its own note. */}
-          <ul className="divide-y divide-border-subtle">
+          <ul className="divide-y divide-line-subtle">
             {(tab === 'connected' ? connected : tab === 'disconnected' ? notConnected : mine).map((c) => {
               const status = statusOf(c);
               const service = serviceOf(c);
               return (
                 <li key={c.path} className="py-0.5">
-                  <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5 transition-colors hover:bg-surface-2">
+                  <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5 transition-colors hover:bg-surface-subtle">
                     <button
                       onClick={() => openConnector(c.name)}
                       className="flex min-w-0 flex-1 items-center gap-4 text-left"
                     >
                       <ConnectorLogo name={c.name} recipe={c.recipe} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-text-primary">
+                        <p className="truncate text-sm font-semibold text-fg">
                           {c.title ?? c.name}
                         </p>
                         {/* The service it is to, and the name agents call it by
                             — the two things that tell one Drive from another. */}
-                        <p className="truncate text-xs text-text-muted">
+                        <p className="truncate text-xs text-fg-muted">
                           {service ? `${service.name} · ${c.name}` : c.name}
                           {c.shared && ` · shared from ${c.sharedFrom?.name ?? 'the parent space'}`}
                         </p>
@@ -840,13 +840,13 @@ export default function ConnectorsPanel({
                   <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
                     <ConnectorLogo name={h.name} recipe={h.recipe} size="sm" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-text-primary">{h.title ?? h.name}</p>
-                      <p className="truncate text-xs text-text-muted">
+                      <p className="truncate text-sm font-semibold text-fg">{h.title ?? h.name}</p>
+                      <p className="truncate text-xs text-fg-muted">
                         {service ? `${service.name} · ${h.name}` : h.name}
                       </p>
                     </div>
                     {h.accessRequested ? (
-                      <span className={`${ACTION_SLOT} text-xs text-text-muted`}>Requested</span>
+                      <span className={`${ACTION_SLOT} text-xs text-fg-muted`}>Requested</span>
                     ) : (
                       <Button
                         variant="brand"
@@ -865,15 +865,15 @@ export default function ConnectorsPanel({
           </ul>
         </div>
       ) : (
-        <div className="border-t border-border-subtle pt-2">
+        <div className="border-t border-line-subtle pt-2">
           {services.length === 0 && (
-            <p className="py-8 text-center text-sm text-text-muted">Nothing matches “{query}”.</p>
+            <p className="py-8 text-center text-sm text-fg-muted">Nothing matches “{query}”.</p>
           )}
 
           {/* One row per SERVICE: what the space holds of it, or a member's
               Request. A connector is written by an AI over MCP; its page is
               where the key is pasted or the sign-in pressed. */}
-          <ul className="divide-y divide-border-subtle">
+          <ul className="divide-y divide-line-subtle">
             {services.map((e) => {
               const rows = held.get(e.id) ?? [];
               const busy = asking === e.id;
@@ -887,8 +887,8 @@ export default function ConnectorsPanel({
                     <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
                       <ConnectorLogo entry={e} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-text-primary">{catalogRowLabel(e)}</p>
-                        <p className="truncate text-xs text-text-muted">{e.description}</p>
+                        <p className="truncate text-sm font-semibold text-fg">{catalogRowLabel(e)}</p>
+                        <p className="truncate text-xs text-fg-muted">{e.description}</p>
                       </div>
                       <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES.muted}`}>Your account</span>
                       {myAccounts.includes(e.id) ? (
@@ -914,15 +914,15 @@ export default function ConnectorsPanel({
                     <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
                       <ConnectorLogo entry={e} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-text-primary">{catalogRowLabel(e)}</p>
-                        <p className="truncate text-xs text-text-muted">{e.description}</p>
+                        <p className="truncate text-sm font-semibold text-fg">{catalogRowLabel(e)}</p>
+                        <p className="truncate text-xs text-fg-muted">{e.description}</p>
                       </div>
                       {rows.length > 0 ? (
                         <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES.ok}`}>
                           {rows.length === 1 ? 'In this space' : `${rows.length} in this space`}
                         </span>
                       ) : !readOnly ? null : isRequested ? (
-                        <span className={`${ACTION_SLOT} text-xs text-text-muted`}>Requested</span>
+                        <span className={`${ACTION_SLOT} text-xs text-fg-muted`}>Requested</span>
                       ) : (
                         <Button
                           variant="neutral"

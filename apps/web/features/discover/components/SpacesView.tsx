@@ -67,7 +67,7 @@ export default function SpacesView({
                 onClick={() => toggleSector(o.value)}
               >
                 {o.label}
-                <span className={`tabular-nums ${on ? 'text-white/80' : 'text-text-muted'}`}>{o.count}</span>
+                <span className={`tabular-nums ${on ? 'text-white/80' : 'text-fg-muted'}`}>{o.count}</span>
               </Chip>
             );
           })}

@@ -291,9 +291,9 @@ export default function ToolFrame({
                 // its own: the frame document's body is transparent and the
                 // app's backdrop shows through, exactly as it does behind a
                 // native page. A
-                // tab or preview is a panel, and panels sit on surface-1 like
+                // tab or preview is a panel, and panels sit on the surface like
                 // every other card in the app.
-                className={clsx('block h-full w-full', mode === 'page' ? 'bg-transparent' : 'bg-surface-1 rounded-xl border border-border-subtle')}
+                className={clsx('block h-full w-full', mode === 'page' ? 'bg-transparent' : 'bg-surface rounded-xl border border-line-subtle')}
               />
             )}
             {status !== 'ready' && !frameLoaded && <ToolFrameSkeleton framed={mode !== 'page'} />}
@@ -319,7 +319,7 @@ function ToolFrameSkeleton({ framed }: { framed: boolean }) {
       // Unframed (page mode) it paints no background, so the skeleton floats
       // on the app's backdrop the way a loading native page does — an opaque
       // slab here would read as a card the finished page never had.
-      className={clsx('absolute inset-0 flex flex-col gap-3', framed ? 'bg-surface-1 rounded-xl border border-border-subtle p-5' : 'p-6')}
+      className={clsx('absolute inset-0 flex flex-col gap-3', framed ? 'bg-surface rounded-xl border border-line-subtle p-5' : 'p-6')}
     >
       <Skeleton className="h-5 w-48" />
       <Skeleton className="h-3.5 w-72" />
@@ -340,14 +340,14 @@ function ToolFrameSkeleton({ framed }: { framed: boolean }) {
  */
 function ToolFrameSlowNotice({ reportHref, onReload }: { reportHref: string; onReload: () => void }) {
   return (
-    <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 border-b border-border-subtle bg-surface-1/95 px-4 py-2 text-xs text-text-muted backdrop-blur">
+    <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 border-b border-line-subtle bg-surface/95 px-4 py-2 text-xs text-fg-muted backdrop-blur">
       <span>This Tool is taking longer than usual to start.</span>
       <div className="flex items-center gap-1.5">
         <Button variant="ghost" size="sm" onClick={onReload} className="inline-flex items-center gap-1.5">
           <RefreshCwIcon className="h-3 w-3" />
           Reload
         </Button>
-        <Link href={reportHref} className="font-medium text-text-secondary hover:text-text-primary">
+        <Link href={reportHref} className="font-medium text-fg-secondary hover:text-fg">
           View this Tool
         </Link>
       </div>

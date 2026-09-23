@@ -47,22 +47,22 @@ export default function MutualsRow({ nodeId, onOpen, accent }: Props) {
     <div className="mt-2.5 flex items-center gap-2">
       <div className="flex -space-x-2">
         {mutuals.slice(0, 3).map((m) => (
-          <span key={m.userId} className="ring-2 ring-surface-1 rounded-lg">
+          <span key={m.userId} className="ring-2 ring-surface rounded-lg">
             <Avatar name={m.name} imageUrl={m.imageUrl} size="sm" />
           </span>
         ))}
       </div>
-      <p className="min-w-0 text-sm text-text-muted">
+      <p className="min-w-0 text-sm text-fg-muted">
         {named.map((m, i) => (
           <span key={m.userId}>
             {i > 0 && ', '}
             {m.nodeId ? (
               <SpaceLink href={`/directory/${encodeURIComponent(m.nodeId)}`}
-                         className="font-semibold text-text-secondary hover:underline">
+                         className="font-semibold text-fg-secondary hover:underline">
                 {m.name}
               </SpaceLink>
             ) : (
-              <span className="font-semibold text-text-secondary">{m.name}</span>
+              <span className="font-semibold text-fg-secondary">{m.name}</span>
             )}
           </span>
         ))}
@@ -75,7 +75,7 @@ export default function MutualsRow({ nodeId, onOpen, accent }: Props) {
                 {rest} other{rest === 1 ? '' : 's'}
               </button>
             ) : (
-              <span className="font-semibold text-text-secondary">{rest} other{rest === 1 ? '' : 's'}</span>
+              <span className="font-semibold text-fg-secondary">{rest} other{rest === 1 ? '' : 's'}</span>
             )}
           </>
         )}

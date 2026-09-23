@@ -67,7 +67,7 @@ export function ChannelIconPicker({
   }, [onClose]);
 
   return (
-    <div ref={ref} className="w-56 rounded-2xl border border-border-subtle bg-surface-1 p-2 shadow-float">
+    <div ref={ref} className="w-56 rounded-2xl border border-line-subtle bg-surface p-2 shadow-float">
       <div className="grid grid-cols-8 gap-0.5">
         {CHANNEL_ICONS.map((name) => (
           <button
@@ -77,21 +77,21 @@ export function ChannelIconPicker({
             onClick={() => { onSelect(name); onClose(); }}
             onMouseEnter={() => setHovered(name)}
             onMouseLeave={() => setHovered((h) => (h === name ? null : h))}
-            className="flex items-center justify-center rounded-lg p-1 text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
+            className="flex items-center justify-center rounded-lg p-1 text-fg-secondary transition-colors hover:bg-surface-subtle hover:text-fg"
           >
             <Icon name={name} className="h-4 w-4" strokeWidth={2} />
           </button>
         ))}
       </div>
       {/* The grid is shapes, not words — this is how you find out what one is. */}
-      <p className="mt-1.5 h-4 truncate px-1 text-[11px] leading-4 text-text-muted">
+      <p className="mt-1.5 h-4 truncate px-1 text-[11px] leading-4 text-fg-muted">
         {hovered ? hovered.replace(/-/g, ' ') : ''}
       </p>
       {onClear && (
         <button
           type="button"
           onClick={() => { onClear(); onClose(); }}
-          className="mt-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text-secondary"
+          className="mt-1 flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-subtle hover:text-fg-secondary"
         >
           <HashIcon className="h-3.5 w-3.5" strokeWidth={2} />
           {clearLabel}

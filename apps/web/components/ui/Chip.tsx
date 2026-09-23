@@ -56,11 +56,11 @@ const ICON_CLASS: Record<ChipSize, string> = {
 
 const TONE_CLASS: Record<ChipTone, string> = {
   solid: 'text-white',
-  muted: 'bg-surface-3 text-text-secondary',
+  muted: 'bg-surface-muted text-fg-secondary',
   // Hover is left to the caller: some empty slots brighten to the surface's own
   // accent, others just to the text colour, and two competing `hover:text-*`
   // rules resolve by stylesheet order rather than by the order they're written.
-  dashed: 'border border-dashed border-border-default text-text-muted transition-colors disabled:opacity-40',
+  dashed: 'border border-dashed border-line text-fg-muted transition-colors disabled:opacity-40',
 };
 
 /**

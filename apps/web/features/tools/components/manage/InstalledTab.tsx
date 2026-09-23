@@ -30,6 +30,7 @@ import { fetchVersion, patchInstall, uninstallTool } from '@/features/tools/lib/
 import { describeRequirements } from '@/lib/tools/requirements';
 import type { InstallSummary, VersionDetail } from '@/lib/tools/api';
 import type { TypeClaimMode } from '@/lib/tools/installs';
+import { color } from '@visvine/tokens';
 
 export default function InstalledTab({
   spaceId,
@@ -82,7 +83,7 @@ export default function InstalledTab({
 
   return (
     <>
-      <div className="-my-4 divide-y divide-border-subtle">
+      <div className="-my-4 divide-y divide-line-subtle">
         {installs.map((install) => (
           <InstallRow
             key={install.id}
@@ -139,14 +140,14 @@ function InstallRow({
       <header className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-text-primary">{install.title}</h3>
+            <h3 className="truncate text-sm font-semibold text-fg">{install.title}</h3>
             {!install.enabled && (
               <Chip tone="muted" size="sm">
                 Off
               </Chip>
             )}
             {install.degraded && (
-              <Chip tone="solid" size="sm" color="#b45309">
+              <Chip tone="solid" size="sm" color={color.warning.default}>
                 Degraded
               </Chip>
             )}
@@ -156,11 +157,11 @@ function InstallRow({
               </Chip>
             )}
           </div>
-          <p className="truncate font-mono text-[11px] text-text-muted">
+          <p className="truncate font-mono text-[11px] text-fg-muted">
             {install.slug} · v{install.version}
           </p>
           {install.description && (
-            <p className="mt-1 line-clamp-2 text-sm text-text-secondary">{install.description}</p>
+            <p className="mt-1 line-clamp-2 text-sm text-fg-secondary">{install.description}</p>
           )}
         </div>
 
@@ -168,7 +169,7 @@ function InstallRow({
           {install.rail && install.enabled && (
             <Link
               href={`/t/${install.slug}`}
-              className="flex items-center gap-1 text-xs font-medium text-brand-dark-green hover:opacity-80"
+              className="flex items-center gap-1 text-xs font-medium text-accent-strong hover:opacity-80"
             >
               Open <ExternalLinkIcon className="h-3.5 w-3.5" aria-hidden />
             </Link>
@@ -188,17 +189,17 @@ function InstallRow({
       </header>
 
       {missing.length > 0 && (
-        <div className="mt-3 border-l-2 border-amber-500 pl-3">
-          <p className="flex items-center gap-1.5 text-sm font-medium text-amber-800">
+        <div className="mt-3 border-l-2 border-warning-bright pl-3">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-warning-strong">
             <TriangleAlertIcon className="h-4 w-4 shrink-0" aria-hidden />
             Running with limits
           </p>
-          <ul className="mt-1 space-y-0.5 text-sm text-amber-800">
+          <ul className="mt-1 space-y-0.5 text-sm text-warning-strong">
             {missing.map((line) => (
               <li key={line}>{line}</li>
             ))}
           </ul>
-          <p className="mt-1 text-xs text-amber-700">
+          <p className="mt-1 text-xs text-warning">
             Unsatisfied reads come back empty. Add what it needs, then re-check.
           </p>
           {isAdmin && (
@@ -233,13 +234,13 @@ function InstallRow({
 
       {install.types.length > 0 && (
         <div className="mt-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">Type pages</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Type pages</p>
           <ul className="space-y-2">
             {install.types.map((surface) => {
               const mode = install.typeClaims[surface.type] ?? null;
               return (
                 <li key={surface.type} className="flex flex-wrap items-center gap-2 text-sm">
-                  <span className="w-32 shrink-0 truncate font-mono text-[13px] text-text-primary">
+                  <span className="w-32 shrink-0 truncate font-mono text-[13px] text-fg">
                     {surface.type}
                   </span>
                   {isAdmin ? (
@@ -262,12 +263,12 @@ function InstallRow({
                       <option value="page">Owns the page</option>
                     </Select>
                   ) : (
-                    <span className="text-text-secondary">
+                    <span className="text-fg-secondary">
                       {mode === 'page' ? 'Owns the page' : mode === 'tab' ? 'Adds a tab' : 'Not claimed here'}
                     </span>
                   )}
                   {mode === null && (
-                    <span className="text-xs text-text-muted">
+                    <span className="text-xs text-fg-muted">
                       Declared but unclaimed — another tool holds this page.
                     </span>
                   )}
@@ -286,7 +287,7 @@ function InstallRow({
         </div>
       )}
       {isAdmin && install.sharedFrom && (
-        <p className="mt-3 text-xs text-text-muted">
+        <p className="mt-3 text-xs text-fg-muted">
           Installed here by {install.sharedFrom.name}; it follows the version that space runs. Turn it off here, or stop sharing it there.
         </p>
       )}
@@ -338,16 +339,16 @@ function UpgradeCard({
   };
 
   return (
-    <div className="mt-3 border-l-2 border-green-600 pl-3">
+    <div className="mt-3 border-l-2 border-success pl-3">
       <div className="flex flex-wrap items-center gap-2">
-        <p className="flex items-center gap-1.5 text-sm font-medium text-green-800">
+        <p className="flex items-center gap-1.5 text-sm font-medium text-success-strong">
           <CircleArrowUpIcon className="h-4 w-4 shrink-0" aria-hidden />
           Version {pending.version} is available
         </p>
         <button
           type="button"
           onClick={() => (open ? setOpen(false) : expand())}
-          className="text-xs font-medium text-green-900 underline"
+          className="text-xs font-medium text-success-strong underline"
         >
           {open ? 'Hide what changes' : 'See what changes'}
         </button>
@@ -368,11 +369,11 @@ function UpgradeCard({
       </div>
 
       {open && (
-        <div className="mt-2 rounded-lg bg-surface-2 p-3">
+        <div className="mt-2 rounded-lg bg-surface-subtle p-3">
           {loading && <Skeleton className="h-16 w-full rounded" />}
           {detail && <PerimeterSummary perimeter={detail.perimeter} diff={pending.perimeterDiff} />}
           {detail && (
-            <p className="mt-2 text-xs text-text-muted">
+            <p className="mt-2 text-xs text-fg-muted">
               Green is reach the new version asks for that v{install.version} did not; struck-through red is
               reach it gives up.
             </p>

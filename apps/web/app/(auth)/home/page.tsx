@@ -34,7 +34,7 @@ export default function HomePage() {
   }, [currentSpace, loading, isAdmin, router]);
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] items-center justify-center text-sm text-text-muted">
+    <div className="flex h-[calc(100dvh-56px)] items-center justify-center text-sm text-fg-muted">
       <LoaderCircleIcon className="w-5 h-5 animate-spin mr-2" /> Opening your space…
     </div>
   );

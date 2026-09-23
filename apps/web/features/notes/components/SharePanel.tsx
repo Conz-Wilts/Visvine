@@ -185,7 +185,7 @@ function PickerMenu({
   // Nothing to choose between: render the current value as plain text so a
   // read-only viewer doesn't get a dead-end control.
   if (items.length === 0) {
-    return <span className="shrink-0 pr-1.5 text-sm text-text-muted">{currentLabel}</span>
+    return <span className="shrink-0 pr-1.5 text-sm text-fg-muted">{currentLabel}</span>
   }
 
   return (
@@ -197,10 +197,10 @@ function PickerMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className={`flex h-8 shrink-0 items-center gap-1 rounded-lg border border-transparent transition hover:border-border-default hover:bg-surface-2 disabled:opacity-40 ${
+        className={`flex h-8 shrink-0 items-center gap-1 rounded-lg border border-transparent transition hover:border-line hover:bg-surface-subtle disabled:opacity-40 ${
           emphasis
-            ? '-ml-2 px-2 text-sm font-medium text-text-primary'
-            : 'px-2 text-sm text-text-secondary'
+            ? '-ml-2 px-2 text-sm font-medium text-fg'
+            : 'px-2 text-sm text-fg-secondary'
         }`}
       >
         {currentLabel}
@@ -215,11 +215,11 @@ function PickerMenu({
             <div
               role="menu"
               style={{ ...pos, maxHeight: Math.min(pos.maxHeight, 320) }}
-              className="fixed z-[96] w-64 overflow-y-auto overscroll-contain rounded-xl border border-border-default bg-surface-1 py-1 shadow-float"
+              className="fixed z-[96] w-64 overflow-y-auto overscroll-contain rounded-xl border border-line bg-surface py-1 shadow-float"
             >
               {items.map((item, i) => (
                 <div key={item.value}>
-                  {item.danger && i > 0 && <div className="my-1 border-t border-border-subtle" />}
+                  {item.danger && i > 0 && <div className="my-1 border-t border-line-subtle" />}
                   <button
                     type="button"
                     role="menuitem"
@@ -227,21 +227,21 @@ function PickerMenu({
                       onPick(item.value)
                       setOpen(false)
                     }}
-                    className="flex w-full items-start gap-2 px-3 py-1.5 text-left transition hover:bg-surface-2"
+                    className="flex w-full items-start gap-2 px-3 py-1.5 text-left transition hover:bg-surface-subtle"
                   >
                     <span className="w-4 shrink-0 pt-0.5">
                       {current === item.value && !item.danger && (
-                        <CheckIcon className="h-4 w-4 text-brand-green" />
+                        <CheckIcon className="h-4 w-4 text-accent" />
                       )}
                     </span>
                     <span className="min-w-0">
                       <span
-                        className={`block text-sm ${item.danger ? 'text-red-600' : 'text-text-primary'}`}
+                        className={`block text-sm ${item.danger ? 'text-danger' : 'text-fg'}`}
                       >
                         {item.label}
                       </span>
                       {item.hint && (
-                        <span className="block text-[11px] leading-snug text-text-muted">
+                        <span className="block text-[11px] leading-snug text-fg-muted">
                           {item.hint}
                         </span>
                       )}
@@ -294,7 +294,7 @@ function RoleMenu({
 // small shared bits
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h4 className="mb-1 text-sm font-semibold text-text-primary">{children}</h4>
+  return <h4 className="mb-1 text-sm font-semibold text-fg">{children}</h4>
 }
 
 /** Avatar for a row: the shared square Avatar for people, a tile for aliases. */
@@ -313,7 +313,7 @@ function SubjectAvatar({
   if (type === 'alias') {
     return (
       <span
-        className={`flex shrink-0 items-center justify-center rounded-xl bg-surface-2 text-text-muted ${
+        className={`flex shrink-0 items-center justify-center rounded-xl bg-surface-subtle text-fg-muted ${
           size === 'chip' ? 'h-7 w-7 rounded-lg' : 'h-9 w-9'
         }`}
       >
@@ -334,9 +334,9 @@ function IconTile({
   children: React.ReactNode
 }) {
   const tones = {
-    muted: 'bg-surface-2 text-text-muted',
-    brand: 'bg-brand-green/15 text-brand-green',
-    red: 'bg-red-500/15 text-red-600',
+    muted: 'bg-surface-subtle text-fg-muted',
+    brand: 'bg-accent/15 text-accent',
+    red: 'bg-danger-bright/15 text-danger',
   }
   return (
     <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tones[tone]}`}>
@@ -345,7 +345,7 @@ function IconTile({
   )
 }
 
-const ROW_CLASS = 'flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition hover:bg-surface-2'
+const ROW_CLASS = 'flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition hover:bg-surface-subtle'
 
 const ALL_LEVELS = ACCESS_LEVELS.map((l) => l.name)
 
@@ -607,11 +607,11 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
 
   const addStep = (
     <>
-      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-border-default px-2.5 py-2">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-line px-2.5 py-2">
         {pending.map((p) => (
           <span
             key={p.key}
-            className="flex items-center gap-1.5 rounded-full bg-surface-2 py-0.5 pl-1 pr-1.5 text-sm text-text-primary"
+            className="flex items-center gap-1.5 rounded-full bg-surface-subtle py-0.5 pl-1 pr-1.5 text-sm text-fg"
           >
             <SubjectAvatar type={p.type} name={p.name} image={p.image} size="chip" />
             {p.name}
@@ -619,7 +619,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
               type="button"
               aria-label={`Remove ${p.name}`}
               onClick={() => setPending((prev) => prev.filter((x) => x.key !== p.key))}
-              className="rounded-full p-0.5 text-text-muted transition hover:text-text-primary"
+              className="rounded-full p-0.5 text-fg-muted transition hover:text-fg"
             >
               <XIcon className="h-3.5 w-3.5" />
             </button>
@@ -627,7 +627,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
         ))}
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-sm text-text-secondary">Role</span>
+        <span className="text-sm text-fg-secondary">Role</span>
         <RoleMenu
           current={pendingLevel}
           levels={ALL_LEVELS}
@@ -640,8 +640,8 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
 
   const browseStep = access === null ? (
     <div className="animate-pulse space-y-2 py-2">
-      <div className="h-4 w-2/3 rounded bg-surface-2" />
-      <div className="h-4 w-1/2 rounded bg-surface-2" />
+      <div className="h-4 w-2/3 rounded bg-surface-subtle" />
+      <div className="h-4 w-1/2 rounded bg-surface-subtle" />
     </div>
   ) : (
     <>
@@ -649,7 +649,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
       {canManage && access.subjects && (
         <div
           ref={typeaheadRef}
-          className="flex min-h-[42px] items-center rounded-xl border border-border-default bg-surface-1 px-3 py-1.5 transition focus-within:border-brand-green"
+          className="flex min-h-[42px] items-center rounded-xl border border-line bg-surface px-3 py-1.5 transition focus-within:border-accent"
           onClick={() => inputRef.current?.focus()}
         >
           <input
@@ -659,7 +659,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
             onFocus={() => setInputFocused(true)}
             onBlur={() => setTimeout(() => setInputFocused(false), 150)}
             placeholder="Add people and aliases"
-            className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+            className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-muted"
           />
         </div>
       )}
@@ -675,10 +675,10 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
               <div key={r.id} className={ROW_CLASS}>
                 <SubjectAvatar type="user" name={r.requesterName ?? 'Member'} image={r.requesterImage ?? null} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-text-primary">
+                  <div className="truncate text-sm font-medium text-fg">
                     {r.requesterName ?? 'Member'}
                   </div>
-                  <div className="truncate text-[11px] text-text-muted">
+                  <div className="truncate text-[11px] text-fg-muted">
                     {r.message ? `“${r.message}”` : (r.requesterEmail ?? 'Asked for access')}
                   </div>
                 </div>
@@ -686,7 +686,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
                   type="button"
                   disabled={busy}
                   onClick={() => void resolveRequest(r.id, true)}
-                  className="h-7 shrink-0 rounded-lg bg-brand-green px-2.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                  className="h-7 shrink-0 rounded-lg bg-accent px-2.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
                 >
                   Approve
                 </button>
@@ -694,7 +694,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
                   type="button"
                   disabled={busy}
                   onClick={() => void resolveRequest(r.id, false)}
-                  className="h-7 shrink-0 rounded-lg border border-border-default px-2.5 text-xs font-semibold text-text-secondary transition hover:bg-surface-2 disabled:opacity-40"
+                  className="h-7 shrink-0 rounded-lg border border-line px-2.5 text-xs font-semibold text-fg-secondary transition hover:bg-surface-subtle disabled:opacity-40"
                 >
                   Deny
                 </button>
@@ -721,11 +721,11 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
                   image={entry.subjectType === 'user' ? memberImage(entry.subjectId) : null}
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-text-primary">
+                  <div className="truncate text-sm font-medium text-fg">
                     {entry.name}
-                    {isMe && <span className="font-normal text-text-muted"> (you)</span>}
+                    {isMe && <span className="font-normal text-fg-muted"> (you)</span>}
                   </div>
-                  <div className="truncate text-[11px] text-text-muted">
+                  <div className="truncate text-[11px] text-fg-muted">
                     {direct
                       ? entry.subjectType === 'alias' ? 'Alias' : entry.email ?? ''
                       : `via ${entry.via === '' ? spaceName : `${entry.via}/`}`}
@@ -744,7 +744,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
             )
           })}
           {peopleEntries.length === 0 && !spaceEntry && (
-            <p className="px-2 py-1 text-sm text-text-muted">Only space admins.</p>
+            <p className="px-2 py-1 text-sm text-fg-muted">Only space admins.</p>
           )}
         </div>
       </section>
@@ -778,11 +778,11 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
                 }}
               />
             ) : (
-              <div className="text-sm font-medium text-text-primary">
+              <div className="text-sm font-medium text-fg">
                 {spaceEntry ? `Everyone in ${spaceName}` : 'Restricted'}
               </div>
             )}
-            <div className="truncate text-[11px] text-text-muted">
+            <div className="truncate text-[11px] text-fg-muted">
               {spaceEntry
                 ? spaceEntry.via === path
                   ? `Anyone in ${spaceName} can ${spaceEntry.levelName === 'view' ? 'view' : 'edit'}`
@@ -809,7 +809,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
             <IconTile tone={isRestricted ? 'red' : 'muted'}>
               {isRestricted ? <LockIcon className="h-4 w-4" /> : <LockOpenIcon className="h-4 w-4" />}
             </IconTile>
-            <div className="min-w-0 flex-1 text-sm font-medium text-text-primary" title={restrictRow.hint}>
+            <div className="min-w-0 flex-1 text-sm font-medium text-fg" title={restrictRow.hint}>
               {restrictRow.title}
             </div>
             <Toggle
@@ -828,7 +828,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
               <BotIcon className="h-4 w-4" />
             </IconTile>
             <div
-              className="min-w-0 flex-1 text-sm font-medium text-text-primary"
+              className="min-w-0 flex-1 text-sm font-medium text-fg"
               title="Maintenance passes — review fixes, reorganizing, enrichment — leave a frozen folder alone"
             >
               Freeze for AI
@@ -863,22 +863,22 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
           role="dialog"
           aria-modal="true"
           aria-label={`Share ${displayName}`}
-          className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-1 shadow-float"
+          className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-float"
         >
           {/* Header */}
           <div className="flex items-start justify-between gap-3 px-5 pt-4">
             <div className="min-w-0">
-              <h3 className="truncate text-[17px] font-semibold text-text-primary">
+              <h3 className="truncate text-[17px] font-semibold text-fg">
                 {adding ? 'Share with people and aliases' : `Share “${displayName}”`}
               </h3>
               {!adding && kind === 'folder' && path !== '' && (
-                <p className="truncate text-[11px] text-text-muted">{path}/</p>
+                <p className="truncate text-[11px] text-fg-muted">{path}/</p>
               )}
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="-mr-1 shrink-0 rounded-full p-1.5 text-text-muted transition hover:bg-surface-2 hover:text-text-secondary"
+              className="-mr-1 shrink-0 rounded-full p-1.5 text-fg-muted transition hover:bg-surface-subtle hover:text-fg-secondary"
               aria-label="Close"
             >
               <XIcon className="h-4 w-4" />
@@ -887,18 +887,18 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
 
           <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-3">
             {error && (
-              <div className="border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
+              <div className="border-l-2 border-danger-bright pl-3 py-1 text-sm text-danger-strong">
                 {error}
               </div>
             )}
             {notice && (
-              <div className="rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
+              <div className="rounded-xl border border-line-subtle bg-surface-subtle px-3 py-2 text-sm text-fg-secondary">
                 {notice}
               </div>
             )}
 
             {isPersonalSpace ? (
-              <p className="text-sm text-text-muted">Only you can see this — it lives in your personal context.</p>
+              <p className="text-sm text-fg-muted">Only you can see this — it lives in your personal context.</p>
             ) : adding ? (
               addStep
             ) : (
@@ -910,7 +910,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between gap-2 border-t border-border-subtle px-5 py-3">
+          <div className="flex items-center justify-between gap-2 border-t border-line-subtle px-5 py-3">
             {adding ? (
               <>
                 <span />
@@ -919,7 +919,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
                     type="button"
                     onClick={cancelAdd}
                     disabled={busy}
-                    className="h-9 rounded-lg px-4 text-sm font-medium text-text-secondary transition hover:bg-surface-2 disabled:opacity-40"
+                    className="h-9 rounded-lg px-4 text-sm font-medium text-fg-secondary transition hover:bg-surface-subtle disabled:opacity-40"
                   >
                     Cancel
                   </button>
@@ -927,7 +927,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
                     type="button"
                     disabled={busy}
                     onClick={() => void sharePending()}
-                    className="h-9 rounded-lg bg-brand-green px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                    className="h-9 rounded-lg bg-accent px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
                   >
                     Share
                   </button>
@@ -939,7 +939,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
                   <button
                     type="button"
                     onClick={() => void copy(`${window.location.origin}${spaceHref(noteHref(path))}`)}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border-default px-3 text-sm font-medium text-text-secondary transition hover:bg-surface-2"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-sm font-medium text-fg-secondary transition hover:bg-surface-subtle"
                   >
                     <Link2Icon className="h-4 w-4" />
                     {copied ? 'Copied' : 'Copy link'}
@@ -950,7 +950,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
                 <button
                   type="button"
                   onClick={onClose}
-                  className="h-9 rounded-lg bg-brand-green px-5 text-sm font-semibold text-white transition hover:opacity-90"
+                  className="h-9 rounded-lg bg-accent px-5 text-sm font-semibold text-white transition hover:opacity-90"
                 >
                   Done
                 </button>
@@ -965,7 +965,7 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
       {suggestOpen && suggestPos && (
         <div
           style={{ ...suggestPos, maxHeight: Math.min(suggestPos.maxHeight, 272) }}
-          className="fixed z-[96] overflow-y-auto overscroll-contain rounded-xl border border-border-default bg-surface-1 py-1 shadow-float"
+          className="fixed z-[96] overflow-y-auto overscroll-contain rounded-xl border border-line bg-surface py-1 shadow-float"
         >
           {suggestions.map((s) => (
             <button
@@ -979,12 +979,12 @@ export function SharePanel({ spaceId, path, kind, title, extra, onClose }: Share
                 ])
                 setQuery('')
               }}
-              className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition hover:bg-surface-2"
+              className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition hover:bg-surface-subtle"
             >
               <SubjectAvatar type={s.type} name={s.name} image={s.image} />
               <span className="min-w-0">
-                <span className="block truncate text-sm text-text-primary">{s.name}</span>
-                {s.sub && <span className="block truncate text-[11px] text-text-muted">{s.sub}</span>}
+                <span className="block truncate text-sm text-fg">{s.name}</span>
+                {s.sub && <span className="block truncate text-[11px] text-fg-muted">{s.sub}</span>}
               </span>
             </button>
           ))}

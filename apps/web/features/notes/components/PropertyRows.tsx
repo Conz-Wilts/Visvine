@@ -14,16 +14,16 @@ import React, { useRef } from 'react'
 import { LocationAutocomplete } from '@/features/notes/components/LocationAutocomplete'
 import { fieldsForType, type TypeFieldDef } from '@/lib/types/typeFields'
 
-const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-text-muted'
+const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-fg-muted'
 
 // Label above its value, matching NoteMetaRows — the one layout every surface
 // that shows a note's type and tags shares.
 const ROW_CLASS = 'flex flex-col gap-1'
 
 const INPUT_CLASS =
-  'w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-[14px] text-text-primary ' +
-  'transition placeholder:text-text-muted hover:border-border-subtle focus:border-[color:var(--accent)] ' +
-  'focus:bg-surface-1 focus:outline-none'
+  'w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-[14px] text-fg ' +
+  'transition placeholder:text-fg-muted hover:border-line-subtle focus:border-[color:var(--accent)] ' +
+  'focus:bg-surface focus:outline-none'
 
 export interface PropertyRowsProps {
   /** Node type (or the draft's picked type) — drives which fields render. */
@@ -199,7 +199,7 @@ function ReadOnlyValue({ field, value }: { field: TypeFieldDef; value: string })
         href={href}
         target="_blank"
         rel="noreferrer noopener"
-        className="truncate text-[14px] text-text-primary underline decoration-border-default underline-offset-2 transition hover:decoration-current"
+        className="truncate text-[14px] text-fg underline decoration-line underline-offset-2 transition hover:decoration-current"
       >
         {value}
       </a>
@@ -207,12 +207,12 @@ function ReadOnlyValue({ field, value }: { field: TypeFieldDef; value: string })
   }
   if (field.kind === 'email') {
     return (
-      <a href={`mailto:${value}`} className="truncate text-[14px] text-text-primary underline decoration-border-default underline-offset-2 transition hover:decoration-current">
+      <a href={`mailto:${value}`} className="truncate text-[14px] text-fg underline decoration-line underline-offset-2 transition hover:decoration-current">
         {value}
       </a>
     )
   }
-  return <span className="block truncate px-2 py-1 text-[14px] text-text-primary">{value}</span>
+  return <span className="block truncate px-2 py-1 text-[14px] text-fg">{value}</span>
 }
 
 function ImageField({
@@ -231,19 +231,19 @@ function ImageField({
   if (!editable) {
     if (!value) return null
     return (
-      <img src={value} alt={label} className="h-12 w-12 rounded-lg border border-border-subtle object-cover" />
+      <img src={value} alt={label} className="h-12 w-12 rounded-lg border border-line-subtle object-cover" />
     )
   }
 
   return (
     <div className="flex items-center gap-2">
       {value && (
-        <img src={value} alt={label} className="h-12 w-12 rounded-lg border border-border-subtle object-cover" />
+        <img src={value} alt={label} className="h-12 w-12 rounded-lg border border-line-subtle object-cover" />
       )}
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="rounded-md border border-dashed border-border-default px-2.5 py-1 text-[13px] font-medium text-text-muted transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
+        className="rounded-md border border-dashed border-line px-2.5 py-1 text-[13px] font-medium text-fg-muted transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
       >
         {value ? 'Replace' : `Add ${label.toLowerCase()}`}
       </button>

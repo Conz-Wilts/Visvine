@@ -4,11 +4,10 @@
 
 /**
  * Default tint for silhouettes with no type/accent context. Routed through the
- * theme variable so the user's chosen accent colour applies (ThemeContext
- * overrides --color-brand-green at runtime); the hex is only the pre-hydration
- * fallback. DOM-only — canvas fillStyle can't resolve var().
+ * accent token so the person's chosen accent applies (ThemeContext sets it on
+ * <html>). DOM-only — canvas fillStyle can't resolve var().
  */
-export const THEME_ACCENT = 'var(--color-brand-green, #78d870)';
+export const THEME_ACCENT = 'var(--vv-color-accent)';
 
 /**
  * SVG path for the person-silhouette avatar fallback (24×24 viewBox).

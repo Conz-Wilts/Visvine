@@ -14,7 +14,7 @@ import type { SerializedMessage } from '@/lib/messages/types';
 const LIKE = '❤️';
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
 
-const iconButton = 'rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary';
+const iconButton = 'rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-surface-subtle hover:text-fg';
 
 /** A post on the Feed: author, their alias and place, the post, then a like · comment bar. */
 export const FeedPostCard = memo(function FeedPostCard({
@@ -68,7 +68,7 @@ export const FeedPostCard = memo(function FeedPostCard({
 
   return (
     <article
-      className="rounded-2xl border border-border-subtle bg-surface-1"
+      className="rounded-2xl border border-line-subtle bg-surface"
       data-message-id={post.id}
       onMouseLeave={() => setPicker(false)}
     >
@@ -77,11 +77,11 @@ export const FeedPostCard = memo(function FeedPostCard({
           <Avatar name={post.sender.name} imageUrl={post.sender.image} size="lg" />
           <div className="min-w-0 flex-1">
             <p className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-[15px] font-semibold text-text-primary">{post.sender.name}</span>
+              <span className="truncate text-[15px] font-semibold text-fg">{post.sender.name}</span>
               {badge && <Chip color={badge.color} size="sm" className="shrink-0">{badge.name}</Chip>}
-              <span className="shrink-0 text-[13px] text-text-muted">{timeAgo(post.createdAt, { style: 'compact' })}</span>
+              <span className="shrink-0 text-[13px] text-fg-muted">{timeAgo(post.createdAt, { style: 'compact' })}</span>
             </p>
-            <div className="truncate text-[13px] text-text-muted">{place}</div>
+            <div className="truncate text-[13px] text-fg-muted">{place}</div>
           </div>
           {!deleted && (canEdit || post.isOwn) && (
             <PostMenu
@@ -92,9 +92,9 @@ export const FeedPostCard = memo(function FeedPostCard({
         </header>
 
         {deleted ? (
-          <p className="mt-4 text-sm italic text-text-muted">This post was deleted</p>
+          <p className="mt-4 text-sm italic text-fg-muted">This post was deleted</p>
         ) : editing ? (
-          <div className="mt-4 rounded-xl border border-border-default px-3 py-2">
+          <div className="mt-4 rounded-xl border border-line px-3 py-2">
             <textarea
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
@@ -104,19 +104,19 @@ export const FeedPostCard = memo(function FeedPostCard({
               }}
               autoFocus
               rows={4}
-              className="w-full resize-none bg-transparent text-[15px] leading-relaxed text-text-primary focus:outline-none"
+              className="w-full resize-none bg-transparent text-[15px] leading-relaxed text-fg focus:outline-none"
             />
             <div className="flex gap-3 text-xs">
-              <button type="button" onClick={submitEdit} className="font-semibold text-brand-dark-green">Save</button>
-              <button type="button" onClick={() => setEditing(false)} className="text-text-muted">Cancel</button>
+              <button type="button" onClick={submitEdit} className="font-semibold text-accent-strong">Save</button>
+              <button type="button" onClick={() => setEditing(false)} className="text-fg-muted">Cancel</button>
             </div>
           </div>
         ) : (
           <div className="mt-4">
             {post.text && (
-              <div className="text-[16px] leading-[1.7] text-text-primary [&_a]:underline [&_h1]:mb-3 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-bold [&_p+p]:mt-3 [&_p]:whitespace-pre-wrap">
+              <div className="text-[16px] leading-[1.7] text-fg [&_a]:underline [&_h1]:mb-3 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:mb-3 [&_h2]:text-xl [&_h2]:font-bold [&_p+p]:mt-3 [&_p]:whitespace-pre-wrap">
                 <MarkdownMessage text={post.text} />
-                {post.editedAt && <span className="ml-1 text-[11px] italic text-text-muted">(edited)</span>}
+                {post.editedAt && <span className="ml-1 text-[11px] italic text-fg-muted">(edited)</span>}
               </div>
             )}
             <MessageImageGrid images={post.images} />
@@ -127,10 +127,10 @@ export const FeedPostCard = memo(function FeedPostCard({
       </div>
 
       {!deleted && (
-        <footer className="relative flex items-center gap-1 border-t border-border-subtle px-4 py-2.5">
+        <footer className="relative flex items-center gap-1 border-t border-line-subtle px-4 py-2.5">
           <button
             type="button"
-            className={`${iconButton} ${like?.reacted ? 'text-red-500 hover:text-red-500' : ''}`}
+            className={`${iconButton} ${like?.reacted ? 'text-danger-bright hover:text-danger-bright' : ''}`}
             title="Like"
             aria-pressed={Boolean(like?.reacted)}
             onClick={() => void onReaction(post.id, LIKE)}
@@ -148,7 +148,7 @@ export const FeedPostCard = memo(function FeedPostCard({
               key={r.emoji}
               type="button"
               onClick={() => void onReaction(post.id, r.emoji)}
-              className={`ml-1 flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${r.reacted ? 'bg-surface-3 text-text-primary' : 'bg-surface-2 text-text-muted'}`}
+              className={`ml-1 flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${r.reacted ? 'bg-surface-muted text-fg' : 'bg-surface-subtle text-fg-muted'}`}
             >
               <span>{r.emoji}</span>
               <span className="font-medium">{r.count}</span>
@@ -157,7 +157,7 @@ export const FeedPostCard = memo(function FeedPostCard({
           <button
             type="button"
             onClick={() => setShowComments((v) => !v)}
-            className="ml-auto text-[14px] text-text-muted hover:text-text-secondary"
+            className="ml-auto text-[14px] text-fg-muted hover:text-fg-secondary"
           >
             {like?.count ?? 0} {like?.count === 1 ? 'like' : 'likes'} · {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
           </button>
@@ -170,7 +170,7 @@ export const FeedPostCard = memo(function FeedPostCard({
       )}
 
       {!deleted && showComments && (
-        <div className="border-t border-border-subtle px-6 py-3">
+        <div className="border-t border-line-subtle px-6 py-3">
           {comments.map((comment) => (
             <CommentRow key={comment.id} comment={comment} onReaction={onReaction} onDelete={onDelete} />
           ))}
@@ -182,13 +182,13 @@ export const FeedPostCard = memo(function FeedPostCard({
               placeholder="Write a comment…"
               disabled={sending}
               autoFocus
-              className="min-w-0 flex-1 rounded-full bg-surface-2 px-4 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-border-default disabled:opacity-50"
+              className="min-w-0 flex-1 rounded-full bg-surface-subtle px-4 py-2 text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:ring-1 focus:ring-line disabled:opacity-50"
             />
             <button
               type="button"
               onClick={() => void submitComment()}
               disabled={!commentText.trim() || sending}
-              className="shrink-0 rounded-full bg-brand-green px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
+              className="shrink-0 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
             >
               Reply
             </button>
@@ -220,7 +220,7 @@ function PostMenu({ onEdit, onDelete }: { onEdit?: () => void; onDelete?: () => 
     };
   }, [open]);
 
-  const item = 'flex h-8 w-full items-center gap-2 px-3 text-left text-[13px] transition-colors hover:bg-surface-2';
+  const item = 'flex h-8 w-full items-center gap-2 px-3 text-left text-[13px] transition-colors hover:bg-surface-subtle';
   const pick = (fn: () => void) => () => {
     setOpen(false);
     fn();
@@ -245,16 +245,16 @@ function PostMenu({ onEdit, onDelete }: { onEdit?: () => void; onDelete?: () => 
       {open && (
         <div
           role="menu"
-          className="dropdown-pop absolute right-0 top-full z-20 mt-1 w-36 rounded-xl border border-border-subtle bg-surface-1 py-[5px] shadow-float"
+          className="dropdown-pop absolute right-0 top-full z-20 mt-1 w-36 rounded-xl border border-line-subtle bg-surface py-[5px] shadow-float"
         >
           {onEdit && (
-            <button type="button" role="menuitem" className={`${item} text-text-secondary`} onClick={pick(onEdit)}>
+            <button type="button" role="menuitem" className={`${item} text-fg-secondary`} onClick={pick(onEdit)}>
               <PencilIcon className="h-3.5 w-3.5" />
               Edit
             </button>
           )}
           {onDelete && (
-            <button type="button" role="menuitem" className={`${item} text-red-500`} onClick={pick(onDelete)}>
+            <button type="button" role="menuitem" className={`${item} text-danger-bright`} onClick={pick(onDelete)}>
               <Trash2Icon className="h-3.5 w-3.5" />
               Delete
             </button>

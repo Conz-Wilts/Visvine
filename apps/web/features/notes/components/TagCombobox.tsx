@@ -134,9 +134,9 @@ function TagMenu({
             >
               {row.kind === 'create' ? (
                 <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="text-text-muted">+</span>
-                  <span className="text-text-secondary">Create</span>
-                  <span className="truncate font-medium text-text-primary">“{row.value}”</span>
+                  <span className="text-fg-muted">+</span>
+                  <span className="text-fg-secondary">Create</span>
+                  <span className="truncate font-medium text-fg">“{row.value}”</span>
                 </span>
               ) : (
                 <Chip size="md" color={tagPalette(row.value, registry).base}>
@@ -149,7 +149,7 @@ function TagMenu({
       )}
 
       {showCreate && (
-        <div className="flex flex-wrap gap-1.5 border-t border-border-subtle px-4 py-2.5">
+        <div className="flex flex-wrap gap-1.5 border-t border-line-subtle px-4 py-2.5">
           {TAG_SWATCHES.map((color) => (
             <button
               key={color}

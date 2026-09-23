@@ -100,7 +100,7 @@ function ToolSwitch({
     <div
       role="radiogroup"
       aria-label={`Permission for ${label}`}
-      className="flex shrink-0 items-center gap-1 rounded-lg border border-border-subtle p-0.5"
+      className="flex shrink-0 items-center gap-1 rounded-lg border border-line-subtle p-0.5"
     >
       {TOOL_PERMISSIONS.map((verdict) => {
         const { Icon, label: name, hint } = VERDICTS[verdict];
@@ -117,8 +117,8 @@ function ToolSwitch({
             onClick={() => { if (!on) onChange(verdict); }}
             className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
               on
-                ? 'bg-surface-3 text-text-primary'
-                : 'text-text-muted hover:bg-surface-2 hover:text-text-secondary'
+                ? 'bg-surface-muted text-fg'
+                : 'text-fg-muted hover:bg-surface-subtle hover:text-fg-secondary'
             }`}
           >
             <Icon className="h-4 w-4" />
@@ -196,8 +196,8 @@ export default function ConnectorToolPermissions({
 
   const heading = (
     <div>
-      <h3 className="text-sm font-semibold text-text-primary">Tool permissions</h3>
-      <p className="mt-0.5 text-xs text-text-muted">
+      <h3 className="text-sm font-semibold text-fg">Tool permissions</h3>
+      <p className="mt-0.5 text-xs text-fg-muted">
         Choose when this connector’s tools may be used. “Only when I’m here” means a run you
         started — a scheduled one is refused.
       </p>
@@ -228,7 +228,7 @@ export default function ConnectorToolPermissions({
     return (
       <section className="flex flex-col gap-3">
         {heading}
-        <p className="text-sm text-text-muted">This server advertises no tools.</p>
+        <p className="text-sm text-fg-muted">This server advertises no tools.</p>
       </section>
     );
   }
@@ -257,11 +257,11 @@ export default function ConnectorToolPermissions({
                     return next;
                   })
                 }
-                className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-text-primary"
+                className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-medium text-fg"
               >
-                {shut ? <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted" /> : <ChevronDownIcon className="h-4 w-4 shrink-0 text-text-muted" />}
+                {shut ? <ChevronRightIcon className="h-4 w-4 shrink-0 text-fg-muted" /> : <ChevronDownIcon className="h-4 w-4 shrink-0 text-fg-muted" />}
                 <span className="truncate">{group.label}</span>
-                <span className="shrink-0 rounded bg-surface-2 px-1.5 py-0.5 text-xs text-text-muted">{tools.length}</span>
+                <span className="shrink-0 rounded bg-surface-subtle px-1.5 py-0.5 text-xs text-fg-muted">{tools.length}</span>
               </button>
               {/* One dropdown for the whole group — the same PATCH, with every
                   name in it. "Mixed" is a readout, never a value to choose. */}
@@ -270,7 +270,7 @@ export default function ConnectorToolPermissions({
                 value={shared ?? ''}
                 disabled={saving}
                 onChange={(e) => void set(tools.map((t) => t.name), e.target.value as ToolPermission)}
-                className="shrink-0 rounded-lg border border-border-subtle bg-surface-2 px-2 py-1.5 text-xs text-text-secondary disabled:opacity-50"
+                className="shrink-0 rounded-lg border border-line-subtle bg-surface-subtle px-2 py-1.5 text-xs text-fg-secondary disabled:opacity-50"
               >
                 {shared === null && <option value="">Mixed</option>}
                 {TOOL_PERMISSIONS.map((verdict) => (
@@ -280,17 +280,17 @@ export default function ConnectorToolPermissions({
             </div>
 
             {!shut && (
-              <p className="pb-1 pl-6 text-xs text-text-muted">{group.blurb}</p>
+              <p className="pb-1 pl-6 text-xs text-fg-muted">{group.blurb}</p>
             )}
 
             {!shut && (
-              <ul className="divide-y divide-border-subtle border-t border-border-subtle">
+              <ul className="divide-y divide-line-subtle border-t border-line-subtle">
                 {tools.map((tool) => (
                   <li key={tool.name} className="flex min-h-12 items-center gap-3 py-2 pl-6">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-text-primary">{tool.title ?? tool.name}</p>
+                      <p className="truncate text-sm text-fg">{tool.title ?? tool.name}</p>
                       {(tool.description || (tool.suggested && tool.suggested !== tool.permission)) && (
-                        <p className="truncate text-xs text-text-muted">
+                        <p className="truncate text-xs text-fg-muted">
                           {[tool.suggested && tool.suggested !== tool.permission ? `Suggested ${tool.suggested}` : null, tool.description]
                             .filter(Boolean)
                             .join(' · ')}

@@ -62,7 +62,7 @@ export default function AgentsRoster({
   if (error && !data) return <Alert>{error}</Alert>;
   if (!data) {
     return (
-      <div className="flex flex-col divide-y divide-border-subtle pr-6">
+      <div className="flex flex-col divide-y divide-line-subtle pr-6">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="flex h-12 items-center gap-4">
             <Skeleton className="h-2 w-2 rounded-full" />
@@ -83,7 +83,7 @@ export default function AgentsRoster({
       {/* The clock. A row is a time and what happens then; "now" is anything
           running. Nothing here that is not inside 24 hours. */}
       {clock.length > 0 && (
-        <div className="mb-6 flex flex-col border-b border-border-subtle pb-4">
+        <div className="mb-6 flex flex-col border-b border-line-subtle pb-4">
           {clock.map((e) => {
             const agent = e.kind === 'clean' ? null : byName.get(e.name);
             const href = e.kind === 'clean' ? '/admin?section=general' : agentHref(e.name);
@@ -91,14 +91,14 @@ export default function AgentsRoster({
               <Link
                 key={`${e.kind}:${e.name}`}
                 href={href}
-                className="group flex h-9 items-center gap-4 rounded px-2 text-[13px] hover:bg-surface-2"
+                className="group flex h-9 items-center gap-4 rounded px-2 text-[13px] hover:bg-surface-subtle"
               >
-                <span className="w-12 shrink-0 font-mono text-[12px] tabular-nums text-text-muted">
+                <span className="w-12 shrink-0 font-mono text-[12px] tabular-nums text-fg-muted">
                   {e.at ? (isToday(e.at) ? time(e.at) : `${time(e.at)}`) : 'now'}
                 </span>
                 <StatusDot tone={e.kind === 'running' ? 'live' : 'muted'} />
-                <span className="min-w-0 truncate font-medium text-text-primary">{e.title}</span>
-                <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-text-muted">
+                <span className="min-w-0 truncate font-medium text-fg">{e.title}</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-fg-muted">
                   {e.kind === 'running'
                     ? agent?.currentStep ?? 'running'
                     : e.kind === 'clean'
@@ -107,7 +107,7 @@ export default function AgentsRoster({
                         ? agent.activation.scheduleLabel.replace(/^No schedule$/, 'on triggers')
                         : ''}
                 </span>
-                {e.who && <span className="shrink-0 text-[12px] text-text-muted">{e.who}</span>}
+                {e.who && <span className="shrink-0 text-[12px] text-fg-muted">{e.who}</span>}
               </Link>
             );
           })}
@@ -115,12 +115,12 @@ export default function AgentsRoster({
       )}
 
       {agents.length === 0 ? (
-        data.agents.length > 0 && <p className="px-2 text-[13px] text-text-muted">Nothing matches.</p>
+        data.agents.length > 0 && <p className="px-2 text-[13px] text-fg-muted">Nothing matches.</p>
       ) : (
         groups.map((g) => (
           <section key={g.name ?? '—'} className="mb-6">
             {(g.name || groups.length > 1) && (
-              <h3 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+              <h3 className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
                 {g.name ?? 'Other'}
               </h3>
             )}
@@ -134,20 +134,20 @@ export default function AgentsRoster({
                     <button
                       type="button"
                       onClick={() => onNavigate(agentHref(a.name))}
-                      className="group flex h-12 w-full items-center gap-4 rounded px-2 text-left text-[13px] hover:bg-surface-2"
+                      className="group flex h-12 w-full items-center gap-4 rounded px-2 text-left text-[13px] hover:bg-surface-subtle"
                     >
                       <StatusDot tone={line.tone} />
-                      <span className="w-48 shrink-0 truncate font-medium text-text-primary">{a.title}</span>
+                      <span className="w-48 shrink-0 truncate font-medium text-fg">{a.title}</span>
                       <span
-                        className={`min-w-0 flex-1 truncate ${running ? 'font-mono text-[12px] text-text-secondary' : line.problem ? (line.tone === 'bad' ? 'text-red-600' : 'text-amber-700') : 'text-text-muted'}`}
+                        className={`min-w-0 flex-1 truncate ${running ? 'font-mono text-[12px] text-fg-secondary' : line.problem ? (line.tone === 'bad' ? 'text-danger' : 'text-warning') : 'text-fg-muted'}`}
                         title={running ? a.currentStep ?? undefined : line.text}
                       >
                         {running ? a.currentStep ?? line.text : line.text}
                       </span>
                       {a.runsFor.count > 0 && (
-                        <span className="hidden w-28 shrink-0 truncate text-[12px] text-text-muted md:inline">{whoLabel(a.runsFor)}</span>
+                        <span className="hidden w-28 shrink-0 truncate text-[12px] text-fg-muted md:inline">{whoLabel(a.runsFor)}</span>
                       )}
-                      <span className="hidden w-28 shrink-0 truncate text-right text-[12px] tabular-nums text-text-muted lg:inline">
+                      <span className="hidden w-28 shrink-0 truncate text-right text-[12px] tabular-nums text-fg-muted lg:inline">
                         {last
                           ? last.status === 'running'
                             ? 'now'

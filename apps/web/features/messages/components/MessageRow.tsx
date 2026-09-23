@@ -53,11 +53,11 @@ function linkifyMentions(text: string): React.ReactNode[] {
     if (m.index > last) parts.push(text.slice(last, m.index));
     if (m[1]) {
       parts.push(
-        <span key={`u${m.index}`} className="font-semibold text-brand-dark-green cursor-pointer hover:underline">{m[1]}</span>,
+        <span key={`u${m.index}`} className="font-semibold text-accent-strong cursor-pointer hover:underline">{m[1]}</span>,
       );
     } else if (m[2]) {
       parts.push(
-        <span key={`e${m.index}`} className="font-semibold text-red-500 cursor-pointer hover:underline">#{m[2]}</span>,
+        <span key={`e${m.index}`} className="font-semibold text-danger-bright cursor-pointer hover:underline">#{m[2]}</span>,
       );
     }
     last = m.index + m[0].length;
@@ -87,14 +87,14 @@ const MD_COMPONENTS: ReactMarkdownOptions['components'] = {
   li: ({ children }) => <li className="ml-5 list-disc">{applyMentions(children)}</li>,
   strong: ({ children }) => <strong className="font-semibold">{applyMentions(children)}</strong>,
   em: ({ children }) => <em className="italic">{applyMentions(children)}</em>,
-  code: ({ children }) => <code className="rounded bg-surface-3 px-1 py-0.5 font-mono text-[13px]">{children}</code>,
-  pre: ({ children }) => <pre className="my-1 overflow-x-auto rounded-md bg-surface-3 p-2 font-mono text-[13px]">{children}</pre>,
+  code: ({ children }) => <code className="rounded bg-surface-muted px-1 py-0.5 font-mono text-[13px]">{children}</code>,
+  pre: ({ children }) => <pre className="my-1 overflow-x-auto rounded-md bg-surface-muted p-2 font-mono text-[13px]">{children}</pre>,
   a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:opacity-80">
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-fg-link underline hover:opacity-80">
       {children}
     </a>
   ),
-  blockquote: ({ children }) => <blockquote className="my-1 border-l-[3px] border-border-default pl-2 text-text-secondary">{children}</blockquote>,
+  blockquote: ({ children }) => <blockquote className="my-1 border-l-[3px] border-line pl-2 text-fg-secondary">{children}</blockquote>,
 };
 
 // memo()'d so a MessageRow re-render with unchanged text (reactions, hover
@@ -128,13 +128,13 @@ export function EmojiPicker({ onSelect, onClose }: { onSelect: (emoji: string) =
   }, [onClose]);
 
   return (
-    <div ref={ref} className="flex items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-1 px-2 py-1.5 shadow-float">
+    <div ref={ref} className="flex items-center gap-0.5 rounded-xl border border-line-subtle bg-surface px-2 py-1.5 shadow-float">
       {QUICK_EMOJIS.map((emoji) => (
         <button
           key={emoji}
           type="button"
           onClick={() => { onSelect(emoji); onClose(); }}
-          className="rounded-lg p-1.5 text-base hover:bg-surface-2 transition-colors"
+          className="rounded-lg p-1.5 text-base hover:bg-surface-subtle transition-colors"
         >
           {emoji}
         </button>
@@ -171,12 +171,12 @@ export function MessageFiles({ files }: { files: SerializedMessage['files'] }) {
             <Link
               key={file.id}
               href={`/resources/${encodeURIComponent(file.id)}`}
-              className="flex items-center gap-3 rounded-xl border border-border-subtle px-3 py-2 transition-colors hover:bg-surface-2"
+              className="flex items-center gap-3 rounded-xl border border-line-subtle px-3 py-2 transition-colors hover:bg-surface-subtle"
             >
               <FileTypeIcon type={file.fileType} className="h-9 w-9 shrink-0" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-text-primary">{file.name}</span>
-                <span className="block text-xs text-text-muted">
+                <span className="block truncate text-sm font-medium text-fg">{file.name}</span>
+                <span className="block text-xs text-fg-muted">
                   {[FILE_LABEL[file.fileType] ?? file.fileType, formatBytes(file.fileSize ?? undefined)].filter(Boolean).join(' · ')}
                 </span>
               </span>
@@ -299,7 +299,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
     return (
       <div className="flex gap-3 rounded-xl px-3 py-1">
         <div className="w-9 shrink-0" />
-        <p className="text-sm italic text-text-muted">This message was deleted</p>
+        <p className="text-sm italic text-fg-muted">This message was deleted</p>
       </div>
     );
   }
@@ -308,8 +308,8 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
     <div
       className={
         feed
-          ? `group relative flex gap-3 rounded-xl px-3 transition-colors hover:bg-surface-2/40 ${showHeader ? 'pb-1 pt-2' : 'py-0.5'}`
-          : `group relative flex gap-3 rounded-xl px-3 transition-colors hover:bg-surface-2/40 ${showHeader ? 'pb-1 pt-2' : 'py-0.5'}`
+          ? `group relative flex gap-3 rounded-xl px-3 transition-colors hover:bg-surface-subtle/40 ${showHeader ? 'pb-1 pt-2' : 'py-0.5'}`
+          : `group relative flex gap-3 rounded-xl px-3 transition-colors hover:bg-surface-subtle/40 ${showHeader ? 'pb-1 pt-2' : 'py-0.5'}`
       }
       onMouseLeave={() => setShowEmojiPicker(false)}
     >
@@ -320,7 +320,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
         </div>
       ) : (
         <div className="relative w-9 shrink-0">
-          <span className="absolute right-0 top-1 hidden text-[10px] leading-none text-text-muted group-hover:block">
+          <span className="absolute right-0 top-1 hidden text-[10px] leading-none text-fg-muted group-hover:block">
             {formatTime(message.createdAt)}
           </span>
         </div>
@@ -334,10 +334,10 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
         {/* Header line: name · time · receipts */}
         {showHeader && (
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className={`${feed ? 'text-[15px]' : 'text-[13px]'} font-semibold text-text-primary`}>
+            <span className={`${feed ? 'text-[15px]' : 'text-[13px]'} font-semibold text-fg`}>
               {message.isOwn ? 'You' : message.sender.name}
             </span>
-            <span className="text-[11px] text-text-muted">{formatChatTimestamp(message.createdAt)}</span>
+            <span className="text-[11px] text-fg-muted">{formatChatTimestamp(message.createdAt)}</span>
             {message.isOwn && message.recipientCount > 0 && (
               <span
                 className="text-[11px]"
@@ -346,17 +346,17 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
                 }
               >
                 {message.isFullyReadByRecipients || message.readByCount > 0 ? (
-                  <span className={`inline-flex ${message.isFullyReadByRecipients ? 'text-blue-500' : 'text-text-muted'}`}>
+                  <span className={`inline-flex ${message.isFullyReadByRecipients ? 'text-info-bright' : 'text-fg-muted'}`}>
                     <CheckIcon className="h-3 w-3" />
                     <CheckIcon className="-ml-[5px] h-3 w-3" />
                   </span>
                 ) : (
-                  <CheckIcon className="h-3 w-3 text-text-muted" />
+                  <CheckIcon className="h-3 w-3 text-fg-muted" />
                 )}
               </span>
             )}
             {message.starred && (
-              <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-medium text-white">
+              <span className="inline-flex items-center gap-0.5 rounded-md bg-warning-bright px-2 py-0.5 text-[10px] font-medium text-white">
                 <StarIcon className="h-2.5 w-2.5 fill-current" /> Saved
               </span>
             )}
@@ -365,7 +365,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
 
         {/* Saved badge for grouped messages (the header line carries it otherwise) */}
         {!showHeader && message.starred && (
-          <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-medium text-white">
+          <span className="inline-flex items-center gap-0.5 rounded-md bg-warning-bright px-2 py-0.5 text-[10px] font-medium text-white">
             <StarIcon className="h-2.5 w-2.5 fill-current" /> Saved
           </span>
         )}
@@ -375,10 +375,10 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
           <button
             type="button"
             onClick={() => onScrollToMessage?.(message.replyTo!.id)}
-            className="group/quote mt-0.5 block w-full max-w-md border-l-4 border-border-default py-0.5 pl-3 text-left transition-colors hover:border-text-muted"
+            className="group/quote mt-0.5 block w-full max-w-md border-l-4 border-line py-0.5 pl-3 text-left transition-colors hover:border-fg-muted"
           >
-            <p className="truncate text-[13px] text-text-muted">
-              <span className="font-bold text-text-secondary group-hover/quote:text-text-primary">{message.replyTo.senderName}</span>
+            <p className="truncate text-[13px] text-fg-muted">
+              <span className="font-bold text-fg-secondary group-hover/quote:text-fg">{message.replyTo.senderName}</span>
               {'  '}{message.replyTo.text}
             </p>
           </button>
@@ -386,7 +386,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
 
         {/* Body: rich text or edit mode */}
         {isEditing ? (
-          <div className="mt-1 w-full section-y-2 rounded-lg bg-surface-2 px-3 py-2">
+          <div className="mt-1 w-full section-y-2 rounded-lg bg-surface-subtle px-3 py-2">
             <textarea
               ref={editRef}
               value={editText}
@@ -395,20 +395,20 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditSubmit(); }
                 if (e.key === 'Escape') setIsEditing(false);
               }}
-              className="w-full resize-none bg-transparent text-sm leading-relaxed text-text-primary focus:outline-none"
+              className="w-full resize-none bg-transparent text-sm leading-relaxed text-fg focus:outline-none"
               rows={2}
             />
             <div className="flex items-center gap-2 text-xs">
-              <button type="button" onClick={handleEditSubmit} className="font-medium text-brand-dark-green">Save</button>
-              <button type="button" onClick={() => setIsEditing(false)} className="text-text-muted">Cancel</button>
+              <button type="button" onClick={handleEditSubmit} className="font-medium text-accent-strong">Save</button>
+              <button type="button" onClick={() => setIsEditing(false)} className="text-fg-muted">Cancel</button>
             </div>
           </div>
         ) : (
           <>
             {message.text && (
-              <div className="text-[15px] leading-relaxed text-text-primary [&_a]:underline [&_p]:whitespace-pre-wrap">
+              <div className="text-[15px] leading-relaxed text-fg [&_a]:underline [&_p]:whitespace-pre-wrap">
                 {markdownBody}
-                {isEdited && <span className="ml-1 text-[11px] italic text-text-muted">(edited)</span>}
+                {isEdited && <span className="ml-1 text-[11px] italic text-fg-muted">(edited)</span>}
               </div>
             )}
 
@@ -417,7 +417,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
 
             {/* Image-only messages still need their edited marker */}
             {!message.text && isEdited && (
-              <div className="mt-0.5"><span className="text-[11px] italic text-text-muted">(edited)</span></div>
+              <div className="mt-0.5"><span className="text-[11px] italic text-fg-muted">(edited)</span></div>
             )}
 
             {message.linkPreviews?.map((lp) => (
@@ -436,8 +436,8 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
                 onClick={() => onReaction(message.id, r.emoji)}
                 className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs transition-colors ${
                   r.reacted
-                    ? 'bg-brand-green/15 text-text-primary'
-                    : 'bg-surface-2 text-text-muted hover:bg-surface-3'
+                    ? 'bg-accent/15 text-fg'
+                    : 'bg-surface-subtle text-fg-muted hover:bg-surface-muted'
                 }`}
               >
                 <span>{r.emoji}</span>
@@ -449,11 +449,11 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
           {/* Hover actions — floating toolbar pinned to the bubble (CSS
               group-hover so a mouse pass doesn't re-render the row) */}
           {!isEditing && (
-            <div className="absolute -top-3 right-1 z-10 hidden items-center gap-0.5 rounded-lg bg-surface-1 px-1 py-0.5 shadow-float group-hover:flex">
+            <div className="absolute -top-3 right-1 z-10 hidden items-center gap-0.5 rounded-lg bg-surface px-1 py-0.5 shadow-float group-hover:flex">
           <button
             type="button"
             onClick={() => setShowEmojiPicker(true)}
-            className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
+            className="rounded-md p-1.5 text-fg-muted hover:bg-surface-subtle hover:text-fg-secondary"
             title="React"
           >
             <SmileIcon className="h-4 w-4" />
@@ -461,7 +461,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
           <button
             type="button"
             onClick={() => onReply({ id: message.id, text: message.text, senderName: message.sender.name })}
-            className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
+            className="rounded-md p-1.5 text-fg-muted hover:bg-surface-subtle hover:text-fg-secondary"
             title="Reply"
           >
             <ReplyIcon className="h-4 w-4" />
@@ -470,7 +470,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
             <button
               type="button"
               onClick={() => onToggleStar(message.id)}
-              className={`rounded-md p-1.5 hover:bg-surface-2 ${message.starred ? 'text-amber-500' : 'text-text-muted hover:text-text-secondary'}`}
+              className={`rounded-md p-1.5 hover:bg-surface-subtle ${message.starred ? 'text-warning-bright' : 'text-fg-muted hover:text-fg-secondary'}`}
               title={message.starred ? 'Remove from saved' : 'Save for later'}
             >
               <StarIcon className={`h-4 w-4 ${message.starred ? 'fill-current' : ''}`} />
@@ -480,7 +480,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
             <button
               type="button"
               onClick={() => { setIsEditing(true); setEditText(message.text); }}
-              className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
+              className="rounded-md p-1.5 text-fg-muted hover:bg-surface-subtle hover:text-fg-secondary"
               title="Edit"
             >
               <PencilIcon className="h-4 w-4" />
@@ -490,7 +490,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
                 <button
                   type="button"
                   onClick={() => onDelete(message.id)}
-                  className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-500"
+                  className="rounded-md p-1.5 text-fg-muted hover:bg-danger-wash hover:text-danger-bright"
                   title="Delete"
                 >
                   <Trash2Icon className="h-4 w-4" />

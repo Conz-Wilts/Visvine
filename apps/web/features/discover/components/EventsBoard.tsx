@@ -58,7 +58,7 @@ export default function EventsBoard({
     return (
       <div style={GRID} className="w-full">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="flex w-full flex-col overflow-hidden rounded-2xl border-4 border-surface-3 bg-surface-1">
+          <div key={i} className="flex w-full flex-col overflow-hidden rounded-2xl border-4 border-surface-muted bg-surface">
             <Skeleton className="aspect-[4/3] w-full rounded-none" />
             <div className="px-4 pt-3 pb-4"><Skeleton className="h-4 w-3/4" /><Skeleton className="mt-2 h-3 w-1/2" /></div>
           </div>
@@ -81,8 +81,8 @@ export default function EventsBoard({
       {days.map((day) => (
         <section key={day.key} aria-label={day.label}>
           <h2 className="flex items-baseline gap-2 pb-3">
-            <span className="text-[15px] font-semibold text-text-primary">{day.label}</span>
-            <span className="text-[13px] text-text-muted">{day.events.length} {day.events.length === 1 ? 'event' : 'events'}</span>
+            <span className="text-[15px] font-semibold text-fg">{day.label}</span>
+            <span className="text-[13px] text-fg-muted">{day.events.length} {day.events.length === 1 ? 'event' : 'events'}</span>
           </h2>
           <div style={GRID} className="w-full">
             {day.events.map((event) => <EventPoster key={event.id} event={event} />)}
@@ -111,7 +111,7 @@ function EventPoster({ event }: { event: DiscoverEvent }) {
       ref={tiltRef as React.Ref<HTMLAnchorElement>}
       href={`/e/${encodeURIComponent(event.slug)}`}
       style={style}
-      className="group relative z-0 flex w-full flex-col overflow-hidden rounded-2xl border-4 bg-surface-1 transition-[box-shadow,transform] duration-200 hover:z-10 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_16px_32px_rgba(0,0,0,0.16),0_0_20px_4px_var(--card-glow-strong)]"
+      className="group relative z-0 flex w-full flex-col overflow-hidden rounded-2xl border-4 bg-surface transition-[box-shadow,transform] duration-200 hover:z-10 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_16px_32px_rgba(0,0,0,0.16),0_0_20px_4px_var(--card-glow-strong)]"
     >
       <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden">
         {event.coverImageUrl ? (
@@ -130,16 +130,16 @@ function EventPoster({ event }: { event: DiscoverEvent }) {
         )}
         {/* The date rides the corner of a cover so a poster still says when. */}
         {event.coverImageUrl && (
-          <span className="absolute left-2.5 top-2.5 flex flex-col items-center rounded-lg bg-surface-1/95 px-2 py-1 leading-none shadow-strip">
+          <span className="absolute left-2.5 top-2.5 flex flex-col items-center rounded-lg bg-surface/95 px-2 py-1 leading-none shadow-strip">
             <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color }}>{month}</span>
-            <span className="mt-0.5 text-base font-bold tabular-nums text-text-primary">{day}</span>
+            <span className="mt-0.5 text-base font-bold tabular-nums text-fg">{day}</span>
           </span>
         )}
       </div>
 
       <div className="flex flex-1 flex-col px-4 pt-3 pb-4">
-        <h3 className="line-clamp-2 text-base font-semibold leading-tight text-text-primary">{event.title}</h3>
-        <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-text-secondary">
+        <h3 className="line-clamp-2 text-base font-semibold leading-tight text-fg">{event.title}</h3>
+        <p className="mt-1.5 flex items-center gap-1.5 text-[13px] text-fg-secondary">
           <span className="tabular-nums">{formatEventTime(event.startAt)}</span>
           <span aria-hidden>·</span>
           {online ? <VideoIcon className="h-3.5 w-3.5 shrink-0" /> : <MapPinIcon className="h-3.5 w-3.5 shrink-0" />}
@@ -147,7 +147,7 @@ function EventPoster({ event }: { event: DiscoverEvent }) {
         </p>
         <div className="mt-3 flex items-center justify-between gap-2">
           {event.spaceName ? (
-            <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-text-muted">
+            <span className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-muted">
               <SpaceAvatar name={event.spaceName} imageUrl={event.spaceImageUrl ?? undefined} size="sm" rounded="rounded" className="!h-4 !w-4 !text-[9px]" />
               <span className="truncate">{event.spaceName}</span>
             </span>

@@ -27,7 +27,7 @@ import {
 import { scoreText } from '@/lib/fuzzy'
 import type { NodeTypeConfig } from '@/lib/types'
 
-const PICKED_RING = 'ring-2 ring-border-default ring-offset-1 ring-offset-surface-1'
+const PICKED_RING = 'ring-2 ring-line ring-offset-1 ring-offset-surface'
 
 interface TypePickerProps {
   /** Types that may be assigned. The caller owns vocabulary policy. */
@@ -104,7 +104,7 @@ export function TypePicker({ options, current, clearLabel, onPick, anchorRef, on
                 <span className="truncate">{row.option.name}</span>
               </Chip>
             ) : (
-              <span className="text-text-secondary">{clearLabel}</span>
+              <span className="text-fg-secondary">{clearLabel}</span>
             )}
           </button>
         ))}

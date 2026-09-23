@@ -23,7 +23,7 @@ interface Props {
   onSave: (values: Record<string, string | null> & { id?: string }) => Promise<void>;
 }
 
-const FIELD = 'w-full px-3 py-2 border border-border-subtle rounded-xl text-sm bg-surface-1 text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30';
+const FIELD = 'w-full px-3 py-2 border border-line-subtle rounded-xl text-sm bg-surface text-fg focus:outline-none focus:ring-2 focus:ring-accent-strong/30';
 
 const LABELS: Record<EntryField, string> = {
   title: 'Title',
@@ -79,7 +79,7 @@ export default function EditEntryModal({ open, kind, sectionTitle, entry, onClos
       <form onSubmit={submit} className="p-6 space-y-4">
         {plain.map((field) => (
           <div key={field}>
-            <label className="block text-xs font-medium text-brand-grey mb-1">{LABELS[field]}</label>
+            <label className="block text-xs font-medium text-fg-muted mb-1">{LABELS[field]}</label>
             {field === 'description' ? (
               <textarea value={values[field] ?? ''} onChange={(e) => set(field, e.target.value)}
                         rows={3} maxLength={2000} className={`${FIELD} resize-y`} />
@@ -95,7 +95,7 @@ export default function EditEntryModal({ open, kind, sectionTitle, entry, onClos
           <div className="grid grid-cols-2 gap-3">
             {years.map((field) => (
               <div key={field}>
-                <label className="block text-xs font-medium text-brand-grey mb-1">{LABELS[field]}</label>
+                <label className="block text-xs font-medium text-fg-muted mb-1">{LABELS[field]}</label>
                 <input value={values[field] ?? ''} onChange={(e) => set(field, e.target.value)}
                        inputMode="numeric" pattern="\d{4}" placeholder={PLACEHOLDERS[field]} className={FIELD} />
               </div>
@@ -104,7 +104,7 @@ export default function EditEntryModal({ open, kind, sectionTitle, entry, onClos
         )}
 
         <div>
-          <label className="block text-xs font-medium text-brand-grey mb-1">Space</label>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Space</label>
           <SpaceField value={spaceId} onChange={(id, name) => {
             setSpaceId(id);
             // A picked space names the row when it has no name of its own.

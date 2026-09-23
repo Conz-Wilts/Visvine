@@ -169,8 +169,8 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
   return (
     <div className="profile-content-fade flex flex-col gap-5">
       {/* ══ IDENTITY HERO — the avatar beside who they are, their spaces to the right ══ */}
-      <section className="rounded-2xl border border-border-subtle bg-surface-1 px-5 py-5 shadow-strip sm:px-7 sm:py-7 flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">
-        <div className="relative w-44 h-44 sm:w-56 sm:h-56 flex-none rounded-2xl overflow-hidden bg-surface-2">
+      <section className="rounded-2xl border border-line-subtle bg-surface px-5 py-5 shadow-strip sm:px-7 sm:py-7 flex flex-col sm:flex-row sm:items-start gap-5 sm:gap-7">
+        <div className="relative w-44 h-44 sm:w-56 sm:h-56 flex-none rounded-2xl overflow-hidden bg-surface-subtle">
           {profile.imageUrl ? (
               <Image src={profile.imageUrl} alt={profile.name} width={224} height={224} quality={90} className="w-full h-full object-cover" />
           ) : (
@@ -190,7 +190,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
           {/* identity — every fact appears exactly once on this page */}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-              <h1 className="text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
+              <h1 className="text-[26px] sm:text-3xl font-bold text-fg leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
               {/* A profile served from a member's own record, not synthesized from a directory card. */}
               {profile.userId && (
                 <span title="Verified member" aria-label="Verified member" style={{ color: theme.dark }}>
@@ -205,11 +205,11 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
             </div>
 
             {profile.subtitle && (
-              <p className="mt-1.5 text-lg text-text-primary max-w-[60ch]">{profile.subtitle}</p>
+              <p className="mt-1.5 text-lg text-fg max-w-[60ch]">{profile.subtitle}</p>
             )}
 
             {profile.location && (
-              <div className="mt-2 flex items-center gap-1.5 text-sm text-text-muted">
+              <div className="mt-2 flex items-center gap-1.5 text-sm text-fg-muted">
                 {hasCountry
                   ? <CountryFlag location={profile.location} />
                   : <MapPinIcon className="w-3.5 h-3.5" />}
@@ -218,7 +218,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
             )}
 
             {/* The ways to reach them, under where they are */}
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text-muted">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-fg-muted">
               {profile.website && (
                 <a href={profile.website} target="_blank" rel="noopener noreferrer"
                    className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
@@ -238,7 +238,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
             </div>
 
             {follow.followers > 0 && (
-              <p className="mt-2 text-sm font-semibold text-text-secondary">
+              <p className="mt-2 text-sm font-semibold text-fg-secondary">
                 {follow.followers} {follow.followers === 1 ? 'follower' : 'followers'}
               </p>
             )}
@@ -274,7 +274,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
                 page is. */}
             {!isOwner && memberConnection.connection && memberConnection.canManage && !isPersonalSpace && (
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="text-[13px] text-text-muted">Member</span>
+                <span className="text-[13px] text-fg-muted">Member</span>
                 <Chip size="lg">{memberConnection.connection.name}</Chip>
                 <button type="button" onClick={() => void memberConnection.disconnect()}
                         disabled={memberConnection.busy}
@@ -282,7 +282,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
                         style={cssVars({ '--accent': theme.dark })}>
                   Disconnect
                 </button>
-                {memberConnection.error && <span className="text-xs text-red-600">{memberConnection.error}</span>}
+                {memberConnection.error && <span className="text-xs text-danger">{memberConnection.error}</span>}
               </div>
             )}
           </div>
@@ -297,7 +297,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
                   {spaceCount} {spaceCount === 1 ? 'space' : 'spaces'}
                 </button>
               ) : (
-                <p className="text-sm font-semibold text-text-secondary">
+                <p className="text-sm font-semibold text-fg-secondary">
                   {spaceCount} {spaceCount === 1 ? 'space' : 'spaces'}
                 </p>
               )}
@@ -307,8 +307,8 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
                   <SpaceAvatar name={space.name} imageUrl={space.imageUrl ?? undefined}
                                size="lg" rounded="rounded-lg" className="w-10 h-10 flex-none" />
                   <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-text-primary truncate group-hover:underline">{space.name}</span>
-                    <span className="block text-[13px] text-text-muted">
+                    <span className="block text-sm font-semibold text-fg truncate group-hover:underline">{space.name}</span>
+                    <span className="block text-[13px] text-fg-muted">
                       {space.isAdmin ? 'Admin' : 'Member'} · {space.memberCount} {space.memberCount === 1 ? 'member' : 'members'}
                     </span>
                   </span>
@@ -326,7 +326,7 @@ export default function ProfilePageContent({ nodeId, overlay = false, selfView =
                      scrollMargin={sectionScrollMargin} isOwner={isOwner} onEdit={() => setModal('about')}>
           {profile.bio
             ? <BioText bio={profile.bio} theme={theme} />
-            : <p className="text-base text-text-muted">No bio yet.</p>}
+            : <p className="text-base text-fg-muted">No bio yet.</p>}
         </SectionCard>
 
         {/* The sections they built themselves */}
@@ -362,7 +362,7 @@ function BioText({ bio, theme }: { bio: string; theme: ThemePalette }) {
   const text = long && !open ? bio.slice(0, 280).trimEnd() + '…' : bio;
   return (
     <div>
-      <p className="text-[17px] text-text-secondary leading-relaxed whitespace-pre-line max-w-[72ch]">{text}</p>
+      <p className="text-[17px] text-fg-secondary leading-relaxed whitespace-pre-line max-w-[72ch]">{text}</p>
       {long && (
         <button onClick={() => setOpen((v) => !v)} className="mt-2 flex items-center gap-1 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
           {open ? <><ChevronUpIcon className="w-3.5 h-3.5" /> Show less</> : <><ChevronDownIcon className="w-3.5 h-3.5" /> Read more</>}

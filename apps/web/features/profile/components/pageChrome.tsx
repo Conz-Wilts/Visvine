@@ -11,11 +11,11 @@ import { fetchJsonBody } from '@/lib/fetchJson';
  */
 
 export const FIELD =
-  'w-full min-w-0 rounded-lg border border-border-default bg-surface-1 px-3 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:border-brand-green';
+  'w-full min-w-0 rounded-lg border border-line bg-surface px-3 py-1.5 font-mono text-[13px] text-fg outline-none focus:border-accent';
 export const GHOST_BUTTON =
-  'rounded-lg border border-border-default px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50';
+  'rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-fg-secondary transition-colors hover:bg-surface-subtle disabled:opacity-50';
 export const SAVE_BUTTON =
-  'rounded-lg bg-brand-green px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50';
+  'rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50';
 
 export interface SecretStatus {
   name: string;
@@ -40,11 +40,11 @@ export function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-t border-border-subtle py-5">
+    <section className="border-t border-line-subtle py-5">
       <header className="flex items-center justify-between gap-3 pb-3">
         <h2 className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-sm font-semibold text-text-primary">{title}</span>
-          {meta && <span className="shrink-0 font-mono text-[11px] text-text-muted">{meta}</span>}
+          <span className="truncate text-sm font-semibold text-fg">{title}</span>
+          {meta && <span className="shrink-0 font-mono text-[11px] text-fg-muted">{meta}</span>}
         </h2>
         {action}
       </header>
@@ -106,7 +106,7 @@ export function SecretEditor({
   };
 
   return (
-    <div className="mt-3 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2.5">
+    <div className="mt-3 rounded-lg border border-line-subtle bg-surface-subtle px-3 py-2.5">
       <form
         className="flex flex-wrap items-center gap-2"
         onSubmit={(e) => {
@@ -136,14 +136,14 @@ export function SecretEditor({
             disabled={busy}
             aria-label={`Clear ${secret.name}`}
             title={`Clear ${secret.name}`}
-            className="rounded-lg border border-border-default p-1.5 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+            className="rounded-lg border border-line p-1.5 text-fg-muted transition-colors hover:border-danger-line hover:bg-danger-wash hover:text-danger disabled:opacity-50"
           >
             <Trash2Icon className="h-3.5 w-3.5" />
           </button>
         )}
       </form>
-      <p className="mt-1.5 text-xs text-text-muted">Encrypted on save, never shown again.</p>
-      {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
+      <p className="mt-1.5 text-xs text-fg-muted">Encrypted on save, never shown again.</p>
+      {error && <p className="mt-1.5 text-xs text-danger">{error}</p>}
     </div>
   );
 }

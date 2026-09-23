@@ -58,13 +58,13 @@ export default function EditContactModal({ open, onClose, profile, onSave }: Pro
           { label: 'X', value: twitterUrl, set: setTwitterUrl, type: 'url', placeholder: 'https://x.com/you' },
         ].map(({ label, value, set, type, placeholder }) => (
           <div key={label}>
-            <label className="block text-xs font-medium text-brand-grey mb-1">{label}</label>
+            <label className="block text-xs font-medium text-fg-muted mb-1">{label}</label>
             <input
               type={type}
               value={value}
               onChange={(e) => set(e.target.value)}
               placeholder={placeholder}
-              className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
+              className="w-full px-3 py-2 border border-line-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent-strong/30"
             />
           </div>
         ))}

@@ -11,12 +11,12 @@ import type { AgentSummary } from '@/lib/agents/service';
 import { useAgentOptions } from '../lib/useAgentOptions';
 import MachinePane from './MachinePane';
 
-const ON = 'var(--color-brand-green)';
+const ON = 'var(--vv-color-accent)';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-h-12 items-center gap-4 border-b border-border-subtle py-2">
-      <span className="w-28 shrink-0 text-[13px] text-text-muted">{label}</span>
+    <div className="flex min-h-12 items-center gap-4 border-b border-line-subtle py-2">
+      <span className="w-28 shrink-0 text-[13px] text-fg-muted">{label}</span>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
@@ -104,9 +104,9 @@ export default function AgentConfig({
   return (
     <div className="flex flex-col gap-8">
       <fieldset disabled={!canManage} className="flex flex-col">
-        {error && <p className="pb-2 text-[13px] text-red-600">{error}</p>}
+        {error && <p className="pb-2 text-[13px] text-danger">{error}</p>}
         <Row label="When">
-          <button type="button" className="text-left text-[13.5px] text-text-primary hover:underline disabled:no-underline" onClick={onSchedule}>
+          <button type="button" className="text-left text-[13.5px] text-fg hover:underline disabled:no-underline" onClick={onSchedule}>
             {when}
           </button>
         </Row>

@@ -24,6 +24,7 @@ import type { Space } from "@/lib/types";
 import type { Session } from "@/features/auth/lib/auth-client";
 import type { InitialMembership } from "@/features/shared/contexts/SpaceContext";
 import type { LockedSubspace } from "@/lib/spaces/subspaceAccess";
+import { motion } from "@visvine/tokens";
 
 // If this user can't open the feature whose page is currently on screen —
 // either the space removed it, or the tool is admins-only and they're a
@@ -97,7 +98,7 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
     </div>
   );
 
-  const railMotion = "0.3s cubic-bezier(0.25, 0.1, 0.25, 1)";
+  const railMotion = `${motion.duration.base}ms ${motion.easeCss.gentle}`;
 
   return (
     <div
@@ -125,7 +126,7 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
             : `margin-left ${railMotion}, border-top-color ${BAND_MOTION}, border-top-left-radius ${BAND_MOTION}`,
           // The content is a sheet set into the frame: one hairline along the
           // band and the rail, rounded where they meet.
-          background: "var(--color-surface-1)",
+          background: "var(--vv-color-surface)",
           // The top line stays in the box and only loses its colour, so the
           // sheet never jumps a pixel as the band comes and goes.
           borderTopWidth: 1,

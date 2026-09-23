@@ -14,7 +14,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
   useEffect(() => { console.error(error); }, [error]);
   return (
     <html lang="en">
-      <body className="text-text-secondary antialiased">
+      <body className="text-fg-secondary antialiased">
         <PageError message="Something went wrong." onRetry={reset} />
       </body>
     </html>

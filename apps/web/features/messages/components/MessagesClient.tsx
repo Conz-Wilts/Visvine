@@ -27,6 +27,7 @@ import ThreadPanel from './ThreadPanel';
 import { useConversations } from './useConversations';
 import { useMessagesRealtime } from './useMessagesRealtime';
 import { useMessageActions } from './useMessageActions';
+import { motion } from '@visvine/tokens';
 
 interface MessagesClientProps {
   currentUser: {
@@ -728,7 +729,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   return (
     <div
       className={`flex h-full min-h-0 w-full flex-col ${docked ? 'lg:pl-[300px]' : ''}`}
-      style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}
+      style={{ transition: `padding-left ${motion.duration.base}ms ${motion.easeCss.gentle}` }}
     >
 
       {/* ╭── List box — docked: portals into the Sidebar ──╮ */}
@@ -800,7 +801,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
       {/* ╭── Details box — the open channel's members and settings ────────╮ */}
       {showProfile && selectedConversation && (
-        <aside className="hidden w-80 shrink-0 flex-col overflow-hidden border-l border-border-subtle xl:flex">
+        <aside className="hidden w-80 shrink-0 flex-col overflow-hidden border-l border-line-subtle xl:flex">
           <ProfilePanel
             conversation={selectedConversation}
             currentUserId={currentUser.id}
@@ -833,7 +834,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
       {/* Toast error */}
       {error && (
-        <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-text-primary px-5 py-2.5 text-sm font-medium text-surface-1 shadow-float">
+        <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-fg px-5 py-2.5 text-sm font-medium text-surface shadow-float">
           {error}
         </div>
       )}

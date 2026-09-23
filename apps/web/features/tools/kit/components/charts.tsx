@@ -14,12 +14,13 @@ import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import * as Recharts from 'recharts';
 import { useTheme } from '../hooks';
+import { CHART_COLORS } from '../styles';
 import { cx } from './cx';
 
 export { Recharts };
 
 /** Fallbacks for a document without the kit stylesheet (tests, SSR). */
-const FALLBACK_COLORS = ['#2f7a3e', '#1d4ed8', '#b45309', '#7c3aed', '#0e7490', '#be185d', '#4d7c0f', '#6b7280'];
+const FALLBACK_COLORS = CHART_COLORS;
 
 /** How many `--vv-chart-N` slots the stylesheet defines. */
 export const CHART_COLOR_SLOTS = FALLBACK_COLORS.length;

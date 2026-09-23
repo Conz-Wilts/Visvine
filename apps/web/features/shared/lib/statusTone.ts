@@ -12,11 +12,11 @@
 export type Tone = 'ok' | 'warn' | 'bad' | 'muted' | 'live';
 
 export const TONE_CLASSES: Record<Tone, string> = {
-  ok: 'bg-brand-green text-white',
-  warn: 'bg-amber-500 text-white',
-  bad: 'bg-red-600 text-white',
-  muted: 'bg-surface-2 text-text-muted',
-  live: 'bg-sky-600 text-white',
+  ok: 'bg-accent text-white',
+  warn: 'bg-warning-bright text-white',
+  bad: 'bg-danger text-white',
+  muted: 'bg-surface-subtle text-fg-muted',
+  live: 'bg-info text-white',
 };
 
 /** Shell for a status chip: the Chip primitive's shape, without its colour. */

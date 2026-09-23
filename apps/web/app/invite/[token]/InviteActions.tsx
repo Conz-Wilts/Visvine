@@ -26,7 +26,7 @@ export default function InviteActions({
     return (
       <button
         onClick={() => router.push('/home')}
-        className="mt-6 w-full rounded-lg bg-brand-green px-4 py-2 text-sm font-medium text-white"
+        className="mt-6 w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
       >
         Open space
       </button>
@@ -35,7 +35,7 @@ export default function InviteActions({
 
   if (status === 'pending') {
     return (
-      <p className="mt-6 rounded-lg bg-surface-2 px-4 py-3 text-sm text-text-muted">
+      <p className="mt-6 rounded-lg bg-surface-subtle px-4 py-3 text-sm text-fg-muted">
         Your request to join has been sent. An admin will approve you shortly.
       </p>
     );
@@ -59,11 +59,11 @@ export default function InviteActions({
       <button
         onClick={requestJoin}
         disabled={loading}
-        className="w-full rounded-lg bg-brand-green px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+        className="w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
       >
         {loading ? 'Requesting…' : 'Request to join'}
       </button>
-      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+      {error && <p className="mt-2 text-xs text-danger-bright">{error}</p>}
     </div>
   );
 }

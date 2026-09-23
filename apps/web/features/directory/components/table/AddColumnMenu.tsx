@@ -63,15 +63,15 @@ export default function AddColumnMenu({
     <>
       {hiddenColumns.length > 0 && (
         <div className="px-2 pb-1 pt-0.5">
-          <div className="flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-1.5">
-            <SearchIcon className="h-3 w-3 shrink-0 text-text-muted" />
+          <div className="flex items-center gap-1.5 rounded-md bg-surface-subtle px-2 py-1.5">
+            <SearchIcon className="h-3 w-3 shrink-0 text-fg-muted" />
             <input
               ref={searchRef}
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Find a column…"
-              className="min-w-0 flex-1 bg-transparent text-xs text-text-primary outline-none placeholder:text-text-muted"
+              className="min-w-0 flex-1 bg-transparent text-xs text-fg outline-none placeholder:text-fg-muted"
               aria-label="Find a column"
             />
           </div>
@@ -86,33 +86,33 @@ export default function AddColumnMenu({
               type="button"
               role="menuitem"
               onClick={() => { onShow(column.key); onClose(); }}
-              className="flex w-full items-center gap-2.5 px-3.5 py-1.5 text-[13px] text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
+              className="flex w-full items-center gap-2.5 px-3.5 py-1.5 text-[13px] text-fg-secondary transition-colors hover:bg-surface-subtle hover:text-fg"
             >
-              <ColumnKindIcon column={column} className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+              <ColumnKindIcon column={column} className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
               <span className="min-w-0 flex-1 truncate text-left">{column.label}</span>
-              {column.origin === 'tracked' && <span className="shrink-0 text-[11px] text-text-muted">tracked</span>}
+              {column.origin === 'tracked' && <span className="shrink-0 text-[11px] text-fg-muted">tracked</span>}
             </button>
           );
         })}
         {shown.length === 0 && (
-          <p className="px-3.5 py-2 text-xs text-text-muted">
+          <p className="px-3.5 py-2 text-xs text-fg-muted">
             {hiddenColumns.length === 0 ? 'Every column is already showing.' : 'No matches'}
           </p>
         )}
       </div>
 
-      <div className="border-t border-border-subtle px-3.5 py-1.5">
+      <div className="border-t border-line-subtle px-3.5 py-1.5">
         {fields ? (
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-1.5 py-1 text-[13px] font-semibold text-brand-dark-green hover:underline"
+            className="inline-flex items-center gap-1.5 py-1 text-[13px] font-semibold text-accent-strong hover:underline"
           >
             <PlusIcon className="h-3.5 w-3.5" />
             Create a field
           </button>
         ) : (
-          <span className="text-[12px] text-text-muted">An admin can add fields to {typeName}.</span>
+          <span className="text-[12px] text-fg-muted">An admin can add fields to {typeName}.</span>
         )}
       </div>
     </>

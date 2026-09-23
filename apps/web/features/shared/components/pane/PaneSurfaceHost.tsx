@@ -30,6 +30,7 @@ import {
   usePaneChromeState,
   type PaneSurface,
 } from '@/features/shared/contexts/PaneShellContext';
+import { motion } from '@visvine/tokens';
 
 // Tiptap + the notes stack load only when a note surface actually renders.
 const NoteContextPanel = dynamic(
@@ -79,7 +80,7 @@ function identityOf(s: PaneSurface): string {
 function useRailInsetStyle(railVisible: boolean): React.CSSProperties {
   return {
     paddingRight: railVisible ? CONNECTIONS_RAIL_W : undefined,
-    transition: 'padding 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
+    transition: `padding ${motion.duration.base}ms ${motion.easeCss.gentle}`,
   };
 }
 

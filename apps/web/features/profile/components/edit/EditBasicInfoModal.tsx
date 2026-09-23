@@ -80,7 +80,7 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="relative group w-20 h-20 flex-none rounded-2xl overflow-hidden ring-1 ring-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-dark-green/40"
+            className="relative group w-20 h-20 flex-none rounded-2xl overflow-hidden ring-1 ring-line-subtle focus:outline-none focus:ring-2 focus:ring-accent-strong/40"
             aria-label="Change profile photo"
           >
             {imageUrl ? (
@@ -92,36 +92,36 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
               {uploading ? <LoaderCircleIcon className="w-5 h-5 animate-spin" /> : <CameraIcon className="w-5 h-5" />}
             </span>
           </button>
-          {uploadError && <p className="min-w-0 text-xs text-red-500">{uploadError}</p>}
+          {uploadError && <p className="min-w-0 text-xs text-danger-bright">{uploadError}</p>}
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-brand-grey mb-1">Name</label>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Name</label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
+            className="w-full px-3 py-2 border border-line-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent-strong/30"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-brand-grey mb-1">Headline</label>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Headline</label>
           <input
             value={subtitle}
             onChange={(e) => setSubtitle(e.target.value)}
             placeholder="Founder at Acme"
             maxLength={220}
-            className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
+            className="w-full px-3 py-2 border border-line-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent-strong/30"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-brand-grey mb-1">Location</label>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Location</label>
           <input
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             placeholder="City, Country"
-            className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
+            className="w-full px-3 py-2 border border-line-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-accent-strong/30"
           />
         </div>
         <ModalFooter onCancel={onClose} saving={saving} />

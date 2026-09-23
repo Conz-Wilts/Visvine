@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
+import { color, palette } from '@visvine/tokens';
 
 interface Column {
   table_name: string;
@@ -279,12 +280,12 @@ export default function DbVisualization() {
   const onMouseUp = useCallback(() => { panning.current = false; }, []);
 
   if (error) {
-    return <div className="flex items-center justify-center h-screen bg-white text-red-500 font-mono text-sm">{error}</div>;
+    return <div className="flex items-center justify-center h-screen bg-white text-danger-bright font-mono text-sm">{error}</div>;
   }
   if (!schema || layouts.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen bg-white">
-        <span className="text-gray-400 font-mono text-sm animate-pulse">querying schema…</span>
+        <span className="text-fg-subtle font-mono text-sm animate-pulse">querying schema…</span>
       </div>
     );
   }
@@ -306,16 +307,16 @@ export default function DbVisualization() {
   const { x, y, k } = tf.current;
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#f4f5f7]">
+    <div className="relative w-screen h-screen overflow-hidden bg-surface-muted">
       {/* Header */}
-      <header className="absolute top-0 left-0 right-0 h-11 z-20 flex items-center justify-between px-5 bg-white border-b border-gray-200">
+      <header className="absolute top-0 left-0 right-0 h-11 z-20 flex items-center justify-between px-5 bg-white border-b border-line-subtle">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-gray-900">Database Schema</span>
-          <span className="text-xs text-gray-400">{schema.tables.length} tables · {schema.foreignKeys.length} relations</span>
+          <span className="text-sm font-semibold text-fg">Database Schema</span>
+          <span className="text-xs text-fg-subtle">{schema.tables.length} tables · {schema.foreignKeys.length} relations</span>
         </div>
         <div className="flex items-center gap-4">
           <button
-            className="text-xs text-gray-500 hover:text-gray-800 border border-gray-200 rounded px-2 py-1 bg-white transition-colors"
+            className="text-xs text-fg-muted hover:text-fg border border-line-subtle rounded px-2 py-1 bg-white transition-colors"
             onClick={() => {
               const maxX = Math.max(...layouts.map((l) => l.x + l.width)) + PAD;
               const maxY = Math.max(...layouts.map((l) => l.y + l.height)) + PAD;
@@ -328,7 +329,7 @@ export default function DbVisualization() {
           >
             fit
           </button>
-          <button onClick={() => window.history.back()} className="text-xs text-gray-400 hover:text-gray-700 transition-colors">← back</button>
+          <button onClick={() => window.history.back()} className="text-xs text-fg-subtle hover:text-fg-secondary transition-colors">← back</button>
         </div>
       </header>
 
@@ -345,13 +346,13 @@ export default function DbVisualization() {
       >
         <defs>
           <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-            <path d="M0,0.5 L0,6.5 L6,3.5 z" fill="#9ca3af" />
+            <path d="M0,0.5 L0,6.5 L6,3.5 z" fill={color.fg.subtle} />
           </marker>
           <marker id="arr-hi" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-            <path d="M0,0.5 L0,6.5 L6,3.5 z" fill="#3b5bdb" />
+            <path d="M0,0.5 L0,6.5 L6,3.5 z" fill={color.info.bright} />
           </marker>
           <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.08" />
+            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor={palette.black} floodOpacity="0.08" />
           </filter>
         </defs>
 
@@ -378,7 +379,7 @@ export default function DbVisualization() {
                 key={i}
                 d={fkPath(src, fk.source_column, tgt, fk.target_column, arcIdx)}
                 fill="none"
-                stroke={isHi ? '#3b5bdb' : '#c3c8d4'}
+                stroke={isHi ? color.info.bright : color.line.default}
                 strokeWidth={isHi ? 2 : 1.5}
                 opacity={isDim ? 0.12 : isHi ? 1 : 0.75}
                 markerEnd={isHi ? 'url(#arr-hi)' : 'url(#arr)'}
@@ -404,13 +405,13 @@ export default function DbVisualization() {
                 filter="url(#shadow)"
               >
                 {/* Card body */}
-                <rect width={pos.width} height={pos.height} rx={6} fill="white" stroke={isHi ? '#3b5bdb' : '#e2e8f0'} strokeWidth={isHi ? 1.5 : 1} />
+                <rect width={pos.width} height={pos.height} rx={6} fill={color.surface.default} stroke={isHi ? color.info.bright : color.line.subtle} strokeWidth={isHi ? 1.5 : 1} />
 
                 {/* Header */}
-                <rect width={pos.width} height={TH} rx={6} fill={isHi ? '#3b5bdb' : '#334155'} />
-                <rect y={TH - 6} width={pos.width} height={6} fill={isHi ? '#3b5bdb' : '#334155'} />
+                <rect width={pos.width} height={TH} rx={6} fill={isHi ? color.info.bright : color.fg.secondary} />
+                <rect y={TH - 6} width={pos.width} height={6} fill={isHi ? color.info.bright : color.fg.secondary} />
                 <text x={12} y={TH / 2 + 5} fill="white" fontSize={13} fontFamily="ui-monospace,monospace" fontWeight="600">{pos.name}</text>
-                <text x={pos.width - 10} y={TH / 2 + 5} fill="rgba(255,255,255,0.45)" fontSize={10} fontFamily="ui-monospace,monospace" textAnchor="end">
+                <text x={pos.width - 10} y={TH / 2 + 5} fill={palette.white} fillOpacity={0.45} fontSize={10} fontFamily="ui-monospace,monospace" textAnchor="end">
                   {schema.rowCounts[pos.name]?.toLocaleString() ?? '0'} rows
                 </text>
 
@@ -426,21 +427,21 @@ export default function DbVisualization() {
 
                   return (
                     <g key={col.column_name}>
-                      {ci > 0 && <line x1={0} y1={rowY} x2={pos.width} y2={rowY} stroke="#f1f5f9" strokeWidth={1} />}
+                      {ci > 0 && <line x1={0} y1={rowY} x2={pos.width} y2={rowY} stroke={color.line.subtle} strokeWidth={1} />}
 
                       {/* PK / FK icon */}
                       {isPK && (
-                        <text x={9} y={rowY + RH / 2 + 4} fontSize={10} fill="#f59e0b">⬡</text>
+                        <text x={9} y={rowY + RH / 2 + 4} fontSize={10} fill={color.warning.bright}>⬡</text>
                       )}
                       {!isPK && isFKCol && (
-                        <text x={9} y={rowY + RH / 2 + 4} fontSize={10} fill="#818cf8">◈</text>
+                        <text x={9} y={rowY + RH / 2 + 4} fontSize={10} fill={color.hue.indigo.default}>◈</text>
                       )}
 
                       {/* Column name */}
                       <text
                         x={isPK || isFKCol ? 24 : 12}
                         y={rowY + RH / 2 + 4}
-                        fill={isPK ? '#1e293b' : '#374151'}
+                        fill={isPK ? color.fg.default : color.fg.secondary}
                         fontSize={12}
                         fontFamily="ui-monospace,monospace"
                         fontWeight={isPK ? '600' : '400'}
@@ -452,7 +453,7 @@ export default function DbVisualization() {
                       <text
                         x={pos.width - 10}
                         y={rowY + RH / 2 + 4}
-                        fill="#94a3b8"
+                        fill={color.fg.subtle}
                         fontSize={11}
                         fontFamily="ui-monospace,monospace"
                         textAnchor="end"
@@ -469,9 +470,9 @@ export default function DbVisualization() {
       </svg>
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-5 flex items-center gap-4 text-xs text-gray-400 bg-white/90 border border-gray-200 rounded-lg px-4 py-2 backdrop-blur-sm">
-        <span className="flex items-center gap-1"><span className="text-amber-400">⬡</span> primary key</span>
-        <span className="flex items-center gap-1"><span className="text-indigo-400">◈</span> foreign key</span>
+      <div className="absolute bottom-4 left-5 flex items-center gap-4 text-xs text-fg-subtle bg-white/90 border border-line-subtle rounded-lg px-4 py-2 backdrop-blur-sm">
+        <span className="flex items-center gap-1"><span className="text-warning-bright">⬡</span> primary key</span>
+        <span className="flex items-center gap-1"><span className="text-hue-indigo">◈</span> foreign key</span>
         <span>scroll to zoom · drag to pan · click to highlight</span>
       </div>
     </div>

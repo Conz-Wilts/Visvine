@@ -27,6 +27,7 @@ import { NoteSidebar } from './NoteSidebar'
 import { SharePanel } from './SharePanel'
 import { MoveAccessDialog } from './MoveAccessDialog'
 import { SHELL_PANE_TOP } from '@/features/shared/contexts/ThemeContext'
+import { motion } from '@visvine/tokens'
 
 /** Width of the tree column. The pane tab bars inset their toolbar tray by the
  *  same amount so the tray centres over the note, not the whole pane. */
@@ -152,7 +153,7 @@ export function ContextSidebar({
         height: `calc(100dvh - ${bandH + SHELL_PANE_TOP}px)`,
         marginTop: trayOpen ? -TRAY_ROW_H : 0,
         marginBottom: -MAIN_PAD_B,
-        transition: 'margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: `margin-top ${motion.duration.base}ms ${motion.easeCss.standard}`,
       }}
     >
       <div className="flex min-h-0 flex-1 flex-col" style={{ width: CONTEXT_PANEL_W }}>
@@ -173,11 +174,11 @@ export function ContextSidebar({
         </div>
 
         {loading && notes.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-text-muted">Loading context…</div>
+          <div className="px-3 py-4 text-sm text-fg-muted">Loading context…</div>
         ) : error ? (
-          <div className="px-3 py-4 text-sm text-red-500">{error}</div>
+          <div className="px-3 py-4 text-sm text-danger-bright">{error}</div>
         ) : notes.length === 0 && trash.length === 0 ? (
-          <div className="px-3 py-4 text-sm text-text-muted">No context notes yet.</div>
+          <div className="px-3 py-4 text-sm text-fg-muted">No context notes yet.</div>
         ) : (
           <>
             <NoteSidebar

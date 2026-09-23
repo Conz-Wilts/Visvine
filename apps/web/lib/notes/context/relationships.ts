@@ -6,6 +6,7 @@
  * console, mirroring node types), falling back to DEFAULT_LINK_TYPES.
  */
 import { DEFAULT_LINK_TYPES, getLinkTypes, type LinkTypeConfig } from '../../types';
+import { relationColor } from '@visvine/tokens';
 
 /** Normalized "minId|maxId" so A->B and B->A dedup as one undirected edge. The
  *  single source of truth for the dedup key, shared by the write path and the
@@ -44,7 +45,7 @@ export function getLinkTypeConfig(
   const name = slug
     ? slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
     : 'Related';
-  return { name, color: '#94a3b8', directed: false };
+  return { name, color: relationColor.related, directed: false };
 }
 
 /** True when the relationship's configured type is the kind the auto-flows own. */

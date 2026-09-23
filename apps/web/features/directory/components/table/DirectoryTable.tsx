@@ -149,7 +149,7 @@ function Table({ style, children, context }: React.ComponentPropsWithoutRef<'tab
 // z-index on the head is 1, which the name column would scroll over.
 const TableHead = React.forwardRef<HTMLTableSectionElement, React.ComponentPropsWithoutRef<'thead'>>(
   function TableHead({ style, ...props }, ref) {
-    return <thead ref={ref} {...props} style={{ ...style, zIndex: 20 }} className="bg-surface-1" />;
+    return <thead ref={ref} {...props} style={{ ...style, zIndex: 20 }} className="bg-surface" />;
   },
 );
 
@@ -159,7 +159,7 @@ const TableHead = React.forwardRef<HTMLTableSectionElement, React.ComponentProps
 // head takes it: the body's sticky name cells are z-10.
 const TableFoot = React.forwardRef<HTMLTableSectionElement, React.ComponentPropsWithoutRef<'tfoot'>>(
   function TableFoot({ style, ...props }, ref) {
-    return <tfoot ref={ref} {...props} style={{ ...style, zIndex: 20 }} className="bg-surface-1" />;
+    return <tfoot ref={ref} {...props} style={{ ...style, zIndex: 20 }} className="bg-surface" />;
   },
 );
 
@@ -183,20 +183,20 @@ const TableBody = React.forwardRef<
           key={`filler-${i}`}
           aria-hidden
           data-filler
-          className="h-12 border-b border-border-subtle"
+          className="h-12 border-b border-line-subtle"
           style={i === fillerRows - 1 ? { height: lastFillerHeight } : undefined}
         >
           {columns.map((column, j) => (
             <td
               key={column.key}
               className={clsx(
-                'border-r border-border-subtle p-0',
-                litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
+                'border-r border-line-subtle p-0',
+                litKey === column.key ? 'bg-surface-subtle' : 'bg-surface',
                 j === 0 && column.source === 'name' && 'sticky left-0 z-10',
               )}
             />
           ))}
-          <td className="bg-surface-1 p-0" />
+          <td className="bg-surface p-0" />
         </tr>
       ))}
     </tbody>
@@ -207,7 +207,7 @@ const TableRow = ({ item: _item, style, ...props }: React.ComponentPropsWithoutR
   <tr
     {...props}
     style={style}
-    className="group h-12 border-b border-border-subtle"
+    className="group h-12 border-b border-line-subtle"
   />
 );
 
@@ -377,7 +377,7 @@ export default function DirectoryTable({
 
   if (loading) {
     return (
-      <div className="flex flex-col divide-y divide-border-subtle">
+      <div className="flex flex-col divide-y divide-line-subtle">
         {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="flex h-12 items-center gap-6 px-4">
             <Skeleton className="h-7 w-7 rounded-lg" />
@@ -395,10 +395,10 @@ export default function DirectoryTable({
   }
 
   return (
-    <div ref={frameRef} className="relative flex h-full w-full flex-col overflow-hidden bg-surface-1">
+    <div ref={frameRef} className="relative flex h-full w-full flex-col overflow-hidden bg-surface">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-30 border border-border-subtle"
+        className="pointer-events-none absolute inset-0 z-30 border border-line-subtle"
         style={{ right: gutter.right || BOX_INSET, bottom: gutter.bottom || BOX_INSET }}
       />
       <div className="min-h-0 min-w-0 flex-1">
@@ -409,7 +409,7 @@ export default function DirectoryTable({
           computeItemKey={(_, item) => item.id}
           increaseViewportBy={{ top: 240, bottom: 480 }}
           fixedHeaderContent={() => (
-            <tr className="h-11 border-b border-border-default">
+            <tr className="h-11 border-b border-line">
               {columns.map((column) => {
                 const active = sort?.key === column.key;
                 const isName = column.source === 'name';
@@ -439,11 +439,11 @@ export default function DirectoryTable({
                     }}
                     onDragEnd={() => { setDragKey(null); setDropKey(null); }}
                     className={clsx(
-                      'group/th relative border-r border-border-subtle px-0 text-left align-middle text-[13px] font-medium text-text-secondary select-none',
-                      lit ? 'bg-surface-2' : 'bg-surface-1',
+                      'group/th relative border-r border-line-subtle px-0 text-left align-middle text-[13px] font-medium text-fg-secondary select-none',
+                      lit ? 'bg-surface-subtle' : 'bg-surface',
                       isName && 'sticky left-0 z-10',
                       dragKey === column.key && 'opacity-40',
-                      dropKey === column.key && 'shadow-[inset_2px_0_0_var(--color-brand-green)]',
+                      dropKey === column.key && 'shadow-[inset_2px_0_0_var(--vv-color-accent)]',
                     )}
                   >
                     <button
@@ -455,19 +455,19 @@ export default function DirectoryTable({
                       aria-haspopup="menu"
                       aria-expanded={menu?.key === column.key}
                       className={clsx(
-                        'flex h-11 w-full min-w-0 items-center gap-2 px-4 transition-colors hover:text-text-primary',
+                        'flex h-11 w-full min-w-0 items-center gap-2 px-4 transition-colors hover:text-fg',
                         column.kind === 'number' && 'justify-end',
-                        (active || lit) && 'text-text-primary',
+                        (active || lit) && 'text-fg',
                       )}
                       title={`${column.label} column`}
                     >
                       {isName && <span aria-hidden className="w-6 shrink-0" />}
-                      <ColumnKindIcon column={column} className="h-4 w-4 shrink-0 text-text-muted" />
+                      <ColumnKindIcon column={column} className="h-4 w-4 shrink-0 text-fg-muted" />
                       <span className="truncate">{column.label}</span>
                       {active && (
                         sort!.dir === 'asc'
-                          ? <ArrowUpIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-text-muted" />
-                          : <ArrowDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-text-muted" />
+                          ? <ArrowUpIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-fg-muted" />
+                          : <ArrowDownIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-fg-muted" />
                       )}
                     </button>
                     {/* The resize grip: the last 6px of every header. */}
@@ -481,8 +481,8 @@ export default function DirectoryTable({
                       onPointerCancel={endResize}
                       onClick={(e) => e.stopPropagation()}
                       className={clsx(
-                        'absolute inset-y-2 right-0 w-1.5 cursor-col-resize rounded-full transition-colors hover:bg-border-default',
-                        liveWidth?.key === column.key && 'bg-brand-green',
+                        'absolute inset-y-2 right-0 w-1.5 cursor-col-resize rounded-full transition-colors hover:bg-line',
+                        liveWidth?.key === column.key && 'bg-accent',
                       )}
                     />
                   </th>
@@ -503,8 +503,8 @@ export default function DirectoryTable({
                   setDropKey(null);
                 }}
                 className={clsx(
-                  'bg-surface-1 p-0 text-left align-middle',
-                  dropKey === 'end' && 'shadow-[inset_2px_0_0_var(--color-brand-green)]',
+                  'bg-surface p-0 text-left align-middle',
+                  dropKey === 'end' && 'shadow-[inset_2px_0_0_var(--vv-color-accent)]',
                 )}
               >
                 <button
@@ -517,8 +517,8 @@ export default function DirectoryTable({
                   aria-expanded={addAnchor !== null}
                   title="Add a column"
                   className={clsx(
-                    'flex h-11 w-full items-center gap-2 px-4 text-[13px] font-medium text-text-muted transition-colors hover:text-text-primary',
-                    addAnchor && 'text-text-primary',
+                    'flex h-11 w-full items-center gap-2 px-4 text-[13px] font-medium text-fg-muted transition-colors hover:text-fg',
+                    addAnchor && 'text-fg',
                   )}
                 >
                   <PlusIcon className="h-4 w-4 shrink-0" />
@@ -533,25 +533,25 @@ export default function DirectoryTable({
             // pane's bottom edge however few rows there are, slides with the
             // columns, and leaves the horizontal scrollbar below it. The name
             // cell holds still the way its column does.
-            <tr className="h-10 border-t border-border-default text-[12.5px]">
+            <tr className="h-10 border-t border-line text-[12.5px]">
               {columns.map((column, i) => (
                 <td
                   key={column.key}
                   className={clsx(
-                    'border-r border-border-subtle px-4 align-middle',
-                    litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
+                    'border-r border-line-subtle px-4 align-middle',
+                    litKey === column.key ? 'bg-surface-subtle' : 'bg-surface',
                     i === 0 && column.source === 'name' && 'sticky left-0 z-10',
                     column.kind === 'number' && 'text-right',
                   )}
                 >
                   {column.source === 'name' && (
-                    <span className="text-text-secondary">
-                      <span className="font-semibold tabular-nums text-text-primary">{items.length}</span> count
+                    <span className="text-fg-secondary">
+                      <span className="font-semibold tabular-nums text-fg">{items.length}</span> count
                     </span>
                   )}
                 </td>
               ))}
-              <td aria-hidden className="bg-surface-1 p-0" />
+              <td aria-hidden className="bg-surface p-0" />
             </tr>
           )}
           itemContent={(_index, item) => {
@@ -569,12 +569,12 @@ export default function DirectoryTable({
                         <td
                           key={column.key}
                           className={clsx(
-                            // Opaque, always: surface-2 is a tint with alpha, so
+                            // Opaque, always: surface-subtle is a tint with alpha, so
                             // a hovered sticky cell painted in it would show the
                             // columns sliding underneath. The tint goes on as an
-                            // image over an opaque surface-1 instead.
-                            'sticky left-0 z-10 border-r border-border-subtle bg-surface-1 p-0 align-middle group-hover:bg-[image:linear-gradient(var(--color-surface-2),var(--color-surface-2))]',
-                            litKey === column.key && 'bg-[image:linear-gradient(var(--color-surface-2),var(--color-surface-2))]',
+                            // image over an opaque surface instead.
+                            'sticky left-0 z-10 border-r border-line-subtle bg-surface p-0 align-middle group-hover:bg-[image:linear-gradient(var(--vv-color-surface-subtle),var(--vv-color-surface-subtle))]',
+                            litKey === column.key && 'bg-[image:linear-gradient(var(--vv-color-surface-subtle),var(--vv-color-surface-subtle))]',
                           )}
                         >
                           <NameCell
@@ -590,8 +590,8 @@ export default function DirectoryTable({
                       <td
                         key={column.key}
                         className={clsx(
-                          'h-12 border-r border-border-subtle p-0 align-middle group-hover:bg-surface-2',
-                          litKey === column.key ? 'bg-surface-2' : 'bg-surface-1',
+                          'h-12 border-r border-line-subtle p-0 align-middle group-hover:bg-surface-subtle',
+                          litKey === column.key ? 'bg-surface-subtle' : 'bg-surface',
                         )}
                       >
                         <TableCell
@@ -606,7 +606,7 @@ export default function DirectoryTable({
                       </td>
                     );
                   })}
-                  <td aria-hidden className="bg-surface-1 p-0 group-hover:bg-surface-2" />
+                  <td aria-hidden className="bg-surface p-0 group-hover:bg-surface-subtle" />
                 </>
               );
           }}
@@ -710,14 +710,14 @@ function NameCell({ item, accentColor, onOpen, onRename }: {
             className="flex min-w-0 items-center text-left"
             title={`Open ${item.name}`}
           >
-            <span className="truncate font-medium text-text-primary hover:underline">{item.name}</span>
+            <span className="truncate font-medium text-fg hover:underline">{item.name}</span>
           </button>
           {onRename && (
             <button
               type="button"
               onClick={() => setEditing(true)}
               aria-label={`Rename ${item.name}`}
-              className="shrink-0 rounded p-1 text-text-muted opacity-0 transition-opacity hover:text-text-primary group-hover:opacity-100 focus-visible:opacity-100"
+              className="shrink-0 rounded p-1 text-fg-muted opacity-0 transition-opacity hover:text-fg group-hover:opacity-100 focus-visible:opacity-100"
             >
               <PencilIcon className="h-3.5 w-3.5" />
             </button>

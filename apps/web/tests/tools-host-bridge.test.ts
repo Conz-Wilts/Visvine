@@ -475,11 +475,11 @@ test('a frame that has already gone is not posted to', () => {
 
 // ── theme collection ──
 
-test('theme tokens are published under both the app name and the vv alias', () => {
+test('theme tokens are read from the design tokens and published under the legacy name and the vv alias', () => {
   const painted: Record<string, string> = {
-    '--color-brand-green': '#60a5fa',
-    '--color-brand-dark-green': '#1d4ed8',
-    '--text-muted': '  #808080  ',
+    '--vv-color-accent': '#60a5fa',
+    '--vv-color-accent-strong': '#1d4ed8',
+    '--vv-color-fg-muted': '  #808080  ',
   }
   const tokens = themeTokensFrom((name) => painted[name] ?? '')
 
@@ -521,8 +521,8 @@ test('collectThemeTokens reads :root first, then body', () => {
     defaultView: {
       getComputedStyle: (element: { tag: string }) =>
         element.tag === 'html'
-          ? style({ '--color-brand-green': '#111111' })
-          : style({ '--color-brand-green': '#222222', '--text-primary': '#333333' }),
+          ? style({ '--vv-color-accent': '#111111' })
+          : style({ '--vv-color-accent': '#222222', '--vv-color-fg': '#333333' }),
     },
   } as unknown as Document
 

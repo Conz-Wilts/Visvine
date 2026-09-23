@@ -1,3 +1,5 @@
+import { color, fontFamily, palette, radius } from '@visvine/tokens';
+
 /**
  * The kit stylesheet, as a string.
  *
@@ -10,50 +12,65 @@
  * the host's theme map (which sets `--color-brand-*` and friends on `:root`)
  * repaints a Tool it has never seen. The `--vv-*` layer exists so a Tool can
  * style its own markup against a stable name even if the app's variables are
- * renamed, and the fallbacks keep it legible before the handshake lands.
+ * renamed, and the fallbacks keep it legible before the handshake lands. Every
+ * value here is a design token (packages/tokens), interpolated at build time.
  */
+
+/** The chart series, accent first, then hues that stay apart. `--vv-chart-1`
+ *  follows the host's accent; these are the values before the handshake lands. */
+export const CHART_COLORS: string[] = [
+  color.accent.strong,
+  palette.blue[700],
+  palette.amber[700],
+  palette.violet[600],
+  palette.cyan[700],
+  palette.pink[700],
+  palette.lime[700],
+  palette.gray[500],
+];
+
 export const KIT_CSS = `
 :root {
-  --vv-accent: var(--color-brand-green, #78d870);
-  --vv-accent-strong: var(--color-brand-dark-green, #2f7a3e);
-  --vv-accent-soft: var(--color-brand-light-bg, #eaf9ec);
+  --vv-accent: var(--color-brand-green, ${color.accent.default});
+  --vv-accent-strong: var(--color-brand-dark-green, ${color.accent.strong});
+  --vv-accent-soft: var(--color-brand-light-bg, ${color.accent.soft});
   /* The app's page backdrop (white).
      Informational: the body below stays transparent so the host's own backdrop
      shows through; paint with this only for something that must be
      self-contained, like an exported image. */
-  --vv-backdrop: var(--app-backdrop, #ffffff);
-  --vv-surface: var(--surface-1, #ffffff);
-  --vv-surface-2: var(--surface-2, #f9fafb);
-  --vv-surface-3: var(--surface-3, #f3f4f6);
-  --vv-border: var(--border-subtle, #e5e7eb);
-  --vv-border-strong: var(--border-default, #d1d5db);
-  --vv-text: var(--text-primary, #111827);
-  --vv-text-secondary: var(--text-secondary, #374151);
-  --vv-text-muted: var(--text-muted, #4b5563);
-  --vv-danger: #dc2626;
-  --vv-danger-soft: #fef2f2;
-  --vv-warn: #b45309;
-  --vv-warn-soft: #fffbeb;
-  --vv-info: #1d4ed8;
-  --vv-info-soft: #eff6ff;
-  --vv-radius: 8px;
-  --vv-radius-lg: 12px;
+  --vv-backdrop: var(--app-backdrop, ${color.surface.backdrop});
+  --vv-surface: var(--surface-1, ${color.surface.default});
+  --vv-surface-2: var(--surface-2, ${color.surface.subtle});
+  --vv-surface-3: var(--surface-3, ${color.surface.muted});
+  --vv-border: var(--border-subtle, ${color.line.subtle});
+  --vv-border-strong: var(--border-default, ${color.line.default});
+  --vv-text: var(--text-primary, ${color.fg.default});
+  --vv-text-secondary: var(--text-secondary, ${color.fg.secondary});
+  --vv-text-muted: var(--text-muted, ${color.fg.muted});
+  --vv-danger: ${color.danger.default};
+  --vv-danger-soft: ${color.danger.wash};
+  --vv-warn: ${color.warning.default};
+  --vv-warn-soft: ${color.warning.wash};
+  --vv-info: ${color.info.default};
+  --vv-info-soft: ${color.info.wash};
+  --vv-radius: ${radius.lg}px;
+  --vv-radius-lg: ${radius.xl}px;
   --vv-radius-pill: 999px;
   --vv-gap-sm: 6px;
   --vv-gap: 12px;
   --vv-gap-lg: 20px;
-  --vv-font: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --vv-font: ${fontFamily.ui};
   --vv-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
   /* Chart palette: accent first, then hues that stay apart in both themes.
      Resolved by useChartColors(); override any slot in your own CSS. */
   --vv-chart-1: var(--vv-accent-strong);
-  --vv-chart-2: #1d4ed8;
-  --vv-chart-3: #b45309;
-  --vv-chart-4: #7c3aed;
-  --vv-chart-5: #0e7490;
-  --vv-chart-6: #be185d;
-  --vv-chart-7: #4d7c0f;
-  --vv-chart-8: #6b7280;
+  --vv-chart-2: ${CHART_COLORS[1]};
+  --vv-chart-3: ${CHART_COLORS[2]};
+  --vv-chart-4: ${CHART_COLORS[3]};
+  --vv-chart-5: ${CHART_COLORS[4]};
+  --vv-chart-6: ${CHART_COLORS[5]};
+  --vv-chart-7: ${CHART_COLORS[6]};
+  --vv-chart-8: ${CHART_COLORS[7]};
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -134,13 +151,13 @@ a { color: var(--vv-accent-strong); }
 }
 .vv-btn--sm { padding: 5px 10px; font-size: 13px; }
 .vv-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.vv-btn--primary { background: var(--vv-accent); color: #ffffff; }
+.vv-btn--primary { background: var(--vv-accent); color: ${color.fg.inverse}; }
 .vv-btn--primary:hover:not(:disabled) { background: var(--vv-accent-strong); }
 .vv-btn--secondary { background: var(--vv-surface); color: var(--vv-text); border-color: var(--vv-border-strong); }
 .vv-btn--secondary:hover:not(:disabled) { background: var(--vv-surface-3); }
 .vv-btn--ghost { background: transparent; color: var(--vv-text-secondary); }
 .vv-btn--ghost:hover:not(:disabled) { background: var(--vv-surface-3); color: var(--vv-text); }
-.vv-btn--danger { background: var(--vv-danger); color: #ffffff; }
+.vv-btn--danger { background: var(--vv-danger); color: ${color.fg.inverse}; }
 .vv-btn--danger:hover:not(:disabled) { filter: brightness(0.92); }
 
 /* ── form ── */

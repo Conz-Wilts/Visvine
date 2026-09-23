@@ -96,9 +96,9 @@ export function SourcePreviewPanel({ path }: { path: string }) {
   if (!spaceId || loading) {
     return (
       <div className="mx-auto max-w-3xl animate-pulse space-y-3 py-6">
-        <div className="h-4 w-2/3 rounded bg-surface-2" />
-        <div className="h-4 w-full rounded bg-surface-2" />
-        <div className="h-4 w-1/2 rounded bg-surface-2" />
+        <div className="h-4 w-2/3 rounded bg-surface-subtle" />
+        <div className="h-4 w-full rounded bg-surface-subtle" />
+        <div className="h-4 w-1/2 rounded bg-surface-subtle" />
       </div>
     )
   }
@@ -111,11 +111,11 @@ export function SourcePreviewPanel({ path }: { path: string }) {
     <div className="mx-auto w-full max-w-[760px] px-7 pb-10 pt-10">
       {/* leading-[1.25]: `truncate` hides overflow, so a tighter line box would
           shave the font's descenders off the title. */}
-      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary font-open-sauce">
+      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-fg font-open-sauce">
         {source.name}
       </h2>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-text-muted">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-fg-muted">
         <StatusBadge status={source.status} />
         <span>{source.kind}</span>
         <span>·</span>
@@ -128,7 +128,7 @@ export function SourcePreviewPanel({ path }: { path: string }) {
         )}
         {source.truncated && (
           <span
-            className="rounded-md bg-amber-500 px-2 py-px text-[11px] font-semibold text-white"
+            className="rounded-md bg-warning-bright px-2 py-px text-[11px] font-semibold text-white"
             title="The file exceeded the indexing caps — only its head is searchable."
           >
             partially indexed
@@ -137,12 +137,12 @@ export function SourcePreviewPanel({ path }: { path: string }) {
       </div>
 
       {source.status === 'failed' && source.error && (
-        <div className="mt-3 border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
+        <div className="mt-3 border-l-2 border-danger-bright pl-3 py-1 text-sm text-danger-strong">
           Ingestion failed: {source.error}
         </div>
       )}
       {error && (
-        <div className="mt-3 border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
+        <div className="mt-3 border-l-2 border-danger-bright pl-3 py-1 text-sm text-danger-strong">
           {error}
         </div>
       )}
@@ -152,7 +152,7 @@ export function SourcePreviewPanel({ path }: { path: string }) {
           <a
             href={downloadUrl}
             download={source.name}
-            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-text-secondary transition hover:bg-surface-3 hover:text-text-primary"
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-fg-secondary transition hover:bg-surface-muted hover:text-fg"
           >
             Download original
           </a>
@@ -162,7 +162,7 @@ export function SourcePreviewPanel({ path }: { path: string }) {
             type="button"
             disabled={busy}
             onClick={reingest}
-            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-text-secondary transition hover:bg-surface-3 hover:text-text-primary disabled:opacity-50"
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-fg-secondary transition hover:bg-surface-muted hover:text-fg disabled:opacity-50"
           >
             {busy ? 'Retrying…' : 'Retry ingestion'}
           </button>
@@ -171,24 +171,24 @@ export function SourcePreviewPanel({ path }: { path: string }) {
           type="button"
           disabled={busy}
           onClick={remove}
-          className="rounded-lg px-3 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+          className="rounded-lg px-3 py-1.5 text-sm font-semibold text-danger transition hover:bg-danger-wash disabled:opacity-50"
         >
           Delete
         </button>
       </div>
 
       {text ? (
-        <pre className="mt-6 max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-4 text-[13px] leading-relaxed text-text-primary">
+        <pre className="mt-6 max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-lg bg-surface-subtle p-4 text-[13px] leading-relaxed text-fg">
           {text}
         </pre>
       ) : (
-        <p className="mt-6 text-sm text-text-muted">No extracted text.</p>
+        <p className="mt-6 text-sm text-fg-muted">No extracted text.</p>
       )}
       {text.length < totalChars && (
         <button
           type="button"
           onClick={loadMore}
-          className="mt-3 rounded-lg border border-border-default px-3 py-1.5 text-sm font-medium text-text-secondary transition hover:bg-surface-2"
+          className="mt-3 rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-secondary transition hover:bg-surface-subtle"
         >
           Show more ({formatBytes(totalChars - text.length)} remaining)
         </button>
@@ -200,10 +200,10 @@ export function SourcePreviewPanel({ path }: { path: string }) {
 function StatusBadge({ status }: { status: ContextSourceMeta['status'] }) {
   const styles =
     status === 'ready'
-      ? 'bg-emerald-600 text-white'
+      ? 'bg-success text-white'
       : status === 'failed'
-        ? 'bg-red-600 text-white'
-        : 'bg-surface-2 text-text-muted'
+        ? 'bg-danger text-white'
+        : 'bg-surface-subtle text-fg-muted'
   return (
     <span className={`rounded-md px-2 py-px text-[11px] font-semibold uppercase tracking-wide ${styles}`}>
       {status}

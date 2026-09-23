@@ -1,4 +1,9 @@
 @import "tailwindcss";
+/* The design tokens (packages/tokens): every value as a --vv-* custom property,
+   and the @theme that names Tailwind's utilities after the same roles —
+   bg-surface, text-fg-muted, border-line-subtle, bg-accent, text-danger. */
+@import "@visvine/tokens/tokens.css";
+@import "@visvine/tokens/theme.css";
 
 /* ─── Open Sauce One — local font faces ─── */
 /* Self-hosted, like the Visvine faces below, and for the same two reasons: it is
@@ -108,30 +113,6 @@
   font-display: swap;
 }
 
-@theme {
-  /* Visvine Brand Colors */
-  --color-brand-black: #111827;
-  --color-brand-grey: #4b5563;
-  --color-brand-white: #F9FAFB;
-  --color-brand-light-bg: #eaf9ec;
-  --color-brand-green: #78d870;
-  --color-brand-dark-green: #2f7a3e;
-  --color-brand-bg: #ffffff;
-  /* The built-in Owner alias — the one thing in People & access you cannot change. */
-  --color-brand-gold: #b4881b;
-  --font-brand: 'ABC Ginto Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-open-sauce: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-
-  /* ── Semantic surface tokens (runtime-swapped by ThemeContext) ── */
-  --color-surface-1: var(--surface-1, #ffffff);        /* main card / panel bg */
-  --color-surface-2: var(--surface-2, rgba(17, 24, 39, 0.025));        /* secondary surface */
-  --color-surface-3: var(--surface-3, rgba(17, 24, 39, 0.05));        /* hover / tertiary */
-  --color-border-subtle: var(--border-subtle, #e5e7eb); /* hairline borders */
-  --color-border-default: var(--border-default, #d1d5db);/* standard borders */
-  --color-text-primary: var(--text-primary, #111827);
-  --color-text-secondary: var(--text-secondary, #374151);
-  --color-text-muted: var(--text-muted, #4b5563);
-}
 
 /* Explicit font-family utility classes — use CSS vars so SpaceDesignContext
    can override. Two families, and the split is a rule not a preference:
@@ -160,8 +141,8 @@ html, body {
      scrolls — <main> does — so one paint covers the viewport and the
      transparent shell chrome (navbar, rail, <main>) lets it run unbroken
      underneath. */
-  background: var(--app-backdrop, #ffffff);
-  accent-color: var(--theme-accent-color, #78d870);
+  background: var(--vv-color-surface-backdrop);
+  accent-color: var(--vv-color-accent);
   /* No horizontal rubber-band: macOS Chrome elastically bounces the viewport on
      a sideways trackpad swipe even with zero horizontal overflow. Fixed chrome
      (navbar, rail) stays put while everything else stretches, so the content
@@ -171,20 +152,11 @@ html, body {
 }
 
 :root {
-  /* Product titles default to the body face — the brand font is marketing-only. */
-  --font-main: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-utility: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* The two faces a space may swap (SpaceDesignContext). Product titles default
+     to the body face — the brand font is marketing-only. */
+  --font-main: var(--vv-font-family-ui);
+  --font-utility: var(--vv-font-family-ui);
   color-scheme: light;
-  /* Links in content are the web's blue, never the theme colour. */
-  --color-link: #2563eb;
-  /* Lifted "floating chrome" shadow (navbar pills, sidebar). Lives on :root
-     (not @theme) — Tailwind v4 inlines @theme shadow values into utilities.
-     (there is no tailwind.config.js — Tailwind v4 is configured here). */
-  --shadow-float: 0 1px 2px rgba(16,24,40,0.10), 0 4px 10px rgba(16,24,40,0.10), 0 16px 32px -8px rgba(16,24,40,0.14);
-  /* Docked chrome that sits ON the page rather than over it — the editor
-     toolbar strip. Enough lift to read as its own surface, none of the wide
-     cast a menu needs to clear the content under it. */
-  --shadow-strip: 0 1px 2px rgba(16,24,40,0.05), 0 2px 6px -2px rgba(16,24,40,0.08);
 }
 
 /* Chrome that pins over scrolling content (pane tab rows, sticky toolbars,
@@ -192,25 +164,27 @@ html, body {
    so it hides what scrolls beneath without ever reading as a block. Needs no
    transformed ancestor — a transform re-anchors a fixed background. */
 .bg-glass {
-  background: var(--app-backdrop, #ffffff);
+  background: var(--vv-color-surface-backdrop);
   background-attachment: fixed;
 }
 
 /* Same idea for chrome that slides in with a transform (ConnectionsRail),
    where a fixed background can't anchor: translucent white over a blur. */
 .bg-glass-float {
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--vv-color-surface-glass);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
 
-/* Plain classes (not @utility): read the var at paint time */
+/* Plain classes (not @theme): Tailwind rewrites an @theme shadow's colours
+   into its own variables, and these are read as the tokens wrote them. Floating
+   chrome (menus, popovers) takes float; docked chrome on the page takes strip. */
 .shadow-float {
-  box-shadow: var(--shadow-float);
+  box-shadow: var(--vv-shadow-float);
 }
 
 .shadow-strip {
-  box-shadow: var(--shadow-strip);
+  box-shadow: var(--vv-shadow-strip);
 }
 
 /* In @layer base so text-* utilities on links (e.g. the rail's active
@@ -218,11 +192,11 @@ html, body {
    always beat @layer utilities regardless of specificity. */
 @layer base {
   a {
-    color: rgb(55 65 81); /* text-gray-700 */
-    transition: color 0.15s ease-in-out;
+    color: var(--vv-color-fg-secondary);
+    transition: color var(--vv-motion-duration-fast) ease-in-out;
   }
   a:hover {
-    color: rgb(17 24 39); /* text-gray-900 */
+    color: var(--vv-color-fg);
   }
 }
 
@@ -241,7 +215,7 @@ html, body {
   to   { opacity: 1; transform: translateY(0); }
 }
 .card-rise {
-  animation: card-rise 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: card-rise var(--vv-motion-duration-slow) var(--vv-motion-ease-enter) both;
   will-change: opacity, transform;
 }
 
@@ -254,12 +228,12 @@ html, body {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 .profile-enter {
-  animation: profile-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: profile-enter 0.4s var(--vv-motion-ease-enter);
 }
 
 /* Crossfade when the profile skeleton swaps to loaded content. */
 .profile-content-fade {
-  animation: fadeIn 0.3s ease-out;
+  animation: fadeIn var(--vv-motion-duration-base) ease-out;
 }
 
 /* Profile skill chips — staggered pop-in (delay set inline per chip). */
@@ -268,7 +242,7 @@ html, body {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 .chip-pop {
-  animation: chip-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: chip-pop 0.35s var(--vv-motion-ease-enter) both;
 }
 
 /* Profile experience timeline — entries rise in sequence while the spine
@@ -278,7 +252,7 @@ html, body {
   to   { opacity: 1; transform: translateY(0); }
 }
 .exp-rise {
-  animation: exp-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: exp-rise 0.45s var(--vv-motion-ease-enter) both;
 }
 @keyframes timeline-draw {
   from { transform: scaleY(0); }
@@ -286,7 +260,7 @@ html, body {
 }
 .timeline-draw {
   transform-origin: top;
-  animation: timeline-draw 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: timeline-draw 0.9s var(--vv-motion-ease-enter) both;
 }
 
 /* Soft pulse behind the "current role" timeline dot. */
@@ -305,7 +279,7 @@ html, body {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 .dropdown-pop {
-  animation: dropdown-pop 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: dropdown-pop 0.14s var(--vv-motion-ease-enter);
   transform-origin: top left;
 }
 
@@ -319,7 +293,7 @@ html, body {
   to   { opacity: 1; }
 }
 .tabbar-label-enter {
-  animation: tabbar-label-enter 0.3s ease-out;
+  animation: tabbar-label-enter var(--vv-motion-duration-base) ease-out;
 }
 
 /* A label leaving the persistent pane-top bar on an in-place tab-set change
@@ -331,7 +305,7 @@ html, body {
   to   { opacity: 0; }
 }
 .tabbar-label-exit {
-  animation: tabbar-label-exit 0.3s ease-out forwards;
+  animation: tabbar-label-exit var(--vv-motion-duration-base) ease-out forwards;
 }
 
 /* A row dropping into a list as it is revealed (TreeChrome's TreeSpine). A
@@ -345,11 +319,11 @@ html, body {
    The held row is tinted wherever it is drawn, rows slide by transform
    (useTreeFlip), and the destination lights
    as ONE block — the folder and everything open under it — because that is
-   what a drop anywhere in it files into. The wash is the theme accent
-   (--color-brand-green follows the ThemeContext override), never a fixed green. */
+   what a drop anywhere in it files into. The wash is the chosen accent
+   (--vv-color-accent), never a fixed green. */
 /* The held row, wherever the tree is drawing it right now. */
 .tree-row-held {
-  background-color: color-mix(in srgb, var(--color-brand-green) 15%, transparent);
+  background-color: color-mix(in srgb, var(--vv-color-accent) 15%, transparent);
 }
 /* The held row itself, off the tree (useTreeDrag's lift): it rises on the grab
    and comes back down as it settles into the slot. */
@@ -359,9 +333,9 @@ html, body {
 .tree-lift {
   transform: scale(1.03);
   transform-origin: center;
-  box-shadow: 0 14px 32px -8px rgb(0 0 0 / 0.28), 0 4px 10px -4px rgb(0 0 0 / 0.18);
-  animation: tree-lift-up 160ms cubic-bezier(0.25, 1, 0.5, 1);
-  transition: transform 180ms cubic-bezier(0.25, 1, 0.5, 1), box-shadow 180ms ease-out, opacity 120ms ease-out;
+  box-shadow: var(--vv-shadow-lift);
+  animation: tree-lift-up 160ms var(--vv-motion-ease-settle);
+  transition: transform 180ms var(--vv-motion-ease-settle), box-shadow 180ms ease-out, opacity 120ms ease-out;
 }
 .tree-lift.tree-lift-down {
   transform: scale(1);
@@ -371,11 +345,11 @@ html, body {
   border-radius: 10px;
 }
 .tree-drop-zone-on {
-  background-color: color-mix(in srgb, var(--color-brand-green) 9%, transparent);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--color-brand-green) 55%, transparent);
+  background-color: color-mix(in srgb, var(--vv-color-accent) 9%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--vv-color-accent) 55%, transparent);
 }
 @keyframes tree-row-land {
-  0%   { background-color: color-mix(in srgb, var(--color-brand-green) 20%, transparent); }
+  0%   { background-color: color-mix(in srgb, var(--vv-color-accent) 20%, transparent); }
   /* No end frame: it fades to the row's OWN background, which for the open
      note is the selection band, not nothing. */
 }
@@ -393,10 +367,10 @@ html, body {
 }
 .tree-spine-enter .tree-line {
   transform-origin: top;
-  animation: tree-line-draw 0.19s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: tree-line-draw 0.19s var(--vv-motion-ease-enter) both;
 }
 .tree-spine-enter .tree-spine-row {
-  animation: ctx-row-drop 0.19s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: ctx-row-drop 0.19s var(--vv-motion-ease-enter) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -484,11 +458,11 @@ main::-webkit-scrollbar-track {
    opaque instead: the same grey pre-blended with the page surface, so it looks
    identical but actually covers what the track paints beneath it. */
 main::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, rgb(128 128 128) 50%, var(--color-surface-1));
+  background: color-mix(in srgb, rgb(128 128 128) 50%, var(--vv-color-surface));
 }
 
 main::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, rgb(128 128 128) 75%, var(--color-surface-1));
+  background: color-mix(in srgb, rgb(128 128 128) 75%, var(--vv-color-surface));
 }
 
 *::-webkit-scrollbar-thumb,
@@ -527,7 +501,7 @@ input[type="date"],
 input[type="time"] {
   position: relative;
   color-scheme: light;
-  accent-color: var(--theme-accent-color, #78d870);
+  accent-color: var(--vv-color-accent);
 }
 
 /* Calendar icon styling */
@@ -546,14 +520,14 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 input[type="date"]:hover::-webkit-calendar-picker-indicator,
 input[type="time"]:hover::-webkit-calendar-picker-indicator {
   opacity: 1;
-  background-color: var(--color-brand-light-bg, #eaf9ec);
+  background-color: var(--vv-color-accent-soft);
   filter: var(--theme-picker-filter-hover, brightness(0) saturate(100%) invert(73%) sepia(21%) saturate(584%) hue-rotate(75deg) brightness(95%) contrast(85%));
 }
 
 input[type="date"]:focus::-webkit-calendar-picker-indicator,
 input[type="time"]:focus::-webkit-calendar-picker-indicator {
   opacity: 1;
-  background-color: var(--color-brand-light-bg, #eaf9ec);
+  background-color: var(--vv-color-accent-soft);
   filter: var(--theme-picker-filter-hover, brightness(0) saturate(100%) invert(73%) sepia(21%) saturate(584%) hue-rotate(75deg) brightness(95%) contrast(85%));
 }
 
@@ -571,7 +545,7 @@ input[type="time"]::-webkit-datetime-edit-fields-wrapper {
 
 input[type="date"]::-webkit-datetime-edit-text,
 input[type="time"]::-webkit-datetime-edit-text {
-  color: #b4b4b4;
+  color: var(--vv-color-fg-subtle);
   padding: 0 3px;
   font-weight: 500;
 }
@@ -582,7 +556,7 @@ input[type="date"]::-webkit-datetime-edit-day-field,
 input[type="date"]::-webkit-datetime-edit-year-field,
 input[type="time"]::-webkit-datetime-edit-hour-field,
 input[type="time"]::-webkit-datetime-edit-minute-field {
-  color: #000000;
+  color: var(--vv-color-fg);
   font-weight: 600;
   padding: 4px 6px;
   border-radius: 6px;
@@ -594,23 +568,23 @@ input[type="date"]::-webkit-datetime-edit-day-field:focus,
 input[type="date"]::-webkit-datetime-edit-year-field:focus,
 input[type="time"]::-webkit-datetime-edit-hour-field:focus,
 input[type="time"]::-webkit-datetime-edit-minute-field:focus {
-  background-color: var(--color-brand-light-bg, #eaf9ec);
-  color: var(--color-brand-green, #78d870);
+  background-color: var(--vv-color-accent-soft);
+  color: var(--vv-color-accent);
   outline: none;
 }
 
 /* AM/PM field */
 input[type="time"]::-webkit-datetime-edit-ampm-field {
-  color: var(--color-brand-green, #78d870);
+  color: var(--vv-color-accent);
   font-weight: 700;
   padding: 4px 6px;
   border-radius: 6px;
-  background-color: var(--color-brand-light-bg, #eaf9ec);
+  background-color: var(--vv-color-accent-soft);
 }
 
 input[type="time"]::-webkit-datetime-edit-ampm-field:focus {
-  background-color: var(--color-brand-green, #78d870);
-  color: #F9FAFB;
+  background-color: var(--vv-color-accent);
+  color: var(--vv-color-fg-inverse);
   outline: none;
 }
 
@@ -633,7 +607,7 @@ input[type="time"]::-moz-calendar-picker-indicator {
 input[type="date"]:hover::-moz-calendar-picker-indicator,
 input[type="time"]:hover::-moz-calendar-picker-indicator {
   opacity: 1;
-  background-color: var(--color-brand-light-bg, #eaf9ec);
+  background-color: var(--vv-color-accent-soft);
 }
 
 /* Additional webkit styling for better calendar appearance */
@@ -644,7 +618,7 @@ input[type="time"]::-webkit-inner-spin-button {
 
 input[type="date"]::-webkit-calendar-picker-indicator:active,
 input[type="time"]::-webkit-calendar-picker-indicator:active {
-  background-color: var(--color-brand-green, #78d870);
+  background-color: var(--vv-color-accent);
 }
 
 /* ─── Long-form prose typography ───
@@ -652,7 +626,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:active {
    its own compact overrides on top (.note-prose.notes-editor, features/notes/
    notes.css). Left-aligned long-form reading column. */
 .note-prose {
-  color: #404040;
+  color: var(--vv-color-fg-secondary);
   font-size: 1.125rem;
   line-height: 1.75;
   text-align: left;
@@ -670,7 +644,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:active {
 }
 
 .note-prose h2 {
-  color: #000;
+  color: var(--vv-color-fg);
   font-size: 1.875rem;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -679,7 +653,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:active {
 }
 
 .note-prose h3 {
-  color: #000;
+  color: var(--vv-color-fg);
   font-size: 1.4rem;
   font-weight: 500;
   line-height: 1.25;
@@ -687,7 +661,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:active {
 }
 
 .note-prose a {
-  color: var(--color-link);
+  color: var(--vv-color-fg-link);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -711,8 +685,8 @@ input[type="time"]::-webkit-calendar-picker-indicator:active {
 }
 
 .note-prose blockquote {
-  border-left: 3px solid var(--color-brand-green, #78d870);
-  color: #525252;
+  border-left: 3px solid var(--vv-color-accent);
+  color: var(--vv-color-fg-muted);
   font-style: italic;
   margin: 1.5rem 0;
   padding-left: 1.1rem;

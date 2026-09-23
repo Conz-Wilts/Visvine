@@ -46,16 +46,16 @@ export default function SectionRow({ entry, kind, isOwner, onEdit, onRemove, gri
 
   const heading = kind === 'links' && entry.url ? (
     <a href={entry.url} target="_blank" rel="noopener noreferrer"
-       className="inline-flex items-center gap-1.5 text-[15px] font-bold font-open-sauce text-text-primary hover:underline">
-      {title}<ExternalLinkIcon className="w-3.5 h-3.5 text-text-muted" />
+       className="inline-flex items-center gap-1.5 text-[15px] font-bold font-open-sauce text-fg hover:underline">
+      {title}<ExternalLinkIcon className="w-3.5 h-3.5 text-fg-muted" />
     </a>
   ) : entry.space ? (
     <button type="button" onClick={() => setCurrentSpace(entry.space!.id)}
-            className="text-[15px] font-bold font-open-sauce text-text-primary hover:underline">
+            className="text-[15px] font-bold font-open-sauce text-fg hover:underline">
       {title}
     </button>
   ) : (
-    <div className="text-[15px] font-bold font-open-sauce text-text-primary">{title}</div>
+    <div className="text-[15px] font-bold font-open-sauce text-fg">{title}</div>
   );
 
   return (
@@ -63,13 +63,13 @@ export default function SectionRow({ entry, kind, isOwner, onEdit, onRemove, gri
       {mark && <span className="flex-none">{mark}</span>}
       <div className="min-w-0 flex-1">
         {heading}
-        {drawn.has('subtitle') && entry.subtitle && <div className="text-sm text-text-secondary">{entry.subtitle}</div>}
-        {years && <div className="text-sm text-text-muted">{years}</div>}
+        {drawn.has('subtitle') && entry.subtitle && <div className="text-sm text-fg-secondary">{entry.subtitle}</div>}
+        {years && <div className="text-sm text-fg-muted">{years}</div>}
         {kind === 'links' && entry.url && (
-          <div className="text-sm text-text-muted">{hostname(entry.url)}</div>
+          <div className="text-sm text-fg-muted">{hostname(entry.url)}</div>
         )}
         {drawn.has('description') && entry.description && (
-          <p className="mt-1.5 text-sm text-text-secondary leading-relaxed max-w-[72ch] whitespace-pre-line">
+          <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed max-w-[72ch] whitespace-pre-line">
             {entry.description}
           </p>
         )}
@@ -77,15 +77,15 @@ export default function SectionRow({ entry, kind, isOwner, onEdit, onRemove, gri
       {isOwner && (
         <div className="flex-none flex items-start gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
           <button type="button" {...gripProps}
-                  className="p-1.5 rounded-lg text-text-muted hover:bg-surface-2 hover:text-text-primary cursor-grab touch-none">
+                  className="p-1.5 rounded-lg text-fg-muted hover:bg-surface-subtle hover:text-fg cursor-grab touch-none">
             <GripVerticalIcon className="w-4 h-4" />
           </button>
           <button type="button" onClick={onEdit} aria-label={`Edit ${title}`}
-                  className="p-1.5 rounded-lg text-text-muted hover:bg-surface-2 hover:text-text-primary">
+                  className="p-1.5 rounded-lg text-fg-muted hover:bg-surface-subtle hover:text-fg">
             <PencilIcon className="w-4 h-4" />
           </button>
           <button type="button" onClick={onRemove} aria-label={`Remove ${title}`}
-                  className="p-1.5 rounded-lg text-text-muted hover:bg-surface-2 hover:text-red-600">
+                  className="p-1.5 rounded-lg text-fg-muted hover:bg-surface-subtle hover:text-danger">
             <Trash2Icon className="w-4 h-4" />
           </button>
         </div>

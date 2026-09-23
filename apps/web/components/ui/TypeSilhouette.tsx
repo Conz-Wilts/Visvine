@@ -1,4 +1,5 @@
 import { THEME_ACCENT, NODE_GLYPH_PATHS, NODE_GLYPH_FILL_RULE, type NodeGlyph } from '@/lib/avatarUtils';
+import { palette } from '@visvine/tokens';
 
 interface TypeSilhouetteProps {
   /** Which node-type glyph to draw (the getNodeGlyph value space). */
@@ -22,7 +23,7 @@ export default function TypeSilhouette({ glyph, color = THEME_ACCENT, className 
     >
       <svg
         viewBox="0 0 24 24"
-        fill="#ffffff"
+        fill={palette.white}
         className="h-[60%] w-[60%]"
         aria-hidden="true"
       >

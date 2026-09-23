@@ -51,13 +51,13 @@ function matchesFilter(a: AttendeeRow, f: FilterKey): boolean {
 }
 
 const STATUS_BADGE: Partial<Record<RSVPStatus, { label: string; cls: string; icon: React.ReactNode }>> = {
-  going: { label: 'Going', cls: 'bg-brand-green text-white', icon: <CheckIcon className="w-3 h-3" /> },
-  waitlisted: { label: 'Waitlist', cls: 'bg-orange-500 text-white', icon: <ClockIcon className="w-3 h-3" /> },
-  pending: { label: 'Pending', cls: 'bg-amber-500 text-white', icon: <ClockIcon className="w-3 h-3" /> },
-  checked_in: { label: 'Checked in', cls: 'bg-brand-green text-white', icon: <UserCheckIcon className="w-3 h-3" /> },
-  cancelled: { label: 'Cancelled', cls: 'bg-gray-500 text-white', icon: <XIcon className="w-3 h-3" /> },
-  no_show: { label: 'No show', cls: 'bg-gray-500 text-white', icon: <BanIcon className="w-3 h-3" /> },
-  invited: { label: 'Invited', cls: 'bg-blue-600 text-white', icon: <ClockIcon className="w-3 h-3" /> },
+  going: { label: 'Going', cls: 'bg-accent text-white', icon: <CheckIcon className="w-3 h-3" /> },
+  waitlisted: { label: 'Waitlist', cls: 'bg-hue-orange text-white', icon: <ClockIcon className="w-3 h-3" /> },
+  pending: { label: 'Pending', cls: 'bg-warning-bright text-white', icon: <ClockIcon className="w-3 h-3" /> },
+  checked_in: { label: 'Checked in', cls: 'bg-accent text-white', icon: <UserCheckIcon className="w-3 h-3" /> },
+  cancelled: { label: 'Cancelled', cls: 'bg-fg-muted text-white', icon: <XIcon className="w-3 h-3" /> },
+  no_show: { label: 'No show', cls: 'bg-fg-muted text-white', icon: <BanIcon className="w-3 h-3" /> },
+  invited: { label: 'Invited', cls: 'bg-info text-white', icon: <ClockIcon className="w-3 h-3" /> },
 };
 
 export function GuestManager({ event, spaceId }: GuestManagerProps) {
@@ -204,7 +204,7 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
         <button onClick={() => load()} className={actionBtn}>
           <RefreshCwIcon className="w-4 h-4" /> Refresh
         </button>
-        <div className="ml-auto text-sm text-brand-grey">
+        <div className="ml-auto text-sm text-fg-muted">
           {occupied}
           {event.capacity ? ` / ${event.capacity}` : ''} going
         </div>
@@ -212,9 +212,9 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
 
       {/* capacity bar */}
       {event.capacity ? (
-        <div className="h-2 rounded-full bg-surface-3 overflow-hidden">
+        <div className="h-2 rounded-full bg-surface-muted overflow-hidden">
           <div
-            className="h-full bg-brand-green transition-all"
+            className="h-full bg-accent transition-all"
             style={{ width: `${Math.min(100, (occupied / event.capacity) * 100)}%` }}
           />
         </div>
@@ -228,8 +228,8 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
             onClick={() => setFilter(f.key)}
             className={`px-3.5 py-1.5 rounded-md text-sm font-medium border transition-colors ${
               filter === f.key
-                ? 'bg-brand-green text-white border-brand-green'
-                : 'bg-brand-white text-brand-grey border-border-subtle hover:border-brand-green hover:text-brand-black'
+                ? 'bg-accent text-white border-accent'
+                : 'bg-surface-subtle text-fg-muted border-line-subtle hover:border-accent hover:text-fg'
             }`}
           >
             {f.label} <span className="opacity-70">({counts[f.key]})</span>
@@ -239,54 +239,54 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
 
       {/* bulk bar */}
       {selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2.5 p-3 rounded-lg bg-surface-2">
-          <span className="text-sm font-medium text-brand-black">{selected.size} selected</span>
+        <div className="flex flex-wrap items-center gap-2.5 p-3 rounded-lg bg-surface-subtle">
+          <span className="text-sm font-medium text-fg">{selected.size} selected</span>
           <button onClick={() => bulk('approve')} disabled={busy} className={bulkBtn}><CircleCheckIcon className="w-4 h-4" /> Approve</button>
           <button onClick={() => bulk('promote')} disabled={busy} className={bulkBtn}><CircleArrowUpIcon className="w-4 h-4" /> Promote</button>
           <button onClick={() => bulk('checkin')} disabled={busy} className={bulkBtn}><UserCheckIcon className="w-4 h-4" /> Check in</button>
-          <button onClick={() => bulk('remove')} disabled={busy} className={`${bulkBtn} text-red-600`}><XIcon className="w-4 h-4" /> Remove</button>
-          <button onClick={() => setSelected(new Set())} className="ml-auto text-brand-grey hover:text-brand-black"><ChevronUpIcon className="w-4 h-4" /></button>
+          <button onClick={() => bulk('remove')} disabled={busy} className={`${bulkBtn} text-danger`}><XIcon className="w-4 h-4" /> Remove</button>
+          <button onClick={() => setSelected(new Set())} className="ml-auto text-fg-muted hover:text-fg"><ChevronUpIcon className="w-4 h-4" /></button>
         </div>
       )}
 
       {/* list */}
-      <div className="border-t border-border-subtle">
+      <div className="border-t border-line-subtle">
         {loading ? (
-          <div className="py-16 flex items-center justify-center text-brand-grey"><LoaderCircleIcon className="w-5 h-5 animate-spin" /></div>
+          <div className="py-16 flex items-center justify-center text-fg-muted"><LoaderCircleIcon className="w-5 h-5 animate-spin" /></div>
         ) : visible.length === 0 ? (
-          <div className="py-16 text-center text-brand-grey flex flex-col items-center gap-2">
+          <div className="py-16 text-center text-fg-muted flex flex-col items-center gap-2">
             <UsersIcon className="w-7 h-7 opacity-50" />
             No guests {filter !== 'all' ? 'in this view' : 'yet'}.
           </div>
         ) : (
-          <ul className="divide-y divide-border-subtle">
+          <ul className="divide-y divide-line-subtle">
             {visible.map((a) => {
               const status = norm(a.status);
               const badge = STATUS_BADGE[status];
               const details = guestDetails(a);
               const isOpen = expanded.has(a.id);
               return (
-                <li key={a.id} className="hover:bg-brand-light-bg/40 transition-colors">
+                <li key={a.id} className="hover:bg-accent-soft/40 transition-colors">
                   <div className="flex items-center gap-3 px-4 py-3">
                     <input
                       type="checkbox"
                       checked={selected.has(a.id)}
                       onChange={() => toggleSel(a.id)}
-                      className="w-4 h-4 rounded border-border-default text-brand-green focus:ring-brand-green"
+                      className="w-4 h-4 rounded border-line text-accent focus:ring-accent"
                     />
                     <div
                       className={`min-w-0 flex-1 ${details.length > 0 ? 'cursor-pointer' : ''}`}
                       onClick={details.length > 0 ? () => toggleExpand(a.id) : undefined}
                     >
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-brand-black truncate">{a.name || a.email || 'Guest'}</span>
-                        {a.response === 'maybe' && <span className="text-xs text-amber-600 font-medium">Maybe</span>}
-                        {(a.plusOnes ?? 0) > 0 && <span className="text-xs text-brand-grey">+{a.plusOnes}</span>}
+                        <span className="font-semibold text-fg truncate">{a.name || a.email || 'Guest'}</span>
+                        {a.response === 'maybe' && <span className="text-xs text-warning font-medium">Maybe</span>}
+                        {(a.plusOnes ?? 0) > 0 && <span className="text-xs text-fg-muted">+{a.plusOnes}</span>}
                       </div>
-                      <div className="text-xs text-brand-grey truncate">
+                      <div className="text-xs text-fg-muted truncate">
                         {[a.email, a.companyName].filter(Boolean).join(' · ') || '—'}
                         {details.length > 0 && (
-                          <span className="ml-1.5 text-brand-green font-medium">
+                          <span className="ml-1.5 text-accent font-medium">
                             · {details.length} {details.length === 1 ? 'answer' : 'answers'} {isOpen ? '▴' : '▾'}
                           </span>
                         )}
@@ -304,8 +304,8 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
                     <dl className="px-4 pb-3 pl-11 space-y-1">
                       {details.map((d) => (
                         <div key={d.label} className="text-xs">
-                          <dt className="inline text-brand-grey">{d.label}: </dt>
-                          <dd className="inline text-brand-black break-words">{d.value}</dd>
+                          <dt className="inline text-fg-muted">{d.label}: </dt>
+                          <dd className="inline text-fg break-words">{d.value}</dd>
                         </div>
                       ))}
                     </dl>
@@ -325,27 +325,27 @@ function RowActions({
 }: { status: RSVPStatus; onAct: (action: string) => void; onRemove: () => void }) {
   return (
     <div className="flex items-center gap-1">
-      {status === 'pending' && <IconBtn title="Approve" onClick={() => onAct('approve')}><CheckIcon className="w-4 h-4 text-brand-green" /></IconBtn>}
-      {status === 'waitlisted' && <IconBtn title="Promote" onClick={() => onAct('promote')}><CircleArrowUpIcon className="w-4 h-4 text-brand-green" /></IconBtn>}
-      {(status === 'going') && <IconBtn title="Check in" onClick={() => onAct('checkin')}><UserCheckIcon className="w-4 h-4 text-brand-green" /></IconBtn>}
-      {status === 'checked_in' && <IconBtn title="Undo check-in" onClick={() => onAct('uncheckin')}><UserCheckIcon className="w-4 h-4 text-brand-grey" /></IconBtn>}
+      {status === 'pending' && <IconBtn title="Approve" onClick={() => onAct('approve')}><CheckIcon className="w-4 h-4 text-accent" /></IconBtn>}
+      {status === 'waitlisted' && <IconBtn title="Promote" onClick={() => onAct('promote')}><CircleArrowUpIcon className="w-4 h-4 text-accent" /></IconBtn>}
+      {(status === 'going') && <IconBtn title="Check in" onClick={() => onAct('checkin')}><UserCheckIcon className="w-4 h-4 text-accent" /></IconBtn>}
+      {status === 'checked_in' && <IconBtn title="Undo check-in" onClick={() => onAct('uncheckin')}><UserCheckIcon className="w-4 h-4 text-fg-muted" /></IconBtn>}
       {status !== 'cancelled' && status !== 'waitlisted' && (
-        <IconBtn title="Move to waitlist" onClick={() => onAct('waitlist')}><ClockIcon className="w-4 h-4 text-brand-grey" /></IconBtn>
+        <IconBtn title="Move to waitlist" onClick={() => onAct('waitlist')}><ClockIcon className="w-4 h-4 text-fg-muted" /></IconBtn>
       )}
-      <IconBtn title="Remove" onClick={onRemove}><XIcon className="w-4 h-4 text-red-500" /></IconBtn>
+      <IconBtn title="Remove" onClick={onRemove}><XIcon className="w-4 h-4 text-danger-bright" /></IconBtn>
     </div>
   );
 }
 
 function IconBtn({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button title={title} onClick={onClick} className="p-1.5 rounded-lg hover:bg-surface-3 transition-colors">
+    <button title={title} onClick={onClick} className="p-1.5 rounded-lg hover:bg-surface-muted transition-colors">
       {children}
     </button>
   );
 }
 
 const actionBtn =
-  'inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-brand-black bg-brand-white border border-border-subtle rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all';
+  'inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-fg bg-surface-subtle border border-line-subtle rounded-lg hover:border-accent hover:bg-accent-soft transition-all';
 const bulkBtn =
-  'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-brand-black bg-brand-white border border-border-subtle rounded-lg hover:border-brand-green transition-all disabled:opacity-50';
+  'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-fg bg-surface-subtle border border-line-subtle rounded-lg hover:border-accent transition-all disabled:opacity-50';

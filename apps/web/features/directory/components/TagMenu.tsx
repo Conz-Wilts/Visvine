@@ -87,8 +87,8 @@ export default function TagMenu({ tags, selected, total, getColor, onChange }: {
           fill
             ? clsx('text-white hover:brightness-95', open && 'brightness-95')
             : clsx(
-              'bg-surface-1 text-text-primary ring-1 hover:bg-surface-2 hover:ring-border-default',
-              open || picked.length > 1 ? 'ring-border-default' : 'ring-border-subtle',
+              'bg-surface text-fg ring-1 hover:bg-surface-subtle hover:ring-line',
+              open || picked.length > 1 ? 'ring-line' : 'ring-line-subtle',
             ),
         )}
         aria-haspopup="menu"
@@ -96,9 +96,9 @@ export default function TagMenu({ tags, selected, total, getColor, onChange }: {
       >
         <span className="truncate">{triggerLabel}</span>
         {triggerCount !== undefined && (
-          <span className={clsx('text-[11px] leading-4 font-semibold tabular-nums', fill ? 'text-white/80' : 'text-text-muted')}>{triggerCount}</span>
+          <span className={clsx('text-[11px] leading-4 font-semibold tabular-nums', fill ? 'text-white/80' : 'text-fg-muted')}>{triggerCount}</span>
         )}
-        <ChevronDownIcon className={clsx('ml-1 h-3.5 w-3.5 transition-transform', fill ? 'text-white' : 'text-text-muted', open && 'rotate-180')} />
+        <ChevronDownIcon className={clsx('ml-1 h-3.5 w-3.5 transition-transform', fill ? 'text-white' : 'text-fg-muted', open && 'rotate-180')} />
       </button>
 
       {open && (
@@ -106,7 +106,7 @@ export default function TagMenu({ tags, selected, total, getColor, onChange }: {
           <SearchMenuInput value={query} onChange={setQuery} onKeyDown={cursor.onKeyDown} placeholder="Search tags…" />
           <SearchMenuList active={cursor.active} className="max-h-[440px]">
             {q && shown.length === 0 && (
-              <p className="px-4 py-3 text-[13px] text-text-muted">Nothing matches “{query.trim()}”</p>
+              <p className="px-4 py-3 text-[13px] text-fg-muted">Nothing matches “{query.trim()}”</p>
             )}
             {rows.map((row, i) => {
               const on = row.kind === 'all' ? picked.length === 0 : selected.has(row.tag.name);
@@ -123,20 +123,20 @@ export default function TagMenu({ tags, selected, total, getColor, onChange }: {
                 >
                   <span className="min-w-0 flex-1 text-left">
                     {row.kind === 'all' ? (
-                      <span className={clsx('px-2 text-[12px] font-semibold', on ? 'text-text-primary' : 'text-text-secondary')}>
+                      <span className={clsx('px-2 text-[12px] font-semibold', on ? 'text-fg' : 'text-fg-secondary')}>
                         All
                       </span>
                     ) : (
                       <Chip
                         color={getColor(row.tag.name)}
                         size="md"
-                        className={clsx(on && 'ring-2 ring-border-default ring-offset-1 ring-offset-surface-1')}
+                        className={clsx(on && 'ring-2 ring-line ring-offset-1 ring-offset-surface')}
                       >
                         <span className="truncate">{row.tag.name}</span>
                       </Chip>
                     )}
                   </span>
-                  <span className="shrink-0 text-[11px] leading-4 tabular-nums text-text-muted">
+                  <span className="shrink-0 text-[11px] leading-4 tabular-nums text-fg-muted">
                     {row.kind === 'all' ? total : row.tag.count}
                   </span>
                 </button>

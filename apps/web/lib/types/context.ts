@@ -1,6 +1,8 @@
 // Context domain: nodes, links, node/link type configs, aliases, and their
 // canonical defaults + resolution helpers.
 
+import { color, relationColor } from '@visvine/tokens';
+
 // Node type is now dynamic per space
 export type NodeType = string;
 
@@ -178,7 +180,7 @@ export const ADMIN_ALIAS_ID = 'admin';
 export const ADMIN_ALIAS: SpaceAlias = {
   id: ADMIN_ALIAS_ID,
   name: ADMIN_ALIAS_NAME,
-  color: '#b4881b',
+  color: color.admin.default,
   nodeType: 'Person',
   admin: true,
   system: true,
@@ -254,13 +256,12 @@ export interface LinkTypeConfig {
 // even before a space config has loaded. This is what prevents the
 // "everything is grey on first paint" race condition.
 //
-// One palette, one weight: every colour here is the mid-light step of its hue,
-// so no type shouts over its neighbours and a row of chips reads as one set.
-// The hues are spread far enough apart that shape and colour together tell any
-// two types apart — which is why Tool (square) and Model (rectangle) may sit
-// one step apart in the purples.
+// The colours are the design tokens' type palette (`color.type.*` in
+// packages/tokens): one lightness step for every type so no chip shouts over its
+// neighbours, hues spread round the wheel so any two types tell apart, Space in
+// the logo green. iOS and Android read the same palette.
 export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
-  { name: 'Person',    color: '#60a5fa', shape: 'rectangle' },
+  { name: 'Person',    color: color.type.person.default, shape: 'rectangle' },
   // A group, organisation or space recorded in the directory — the type
   // was called Space until the 2026-08 vocabulary rename (and Group /
   // Organization before that). There is one type because there is one thing:
@@ -268,34 +269,34 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // `metadata.spaceRef`, unclaimed until somebody runs it (lib/spaces/
   // stub.ts). isOwnSpaceNode below tells the space you're IN apart from
   // the organisations recorded inside it.
-  { name: 'Space',     color: '#4ade80', shape: 'square', system: true },
-  { name: 'Event',     color: '#f87171', shape: 'rectangle' },
-  { name: 'Resource',  color: '#fb923c', shape: 'rectangle' },
+  { name: 'Space',     color: color.type.space.default, shape: 'square', system: true },
+  { name: 'Event',     color: color.type.event.default, shape: 'rectangle' },
+  { name: 'Resource',  color: color.type.resource.default, shape: 'rectangle' },
   // Structural types — the container kinds. Colours match the Create panel's
   // tiles so a thing looks the same wherever you meet it. Notes and uploaded
   // files are deliberately absent: they are content in a context, not nodes in
   // the graph, so nothing syncs a `note:`/`file:` node for them. Section was
   // called Space before the rename freed that name for the org type; stored
   // rows are migrated by scripts/rename-community-to-space.ts.
-  { name: 'Section',   color: '#38bdf8', shape: 'square' },
-  { name: 'Channel',   color: '#f472b6', shape: 'rectangle' },
+  { name: 'Section',   color: color.type.section.default, shape: 'square' },
+  { name: 'Channel',   color: color.type.channel.default, shape: 'rectangle' },
   // A connector is a space's gateway to an external API or database, kept
   // as a note under connectors/. Rectangle like the other document types — the
   // indigo and the plug glyph are what set it apart.
-  { name: 'Connector', color: '#818cf8', shape: 'rectangle', system: true, noAliases: true },
+  { name: 'Connector', color: color.type.connector.default, shape: 'rectangle', system: true, noAliases: true },
   // An agent is a scheduled worker authored as a note under agents/ (lib/agents).
   // Teal, the one hue no other document type uses.
-  { name: 'Agent',     color: '#2dd4bf', shape: 'rectangle', system: true },
+  { name: 'Agent',     color: color.type.agent.default, shape: 'rectangle', system: true },
   // A Tool is a member-built app authored as an entity folder under tools/
   // (lib/tools) — its index is the config, its sub-notes the source. Square
   // because a Tool is a container of its own surfaces, not a document; purple,
   // clear of Connector's indigo so the two never read as one.
-  { name: 'Tool',      color: '#c084fc', shape: 'square', system: true, noAliases: true },
+  { name: 'Tool',      color: color.type.tool.default, shape: 'square', system: true, noAliases: true },
   // A model is what agents run on, kept as a note under models/ (lib/models).
   // Without a row here it fell through to the unknown-type grey and the Type
   // filter showed the raw lowercase `models`. Violet, one step off Tool's
   // purple — the shapes carry the rest of the difference.
-  { name: 'Model',     color: '#a78bfa', shape: 'rectangle', system: true, noAliases: true },
+  { name: 'Model',     color: color.type.model.default, shape: 'rectangle', system: true, noAliases: true },
   // A folder, which is its `index.md` (lib/notes/shared/indexNote.ts). It is
   // here so the word a folder shows has a colour and a spelling the console
   // owns like every other type — not so anything can be typed `Index`: the name
@@ -306,11 +307,11 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // `scope: 'note'` is the honest one: it labels a NOTE and never a node —
   // nothing syncs an `index:` node — so it belongs with the vocabulary the
   // directory's type filter skips rather than with the types a card can wear.
-  { name: 'Index',     color: '#facc15', shape: 'square', scope: 'note', system: true, noAliases: true },
+  { name: 'Index',     color: color.type.index.default, shape: 'square', scope: 'note', system: true, noAliases: true },
   // A sub-space's root as it is drawn in its house's context — the
   // `subspaces/<id>/` folder (lib/notes/federation.ts). Like Index it labels a
   // PATH and never a node: a room is a tenant, not a directory record.
-  { name: 'Subspace',  color: '#a3e635', shape: 'square', scope: 'note', system: true, noAliases: true },
+  { name: 'Subspace',  color: color.type.subspace.default, shape: 'square', scope: 'note', system: true, noAliases: true },
 ];
 
 /** Is this a built-in that can hold no aliases ({@link NodeTypeConfig.noAliases})? */
@@ -508,7 +509,7 @@ export function getNodeTypeConfig(
   if (config) return config;
 
   // Truly unknown type — capitalize for display
-  return { name: type.charAt(0).toUpperCase() + type.slice(1), color: '#6b7280', shape: 'rectangle' };
+  return { name: type.charAt(0).toUpperCase() + type.slice(1), color: color.type.other.default, shape: 'rectangle' };
 }
 
 /**
@@ -593,22 +594,23 @@ export function nodeTypeLabel(
 // Canonical relationship (edge) types and their default colours. A space
 // overrides these via `linkTypes`; this is the seeded fallback. The `system`
 // types back the auto-link flows (RSVP/event/intro/context-note mentions) and
-// must always resolve, even before a space config loads. Keep in sync with
-// the `Space.linkTypes` default in schema.prisma.
+// must always resolve, even before a space config loads. The colours are the
+// design tokens' `color.relation.*`. Keep in sync with the `Space.linkTypes`
+// default in schema.prisma.
 export const DEFAULT_LINK_TYPES: LinkTypeConfig[] = [
-  { name: 'Related',     color: '#94a3b8', directed: false },
-  { name: 'Knows',       color: '#2563eb', directed: false },
-  { name: 'Works at',    color: '#9333ea', directed: true  },
-  { name: 'Founded',     color: '#16a34a', directed: true  },
-  { name: 'Invested in', color: '#f59e0b', directed: true  },
-  { name: 'Member of',   color: '#0ea5e9', directed: true  },
-  { name: 'Partner',     color: '#ec4899', directed: false },
-  { name: 'Mentors',     color: '#14b8a6', directed: true  },
-  { name: 'Attended',    color: '#ef4444', directed: true,  system: true },
-  { name: 'Hosting',     color: '#ef4444', directed: true,  system: true },
-  { name: 'Introduced',  color: '#06b6d4', directed: false, system: true },
-  { name: 'Mentioned',   color: '#8b5cf6', directed: false, system: true },
-  { name: 'Contains',    color: '#64748b', directed: true,  system: true },
+  { name: 'Related',     color: relationColor.related, directed: false },
+  { name: 'Knows',       color: relationColor.knows, directed: false },
+  { name: 'Works at',    color: relationColor['works-at'], directed: true  },
+  { name: 'Founded',     color: relationColor.founded, directed: true  },
+  { name: 'Invested in', color: relationColor['invested-in'], directed: true  },
+  { name: 'Member of',   color: relationColor['member-of'], directed: true  },
+  { name: 'Partner',     color: relationColor.partner, directed: false },
+  { name: 'Mentors',     color: relationColor.mentors, directed: true  },
+  { name: 'Attended',    color: relationColor.attended, directed: true,  system: true },
+  { name: 'Hosting',     color: relationColor.hosting, directed: true,  system: true },
+  { name: 'Introduced',  color: relationColor.introduced, directed: false, system: true },
+  { name: 'Mentioned',   color: relationColor.mentioned, directed: false, system: true },
+  { name: 'Contains',    color: relationColor.contains, directed: true,  system: true },
 ];
 
 /**

@@ -192,7 +192,7 @@ export default function SpaceSwitcherPanel() {
         role="dialog"
         aria-label="Switch space"
         aria-hidden={!isOpen}
-        className={`absolute inset-0 z-10 flex flex-col overflow-hidden border-r border-border-subtle bg-surface-1 ${isOpen ? '' : 'pointer-events-none'}`}
+        className={`absolute inset-0 z-10 flex flex-col overflow-hidden border-r border-line-subtle bg-surface ${isOpen ? '' : 'pointer-events-none'}`}
         // Inline, not `-translate-x-full`: Tailwind v4 compiles translate
         // utilities to the `translate` property, which a `transition:
         // transform` never animates.
@@ -220,7 +220,7 @@ export default function SpaceSwitcherPanel() {
             <NewSpaceRow tabbable={isOpen} onClick={() => setMakingSpace(true)} />
           </div>
           {rows.length === 0 ? (
-            <div className="p-4 text-center text-sm text-text-muted">No spaces found</div>
+            <div className="p-4 text-center text-sm text-fg-muted">No spaces found</div>
           ) : (
             <>
               {/* The space you are in stands alone under New space, held off
@@ -230,7 +230,7 @@ export default function SpaceSwitcherPanel() {
               {elsewhere.length > 0 && (
                 <div
                   className={`flex flex-col ${here.length > 0 ? 'border-t' : ''}`}
-                  style={{ gap: ITEM_GAP, borderTopColor: 'var(--shell-border, #e5e7eb)' }}
+                  style={{ gap: ITEM_GAP, borderTopColor: 'var(--vv-color-line-subtle)' }}
                 >
                   {elsewhere.map(renderRow)}
                 </div>

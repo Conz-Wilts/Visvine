@@ -58,8 +58,8 @@ export default function DeleteAccountPanel() {
 
       <Modal open={open} onClose={close} title="Delete account" size="sm">
         <div className="space-y-4 p-6">
-          <p className="text-sm text-text-secondary">
-            This cannot be undone. Type <span className="font-medium text-text-primary">{email}</span> to confirm.
+          <p className="text-sm text-fg-secondary">
+            This cannot be undone. Type <span className="font-medium text-fg">{email}</span> to confirm.
           </p>
           <Input
             value={typed}

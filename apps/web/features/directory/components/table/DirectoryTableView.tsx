@@ -236,14 +236,14 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
             roster with the clock over it rather than the cell grid. Same bar,
             same search and tag filter, same click-through. */}
         {isAgents && spaceId ? (
-          <div className="h-full border-t border-l border-border-subtle">
+          <div className="h-full border-t border-l border-line-subtle">
             <AgentsRoster data={roster.data} error={roster.error} now={roster.now} search={browse.searchTerm} tags={browse.filterTags} onNavigate={(href) => router.push(href)} />
           </div>
         ) : isConnectors && spaceId ? (
-          <div className="h-full overflow-y-auto border-t border-border-subtle px-4 py-3">
+          <div className="h-full overflow-y-auto border-t border-line-subtle px-4 py-3">
             <div className="mx-auto max-w-2xl">
               {connectorView === 'catalog' && (
-                <button type="button" className="mb-2 text-[13px] text-text-secondary hover:text-text-primary" onClick={() => setConnectorView('mine')}>
+                <button type="button" className="mb-2 text-[13px] text-fg-secondary hover:text-fg" onClick={() => setConnectorView('mine')}>
                   ← In this space
                 </button>
               )}

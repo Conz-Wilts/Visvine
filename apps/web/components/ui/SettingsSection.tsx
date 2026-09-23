@@ -35,14 +35,14 @@ export default function SettingsSection({
   return (
     <section
       className={clsx(
-        !flush && 'border-t border-border-subtle pt-8 first:border-t-0 first:pt-0',
+        !flush && 'border-t border-line-subtle pt-8 first:border-t-0 first:pt-0',
         className,
       )}
     >
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h3 className={clsx(large ? 'text-base' : 'text-sm', 'mb-1 font-semibold text-text-primary')}>{title}</h3>
-          {description && <p className="text-xs text-text-muted">{description}</p>}
+          <h3 className={clsx(large ? 'text-base' : 'text-sm', 'mb-1 font-semibold text-fg')}>{title}</h3>
+          {description && <p className="text-xs text-fg-muted">{description}</p>}
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>

@@ -30,6 +30,7 @@ import { findAlias, getNodeTypeConfig } from '@/lib/types';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
 import type { SpaceAlias } from '@/lib/types';
 import type { ContextItem } from '@/features/notes/lib/contextItems';
+import { color } from '@visvine/tokens';
 
 type Direction = 'out' | 'in' | 'both' | 'unresolved';
 
@@ -59,11 +60,11 @@ const UNTYPED = '__note__';
 const UNRESOLVED = '__unresolved__';
 
 /**
- * Absences read as grey; anything else is a real type with a real colour. A
- * literal hex rather than the muted token because every colour here is also
+ * Absences read as grey; anything else is a real type with a real colour. The
+ * token's hex rather than its custom property because every colour here is also
  * suffixed with an alpha pair for the hover tint, which a `var()` can't take.
  */
-const NEUTRAL = '#6b7280';
+const NEUTRAL = color.hue.gray.default;
 
 // Direction is carried by the row's tooltip alone: a glyph on every row turns
 // the column into a wall of arrows to read past, and the name is what you scan
@@ -199,8 +200,8 @@ export default function ContextLinksPanel({
 
   if (!item) {
     return (
-      <div className="flex h-full flex-col justify-center gap-2 px-4 text-sm text-text-muted">
-        <p className="text-text-secondary">Select a context to see what it connects to.</p>
+      <div className="flex h-full flex-col justify-center gap-2 px-4 text-sm text-fg-muted">
+        <p className="text-fg-secondary">Select a context to see what it connects to.</p>
       </div>
     );
   }
@@ -212,7 +213,7 @@ export default function ContextLinksPanel({
     // already labelled, and a second label under it was the same word twice.
     <div className="flex h-full flex-col overflow-y-auto px-4 py-4">
       {total === 0 ? (
-        <p className="text-sm text-text-muted">
+        <p className="text-sm text-fg-muted">
           Nothing links here yet, and this note links nowhere.
         </p>
       ) : (
@@ -276,14 +277,14 @@ export default function ContextLinksPanel({
                               // type it isn't. Colours are runtime config, so the
                               // tint rides in as a custom property.
                               style={{ '--row-tint': `${group.color}1a` } as CSSProperties}
-                              className="group/row flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-text-secondary transition-colors hover:bg-[var(--row-tint)] hover:text-text-primary"
+                              className="group/row flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-fg-secondary transition-colors hover:bg-[var(--row-tint)] hover:text-fg"
                             >
                               {body}
                             </button>
                           ) : (
                             <div
                               title={DIRECTION_TITLE.unresolved}
-                              className="group/row flex w-full items-center gap-2 px-2 py-1.5 text-sm italic text-text-muted"
+                              className="group/row flex w-full items-center gap-2 px-2 py-1.5 text-sm italic text-fg-muted"
                             >
                               {body}
                             </div>

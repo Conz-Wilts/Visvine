@@ -28,7 +28,7 @@ export { AVATAR_PX as LIST_AVATAR_PX };
 
 /** The mark on the space you are in — a row and a sub-space row wear the same one. */
 const CURRENT_CHECK = (
-  <svg className="h-6 w-6 shrink-0 text-brand-green" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
+  <svg className="h-6 w-6 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24">
     <path d="M5 12.5l4.5 4.5L19 7.5" />
   </svg>
 );
@@ -71,7 +71,7 @@ export function SpaceListRow({
         style={{
           height: END_ROW_H,
           paddingRight: 16,
-          color: current ? 'var(--shell-fg-strong, #111827)' : 'var(--shell-fg-muted, #111827)',
+          color: current ? 'var(--vv-color-fg)' : 'var(--vv-color-fg)',
         }}
       >
         <span className="flex shrink-0 items-center justify-end" style={{ width: LIST_CELL_W, height: END_ROW_H, paddingRight: AVATAR_GAP }}>
@@ -89,7 +89,7 @@ export function SpaceListRow({
           aria-expanded={open}
           tabIndex={tabbable ? 0 : -1}
           onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
-          className="absolute top-0 z-20 flex items-center justify-center text-text-muted transition-colors hover:text-text-primary [&>svg]:h-4 [&>svg]:w-4"
+          className="absolute top-0 z-20 flex items-center justify-center text-fg-muted transition-colors hover:text-fg [&>svg]:h-4 [&>svg]:w-4"
           style={{ left: 0, width: CHEVRON_W, height: END_ROW_H }}
         >
           <span className="flex transition-transform duration-150" style={{ transform: open ? 'rotate(90deg)' : 'none' }}>
@@ -131,7 +131,7 @@ export function SubspaceRow({
       className={`${ROW_CLASS} !z-0 !w-[calc(100%+999px)] ${TREE_ROW_BLEED} min-w-0 gap-3 pr-4 text-left ${current ? 'font-semibold' : 'font-normal'}`}
       style={{
         height: SUBSPACE_ROW_H,
-        color: current ? 'var(--shell-fg-strong, #111827)' : 'var(--shell-fg-muted, #111827)',
+        color: current ? 'var(--vv-color-fg)' : 'var(--vv-color-fg)',
       }}
     >
       <TreeSpineJoin kind={nested} />
@@ -170,16 +170,16 @@ export function LockedSubspaceRow({
       tabIndex={tabbable ? 0 : -1}
       aria-label={`${space.name} — private${space.houseDoor === 'open' ? ', open to members here' : space.requested ? ', access requested' : ', request access'}`}
       className={`${ROW_CLASS} !z-0 !w-[calc(100%+999px)] ${TREE_ROW_BLEED} min-w-0 gap-3 pr-4 text-left font-normal`}
-      style={{ height: SUBSPACE_ROW_H, color: 'var(--shell-fg-muted, #111827)' }}
+      style={{ height: SUBSPACE_ROW_H, color: 'var(--vv-color-fg)' }}
     >
       <TreeSpineJoin kind={nested} />
       <span className={`${ROW_TEXT} min-w-0 flex-1 truncate opacity-70`}>{space.name}</span>
       {space.houseDoor === 'open' ? (
-        <span className="shrink-0 text-[11px] text-text-muted">Join</span>
+        <span className="shrink-0 text-[11px] text-fg-muted">Join</span>
       ) : (
-        space.requested && <span className="shrink-0 text-[11px] text-text-muted">Asked</span>
+        space.requested && <span className="shrink-0 text-[11px] text-fg-muted">Asked</span>
       )}
-      <LockIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+      <LockIcon className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
     </button>
   );
 }
@@ -199,11 +199,11 @@ export function NewSpaceRow({ tabbable, onClick }: { tabbable: boolean; onClick:
       onClick={onClick}
       tabIndex={tabbable ? 0 : -1}
       className={`${ROW_CLASS} min-w-0 text-left font-normal`}
-      style={{ height: END_ROW_H, paddingRight: 16, color: 'var(--shell-fg-muted, #111827)' }}
+      style={{ height: END_ROW_H, paddingRight: 16, color: 'var(--vv-color-fg)' }}
     >
       <span className="flex shrink-0 items-center justify-end" style={{ width: LIST_CELL_W, height: END_ROW_H, paddingRight: AVATAR_GAP }}>
         <span
-          className="flex items-center justify-center rounded-[8px] border border-dashed border-border-default text-text-muted [&>svg]:h-4 [&>svg]:w-4"
+          className="flex items-center justify-center rounded-[8px] border border-dashed border-line text-fg-muted [&>svg]:h-4 [&>svg]:w-4"
           style={{ width: AVATAR_PX, height: AVATAR_PX }}
         >
           <PlusIcon />
@@ -233,10 +233,10 @@ export function NewSubspaceRow({ parentName, nested, tabbable, onClick }: {
       tabIndex={tabbable ? 0 : -1}
       aria-label={`New sub-space of ${parentName}`}
       className={`${ROW_CLASS} !z-0 !w-[calc(100%+999px)] ${TREE_ROW_BLEED} min-w-0 gap-3 pr-4 text-left font-normal`}
-      style={{ height: SUBSPACE_ROW_H, color: 'var(--shell-fg-muted, #111827)' }}
+      style={{ height: SUBSPACE_ROW_H, color: 'var(--vv-color-fg)' }}
     >
       <TreeSpineJoin kind={nested} />
-      <span aria-hidden className="flex shrink-0 items-center justify-center rounded-[5px] border border-dashed border-text-muted text-text-muted [&>svg]:h-3 [&>svg]:w-3" style={{ width: 20, height: 20 }}>
+      <span aria-hidden className="flex shrink-0 items-center justify-center rounded-[5px] border border-dashed border-fg-muted text-fg-muted [&>svg]:h-3 [&>svg]:w-3" style={{ width: 20, height: 20 }}>
         <PlusIcon />
       </span>
       <span className={`${ROW_TEXT} min-w-0 flex-1 truncate`}>New sub-space</span>

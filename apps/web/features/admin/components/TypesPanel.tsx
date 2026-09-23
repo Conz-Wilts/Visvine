@@ -75,7 +75,7 @@ function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabl
           type="button"
           data-color-trigger
           onClick={() => setShowPicker(p => !p)}
-          className="w-7 h-7 rounded-lg border-2 border-border-default shrink-0 transition-transform hover:scale-110"
+          className="w-7 h-7 rounded-lg border-2 border-line shrink-0 transition-transform hover:scale-110"
           style={{ background: color }}
           title="Pick colour"
         />
@@ -85,7 +85,7 @@ function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabl
       </div>
       <input
         autoFocus
-        className="flex-1 px-3 py-1.5 rounded-lg border border-border-default bg-surface-1 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/40 focus:border-brand-green transition-all"
+        className="flex-1 px-3 py-1.5 rounded-lg border border-line bg-surface text-sm text-fg placeholder:text-fg-muted focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent transition-all"
         placeholder="Alias name"
         value={name}
         onChange={e => setName(e.target.value)}
@@ -95,13 +95,13 @@ function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabl
       <button
         onClick={handleAdd}
         disabled={!name.trim() || disabled}
-        className="px-3 py-1.5 rounded-lg bg-brand-green text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
+        className="px-3 py-1.5 rounded-lg bg-accent text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
       >
         Add
       </button>
       <button
         onClick={onCancel}
-        className="px-2 py-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-3 text-sm transition-colors shrink-0"
+        className="px-2 py-1.5 rounded-lg text-fg-muted hover:text-fg hover:bg-surface-muted text-sm transition-colors shrink-0"
       >
         Cancel
       </button>
@@ -187,7 +187,7 @@ function LabelAliases({ typeName, typeColor, aliases, allAliases, newOpen, onNew
                 type="button"
                 data-color-trigger
                 onClick={() => setPicking(p => !p)}
-                className="block h-7 w-7 rounded-lg border-2 border-border-default transition-transform hover:scale-110"
+                className="block h-7 w-7 rounded-lg border-2 border-line transition-transform hover:scale-110"
                 style={{ background: showing.color }}
                 title={`Change the colour of ${showing.name}`}
                 aria-label={`Colour of ${showing.name}`}
@@ -220,12 +220,12 @@ function LabelAliases({ typeName, typeColor, aliases, allAliases, newOpen, onNew
               onClick={() => { onRemove(showing.name, showing.nodeType); close(); }}
               disabled={saving}
               title={`Remove ${showing.name}`}
-              className="shrink-0 rounded-full p-1 text-text-muted transition hover:text-red-500 disabled:opacity-40"
+              className="shrink-0 rounded-full p-1 text-fg-muted transition hover:text-danger-bright disabled:opacity-40"
             >
               <Trash2Icon className="h-3.5 w-3.5" />
             </button>
           </div>
-          <p className="text-xs text-text-muted">
+          <p className="text-xs text-fg-muted">
             A label on a {typeName.toLowerCase()} card. Only Person&apos;s aliases carry holders and
             permissions.
           </p>
@@ -313,7 +313,7 @@ function TypePageOwner({ typeName, claimants, onChoose, saving }: {
           ))}
         </Select>
       ) : (
-        <span className="text-sm text-text-secondary">
+        <span className="text-sm text-fg-secondary">
           {claimants[0]
             ? claimants[0].title
             : 'No installed tool draws a page for these — they read as context notes.'}
@@ -381,7 +381,7 @@ function TypePlural({ typeName, plural, saving, onSave }: {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <h5 className="mb-1.5 text-xs font-medium text-text-muted">{label}</h5>
+      <h5 className="mb-1.5 text-xs font-medium text-fg-muted">{label}</h5>
       {children}
     </div>
   );
@@ -410,14 +410,14 @@ function TypeRow({ typeName, typeColor, expanded, onOpen, onUpdateColor }: {
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}
-      className="flex cursor-pointer items-center gap-3.5 py-4 transition-colors hover:bg-surface-2"
+      className="flex cursor-pointer items-center gap-3.5 py-4 transition-colors hover:bg-surface-subtle"
       aria-expanded={expanded}
       aria-label={`Settings for ${typeName}`}
     >
       {/* The chevron leads the row: it points into the type while shut and down
           the moment what's inside is on screen, so a column of them reads as
           which one is open. */}
-      <span className="ml-1 grid h-5 w-5 shrink-0 place-items-center text-text-muted">
+      <span className="ml-1 grid h-5 w-5 shrink-0 place-items-center text-fg-muted">
         <ChevronDownIcon className={`h-4 w-4 transition-transform ${expanded ? '' : '-rotate-90'}`} />
       </span>
 
@@ -443,7 +443,7 @@ function TypeRow({ typeName, typeColor, expanded, onOpen, onUpdateColor }: {
           </span>
         )}
       </span>
-      <span className="min-w-0 flex-1 truncate text-base font-semibold text-text-primary">
+      <span className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
         {typeName}
       </span>
     </div>
@@ -498,7 +498,7 @@ function TypeSettings({ typeName, typeColor, plural, pageOwner, aliases, allAlia
            context notes — Context and Raw, a coloured chip, no profile page — so
            there is nothing here to alias: an alias narrows a directory record,
            and a note isn't one. */
-        <p className="text-sm text-text-muted">
+        <p className="text-sm text-fg-muted">
           Added from a note. Things of this type are context notes, so it carries no aliases —
           only the colour on its row.
         </p>
@@ -524,7 +524,7 @@ function TypeSettings({ typeName, typeColor, plural, pageOwner, aliases, allAlia
       {pageOwner}
 
       {onDelete && (
-        <div className="flex justify-end border-t border-border-subtle pt-4">
+        <div className="flex justify-end border-t border-line-subtle pt-4">
           <Button variant="danger" size="sm" disabled={saving} onClick={onDelete}>
             Delete type
           </Button>
@@ -652,7 +652,7 @@ export default function TypesPanel() {
   };
 
   if (!currentSpace) {
-    return <div className="p-6 text-sm text-text-muted">Select a space to manage types.</div>;
+    return <div className="p-6 text-sm text-fg-muted">Select a space to manage types.</div>;
   }
 
   // Every type this space has: the built-ins plus the ones members named on the
@@ -819,10 +819,10 @@ export default function TypesPanel() {
       {/* One section per tool: the tool's name, a hairline, then its types. */}
       {toolSections.map(({ label, types: sectionTypes }) => (
         <section key={label}>
-          <h3 className="border-b border-border-default pb-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+          <h3 className="border-b border-line pb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-secondary">
             {label}
           </h3>
-          <div className="divide-y divide-border-subtle">
+          <div className="divide-y divide-line-subtle">
             {sectionTypes.map(renderRow)}
           </div>
         </section>
@@ -832,16 +832,16 @@ export default function TypesPanel() {
       {/* Member-made types, drawn only when there are some. */}
       {customTypes.length > 0 && (
         <section>
-          <h3 className="border-b border-border-default pb-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+          <h3 className="border-b border-line pb-1.5 text-xs font-semibold uppercase tracking-wide text-fg-secondary">
             Custom types
           </h3>
-          <div className="divide-y divide-border-subtle">
+          <div className="divide-y divide-line-subtle">
             {customTypes.map(renderRow)}
           </div>
         </section>
       )}
 
-      {!anyTypes && <p className="text-sm text-text-muted">No matches.</p>}
+      {!anyTypes && <p className="text-sm text-fg-muted">No matches.</p>}
 
       <ConfirmDialog
         open={deleting !== null}

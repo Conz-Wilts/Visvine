@@ -69,7 +69,7 @@ export default function HeaderPopover({
       ref={ref}
       role="menu"
       style={{ position: 'fixed', top: pos.top, left: pos.left, width }}
-      className="z-50 overflow-hidden rounded-xl bg-surface-1 py-1.5 shadow-float"
+      className="z-50 overflow-hidden rounded-xl bg-surface py-1.5 shadow-float"
     >
       {children}
     </div>,

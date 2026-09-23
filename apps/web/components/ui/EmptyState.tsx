@@ -29,13 +29,13 @@ export default function EmptyState({ title, description, action, icon, size = 'm
   const box = size === 'sm' ? 'py-8' : size === 'page' ? 'min-h-[60vh] py-12' : 'py-12';
   const actionClass =
     actionStyle === 'solid'
-      ? 'rounded-lg bg-brand-green px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 active:translate-y-[1px]'
-      : 'text-sm font-semibold text-brand-dark-green hover:underline';
+      ? 'rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 active:translate-y-[1px]'
+      : 'text-sm font-semibold text-accent-strong hover:underline';
 
   return (
     <div className={`flex flex-col items-center justify-center text-center ${box}`}>
-      {icon && <div className="mb-3 text-text-muted [&>svg]:h-6 [&>svg]:w-6">{icon}</div>}
-      <p className="mb-3 text-text-muted">{description ?? title}</p>
+      {icon && <div className="mb-3 text-fg-muted [&>svg]:h-6 [&>svg]:w-6">{icon}</div>}
+      <p className="mb-3 text-fg-muted">{description ?? title}</p>
       {action && (
         action.href ? (
           <Link href={action.href} className={actionClass}>{action.label}</Link>

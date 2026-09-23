@@ -9,6 +9,7 @@ import { SettingsIcon } from '@/features/shared/icons';
 import SpaceAvatar from '@/features/spaces/components/SpaceAvatar';
 import { spaceMark } from '@/lib/spaces/subspaces';
 import { RAIL_ROW_CLASS, END_ROW_H, HEAD_CELL_W, MARK_PX, ITEM_GAP, ROW_INSET, Row } from '@/features/shared/components/layout/railRow';
+import { motion } from '@visvine/tokens';
 
 /**
  * The space band — the rail's first rows (Sidebar). The space sits at the head
@@ -137,7 +138,7 @@ export default function SpaceSelector() {
                 : currentSpace.name
               : 'Select space'
           }
-          className={`${RAIL_ROW_CLASS} ${switcherOpen ? 'before:bg-surface-3' : ''}`}
+          className={`${RAIL_ROW_CLASS} ${switcherOpen ? 'before:bg-surface-muted' : ''}`}
           style={{ height: END_ROW_H }}
         >
           <span className="flex shrink-0 items-center justify-center" style={{ width: HEAD_CELL_W, height: END_ROW_H }}>
@@ -146,7 +147,7 @@ export default function SpaceSelector() {
                 <SpaceAvatar name={mark.name} imageUrl={mark.imageUrl} size="md" rounded="rounded-[10px]" className="!w-full !h-full !text-base" />
               </span>
             ) : (
-              <div className="rounded-[10px] bg-surface-3 flex-shrink-0" style={{ width: MARK_PX, height: MARK_PX }} />
+              <div className="rounded-[10px] bg-surface-muted flex-shrink-0" style={{ width: MARK_PX, height: MARK_PX }} />
             )}
           </span>
           {/* The name stays mounted so it can FADE with the rail's other labels
@@ -162,7 +163,7 @@ export default function SpaceSelector() {
           >
             <span className="flex min-w-0 flex-1 flex-col text-left">
               {parentName && (
-                <span className="min-w-0 truncate text-[12px] leading-tight font-open-sauce text-text-muted">
+                <span className="min-w-0 truncate text-[12px] leading-tight font-open-sauce text-fg-muted">
                   {parentName}
                 </span>
               )}
@@ -180,10 +181,10 @@ export default function SpaceSelector() {
                   // two read as connected rather than collided. The corner
                   // lands at the name's own middle, and the tick clears it.
                   <span aria-hidden className="relative -mt-[3px] ml-[4px] mr-2 h-[20px] w-2.5 shrink-0">
-                    <span className="absolute left-0 top-0 h-[13px] w-2.5 rounded-bl-[5px] border-b border-l border-border-default" />
+                    <span className="absolute left-0 top-0 h-[13px] w-2.5 rounded-bl-[5px] border-b border-l border-line" />
                   </span>
                 )}
-                <span className="min-w-0 truncate text-[15px] font-open-sauce font-semibold text-text-primary">
+                <span className="min-w-0 truncate text-[15px] font-open-sauce font-semibold text-fg">
                   {currentSpace?.name || 'Select space'}
                 </span>
               </span>
@@ -205,9 +206,9 @@ export default function SpaceSelector() {
           height: open ? openH : shutH,
           // The sheet's bottom edge is the rail's one hairline: the line under
           // the space when shut, and the line under its rows when open.
-          borderBottomColor: 'var(--shell-border, #e5e7eb)',
+          borderBottomColor: 'var(--vv-color-line-subtle)',
           boxSizing: 'content-box',
-          transition: reduced ? 'none' : `height ${dur} cubic-bezier(0.25, 0.1, 0.25, 1)`,
+          transition: reduced ? 'none' : `height ${dur} ${motion.easeCss.gentle}`,
         }}
         aria-hidden={!open}
       >

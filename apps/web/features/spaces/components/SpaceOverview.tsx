@@ -197,7 +197,7 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
     <div className="profile-content-fade w-full max-w-5xl mx-auto px-6 sm:px-8 py-6 flex flex-col gap-5">
       {/* ══ IDENTITY HERO — avatar beside the identity block, same shape as the profile page ══ */}
       <div className="flex flex-col sm:flex-row gap-5 items-stretch">
-        <div className="w-48 h-48 sm:w-60 sm:h-60 aspect-square flex-none rounded-lg overflow-hidden bg-surface-2">
+        <div className="w-48 h-48 sm:w-60 sm:h-60 aspect-square flex-none rounded-lg overflow-hidden bg-surface-subtle">
           {space.imageUrl ? (
             <img src={space.imageUrl} alt={space.name} className="w-full h-full object-cover" />
           ) : (
@@ -211,7 +211,7 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
         <section className="flex-1 min-w-0 sm:min-h-60 flex flex-col">
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 my-auto py-4">
             <div className="min-w-0 flex-1">
-              <h1 className="text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{space.name}</h1>
+              <h1 className="text-[26px] sm:text-3xl font-bold text-fg leading-tight tracking-tight font-open-sauce">{space.name}</h1>
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                 <Chip tone="solid" color={theme.base}>Space</Chip>
                 {isActive && (
@@ -224,9 +224,9 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
                   </span>
                 )}
               </div>
-              {tagline && <p className="mt-1.5 text-[15px] text-text-secondary max-w-[60ch]">{tagline}</p>}
+              {tagline && <p className="mt-1.5 text-[15px] text-fg-secondary max-w-[60ch]">{tagline}</p>}
 
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-fg-muted">
                 {space.location && (
                   <span className="inline-flex items-center gap-1.5"><MapPinIcon className="w-3.5 h-3.5" />{space.location}</span>
                 )}
@@ -236,7 +236,7 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
 
             <div className="flex flex-wrap items-center gap-2 flex-none">
               <button onClick={share}
-                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-lg text-[13px] font-semibold text-text-secondary hover:bg-surface-3 hover:text-text-primary transition-colors">
+                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-lg text-[13px] font-semibold text-fg-secondary hover:bg-surface-muted hover:text-fg transition-colors">
                 {copied ? <CheckIcon className="w-4 h-4" /> : <Share2Icon className="w-4 h-4" />}
                 <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
               </button>
@@ -244,14 +244,14 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
                 <>
                   {confirmLeave ? (
                     <span className="inline-flex items-center gap-2 text-[13px]">
-                      <button onClick={() => setConfirmLeave(false)} className="font-medium text-text-muted hover:text-text-secondary">Cancel</button>
-                      <button onClick={handleLeave} disabled={leaving} className="font-bold text-red-500 hover:text-red-600 disabled:opacity-60">
+                      <button onClick={() => setConfirmLeave(false)} className="font-medium text-fg-muted hover:text-fg-secondary">Cancel</button>
+                      <button onClick={handleLeave} disabled={leaving} className="font-bold text-danger-bright hover:text-danger disabled:opacity-60">
                         {leaving ? 'Leaving…' : 'Confirm leave'}
                       </button>
                     </span>
                   ) : (
                     <button onClick={() => setConfirmLeave(true)}
-                      className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-lg text-[13px] font-semibold text-text-secondary hover:bg-surface-3 hover:text-red-500 transition-colors">
+                      className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-lg text-[13px] font-semibold text-fg-secondary hover:bg-surface-muted hover:text-danger-bright transition-colors">
                       <LogOutIcon className="w-4 h-4" /><span className="hidden sm:inline">Leave</span>
                     </button>
                   )}
@@ -262,7 +262,7 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
                   </button>
                 </>
               ) : isGlobal ? (
-                <span className="text-[13px] font-medium text-text-muted">The public record — open to everyone</span>
+                <span className="text-[13px] font-medium text-fg-muted">The public record — open to everyone</span>
               ) : (
                 <button onClick={handleJoin} disabled={joining || asked || viewerDoor === 'deny'}
                   title={viewerDoor === 'deny' ? 'This space is invite only' : undefined}
@@ -276,7 +276,7 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
           </div>
 
           {/* stat strip — pinned to the hero's bottom edge */}
-          <div className="flex flex-wrap items-center gap-x-7 gap-y-2 pt-4 border-t border-border-subtle">
+          <div className="flex flex-wrap items-center gap-x-7 gap-y-2 pt-4 border-t border-line-subtle">
             <StatItem value={counts.members} label={counts.members === 1 ? 'Member' : 'Members'}
                       onClick={isMember ? openDirectory : undefined} accent={theme.dark} />
             {isMember && (
@@ -300,7 +300,7 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
             {space.description ? (
               <AboutText text={space.description} accent={theme.dark} className="max-w-[72ch]" />
             ) : (
-              <p className="text-sm text-text-muted">
+              <p className="text-sm text-fg-muted">
                 {isAdminViewer ? 'Add a description so people know what this space is about.' : 'No description yet.'}
               </p>
             )}
@@ -310,7 +310,7 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
             <SectionCard id="events" title="Upcoming events" scrollMargin="scroll-mt-20"
                          badge={events.length > 0 ? counts.upcomingEvents : undefined}
                          action={<Link href="/directory?type=event" className="text-[13px] font-semibold hover:underline" style={{ color: theme.dark }}>View all</Link>}>
-              <div className="flex flex-col divide-y divide-border-subtle">
+              <div className="flex flex-col divide-y divide-line-subtle">
                 {events.map((e) => <EventRow key={e.id} event={e} theme={theme} />)}
               </div>
             </SectionCard>
@@ -321,11 +321,11 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
                 {resources.map((r) => (
                   <Link key={r.id} href={`/resources/${encodeURIComponent(r.id)}`}
-                        className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-2">
+                        className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-subtle">
                     <FileTypeIcon type={r.fileType} className="h-9 w-9 flex-none" />
                     <span className="min-w-0">
-                      <b className="block text-[13.5px] font-semibold text-text-primary truncate">{r.name}</b>
-                      <span className="block text-xs text-text-muted truncate">
+                      <b className="block text-[13.5px] font-semibold text-fg truncate">{r.name}</b>
+                      <span className="block text-xs text-fg-muted truncate">
                         {FILE_LABEL[r.fileType] ?? r.fileType.toUpperCase()}
                         {r.fileSize ? ` · ${formatBytes(r.fileSize)}` : ''}
                       </span>
@@ -408,23 +408,23 @@ function EventRow({ event, theme }: { event: OverviewEvent; theme: ThemePalette 
     : `/events/${encodeURIComponent(event.id)}`;
   return (
     <Link href={href}
-          className="-mx-2 flex items-center gap-4 rounded-lg px-2 py-3 transition-colors hover:bg-surface-2">
+          className="-mx-2 flex items-center gap-4 rounded-lg px-2 py-3 transition-colors hover:bg-surface-subtle">
       <span className="flex flex-col items-center w-11 flex-none leading-none">
         <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: accent }}>{month}</span>
-        <span className="mt-0.5 text-xl font-bold font-open-sauce text-text-primary tabular-nums">{day}</span>
+        <span className="mt-0.5 text-xl font-bold font-open-sauce text-fg tabular-nums">{day}</span>
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2 min-w-0">
-          <b className="block text-[14px] font-semibold text-text-primary truncate">{event.title}</b>
+          <b className="block text-[14px] font-semibold text-fg truncate">{event.title}</b>
           {event.viaSpace && <Chip tone="muted">{event.viaSpace.name}</Chip>}
         </span>
-        <span className="block mt-0.5 text-[13px] text-text-muted truncate">
+        <span className="block mt-0.5 text-[13px] text-fg-muted truncate">
           {formatEventTime(event.startAt)}
           {event.locationLabel ? ` · ${event.locationLabel}` : event.eventType === 'virtual' ? ' · Virtual' : ''}
           {event.going > 0 ? ` · ${event.going} going` : ''}
         </span>
       </span>
-      <ChevronRightIcon className="w-4 h-4 flex-none text-text-muted" />
+      <ChevronRightIcon className="w-4 h-4 flex-none text-fg-muted" />
     </Link>
   );
 }
@@ -436,12 +436,12 @@ function MemberRow({ member, theme }: { member: OverviewMember; theme: ThemePale
         ? <img src={member.image} alt={member.name} className="w-9 h-9 rounded-lg object-cover flex-none" />
         : <span className="w-9 h-9 rounded-lg overflow-hidden flex-none"><PersonSilhouette color={theme.base} /></span>}
       <span className="min-w-0 flex-1">
-        <b className="block text-[13.5px] font-semibold text-text-primary truncate">{member.name}</b>
-        {member.subtitle && <span className="block text-xs text-text-muted truncate">{member.subtitle}</span>}
+        <b className="block text-[13.5px] font-semibold text-fg truncate">{member.name}</b>
+        {member.subtitle && <span className="block text-xs text-fg-muted truncate">{member.subtitle}</span>}
       </span>
     </>
   );
-  const cls = 'flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-surface-2 transition-colors';
+  const cls = 'flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-surface-subtle transition-colors';
   return member.personId
     ? <Link href={`/directory/${encodeURIComponent(member.personId)}`} className={cls}>{inner}</Link>
     : <div className={cls}>{inner}</div>;
@@ -464,23 +464,23 @@ function SpaceSkeleton() {
   return (
     <div className="w-full max-w-5xl mx-auto px-6 sm:px-8 py-6 animate-pulse flex flex-col gap-5">
       <div className="flex flex-col sm:flex-row gap-5">
-        <div className="w-48 h-48 sm:w-60 sm:h-60 flex-none rounded-lg bg-surface-3" />
+        <div className="w-48 h-48 sm:w-60 sm:h-60 flex-none rounded-lg bg-surface-muted" />
         <div className="flex-1 flex flex-col justify-center gap-3">
-          <div className="h-8 w-64 rounded bg-surface-3" />
-          <div className="h-4 w-96 max-w-full rounded bg-surface-3" />
-          <div className="h-4 w-48 rounded bg-surface-3" />
-          <div className="mt-6 h-px bg-surface-3" />
-          <div className="h-4 w-72 rounded bg-surface-3" />
+          <div className="h-8 w-64 rounded bg-surface-muted" />
+          <div className="h-4 w-96 max-w-full rounded bg-surface-muted" />
+          <div className="h-4 w-48 rounded bg-surface-muted" />
+          <div className="mt-6 h-px bg-surface-muted" />
+          <div className="h-4 w-72 rounded bg-surface-muted" />
         </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-5">
         <div className="flex flex-col gap-5">
-          <div className="h-32 rounded bg-surface-3" />
-          <div className="h-48 rounded bg-surface-3" />
+          <div className="h-32 rounded bg-surface-muted" />
+          <div className="h-48 rounded bg-surface-muted" />
         </div>
         <div className="flex flex-col gap-4">
-          <div className="h-36 rounded bg-surface-3" />
-          <div className="h-24 rounded bg-surface-3" />
+          <div className="h-36 rounded bg-surface-muted" />
+          <div className="h-24 rounded bg-surface-muted" />
         </div>
       </div>
     </div>

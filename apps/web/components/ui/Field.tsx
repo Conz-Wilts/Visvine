@@ -21,12 +21,12 @@ interface FieldProps {
 export default function Field({ label, hint, error, className, children }: FieldProps) {
   return (
     <div className={clsx('w-full', className)}>
-      <label className="mb-1.5 block text-base font-medium text-text-primary">{label}</label>
+      <label className="mb-1.5 block text-base font-medium text-fg">{label}</label>
       {children}
       {error ? (
-        <p className="mt-1 text-sm text-red-500">{error}</p>
+        <p className="mt-1 text-sm text-danger-bright">{error}</p>
       ) : hint ? (
-        <p className="mt-1 text-sm text-text-muted">{hint}</p>
+        <p className="mt-1 text-sm text-fg-muted">{hint}</p>
       ) : null}
     </div>
   );

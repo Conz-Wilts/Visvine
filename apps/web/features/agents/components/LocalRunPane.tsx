@@ -118,13 +118,13 @@ export default function LocalRunPane({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2 text-[13px] text-text-secondary">
+      <div className="flex items-center gap-2 text-[13px] text-fg-secondary">
         <StatusDot tone="live" />
         <span>{line}</span>
         {phase === 'running' && runIdRef.current && (
           <button
             type="button"
-            className="ml-auto rounded-md px-2 py-0.5 text-xs text-text-muted hover:bg-surface-3 hover:text-text-primary"
+            className="ml-auto rounded-md px-2 py-0.5 text-xs text-fg-muted hover:bg-surface-muted hover:text-fg"
             onClick={() => runIdRef.current && void desktopRuntimes()?.cancel(runIdRef.current)}
           >
             Stop

@@ -9,11 +9,11 @@
 // menu itself is SearchMenu.tsx.
 /** Toolbar-sized trigger — sits on one line beside a 40px search field. */
 export const DROPDOWN_TRIGGER_CLASS =
-  'flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold transition-colors hover:bg-surface-3';
+  'flex h-10 items-center gap-1.5 rounded-lg px-2.5 text-[13px] font-semibold transition-colors hover:bg-surface-muted';
 /** A filter is applied: the trigger speaks in the accent's dark shade. */
 export const DROPDOWN_TRIGGER_ACTIVE_STYLE: React.CSSProperties = {
-  color: 'var(--color-brand-dark-green)',
+  color: 'var(--vv-color-accent-strong)',
 };
 export const DROPDOWN_TRIGGER_IDLE_STYLE: React.CSSProperties = {
-  color: 'var(--text-primary, #111827)',
+  color: 'var(--vv-color-fg)',
 };

@@ -39,11 +39,11 @@ export default function ConnectorLogo({
   const resolved = entry ?? (name ? catalogEntryFor(name, recipe) : null);
   const { box, glyph } = SIZES[size];
   return (
-    <div className={`${box} flex shrink-0 items-center justify-center bg-surface-2`}>
+    <div className={`${box} flex shrink-0 items-center justify-center bg-surface-subtle`}>
       {resolved ? (
         <img src={`/images/connectors/${resolved.logo}`} alt="" className={`${glyph} object-contain`} />
       ) : (
-        <PlugIcon className={`${glyph} text-text-muted`} />
+        <PlugIcon className={`${glyph} text-fg-muted`} />
       )}
     </div>
   );

@@ -38,12 +38,12 @@ export default function ContactInfoModal({ open, onClose, profile, isOwner, onEd
           <div className="flex flex-col gap-4">
             {rows.map((row) => (
               <div key={row.label} className="flex items-start gap-3">
-                <span className="mt-0.5 text-text-muted flex-none">{row.icon}</span>
+                <span className="mt-0.5 text-fg-muted flex-none">{row.icon}</span>
                 <div className="min-w-0">
-                  <div className="text-[13px] font-semibold text-text-primary">{row.label}</div>
+                  <div className="text-[13px] font-semibold text-fg">{row.label}</div>
                   <a href={row.href}
                      {...(row.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                     className="text-sm text-text-secondary hover:underline break-words">
+                     className="text-sm text-fg-secondary hover:underline break-words">
                     {row.text}
                   </a>
                 </div>
@@ -51,14 +51,14 @@ export default function ContactInfoModal({ open, onClose, profile, isOwner, onEd
             ))}
           </div>
         ) : (
-          <p className="text-sm text-text-muted">
+          <p className="text-sm text-fg-muted">
             No contact info
           </p>
         )}
 
         {isOwner && onEdit && (
           <button type="button" onClick={onEdit}
-                  className="mt-6 inline-flex items-center gap-1.5 text-[13px] font-semibold text-text-muted hover:text-text-primary transition-colors">
+                  className="mt-6 inline-flex items-center gap-1.5 text-[13px] font-semibold text-fg-muted hover:text-fg transition-colors">
             <PencilIcon className="w-3.5 h-3.5" />
             {rows.length > 0 ? 'Edit' : 'Add'}
           </button>

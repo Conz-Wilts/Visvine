@@ -16,13 +16,13 @@ import { clsx } from 'clsx';
 
 /** The floating panel. Position it with your own `absolute …` classes. */
 export const SEARCH_MENU_PANEL =
-  'z-50 overflow-hidden rounded-xl border border-border-subtle bg-surface-1 shadow-float';
+  'z-50 overflow-hidden rounded-xl border border-line-subtle bg-surface shadow-float';
 
 /** A row's box. Pair with `searchMenuRowState(active)`. */
 export const SEARCH_MENU_ROW = 'flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm transition-colors';
 
 export function searchMenuRowState(active: boolean): string {
-  return active ? 'bg-surface-2' : 'hover:bg-surface-2';
+  return active ? 'bg-surface-subtle' : 'hover:bg-surface-subtle';
 }
 
 export const SearchMenuInput = forwardRef<
@@ -40,7 +40,7 @@ export const SearchMenuInput = forwardRef<
   }
 >(function SearchMenuInput({ value, onChange, onKeyDown, placeholder, maxLength, autoFocus = true, trailing }, ref) {
   return (
-    <div className="flex items-center gap-2 border-b border-border-subtle pr-4">
+    <div className="flex items-center gap-2 border-b border-line-subtle pr-4">
       <input
         ref={ref}
         autoFocus={autoFocus}
@@ -49,7 +49,7 @@ export const SearchMenuInput = forwardRef<
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         maxLength={maxLength}
-        className="min-w-0 flex-1 bg-transparent py-2.5 pl-4 text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+        className="min-w-0 flex-1 bg-transparent py-2.5 pl-4 text-sm text-fg placeholder:text-fg-muted focus:outline-none"
       />
       {trailing}
     </div>
@@ -79,7 +79,7 @@ export function SearchMenuList({ active, className, children }: {
 }
 
 export function SearchMenuEmpty({ children = 'No matches' }: { children?: React.ReactNode }) {
-  return <div className="px-4 py-6 text-center text-sm text-text-muted">{children}</div>;
+  return <div className="px-4 py-6 text-center text-sm text-fg-muted">{children}</div>;
 }
 
 /**

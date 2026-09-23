@@ -88,7 +88,7 @@ function label(type: MenuType, nodeTypes?: NodeTypeConfig[]) {
   return type.id === 'all' ? type.name : pluralTypeName(type.name, nodeTypes);
 }
 
-const PICKED_RING = 'ring-2 ring-border-default ring-offset-1 ring-offset-surface-1';
+const PICKED_RING = 'ring-2 ring-line ring-offset-1 ring-offset-surface';
 
 export default function TypeMenu({ types, activeKey, activeAlias, nodeTypes, onChange }: {
   types: MenuType[];
@@ -144,17 +144,17 @@ export default function TypeMenu({ types, activeKey, activeAlias, nodeTypes, onC
           fill
             ? clsx('text-white', open && 'brightness-95', !only && 'hover:brightness-95')
             : clsx(
-              'bg-surface-1 text-text-primary ring-1',
-              open ? 'ring-border-default' : 'ring-border-subtle',
-              !only && 'hover:bg-surface-2 hover:ring-border-default',
+              'bg-surface text-fg ring-1',
+              open ? 'ring-line' : 'ring-line-subtle',
+              !only && 'hover:bg-surface-subtle hover:ring-line',
             ),
         )}
         aria-haspopup={only ? undefined : 'menu'}
         aria-expanded={only ? undefined : open}
       >
         <span className="truncate">{triggerLabel}</span>
-        <span className={clsx('text-[11px] leading-4 font-semibold tabular-nums', fill ? 'text-white/80' : 'text-text-muted')}>{triggerCount}</span>
-        {!only && <ChevronDownIcon className={clsx('ml-1 h-3.5 w-3.5 transition-transform', fill ? 'text-white' : 'text-text-muted', open && 'rotate-180')} />}
+        <span className={clsx('text-[11px] leading-4 font-semibold tabular-nums', fill ? 'text-white/80' : 'text-fg-muted')}>{triggerCount}</span>
+        {!only && <ChevronDownIcon className={clsx('ml-1 h-3.5 w-3.5 transition-transform', fill ? 'text-white' : 'text-fg-muted', open && 'rotate-180')} />}
       </button>
 
       {open && (
@@ -179,7 +179,7 @@ export default function TypeMenu({ types, activeKey, activeAlias, nodeTypes, onC
                     {type.id === 'all' ? (
                       // All has no colour to be a chip in: it is the word,
                       // padded to line up with the chip labels under it.
-                      <span className={clsx('px-2 text-[12px] font-semibold', picked ? 'text-text-primary' : 'text-text-secondary')}>
+                      <span className={clsx('px-2 text-[12px] font-semibold', picked ? 'text-fg' : 'text-fg-secondary')}>
                         {label(type, nodeTypes)}
                       </span>
                     ) : (
@@ -188,7 +188,7 @@ export default function TypeMenu({ types, activeKey, activeAlias, nodeTypes, onC
                       </Chip>
                     )}
                   </span>
-                  <span className="shrink-0 text-[11px] leading-4 tabular-nums text-text-muted">{type.count}</span>
+                  <span className="shrink-0 text-[11px] leading-4 tabular-nums text-fg-muted">{type.count}</span>
                 </button>
               );
             })}

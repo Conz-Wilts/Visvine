@@ -119,7 +119,7 @@ export default function DiscoverPage() {
             className="w-full max-w-[420px] flex-1 sm:min-w-[280px]"
           />
 
-          <div className="hidden h-6 w-px shrink-0 bg-border-subtle sm:block" />
+          <div className="hidden h-6 w-px shrink-0 bg-line-subtle sm:block" />
 
           {countryOpts.length > 0 && (
             <FilterDropdown label="Where" options={countryOpts} selected={countries} onChange={setCountries} />
@@ -166,7 +166,7 @@ export default function DiscoverPage() {
               <Chip color={SPACE_COLOR} onRemove={() => setFormat('all')} removeLabel="Remove format filter">{FORMAT.find((f) => f.value === format)?.label}</Chip>
             )}
             {activeCount > 1 && (
-              <button type="button" onClick={clearAll} className="text-[12px] font-medium text-text-muted hover:text-text-primary">Clear all</button>
+              <button type="button" onClick={clearAll} className="text-[12px] font-medium text-fg-muted hover:text-fg">Clear all</button>
             )}
           </div>
         )}

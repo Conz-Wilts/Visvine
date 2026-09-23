@@ -157,8 +157,8 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
                   imageUrl={parent?.imageUrl}
                   size="xl"
                 />
-                <p className="text-xs text-text-muted">
-                  Wears {parent ? <span className="font-medium text-text-secondary">{parent.name}</span> : 'its parent'}&apos;s picture
+                <p className="text-xs text-fg-muted">
+                  Wears {parent ? <span className="font-medium text-fg-secondary">{parent.name}</span> : 'its parent'}&apos;s picture
                 </p>
               </div>
             ) : (
@@ -176,13 +176,13 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
                 below (RoomDials). A top-level space keeps the toggle. */}
             {!isSubspace && (
               <div className="flex flex-col items-end text-right">
-                <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
-                  <span className={isPrivate ? 'text-brand-dark-green' : 'text-text-muted'}>
+                <div className="flex items-center gap-2 text-sm font-medium text-fg">
+                  <span className={isPrivate ? 'text-accent-strong' : 'text-fg-muted'}>
                     {isPrivate ? <LockIcon /> : <GlobeIcon />}
                   </span>
                   {isPrivate ? 'Private' : 'Public'}
                 </div>
-                <p className="mt-0.5 text-xs text-text-muted">
+                <p className="mt-0.5 text-xs text-fg-muted">
                   {isPrivate ? 'Invite or admin only' : 'Anyone can find and join'}
                 </p>
                 <Toggle
@@ -199,8 +199,8 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
               is the Name field right below. */}
           {visibilityError && <Alert variant="error">{visibilityError}</Alert>}
           {isSubspace && (
-            <p className="text-sm text-text-muted">
-              A sub-space of <span className="font-medium text-text-secondary">{parent?.name ?? space.parentId}</span> —
+            <p className="text-sm text-fg-muted">
+              A sub-space of <span className="font-medium text-fg-secondary">{parent?.name ?? space.parentId}</span> —
               its own members, admins and tools. What it shows the house, who may walk in and who holds its keys are its own to set, below.
             </p>
           )}
@@ -231,7 +231,7 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
                 <span
                   aria-live="polite"
                   className={`pointer-events-none absolute bottom-2 right-3 text-xs tabular-nums ${
-                    countWords(description) >= SPACE_DESCRIPTION_MAX_WORDS ? 'text-red-500' : 'text-text-muted'
+                    countWords(description) >= SPACE_DESCRIPTION_MAX_WORDS ? 'text-danger-bright' : 'text-fg-muted'
                   }`}
                 >
                   {countWords(description)}/{SPACE_DESCRIPTION_MAX_WORDS} words

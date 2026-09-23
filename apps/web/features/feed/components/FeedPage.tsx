@@ -60,11 +60,11 @@ export default function FeedPage() {
       <div className="mx-auto flex w-full max-w-2xl gap-6 px-6 pt-6">
         <main className="flex min-w-0 flex-1 flex-col gap-5">
           {target && (
-            <div className="rounded-2xl border border-border-subtle bg-surface-1 px-4 py-3">
+            <div className="rounded-2xl border border-line-subtle bg-surface px-4 py-3">
               <button type="button" onClick={() => setComposing(true)} className="flex w-full items-center gap-3 text-left">
                 <Avatar name={user.name} imageUrl={user.image ?? null} size="md" />
-                <span className="flex-1 text-[15px] text-text-muted">Start a post</span>
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-2 text-text-secondary">
+                <span className="flex-1 text-[15px] text-fg-muted">Start a post</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-subtle text-fg-secondary">
                   <PlusIcon className="h-4 w-4" />
                 </span>
               </button>
@@ -72,7 +72,7 @@ export default function FeedPage() {
           )}
 
           {loading && Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="rounded-2xl border border-border-subtle bg-surface-1 px-6 py-5">
+            <div key={i} className="rounded-2xl border border-line-subtle bg-surface px-6 py-5">
               <div className="flex items-center gap-3">
                 <Skeleton className="h-11 w-11 shrink-0 rounded-xl" />
                 <Skeleton className="h-3 w-40" />
@@ -103,7 +103,7 @@ export default function FeedPage() {
               place={(
                 <Link
                   href={inSpace(post.space.id, `/channels/${post.conversationId}`)}
-                  className="hover:text-text-secondary hover:underline"
+                  className="hover:text-fg-secondary hover:underline"
                 >
                   Posted in {placeLabel(post)}
                 </Link>
@@ -116,7 +116,7 @@ export default function FeedPage() {
           ))}
 
           <div ref={sentinelRef} className="flex h-10 items-center justify-center">
-            {loadingOlder && <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />}
+            {loadingOlder && <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />}
           </div>
         </main>
       </div>

@@ -28,7 +28,7 @@ export default function JoinWord({
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!quiet) onJoin(); }}
       disabled={quiet}
       className={`shrink-0 text-[13px] font-semibold transition-colors ${
-        quiet ? 'cursor-default text-text-muted' : 'text-brand-dark-green hover:underline'
+        quiet ? 'cursor-default text-fg-muted' : 'text-accent-strong hover:underline'
       } ${className}`}
     >
       {joined ? 'Joined' : doorLabel(door, asked)}

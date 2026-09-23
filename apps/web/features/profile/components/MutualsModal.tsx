@@ -25,17 +25,17 @@ export default function MutualsModal({ nodeId, onClose }: {
   return (
     <Modal open title="Mutuals" onClose={onClose} size="sm">
       <div className="p-2">
-        {mutuals === null && <p className="px-4 py-6 text-sm text-text-muted">Loading…</p>}
+        {mutuals === null && <p className="px-4 py-6 text-sm text-fg-muted">Loading…</p>}
         {mutuals?.map((m) => {
           const row = (
             <>
               <Avatar name={m.name} imageUrl={m.imageUrl} size="md" />
-              <span className="min-w-0 truncate text-sm font-semibold text-text-primary">{m.name}</span>
+              <span className="min-w-0 truncate text-sm font-semibold text-fg">{m.name}</span>
             </>
           );
           return m.nodeId ? (
             <SpaceLink key={m.userId} href={`/directory/${encodeURIComponent(m.nodeId)}`} onClick={onClose}
-                       className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-surface-2">
+                       className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-surface-subtle">
               {row}
             </SpaceLink>
           ) : (

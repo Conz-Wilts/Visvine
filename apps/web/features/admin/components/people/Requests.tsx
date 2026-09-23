@@ -37,14 +37,14 @@ export default function Requests() {
 
       {pending.length > 0 && (
         <SettingsSection title={`Wants to join (${pending.length})`}>
-          <div className="divide-y divide-border-subtle">
+          <div className="divide-y divide-line-subtle">
             {pending.map((member) => (
               <div key={member.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div className="flex min-w-0 items-center gap-3">
                   <Avatar name={member.user.name} imageUrl={member.user.image} size="sm" />
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-text-primary">{member.user.name}</div>
-                    <div className="truncate text-xs text-text-muted">{member.user.email}</div>
+                    <div className="truncate text-sm font-medium text-fg">{member.user.name}</div>
+                    <div className="truncate text-xs text-fg-muted">{member.user.email}</div>
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">

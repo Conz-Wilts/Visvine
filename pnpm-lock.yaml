@@ -138,6 +138,9 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.31.0
         version: 3.31.0
+      '@visvine/tokens':
+        specifier: workspace:*
+        version: link:../../packages/tokens
       '@visvine/vm-policy':
         specifier: workspace:*
         version: link:../../packages/vm-policy

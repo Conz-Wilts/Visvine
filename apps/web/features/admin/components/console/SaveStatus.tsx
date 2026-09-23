@@ -23,7 +23,7 @@ export default function SaveStatus({ status, onRetry, className }: SaveStatusPro
     return (
       <span
         className={clsx(
-          'inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1 text-xs font-medium text-red-600',
+          'inline-flex items-center gap-1.5 rounded-full bg-danger-bright/10 px-3 py-1 text-xs font-medium text-danger',
           className,
         )}
       >
@@ -45,7 +45,7 @@ export default function SaveStatus({ status, onRetry, className }: SaveStatusPro
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-text-muted',
+        'inline-flex items-center gap-1.5 rounded-full bg-surface-subtle px-3 py-1 text-xs font-medium text-fg-muted',
         className,
       )}
     >
@@ -56,7 +56,7 @@ export default function SaveStatus({ status, onRetry, className }: SaveStatusPro
         </>
       ) : (
         <>
-          <CheckIcon size={12} className="text-brand-dark-green" />
+          <CheckIcon size={12} className="text-accent-strong" />
           Saved
         </>
       )}

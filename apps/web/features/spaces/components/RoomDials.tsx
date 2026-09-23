@@ -143,8 +143,8 @@ export default function RoomDials({ space, parentName, save }: Props) {
   return (
     <section className="space-y-5">
       <div>
-        <h2 className="text-base font-semibold text-text-primary">This room in {parentName}</h2>
-        <p className="mt-0.5 text-sm text-text-muted">
+        <h2 className="text-base font-semibold text-fg">This room in {parentName}</h2>
+        <p className="mt-0.5 text-sm text-fg-muted">
           Four things this space decides about the house it sits in. Membership never crosses: joining here does not join {parentName}, and joining {parentName} does not join here.
         </p>
       </div>
@@ -167,15 +167,15 @@ export default function RoomDials({ space, parentName, save }: Props) {
                 onClick={() => chooseListing(l)}
                 className={`flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                   active
-                    ? 'border-brand-green bg-brand-green/10 text-text-primary'
-                    : 'border-border-subtle bg-surface-1 text-text-secondary hover:border-border-default'
+                    ? 'border-accent bg-accent/10 text-fg'
+                    : 'border-line-subtle bg-surface text-fg-secondary hover:border-line'
                 }`}
               >
                 <span className="inline-flex items-center gap-1.5 text-sm font-medium">
-                  <span className={active ? 'text-brand-dark-green' : 'text-text-muted'}>{copy.icon}</span>
+                  <span className={active ? 'text-accent-strong' : 'text-fg-muted'}>{copy.icon}</span>
                   {copy.label}
                 </span>
-                <span className="text-xs text-text-muted">{copy.blurb(parentName)}</span>
+                <span className="text-xs text-fg-muted">{copy.blurb(parentName)}</span>
               </button>
             );
           })}
@@ -214,7 +214,7 @@ export default function RoomDials({ space, parentName, save }: Props) {
         title={`What ${parentName} can read`}
         hint={secret ? 'Nothing flows from a secret room: a folder or an event carrying its name would reveal it.' : 'Read-only, as of now. Whatever this room shows all of its members, and no more.'}
       >
-        <div className="divide-y divide-border-subtle rounded-lg border border-border-subtle">
+        <div className="divide-y divide-line-subtle rounded-lg border border-line-subtle">
           <FlowRow
             title="Context"
             blurb={`This room's notes appear in ${parentName}'s tree as one read-only folder, under this room's name.`}
@@ -234,10 +234,10 @@ export default function RoomDials({ space, parentName, save }: Props) {
 
       {/* Governance */}
       <DialBlock title="Who holds the keys" hint="This room's own admins always do.">
-        <div className="flex items-start justify-between gap-4 rounded-lg border border-border-subtle px-4 py-3">
+        <div className="flex items-start justify-between gap-4 rounded-lg border border-line-subtle px-4 py-3">
           <div>
-            <p className="text-sm font-medium text-text-primary">Managed by {parentName}&apos;s admins too</p>
-            <p className="mt-0.5 text-xs text-text-muted">
+            <p className="text-sm font-medium text-fg">Managed by {parentName}&apos;s admins too</p>
+            <p className="mt-0.5 text-xs text-fg-muted">
               {parentAdmins
                 ? `Whoever administers ${parentName} administers this room — settings, members, connectors. Switching this off makes the room autonomous; only an admin of this space itself can switch it back on.`
                 : canRestoreGovernance
@@ -268,8 +268,8 @@ function DialBlock({ title, hint, children }: { title: string; hint?: string; ch
   return (
     <div className="space-y-2">
       <div>
-        <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
-        {hint && <p className="mt-0.5 text-xs text-text-muted">{hint}</p>}
+        <h3 className="text-sm font-semibold text-fg">{title}</h3>
+        {hint && <p className="mt-0.5 text-xs text-fg-muted">{hint}</p>}
       </div>
       {children}
     </div>
@@ -292,8 +292,8 @@ function DoorPicker({
   note?: string;
 }) {
   return (
-    <div className={`rounded-lg border border-border-subtle px-4 py-3 ${disabled ? 'opacity-60' : ''}`}>
-      <p className="text-sm font-medium text-text-primary">{label}</p>
+    <div className={`rounded-lg border border-line-subtle px-4 py-3 ${disabled ? 'opacity-60' : ''}`}>
+      <p className="text-sm font-medium text-fg">{label}</p>
       <div role="radiogroup" aria-labelledby={`${id}-label`} className="mt-2 flex flex-wrap gap-1.5">
         <span id={`${id}-label`} className="sr-only">{label}</span>
         {DOORS.map((d) => (
@@ -306,15 +306,15 @@ function DoorPicker({
             onClick={() => onChange(d)}
             className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed ${
               value === d
-                ? 'border-brand-green bg-brand-green/10 text-text-primary'
-                : 'border-border-subtle bg-surface-1 text-text-secondary hover:border-border-default'
+                ? 'border-accent bg-accent/10 text-fg'
+                : 'border-line-subtle bg-surface text-fg-secondary hover:border-line'
             }`}
           >
             {DOOR_COPY[d]}
           </button>
         ))}
       </div>
-      {note && <p className="mt-2 text-xs text-text-muted">{note}</p>}
+      {note && <p className="mt-2 text-xs text-fg-muted">{note}</p>}
     </div>
   );
 }
@@ -335,8 +335,8 @@ function FlowRow({
   return (
     <div className={`flex items-start justify-between gap-4 px-4 py-3 ${disabled ? 'opacity-60' : ''}`}>
       <div>
-        <p className="text-sm font-medium text-text-primary">{title}</p>
-        <p className="mt-0.5 text-xs text-text-muted">{blurb}</p>
+        <p className="text-sm font-medium text-fg">{title}</p>
+        <p className="mt-0.5 text-xs text-fg-muted">{blurb}</p>
       </div>
       <Toggle checked={checked} disabled={disabled} onChange={onChange} aria-label={`${title} flows up`} />
     </div>

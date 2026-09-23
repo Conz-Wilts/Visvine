@@ -17,7 +17,7 @@ interface Props {
   onDelete?: () => Promise<void>;
 }
 
-const FIELD = 'w-full px-3 py-2 border border-border-subtle rounded-xl text-sm bg-surface-1 text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30';
+const FIELD = 'w-full px-3 py-2 border border-line-subtle rounded-xl text-sm bg-surface text-fg focus:outline-none focus:ring-2 focus:ring-accent-strong/30';
 
 export default function EditSectionModal({ open, section, onClose, onSave, onDelete }: Props) {
   const [title, setTitle] = useState('');
@@ -53,21 +53,21 @@ export default function EditSectionModal({ open, section, onClose, onSave, onDel
     <EditModal title={section ? 'Edit section' : 'Add section'} open={open} onClose={onClose} size="sm">
       <form onSubmit={submit} className="p-6 space-y-4">
         <div>
-          <label className="block text-xs font-medium text-brand-grey mb-1">Name</label>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Name</label>
           <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={MAX_TITLE}
                  placeholder="Education" className={FIELD} autoFocus />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-brand-grey mb-1">Holds</label>
+          <label className="block text-xs font-medium text-fg-muted mb-1">Holds</label>
           <div className="flex flex-wrap gap-2">
             {SECTION_KINDS.map((row) => (
               <button key={row.kind} type="button" onClick={() => setKind(row.kind)}
                       aria-pressed={kind === row.kind}
                       className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
                         kind === row.kind
-                          ? 'bg-brand-green text-white'
-                          : 'bg-surface-2 text-text-secondary hover:bg-surface-3'
+                          ? 'bg-accent text-white'
+                          : 'bg-surface-subtle text-fg-secondary hover:bg-surface-muted'
                       }`}>
                 {row.label}
               </button>
@@ -77,7 +77,7 @@ export default function EditSectionModal({ open, section, onClose, onSave, onDel
 
         {hasBody(kind) && (
           <div>
-            <label className="block text-xs font-medium text-brand-grey mb-1">Text</label>
+            <label className="block text-xs font-medium text-fg-muted mb-1">Text</label>
             <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={8} maxLength={20000}
                       className={`${FIELD} resize-y`} />
           </div>
@@ -86,7 +86,7 @@ export default function EditSectionModal({ open, section, onClose, onSave, onDel
         <div className="flex items-center justify-between gap-3 pt-2">
           {onDelete ? (
             <button type="button" onClick={() => void onDelete().then(onClose)}
-                    className="text-xs text-red-600 hover:text-red-800">
+                    className="text-xs text-danger hover:text-danger-strong">
               Delete
             </button>
           ) : <span />}

@@ -65,13 +65,13 @@ function Thumb({ item }: { item: LibraryItem }) {
         loading="lazy"
         referrerPolicy="no-referrer"
         onError={() => setBroken(true)}
-        className="h-10 w-10 shrink-0 rounded-lg bg-surface-2 object-cover"
+        className="h-10 w-10 shrink-0 rounded-lg bg-surface-subtle object-cover"
       />
     );
   }
   if (item.kind === 'link') {
     return (
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-text-muted">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-surface-subtle text-fg-muted">
         {item.faviconUrl && !broken ? (
           <img src={item.faviconUrl} alt="" className="h-5 w-5" referrerPolicy="no-referrer" onError={() => setBroken(true)} />
         ) : (
@@ -88,12 +88,12 @@ function Row({ item }: { item: LibraryItem }) {
     <>
       <Thumb item={item} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-text-primary">{item.name}</span>
-        <span className="block truncate text-xs text-text-muted">{stateLine(item)}</span>
+        <span className="block truncate text-sm font-medium text-fg">{item.name}</span>
+        <span className="block truncate text-xs text-fg-muted">{stateLine(item)}</span>
       </span>
     </>
   );
-  const className = 'flex items-center gap-3 px-2 py-2.5 transition-colors hover:bg-surface-2';
+  const className = 'flex items-center gap-3 px-2 py-2.5 transition-colors hover:bg-surface-subtle';
   if (item.href) {
     return <Link href={item.href} className={className}>{body}</Link>;
   }
@@ -237,7 +237,7 @@ export default function ResourcesView() {
       onDrop={onDrop}
     >
       {dragging && (
-        <div className="pointer-events-none absolute inset-3 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand-green bg-surface-1/80 text-sm font-medium text-brand-green">
+        <div className="pointer-events-none absolute inset-3 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-accent bg-surface/80 text-sm font-medium text-accent">
           Drop to add
         </div>
       )}
@@ -255,7 +255,7 @@ export default function ResourcesView() {
         <div className="ml-auto flex items-center gap-2">
           <form
             onSubmit={(e) => { e.preventDefault(); void addLink(link.trim()); }}
-            className="flex h-9 items-center rounded-lg bg-surface-1 px-3 ring-1 ring-border-subtle focus-within:ring-border-default"
+            className="flex h-9 items-center rounded-lg bg-surface px-3 ring-1 ring-line-subtle focus-within:ring-line"
           >
             <input
               value={link}
@@ -263,7 +263,7 @@ export default function ResourcesView() {
               placeholder="Paste a link"
               aria-label="Add link"
               disabled={busy}
-              className="w-44 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+              className="w-44 bg-transparent text-sm text-fg placeholder:text-fg-muted focus:outline-none"
             />
           </form>
           <input
@@ -280,10 +280,10 @@ export default function ResourcesView() {
             type="button"
             onClick={() => fileInput.current?.click()}
             disabled={busy}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-text-secondary ring-1 ring-border-subtle transition-colors hover:bg-surface-2 hover:text-text-primary disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-fg-secondary ring-1 ring-line-subtle transition-colors hover:bg-surface-subtle hover:text-fg disabled:opacity-50"
           >
             {busy
-              ? <span className="block h-4 w-4 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+              ? <span className="block h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
               : <UploadIcon className="h-4 w-4" />}
             Upload
           </button>
@@ -292,9 +292,9 @@ export default function ResourcesView() {
 
       <ContentReveal ready={page !== null} id="panel-resources" role="tabpanel">
         <div className="w-full px-4 pt-4 pb-8">
-          {problem && <p className="px-2 pb-2 text-sm text-red-600">{problem}</p>}
+          {problem && <p className="px-2 pb-2 text-sm text-danger">{problem}</p>}
           {items.length > 0 && (
-            <div className="flex flex-col divide-y divide-border-subtle">
+            <div className="flex flex-col divide-y divide-line-subtle">
               {items.map((item) => <Row key={item.key} item={item} />)}
             </div>
           )}
@@ -303,7 +303,7 @@ export default function ResourcesView() {
               type="button"
               onClick={() => void loadMore()}
               disabled={loadingMore}
-              className="mt-3 px-2 text-sm font-medium text-text-secondary hover:text-text-primary disabled:opacity-50"
+              className="mt-3 px-2 text-sm font-medium text-fg-secondary hover:text-fg disabled:opacity-50"
             >
               {loadingMore ? 'Loading…' : 'More'}
             </button>

@@ -24,12 +24,12 @@ export default function PageError({
       role="status"
       className={`flex flex-wrap items-center justify-center gap-3 text-center ${size === 'page' ? 'py-24' : 'py-10'}`}
     >
-      <p className="text-sm text-text-muted">{message}</p>
+      <p className="text-sm text-fg-muted">{message}</p>
       {onRetry && (
         <button
           type="button"
           onClick={onRetry}
-          className="rounded-lg border border-border-default px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
+          className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-fg-secondary transition-colors hover:bg-surface-subtle hover:text-fg"
         >
           Retry
         </button>

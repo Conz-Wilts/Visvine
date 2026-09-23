@@ -9,6 +9,7 @@ import Toggle from '@/components/ui/Toggle';
 import { useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { deleteAuthoredTool, uninstallTool } from '@/features/tools/lib/client';
+import { motion } from '@visvine/tokens';
 
 interface Props {
   space: Space;
@@ -102,7 +103,7 @@ function LockToggle({ label, locked, always, onChange }: {
       data-no-drag
       title={title}
       className={`flex shrink-0 items-center gap-1.5 ${
-        locked || always ? 'text-text-secondary' : 'text-text-muted'
+        locked || always ? 'text-fg-secondary' : 'text-fg-muted'
       }`}
     >
       <LockIcon className="h-3.5 w-3.5" />
@@ -236,7 +237,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
               { transform: 'translateY(0) scale(1)', offset: 1 },
             ]
           : [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
-        { duration: moved ? 420 : 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+        { duration: moved ? 420 : 320, easing: motion.easeCss.enter },
       );
       if (moved && flipKey.startsWith('row:')) {
         el.animate(
@@ -388,7 +389,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
       // Settle the card from wherever the cursor left it into its new slot.
       el.animate(
         [{ transform: `translateY(${translate}px) scale(1.02)` }, { transform: 'translateY(0) scale(1)' }],
-        { duration: 280, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+        { duration: 280, easing: motion.easeCss.enter },
       );
     }
     setDraggingKey(null);
@@ -579,7 +580,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
         // the dividers unevenly spaced.
         className={`cursor-grab select-none py-4 ${
           isDragging
-            ? 'relative z-10 -mx-3 cursor-grabbing rounded-xl !border-transparent bg-surface-1 px-3 shadow-float ring-1 ring-border-subtle'
+            ? 'relative z-10 -mx-3 cursor-grabbing rounded-xl !border-transparent bg-surface px-3 shadow-float ring-1 ring-line-subtle'
             : ''
         }`}
       >
@@ -599,17 +600,17 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
               applySequence(moveKey(sequence, feature.key, e.key === 'ArrowUp' ? -1 : 1), true);
             }}
             aria-label={`Reorder ${feature.label} (position ${position} of ${sequence.length}) — use arrow keys`}
-            className="shrink-0 rounded text-text-muted transition-colors hover:text-text-secondary focus-visible:text-text-secondary"
+            className="shrink-0 rounded text-fg-muted transition-colors hover:text-fg-secondary focus-visible:text-fg-secondary"
           >
             <GripIcon />
           </button>
           <div className="flex min-w-0 flex-1 items-center gap-3.5">
-            <span className="shrink-0 text-text-secondary">
+            <span className="shrink-0 text-fg-secondary">
               {feature.icon}
             </span>
             {/* Sized like a Types row's name: this list IS the page, so a tool
                 reads as a heading rather than as a settings line. */}
-            <span className="min-w-0 truncate text-base font-semibold text-text-primary">
+            <span className="min-w-0 truncate text-base font-semibold text-fg">
               {feature.label}
             </span>
           </div>
@@ -633,7 +634,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
               onClick={() => { setRemoveInstallError(null); setConfirmRemoveKey(feature.key); }}
               aria-label={`Remove ${feature.label}`}
               title={`Remove ${feature.label}`}
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500"
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-fg-muted transition-colors hover:bg-danger-bright/10 hover:text-danger-bright"
             >
               <Trash2Icon className="h-4 w-4" />
             </button>
@@ -671,16 +672,16 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
           <button
             type="button"
             onClick={() => { setPickerQuery(''); setPickerOpen(true); }}
-            className="-my-1.5 inline-flex items-center gap-1 rounded-lg bg-brand-green px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+            className="-my-1.5 inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
           >
             <PlusIcon />
             Add tool
           </button>
         }
       >
-        <div className="-mt-3 divide-y divide-border-subtle">
+        <div className="-mt-3 divide-y divide-line-subtle">
         {railKeys.length === 0 && (
-          <p className="py-3 text-sm text-text-muted">
+          <p className="py-3 text-sm text-fg-muted">
             Every tool is in More. Drag one back up here to give it a sidebar row.
           </p>
         )}
@@ -704,8 +705,8 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
         <div
           data-flip-key={`row:${MORE_DIVIDER}`}
           // min-h keeps an empty More a drop target now that it has no hint text.
-          className={`-mt-3 min-h-14 divide-y divide-border-subtle rounded-xl ring-1 transition-colors ${
-            draggingKey ? 'ring-brand-green/60 bg-brand-green/5' : 'ring-transparent'
+          className={`-mt-3 min-h-14 divide-y divide-line-subtle rounded-xl ring-1 transition-colors ${
+            draggingKey ? 'ring-accent/60 bg-accent/5' : 'ring-transparent'
           }`}
         >
           {moreKeys.map(renderToolRow)}
@@ -721,18 +722,18 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
           title="No sidebar row"
           description="Reached elsewhere in the app, so there's nothing to reorder — just on or off."
         >
-          <div className="-mt-3 divide-y divide-border-subtle">
+          <div className="-mt-3 divide-y divide-line-subtle">
             {enabledUnplaceable.length === 0 ? (
-              <p className="py-3 text-sm text-text-muted">
+              <p className="py-3 text-sm text-fg-muted">
                 Nothing on. Add one from the picker above.
               </p>
             ) : (
               enabledUnplaceable.map(feature => (
                 <div key={feature.key} className="flex items-center gap-3.5 py-4">
-                  <span className="shrink-0 text-text-secondary">{feature.icon}</span>
+                  <span className="shrink-0 text-fg-secondary">{feature.icon}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-base font-semibold text-text-primary">{feature.label}</div>
-                    <div className="truncate text-sm text-text-muted">{feature.description}</div>
+                    <div className="truncate text-base font-semibold text-fg">{feature.label}</div>
+                    <div className="truncate text-sm text-fg-muted">{feature.description}</div>
                   </div>
                   <Toggle
                     checked
@@ -766,11 +767,11 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
             />
           )}
           {availableFeatures.length === 0 ? (
-            <p className="py-6 text-center text-sm text-text-muted">
+            <p className="py-6 text-center text-sm text-fg-muted">
               Every tool is already added.
             </p>
           ) : pickerResults.length === 0 ? (
-            <p className="py-6 text-center text-sm text-text-muted">No tools match “{pickerQuery}”.</p>
+            <p className="py-6 text-center text-sm text-fg-muted">No tools match “{pickerQuery}”.</p>
           ) : (
             <ul className="space-y-1">
               {pickerResults.map(feature => (
@@ -785,16 +786,16 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
                       }
                       if (availableFeatures.length <= 1) setPickerOpen(false);
                     }}
-                    className="flex w-full items-start gap-3 rounded-lg p-2.5 text-left transition-colors hover:bg-surface-2"
+                    className="flex w-full items-start gap-3 rounded-lg p-2.5 text-left transition-colors hover:bg-surface-subtle"
                   >
-                    <span className="shrink-0 text-text-secondary">
+                    <span className="shrink-0 text-fg-secondary">
                       {feature.icon}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-medium text-text-primary">{feature.label}</span>
-                      <span className="mt-0.5 block text-xs text-text-muted">{feature.description}</span>
+                      <span className="block text-sm font-medium text-fg">{feature.label}</span>
+                      <span className="mt-0.5 block text-xs text-fg-muted">{feature.description}</span>
                     </span>
-                    <span className="mt-0.5 shrink-0 text-text-muted">
+                    <span className="mt-0.5 shrink-0 text-fg-muted">
                       <PlusIcon />
                     </span>
                   </button>

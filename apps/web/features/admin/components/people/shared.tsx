@@ -181,7 +181,7 @@ export function LevelSelect({
         if (e.target.value === '__remove') onRemove?.();
         else onChange(e.target.value as AccessLevelName);
       }}
-      className="h-8 shrink-0 rounded-lg border border-border-default bg-surface-1 px-2 text-xs font-medium text-text-secondary disabled:opacity-40"
+      className="h-8 shrink-0 rounded-lg border border-line bg-surface px-2 text-xs font-medium text-fg-secondary disabled:opacity-40"
     >
       {ACCESS_LEVELS.map((l) => (
         <option key={l.name} value={l.name}>
@@ -203,7 +203,7 @@ export function PathLabel({ path, contextName, paths }: {
   return (
     <span className="min-w-0 flex-1 truncate">
       {label}
-      {hint && <span className="ml-1.5 text-xs text-text-muted">{hint}</span>}
+      {hint && <span className="ml-1.5 text-xs text-fg-muted">{hint}</span>}
     </span>
   );
 }
@@ -263,23 +263,23 @@ function PathPicker({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-9 w-full items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 text-left text-sm text-text-secondary"
+        className="flex h-9 w-full items-center gap-2 rounded-xl border border-line bg-surface px-3 text-left text-sm text-fg-secondary"
       >
         {value === null ? (
-          <span className="min-w-0 flex-1 truncate text-text-muted">{placeholder}</span>
+          <span className="min-w-0 flex-1 truncate text-fg-muted">{placeholder}</span>
         ) : (
           <PathLabel path={value} contextName={contextName} paths={paths} />
         )}
         <ChevronDownIcon className={`h-4 w-4 shrink-0 opacity-50 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-full min-w-[260px] overflow-hidden rounded-xl border border-border-subtle bg-surface-1 shadow-float">
+        <div className="absolute left-0 top-full z-50 mt-1 w-full min-w-[260px] overflow-hidden rounded-xl border border-line-subtle bg-surface shadow-float">
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter folders and notes…"
-            className="w-full border-b border-border-subtle bg-transparent px-3 py-2 text-sm outline-none"
+            className="w-full border-b border-line-subtle bg-transparent px-3 py-2 text-sm outline-none"
           />
           <div className="max-h-64 overflow-y-auto py-1">
             {filtered.map((p) => (
@@ -287,7 +287,7 @@ function PathPicker({
                 key={p.path || '<root>'}
                 type="button"
                 onClick={() => pick(p.path)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-text-secondary transition-colors hover:bg-surface-2"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-fg-secondary transition-colors hover:bg-surface-subtle"
               >
                 {p.path === '' ? (
                   <UsersIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
@@ -300,7 +300,7 @@ function PathPicker({
               </button>
             ))}
             {filtered.length === 0 && (
-              <p className="px-3 py-2 text-sm text-text-muted">No matches.</p>
+              <p className="px-3 py-2 text-sm text-fg-muted">No matches.</p>
             )}
           </div>
         </div>
@@ -354,7 +354,7 @@ export function GrantEditor({
   return (
     <div className="space-y-1">
       {grants.map((grant) => (
-        <div key={grant.id} className="flex items-center gap-2.5 rounded-lg px-1 py-1 text-sm text-text-primary">
+        <div key={grant.id} className="flex items-center gap-2.5 rounded-lg px-1 py-1 text-sm text-fg">
           <PathLabel path={grant.resourcePath} contextName={contextName} paths={paths} />
           <LevelSelect
             value={levelName(grant.level) ?? 'view'}
@@ -377,7 +377,7 @@ export function GrantEditor({
           />
         </div>
       ))}
-      {grants.length === 0 && <p className="px-1 text-xs text-text-muted">{emptyText}</p>}
+      {grants.length === 0 && <p className="px-1 text-xs text-fg-muted">{emptyText}</p>}
       <div className="flex items-center gap-2 pt-1">
         <PathPicker
           paths={paths}

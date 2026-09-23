@@ -136,8 +136,8 @@ export default function AddMembersModal({
       title="Add members"
       size="sm"
       footer={
-        <div className="flex items-center justify-end gap-2 border-t border-border-subtle px-6 py-3">
-          {error && <p className="mr-auto min-w-0 truncate text-sm text-red-700">{error}</p>}
+        <div className="flex items-center justify-end gap-2 border-t border-line-subtle px-6 py-3">
+          {error && <p className="mr-auto min-w-0 truncate text-sm text-danger-strong">{error}</p>}
           <Button variant="neutral" onClick={onClose}>
             Cancel
           </Button>
@@ -158,13 +158,13 @@ export default function AddMembersModal({
         {selectedUserObjects.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-6 pb-3">
             {selectedUserObjects.map((user) => (
-              <div key={user.id} className="flex items-center gap-1.5 rounded-full bg-brand-green/10 border border-brand-green/20 pl-1.5 pr-2 py-1">
+              <div key={user.id} className="flex items-center gap-1.5 rounded-full bg-accent/10 border border-accent/20 pl-1.5 pr-2 py-1">
                 <Avatar name={user.name} size="chip" />
-                <span className="text-xs font-medium text-brand-green">{user.name.split(' ')[0]}</span>
+                <span className="text-xs font-medium text-accent">{user.name.split(' ')[0]}</span>
                 <button
                   type="button"
                   onClick={() => handleToggleMember(user.id)}
-                  className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-brand-green/20 text-brand-green hover:bg-brand-green/40 transition-colors"
+                  className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent/20 text-accent hover:bg-accent/40 transition-colors"
                 >
                   <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
@@ -191,10 +191,10 @@ export default function AddMembersModal({
             <div className="section-y-1 py-2">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 rounded-xl p-3">
-                  <div className="h-9 w-9 animate-pulse rounded-full bg-surface-3 shrink-0" />
+                  <div className="h-9 w-9 animate-pulse rounded-full bg-surface-muted shrink-0" />
                   <div className="flex-1 section-y-2">
-                    <div className="h-3 w-1/2 animate-pulse rounded bg-surface-3" />
-                    <div className="h-2.5 w-1/3 animate-pulse rounded bg-surface-3" />
+                    <div className="h-3 w-1/2 animate-pulse rounded bg-surface-muted" />
+                    <div className="h-2.5 w-1/3 animate-pulse rounded bg-surface-muted" />
                   </div>
                 </div>
               ))}
@@ -202,7 +202,7 @@ export default function AddMembersModal({
           )}
 
           {!loading && eligibleUsers.length === 0 && directoryPeople.length === 0 && (
-            <p className="py-10 text-center text-sm text-text-muted">No one found</p>
+            <p className="py-10 text-center text-sm text-fg-muted">No one found</p>
           )}
 
           {/* ── Active platform users ── */}
@@ -217,13 +217,13 @@ export default function AddMembersModal({
                     type="button"
                     onClick={() => handleToggleMember(user.id)}
                     className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
-                      isSelected ? 'bg-surface-3' : 'hover:bg-surface-2'
+                      isSelected ? 'bg-surface-muted' : 'hover:bg-surface-subtle'
                     }`}
                   >
                     <div className="relative shrink-0">
                       <Avatar name={user.name} />
                       {isSelected && (
-                        <div className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-brand-green ring-2 ring-white">
+                        <div className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent ring-2 ring-white">
                           <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                           </svg>
@@ -231,8 +231,8 @@ export default function AddMembersModal({
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-text-primary">{user.name}</p>
-                      <p className="truncate text-xs text-text-muted">{user.email}</p>
+                      <p className="text-sm font-medium text-fg">{user.name}</p>
+                      <p className="truncate text-xs text-fg-muted">{user.email}</p>
                     </div>
                   </button>
                 );
@@ -243,7 +243,7 @@ export default function AddMembersModal({
           {/* ── Directory people (no active account) ── */}
           {!loading && directoryPeople.length > 0 && (
             <div className="pb-2">
-              <p className="mt-2 border-t border-border-subtle px-3 pb-1.5 pt-3 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+              <p className="mt-2 border-t border-line-subtle px-3 pb-1.5 pt-3 text-[11px] font-semibold uppercase tracking-wider text-fg-muted">
                 Not on Visvine
               </p>
               {directoryPeople.map((person) => {
@@ -257,8 +257,8 @@ export default function AddMembersModal({
                       <Avatar name={person.name} imageUrl={person.imageUrl} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-text-secondary">{person.name}</p>
-                      <p className="truncate text-xs text-text-muted">
+                      <p className="text-sm font-medium text-fg-secondary">{person.name}</p>
+                      <p className="truncate text-xs text-fg-muted">
                         {person.subtitle ?? person.spaceName ?? ''}
                       </p>
                     </div>
@@ -268,8 +268,8 @@ export default function AddMembersModal({
                       onClick={() => handleInvite(person)}
                       className={`shrink-0 flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-all duration-150 ${
                         isCopied
-                          ? 'border-brand-green bg-brand-green/10 text-brand-green'
-                          : 'border-border-default text-text-muted hover:border-brand-green hover:bg-brand-green/5 hover:text-brand-green'
+                          ? 'border-accent bg-accent/10 text-accent'
+                          : 'border-line text-fg-muted hover:border-accent hover:bg-accent/5 hover:text-accent'
                       }`}
                     >
                       {isCopied ? (

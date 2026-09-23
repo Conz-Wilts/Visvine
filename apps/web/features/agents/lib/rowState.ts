@@ -111,11 +111,11 @@ export function statusLine(a: AgentSummary, now = Date.now()): StatusLine {
 
 /** The dot that carries a tone. `live` breathes. */
 export const TONE_DOT: Record<Tone, string> = {
-  ok: 'bg-brand-green',
-  warn: 'bg-amber-500',
-  bad: 'bg-red-500',
-  muted: 'bg-border-default',
-  live: 'bg-sky-500 dot-pulse [--pulse-color:rgba(14,165,233,0.4)]',
+  ok: 'bg-accent',
+  warn: 'bg-warning-bright',
+  bad: 'bg-danger-bright',
+  muted: 'bg-line',
+  live: 'bg-info-bright dot-pulse [--pulse-color:color-mix(in_srgb,var(--vv-color-info-bright)_40%,transparent)]',
 };
 
 export function fmtAgo(iso: string | null, now = Date.now()): string {

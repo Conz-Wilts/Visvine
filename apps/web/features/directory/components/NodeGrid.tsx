@@ -37,7 +37,7 @@ const STAGGER_STEP_MS = 45
 
 function NodeCardSkeleton() {
   return (
-    <div className="rounded-2xl overflow-hidden w-full flex flex-col bg-surface-1 border-4 border-surface-3">
+    <div className="rounded-2xl overflow-hidden w-full flex flex-col bg-surface border-4 border-surface-muted">
       <Skeleton className="aspect-square w-full shrink-0 rounded-none" />
       <div className="px-4 pt-3 pb-4 flex flex-col flex-1 items-center">
         <Skeleton className="h-4 w-3/4" />

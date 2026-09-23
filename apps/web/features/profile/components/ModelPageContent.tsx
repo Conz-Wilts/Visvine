@@ -112,7 +112,7 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
     );
   }
   if (error || !data || !spaceId) {
-    return <p className="py-10 text-center text-sm text-text-muted">{error ?? 'Model not found'}</p>;
+    return <p className="py-10 text-center text-sm text-fg-muted">{error ?? 'Model not found'}</p>;
   }
 
   const { model, history } = data;
@@ -135,8 +135,8 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
       <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <ConnectorLogo entry={entry} size="lg" />
-          <h1 className="truncate font-title text-xl font-semibold text-text-primary">{model.title ?? model.name}</h1>
-          {info && <span className="font-mono text-[12px] text-text-muted">{info.modelRef ?? info.provider}</span>}
+          <h1 className="truncate font-title text-xl font-semibold text-fg">{model.title ?? model.name}</h1>
+          {info && <span className="font-mono text-[12px] text-fg-muted">{info.modelRef ?? info.provider}</span>}
           <span className={`${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>{status.label}</span>
         </div>
         <Toggle
@@ -148,18 +148,18 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
       </div>
 
       {status.tone !== 'ok' && (
-        <p className="flex items-start gap-2 pb-5 text-xs text-text-muted">
-          <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
+        <p className="flex items-start gap-2 pb-5 text-xs text-fg-muted">
+          <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0 text-warning-bright" />
           {status.hint}
         </p>
       )}
 
       {model.invalid && (
-        <div className="mb-5 flex items-start gap-2.5 border-l-2 border-red-500 py-1 pl-3">
-          <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+        <div className="mb-5 flex items-start gap-2.5 border-l-2 border-danger-bright py-1 pl-3">
+          <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
           <div className="min-w-0">
-            <p className="break-words text-sm text-red-700">{model.invalid}</p>
-            <Link href={`/directory/${encodeURIComponent(nodeId)}?tab=raw`} className="mt-1 inline-block text-xs font-semibold text-red-700 underline">
+            <p className="break-words text-sm text-danger-strong">{model.invalid}</p>
+            <Link href={`/directory/${encodeURIComponent(nodeId)}?tab=raw`} className="mt-1 inline-block text-xs font-semibold text-danger-strong underline">
               Fix it in the Raw tab
             </Link>
           </div>
@@ -167,7 +167,7 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
       )}
 
       {model.legacy && (
-        <p className="mb-5 text-xs text-text-muted">
+        <p className="mb-5 text-xs text-fg-muted">
           This note is still at <code className="font-mono">{model.path}</code>, the shape before models had a folder of their own.
           It works as it is; <code className="font-mono">db:models:migrate</code> moves it to <code className="font-mono">models/{model.name}.md</code>.
         </p>
@@ -181,7 +181,7 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
           action={
             editing ? undefined : (
               <button type="button" onClick={openEditor} aria-label="Change model" title="Change model"
-                className="shrink-0 rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary">
+                className="shrink-0 rounded-md p-1.5 text-fg-muted transition-colors hover:bg-surface-subtle hover:text-fg">
                 <PencilIcon className="h-3.5 w-3.5" />
               </button>
             )
@@ -212,14 +212,14 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
               {provider === 'custom' && (
                 <input type="url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://llm.example.com/v1/" className={FIELD} required />
               )}
-              <p className="text-xs text-text-muted">
+              <p className="text-xs text-fg-muted">
                 Changing the provider changes which key this note stands for.{' '}
                 {provider === 'custom'
                   ? 'The base URL is an OpenAI-compatible https endpoint — where this space’s agents send their context, so only an admin can change it.'
                   : 'The endpoint is the provider’s own, pinned by Visvine.'}
               </p>
               {saveError && (
-                <p className="flex items-start gap-1.5 text-xs text-red-600">
+                <p className="flex items-start gap-1.5 text-xs text-danger">
                   <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
                   <span className="min-w-0 break-words">{saveError}</span>
                 </p>
@@ -231,15 +231,15 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
             </form>
           ) : (
             <div className="flex flex-col gap-3">
-              <p className="text-sm text-text-primary">
+              <p className="text-sm text-fg">
                 {info.providerLabel}
-                <span className="ml-2 font-mono text-[12px] text-text-muted">{info.baseURL}</span>
+                <span className="ml-2 font-mono text-[12px] text-fg-muted">{info.baseURL}</span>
               </p>
-              <p className="text-sm text-text-primary">
-                Runs <code className="rounded-md bg-surface-2 px-2 py-0.5 font-mono text-[12px]">{info.modelRef ?? 'no model named'}</code>
+              <p className="text-sm text-fg">
+                Runs <code className="rounded-md bg-surface-subtle px-2 py-0.5 font-mono text-[12px]">{info.modelRef ?? 'no model named'}</code>
               </p>
               {info.models.length > 1 && (
-                <p className="text-xs text-text-muted">
+                <p className="text-xs text-fg-muted">
                   A brief may pin any of{' '}
                   {info.models.map((m, i) => (
                     <span key={m.id}>{i > 0 && ', '}<code className="font-mono">{info.provider}/{m.id}</code></span>
@@ -247,7 +247,7 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
                   on this key.
                 </p>
               )}
-              {saveError && !editing && <p className="text-xs text-red-600">{saveError}</p>}
+              {saveError && !editing && <p className="text-xs text-danger">{saveError}</p>}
             </div>
           )}
         </Section>
@@ -260,7 +260,7 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
             type="button"
             onClick={() => setKeyOpen((o) => !o)}
             className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[12px] transition-colors ${
-              model.key.set ? 'border-border-default text-text-primary hover:bg-surface-2' : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+              model.key.set ? 'border-line text-fg hover:bg-surface-subtle' : 'border-warning-line bg-warning-wash text-warning-strong hover:bg-warning-wash'
             }`}
             title={model.key.set ? `Set ${model.key.updatedAt ? timeAgo(new Date(model.key.updatedAt).getTime()) : ''} — click to replace or clear` : 'Not stored — click to add'}
           >
@@ -269,7 +269,7 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
             {!model.key.set && <span className="text-[10px] font-semibold uppercase">missing</span>}
           </button>
           {keyOpen && <SecretEditor secret={model.key} spaceId={spaceId} onChanged={() => void reload()} onClose={() => setKeyOpen(false)} />}
-          <p className="mt-2 text-xs text-text-muted">
+          <p className="mt-2 text-xs text-fg-muted">
             One key per provider, shared by every agent in this space. Encrypted on save, never shown again, and never
             reachable from a run — a model is not a connector.
           </p>
@@ -281,7 +281,7 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
         <Section title="Who has run on it" meta={`last ${history.runs.length} runs`}>
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="border-b border-border-subtle text-left text-xs text-text-muted">
+              <tr className="border-b border-line-subtle text-left text-xs text-fg-muted">
                 <th className="py-1 pr-3 font-normal" />
                 <th className="py-1 pr-3 text-right font-normal">Runs</th>
                 <th className="py-1 pr-3 text-right font-normal">Tokens</th>
@@ -290,16 +290,16 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
             </thead>
             <tbody>
               {history.users.map((u) => (
-                <tr key={u.user.id} className="border-b border-border-subtle last:border-b-0">
-                  <td className="py-1.5 pr-3 text-text-primary">{u.user.name}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{u.runs}</td>
-                  <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{fmtTokens(u.promptTokens + u.completionTokens)}</td>
-                  <td className="py-1.5 text-right text-text-muted">{timeAgo(new Date(u.lastAt).getTime())}</td>
+                <tr key={u.user.id} className="border-b border-line-subtle last:border-b-0">
+                  <td className="py-1.5 pr-3 text-fg">{u.user.name}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-fg-muted">{u.runs}</td>
+                  <td className="py-1.5 pr-3 text-right tabular-nums text-fg-muted">{fmtTokens(u.promptTokens + u.completionTokens)}</td>
+                  <td className="py-1.5 text-right text-fg-muted">{timeAgo(new Date(u.lastAt).getTime())}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="mt-2 text-xs text-text-muted">
+          <p className="mt-2 text-xs text-fg-muted">
             A run counts for the person it ran for — the subscriber a scheduled fire served, or whoever pressed Run.
           </p>
         </Section>
@@ -309,12 +309,12 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
       {info && (
         <Section title="History" meta={history.runs.length === 0 ? undefined : `${history.runs.length} recent`}>
           {history.runs.length === 0 ? (
-            <p className="text-sm text-text-muted">No runs on {info.providerLabel} in the last 90 days.</p>
+            <p className="text-sm text-fg-muted">No runs on {info.providerLabel} in the last 90 days.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="border-b border-border-subtle text-left text-xs text-text-muted">
+                  <tr className="border-b border-line-subtle text-left text-xs text-fg-muted">
                     <th className="py-1 pr-3 font-normal">When</th>
                     <th className="py-1 pr-3 font-normal">Agent</th>
                     <th className="py-1 pr-3 font-normal">For</th>
@@ -327,15 +327,15 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
                   {history.runs.map((r) => {
                     const who = r.ranFor ?? r.startedBy;
                     return (
-                      <tr key={r.id} className="border-b border-border-subtle last:border-b-0">
-                        <td className="whitespace-nowrap py-1.5 pr-3 text-text-muted" title={new Date(r.startedAt).toLocaleString()}>{timeAgo(new Date(r.startedAt).getTime())}</td>
-                        <td className="py-1.5 pr-3 font-mono text-[12px] text-text-primary">
+                      <tr key={r.id} className="border-b border-line-subtle last:border-b-0">
+                        <td className="whitespace-nowrap py-1.5 pr-3 text-fg-muted" title={new Date(r.startedAt).toLocaleString()}>{timeAgo(new Date(r.startedAt).getTime())}</td>
+                        <td className="py-1.5 pr-3 font-mono text-[12px] text-fg">
                           <Link href={agentPageHref(r.agent, r.id)} className="hover:underline">{r.agent}</Link>
                         </td>
-                        <td className="py-1.5 pr-3 text-text-primary">{who ? who.name : <span className="text-text-muted">—</span>}</td>
-                        <td className="py-1.5 pr-3 font-mono text-[12px] text-text-muted">{r.model.slice(r.model.indexOf('/') + 1)}</td>
-                        <td className="py-1.5 pr-3 text-right tabular-nums text-text-muted">{fmtTokens(r.promptTokens + r.completionTokens)}</td>
-                        <td className="py-1.5 text-text-muted">{r.status === 'running' ? 'running' : r.terminalReason ?? r.status}</td>
+                        <td className="py-1.5 pr-3 text-fg">{who ? who.name : <span className="text-fg-muted">—</span>}</td>
+                        <td className="py-1.5 pr-3 font-mono text-[12px] text-fg-muted">{r.model.slice(r.model.indexOf('/') + 1)}</td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums text-fg-muted">{fmtTokens(r.promptTokens + r.completionTokens)}</td>
+                        <td className="py-1.5 text-fg-muted">{r.status === 'running' ? 'running' : r.terminalReason ?? r.status}</td>
                       </tr>
                     );
                   })}
@@ -347,8 +347,8 @@ export default function ModelPageContent({ nodeId }: { nodeId: string }) {
       )}
 
       <Section title="Note">
-        <p className="font-mono text-xs text-text-secondary">{model.path}</p>
-        <p className="mt-1.5 text-xs text-text-muted">The note is the model. Read and edit it on the Context and Raw tabs.</p>
+        <p className="font-mono text-xs text-fg-secondary">{model.path}</p>
+        <p className="mt-1.5 text-xs text-fg-muted">The note is the model. Read and edit it on the Context and Raw tabs.</p>
       </Section>
     </div>
   );

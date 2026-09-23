@@ -1,4 +1,5 @@
 import { THEME_ACCENT, PERSON_SILHOUETTE_PATH } from '@/lib/avatarUtils';
+import { palette } from '@visvine/tokens';
 
 interface PersonSilhouetteProps {
   /** Fill colour of the silhouette (the accent/theme colour). Defaults to the theme accent. */
@@ -19,7 +20,7 @@ export default function PersonSilhouette({ color = THEME_ACCENT, className = '' 
     >
       <svg
         viewBox="0 0 24 24"
-        fill="#ffffff"
+        fill={palette.white}
         className="h-[60%] w-[60%]"
         aria-hidden="true"
       >

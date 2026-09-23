@@ -59,7 +59,7 @@ export default function AddFieldForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-2 py-1">
-      <p className="text-[12px] text-text-muted">
+      <p className="text-[12px] text-fg-muted">
         {initial
           ? 'A new name shows everywhere the field does; values keep their key.'
           : `A new column for every ${typeName}, kept on each record and in its note.`}

@@ -33,8 +33,8 @@ const SECTIONS: ConsoleSection[] = [
 
 const swatchRing = (active: boolean, accent: string) =>
   active
-    ? `0 0 0 2px var(--surface-1, white), 0 0 0 4px ${accent}`
-    : 'inset 0 0 0 1px var(--border-subtle, #e5e7eb)';
+    ? `0 0 0 2px var(--vv-color-surface, white), 0 0 0 4px ${accent}`
+    : 'inset 0 0 0 1px var(--vv-color-line-subtle)';
 
 /** One theme set: the accent dot sitting on the set's soft tint. */
 function ThemeSwatch({ t, active, onSelect }: { t: ColorTheme; active: boolean; onSelect: () => void }) {
@@ -43,7 +43,7 @@ function ThemeSwatch({ t, active, onSelect }: { t: ColorTheme; active: boolean; 
       <div
         className="flex h-12 w-16 items-center justify-center rounded-lg transition-all duration-200"
         style={{
-          background: t.accentLight,
+          background: t.accentSoft,
           boxShadow: swatchRing(active, t.accent),
           transform: active ? 'scale(1.08)' : 'scale(1)',
         }}

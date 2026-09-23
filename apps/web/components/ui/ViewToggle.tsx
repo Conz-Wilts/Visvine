@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { motion } from '@visvine/tokens';
 
 export interface ViewToggleOption<T extends string> {
   id: T
@@ -72,13 +73,13 @@ export default function ViewToggle<T extends string>({ options, value, onChange,
     >
       {pillStyle && (
         <span
-          className={`absolute bottom-0 rounded-full bg-brand-green ${size === 'lg' ? 'h-[3px]' : 'h-0.5'}`}
+          className={`absolute bottom-0 rounded-full bg-accent ${size === 'lg' ? 'h-[3px]' : 'h-0.5'}`}
 
           style={{
             left: pillStyle.left,
             width: pillStyle.width,
             transition: animatedRef.current
-              ? 'left 220ms cubic-bezier(0.4,0,0.2,1), width 220ms cubic-bezier(0.4,0,0.2,1)'
+              ? `left 220ms ${motion.easeCss.standard}, width 220ms ${motion.easeCss.standard}`
               : undefined,
           }}
         />
@@ -97,7 +98,7 @@ export default function ViewToggle<T extends string>({ options, value, onChange,
               : size === 'lg'
                 ? 'px-4 text-sm font-medium'
                 : 'px-3 text-xs font-semibold'
-          } ${value === o.id ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}
+          } ${value === o.id ? 'text-fg' : 'text-fg-muted hover:text-fg-secondary'}`}
         >
           {o.icon}
           {o.label}

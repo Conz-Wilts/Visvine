@@ -86,11 +86,11 @@ export default function NewSpaceDialog({ parent, onClose }: {
         <button
           onClick={onClose}
           aria-label="Close"
-          className="absolute right-3 top-3 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+          className="absolute right-3 top-3 rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg"
         >
           <XIcon className="h-5 w-5" />
         </button>
-        <h2 className="text-lg font-semibold text-text-primary">
+        <h2 className="text-lg font-semibold text-fg">
           {parent ? `New sub-space of ${parent.name}` : 'New space'}
         </h2>
         {/* The placeholder is the label — one field needs no heading above it. */}
@@ -103,7 +103,7 @@ export default function NewSpaceDialog({ parent, onClose }: {
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
         />
-        {error && <div className="text-sm text-red-700">{error}</div>}
+        {error && <div className="text-sm text-danger-strong">{error}</div>}
         {/* Create alone: the close button in the corner is already the way out,
             and a Cancel beside it would be the same act said twice. */}
         <div className="flex items-center justify-center">

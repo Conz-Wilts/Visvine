@@ -146,8 +146,8 @@ export default function ThreadPanel({
       {/* ── Empty state when no channel is open ── */}
       {!selectedConversation && (
         <div className="flex h-full flex-col items-center justify-center p-8">
-          <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-surface-2">
-            <HashIcon className="h-9 w-9 text-text-muted" strokeWidth={1.5} />
+          <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-surface-subtle">
+            <HashIcon className="h-9 w-9 text-fg-muted" strokeWidth={1.5} />
           </div>
         </div>
       )}
@@ -155,19 +155,19 @@ export default function ThreadPanel({
       {selectedConversation && (
         <>
           {/* Channel header */}
-          <header className="relative flex items-center justify-between gap-3 border-b border-t border-border-subtle px-4 py-2.5">
+          <header className="relative flex items-center justify-between gap-3 border-b border-t border-line-subtle px-4 py-2.5">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               {isMobile && (
                 <button
                   type="button"
                   onClick={onBackToList}
-                  className="mr-1 rounded-lg p-1.5 text-text-muted hover:bg-surface-3"
+                  className="mr-1 rounded-lg p-1.5 text-fg-muted hover:bg-surface-muted"
                 >
                   <ArrowLeftIcon className="h-5 w-5" />
                 </button>
               )}
               <div
-                className={`min-w-0 ${onToggleDetails ? 'cursor-pointer rounded-lg px-1.5 py-0.5 -mx-1.5 -my-0.5 transition-colors hover:bg-surface-2' : ''}`}
+                className={`min-w-0 ${onToggleDetails ? 'cursor-pointer rounded-lg px-1.5 py-0.5 -mx-1.5 -my-0.5 transition-colors hover:bg-surface-subtle' : ''}`}
                 {...(onToggleDetails ? {
                   role: 'button' as const,
                   tabIndex: 0,
@@ -178,14 +178,14 @@ export default function ThreadPanel({
                   },
                 } : {})}
               >
-                <p className="flex items-center gap-1.5 truncate text-lg font-bold text-text-primary">
+                <p className="flex items-center gap-1.5 truncate text-lg font-bold text-fg">
                   {isAdmin ? (
                     <span className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={() => setShowHeaderIconPicker((v) => !v)}
                         title="Change channel icon"
-                        className="flex items-center justify-center rounded-md p-0.5 transition-colors hover:bg-surface-2"
+                        className="flex items-center justify-center rounded-md p-0.5 transition-colors hover:bg-surface-subtle"
                       >
                         <ChannelIcon icon={selectedConversation.icon} fallback={isFeed ? 'feed' : 'hash'} className="h-5 w-5" />
                       </button>
@@ -217,20 +217,20 @@ export default function ThreadPanel({
                   onClick={onToggleDetails}
                   aria-pressed={detailsShown}
                   title={detailsShown ? 'Hide channel details' : 'Show channel details'}
-                  className={`hidden items-center gap-1.5 rounded-lg border border-border-subtle px-2 py-1 transition-colors xl:flex ${detailsShown ? 'bg-brand-green/10' : 'hover:bg-surface-2'}`}
+                  className={`hidden items-center gap-1.5 rounded-lg border border-line-subtle px-2 py-1 transition-colors xl:flex ${detailsShown ? 'bg-accent/10' : 'hover:bg-surface-subtle'}`}
                 >
                   <span className="flex -section-x-1.5">
                     {selectedConversation.participants.slice(0, 3).map((p) => (
-                      <Avatar key={p.id} name={p.name} imageUrl={p.image} size="sm" className="!h-5 !w-5 !text-[9px] ring-2 ring-surface-1" />
+                      <Avatar key={p.id} name={p.name} imageUrl={p.image} size="sm" className="!h-5 !w-5 !text-[9px] ring-2 ring-surface" />
                     ))}
                   </span>
-                  <span className="text-xs font-medium text-text-secondary">{selectedConversation.participants.length}</span>
+                  <span className="text-xs font-medium text-fg-secondary">{selectedConversation.participants.length}</span>
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => void openHeaderPanel('saved')}
-                className={`rounded-lg p-2 transition-colors ${headerPanel === 'saved' ? 'bg-brand-green/10 text-brand-dark-green' : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'}`}
+                className={`rounded-lg p-2 transition-colors ${headerPanel === 'saved' ? 'bg-accent/10 text-accent-strong' : 'text-fg-muted hover:bg-surface-muted hover:text-fg-secondary'}`}
                 title="Saved messages"
               >
                 <StarIcon className="h-4 w-4" />
@@ -238,7 +238,7 @@ export default function ThreadPanel({
               <button
                 type="button"
                 onClick={() => setShowMessageSearch((v) => !v)}
-                className={`rounded-lg p-2 transition-colors ${showMessageSearch ? 'bg-brand-green/10 text-brand-dark-green' : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'}`}
+                className={`rounded-lg p-2 transition-colors ${showMessageSearch ? 'bg-accent/10 text-accent-strong' : 'text-fg-muted hover:bg-surface-muted hover:text-fg-secondary'}`}
                 title="Search in conversation"
               >
                 <SearchIcon className="h-4 w-4" />
@@ -250,7 +250,7 @@ export default function ThreadPanel({
                   <button
                     type="button"
                     onClick={onShowAddMembers}
-                    className="hidden rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-secondary md:block xl:hidden"
+                    className="hidden rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg-secondary md:block xl:hidden"
                     title="Add members"
                   >
                     <UserPlusIcon className="h-4 w-4" />
@@ -258,7 +258,7 @@ export default function ThreadPanel({
                   <button
                     type="button"
                     onClick={onRenameChannel}
-                    className="hidden rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-secondary md:block xl:hidden"
+                    className="hidden rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-muted hover:text-fg-secondary md:block xl:hidden"
                     title="Rename channel"
                   >
                     <PencilIcon className="h-4 w-4" />
@@ -269,7 +269,7 @@ export default function ThreadPanel({
               <button
                 type="button"
                 onClick={onLeaveChannel}
-                className="rounded-lg p-2 text-text-muted transition-colors hover:bg-red-50 hover:text-red-500 xl:hidden"
+                className="rounded-lg p-2 text-fg-muted transition-colors hover:bg-danger-wash hover:text-danger-bright xl:hidden"
                 title="Leave channel"
               >
                 <LogOutIcon className="h-4 w-4" />
@@ -278,20 +278,20 @@ export default function ThreadPanel({
 
             {/* Saved-messages dropdown panel */}
             {headerPanel && (
-              <div className="custom-scrollbar absolute right-4 top-full z-30 max-h-96 w-80 overflow-y-auto rounded-xl bg-surface-1 p-2 shadow-float">
+              <div className="custom-scrollbar absolute right-4 top-full z-30 max-h-96 w-80 overflow-y-auto rounded-xl bg-surface p-2 shadow-float">
                 <div className="flex items-center justify-between px-2 pb-1 pt-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
                     Your saved messages
                   </p>
-                  <button type="button" onClick={() => setHeaderPanel(null)} className="text-text-muted hover:text-text-secondary">
+                  <button type="button" onClick={() => setHeaderPanel(null)} className="text-fg-muted hover:text-fg-secondary">
                     <XIcon className="h-3.5 w-3.5" />
                   </button>
                 </div>
                 {panelLoading && (
-                  <p className="px-2 py-4 text-center text-xs text-text-muted">Loading…</p>
+                  <p className="px-2 py-4 text-center text-xs text-fg-muted">Loading…</p>
                 )}
                 {!panelLoading && panelItems.length === 0 && (
-                  <p className="px-2 py-4 text-center text-xs text-text-muted">
+                  <p className="px-2 py-4 text-center text-xs text-fg-muted">
                     Nothing saved yet — hover a message and hit the star.
                   </p>
                 )}
@@ -300,17 +300,17 @@ export default function ThreadPanel({
                     key={item.id}
                     type="button"
                     onClick={() => onPanelItemClick(item)}
-                    className="block w-full rounded-xl px-2 py-2 text-left transition-colors hover:bg-surface-2"
+                    className="block w-full rounded-xl px-2 py-2 text-left transition-colors hover:bg-surface-subtle"
                   >
-                    <p className="truncate text-xs font-semibold text-text-primary">
+                    <p className="truncate text-xs font-semibold text-fg">
                       {item.senderName}
-                      <span className="font-normal text-text-muted">
+                      <span className="font-normal text-fg-muted">
                         {' · '}{formatChatTimestamp(item.createdAt)}
                         {item.conversationId !== selectedConversationId
                           ? ` · ${item.conversationName}` : ''}
                       </span>
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-text-secondary">{item.text || '(attachment)'}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-fg-secondary">{item.text || '(attachment)'}</p>
                   </button>
                 ))}
               </div>
@@ -320,17 +320,17 @@ export default function ThreadPanel({
           {/* In-conversation search */}
           {showMessageSearch && (
             <div className="px-5 py-2.5">
-              <div className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2">
-                <SearchIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+              <div className="flex items-center gap-2 rounded-xl bg-surface-subtle px-3 py-2">
+                <SearchIcon className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
                 <input
                   value={messageSearch}
                   onChange={(e) => setMessageSearch(e.target.value)}
                   placeholder="Search in this conversation…"
                   autoFocus
-                  className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+                  className="flex-1 bg-transparent text-sm text-fg placeholder:text-fg-muted focus:outline-none"
                 />
                 {messageSearch && (
-                  <button type="button" onClick={() => setMessageSearch('')} className="text-text-muted hover:text-text-secondary">
+                  <button type="button" onClick={() => setMessageSearch('')} className="text-fg-muted hover:text-fg-secondary">
                     <XIcon className="h-3.5 w-3.5" />
                   </button>
                 )}
@@ -366,10 +366,10 @@ export default function ThreadPanel({
               <div className="w-full section-y-4 px-6 py-5 md:px-8">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div key={i} className="flex gap-3">
-                    <div className="h-9 w-9 shrink-0 animate-pulse rounded-xl bg-surface-3" />
+                    <div className="h-9 w-9 shrink-0 animate-pulse rounded-xl bg-surface-muted" />
                     <div className="flex-1 section-y-2 pt-1">
-                      <div className="h-3 w-40 animate-pulse rounded bg-surface-3" />
-                      <div className="h-3 animate-pulse rounded bg-surface-3" style={{ width: `${85 - i * 12}%` }} />
+                      <div className="h-3 w-40 animate-pulse rounded bg-surface-muted" />
+                      <div className="h-3 animate-pulse rounded bg-surface-muted" style={{ width: `${85 - i * 12}%` }} />
                     </div>
                   </div>
                 ))}
@@ -378,9 +378,9 @@ export default function ThreadPanel({
 
             {!messagesLoading && messages.length === 0 && (
               <div className="flex h-full items-center justify-center">
-                <div className="text-center text-sm text-text-muted">
-                  <p className="font-medium text-text-secondary">No messages yet</p>
-                  <p className="mt-0.5 text-xs text-text-muted">Say hello to start the conversation!</p>
+                <div className="text-center text-sm text-fg-muted">
+                  <p className="font-medium text-fg-secondary">No messages yet</p>
+                  <p className="mt-0.5 text-xs text-fg-muted">Say hello to start the conversation!</p>
                 </div>
               </div>
             )}
@@ -431,20 +431,20 @@ export default function ThreadPanel({
                     >
                       {showDateSeparator && (
                         <div className="my-4 flex items-center gap-0 px-3">
-                          <div className="h-px flex-1 bg-border-subtle" />
-                          <span className="px-3 text-xs font-semibold text-text-muted">
+                          <div className="h-px flex-1 bg-line-subtle" />
+                          <span className="px-3 text-xs font-semibold text-fg-muted">
                             {formatDateLabel(message.createdAt)}
                           </span>
-                          <div className="h-px flex-1 bg-border-subtle" />
+                          <div className="h-px flex-1 bg-line-subtle" />
                         </div>
                       )}
                       {showUnreadDivider && (
                         <div className="my-2 flex items-center gap-3 px-3">
-                          <div className="h-px flex-1 bg-red-500/50" />
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-red-500">
+                          <div className="h-px flex-1 bg-danger-bright/50" />
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-danger-bright">
                             New
                           </span>
-                          <div className="h-px flex-1 bg-red-500/50" />
+                          <div className="h-px flex-1 bg-danger-bright/50" />
                         </div>
                       )}
                       <MessageRow
@@ -468,12 +468,12 @@ export default function ThreadPanel({
                     hasMoreMessages ? (
                       <div className="flex justify-center py-3">
                         {loadingOlderMessages ? (
-                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
                         ) : (
                           <button
                             type="button"
                             onClick={() => void onLoadOlder()}
-                            className="rounded-md bg-surface-2 px-4 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-3"
+                            className="rounded-md bg-surface-subtle px-4 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-muted"
                           >
                             Load earlier messages
                           </button>
@@ -489,8 +489,8 @@ export default function ThreadPanel({
                     return (
                       <div className="w-full px-3 md:px-6" style={{ height: h }}>
                         <div className="flex gap-3 px-3 py-1">
-                          <div className="h-9 w-9 shrink-0 rounded-full bg-surface-2" />
-                          <div className="flex-1 rounded-lg bg-surface-2" style={{ height: Math.max(h - 16, 16), maxWidth: '70%' }} />
+                          <div className="h-9 w-9 shrink-0 rounded-full bg-surface-subtle" />
+                          <div className="flex-1 rounded-lg bg-surface-subtle" style={{ height: Math.max(h - 16, 16), maxWidth: '70%' }} />
                         </div>
                       </div>
                     );
@@ -507,7 +507,7 @@ export default function ThreadPanel({
                   virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
                   setNewMessagesPending(0);
                 }}
-                className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-md bg-brand-green px-4 py-1.5 text-xs font-semibold text-white shadow-float hover:opacity-90"
+                className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-md bg-accent px-4 py-1.5 text-xs font-semibold text-white shadow-float hover:opacity-90"
               >
                 ↓ {newMessagesPending} new message{newMessagesPending > 1 ? 's' : ''}
               </button>

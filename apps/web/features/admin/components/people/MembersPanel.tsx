@@ -46,7 +46,7 @@ export default function MembersPanel() {
       <Requests />
 
       <SettingsSection title={`In this space${data ? ` (${active.length})` : ''}`}>
-        {data === null ? <p className="text-sm text-text-muted">Loading…</p> : <MemberTable />}
+        {data === null ? <p className="text-sm text-fg-muted">Loading…</p> : <MemberTable />}
       </SettingsSection>
 
       {/* Last, because it is the vocabulary the roll above is written in: you

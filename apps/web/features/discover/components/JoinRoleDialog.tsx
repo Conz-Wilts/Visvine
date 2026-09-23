@@ -25,7 +25,7 @@ export default function JoinRoleDialog({
       <div className="p-6">
         <div className="mb-4 flex items-center gap-3">
           <SpaceAvatar name={space.name} imageUrl={space.imageUrl} size="md" />
-          <h2 className="text-base font-semibold text-text-primary">Join {space.name} as</h2>
+          <h2 className="text-base font-semibold text-fg">Join {space.name} as</h2>
         </div>
 
         {/* One row per role: a colour dot and the word. The chosen one is
@@ -39,7 +39,7 @@ export default function JoinRoleDialog({
                   type="button"
                   onClick={() => setSelected(alias.name)}
                   className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                    chosen ? 'bg-surface-3 font-semibold text-text-primary' : 'text-text-secondary hover:bg-surface-2'
+                    chosen ? 'bg-surface-muted font-semibold text-fg' : 'text-fg-secondary hover:bg-surface-subtle'
                   }`}
                 >
                   <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: alias.color }} />

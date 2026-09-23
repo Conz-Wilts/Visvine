@@ -54,7 +54,7 @@ export function ClaimActions({ token, callbackUrl }: ClaimActionsProps) {
   return (
     <div className="flex flex-col gap-4">
       {error && (
-        <div className="border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
+        <div className="border-l-2 border-danger-bright pl-3 py-1 text-sm text-danger-strong">
           {error}
         </div>
       )}
@@ -62,7 +62,7 @@ export function ClaimActions({ token, callbackUrl }: ClaimActionsProps) {
       <button
         onClick={handleClaim}
         disabled={loading}
-        className="w-full rounded-lg bg-brand-green px-6 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+        className="w-full rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
       >
         {loading ? "Claiming profile…" : "Yes, this is me"}
       </button>
@@ -70,7 +70,7 @@ export function ClaimActions({ token, callbackUrl }: ClaimActionsProps) {
       <button
         onClick={handleDeny}
         disabled={loading}
-        className="w-full rounded-lg px-6 py-3 text-sm font-semibold text-text-secondary hover:bg-surface-2 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+        className="w-full rounded-lg px-6 py-3 text-sm font-semibold text-fg-secondary hover:bg-surface-subtle disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
       >
         No, this isn&apos;t me
       </button>

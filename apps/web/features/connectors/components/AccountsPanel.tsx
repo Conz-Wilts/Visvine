@@ -123,8 +123,8 @@ export default function AccountsPanel() {
                 >
                   <ConnectorLogo name={a.name} recipe={a.recipe} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-text-primary">{service?.name ?? a.name}</p>
-                    {state && <p className="truncate text-xs text-text-muted">{state}</p>}
+                    <p className="truncate text-sm font-semibold text-fg">{service?.name ?? a.name}</p>
+                    {state && <p className="truncate text-xs text-fg-muted">{state}</p>}
                   </div>
                 </button>
                 {a.broken ? (
@@ -137,10 +137,10 @@ export default function AccountsPanel() {
               </div>
 
               {expanded && (
-                <div className="mb-2 ml-11 flex flex-col gap-1 border-l border-border-subtle pl-4">
+                <div className="mb-2 ml-11 flex flex-col gap-1 border-l border-line-subtle pl-4">
                   {spaces.map((s) => (
                     <div key={s.id} className="flex min-h-9 items-center justify-between gap-3">
-                      <span className="truncate text-sm text-text-secondary">{s.name}</span>
+                      <span className="truncate text-sm text-fg-secondary">{s.name}</span>
                       <Toggle
                         aria-label={`Use in ${s.name}`}
                         checked={accountOnIn(a.offSpaces, s.id)}
@@ -167,7 +167,7 @@ export default function AccountsPanel() {
         })}
       </ul>
 
-      {accounts.length > 0 && unconnected.length > 0 && <hr className="border-border-subtle" />}
+      {accounts.length > 0 && unconnected.length > 0 && <hr className="border-line-subtle" />}
 
       <ul>
         {unconnected.map((s) => (
@@ -175,8 +175,8 @@ export default function AccountsPanel() {
             <div className={ROW}>
               <ConnectorLogo entry={s} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-text-primary">{s.name}</p>
-                <p className="truncate text-xs text-text-muted">{s.description}</p>
+                <p className="truncate text-sm font-semibold text-fg">{s.name}</p>
+                <p className="truncate text-xs text-fg-muted">{s.description}</p>
               </div>
               <Button variant="brand" size="sm" className={ACTION_SLOT} onClick={() => signIn({ recipe: s.id })}>
                 Connect

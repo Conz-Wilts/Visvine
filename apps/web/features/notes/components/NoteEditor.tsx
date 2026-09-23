@@ -614,7 +614,7 @@ export function NoteEditor({
   // Floating (workspace) layout wraps the controls in a hairline tray; the
   // embedded profile bar renders them flat, attached under the tabs.
   const formatPill = formatControls ? (
-    <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-border-subtle bg-surface-1 px-1.5 py-1">
+    <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-line-subtle bg-surface px-1.5 py-1">
       {formatControls}
     </div>
   ) : null
@@ -712,7 +712,7 @@ export function NoteEditor({
            of spread across a full-width row. max-w-full + the inner
            overflow-x-auto keep narrow panes scrolling inside the card rather
            than growing it. */
-        <div className="relative mt-4 flex h-11 max-w-full items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-3 shadow-strip">
+        <div className="relative mt-4 flex h-11 max-w-full items-center gap-1 rounded-xl border border-line-subtle bg-surface px-3 shadow-strip">
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto">{formatControls}</div>
           {/* Trailing group: the Editor/Raw toggle + Share. The
               toggle renders regardless of canEdit/mode (unlike formatControls,
@@ -734,10 +734,10 @@ export function NoteEditor({
       {embedded ? (
         <div className="relative z-0 pt-4">
           {error && (
-            <div className="mb-3 flex items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
+            <div className="mb-3 flex items-center justify-between border-l-2 border-danger-bright pl-3 py-1 text-sm text-danger-strong">
               <span>{error}</span>
               <button onClick={() => setError(null)} aria-label="Dismiss"
-                      className="ml-2 text-red-400 hover:text-red-600">
+                      className="ml-2 text-danger-bright hover:text-danger">
                 <XIcon className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -778,10 +778,10 @@ export function NoteEditor({
             floating ? 'top-[140px]' : 'top-16'
           }`}
         >
-          <div className="pointer-events-auto flex w-full max-w-[760px] items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
+          <div className="pointer-events-auto flex w-full max-w-[760px] items-center justify-between border-l-2 border-danger-bright pl-3 py-1 text-sm text-danger-strong">
             <span>{error}</span>
             <button onClick={() => setError(null)} aria-label="Dismiss"
-                    className="ml-2 text-red-400 hover:text-red-600">
+                    className="ml-2 text-danger-bright hover:text-danger">
               <XIcon className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -839,7 +839,7 @@ function ToolbarButton({
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
       className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm transition ${
-        active ? 'bg-brand-light-bg text-brand-dark-green' : 'text-text-secondary hover:bg-surface-2'
+        active ? 'bg-accent-soft text-accent-strong' : 'text-fg-secondary hover:bg-surface-subtle'
       }`}
     >
       {children}
@@ -935,17 +935,17 @@ function BlockTypeSelect({ editor }: { editor: Editor | null }) {
           setOpen((v) => !v)
         }}
         className={`flex h-7 w-28 items-center justify-between rounded-lg px-2 text-sm transition ${
-          open ? 'bg-surface-2 text-text-primary' : 'text-text-secondary hover:bg-surface-2'
+          open ? 'bg-surface-subtle text-fg' : 'text-fg-secondary hover:bg-surface-subtle'
         }`}
       >
         <span className="truncate">{currentLabel}</span>
-        <ChevronsUpDownIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+        <ChevronsUpDownIcon className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
       </button>
       {open && menuPos && createPortal(
         <div
           ref={menuRef}
           style={{ top: menuPos.top, left: menuPos.left }}
-          className="dropdown-pop fixed z-50 w-44 rounded-xl border border-border-subtle bg-surface-1 p-1.5 shadow-float"
+          className="dropdown-pop fixed z-50 w-44 rounded-xl border border-line-subtle bg-surface p-1.5 shadow-float"
         >
           {BLOCK_TYPES.map((t) => (
             <button
@@ -955,12 +955,12 @@ function BlockTypeSelect({ editor }: { editor: Editor | null }) {
               onClick={() => apply(t.value)}
               className={`flex h-8 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left transition ${
                 t.value === current
-                  ? 'bg-surface-2 text-text-primary'
-                  : 'text-text-primary hover:bg-surface-2'
+                  ? 'bg-surface-subtle text-fg'
+                  : 'text-fg hover:bg-surface-subtle'
               }`}
             >
               <span className={`truncate ${t.preview}`}>{t.label}</span>
-              {t.value === current && <CheckIcon className="h-4 w-4 shrink-0 text-brand-dark-green" />}
+              {t.value === current && <CheckIcon className="h-4 w-4 shrink-0 text-accent-strong" />}
             </button>
           ))}
         </div>,
@@ -971,5 +971,5 @@ function BlockTypeSelect({ editor }: { editor: Editor | null }) {
 }
 
 function Divider() {
-  return <span className="mx-1 h-5 w-px bg-border-subtle" />
+  return <span className="mx-1 h-5 w-px bg-line-subtle" />
 }

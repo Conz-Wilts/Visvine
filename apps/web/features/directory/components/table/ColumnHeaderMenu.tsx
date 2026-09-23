@@ -24,7 +24,7 @@ import type { TableColumn, TableSort } from '@/lib/directory/table';
 import type { TrackedFieldKind } from '@/lib/types';
 
 const ITEM_CLASS =
-  'flex w-full items-center gap-2.5 px-3.5 py-1.5 text-[13px] text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary disabled:pointer-events-none disabled:opacity-40';
+  'flex w-full items-center gap-2.5 px-3.5 py-1.5 text-[13px] text-fg-secondary transition-colors hover:bg-surface-subtle hover:text-fg disabled:pointer-events-none disabled:opacity-40';
 
 export default function ColumnHeaderMenu({
   column,
@@ -87,23 +87,23 @@ export default function ColumnHeaderMenu({
   return (
     <>
       <div className="flex items-center gap-2 px-3.5 pb-1.5 pt-0.5">
-        <ColumnKindIcon column={column} className="h-3.5 w-3.5 shrink-0 text-text-muted" />
-        <span className="truncate text-[12px] font-semibold text-text-muted">{column.label}</span>
-        {column.origin === 'tracked' && <span className="shrink-0 text-[11px] font-normal text-text-muted">tracked</span>}
+        <ColumnKindIcon column={column} className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+        <span className="truncate text-[12px] font-semibold text-fg-muted">{column.label}</span>
+        {column.origin === 'tracked' && <span className="shrink-0 text-[11px] font-normal text-fg-muted">tracked</span>}
       </div>
-      <div className="border-t border-border-subtle py-1">
+      <div className="border-t border-line-subtle py-1">
         <button type="button" role="menuitem" onClick={() => sortBy('asc')} className={ITEM_CLASS}>
           <ArrowUpIcon className="h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate text-left">Sort ascending</span>
-          {active === 'asc' && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-brand-green" />}
+          {active === 'asc' && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-accent" />}
         </button>
         <button type="button" role="menuitem" onClick={() => sortBy('desc')} className={ITEM_CLASS}>
           <ArrowDownIcon className="h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate text-left">Sort descending</span>
-          {active === 'desc' && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-brand-green" />}
+          {active === 'desc' && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-accent" />}
         </button>
       </div>
-      <div className="border-t border-border-subtle py-1">
+      <div className="border-t border-line-subtle py-1">
         <button
           type="button"
           role="menuitem"
@@ -132,7 +132,7 @@ export default function ColumnHeaderMenu({
         )}
       </div>
       {canEdit && (
-        <div className="border-t border-border-subtle py-1">
+        <div className="border-t border-line-subtle py-1">
           <button type="button" role="menuitem" onClick={() => setEditing(true)} className={ITEM_CLASS}>
             <PencilIcon className="h-3.5 w-3.5 shrink-0" />
             Edit field
@@ -141,7 +141,7 @@ export default function ColumnHeaderMenu({
             type="button"
             role="menuitem"
             onClick={() => { onRemove(); onClose(); }}
-            className={clsx(ITEM_CLASS, 'hover:text-red-600')}
+            className={clsx(ITEM_CLASS, 'hover:text-danger')}
           >
             <XIcon className="h-3.5 w-3.5 shrink-0" />
             Stop tracking

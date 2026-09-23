@@ -86,20 +86,20 @@ export default function ConfirmDialog({
         className="absolute inset-0 bg-black/40"
         onClick={() => closeOnBackdrop && !busy && onClose()}
       />
-      <div className="relative w-full max-w-sm rounded-xl bg-surface-1 p-5 shadow-float">
-        <h3 className="text-base font-semibold text-text-primary">{title}</h3>
-        {body && <div className="mt-1.5 text-sm text-text-secondary">{body}</div>}
+      <div className="relative w-full max-w-sm rounded-xl bg-surface p-5 shadow-float">
+        <h3 className="text-base font-semibold text-fg">{title}</h3>
+        {body && <div className="mt-1.5 text-sm text-fg-secondary">{body}</div>}
 
         {error && (
-          <div className="mt-3 border-l-2 border-red-500 pl-3 py-1 text-sm font-medium text-red-600">
+          <div className="mt-3 border-l-2 border-danger-bright pl-3 py-1 text-sm font-medium text-danger">
             {error}
           </div>
         )}
 
         {confirmText && (
           <div className="mt-4">
-            <p className="mb-1.5 text-xs text-text-muted">
-              Type <span className="font-semibold text-text-primary">{confirmText}</span> to confirm
+            <p className="mb-1.5 text-xs text-fg-muted">
+              Type <span className="font-semibold text-fg">{confirmText}</span> to confirm
             </p>
             <Input
               ref={inputRef}
