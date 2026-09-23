@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { adminSpaceIdsFrom } from '@/lib/auth';
 import { canAccessFeature } from '@/lib/featureAccess';
 import type { SpaceFeatureConfig } from '@/lib/types';
+import type { SpaceAlias } from '@/lib/types/context';
 import { MESSAGE_INCLUDE, serializeMessage } from './core';
 import {
   FEED_PAGE_MAX,
@@ -10,6 +11,7 @@ import {
   decodeFeedCursor,
   encodeFeedCursor,
   filterPlaces,
+  foldBadges,
   groupComments,
   type FeedPage,
   type FeedPlace,
@@ -20,7 +22,10 @@ import {
  * joined, in spaces they are an active member of, where Channels is a tool
  * they can open. The same set is what they may post into.
  */
-async function feedPlaces(userId: string, email?: string | null): Promise<FeedPlace[]> {
+async function feedPlaces(
+  userId: string,
+  email?: string | null,
+): Promise<{ places: FeedPlace[]; aliases: Map<string, SpaceAlias[] | undefined> }> {
   const memberships = await prisma.spaceMember.findMany({
     where: { userId, status: 'active' },
     select: {
@@ -29,7 +34,7 @@ async function feedPlaces(userId: string, email?: string | null): Promise<FeedPl
       },
     },
   });
-  if (memberships.length === 0) return [];
+  if (memberships.length === 0) return { places: [], aliases: new Map() };
 
   const spaces = memberships.map((m) => m.space);
   const adminIds = await adminSpaceIdsFrom(userId, spaces, email);
@@ -38,7 +43,8 @@ async function feedPlaces(userId: string, email?: string | null): Promise<FeedPl
       .filter((s) => canAccessFeature(s.featureConfig as SpaceFeatureConfig | null, 'channels', adminIds.has(s.id)))
       .map((s) => [s.id, s]),
   );
-  if (open.size === 0) return [];
+  const aliases = new Map([...open.values()].map((s) => [s.id, (s.aliases as SpaceAlias[] | null) ?? undefined]));
+  if (open.size === 0) return { places: [], aliases };
 
   const channels = await prisma.conversation.findMany({
     where: {
@@ -51,7 +57,7 @@ async function feedPlaces(userId: string, email?: string | null): Promise<FeedPl
     orderBy: { createdAt: 'asc' },
   });
 
-  return channels.map((channel) => {
+  const places = channels.map((channel) => {
     const space = open.get(channel.spaceId!)!;
     return {
       conversationId: channel.id,
@@ -59,6 +65,7 @@ async function feedPlaces(userId: string, email?: string | null): Promise<FeedPl
       space: { id: space.id, name: space.name },
     };
   });
+  return { places, aliases };
 }
 
 /** One page of the feed, newest post first, each post with its comments. */
@@ -66,7 +73,8 @@ export async function listFeedForUser(
   user: { id: string; email?: string | null },
   options?: { cursor?: string | null; limit?: number; spaceId?: string | null },
 ): Promise<FeedPage> {
-  const places = filterPlaces(await feedPlaces(user.id, user.email), options?.spaceId);
+  const found = await feedPlaces(user.id, user.email);
+  const places = filterPlaces(found.places, options?.spaceId);
   const cursor = decodeFeedCursor(options?.cursor);
   const targets = cursor ? undefined : places;
   if (places.length === 0) return { posts: [], nextCursor: null, targets };
@@ -107,6 +115,14 @@ export async function listFeedForUser(
   const comments = groupComments(posts, replies.map((m) => serializeMessage(m, user.id, [])));
   const placeOf = new Map(places.map((p) => [p.conversationId, p]));
 
+  // The viewer is always asked for, so their own new post wears its badge
+  // before the next read.
+  const authors = new Set([user.id, ...page.map((m) => m.senderId), ...replies.map((m) => m.senderId)]);
+  const held = await prisma.userAlias.findMany({
+    where: { spaceId: { in: [...new Set(places.map((p) => p.space.id))] }, userId: { in: [...authors] } },
+    select: { spaceId: true, userId: true, aliasId: true },
+  });
+
   return {
     posts: posts.map((message, i) => ({
       ...placeOf.get(page[i].conversationId)!,
@@ -115,5 +131,6 @@ export async function listFeedForUser(
     })),
     nextCursor,
     targets,
+    badges: foldBadges(found.aliases, held),
   };
 }

@@ -2,16 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
-import Modal from '@/components/ui/Modal';
-import Select from '@/components/ui/Select';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import Link from '@/features/shared/components/SpaceLink';
 import { HouseIcon, PlusIcon } from '@/features/shared/icons';
 import Avatar from '@/components/ui/Avatar';
-import MessageComposer from '@/features/messages/components/MessageComposer';
 import { inSpace } from '@/lib/spaces/shared/spaceUrl';
-import type { FeedPlace } from '@/lib/messages/shared/feed';
+import { badgeKey, type FeedPlace } from '@/lib/messages/shared/feed';
 import { useFeed } from '../hooks/useFeed';
+import FeedComposer from './FeedComposer';
 import { FeedPostCard } from './FeedPostCard';
 
 const TARGET_KEY = 'vv-feed-target';
@@ -27,7 +25,7 @@ const placeLabel = (place: FeedPlace) => `${place.space.name} · ${place.channel
 export default function FeedPage() {
   const { user } = useAuth();
   const feed = useFeed(user?.id ?? '');
-  const { posts, targets, loading, failed, hasMore, loadingOlder, loadOlder } = feed;
+  const { posts, targets, badges, loading, failed, hasMore, loadingOlder, loadOlder } = feed;
 
   // Where a new post lands: the last channel posted into, else the first.
   const [chosen, setChosen] = useState<string | null>(null);
@@ -101,6 +99,7 @@ export default function FeedPage() {
               key={post.message.id}
               post={post.message}
               comments={post.comments}
+              badge={badges[badgeKey(post.space.id, post.message.sender.id)]}
               place={(
                 <Link
                   href={inSpace(post.space.id, `/channels/${post.conversationId}`)}
@@ -123,30 +122,15 @@ export default function FeedPage() {
       </div>
 
       {target && composing && (
-        <Modal title="New post" size="sm" onClose={() => setComposing(false)}>
-          {targets.length > 1 && (
-            <Select
-              aria-label="Post to"
-              className="mb-2 w-fit max-w-full"
-              value={target.conversationId}
-              onChange={(e) => chooseTarget(e.target.value)}
-            >
-              {targets.map((t) => (
-                <option key={t.conversationId} value={t.conversationId}>{placeLabel(t)}</option>
-              ))}
-            </Select>
-          )}
-          <MessageComposer
-            key={target.conversationId}
-            onSend={(payload) => { void feed.send(target.conversationId, payload); setComposing(false); }}
-            spaceId={target.space.id}
-            conversationId={target.conversationId}
-            filesSpaceId={target.space.id}
-            variant="slim"
-            currentUser={{ name: user.name, image: user.image ?? null }}
-            placeholder="Start a post"
-          />
-        </Modal>
+        <FeedComposer
+          targets={targets}
+          target={target}
+          onTarget={chooseTarget}
+          user={{ id: user.id, name: user.name, image: user.image ?? null }}
+          badges={badges}
+          onPublish={feed.send}
+          onClose={() => setComposing(false)}
+        />
       )}
 
       <ConfirmDialog

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { inflightFetch, invalidateRequestCache, swrFetch } from '@/features/shared/lib/requestCache';
 import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
-import { applyFeedEvent, type FeedPage, type FeedPlace, type FeedPost } from '@/lib/messages/shared/feed';
+import { applyFeedEvent, type FeedBadge, type FeedPage, type FeedPlace, type FeedPost } from '@/lib/messages/shared/feed';
 import type { ComposerPayload, RealtimeEvent, SerializedMessage } from '@/lib/messages/types';
 import { withoutDraftFiles } from '@/lib/messages/shared/composer';
 
@@ -32,6 +32,7 @@ function mergeFirstPage(page: FeedPost[], loaded: FeedPost[]): FeedPost[] {
 export function useFeed(currentUserId: string) {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [targets, setTargets] = useState<FeedPlace[]>([]);
+  const [badges, setBadges] = useState<Record<string, FeedBadge>>({});
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -50,6 +51,7 @@ export function useFeed(currentUserId: string) {
     return swrFetch<FeedPage>(FIRST_PAGE_KEY, () => fetchJson<FeedPage>('/api/feed'), (page) => {
       setPosts((loaded) => mergeFirstPage(page.posts, loaded));
       setTargets(page.targets ?? []);
+      setBadges((known) => ({ ...known, ...page.badges }));
       // Older pages hold their own cursor; the first page's only stands
       // until one of them has been read.
       if (!olderLoadedRef.current) setNextCursor(page.nextCursor);
@@ -72,6 +74,7 @@ export function useFeed(currentUserId: string) {
         const seen = new Set(loaded.map((post) => post.message.id));
         return [...loaded, ...page.posts.filter((post) => !seen.has(post.message.id))];
       });
+      setBadges((known) => ({ ...known, ...page.badges }));
       setNextCursor(page.nextCursor);
     } catch { /* the sentinel asks again */ } finally {
       setLoadingOlder(false);
@@ -156,7 +159,7 @@ export function useFeed(currentUserId: string) {
   }, [conversationOf, apply]);
 
   return {
-    posts, targets, loading, failed, loadingOlder,
+    posts, targets, badges, loading, failed, loadingOlder,
     hasMore: nextCursor !== null,
     loadOlder, send, comment, react, edit, remove,
   };

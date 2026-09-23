@@ -12,6 +12,7 @@ import {
   type FeedPlace,
   type FeedPost,
   filterPlaces,
+  foldBadges,
 } from '../lib/messages/shared/feed';
 import type { SerializedMessage } from '../lib/messages/types';
 
@@ -137,4 +138,26 @@ test('filterPlaces keeps one space, or everything when no space is named', () =>
   assert.deepEqual(filterPlaces(places, 'acme').map((p) => p.conversationId), ['c1']);
   assert.equal(filterPlaces(places, null).length, 2);
   assert.equal(filterPlaces(places, 'nope').length, 0);
+});
+
+test('foldBadges: first held alias in the space\'s order, owning alias first', () => {
+  const aliases = new Map([
+    ['s1', [
+      { id: 'mentor', name: 'Mentor', color: '#16a34a', nodeType: 'Person' },
+      { id: 'founder', name: 'Founder', color: '#2563eb', nodeType: 'Person' },
+    ]],
+    ['s2', undefined],
+  ]);
+  const badges = foldBadges(aliases, [
+    { spaceId: 's1', userId: 'a', aliasId: 'founder' },
+    { spaceId: 's1', userId: 'a', aliasId: 'mentor' },
+    { spaceId: 's1', userId: 'b', aliasId: 'founder' },
+    { spaceId: 's1', userId: 'b', aliasId: 'admin' },
+    { spaceId: 's1', userId: 'c', aliasId: 'gone' },
+    { spaceId: 's2', userId: 'a', aliasId: 'admin' },
+  ]);
+  assert.deepEqual(badges['s1:a'], { name: 'Mentor', color: '#16a34a' });
+  assert.equal(badges['s1:b'].name, 'Admin');
+  assert.equal(badges['s1:c'], undefined);
+  assert.equal(badges['s2:a'].name, 'Admin');
 });

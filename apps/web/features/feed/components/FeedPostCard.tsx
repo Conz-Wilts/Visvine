@@ -2,11 +2,13 @@
 
 import { memo, useState, type ReactNode } from 'react';
 import Avatar from '@/components/ui/Avatar';
+import Chip from '@/components/ui/Chip';
 import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
 import { HeartIcon, MessageCircleIcon, PencilIcon, SmileIcon, Trash2Icon } from '@/features/shared/icons';
 import { CommentRow } from '@/features/messages/components/FeedView';
 import { EmojiPicker, MarkdownMessage, MessageImageGrid, MessageFiles } from '@/features/messages/components/MessageRow';
 import { timeAgo } from '@/lib/date';
+import type { FeedBadge } from '@/lib/messages/shared/feed';
 import type { SerializedMessage } from '@/lib/messages/types';
 
 const LIKE = '❤️';
@@ -14,10 +16,11 @@ const EDIT_WINDOW_MS = 15 * 60 * 1000;
 
 const iconButton = 'rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary';
 
-/** A post on the Feed: author and place, the post, then a like · comment bar. */
+/** A post on the Feed: author, their alias and place, the post, then a like · comment bar. */
 export const FeedPostCard = memo(function FeedPostCard({
   post,
   comments,
+  badge,
   place,
   onReaction,
   onEdit,
@@ -26,6 +29,7 @@ export const FeedPostCard = memo(function FeedPostCard({
 }: {
   post: SerializedMessage;
   comments: SerializedMessage[];
+  badge?: FeedBadge;
   place: ReactNode;
   onReaction: (messageId: string, emoji: string) => Promise<void>;
   onEdit: (messageId: string, text: string) => Promise<void>;
@@ -72,8 +76,9 @@ export const FeedPostCard = memo(function FeedPostCard({
         <header className="flex items-start gap-3">
           <Avatar name={post.sender.name} imageUrl={post.sender.image} size="lg" />
           <div className="min-w-0 flex-1">
-            <p className="flex items-baseline gap-2">
-              <span className="truncate text-[15px] font-semibold text-text-primary">{post.isOwn ? 'You' : post.sender.name}</span>
+            <p className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-[15px] font-semibold text-text-primary">{post.sender.name}</span>
+              {badge && <Chip color={badge.color} size="sm" className="shrink-0">{badge.name}</Chip>}
               <span className="shrink-0 text-[13px] text-text-muted">{timeAgo(post.createdAt, { style: 'compact' })}</span>
             </p>
             <div className="truncate text-[13px] text-text-muted">{place}</div>

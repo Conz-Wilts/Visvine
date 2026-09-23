@@ -5,6 +5,7 @@
 // event with it.
 
 import type { RealtimeEvent, SerializedMessage, SerializedReaction } from '../types';
+import { personAliases, type SpaceAlias } from '../../types/context';
 
 /** Where a post was written — the channel, and the space that holds it. */
 export interface FeedPlace {
@@ -23,6 +24,42 @@ export interface FeedPage {
   nextCursor: string | null;
   /** The channels the viewer can post into. First page only. */
   targets?: FeedPlace[];
+  /** The alias each author wears in the space they wrote in, keyed
+   *  `badgeKey(spaceId, userId)`. An author holding none is absent. */
+  badges?: Record<string, FeedBadge>;
+}
+
+/** The alias beside an author's name — what they are in that space. */
+export interface FeedBadge {
+  name: string;
+  color: string;
+}
+
+export const badgeKey = (spaceId: string, userId: string) => `${spaceId}:${userId}`;
+
+/**
+ * Each holder's badge: the first alias they hold in the space's own order,
+ * the owning alias first. Holdings naming an alias the space no longer
+ * defines are ignored.
+ */
+export function foldBadges(
+  aliasesBySpace: ReadonlyMap<string, SpaceAlias[] | undefined>,
+  held: readonly { spaceId: string; userId: string; aliasId: string }[],
+): Record<string, FeedBadge> {
+  const heldBy = new Map<string, Set<string>>();
+  for (const h of held) {
+    const key = badgeKey(h.spaceId, h.userId);
+    const set = heldBy.get(key) ?? new Set<string>();
+    set.add(h.aliasId);
+    heldBy.set(key, set);
+  }
+  const out: Record<string, FeedBadge> = {};
+  for (const [key, ids] of heldBy) {
+    const spaceId = key.slice(0, key.indexOf(':'));
+    const alias = personAliases(aliasesBySpace.get(spaceId)).find((a) => a.id && ids.has(a.id));
+    if (alias) out[key] = { name: alias.name, color: alias.color };
+  }
+  return out;
 }
 
 /** The places in one space, or all of them when no space is named. */
