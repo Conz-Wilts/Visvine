@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Edit an existing event — reuses the EventComposer in `edit` mode.
+ * Edit an existing event in the EventComposer.
  */
 
 import { use, useEffect, useState } from 'react';
@@ -53,7 +53,6 @@ export default function EditEventPage({ params }: { params: Promise<{ eventId: s
     <>
       <EventComposer
         spaceId={currentSpace.id}
-        mode="edit"
         initialEvent={event}
         onDelete={() => setConfirmingDelete(true)}
       />

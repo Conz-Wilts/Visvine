@@ -13,7 +13,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
 import PageError from '@/components/ui/PageError';
 import Link from '@/features/shared/components/SpaceLink';
-import { CalendarIcon, CalendarPlusIcon, CheckIcon, ChevronRightIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon } from '@/features/shared/icons';
+import { CalendarIcon, CheckIcon, ChevronRightIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { viewerDoorFor } from '@/features/spaces/lib/viewerDoor';
 import { isGlobalSpace } from '@/lib/spaces/shared/global';
@@ -306,22 +306,13 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
             )}
           </SectionCard>
 
-          {isMember && (
+          {isMember && events.length > 0 && (
             <SectionCard id="events" title="Upcoming events" scrollMargin="scroll-mt-20"
                          badge={events.length > 0 ? counts.upcomingEvents : undefined}
                          action={<Link href="/directory?type=event" className="text-[13px] font-semibold hover:underline" style={{ color: theme.dark }}>View all</Link>}>
-              {events.length > 0 ? (
-                <div className="flex flex-col divide-y divide-border-subtle">
-                  {events.map((e) => <EventRow key={e.id} event={e} theme={theme} />)}
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
-                  <span className="text-text-muted">No upcoming events.</span>
-                  <Link href="/events/new" className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
-                    <CalendarPlusIcon className="w-4 h-4" /> Create an event
-                  </Link>
-                </div>
-              )}
+              <div className="flex flex-col divide-y divide-border-subtle">
+                {events.map((e) => <EventRow key={e.id} event={e} theme={theme} />)}
+              </div>
             </SectionCard>
           )}
 

@@ -4,11 +4,12 @@ import { useSpaceHref } from '@/features/shared/contexts/SpaceContext';
 import { Alert, Button, Modal } from '@/components/ui';
 
 /**
- * EventComposer — a single-screen, poster-first event creator (replaces the old
- * collapsible EventForm). Four things are needed to publish: cover, title,
- * date/time, location. Everything else lives behind one "More options" toggle,
- * pre-defaulted so it can be skipped. The draft autosaves; "Publish" opens a
- * share sheet (copy link + add to calendar) — the share moment is the reward.
+ * EventComposer — the single-screen, poster-first editor for an event that
+ * exists. Events are made by `create_event` (an AI over MCP, which asks for the
+ * details first) as a draft; this is where a person reads it back, fixes it and
+ * publishes it. Four things matter to publish: cover, title, date/time,
+ * location. Everything else lives behind one "More options" toggle. Edits
+ * autosave; "Publish" opens a share sheet (copy link + add to calendar).
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
@@ -53,8 +54,7 @@ const QUESTION_TYPES: { value: FormField['type']; label: string }[] = [
 
 interface EventComposerProps {
   spaceId: string;
-  mode?: 'create' | 'edit';
-  initialEvent?: NBEvent;
+  initialEvent: NBEvent;
   onDelete?: () => void;
 }
 
@@ -76,10 +76,6 @@ function randomId(len: number): string {
     : Math.random().toString(36).slice(2, 2 + len);
 }
 
-function makeDraftId(): `event:${string}` {
-  return `event:${randomId(12)}`;
-}
-
 function makeQuestionId(): string {
   return `q_${randomId(8)}`;
 }
@@ -95,36 +91,35 @@ function plusHoursIso(iso: string, hours: number): string {
   return new Date(new Date(iso).getTime() + hours * 3600_000).toISOString();
 }
 
-export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete }: EventComposerProps) {
+export function EventComposer({ spaceId, initialEvent, onDelete }: EventComposerProps) {
   const router = useSpaceRouter();
-  const draftIdRef = useRef<`event:${string}`>(initialEvent?.id ?? makeDraftId());
-  const createdRef = useRef(mode === 'edit');
+  const eventId = initialEvent.id;
 
-  const initialType = (initialEvent?.metadata?.eventType as EventType) ?? 'in-person';
-  // Preserve the loaded status on edit so an autosave can't unpublish the event;
-  // a brand-new draft starts unpublished. "Publish" overrides this explicitly.
-  const initialStatus = initialEvent?.status;
+  const initialType = (initialEvent.metadata?.eventType as EventType) ?? 'in-person';
+  // Preserve the loaded status so an autosave can't unpublish the event.
+  // "Publish" overrides this explicitly.
+  const initialStatus = initialEvent.status;
 
   // ── form state ──────────────────────────────────────────────────────────────
-  const [title, setTitle] = useState(initialEvent?.title ?? '');
-  const [description, setDescription] = useState(initialEvent?.description ?? '');
-  const [startAt, setStartAt] = useState(initialEvent?.startAt || nextTopOfHourIso());
-  const [endAt, setEndAt] = useState(initialEvent?.endAt || plusHoursIso(initialEvent?.startAt || nextTopOfHourIso(), 1));
-  const [timezone] = useState(initialEvent?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [title, setTitle] = useState(initialEvent.title ?? '');
+  const [description, setDescription] = useState(initialEvent.description ?? '');
+  const [startAt, setStartAt] = useState(initialEvent.startAt || nextTopOfHourIso());
+  const [endAt, setEndAt] = useState(initialEvent.endAt || plusHoursIso(initialEvent.startAt || nextTopOfHourIso(), 1));
+  const [timezone] = useState(initialEvent.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone);
   const [eventType, setEventType] = useState<EventType>(initialType);
-  const [virtualLink, setVirtualLink] = useState((initialEvent?.metadata?.virtualLink as string) ?? '');
-  const [location, setLocation] = useState(initialEvent?.location ?? { label: '' });
-  const [coverImageUrl, setCoverImageUrl] = useState(initialEvent?.coverImageUrl ?? '');
-  const [themeColor, setThemeColor] = useState(initialEvent?.theme?.color ?? THEME_COLORS[0]);
-  const [visibility, setVisibility] = useState<EventVisibility>(initialEvent?.visibility ?? 'space');
-  const [capacity, setCapacity] = useState<number | undefined>(initialEvent?.capacity);
-  const [requireApproval, setRequireApproval] = useState(initialEvent?.form?.requireApproval ?? false);
-  const [guestListVisible, setGuestListVisible] = useState(initialEvent?.guestListVisible ?? true);
-  const [allowPlusOnes, setAllowPlusOnes] = useState(initialEvent?.allowPlusOnes ?? 0);
-  const [allowMaybe, setAllowMaybe] = useState(initialEvent?.allowedResponses ? initialEvent.allowedResponses.includes('maybe') : true);
-  const [waitlistEnabled, setWaitlistEnabled] = useState(initialEvent?.waitlistEnabled !== false);
+  const [virtualLink, setVirtualLink] = useState((initialEvent.metadata?.virtualLink as string) ?? '');
+  const [location, setLocation] = useState(initialEvent.location ?? { label: '' });
+  const [coverImageUrl, setCoverImageUrl] = useState(initialEvent.coverImageUrl ?? '');
+  const [themeColor, setThemeColor] = useState(initialEvent.theme?.color ?? THEME_COLORS[0]);
+  const [visibility, setVisibility] = useState<EventVisibility>(initialEvent.visibility ?? 'space');
+  const [capacity, setCapacity] = useState<number | undefined>(initialEvent.capacity);
+  const [requireApproval, setRequireApproval] = useState(initialEvent.form?.requireApproval ?? false);
+  const [guestListVisible, setGuestListVisible] = useState(initialEvent.guestListVisible ?? true);
+  const [allowPlusOnes, setAllowPlusOnes] = useState(initialEvent.allowPlusOnes ?? 0);
+  const [allowMaybe, setAllowMaybe] = useState(initialEvent.allowedResponses ? initialEvent.allowedResponses.includes('maybe') : true);
+  const [waitlistEnabled, setWaitlistEnabled] = useState(initialEvent.waitlistEnabled !== false);
   const [questions, setQuestions] = useState<DraftQuestion[]>(() =>
-    (initialEvent?.form?.schema ?? []).map((f) => ({
+    (initialEvent.form?.schema ?? []).map((f) => ({
       id: f.id,
       label: f.label,
       type: f.type,
@@ -145,7 +140,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
 
   const buildBody = useCallback(
     (overrides: Record<string, unknown> = {}) => ({
-      id: draftIdRef.current,
+      id: eventId,
       spaceId,
       title: title.trim() || 'Untitled event',
       description: description.trim() || undefined,
@@ -157,8 +152,8 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
       visibility,
       coverImageUrl: coverImageUrl || undefined,
       theme: { color: themeColor },
-      // Keep the existing status (e.g. 'published') on edit; new drafts default
-      // to 'draft'. Never send a hardcoded 'draft' that would unpublish an event.
+      // Keep the existing status: never send a hardcoded 'draft' that would
+      // unpublish an event.
       status: initialStatus ?? 'draft',
       waitlistEnabled: capacity != null ? waitlistEnabled : undefined,
       guestListVisible,
@@ -191,7 +186,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
       },
       ...overrides,
     }),
-    [spaceId, title, description, startAt, endAt, timezone, location, capacity, visibility,
+    [eventId, spaceId, title, description, startAt, endAt, timezone, location, capacity, visibility,
      coverImageUrl, themeColor, guestListVisible, allowPlusOnes, allowMaybe, requireApproval, eventType, virtualLink, initialStatus,
      waitlistEnabled, questions],
   );
@@ -205,24 +200,15 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
   const persist = useCallback(
     async (overrides: Record<string, unknown> = {}): Promise<NBEvent> => {
       const body = buildBody(overrides);
-      if (!createdRef.current) {
-        createdRef.current = true; // optimistic: prevents a double-create race
-        try {
-          return await fetchJsonBody<NBEvent>('/api/events', 'POST', body);
-        } catch (err) {
-          createdRef.current = false;
-          throw err;
-        }
-      }
       const saved = await fetchJsonBody<NBEvent>(
-        `/api/events/${draftIdRef.current}?spaceId=${encodeURIComponent(spaceId)}`,
+        `/api/events/${eventId}?spaceId=${encodeURIComponent(spaceId)}`,
         'PATCH',
         body,
       );
       invalidateEventDetail(saved.id);
       return saved;
     },
-    [buildBody, spaceId],
+    [buildBody, eventId, spaceId],
   );
 
   // ── autosave (debounced) ─────────────────────────────────────────────────────
@@ -233,7 +219,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
       firstRender.current = false;
       return;
     }
-    if (!title.trim()) return; // need a title before we can create the draft
+    if (!title.trim()) return; // an event is never saved without a title
     const t = setTimeout(async () => {
       try {
         setSaveState('saving');
@@ -253,7 +239,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
     setError(null);
     setUploading(true);
     try {
-      const url = await uploadImage('event', draftIdRef.current, file);
+      const url = await uploadImage('event', eventId, file);
       setCoverImageUrl(url);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to upload cover');
@@ -263,9 +249,8 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
   };
 
   /**
-   * The Drive picker posts to the event's cover route, so the event has to
-   * exist first — the same reason the file upload waits for the draft to be
-   * created. Saving here is what makes "From Drive" work on a brand-new draft.
+   * The Drive picker posts to the event's cover route, which reads the saved
+   * event — so pending edits are saved first rather than overwritten by it.
    */
   const openDrivePicker = async () => {
     setError(null);
@@ -622,7 +607,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
       <div className="fixed bottom-0 inset-x-0 z-30 border-t border-border-subtle bg-surface-1/95 backdrop-blur">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            {mode === 'edit' && onDelete && (
+            {onDelete && (
               <button
                 type="button"
                 onClick={onDelete}
@@ -640,7 +625,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
             className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-brand-green rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
           >
             {publishing ? <LoaderCircleIcon className="w-4 h-4 animate-spin" /> : <SparklesIcon className="w-4 h-4" />}
-            {mode === 'edit' ? 'Save changes' : 'Publish event'}
+            {initialStatus === 'published' ? 'Save changes' : 'Publish event'}
           </button>
         </div>
       </div>
@@ -648,7 +633,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
       {drivePickerOpen && (
         <DriveCoverPicker
           spaceId={spaceId}
-          eventId={draftIdRef.current}
+          eventId={eventId}
           onClose={() => setDrivePickerOpen(false)}
           onPicked={(ev) => {
             // The route has already stored the cover on the record; mirroring it

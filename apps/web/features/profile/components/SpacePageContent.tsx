@@ -33,7 +33,7 @@ import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { hexToPalette } from '@/lib/profileTheme';
 import { findAlias, getNodeGlyph, nodeTypeLabel } from '@/lib/types';
-import { fieldsForType, readFields } from '@/lib/create/typeFields';
+import { fieldsForType, readFields } from '@/lib/types/typeFields';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
 import { getInitials } from '@/lib/avatarUtils';
 import Chip from '@/components/ui/Chip';

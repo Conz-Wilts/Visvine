@@ -42,23 +42,6 @@ function fetchNodeProfile(nodeId: string): Promise<NodeProfileData> {
 }
 
 /**
- * Seed the cache for a node we already hold, so its profile paints on first
- * render instead of fetching. Used by the note-first create commit: it just
- * created the node, so priming here is what makes the jump from the draft
- * surface to /directory/<id>?tab=context land without a skeleton frame.
- *
- * A brand-new node has no links and belongs to exactly the space it was
- * created in, hence the zeroed counts — the real numbers arrive with the next
- * revalidation, and there is nothing to show until then anyway.
- */
-export function primeNodeProfile(nodeId: string, node: NBNode): void {
-  nodeProfileCache.set(nodeId, {
-    data: { node, connectionCount: 0, spaceCount: node.space_id ? 1 : 0, connections: [] },
-    timestamp: Date.now(),
-  });
-}
-
-/**
  * Fold an already-persisted field change (e.g. a rename saved from the context
  * header) into the cached profile, so the next mount paints the new value
  * instead of the 60s-stale one. No-op when the node was never fetched.

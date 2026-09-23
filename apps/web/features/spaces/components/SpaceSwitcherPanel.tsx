@@ -19,8 +19,8 @@ import { spaceBranches } from '@/lib/spaces/subspaces';
 /**
  * The space switcher — the search and the list of every space you are in — as
  * a panel of the rail rather than a popup over the page: a layer against the
- * open rail's edge, the card's full height, sliding out from under the rail
- * the way Create new does, so the rail reads as widening into the list. Opened
+ * open rail's edge, the card's full height, sliding out from under the rail,
+ * so the rail reads as widening into the list. Opened
  * from the space at the rail's head (SpaceSelector) through the sidebar
  * context; always mounted so the column can slide it, parked off to the left
  * while shut.

@@ -252,7 +252,6 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
                 space={spaceId}
                 view={connectorView}
                 returnTo="/directory?view=table&type=connector"
-                onAdd={() => setConnectorView('catalog')}
               />
             </div>
           </div>

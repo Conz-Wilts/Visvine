@@ -17,7 +17,7 @@ import { principalOf } from '@/lib/notes/resolve'
 import { lockedDenial, writeDenial } from '@/lib/notes/contextService'
 import { createNote, readNoteOrNull, type WriteStamp } from '@/lib/notes/store'
 import { entityDraftContent, entityIndexPathOf, entityNotePath } from '@/lib/notes/entities'
-import { applyFields } from '@/lib/create/typeFields'
+import { applyFields } from '@/lib/types/typeFields'
 import { attachIdentity } from '@/lib/identity/attachIdentity'
 import { followGlobalSafe } from '@/lib/global/binding'
 import type { ResolveResult } from '@/lib/identity/resolve'
@@ -30,7 +30,7 @@ import { findAliasByRef, type SpaceAlias } from '@/lib/types/context'
 /**
  * The types the context layer can create. The node TYPE is what decides
  * everything downstream — which fields exist (FIELDS_BY_TYPE in
- * lib/create/typeFields.ts), which note namespace the entity lives in
+ * lib/types/typeFields.ts), which note namespace the entity lives in
  * (ENTITY_DIRS in lib/notes/entities.ts), and whether it resolves to a
  * cross-space identity. section/channel are structural and belong to admin
  * surfaces.

@@ -22,7 +22,6 @@ import {
   evictRequestCache,
   invalidateRequestCache,
   peekRequestCache,
-  primeRequestCache,
   swrFetch,
   watchRequestCache,
 } from '@/features/shared/lib/requestCache'
@@ -35,11 +34,6 @@ export const peekContextCache = peekRequestCache
 /** Watch cache keys for invalidation. Returns the unsubscribe. */
 export const watchContextCache = watchRequestCache
 export const invalidateContextCache = invalidateRequestCache
-/** Seed the cache with a value we already hold, so the next reader paints from
- *  it synchronously instead of fetching. Used by the note-first create commit:
- *  it just wrote the note, so priming `contextKeys.read` means the entity's
- *  Context tab renders its content on first paint. */
-export const primeContextCache = primeRequestCache
 
 // Shared key builders — the panel and the prefetch must agree exactly, or they
 // fetch twice and the cache is pure overhead.

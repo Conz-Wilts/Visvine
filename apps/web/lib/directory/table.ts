@@ -6,7 +6,7 @@
 //
 //   core     name · alias · tags · created — every entity has these
 //   type     the property rows the type already shows on its note
-//            (lib/create/typeFields.ts): a Person's role, company, location…
+//            (lib/types/typeFields.ts): a Person's role, company, location…
 //   tracked  what THIS space decided to track about the type
 //            (NodeTypeConfig.fields, admin-authored here via addTrackedField)
 //
@@ -25,7 +25,7 @@
 //
 // Pure — no DOM, no Prisma — so tests/directory-table.test.ts covers it directly.
 
-import { canonicalType, fieldsForType } from '@/lib/create/typeFields'
+import { canonicalType, fieldsForType } from '@/lib/types/typeFields'
 import type { DirectoryItem, NodeTypeConfig, TrackedField, TrackedFieldKind } from '@/lib/types'
 
 type ColumnKind = TrackedFieldKind | 'location' | 'tags' | 'alias'

@@ -1,20 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
-import { Avatar, Button, ConfirmDialog, Field, Input, SearchInput, Skeleton, Alert } from '@/components/ui';
-import Select from '@/components/ui/Select';
-import NewRow from '@/components/ui/NewRow';
+import { Avatar, Button, ConfirmDialog, SearchInput, Skeleton, Alert } from '@/components/ui';
 import { ArrowLeftIcon, Trash2Icon } from '@/features/shared/icons';
 import ConnectorLogo from './ConnectorLogo';
 import ConnectorToolPermissions from './ConnectorToolPermissions';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { useCreateSurface } from '@/features/shared/contexts/CreateModalContext';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contextPrefetch';
 import { fetchJson } from '@/lib/fetchJson';
-import { connectorSlug } from '@/lib/create/noteSlug';
 import { connectorConnectPath } from '@/lib/connectors/connectUrl';
 import { accountConnectPath, isAccountRecipe } from '@/lib/connectors/accountRecipes';
 import { inflightFetch } from '@/features/shared/lib/requestCache';
@@ -23,14 +19,9 @@ import { timeAgo } from '@/lib/date';
 import type { ConnectorRequest } from '@/lib/connectors/requests';
 import {
   CONNECTOR_CATALOG,
-  catalogConnectStyle,
   catalogEntryFor,
   catalogRowLabel,
-  connectorFromCatalog,
-  connectsInOneClick,
-  plainFields,
   searchCatalog,
-  suggestConnector,
   type CatalogEntry,
 } from '@/lib/connectors/catalog';
 
@@ -257,18 +248,11 @@ function ManageConnections({ spaceId, name, returnTo }: { spaceId: string; name:
 // still reads down one edge.
 const ACTION_SLOT = 'shrink-0 whitespace-nowrap text-center';
 
-// The console's own tab bar: what the space has, and what it can add.
-const TABS: Array<{ id: Tab; label: string }> = [
-  { id: 'mine', label: 'In this space' },
-  { id: 'catalog', label: 'Add a connector' },
-];
-
 
 export default function ConnectorsPanel({
   space,
   returnTo = null,
   view,
-  onAdd,
   onRequestsChanged,
 }: {
   /** The space to work in; defaults to the one the app is showing. */
@@ -281,18 +265,11 @@ export default function ConnectorsPanel({
   view?: Tab;
   /** Where the OAuth round trip lands — this surface, not the connector page. */
   returnTo?: string | null;
-  /**
-   * Where a pinned list sends "Add a connector": the host owns the tabs, so
-   * it is the host that opens the catalogue. Unpinned, the panel opens its
-   * own. Absent on a pinned list, the row is not offered.
-   */
-  onAdd?: () => void;
   /** A member's request was answered — the console re-counts its badge. */
   onRequestsChanged?: () => void;
 } = {}) {
   const router = useSpaceRouter();
   const { currentSpace } = useSpace();
-  const openCreate = useCreateSurface();
   const spaceId = space ?? currentSpace?.id ?? null;
 
   // What the OAuth round trip said on its way back here. Read once and then
@@ -316,9 +293,7 @@ export default function ConnectorsPanel({
   }, [pathname, router]);
 
   const [query, setQuery] = useState('');
-  const [chosenTab, setTab] = useState<Tab>('mine');
-  const tab: Tab = view ?? chosenTab;
-  const [entry, setEntry] = useState<CatalogEntry | null>(null);
+  const tab: Tab = view ?? 'mine';
   const [existing, setExisting] = useState<ExistingConnector[]>([]);
   // What the space has that this caller cannot open, and what they have
   // already asked for — so a row says "Requested" rather than asking again.
@@ -327,10 +302,8 @@ export default function ConnectorsPanel({
   // The row whose ask is in flight — a note path (access) or a recipe id (connect).
   const [asking, setAsking] = useState<string | null>(null);
   // What members asked the space to connect (admins only): the console's
-  // strip, and the request an Add is fulfilling so it can be closed once the
-  // note is written.
+  // strip. An admin answers one by asking an AI to write the connector.
   const [requests, setRequests] = useState<ConnectorRequest[]>([]);
-  const [fulfilling, setFulfilling] = useState<ConnectorRequest | null>(null);
   // The OAuth services this deployment can complete without the space
   // registering its own app — what makes a Connect button one click.
   const [platformClients, setPlatformClients] = useState<string[]>([]);
@@ -352,10 +325,6 @@ export default function ConnectorsPanel({
   // a guess.
   const [canManage, setCanManage] = useState<boolean | null>(null);
   const readOnly = canManage === false;
-  // The catalog row whose one-click connect is in flight, by entry id: the note
-  // is written, then the browser leaves for the provider, so the button stays
-  // busy until navigation rather than settling back.
-  const [connecting, setConnecting] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // The connector Manage is open on, by note name, plus the recipe blurb the
@@ -370,8 +339,6 @@ export default function ConnectorsPanel({
 
   // Re-read what's connected on mount, on a space switch, and after a delete.
   const [reloadKey, setReloadKey] = useState(0);
-  // The space whose first load has already chosen a tab.
-  const landedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!spaceId) return;
     const controller = new AbortController();
@@ -392,15 +359,6 @@ export default function ConnectorsPanel({
         setPlatformClients(data.platformClients ?? []);
         setCanManage(data.canManage !== false);
         setError(null);
-        // What the space has is the question an admin usually has, but a space
-        // with nothing connected would open on an empty list — so land on the
-        // catalog instead. Once per space: a later reload (a delete, a toggle)
-        // must not move the tab out from under whoever chose it. A member has
-        // no catalog to land on.
-        if (view === undefined && landedRef.current !== spaceId) {
-          landedRef.current = spaceId;
-          setTab(data.canManage !== false && data.connectors.length === 0 ? 'catalog' : 'mine');
-        }
       })
       .catch((e: Error) => {
         if (!cancelled()) setError(e.message);
@@ -409,7 +367,7 @@ export default function ConnectorsPanel({
         if (!cancelled()) setLoading(false);
       });
     return () => controller.abort();
-  }, [spaceId, reloadKey, view]);
+  }, [spaceId, reloadKey]);
 
   // The asks, for the admin who answers them. Read only once the list has
   // said the caller can manage, and re-read with it.
@@ -441,10 +399,6 @@ export default function ConnectorsPanel({
     }
     return map;
   }, [existing]);
-
-  // Every note the space holds, including the ones Connected does not claim —
-  // this is what a new connector's name may not collide with.
-  const takenNames = useMemo(() => existing.map((c) => c.name), [existing]);
 
   /** The rows that work for this person now ({@link worksForCaller}). */
   const working = useMemo(() => existing.filter(worksForCaller), [existing]);
@@ -582,69 +536,6 @@ export default function ConnectorsPanel({
       setError(err instanceof Error ? err.message : 'Could not update the request');
     }
   };
-
-  /**
-   * Add what a member asked for: the recipe's own path — one press, or the
-   * form — with the request remembered so the note it writes closes it.
-   */
-  const fulfil = (request: ConnectorRequest) => {
-    const service = CONNECTOR_CATALOG.find((e) => e.id === request.recipe);
-    if (!service) { void resolveRequest(request, 'dismissed'); return; }
-    setFulfilling(request);
-    if (connectsInOneClick(service, platformClients)) void connectInOneClick(service, request);
-    else setEntry(service);
-  };
-
-  /**
-   * Connect a service in one press: write the note the recipe would have
-   * written with everything left at its default, then send the browser to the
-   * provider. No form, because there is nothing to ask — a vetted MCP server
-   * registers Visvine as its client, a Google row rides the deployment's own
-   * OAuth client, and the title, scopes and note are all the recipe's.
-   *
-   * The note is written FIRST because the OAuth start route reads the
-   * connector's perimeter out of it: the note is the connector, so there is
-   * nothing to authorize against until it exists. A dance the person abandons
-   * therefore leaves a connector with no account attached — visible in the
-   * list, deletable, and exactly what pressing Connect again picks up.
-   */
-  const connectInOneClick = async (entry: CatalogEntry, forRequest: ConnectorRequest | null = fulfilling) => {
-    if (!spaceId) return;
-    setConnecting(entry.id);
-    setError(null);
-    try {
-      const { name, title } = suggestConnector(entry, takenNames);
-      const { content } = connectorFromCatalog(entry, { name, title, description: '', values: {} });
-      const path = `connectors/${name}.md`;
-      await notesApi.create(spaceId, path, content);
-      invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId), contextKeys.read(spaceId, path));
-      // The browser is about to leave, so the request is closed before it does.
-      if (forRequest) await resolveRequest(forRequest, 'added', name);
-      window.location.href = connectorConnectPath(spaceId, name, returnTo);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not start the connection');
-      setConnecting(null);
-    }
-  };
-
-  if (entry) {
-    return (
-      <EntryForm
-        entry={entry}
-        spaceId={spaceId}
-        taken={takenNames}
-        returnTo={returnTo}
-        onBack={() => { setEntry(null); setFulfilling(null); }}
-        onWritten={async (name) => {
-          if (fulfilling) await resolveRequest(fulfilling, 'added', name);
-          setFulfilling(null);
-        }}
-        onCreated={(name) => {
-                router.push(`/directory/${encodeURIComponent(`connector:${name}`)}`);
-        }}
-      />
-    );
-  }
 
   const openManage = (connector: ExistingConnector, about: string | null = null) => {
     setToggleError(null);
@@ -809,16 +700,16 @@ export default function ConnectorsPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* What members asked the space to connect. Add is the recipe's own
-          path — one press or the form — and the note it writes closes the
-          request; Dismiss closes it with nothing written. */}
+      {/* What members asked the space to connect. An admin answers by asking
+          an AI to write the connector; writing it closes the request, and
+          Dismiss closes it with nothing written. */}
       {!readOnly && (tab === 'mine' || tab === 'catalog') && requests.length > 0 && (
         <section className="flex flex-col">
           <h3 className="text-sm font-semibold text-text-primary">Requested ({requests.length})</h3>
           <ul className="mt-2 divide-y divide-border-subtle border-t border-border-subtle">
             {requests.map((r) => {
               const service = CONNECTOR_CATALOG.find((e) => e.id === r.recipe) ?? null;
-              const busy = connecting === r.recipe || asking === r.id;
+              const busy = asking === r.id;
               return (
                 <li key={r.id} className="py-0.5">
                   <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
@@ -840,9 +731,6 @@ export default function ConnectorsPanel({
                     >
                       Dismiss
                     </Button>
-                    <Button variant="brand" size="sm" className={ACTION_SLOT} disabled={busy || !service} onClick={() => fulfil(r)}>
-                      {busy ? 'Adding…' : 'Add'}
-                    </Button>
                   </div>
                 </li>
               );
@@ -856,25 +744,6 @@ export default function ConnectorsPanel({
         onChange={setQuery}
         placeholder={tab === 'catalog' ? 'Search services…' : 'Search this space’s connectors…'}
       />
-
-      {!readOnly && view === undefined && <div className="flex gap-1">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-              tab === t.id
-                ? 'border border-border-default bg-surface-2 font-medium text-text-primary'
-                : 'border border-transparent text-text-secondary hover:bg-surface-2'
-            }`}
-          >
-            {t.label}
-            {t.id === 'mine' && existing.length > 0 && (
-              <span className="ml-1.5 text-xs text-text-muted">{existing.length}</span>
-            )}
-          </button>
-        ))}
-      </div>}
 
       {outcome && (
         <p
@@ -900,25 +769,13 @@ export default function ConnectorsPanel({
                   ? 'Nothing connected yet. Sign in to one on Not connected, or ask for one from All connectors.'
                   : tab === 'disconnected'
                     ? 'Everything this space has is connected for you.'
-                    : readOnly
-                      ? 'This space has no connectors yet. Ask for one from All connectors.'
-                      : 'Nothing connected yet.'}
+                    : 'This space has no connectors yet.'}
             </p>
           )}
 
           {/* One row per CONNECTOR, not per service: two Drives are two rows,
-              each with its own key, its own on/off and its own note. Adding
-              one leads the list, a row of it — the shape "New space" and
-              "New type" have at the head of theirs — and opens the catalogue. */}
+              each with its own key, its own on/off and its own note. */}
           <ul className="divide-y divide-border-subtle">
-            {!readOnly && (view === undefined || onAdd) && (
-              <li className="py-0.5">
-                <NewRow
-                  label="Add a connector"
-                  onClick={() => { setQuery(''); if (view === undefined) setTab('catalog'); else onAdd?.(); }}
-                />
-              </li>
-            )}
             {(tab === 'connected' ? connected : tab === 'disconnected' ? notConnected : mine).map((c) => {
               const status = statusOf(c);
               const service = serviceOf(c);
@@ -1013,19 +870,13 @@ export default function ConnectorsPanel({
             <p className="py-8 text-center text-sm text-text-muted">Nothing matches “{query}”.</p>
           )}
 
-          {/* One row per SERVICE. In a space's console it never fills up: a
-              service the space already reaches still offers another, because a
-              second connector is a second set of credentials (the team's Drive
-              beside yours), not a duplicate. */}
+          {/* One row per SERVICE: what the space holds of it, or a member's
+              Request. A connector is written by an AI over MCP; its page is
+              where the key is pasted or the sign-in pressed. */}
           <ul className="divide-y divide-border-subtle">
             {services.map((e) => {
               const rows = held.get(e.id) ?? [];
-              // Nothing to ask for: Connect is the whole interaction, and the
-              // form stays reachable through the row for the space that wants
-              // its own OAuth app or extra scopes.
-              const oneClick = connectsInOneClick(e, platformClients);
-              const style = catalogConnectStyle(e, platformClients);
-              const busy = connecting === e.id || asking === e.id;
+              const busy = asking === e.id;
               const isRequested = requested.includes(e.id);
               // A service each person connects for themselves is nobody's to
               // add to a space: the row signs THIS person in, admin or member,
@@ -1056,11 +907,9 @@ export default function ConnectorsPanel({
                   </li>
                 );
               }
-              // A member's row is an ask, or a pointer at what the space has:
-              // the whole catalogue is offered, and what the space has not
-              // connected is requested rather than connected.
-              if (readOnly) {
-                return (
+              // A row is a pointer at what the space has, or a member's ask for
+              // what it has not.
+              return (
                   <li key={e.id} className="py-0.5">
                     <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5">
                       <ConnectorLogo entry={e} size="sm" />
@@ -1072,7 +921,7 @@ export default function ConnectorsPanel({
                         <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES.ok}`}>
                           {rows.length === 1 ? 'In this space' : `${rows.length} in this space`}
                         </span>
-                      ) : isRequested ? (
+                      ) : !readOnly ? null : isRequested ? (
                         <span className={`${ACTION_SLOT} text-xs text-text-muted`}>Requested</span>
                       ) : (
                         <Button
@@ -1087,74 +936,10 @@ export default function ConnectorsPanel({
                       )}
                     </div>
                   </li>
-                );
-              }
-              return (
-                <li key={e.id} className="py-0.5">
-                  <div className="-mx-3 flex min-h-11 items-center gap-3 rounded-lg px-3 py-1.5 transition-colors hover:bg-surface-2">
-                    <button
-                      // The whole row does what its button does — there is one
-                      // thing to do with a service, and no second surface
-                      // explaining it: what it is and what it reaches are on
-                      // the connector's own page once it exists.
-                      disabled={busy}
-                      onClick={() =>
-                        oneClick ? void connectInOneClick(e) : setEntry(e)
-                      }
-                      className="flex min-w-0 flex-1 items-center gap-4 text-left"
-                    >
-                      <ConnectorLogo entry={e} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-text-primary">{catalogRowLabel(e)}</p>
-                        <p className="truncate text-xs text-text-muted">{e.description}</p>
-                      </div>
-                    </button>
-                    {/* How you connect it, before you press anything: one press,
-                        a sign-in, or a credential you have to go and fetch. */}
-                    <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[style === 'key' || style === 'password' ? 'muted' : 'ok']}`}>
-                      {style === 'one-click' ? 'One click' : style === 'sign-in' ? 'Sign in' : style === 'password' ? 'Password' : 'API key'}
-                    </span>
-                    {rows.length > 0 && (
-                      <span className="shrink-0 text-xs text-text-muted">
-                        {rows.length === 1 ? '1 connected' : `${rows.length} connected`}
-                      </span>
-                    )}
-                    {rows.length === 0 ? (
-                      <Button
-                        variant="brand"
-                        size="sm"
-                        disabled={busy}
-                        className={ACTION_SLOT}
-                        onClick={() => (oneClick ? void connectInOneClick(e) : setEntry(e))}
-                      >
-                        {busy ? 'Connecting…' : 'Connect'}
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="neutral"
-                        size="sm"
-                        disabled={busy}
-                        className={ACTION_SLOT}
-                        onClick={() => (oneClick ? void connectInOneClick(e) : setEntry(e))}
-                      >
-                        {busy ? 'Connecting…' : 'Add another'}
-                      </Button>
-                    )}
-                  </div>
-                </li>
               );
             })}
           </ul>
 
-          {/* The service that isn't on the list: a connector is only ever a
-              note, so a custom one is written on the draft surface. */}
-          {!readOnly && (
-            <div className="flex justify-end border-t border-border-subtle pt-4 mt-2">
-              <Button variant="neutral" size="sm" onClick={() => openCreate('connector')}>
-                Custom connector
-              </Button>
-            </div>
-          )}
         </div>
       )}
 
@@ -1168,204 +953,6 @@ export default function ConnectorsPanel({
         onConfirm={remove}
         onClose={() => setConfirmDelete(null)}
       />
-    </div>
-  );
-}
-
-/**
- * Connect: the recipe's fields, written as a note plus its secrets.
- *
- * The title is what separates a second connector to a service from the first —
- * it is the note's name once slugged, and the name is what agents call. So the
- * form opens on a free one ("Google Drive 2" where a Drive is already
- * connected), and a title that would land on a note the space already has is
- * refused here rather than at the write.
- */
-function EntryForm({
-  entry,
-  spaceId,
-  taken,
-  returnTo,
-  onBack,
-  onWritten,
-  onCreated,
-}: {
-  entry: CatalogEntry;
-  spaceId: string | null;
-  /** Connector names the space already uses — the new note may not be one of them. */
-  taken: string[];
-  /** Where the OAuth round trip lands, for a service that has one. */
-  returnTo: string | null;
-  onBack: () => void;
-  /** The note is written — before the browser goes anywhere. */
-  onWritten: (name: string) => Promise<void>;
-  /** Where to go afterwards, for a service with no sign-in to leave for. */
-  onCreated: (name: string) => void;
-}) {
-  const suggestion = useMemo(() => suggestConnector(entry, taken), [entry, taken]);
-  const [title, setTitle] = useState(suggestion.title);
-  // A field with choices starts on its first one.
-  const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      entry.fields.flatMap((f) => (f.choices && f.choices.length > 0 ? [[f.key, f.choices[0].value]] : [])),
-    ),
-  );
-  const [saving, setSaving] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // The ordinary fields, and the ones only a space registering its own OAuth
-  // app ever fills in. Splitting them is what keeps a client id and secret off
-  // a screen whose honest answer is "press Connect".
-  const plain = useMemo(() => plainFields(entry), [entry]);
-  const advanced = useMemo(() => entry.fields.filter((f) => f.advanced), [entry]);
-
-  const name = connectorSlug(title) || entry.id;
-  const clash = taken.some((n) => n.toLowerCase() === name.toLowerCase());
-  const nth = taken.length > 0 && suggestion.name !== entry.id;
-  const missing = entry.fields.filter((f) => f.required && !(values[f.key] ?? '').trim());
-  const ready = !!spaceId && !!connectorSlug(title) && !clash && missing.length === 0;
-
-  const submit = async () => {
-    if (!ready || !spaceId) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const { content, secrets } = connectorFromCatalog(entry, { name, title, description: '', values });
-      const path = `connectors/${name}.md`;
-      await notesApi.create(spaceId, path, content);
-      for (const secret of secrets) {
-        await fetchJson(`/api/spaces/${encodeURIComponent(spaceId)}/secrets`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(secret),
-        });
-      }
-      invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId), contextKeys.read(spaceId, path));
-      await onWritten(name);
-      // A connector nobody has signed into does nothing, so saving one hands
-      // straight over to the provider rather than landing on a page whose only
-      // useful control is Connect.
-      if (entry.oauth) {
-        window.location.href = connectorConnectPath(spaceId, name, returnTo);
-        return;
-      }
-      onCreated(name);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save the connector');
-      setSaving(false);
-    }
-  };
-
-  const field = (f: CatalogEntry['fields'][number]) => (
-    <Field
-      key={f.key}
-      label={
-        <>
-          {f.label}
-          {f.required && <span className="text-red-500"> *</span>}
-        </>
-      }
-      hint={f.hint}
-    >
-      {/* A field with choices offers them and still takes anything. */}
-      {f.choices && f.choices.length > 0 ? (
-        <>
-          <Select
-            value={f.choices.some((c) => c.value === (values[f.key] ?? '')) ? (values[f.key] ?? '') : ''}
-            onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-            aria-label={f.label}
-          >
-            <option value="">Something else…</option>
-            {f.choices.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </Select>
-          {!f.choices.some((c) => c.value === (values[f.key] ?? '')) && (
-            <Input
-              autoComplete="off"
-              placeholder={f.placeholder}
-              value={values[f.key] ?? ''}
-              onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value.trim() }))}
-              className="mt-2 font-mono text-sm"
-            />
-          )}
-        </>
-      ) : (
-        <Input
-          type={f.secret ? 'password' : 'text'}
-          autoComplete="off"
-          placeholder={f.placeholder}
-          value={values[f.key] ?? ''}
-          onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-          className={f.secret ? 'font-mono' : undefined}
-        />
-      )}
-    </Field>
-  );
-
-  return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-start gap-4">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="mt-1 rounded-lg p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
-        >
-          <ArrowLeftIcon className="h-5 w-5" />
-        </button>
-        <ConnectorLogo entry={entry} size="lg" />
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-text-primary">{catalogRowLabel(entry)}</h2>
-          <p className="text-sm text-text-muted">
-            {nth
-              ? `Another ${entry.name} connector — its own credentials, its own note.`
-              : entry.description}
-          </p>
-        </div>
-      </div>
-
-      <Field
-        label="Title"
-        error={clash ? `This space already has a connector called ${name} — give this one a different title.` : undefined}
-      >
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={64} />
-      </Field>
-
-      {plain.map(field)}
-
-      {advanced.length > 0 && (
-        <div className="border-t border-border-subtle pt-4">
-          <button
-            type="button"
-            onClick={() => setShowAdvanced((v) => !v)}
-            aria-expanded={showAdvanced}
-            className="text-sm font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary"
-          >
-            {entry.oauth ? 'Use your own OAuth app' : 'Advanced'}
-          </button>
-          {showAdvanced && (
-            <div className="mt-4 flex flex-col gap-5">
-              {entry.oauth && (
-                <p className="text-xs text-text-muted">
-                  Leave these blank and the connection runs on Visvine’s own app — nothing to
-                  register. Fill them in to hold the grant in your own provider account instead.
-                </p>
-              )}
-              {advanced.map(field)}
-            </div>
-          )}
-        </div>
-      )}
-
-      {error && <p className="border-l-2 border-red-500 py-1 pl-3 text-sm text-red-500">{error}</p>}
-
-      <div className="flex items-center justify-end gap-2 border-t border-border-subtle pt-4">
-        <Button variant="neutral" onClick={onBack} disabled={saving}>Cancel</Button>
-        <Button variant="brand" onClick={submit} disabled={!ready || saving}>
-          {saving ? 'Saving…' : entry.oauth ? 'Continue to sign-in' : 'Save connector'}
-        </Button>
-      </div>
     </div>
   );
 }

@@ -14,8 +14,8 @@ interface SidebarContextValue {
   /** Honours prefers-reduced-motion — consumers collapse transitions to 0s. */
   reduced: boolean;
   /** The space switcher is open in the rail's panel column — the search and
-   *  the list of every space you are in, slid out beside the rail the way
-   *  Create new is (SpaceSwitcherPanel). Opened from the space at the rail's
+   *  the list of every space you are in, slid out beside the rail
+   *  (SpaceSwitcherPanel). Opened from the space at the rail's
    *  head; the Sidebar owns the column it slides into. */
   switcherOpen: boolean;
   setSwitcherOpen: (v: boolean) => void;

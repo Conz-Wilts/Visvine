@@ -66,7 +66,7 @@ import {
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { lifecycleOf, type NoteLifecycle } from '@/lib/notes/shared/lifecycle'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
-import { readFields } from '@/lib/create/typeFields'
+import { readFields } from '@/lib/types/typeFields'
 import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
 import { ConnectorError } from '@/lib/connectors/config'

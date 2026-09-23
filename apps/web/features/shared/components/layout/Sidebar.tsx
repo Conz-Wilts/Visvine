@@ -3,7 +3,6 @@
 import Link from "@/features/shared/components/SpaceLink";
 import { useRoutePathname } from "@/features/shared/hooks/useRoutePathname";
 import { useEffect, useRef, useState } from "react";
-import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/CreateModalContext";
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { useSpace } from "@/features/shared/contexts/SpaceContext";
@@ -12,11 +11,9 @@ import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { GLOBAL_NAV, GLOBAL_NAV_KEYS } from "@/features/shared/lib/globalNav";
 import { CompassIcon, FeedIcon } from "@/features/shared/icons";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
-import { useHoverIntent } from "@/features/shared/hooks/useHoverIntent";
 import { BAND_MOTION, FRAME_BG, FRAME_LINE, FRAME_RADIUS, useDesktopChrome } from "@/features/desktop/lib/chrome";
 import Modal from "@/components/ui/Modal";
 import UserMenu from "@/features/auth/components/UserMenu";
-import CreatePanel from "@/features/create/components/CreatePanel";
 import SpaceSelector from "@/features/spaces/components/SpaceSelector";
 import SpaceSwitcherPanel from "@/features/spaces/components/SpaceSwitcherPanel";
 import type { SpaceFeatureConfig } from "@/lib/types";
@@ -37,8 +34,8 @@ import {
  *  ┌──────────────────────────────────┐
  *  │ [space]  Blackbird Ventures      │  head: the space, and the page's panel
  *  ├──────────────────────────────────┤
- *  │ +  Create new                    │  top: the one thing you DO — held apart
- *  │                                  │  from the tools by one hairline
+ *  │ ≡  Feed                          │  top: the ways out of the space
+ *  │ ◎  Discover                      │
  *  ├──────────────────────────────────┤
  *  │ ▣  Directory                     │  nav: what this space can do
  *  │ ▤  Channels …                    │
@@ -54,16 +51,19 @@ import {
  *  column of glyphs and nothing else. Only the container's width animates —
  *  nothing flips.
  *
+ * Nothing on the rail makes anything: creation is asked of an AI over the
+ * Visvine MCP server, and the app is where what it made is read and edited.
+ *
  * While the /channels list or a console section is docked, the card ALSO hosts
  * that panel beside the rail (the page portals into the host below via
  * ContextPanelContext), so the two read as one connected container.
  */
 
 const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
-// The rail's own panels — the space list and Create new — slide out beside
-// the rail, which shuts to its glyph column as the pointer crosses into them,
-// so the panel's width is its own: wide enough for a space's name beside its
-// chevron and check, or a kind's name beside its mark, without clipping.
+// The rail's own panel — the space list — slides out beside the rail, which
+// shuts to its glyph column as the pointer crosses into it, so the panel's
+// width is its own: wide enough for a space's name beside its chevron and
+// check without clipping.
 const RAIL_PANEL_W = 340;
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "100dvh"; // the rail is the shell: it owns the viewport's full height
@@ -82,15 +82,9 @@ const LEAVE_SLACK_PX = 40;
 const RAIL_MOTION = `${RAIL_MOTION_MS}ms cubic-bezier(0.25, 0.1, 0.25, 1)`;
 export default function Sidebar() {
   const pathname = useRoutePathname();
-  const { isOpen: createOpen, close: closeCreate } = useCreateModal();
-  const createSurface = useCreateSurface();
   const { expanded, setHovered, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
   const { currentSpace, isAdmin, loading: spaceLoading } = useSpace();
   const { setHost, dockTopInset } = useContextPanel();
-  // Rows that change which panel is out act only once the pointer has rested
-  // on them: a pointer crossing the rail on its way into a panel must not
-  // swap or shut what it is heading for.
-  const intent = useHoverIntent();
   // The desktop shell's window controls stand in the band's left end, over
   // the rail, and the closed rail is wide enough to clear them.
   const { inset: chromeInset, railW: collapsedW, railTop, bandH } = useDesktopChrome();
@@ -106,9 +100,8 @@ export default function Sidebar() {
   // each one's rail row is built from the same data the rest of the nav is —
   // no fetch, no second loading state.
   const installedTools = currentSpace?.installedTools;
-  // No space selected (and not merely still loading one): the tools and the
-  // Create button all act on the current space, so none of them belong on the
-  // rail. The head and foot stay — the space switcher is how you get back into
+  // No space selected (and not merely still loading one): the tools all act
+  // on the current space, so none of them belong on the rail. The head and foot stay — the space switcher is how you get back into
   // one. During the initial load the tools render as usual so the rail doesn't
   // flash empty on every page load.
   const noSpace = !spaceLoading && !currentSpace;
@@ -133,8 +126,7 @@ export default function Sidebar() {
     .reduce<string | null>((best, { href }) => (href.length > (best?.length ?? -1) ? href : best), null);
   const moreActive = moreNav.some(({ href }) => href === activeHref);
 
-  // "More" popup: a centered modal (same shell as the Create-new modal) with a
-  // grid of the tucked-away tools. Modal handles Escape + backdrop dismissal.
+  // "More" popup: a centered modal with a grid of the tucked-away tools. Modal handles Escape + backdrop dismissal.
   const [moreOpen, setMoreOpen] = useState(false);
   // Close on navigation (a tool card was clicked, or back/forward).
   useEffect(() => setMoreOpen(false), [pathname]);
@@ -161,7 +153,7 @@ export default function Sidebar() {
   const docked = pathname.startsWith("/channels") && wide;
   const panelW = CHANNELS_PANEL_W;
 
-  // The rail's own panels — the space switcher and Create new — are layers against
+  // The rail's own panel — the space switcher — is a layer against
   // the rail's edge (below), not this column: clamped so they can't outgrow a
   // narrow viewport even beside the open rail.
   const railPanelW = `min(${RAIL_PANEL_W}px, calc(100vw - ${EXPANDED_W}px))`;
@@ -171,7 +163,7 @@ export default function Sidebar() {
   // glyph column, and the panel — pinned to the rail's edge on the rail's own
   // motion — glides left with it, so the pair settles at a column of glyphs
   // and one list rather than two full columns side by side.
-  const railPanelOpen = switcherOpen || createOpen;
+  const railPanelOpen = switcherOpen;
   const railW = expanded ? EXPANDED_W : collapsedW;
   // Where a rail panel stands: the content sheet's box, below the band.
   const railPanelBox = (open: boolean): React.CSSProperties => ({
@@ -188,13 +180,8 @@ export default function Sidebar() {
     borderBottomLeftRadius: SHELL_FRAME_RADIUS,
     transition: reduced ? "none" : `left ${RAIL_MOTION}, top ${BAND_MOTION}`,
   });
-  // Create new is open only while the pointer is on its row or in the panel:
-  // pointing at any other row of the rail puts it away. The switcher is not
-  // put away by pointing: it goes when another row is PRESSED (pressRailRow),
-  // or when Create new opens in its place.
-  const leaveRailPanels = () => {
-    if (createOpen) closeCreate();
-  };
+  // The switcher is not put away by pointing: it goes when another row is
+  // PRESSED.
   const pressRailRow = () => {
     if (switcherOpen) setSwitcherOpen(false);
   };
@@ -210,7 +197,6 @@ export default function Sidebar() {
   const shutRailPanels = () => {
     const panelsGone = reduced ? 0 : DOCK_MS;
     setSwitcherOpen(false);
-    closeCreate();
     cancelRelease();
     releaseTimer.current = setTimeout(() => {
       releaseTimer.current = null;
@@ -304,19 +290,10 @@ export default function Sidebar() {
       <div className="flex shrink-0 flex-col" style={{ gap: ITEM_GAP }}>
         <SpaceSelector />
 
-        {/* The top group — Discover, then Create new. It rides with the head
-            rather than the nav below because it never scrolls: the way OUT to
-            other spaces and the one thing you come here to DO stay put however
-            many tools the space has switched on. New space hangs off the space
-            itself, in the switcher above.
-
-            Create acts on the current space, so with none selected there is
-            nothing for it to make (creating a space itself lives on the
-            switcher above). Pointing at it is enough, the way the space
-            is: the panel slides out beside the rail — every kind you can make
-            here, searchable — and stays while the pointer is anywhere on the
-            card. The kind decides what comes next: a short form in the panel,
-            its own surface, or a draft note (lib/create/rows.ts). */}
+        {/* The top group — Feed, then Discover. It rides with the head rather
+            than the nav below because it never scrolls: the ways OUT to other
+            spaces stay put however many tools the space has switched on. New
+            space hangs off the space itself, in the switcher above. */}
         <div
           className="flex flex-col border-t"
           style={{
@@ -331,7 +308,7 @@ export default function Sidebar() {
           }}
         >
           {/* Feed: the posts of every space you are in, in one stream. */}
-          <div {...intent(leaveRailPanels)} onClickCapture={pressRailRow}>
+          <div onClickCapture={pressRailRow}>
             <Row
               expanded={expanded}
               reduced={reduced}
@@ -343,55 +320,19 @@ export default function Sidebar() {
           </div>
           {/* Discover: the open spaces. It is here even with no space chosen,
               because it is where someone with none goes to find one. Like any
-              tool row, pointing at it puts Create new away and pressing it puts
-              the switcher away. */}
-          <div {...intent(leaveRailPanels)} onClickCapture={pressRailRow}>
+              tool row, pressing it puts the switcher away. */}
+          <div onClickCapture={pressRailRow}>
             <Row
               expanded={expanded}
               reduced={reduced}
               label="Discover"
               href="/discover"
               active={pathname === "/discover" || pathname.startsWith("/discover/")}
-              // Drawn at the Create disc's size rather than a glyph's: the two
-              // rows of the top group are a pair, and read as one.
+              // Drawn larger than a glyph: the two rows of the top group are
+              // a pair, and read as one.
               icon={<CompassIcon className="!h-9 !w-9" strokeWidth={1.5} />}
             />
           </div>
-          {!noSpace && (
-            <div
-              onClickCapture={pressRailRow}
-              {...intent(() => {
-                // One panel at a time: the panels share the edge of the rail.
-                setSwitcherOpen(false);
-                if (!createOpen) createSurface();
-              })}
-            >
-            <Row
-              expanded={expanded}
-              reduced={reduced}
-              label="Create new"
-              active={createOpen}
-              aria-expanded={createOpen}
-              aria-haspopup="dialog"
-              onClick={() => (createOpen ? closeCreate() : createSurface())}
-              icon={
-                // The one row that MAKES something, so it is the one row that
-                // is painted: a filled disc in the space's own accent rather
-                // than a bare glyph, and drawn larger than a glyph so the row
-                // you come here to press reads first. The glyph cell is a fixed
-                // width, so the disc grows inside it without moving the name.
-                <span
-                  className="flex h-10 w-10 items-center justify-center rounded-full text-white"
-                  style={{ background: "var(--theme-accent-color, #78d870)" }}
-                >
-                  <svg className="h-[22px] w-[22px]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" viewBox="0 0 24 24">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                </span>
-              }
-            />
-            </div>
-          )}
         </div>
       </div>
 
@@ -399,7 +340,6 @@ export default function Sidebar() {
           more tools than the viewport is tall; the head and foot never move. */}
       <nav
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden border-t"
-        {...intent(leaveRailPanels)}
         onClickCapture={pressRailRow}
         style={{
           paddingLeft: ROW_INSET,
@@ -444,7 +384,6 @@ export default function Sidebar() {
       {moreNav.length > 0 && (
         <div
           className="flex shrink-0 flex-col border-t"
-          {...intent(leaveRailPanels)}
           onClickCapture={pressRailRow}
           style={{
             gap: ITEM_GAP,
@@ -479,7 +418,6 @@ export default function Sidebar() {
           the band as rail rows rather than in a menu over the page. */}
       <div
         className="flex shrink-0 flex-col border-t"
-        {...intent(leaveRailPanels)}
         onClickCapture={pressRailRow}
         style={{
           paddingLeft: ROW_INSET,
@@ -502,10 +440,8 @@ export default function Sidebar() {
       className="fixed left-0 top-0 z-40"
       // Every row's glyph cell (railRow) is the closed rail's inner width.
       style={{ [RAIL_CELL_VAR]: `${collapsedW - ROW_INSET * 2}px` } as React.CSSProperties}
-      // The rail's panels open under the pointer (the space row, the
-      // Create new row), so they shut when the pointer leaves the whole card —
-      // rail and panel both. A Create form being filled in is the exception:
-      // it holds the card open until it is done or stepped back from.
+      // The rail's panel opens under the pointer (the space row), so it shuts
+      // when the pointer leaves the whole card — rail and panel both.
       onMouseEnter={() => { if (phase.current === "watch") stopTracking(); }}
       onMouseLeave={leaveCard}
     >
@@ -623,7 +559,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* The rail's own panels — the space switcher and Create new — open in
+      {/* The rail's own panel — the space switcher — opens in
           the content area: below the shell's band, over the sheet's left edge,
           with the sheet's margins and rounded corner, so the band stays whole
           above them. Each slides out from under the rail; parked, it is
@@ -634,23 +570,15 @@ export default function Sidebar() {
           panel opened while the rail is still widening, or shut before it has
           finished, travels with that edge — and when the pointer crosses into
           a panel and the rail shuts under it, the panel glides left to the
-          glyph column's edge. One shows at a time (the rows that open them
-          close the other), so they share the edge without a stack. */}
+          glyph column's edge. */}
       <div
         className={`absolute z-20 overflow-hidden ${switcherOpen ? '' : 'pointer-events-none'}`}
         style={railPanelBox(switcherOpen)}
       >
         <SpaceSwitcherPanel />
       </div>
-      <div
-        className={`absolute z-20 overflow-hidden ${createOpen ? '' : 'pointer-events-none'}`}
-        style={railPanelBox(createOpen)}
-      >
-        <CreatePanel />
-      </div>
 
-      {/* "More" popup — the same centered modal shell as the Create-new modal,
-          with a grid of the tools tucked out of the rail. Modal portals itself
+      {/* "More" popup — a centered modal with a grid of the tools tucked out of the rail. Modal portals itself
           to <body>, which is what keeps the aside's entrance transform from
           trapping the fixed-position overlay inside the rail. */}
       {moreOpen && (

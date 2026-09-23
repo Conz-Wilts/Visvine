@@ -1,8 +1,9 @@
-// The per-type property schema behind the note-first create surface: which rows
-// a Person / Space / Resource shows under its title, and where each row's value
-// lands on the node (a real column vs a metadata key).
+// The per-type property schema: which rows a Person / Space / Resource shows
+// under its title, and where each row's value lands on the node (a real column
+// vs a metadata key). add_context, the note's property rows and the Directory
+// table read the same rows.
 //
-// This lives in lib/create/ rather than lib/types/context.ts on purpose. That
+// This lives beside lib/types/context.ts rather than in it on purpose. That
 // module is the node *domain* — shapes, colours, aliases — and is imported by
 // the graph renderer, the dashboard and the tables; a UI field schema carrying
 // input kinds and placeholders would ride into all of those bundles for nothing.

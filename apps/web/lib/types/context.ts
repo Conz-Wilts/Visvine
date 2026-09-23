@@ -42,7 +42,7 @@ export interface NodeTypeConfig {
   noAliases?: true;
   /**
    * What this type TRACKS, beyond the rows every entity of it already carries
-   * (lib/create/typeFields.ts): the columns the Directory's table shows for
+   * (lib/types/typeFields.ts): the columns the Directory's table shows for
    * it, and the properties an agent can read off its entity note. Each
    * field's value lives at `node.metadata[key]` and is mirrored into the
    * entity note's frontmatter under the same key. Admin-authored

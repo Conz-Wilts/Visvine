@@ -2,9 +2,7 @@
 
 // The property block under a context note's title: a Type row, the node type's
 // own fields (email, location, website…), and a Tags row. One component serves
-// both the draft surface (/directory/new, everything editable, Type is a menu)
-// and a committed entity's Context tab (fields editable, Type a read-only chip),
-// so the two never drift apart visually — the create flow IS the destination.
+// a committed entity's Context tab (fields editable, Type a read-only chip).
 //
 // It is deliberately dumb about persistence. The draft holds values in local
 // state until commit; the entity panel PATCHes on blur. Both pass `onChange`
@@ -13,8 +11,8 @@
 // rollback and the tag-colour registry where they already live and work.
 
 import React, { useRef } from 'react'
-import { LocationAutocomplete } from '@/features/create/components/LocationAutocomplete'
-import { fieldsForType, type TypeFieldDef } from '@/lib/create/typeFields'
+import { LocationAutocomplete } from '@/features/notes/components/LocationAutocomplete'
+import { fieldsForType, type TypeFieldDef } from '@/lib/types/typeFields'
 
 const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-text-muted'
 

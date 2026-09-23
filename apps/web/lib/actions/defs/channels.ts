@@ -83,7 +83,7 @@ export const CHANNEL_ACTIONS = [
         name: channel.name,
         view_mode: channel.viewMode ?? 'CHAT',
         section_id: channel.sectionId ?? null,
-        href: inSpace(args.space_id, `/messages/${encodeURIComponent(channel.id)}`),
+        href: inSpace(args.space_id, `/channels/${encodeURIComponent(channel.id)}`),
       }
     },
   }),

@@ -2,7 +2,7 @@
 
 import type { Dispatch, KeyboardEvent, MutableRefObject, RefObject, SetStateAction } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { ArrowLeftIcon, HashIcon, LogOutIcon, PencilIcon, PlusIcon, SearchIcon, StarIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
+import { ArrowLeftIcon, HashIcon, LogOutIcon, PencilIcon, SearchIcon, StarIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
 import Avatar from '@/components/ui/Avatar';
 import { ChannelIcon, ChannelIconPicker } from './ChannelIcon';
 import MessageComposer from './MessageComposer';
@@ -25,11 +25,8 @@ interface ThreadPanelProps {
   currentUser: { id: string; name: string; image: string | null };
   isMobile: boolean;
   isAdmin: boolean;
-  spaceIsAdmin: boolean | undefined;
   spaceId: string | undefined;
   /** Whether the channel list has any joined channels (drives the empty-state copy). */
-  hasChannelsInList: boolean;
-  onShowChannelForm: () => void;
   onShowAddMembers: () => void;
   onBackToList: () => void;
   // Channel header extras
@@ -96,10 +93,7 @@ export default function ThreadPanel({
   currentUser,
   isMobile,
   isAdmin,
-  spaceIsAdmin,
   spaceId,
-  hasChannelsInList,
-  onShowChannelForm,
   onShowAddMembers,
   onBackToList,
   showHeaderIconPicker,
@@ -155,30 +149,10 @@ export default function ThreadPanel({
 
       {/* ── Empty state when no channel is open ── */}
       {!selectedConversation && (
-        <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
+        <div className="flex h-full flex-col items-center justify-center p-8">
           <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-surface-2">
             <HashIcon className="h-9 w-9 text-text-muted" strokeWidth={1.5} />
           </div>
-          <div>
-            <p className="text-base font-semibold text-text-primary">No channel selected</p>
-            <p className="mt-1 text-sm text-text-muted">
-              {hasChannelsInList
-                ? 'Pick a channel from the list to open its feed.'
-                : spaceIsAdmin
-                  ? 'Create your first channel to start a feed.'
-                  : 'Channels created by your section admins will appear here.'}
-            </p>
-          </div>
-          {spaceIsAdmin && (
-            <button
-              type="button"
-              onClick={onShowChannelForm}
-              className="mt-2 flex items-center gap-2 rounded-lg bg-brand-green px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            >
-              <PlusIcon className="h-4 w-4" strokeWidth={2.5} />
-              New channel
-            </button>
-          )}
         </div>
       )}
 

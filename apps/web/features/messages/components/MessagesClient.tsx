@@ -1,13 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { VirtuosoHandle } from 'react-virtuoso';
 import { useHeader } from '@/features/shared/contexts/HeaderContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useMessageHeights } from '@/features/messages/hooks/useMessageHeights';
 import type {
   ChannelDirectoryEntry,
@@ -47,9 +44,6 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   // Sidebar (the same portal host the /context notes tree uses), so the rail +
   // channel list read as one connected card instead of a separate floating box.
   const { host } = useContextPanel();
-  // Channel + section creation lives in the global "Create new" (+) modal, opened
-  // from anywhere via this context.
-  const { open: openCreateModal } = useCreateModal();
 
   // Under the space's prefix: the history writes below set the URL by hand.
   const basePath = spaceCtx.spaceHref('/channels');
@@ -91,29 +85,6 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   // Collapsed rail sections, persisted per browser (keyed by section id, '__none__' = unfiled).
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [joiningChannelId, setJoiningChannelId] = useState<string | null>(null);
-  const [showChannelForm, setShowChannelForm] = useState(false);
-  // Legacy ?new=channel deep link (older "Create new → Channel" tile routed here):
-  // channel creation now lives in the global Create modal, so open that instead of
-  // the retired on-page form, and clear the param.
-  const router = useSpaceRouter();
-  const searchParams = useSearchParams();
-  useEffect(() => {
-    if (searchParams.get('new') === 'channel') {
-      openCreateModal('channel');
-      router.replace(basePath);
-    }
-  }, [searchParams, router, basePath, openCreateModal]);
-  const [channelName, setChannelName] = useState('');
-  const [channelDescription, setChannelDescription] = useState('');
-  const [channelIcon, setChannelIcon] = useState<string | null>(null);
-  const [channelViewMode, setChannelViewMode] = useState<ChannelViewMode>('CHAT');
-  const [channelSectionId, setChannelSectionId] = useState('');
-  const [showIconPicker, setShowIconPicker] = useState(false);
-  const [creatingChannel, setCreatingChannel] = useState(false);
-  // Inline "new section" form in the channel rail (space admins only).
-  const [showSectionForm, setShowSectionForm] = useState(false);
-  const [sectionName, setSectionName] = useState('');
-  const [creatingSection, setCreatingSection] = useState(false);
   // Channel-header extras: icon picker + saved-messages dropdown panel.
   const [showHeaderIconPicker, setShowHeaderIconPicker] = useState(false);
   const [headerPanel, setHeaderPanel] = useState<'saved' | null>(null);
@@ -490,51 +461,6 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     }
   };
 
-  const handleCreateChannel = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!spaceId || !channelName.trim() || creatingChannel) return;
-    try {
-      setCreatingChannel(true);
-      const payload = await fetchJsonBody<{ conversation: { id: string } }>('/api/messages/conversations/channel', 'POST', {
-        spaceId,
-        name: channelName.trim(),
-        description: channelDescription.trim() || undefined,
-        icon: channelIcon ?? undefined,
-        sectionId: channelSectionId || undefined,
-        viewMode: channelViewMode,
-      });
-      setChannelName('');
-      setChannelDescription('');
-      setChannelIcon(null);
-      setChannelViewMode('CHAT');
-      setChannelSectionId('');
-      setShowChannelForm(false);
-      await fetchConversations(conversationSearch);
-      await fetchChannels();
-      handleSelectConversation(payload.conversation.id);
-    } catch (createError) {
-      setError((createError as Error).message || 'Unable to create the channel.');
-    } finally {
-      setCreatingChannel(false);
-    }
-  };
-
-  const handleCreateSection = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!spaceId || !sectionName.trim() || creatingSection) return;
-    try {
-      setCreatingSection(true);
-      await fetchJsonBody('/api/messages/sections', 'POST', { spaceId, name: sectionName.trim() });
-      setSectionName('');
-      setShowSectionForm(false);
-      await fetchChannels();
-    } catch (createError) {
-      setError((createError as Error).message || 'Unable to create the section.');
-    } finally {
-      setCreatingSection(false);
-    }
-  };
-
   const handleRenameSection = useCallback(async (sectionId: string, name: string) => {
     try {
       // Renaming touches only the name; the icon is set from its own picker
@@ -791,28 +717,6 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
       onJoinChannel={handleJoinChannel}
       joiningChannelId={joiningChannelId}
       spaceIsAdmin={spaceCtx?.isAdmin}
-      showChannelForm={showChannelForm}
-      setShowChannelForm={setShowChannelForm}
-      onCreateChannel={handleCreateChannel}
-      channelName={channelName}
-      setChannelName={setChannelName}
-      channelDescription={channelDescription}
-      setChannelDescription={setChannelDescription}
-      channelIcon={channelIcon}
-      setChannelIcon={setChannelIcon}
-      channelViewMode={channelViewMode}
-      setChannelViewMode={setChannelViewMode}
-      channelSectionId={channelSectionId}
-      setChannelSectionId={setChannelSectionId}
-      showIconPicker={showIconPicker}
-      setShowIconPicker={setShowIconPicker}
-      creatingChannel={creatingChannel}
-      showSectionForm={showSectionForm}
-      setShowSectionForm={setShowSectionForm}
-      sectionName={sectionName}
-      setSectionName={setSectionName}
-      creatingSection={creatingSection}
-      onCreateSection={handleCreateSection}
       onRenameSection={handleRenameSection}
       onDeleteSection={handleDeleteSection}
     />
@@ -847,10 +751,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
           currentUser={currentUser}
           isMobile={isMobile}
           isAdmin={isAdmin}
-          spaceIsAdmin={spaceCtx?.isAdmin}
           spaceId={spaceCtx?.currentSpace?.id}
-          hasChannelsInList={filteredConversations.length > 0}
-          onShowChannelForm={() => openCreateModal('channel')}
           onShowAddMembers={() => setShowAddMembersModal(true)}
           onBackToList={handleBackToList}
           showHeaderIconPicker={showHeaderIconPicker}

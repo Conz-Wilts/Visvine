@@ -167,15 +167,6 @@ export interface AuthoredToolsResponse {
   tools: AuthoredToolSummary[]
 }
 
-/** `POST …/tools/authoring` — the Create panel's Tool tile. */
-export interface CreateToolRequest {
-  name: string
-  title?: string
-  description?: string
-  /** A sidebar row label; omitted = no rail row yet. */
-  railLabel?: string
-}
-
 /**
  * What a scaffold answers with: the new working copy, where to look at it, and
  * the creator MCP server address the success screen hands to a coding agent

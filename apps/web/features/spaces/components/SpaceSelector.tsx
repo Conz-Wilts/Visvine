@@ -2,7 +2,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
-import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useSidebar } from '@/features/shared/contexts/SidebarContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
@@ -24,18 +23,14 @@ import { RAIL_ROW_CLASS, END_ROW_H, HEAD_CELL_W, MARK_PX, ITEM_GAP, ROW_INSET, R
  * The space's own row IS the switcher: pointing at it slides the search and
  * the list of every space you are in out beside the rail, because going
  * somewhere else is what the head of the rail is most often for. It stays out
- * while the pointer wanders the rail; pressing another row, or pointing at
- * Create new, puts it away. The band's rows are the rest.
+ * while the pointer wanders the rail; pressing another row puts it away. The band's rows are the rest.
  *
- * Discover leads the band: it is a way OUT of this space, not one of the
- * create-panel's kinds. Starting a space is the switcher's own last row —
+ * Discover leads the band: it is a way OUT of this space. Starting a space is the switcher's own last row —
  * it belongs beside the spaces you are already in.
  */
 export default function SpaceSelector() {
   const { currentSpace, spaces, isAdmin } = useSpace();
   const { expanded, reduced, switcherOpen, setSwitcherOpen } = useSidebar();
-  // The switcher and Create new share the rail's edge, one at a time.
-  const { close: closeCreate } = useCreateModal();
   const { session } = useAuth();
   const router = useSpaceRouter();
   // The console is the space's own settings, so it hangs off the space — not
@@ -67,10 +62,8 @@ export default function SpaceSelector() {
   }, [expanded]);
 
   // The switcher itself is the rail's panel (SpaceSwitcherPanel), slid out
-  // beside the rail by the Sidebar; this only asks for it. Create new shares
-  // the rail's edge, so it goes away first.
+  // beside the rail by the Sidebar; this only asks for it.
   const openSwitcher = () => {
-    closeCreate();
     setSwitcherOpen(true);
   };
 
@@ -79,7 +72,7 @@ export default function SpaceSelector() {
   const actions: { key: string; label: string; onClick: () => void; icon: React.ReactNode }[] = [
     // The console: THIS space's own settings, hung directly under the
     // space's name, for whoever administers it. (Discover is not here — it is
-    // a row of the rail's top group, above Create new.)
+    // a row of the rail's top group.)
     ...(canManage
       ? [
           {

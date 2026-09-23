@@ -444,13 +444,6 @@ export function trashHref(id: string): string {
   return `/directory/trash/${encodeURIComponent(id)}`
 }
 
-// The app route previewing an uploaded Context Source (csv/xlsx/docx/md/txt…).
-// Sources live in the same context-path namespace as notes but are never .md, so
-// they get their own viewer — same encoding rule as noteHref.
-export function sourceHref(path: string): string {
-  return `/directory/source/${path.split('/').map(encodeURIComponent).join('/')}`
-}
-
 // The entity kind implied by an ENTITY note path — either form — or null. A
 // namespace's own index and a sub-note inside an entity folder are not entity
 // paths (entityKindOfDir / entityOwnerPathOf answer for those).

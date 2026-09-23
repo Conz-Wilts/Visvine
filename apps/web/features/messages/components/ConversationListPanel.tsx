@@ -2,12 +2,10 @@
 
 import { createPortal } from 'react-dom';
 import { useState } from 'react';
-import type { Dispatch, FormEvent, RefObject, SetStateAction } from 'react';
-import { ViewToggle } from '@/components/ui';
-import { ChevronDownIcon, ChevronRightIcon, HashIcon, Icon, MessageCircleIcon, FeedIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from '@/features/shared/icons';
-import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
-import { ChannelIcon, ChannelIconPicker } from './ChannelIcon';
-import type { ChannelDirectoryEntry, ChannelSectionEntry, ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
+import type { FormEvent, RefObject } from 'react';
+import { ChevronDownIcon, ChevronRightIcon, Icon, PencilIcon, SearchIcon, Trash2Icon, XIcon } from '@/features/shared/icons';
+import { ChannelIcon } from './ChannelIcon';
+import type { ChannelDirectoryEntry, ChannelSectionEntry, ConversationSummary } from '@/lib/messages/types';
 
 /** Circle-style rail section: one per section (joined + browsable channels filed there), then an unfiled bucket. */
 export interface ChannelListGroup {
@@ -37,30 +35,6 @@ interface ConversationListPanelProps {
   onJoinChannel: (channelId: string) => Promise<void>;
   joiningChannelId: string | null;
   spaceIsAdmin: boolean | undefined;
-  // Channel-creation form (space admins only)
-  showChannelForm: boolean;
-  setShowChannelForm: Dispatch<SetStateAction<boolean>>;
-  onCreateChannel: (e: FormEvent) => Promise<void>;
-  channelName: string;
-  setChannelName: (value: string) => void;
-  channelDescription: string;
-  setChannelDescription: (value: string) => void;
-  channelIcon: string | null;
-  setChannelIcon: (value: string | null) => void;
-  channelViewMode: ChannelViewMode;
-  setChannelViewMode: (value: ChannelViewMode) => void;
-  channelSectionId: string;
-  setChannelSectionId: (value: string) => void;
-  showIconPicker: boolean;
-  setShowIconPicker: Dispatch<SetStateAction<boolean>>;
-  creatingChannel: boolean;
-  // Inline "new section" form (space admins only)
-  showSectionForm: boolean;
-  setShowSectionForm: Dispatch<SetStateAction<boolean>>;
-  sectionName: string;
-  setSectionName: (value: string) => void;
-  creatingSection: boolean;
-  onCreateSection: (e: FormEvent) => Promise<void>;
   // Section rename/delete (space admins only)
   onRenameSection: (sectionId: string, name: string) => Promise<void>;
   onDeleteSection: (sectionId: string) => Promise<void>;
@@ -87,33 +61,9 @@ export default function ConversationListPanel({
   onJoinChannel,
   joiningChannelId,
   spaceIsAdmin,
-  showChannelForm,
-  setShowChannelForm,
-  onCreateChannel,
-  channelName,
-  setChannelName,
-  channelDescription,
-  setChannelDescription,
-  channelIcon,
-  setChannelIcon,
-  channelViewMode,
-  setChannelViewMode,
-  channelSectionId,
-  setChannelSectionId,
-  showIconPicker,
-  setShowIconPicker,
-  creatingChannel,
-  showSectionForm,
-  setShowSectionForm,
-  sectionName,
-  setSectionName,
-  creatingSection,
-  onCreateSection,
   onRenameSection,
   onDeleteSection,
 }: ConversationListPanelProps) {
-  // Creating channels + sections lives in the global "Create new" (+) modal.
-  const { open: openCreateModal } = useCreateModal();
   // Inline section rename (space admins): which section header is being edited.
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
@@ -143,8 +93,6 @@ export default function ConversationListPanel({
   };
 
   // The list's own header: channel search up top, wherever the list lives.
-  // Channel creation lives in the global sidebar "+" (Create new → Channel),
-  // not here.
   const channelControls = (
     <div className="px-3 pb-2 pt-3">
       <div className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 transition-colors focus-within:bg-surface-1 focus-within:ring-1 focus-within:ring-border-default">
@@ -169,88 +117,6 @@ export default function ConversationListPanel({
     <>
     {channelControls}
 
-    {/* Channel creation (space admins only) */}
-    {showChannelForm && (
-      <form onSubmit={onCreateChannel} className="section-y-2 border-b border-border-subtle px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowIconPicker((v) => !v)}
-              title="Channel icon (default #)"
-              className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-2 text-text-secondary transition-colors hover:bg-surface-3"
-            >
-              <ChannelIcon icon={channelIcon} className="h-4 w-4" />
-            </button>
-            {showIconPicker && (
-              <div className="absolute left-0 top-10 z-30">
-                <ChannelIconPicker
-                  onSelect={(icon) => setChannelIcon(icon)}
-                  onClear={channelIcon ? () => setChannelIcon(null) : undefined}
-                  onClose={() => setShowIconPicker(false)}
-                />
-              </div>
-            )}
-          </div>
-          <input
-            value={channelName}
-            onChange={(e) => setChannelName(e.target.value)}
-            placeholder="Channel name"
-            autoFocus
-            maxLength={80}
-            className="min-w-0 flex-1 rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:bg-surface-1 focus:outline-none focus:ring-1 focus:ring-border-default"
-          />
-        </div>
-        <input
-          value={channelDescription}
-          onChange={(e) => setChannelDescription(e.target.value)}
-          placeholder="Description (optional)"
-          maxLength={500}
-          className="w-full rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:bg-surface-1 focus:outline-none focus:ring-1 focus:ring-border-default"
-        />
-        {/* View style: classic chat thread vs social-feed posts */}
-          <ViewToggle
-          size="sm"
-          value={channelViewMode}
-          onChange={setChannelViewMode}
-          options={[
-            { id: 'CHAT' as const, label: 'Chat', icon: <MessageCircleIcon className="h-3.5 w-3.5" /> },
-            { id: 'FEED' as const, label: 'Feed', icon: <FeedIcon className="h-3.5 w-3.5" /> },
-          ]}
-        />
-        {channelSections.length > 0 && (
-          <select
-            value={channelSectionId}
-            onChange={(e) => setChannelSectionId(e.target.value)}
-            className="w-full rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-primary focus:bg-surface-1 focus:outline-none focus:ring-1 focus:ring-border-default"
-          >
-            <option value="">No section</option>
-            {channelSections.map((section) => (
-              <option key={section.id} value={section.id}>
-                {section.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <div className="flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => { setShowChannelForm(false); setChannelName(''); setChannelDescription(''); setChannelIcon(null); setChannelViewMode('CHAT'); setChannelSectionId(''); setShowIconPicker(false); }}
-            className="rounded-md px-3 py-1.5 text-xs font-medium text-text-muted hover:text-text-secondary"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={!channelName.trim() || creatingChannel}
-            className="rounded-md bg-brand-green px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
-          >
-            {creatingChannel ? 'Creating…' : 'Create channel'}
-          </button>
-        </div>
-      </form>
-    )}
-
     {/* List area */}
     <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-3">
 
@@ -266,20 +132,6 @@ export default function ConversationListPanel({
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-
-          {!conversationsLoading && channelGroups.length === 0 && (
-            <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-              <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-2">
-                <HashIcon className="h-6 w-6 text-text-muted" />
-              </div>
-              <p className="text-sm font-medium text-text-secondary">No channels yet</p>
-              <p className="mt-1 text-xs text-text-muted">
-                {spaceIsAdmin
-                  ? 'Create the first channel with the + button in the sidebar.'
-                  : 'Channels created by your section admins will appear here.'}
-              </p>
             </div>
           )}
 
@@ -420,36 +272,6 @@ export default function ConversationListPanel({
                   </div>
                 );
               })}
-            </div>
-          )}
-
-          {/* ── New section (space admins) ── */}
-          {spaceIsAdmin && (
-            <div className="px-2.5 pt-1">
-              {/* Section form is just an input — Enter creates, Escape cancels. */}
-              {showSectionForm ? (
-                <form onSubmit={onCreateSection} className="px-3 py-1">
-                  <input
-                    value={sectionName}
-                    onChange={(e) => setSectionName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Escape') { setShowSectionForm(false); setSectionName(''); } }}
-                    placeholder="Section name"
-                    autoFocus
-                    disabled={creatingSection}
-                    maxLength={80}
-                    className="w-full rounded-lg border border-border-default bg-surface-1 px-3 py-2 text-[15px] text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none disabled:opacity-50"
-                  />
-                </form>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => openCreateModal('section')}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[15px] font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text-secondary"
-                >
-                  <PlusIcon className="h-[18px] w-[18px]" strokeWidth={2.5} />
-                  New section
-                </button>
-              )}
             </div>
           )}
       </>

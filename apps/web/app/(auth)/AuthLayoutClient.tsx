@@ -17,7 +17,6 @@ import { ProfileProvider } from "@/features/shared/contexts/ProfileContext";
 import {
   ThemeProvider,
 } from "@/features/shared/contexts/ThemeContext";
-import { CreateModalProvider } from "@/features/shared/contexts/CreateModalContext";
 import { SidebarProvider, useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { ContextPanelProvider } from "@/features/shared/contexts/ContextPanelContext";
 import { AuthProvider } from "@/features/auth/contexts/AuthContext";
@@ -203,11 +202,9 @@ export default function AuthLayoutClient({
           <HeaderProvider>
               <SidebarProvider>
               <ContextPanelProvider>
-              <CreateModalProvider>
-                              <AuthLayoutInner>
+                <AuthLayoutInner>
                   {children}
                 </AuthLayoutInner>
-                            </CreateModalProvider>
               </ContextPanelProvider>
               </SidebarProvider>
           </HeaderProvider>

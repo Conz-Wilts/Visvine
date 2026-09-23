@@ -115,9 +115,7 @@ export default function AgentsRoster({
       )}
 
       {agents.length === 0 ? (
-        <p className="px-2 text-[13px] text-text-muted">
-          {data.agents.length === 0 ? 'No agents yet. Create one from the rail.' : 'Nothing matches.'}
-        </p>
+        data.agents.length > 0 && <p className="px-2 text-[13px] text-text-muted">Nothing matches.</p>
       ) : (
         groups.map((g) => (
           <section key={g.name ?? '—'} className="mb-6">

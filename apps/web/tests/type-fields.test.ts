@@ -5,7 +5,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { applyFields, fieldDef, fieldsForType, readFields } from '../lib/create/typeFields'
+import { applyFields, fieldDef, fieldsForType, readFields } from '../lib/types/typeFields'
 
 // type lookup
 

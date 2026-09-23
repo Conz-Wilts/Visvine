@@ -1,7 +1,6 @@
-// Pure helpers behind the "Create new → Context / File" flows: turning a typed
-// title into a context path, and composing the seed note body. Kept out of the
-// modal so both the client (path preview, optimistic routing) and the tests use
-// one implementation. Pure — no Node/DOM/Prisma imports.
+// Pure helpers for making a note from a title: turning a typed title into a
+// context path, and composing the seed note body. One implementation for the
+// client and the tests. Pure — no Node/DOM/Prisma imports.
 
 /**
  * A title as a filename segment: lowercased, punctuation dropped, spaces to

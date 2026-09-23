@@ -1,29 +1,22 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
-import { Alert, Button, Field, Input, Skeleton } from '@/components/ui';
-import NewRow from '@/components/ui/NewRow';
-import { ArrowLeftIcon } from '@/features/shared/icons';
+import { Alert, Button, Skeleton } from '@/components/ui';
 import ConnectorLogo from '@/features/connectors/components/ConnectorLogo';
-import { notesApi } from '@/features/notes/lib/notesApi';
-import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contextPrefetch';
 import { fetchJson } from '@/lib/fetchJson';
-import { connectorSlug } from '@/lib/create/noteSlug';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
-import { MODEL_CATALOG, modelCatalogEntryFor, modelFromCatalog, type ModelCatalogEntry } from '@/lib/models/catalog';
-import { modelPath } from '@/lib/models/config';
+import { modelCatalogEntryFor } from '@/lib/models/catalog';
 import { LOCAL_RUNTIMES, type LocalRuntimeId } from '@/lib/agents/local';
 import { desktopRuntimes, type DesktopRuntimeStatus } from '@/features/desktop/lib/desktop';
 
 /**
- * Models, as the dialog off the account band: what this space's agents run
- * on, one row per note under models/, and a + that offers the providers.
+ * Models, as a section of the Space Console: what this space's agents run on,
+ * one row per note under models/.
  *
- * A row goes to the model's own page — the note is the model, and the page
- * is where the bill is read. Adding one writes models/<name>.md, the same
- * note an admin could have written by hand, and stores the provider's key as
- * the space's reserved MODEL_KEY_<PROVIDER> secret. A member sees the list
+ * A row goes to the model's own page — the note is the model, and the page is
+ * where the provider's key is pasted. A model is written by an AI over MCP
+ * (models/<name>.md, an admin's write); the key never passes through it. A member sees the list
  * (a brief is theirs to write, and it runs on the first of these) and none
  * of the acts.
  *
@@ -74,21 +67,17 @@ export default function ModelsPanel({ space }: {
 }) {
   const router = useSpaceRouter();
   const [rows, setRows] = useState<ModelRow[]>([]);
-  const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [picker, setPicker] = useState(false);
-  const [entry, setEntry] = useState<ModelCatalogEntry | null>(null);
   const [localOn, setLocalOn] = useState<Record<LocalRuntimeId, boolean>>({ claude: true, codex: true });
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetchJson<{ canManage: boolean; models: ModelRow[]; localRuntimes?: Record<LocalRuntimeId, boolean> }>(`/api/spaces/${encodeURIComponent(space)}/models`)
+    fetchJson<{ models: ModelRow[]; localRuntimes?: Record<LocalRuntimeId, boolean> }>(`/api/spaces/${encodeURIComponent(space)}/models`)
       .then((data) => {
         if (cancelled) return;
         setRows(data.models);
-        setCanManage(data.canManage);
         if (data.localRuntimes) setLocalOn(data.localRuntimes);
         setError(null);
       })
@@ -101,18 +90,6 @@ export default function ModelsPanel({ space }: {
     router.push(`/directory/${encodeURIComponent(`model:${name}`)}`);
   };
 
-  if (entry) {
-    return (
-      <AddModelForm
-        entry={entry}
-        space={space}
-        taken={rows.map((r) => r.name)}
-        onBack={() => setEntry(null)}
-        onCreated={open}
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4">
       {error && <Alert>{error}</Alert>}
@@ -122,16 +99,8 @@ export default function ModelsPanel({ space }: {
           {[0, 1].map((i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
         </div>
       ) : (
-        (rows.length > 0 || canManage) && (
+        rows.length > 0 && (
           <ul className="divide-y divide-border-subtle border-t border-border-subtle">
-            {/* Adding one leads the list, a row of it — the shape "New space"
-                and "New type" have at the head of theirs. It opens the
-                providers under itself, and nothing else. */}
-            {canManage && (
-              <li className="py-0.5">
-                <NewRow label="Add model" onClick={() => setPicker((p) => !p)} />
-              </li>
-            )}
             {rows.map((m) => {
               const status = statusOf(m);
               return (
@@ -152,27 +121,6 @@ export default function ModelsPanel({ space }: {
             })}
           </ul>
         )
-      )}
-
-      {/* Choosing a model is choosing among five, not searching a catalogue
-          of forty. */}
-      {picker && canManage && (
-        <ul className="divide-y divide-border-subtle border-t border-border-subtle">
-          {MODEL_CATALOG.map((e) => (
-            <li key={e.id} className="py-0.5">
-              <button
-                onClick={() => { setPicker(false); setEntry(e); }}
-                className="-mx-3 flex min-h-11 w-[calc(100%+1.5rem)] items-center gap-3 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-surface-2"
-              >
-                <ConnectorLogo entry={e} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-text-primary">{e.name}</p>
-                  <p className="truncate text-xs text-text-muted">{e.description}</p>
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
       )}
 
       {(localOn.claude || localOn.codex) && <YourPlan enabled={localOn} />}
@@ -267,112 +215,5 @@ function YourPlan({ enabled }: { enabled: Record<LocalRuntimeId, boolean> }) {
           })}
       </ul>
     </section>
-  );
-}
-
-/**
- * Add: the provider's fields, written as a note plus its key.
- *
- * The title is the note's name once slugged; a title that would land on a
- * note the space already has is refused here rather than at the write. A
- * provider is one row per space — its key is one secret — so a second note
- * to the same provider is refused the same way.
- */
-function AddModelForm({
-  entry,
-  space,
-  taken,
-  onBack,
-  onCreated,
-}: {
-  entry: ModelCatalogEntry;
-  space: string;
-  taken: string[];
-  onBack: () => void;
-  onCreated: (name: string) => void;
-}) {
-  const [title, setTitle] = useState(entry.name);
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const name = connectorSlug(title) || entry.id;
-  const clash = taken.some((n) => n.toLowerCase() === name.toLowerCase());
-  const missing = useMemo(() => entry.fields.filter((f) => f.required && !(values[f.key] ?? '').trim()), [entry, values]);
-  const ready = !!connectorSlug(title) && !clash && missing.length === 0;
-
-  const submit = async () => {
-    if (!ready) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const { content, secrets } = modelFromCatalog(entry, { name, title, description: '', values });
-      const path = modelPath(name);
-      await notesApi.create(space, path, content);
-      for (const secret of secrets) {
-        await fetchJson(`/api/spaces/${encodeURIComponent(space)}/secrets`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(secret),
-        });
-      }
-      invalidateContextCache(contextKeys.tree(space), contextKeys.list(space), contextKeys.read(space, path));
-      onCreated(name);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save the model');
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-start gap-4">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="mt-1 rounded-lg p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
-        >
-          <ArrowLeftIcon className="h-5 w-5" />
-        </button>
-        <ConnectorLogo entry={entry} size="lg" />
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-text-primary">{entry.name}</h2>
-          <p className="text-sm text-text-muted">{entry.description}</p>
-        </div>
-      </div>
-
-      <Field
-        label="Title"
-        error={clash ? `This space already has a model called ${name} — give this one a different title.` : undefined}
-      >
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={64} />
-      </Field>
-
-      {entry.fields.map((f) => (
-        <Field
-          key={f.key}
-          label={<>{f.label}{f.required && <span className="text-red-500"> *</span>}</>}
-          hint={f.hint}
-        >
-          <Input
-            type={f.secret ? 'password' : 'text'}
-            autoComplete="off"
-            placeholder={f.placeholder}
-            value={values[f.key] ?? ''}
-            onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-            className={f.secret ? 'font-mono' : undefined}
-          />
-        </Field>
-      ))}
-
-      {error && <p className="border-l-2 border-red-500 py-1 pl-3 text-sm text-red-500">{error}</p>}
-
-      <div className="flex items-center justify-end gap-2 border-t border-border-subtle pt-4">
-        <Button variant="neutral" onClick={onBack} disabled={saving}>Cancel</Button>
-        <Button variant="brand" onClick={submit} disabled={!ready || saving}>
-          {saving ? 'Saving…' : 'Add model'}
-        </Button>
-      </div>
-    </div>
   );
 }

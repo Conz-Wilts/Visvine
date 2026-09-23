@@ -17,8 +17,6 @@ import type {
   ApprovalDecisionResponse,
   ApprovalQueueResponse,
   AuthoredToolView,
-  CreateToolRequest,
-  CreateToolResponse,
   InstallUpdatedResponse,
   InstallsResponse,
   PublishResponse,
@@ -91,18 +89,6 @@ export function setAuthoredToolShare(
     `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
     'PATCH',
     { share },
-  )
-}
-
-/**
- * Scaffold a new Tool in a space — the Create panel's Tool tile. Any member with
- * write grants under `tools/`; the server refuses a taken or malformed name.
- */
-export function createTool(spaceId: string, input: CreateToolRequest): Promise<CreateToolResponse> {
-  return fetchJsonBody<CreateToolResponse>(
-    `/api/spaces/${encodeURIComponent(spaceId)}/tools/authoring`,
-    'POST',
-    input,
   )
 }
 

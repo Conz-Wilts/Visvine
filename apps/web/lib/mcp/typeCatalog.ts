@@ -16,7 +16,7 @@ import {
   type SpaceAlias,
 } from '@/lib/types/context'
 import { isNodeTypeEnabled, nodeTypeFeatureKey } from '@/lib/featureAccess'
-import { fieldsForType } from '@/lib/create/typeFields'
+import { fieldsForType } from '@/lib/types/typeFields'
 import { entityDirOf } from '@/lib/notes/entities'
 
 export interface TypeCatalogEntry {

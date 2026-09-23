@@ -21,20 +21,6 @@ export async function uploadImage(
 }
 
 /**
- * Upload a cropped image blob.
- */
-export async function uploadCroppedImage(
-  entityType: ImageEntityType,
-  entityId: string,
-  blob: Blob,
-  originalFileName?: string
-): Promise<string> {
-  const fileName = originalFileName || `${entityId}.webp`;
-  const file = new File([blob], fileName, { type: blob.type || 'image/png' });
-  return uploadImage(entityType, entityId, file);
-}
-
-/**
  * Delete all image variants for an entity.
  */
 export async function deleteImage(entityType: ImageEntityType, entityId: string): Promise<void> {
