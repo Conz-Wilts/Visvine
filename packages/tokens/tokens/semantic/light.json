@@ -1,0 +1,72 @@
+{
+  "color": {
+    "$type": "color",
+    "surface": {
+      "default":  { "$value": "{color.white}", "$description": "The one opaque surface: the page, floats, inputs." },
+      "subtle":   { "$value": "{color.ink.3}", "$description": "A quiet fill: a neutral button, a selected row. Tints what it sits on." },
+      "muted":    { "$value": "{color.ink.5}", "$description": "Hover, and the fill one step louder than subtle." },
+      "backdrop": { "$value": "{color.white}", "$description": "What the whole app sits on." },
+      "glass":    { "$value": "{color.chalk.82}", "$description": "Chrome over moving content, under a blur." }
+    },
+    "fg": {
+      "default":   { "$value": "{color.gray.900}", "$description": "Body text, titles, icons that matter." },
+      "secondary": { "$value": "{color.gray.700}" },
+      "muted":     { "$value": "{color.gray.600}", "$description": "Metadata, labels, the `·` state line." },
+      "subtle":    { "$value": "{color.gray.400}", "$description": "Placeholders and disabled text only: below AA for reading." },
+      "inverse":   { "$value": "{color.white}", "$description": "Text on a filled accent or danger control." },
+      "link":      { "$value": "{color.blue.600}", "$description": "Links in content are the web's blue, never the accent." }
+    },
+    "line": {
+      "default": { "$value": "{color.gray.300}", "$description": "Input and control borders." },
+      "subtle":  { "$value": "{color.gray.200}", "$description": "The hairline between sections." }
+    },
+    "accent": {
+      "default": { "$value": "{accents.green.light.default}", "$description": "The chosen hue. Repainted by the accent setting." },
+      "strong":  { "$value": "{accents.green.light.strong}" },
+      "soft":    { "$value": "{accents.green.light.soft}" }
+    },
+    "danger": {
+      "default": { "$value": "{color.red.600}", "$description": "Error text, a destructive button." },
+      "strong":  { "$value": "{color.red.700}", "$description": "Hover on a destructive button; emphasised error text." },
+      "bright":  { "$value": "{color.red.500}", "$description": "An invalid field's border, a status dot." },
+      "wash":    { "$value": "{color.red.50}" },
+      "line":    { "$value": "{color.red.200}" }
+    },
+    "warning": {
+      "default": { "$value": "{color.amber.700}" },
+      "strong":  { "$value": "{color.amber.800}" },
+      "bright":  { "$value": "{color.amber.500}" },
+      "wash":    { "$value": "{color.amber.50}" },
+      "line":    { "$value": "{color.amber.200}" }
+    },
+    "success": {
+      "default": { "$value": "{color.green.700}" },
+      "strong":  { "$value": "{color.green.800}" },
+      "bright":  { "$value": "{color.green.500}" },
+      "wash":    { "$value": "{color.green.50}" },
+      "line":    { "$value": "{color.green.200}" }
+    },
+    "info": {
+      "default": { "$value": "{color.blue.700}" },
+      "strong":  { "$value": "{color.blue.800}" },
+      "bright":  { "$value": "{color.blue.500}" },
+      "wash":    { "$value": "{color.blue.50}" },
+      "line":    { "$value": "{color.blue.200}" }
+    },
+    "type": {
+      "space":     { "fg": { "$value": "{color.visvine.700}" }, "wash": { "$value": "{color.visvine.50}" } },
+      "subspace":  { "fg": { "$value": "{color.visvine.700}" }, "wash": { "$value": "{color.visvine.50}" } },
+      "person":    { "fg": { "$value": "{color.blue.700}" },    "wash": { "$value": "{color.blue.50}" } },
+      "event":     { "fg": { "$value": "{color.rose.700}" },    "wash": { "$value": "{color.rose.50}" } },
+      "resource":  { "fg": { "$value": "{color.orange.700}" },  "wash": { "$value": "{color.orange.50}" } },
+      "index":     { "fg": { "$value": "{color.yellow.700}" },  "wash": { "$value": "{color.yellow.50}" } },
+      "section":   { "fg": { "$value": "{color.sky.700}" },     "wash": { "$value": "{color.sky.50}" } },
+      "channel":   { "fg": { "$value": "{color.pink.700}" },    "wash": { "$value": "{color.pink.50}" } },
+      "connector": { "fg": { "$value": "{color.indigo.700}" },  "wash": { "$value": "{color.indigo.50}" } },
+      "agent":     { "fg": { "$value": "{color.teal.700}" },    "wash": { "$value": "{color.teal.50}" } },
+      "tool":      { "fg": { "$value": "{color.fuchsia.700}" }, "wash": { "$value": "{color.fuchsia.50}" } },
+      "model":     { "fg": { "$value": "{color.violet.700}" },  "wash": { "$value": "{color.violet.50}" } },
+      "other":     { "fg": { "$value": "{color.gray.600}" },    "wash": { "$value": "{color.gray.50}" } }
+    }
+  }
+}

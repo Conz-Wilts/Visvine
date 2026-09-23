@@ -1,0 +1,41 @@
+{
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "ui": {
+        "$value": ["Open Sauce One", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        "$description": "Everything inside the product. Native apps use the system face until Open Sauce is bundled there."
+      },
+      "brand": {
+        "$value": ["ABC Ginto Rounded", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        "$description": "The wordmark face (shipped as Visvine-*). Marketing and the wordmark only; never product UI."
+      }
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "light":    { "$value": 300 },
+      "regular":  { "$value": 400 },
+      "medium":   { "$value": 500 },
+      "semibold": { "$value": 600 },
+      "bold":     { "$value": 700 }
+    },
+    "size": {
+      "$type": "dimension",
+      "$description": "Named by pixel size. The product uses more sizes than a designed scale would; each is a token so the scale can be tightened in one place.",
+      "10": { "$value": "10px" },
+      "11": { "$value": "11px" },
+      "12": { "$value": "12px" },
+      "13": { "$value": "13px" },
+      "14": { "$value": "14px" },
+      "15": { "$value": "15px" },
+      "16": { "$value": "16px" },
+      "18": { "$value": "18px" },
+      "20": { "$value": "20px" },
+      "24": { "$value": "24px" },
+      "30": { "$value": "30px" },
+      "36": { "$value": "36px" },
+      "48": { "$value": "48px" },
+      "60": { "$value": "60px" }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@visvine/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Visvine's design tokens — one DTCG source, generated for web, desktop, iOS and Android",
+  "type": "module",
+  "exports": {
+    ".": "./generated/index.ts",
+    "./tokens.css": "./generated/tokens.css",
+    "./theme.css": "./generated/theme.css"
+  },
+  "types": "./generated/index.ts",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/build.mjs --check",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "style-dictionary": "^5.5.5"
+  }
+}

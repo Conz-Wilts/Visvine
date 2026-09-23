@@ -1,0 +1,73 @@
+{
+  "color": {
+    "$type": "color",
+    "$description": "PROVISIONAL. Generated for every platform and switched on nowhere; every app is light-only until this is designed.",
+    "surface": {
+      "default":  { "$value": "{color.gray.900}" },
+      "subtle":   { "$value": "{color.chalk.3}" },
+      "muted":    { "$value": "{color.chalk.6}" },
+      "backdrop": { "$value": "{color.gray.950}" },
+      "glass":    { "$value": "rgba(17, 24, 39, 0.82)" }
+    },
+    "fg": {
+      "default":   { "$value": "{color.gray.50}" },
+      "secondary": { "$value": "{color.gray.300}" },
+      "muted":     { "$value": "{color.gray.400}" },
+      "subtle":    { "$value": "{color.gray.500}" },
+      "inverse":   { "$value": "{color.gray.900}" },
+      "link":      { "$value": "{color.blue.400}" }
+    },
+    "line": {
+      "default": { "$value": "{color.gray.700}" },
+      "subtle":  { "$value": "{color.gray.800}" }
+    },
+    "accent": {
+      "default": { "$value": "{accents.green.dark.default}" },
+      "strong":  { "$value": "{accents.green.dark.strong}" },
+      "soft":    { "$value": "{accents.green.dark.soft}" }
+    },
+    "danger": {
+      "default": { "$value": "{color.red.400}" },
+      "strong":  { "$value": "{color.red.300}" },
+      "bright":  { "$value": "{color.red.500}" },
+      "wash":    { "$value": "{color.red.950}" },
+      "line":    { "$value": "{color.red.900}" }
+    },
+    "warning": {
+      "default": { "$value": "{color.amber.400}" },
+      "strong":  { "$value": "{color.amber.300}" },
+      "bright":  { "$value": "{color.amber.500}" },
+      "wash":    { "$value": "{color.amber.950}" },
+      "line":    { "$value": "{color.amber.900}" }
+    },
+    "success": {
+      "default": { "$value": "{color.green.400}" },
+      "strong":  { "$value": "{color.green.300}" },
+      "bright":  { "$value": "{color.green.500}" },
+      "wash":    { "$value": "{color.green.950}" },
+      "line":    { "$value": "{color.green.900}" }
+    },
+    "info": {
+      "default": { "$value": "{color.blue.400}" },
+      "strong":  { "$value": "{color.blue.300}" },
+      "bright":  { "$value": "{color.blue.500}" },
+      "wash":    { "$value": "{color.blue.950}" },
+      "line":    { "$value": "{color.blue.900}" }
+    },
+    "type": {
+      "space":     { "fg": { "$value": "{color.visvine.200}" }, "wash": { "$value": "{color.visvine.950}" } },
+      "subspace":  { "fg": { "$value": "{color.visvine.200}" }, "wash": { "$value": "{color.visvine.950}" } },
+      "person":    { "fg": { "$value": "{color.blue.300}" },    "wash": { "$value": "{color.blue.950}" } },
+      "event":     { "fg": { "$value": "{color.rose.300}" },    "wash": { "$value": "{color.rose.950}" } },
+      "resource":  { "fg": { "$value": "{color.orange.300}" },  "wash": { "$value": "{color.orange.950}" } },
+      "index":     { "fg": { "$value": "{color.yellow.300}" },  "wash": { "$value": "{color.yellow.950}" } },
+      "section":   { "fg": { "$value": "{color.sky.300}" },     "wash": { "$value": "{color.sky.950}" } },
+      "channel":   { "fg": { "$value": "{color.pink.300}" },    "wash": { "$value": "{color.pink.950}" } },
+      "connector": { "fg": { "$value": "{color.indigo.300}" },  "wash": { "$value": "{color.indigo.950}" } },
+      "agent":     { "fg": { "$value": "{color.teal.300}" },    "wash": { "$value": "{color.teal.950}" } },
+      "tool":      { "fg": { "$value": "{color.fuchsia.300}" }, "wash": { "$value": "{color.fuchsia.950}" } },
+      "model":     { "fg": { "$value": "{color.violet.300}" },  "wash": { "$value": "{color.violet.950}" } },
+      "other":     { "fg": { "$value": "{color.gray.300}" },    "wash": { "$value": "{color.gray.800}" } }
+    }
+  }
+}

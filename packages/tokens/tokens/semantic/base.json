@@ -1,0 +1,43 @@
+{
+  "color": {
+    "$type": "color",
+    "brand": {
+      "default": { "$value": "{color.visvine.400}", "$description": "The logo green. Fixed: it never follows the chosen accent. Use `accent` for anything a person's accent should repaint." }
+    },
+    "admin": {
+      "default": { "$value": "{color.gold.600}", "$description": "The built-in Admin alias, the one alias a space cannot change." }
+    },
+    "type": {
+      "$description": "The default colour of each built-in type. One lightness step for every type so no chip shouts over its neighbours; hues spread round the wheel so any two types tell apart. A space may override a type's colour — this is the default it starts from.",
+      "space":     { "default": { "$value": "{color.visvine.400}", "$description": "The product's core object wears the logo." } },
+      "subspace":  { "default": { "$value": "{color.visvine.200}", "$description": "A room is a space: the same hue, a step lighter." } },
+      "person":    { "default": { "$value": "{color.blue.400}" } },
+      "event":     { "default": { "$value": "{color.rose.400}", "$description": "Rose, not red: red is danger." } },
+      "resource":  { "default": { "$value": "{color.orange.400}" } },
+      "index":     { "default": { "$value": "{color.yellow.400}", "$description": "A folder. Folders are yellow." } },
+      "section":   { "default": { "$value": "{color.sky.400}" } },
+      "channel":   { "default": { "$value": "{color.pink.400}" } },
+      "connector": { "default": { "$value": "{color.indigo.400}" } },
+      "agent":     { "default": { "$value": "{color.teal.400}" } },
+      "tool":      { "default": { "$value": "{color.fuchsia.400}" } },
+      "model":     { "default": { "$value": "{color.violet.400}" } },
+      "other":     { "default": { "$value": "{color.gray.400}", "$description": "A type nothing has coloured." } }
+    },
+    "relation": {
+      "$description": "The default colour of each built-in link type. A space may override these.",
+      "related":     { "$value": "{color.slate.400}" },
+      "knows":       { "$value": "{color.blue.600}" },
+      "works-at":    { "$value": "{color.purple.600}" },
+      "founded":     { "$value": "{color.green.600}" },
+      "invested-in": { "$value": "{color.amber.500}" },
+      "member-of":   { "$value": "{color.sky.500}" },
+      "partner":     { "$value": "{color.pink.500}" },
+      "mentors":     { "$value": "{color.teal.500}" },
+      "attended":    { "$value": "{color.red.500}" },
+      "hosting":     { "$value": "{color.red.500}" },
+      "introduced":  { "$value": "{color.cyan.500}" },
+      "mentioned":   { "$value": "{color.violet.500}" },
+      "contains":    { "$value": "{color.slate.500}" }
+    }
+  }
+}

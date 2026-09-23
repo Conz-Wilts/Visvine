@@ -1,0 +1,14 @@
+{
+  "z": {
+    "$type": "number",
+    "$description": "Stacking order, lowest first. Web only; native stacks by view order.",
+    "base":    { "$value": 0 },
+    "raised":  { "$value": 10 },
+    "sticky":  { "$value": 20 },
+    "dock":    { "$value": 30 },
+    "overlay": { "$value": 40 },
+    "modal":   { "$value": 50 },
+    "popover": { "$value": 60 },
+    "toast":   { "$value": 100 }
+  }
+}

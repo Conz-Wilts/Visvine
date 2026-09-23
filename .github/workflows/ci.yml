@@ -79,6 +79,11 @@ jobs:
       - name: Apply migrations
         run: pnpm db:migrate
 
+      # Every platform's tokens are generated and committed; a token edited
+      # without `pnpm tokens:build` leaves some app painting the old value.
+      - name: Design tokens
+        run: pnpm tokens:test
+
       - name: Typecheck
         run: pnpm typecheck
 

@@ -1,0 +1,27 @@
+{
+  "shadow": {
+    "$type": "shadow",
+    "float": {
+      "$description": "Chrome that floats over content: menus, popovers, the search overlay. Shadows are only for things that float.",
+      "$value": [
+        { "color": "rgba(16, 24, 40, 0.10)", "offsetX": "0px", "offsetY": "1px",  "blur": "2px",  "spread": "0px" },
+        { "color": "rgba(16, 24, 40, 0.10)", "offsetX": "0px", "offsetY": "4px",  "blur": "10px", "spread": "0px" },
+        { "color": "rgba(16, 24, 40, 0.14)", "offsetX": "0px", "offsetY": "16px", "blur": "32px", "spread": "-8px" }
+      ]
+    },
+    "strip": {
+      "$description": "Docked chrome that sits on the page rather than over it (the editor toolbar).",
+      "$value": [
+        { "color": "rgba(16, 24, 40, 0.05)", "offsetX": "0px", "offsetY": "1px", "blur": "2px", "spread": "0px" },
+        { "color": "rgba(16, 24, 40, 0.08)", "offsetX": "0px", "offsetY": "2px", "blur": "6px", "spread": "-2px" }
+      ]
+    },
+    "lift": {
+      "$description": "A row picked up and dragged.",
+      "$value": [
+        { "color": "rgba(0, 0, 0, 0.28)", "offsetX": "0px", "offsetY": "14px", "blur": "32px", "spread": "-8px" },
+        { "color": "rgba(0, 0, 0, 0.18)", "offsetX": "0px", "offsetY": "4px",  "blur": "10px", "spread": "-4px" }
+      ]
+    }
+  }
+}

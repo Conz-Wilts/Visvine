@@ -1,0 +1,115 @@
+{
+  "accents": {
+    "$type": "color",
+    "$description": "The hues a person picks from in Settings. Each is a set of three: `default` (fills, the selected state), `strong` (text and icons on white), `soft` (a wash behind a selected row). The id is what is stored, so it never changes.",
+    "green": {
+      "$description": "Green — the default, and the logo's hue.",
+      "light": {
+        "default": { "$value": "{color.visvine.400}" },
+        "strong":  { "$value": "{color.visvine.700}" },
+        "soft":    { "$value": "{color.visvine.50}" }
+      },
+      "dark": {
+        "default": { "$value": "{color.visvine.400}" },
+        "strong":  { "$value": "{color.visvine.200}" },
+        "soft":    { "$value": "{color.visvine.950}" }
+      }
+    },
+    "blue": {
+      "light": {
+        "default": { "$value": "{color.blue.400}" },
+        "strong":  { "$value": "{color.blue.700}" },
+        "soft":    { "$value": "{color.blue.50}" }
+      },
+      "dark": {
+        "default": { "$value": "{color.blue.400}" },
+        "strong":  { "$value": "{color.blue.300}" },
+        "soft":    { "$value": "{color.blue.950}" }
+      }
+    },
+    "purple": {
+      "light": {
+        "default": { "$value": "{color.violet.400}" },
+        "strong":  { "$value": "{color.violet.700}" },
+        "soft":    { "$value": "{color.violet.50}" }
+      },
+      "dark": {
+        "default": { "$value": "{color.violet.400}" },
+        "strong":  { "$value": "{color.violet.300}" },
+        "soft":    { "$value": "{color.violet.950}" }
+      }
+    },
+    "rose": {
+      "light": {
+        "default": { "$value": "{color.red.400}" },
+        "strong":  { "$value": "{color.red.700}" },
+        "soft":    { "$value": "{color.rose.50}" }
+      },
+      "dark": {
+        "default": { "$value": "{color.red.400}" },
+        "strong":  { "$value": "{color.red.300}" },
+        "soft":    { "$value": "{color.rose.950}" }
+      }
+    },
+    "orange": {
+      "light": {
+        "default": { "$value": "{color.orange.400}" },
+        "strong":  { "$value": "{color.orange.800}" },
+        "soft":    { "$value": "{color.orange.50}" }
+      },
+      "dark": {
+        "default": { "$value": "{color.orange.400}" },
+        "strong":  { "$value": "{color.orange.300}" },
+        "soft":    { "$value": "{color.orange.950}" }
+      }
+    },
+    "yellow": {
+      "light": {
+        "default": { "$value": "{color.yellow.400}" },
+        "strong":  { "$value": "{color.yellow.800}" },
+        "soft":    { "$value": "{color.yellow.50}" }
+      },
+      "dark": {
+        "default": { "$value": "{color.yellow.400}" },
+        "strong":  { "$value": "{color.yellow.300}" },
+        "soft":    { "$value": "{color.yellow.950}" }
+      }
+    },
+    "teal": {
+      "light": {
+        "default": { "$value": "{color.teal.400}" },
+        "strong":  { "$value": "{color.teal.700}" },
+        "soft":    { "$value": "{color.teal.50}" }
+      },
+      "dark": {
+        "default": { "$value": "{color.teal.400}" },
+        "strong":  { "$value": "{color.teal.300}" },
+        "soft":    { "$value": "{color.teal.950}" }
+      }
+    },
+    "pink": {
+      "light": {
+        "default": { "$value": "{color.pink.400}" },
+        "strong":  { "$value": "{color.pink.700}" },
+        "soft":    { "$value": "{color.pink.50}" }
+      },
+      "dark": {
+        "default": { "$value": "{color.pink.400}" },
+        "strong":  { "$value": "{color.pink.300}" },
+        "soft":    { "$value": "{color.pink.950}" }
+      }
+    },
+    "indigo": {
+      "light": {
+        "default": { "$value": "{color.indigo.400}" },
+        "strong":  { "$value": "{color.indigo.800}" },
+        "soft":    { "$value": "{color.indigo.50}" }
+      },
+      "dark": {
+        "default": { "$value": "{color.indigo.400}" },
+        "strong":  { "$value": "{color.indigo.300}" },
+        "soft":    { "$value": "{color.indigo.950}" }
+      }
+    }
+  }
+}

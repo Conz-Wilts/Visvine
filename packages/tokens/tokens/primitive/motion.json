@@ -1,0 +1,20 @@
+{
+  "motion": {
+    "duration": {
+      "$type": "duration",
+      "fast":   { "$value": "150ms", "$description": "Hover and colour changes." },
+      "quick":  { "$value": "200ms", "$description": "Something closing." },
+      "base":   { "$value": "300ms", "$description": "Tabs, the rail, a panel moving." },
+      "slow":   { "$value": "380ms", "$description": "A view arriving." },
+      "slower": { "$value": "550ms", "$description": "A whole tab set changing." }
+    },
+    "ease": {
+      "$type": "cubicBezier",
+      "standard":  { "$value": [0.4, 0, 0.2, 1], "$description": "Things moving between two places." },
+      "enter":     { "$value": [0.22, 1, 0.36, 1], "$description": "Things arriving: fast out, long settle." },
+      "gentle":    { "$value": [0.25, 0.1, 0.25, 1], "$description": "The shell and rail resizing (CSS `ease`)." },
+      "settle":    { "$value": [0.25, 1, 0.5, 1], "$description": "A dragged row landing." },
+      "overshoot": { "$value": [0.34, 1.56, 0.64, 1], "$description": "A small spring past the mark." }
+    }
+  }
+}
