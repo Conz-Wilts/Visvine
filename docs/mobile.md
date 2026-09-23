@@ -2,13 +2,21 @@
 
 The phone is a lite extension of a space, not the desktop app on a small
 screen. Two native clients (`apps/mobile/ios`, `apps/mobile/android`), thin
-over the web app's routes with `Authorization: Bearer <jwt>`, three tabs:
+over the web app's routes with `Authorization: Bearer <jwt>`, three tabs each —
+Home and Messages on both, then Tools on iOS and Activity on Android:
 
 | Tab | What it is | Reads | Writes |
 |---|---|---|---|
-| **Home** | The space switcher, two rows (People, Events) that open the Directory and Events screens, the space's feed, and a quick-capture composer | `GET /api/data/spaces`, `GET /api/feed?spaceId=&cursor=&limit=` | `POST /api/actions/edit_context` (a note), `POST /api/actions/add_context` (a Person / Space / Resource) |
+| **Home** | The space switcher and the space's feed. iOS swaps Feed, Events and Context under chips; Android has two rows (People, Events) that open the Directory and Events screens | `GET /api/data/spaces`, `GET /api/feed?spaceId=&cursor=&limit=`, `GET /api/events?spaceId=`, `GET /api/notes/tree` (iOS) | — |
 | **Messages** | iMessage-style. **Agents** — the space's agents, each a standing chat thread; **Contacts** — DMs with people | `GET /api/spaces/<id>/agents/chat`, `GET …/agents/<name>/chat?cursor=`, `GET /api/messages/conversations` (type `DM`), `GET /api/messages/users?query=` | `POST …/agents/<name>/chat/stream` (SSE) or `POST …/agents/<name>/chat`, `DELETE …/agents/<name>/chat`, `POST /api/messages/conversations {userId}` (the DM), `POST /api/messages/conversations/<id>/messages` |
-| **Activity** | Everything about you: runs that acted for you, mentions and replies, requests you can answer, the events you are going to | `GET /api/activity?cursor=&limit=` | the row's own `actions` (approve / decline through the existing member and access-request routes) |
+| **Tools** (iOS) | The space's installed Tools; a row opens the Tool on the web | `POST /api/actions/list_tools` | — |
+| **Activity** (Android) | Everything about you: runs that acted for you, mentions and replies, requests you can answer, the events you are going to | `GET /api/activity?cursor=&limit=` | the row's own `actions` (approve / decline through the existing member and access-request routes) |
+
+**The apps view and edit; they do not create.** A note, a person, a space, an
+event, an agent — anything new is asked of an AI through the Visvine MCP
+server (`/api/mcp`), which makes it with the same actions the web uses. What
+the phone writes is conversation (messages, agent chat, DMs), answers to
+requests, joining a space and the person's own profile.
 
 Every response is camelCase; action inputs (`space_id`, …) are snake_case
 because they are the actions' Zod schemas. The clients mirror each handler by
@@ -48,21 +56,6 @@ agent's tools running **as the person**. Not a run.
   whose `agents/` folder they cannot read; a space that wants its members
   chatting grants view on `agents/` (or the one agent's folder) like any
   other folder.
-
-## Quick capture
-
-The Home composer writes a note by default:
-
-```
-POST /api/actions/edit_context
-{ "space_id": "<space>", "path": "inbox/<yyyy-mm-dd>-<HHmm>-<slug>.md",
-  "content": "---\ntitle: <first line>\ntags: [capture]\n---\n\n<text>" }
-```
-
-`inbox/` is an ordinary folder of the space's own (not a reserved namespace):
-it appears because something is in it. With a chip set to Person / Space /
-Resource the composer calls `add_context { space_id, type, name, body }`
-instead, which makes the node and its note. Neither needs a model.
 
 ## Activity
 

@@ -19,7 +19,7 @@ The phone is a lite extension of a space — `docs/mobile.md` is the contract:
 
 | Tab | Holds |
 |---|---|
-| **Home** | the space switcher, a People row and an Events row (the Directory and Events screens, pushed), the space's feed, and a quick-capture composer (a note by default; Person / Space / Resource by chip) |
+| **Home** | the space switcher, a People row and an Events row (the Directory and Events screens, pushed), and the space's feed |
 | **Messages** | Agents — each of the space's agents as a standing chat thread, answered by the space's model with the agent's tools running as you; Contacts — DMs, with a people picker that makes one |
 | **Activity** | runs that acted for you, mentions and replies, join and access requests you can answer in place, and the events you are going to |
 

@@ -80,7 +80,7 @@ Three tabs (`docs/mobile.md`), and what each opens:
 
 | Tab | Screen | Opens |
 |---|---|---|
-| **Home** | `home/HomeScreen` — the space switcher, People and Events rows, the space's feed, the quick-capture composer | `directory/DirectoryScreen`, `events/EventsListScreen` (root-level, from the two rows) |
+| **Home** | `home/HomeScreen` — the space switcher, People and Events rows, the space's feed | `directory/DirectoryScreen`, `events/EventsListScreen` (root-level, from the two rows) |
 | **Messages** | `messaging/MessagesHubScreen` — Agents (standing threads) / Contacts (DMs) | `agents/AgentChatScreen` (SSE turn over `…/chat/stream`), `messaging/ConversationScreen`, `messaging/NewMessageScreen` (person picker → DM) |
 | **Activity** | `activity/ActivityScreen` — coming up, then runs, mentions, replies and requests by day, approve/decline on the row | an agent chat, a conversation, an event |
 

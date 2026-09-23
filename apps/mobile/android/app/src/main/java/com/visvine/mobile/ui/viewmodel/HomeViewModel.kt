@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.visvine.mobile.data.model.FeedPage
 import com.visvine.mobile.data.model.FeedPost
 import com.visvine.mobile.data.remote.ApiResult
-import com.visvine.mobile.data.repository.ActionsRepository
 import com.visvine.mobile.data.repository.FeedRepository
 import com.visvine.mobile.ui.state.SpaceManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,18 +16,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** What the Home composer captures: a note, or a record of one of the three creatable kinds. */
-enum class CaptureType(val label: String, val actionType: String?) {
-    NOTE("Note", null),
-    PERSON("Person", "person"),
-    SPACE("Space", "space"),
-    RESOURCE("Resource", "resource"),
-}
-
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val feedRepo: FeedRepository,
-    private val actionsRepo: ActionsRepository,
     private val spaceManager: SpaceManager,
 ) : ViewModel() {
 
@@ -40,11 +30,6 @@ class HomeViewModel @Inject constructor(
         val posts: List<FeedPost> = emptyList(),
         val nextCursor: String? = null,
         val error: String? = null,
-        val captureType: CaptureType = CaptureType.NOTE,
-        val sending: Boolean = false,
-        /** "Saved to inbox/…" / "Added Ana" — shown for a moment after a capture. */
-        val saved: String? = null,
-        val captureError: String? = null,
     )
 
     private val _state = MutableStateFlow(State())
@@ -102,59 +87,6 @@ class HomeViewModel @Inject constructor(
                 is ApiResult.Failure -> _state.value = _state.value.copy(error = res.error)
             }
             _state.value = _state.value.copy(loadingMore = false)
-        }
-    }
-
-    fun setCaptureType(type: CaptureType) {
-        _state.value = _state.value.copy(captureType = type, captureError = null)
-    }
-
-    fun clearSaved() {
-        _state.value = _state.value.copy(saved = null)
-    }
-
-    /**
-     * Note → `edit_context` at `inbox/<stamp>-<slug>.md`; anything else →
-     * `add_context` with the first line as the name and the rest as the body.
-     * [onDone] receives true when the field should clear.
-     */
-    fun capture(text: String, onDone: (Boolean) -> Unit) {
-        val s = _state.value
-        val spaceId = s.spaceId
-        val trimmed = text.trim()
-        if (trimmed.isEmpty() || s.sending) return
-        if (spaceId == null) {
-            _state.value = s.copy(captureError = "Pick a space first")
-            onDone(false)
-            return
-        }
-        _state.value = s.copy(sending = true, captureError = null, saved = null)
-        viewModelScope.launch {
-            val type = s.captureType
-            val outcome: ApiResult<String> = if (type.actionType == null) {
-                when (val res = actionsRepo.captureNote(spaceId, trimmed)) {
-                    is ApiResult.Success -> ApiResult.Success("Saved to ${res.data.path.ifBlank { "inbox" }}")
-                    is ApiResult.Failure -> res
-                }
-            } else {
-                val lines = trimmed.lines()
-                val name = lines.first().trim()
-                val body = lines.drop(1).joinToString("\n").trim()
-                when (val res = actionsRepo.captureEntity(spaceId, type.actionType, name, body.ifBlank { null })) {
-                    is ApiResult.Success -> ApiResult.Success("Added $name")
-                    is ApiResult.Failure -> res
-                }
-            }
-            when (outcome) {
-                is ApiResult.Success -> {
-                    _state.value = _state.value.copy(sending = false, saved = outcome.data)
-                    onDone(true)
-                }
-                is ApiResult.Failure -> {
-                    _state.value = _state.value.copy(sending = false, captureError = outcome.error)
-                    onDone(false)
-                }
-            }
         }
     }
 

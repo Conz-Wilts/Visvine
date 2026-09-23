@@ -42,7 +42,7 @@ final class HomeModel {
 }
 
 /// The space: its switcher in the header, a row of chips into its lists, and
-/// the feed (docs/mobile.md § Home). Capture is the bar's +.
+/// the feed (docs/mobile.md § Home).
 struct HomeView: View {
     @Environment(ThemeStore.self) private var theme
     @Environment(SpaceStore.self) private var space

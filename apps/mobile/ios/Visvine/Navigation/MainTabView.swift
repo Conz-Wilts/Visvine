@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// Hosts the three tabs — Home, Messages, Tools (docs/mobile.md) — the
-/// system tab bar with create, the space sidebar, and the
-/// Profile modal. Each tab
+/// system tab bar, the space sidebar, and the Profile modal. Each tab
 /// is its own NavigationStack so detail screens push within the tab; the
 /// Directory and Events screens are pushed from Home rather than being tabs.
 struct MainTabView: View {
@@ -12,20 +11,12 @@ struct MainTabView: View {
 
     @State private var selected: MainTab = .home
     @State private var profilePresented = false
-    @State private var createPresented = false
     @State private var discoverPresented = false
 
-    /// The create tab is never selected: choosing it opens the sheet.
-    private var selection: Binding<MainTab> {
-        Binding(get: { selected }, set: { tab in
-            if tab == .create { createPresented = true } else { selected = tab }
-        })
-    }
-
     // The system tab bar, so it sits where iOS puts it and its glass takes a
-    // press-and-drag across tabs. Create rides the search slot: its own circle.
+    // press-and-drag across tabs.
     var body: some View {
-        TabView(selection: selection) {
+        TabView(selection: $selected) {
             Tab("Home", image: VisvineIconName.home.rawValue, value: MainTab.home) {
                 stack { HomeView(onProfile: { profilePresented = true }) }
             }
@@ -34,13 +25,6 @@ struct MainTabView: View {
             }
             Tab("Tools", image: VisvineIconName.grid.rawValue, value: MainTab.tools) {
                 stack { ToolsView(onProfile: { profilePresented = true }) }
-            }
-            Tab(value: MainTab.create, role: .search) {
-                Color.clear
-            } label: {
-                Label { Text("Create") } icon: {
-                    Image(uiImage: createIcon).renderingMode(.original)
-                }
             }
         }
         .tint(theme.colors.accent)
@@ -57,11 +41,6 @@ struct MainTabView: View {
                 .environment(theme)
                 .environment(space)
         }
-        .sheet(isPresented: $createPresented) {
-            CreateSheet()
-                .environment(theme)
-                .environment(space)
-        }
         .task(id: auth.user?.id) { await space.refresh() }
         .onAppear { applyPendingRoute() }
         .onChange(of: auth.pendingRoute) { _, _ in applyPendingRoute() }
@@ -72,25 +51,6 @@ struct MainTabView: View {
                 .environment(auth)
                 .environment(space)
         }
-    }
-
-    /// The create button is a solid accent circle with a white cross. Drawn
-    /// as an original-colour image, because the tab bar tints a symbol.
-    private var createIcon: UIImage {
-        let side: CGFloat = 64
-        let accent = UIColor(theme.colors.accent)
-        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
-            accent.setFill()
-            UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side)).fill()
-            let arm: CGFloat = 13, mid = side / 2
-            let cross = UIBezierPath()
-            cross.move(to: CGPoint(x: mid - arm, y: mid)); cross.addLine(to: CGPoint(x: mid + arm, y: mid))
-            cross.move(to: CGPoint(x: mid, y: mid - arm)); cross.addLine(to: CGPoint(x: mid, y: mid + arm))
-            cross.lineWidth = 4
-            cross.lineCapStyle = .round
-            UIColor.white.setStroke()
-            cross.stroke()
-        }.withRenderingMode(.alwaysOriginal)
     }
 
     private func stack(@ViewBuilder _ root: () -> some View) -> some View {

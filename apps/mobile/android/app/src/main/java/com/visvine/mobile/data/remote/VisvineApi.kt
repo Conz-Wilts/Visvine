@@ -1,8 +1,6 @@
 package com.visvine.mobile.data.remote
 
-import com.visvine.mobile.data.model.ActionEnvelope
 import com.visvine.mobile.data.model.ActivityPage
-import com.visvine.mobile.data.model.AddContextRequest
 import com.visvine.mobile.data.model.ChatAgentsResponse
 import com.visvine.mobile.data.model.ChatPage
 import com.visvine.mobile.data.model.ChatSendRequest
@@ -12,8 +10,6 @@ import com.visvine.mobile.data.model.CreateDmRequest
 import com.visvine.mobile.data.model.CreateDmResponse
 import com.visvine.mobile.data.model.DevUsersResponse
 import com.visvine.mobile.data.model.DirectoryMember
-import com.visvine.mobile.data.model.EditContextRequest
-import com.visvine.mobile.data.model.EditContextResult
 import com.visvine.mobile.data.model.Event
 import com.visvine.mobile.data.model.EventsResponse
 import com.visvine.mobile.data.model.FeedPage
@@ -29,7 +25,6 @@ import com.visvine.mobile.data.model.SessionResponse
 import com.visvine.mobile.data.model.Space
 import com.visvine.mobile.data.model.SpacesResponse
 import com.visvine.mobile.data.model.UsersSearchResponse
-import kotlinx.serialization.json.JsonObject
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -127,13 +122,6 @@ interface VisvineApi {
         @Query("cursor") cursor: String?,
         @Query("limit") limit: Int = 30,
     ): ActivityPage
-
-    // Actions — the body IS the action's input (snake_case), the answer `{ result }`
-    @POST("api/actions/edit_context")
-    suspend fun editContext(@Body body: EditContextRequest): ActionEnvelope<EditContextResult>
-
-    @POST("api/actions/add_context")
-    suspend fun addContext(@Body body: AddContextRequest): ActionEnvelope<JsonObject>
 
     // Directory
     @GET("api/data/nodes")

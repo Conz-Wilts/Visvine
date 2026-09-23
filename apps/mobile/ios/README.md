@@ -60,7 +60,7 @@ Visvine/
 ├── Components/      ScreenHeader, SearchOverlay, SpaceAvatar, PersonAvatar, SegmentedNav,
 │                    MessageBubble, ConversationRow, Hairline/DateSeparator/LinkRow, glass
 ├── Navigation/      RootView, MainTabView, glass tab bar, route enums
-└── Views/           home (feed + capture), messages hub (agents | contacts), agent chat,
+└── Views/           home (feed, events, context), messages hub (agents | contacts), agent chat,
                      new message, activity, directory, full-profile, events, event detail,
                      conversation, login, dev-login, profile, edit-profile, settings
 ```
