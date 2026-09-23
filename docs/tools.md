@@ -144,15 +144,11 @@ and no move, so it cannot free the path either. See
 ## Authoring loop (over MCP)
 
 An authoring agent (Claude Code, Cursor, …) works entirely through Visvine's
-**MCP server** — there is no in-app AI Tool builder. The one in-app
-door is the **Create panel's Tool tile** (`features/create`, offered through
-`canCreateType` like every other tile — ungated and member-open, because there
-is no `tools` feature key and `tools/` is member-writable): a name, title, description and optional
-sidebar label go to `POST /api/spaces/[spaceId]/tools/authoring`, which
-calls the same `createTool` scaffold `create_tool` uses (a `railLabel` becomes
-`surfaces.rail` with the default icon), and the success screen shows the
-preview link plus the MCP address from `mcpResourceUrl()` — "finish it with
-your coding agent (Settings → MCP)".
+**MCP server**, and so does creating one: the app has no create surface.
+`create_tool` scaffolds it (its intake asks what the one screen shows and who
+uses it), `write_tool` iterates, `preview_tool` hands back the link.
+`POST /api/spaces/[spaceId]/tools/authoring` calls the same `createTool`
+scaffold for an HTTP caller.
 
 The console's **Tools** section can also delete a working copy:
 `DELETE /api/spaces/[spaceId]/tools/authoring/[name]` →

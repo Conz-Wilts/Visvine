@@ -69,15 +69,16 @@ a deep-frozen global — an action is convenience and review, never a wider door
 `^[a-z][a-z0-9_]{0,63}$`; at most 32 actions, 32KB of code each; `params` is not validated against
 `args` at run time.
 
-## Adding one from the catalog
+## Adding one
 
-**Create → Connector** opens one searchable list of services, filterable by All / Connected /
-Not connected, with an ⓘ per row. Pick a service, paste the credential
-its form asks for, save. What happens is exactly what an admin would do by hand: the note is
-written at `connectors/<name>.md` with the service's hosts and a body that teaches agents
-its API, and each secret field is stored through the secrets API — never in the note. OAuth
-entries (Google, Microsoft, any MCP server) store the OAuth client; people connect their
-own account afterwards from the connector's page. The recipes are `lib/connectors/catalog.ts`.
+An admin asks an AI over MCP. The `create_connector` recipe runs its intake (which service and
+account, how it authenticates and what the secret is CALLED, which calls matter, read-only or
+not), then writes `connectors/<name>.md` with `edit_context` — the service's hosts and a body
+that teaches agents its API; the catalogue in `lib/connectors/catalog.ts` is where it starts for
+a known service. The credential never passes through the AI: the connector's own page shows each
+`{{secret:NAME}}` unset, and the admin pastes it there, or presses Sign in for OAuth. People
+connect their own account afterwards from the same page. Members ask for a service the space
+lacks from the Directory's Connectors table (**Request**); the console lists those asks.
 
 ## Who can use one
 

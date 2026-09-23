@@ -264,23 +264,29 @@ reconnect and when the tab comes back.
 
 ## Creating things
 
-**Create new is a panel of the rail, and `lib/create/rows.ts#createRows` is the
-one table saying where every kind is made** (pure, tested). The current page's
-kinds sort first (`suggestedType.ts`). `rows.ts#flowFor` is the only place that
-decides what a row does:
+**Nothing in the apps creates anything. Every new thing is asked of an AI over
+the Visvine MCP server**, which runs the action for it; web, desktop, iOS and
+Android are where what it made is read, edited, published and switched on.
+There is no Create button, no draft surface, no `/events/new`.
 
-- `inline` — a form in the panel (`features/create/components/forms/`): Person,
-  Space, Resource, Folder, File, Channel, Section, Tool, New type, Agent
-  starters. Person/Space/Resource render from `lib/create/typeFields.ts`, so the
-  form, the note's property rows and the Directory table share one schema.
-- `route` — the kind's own surface: Event → `/events/new`, Connector → the
-  console catalogue, Model → the Models panel.
-- `draft` — `/directory/new`, for things that ARE prose: a Note, an Agent brief
-  (`?template=`), or a note wearing a custom type (`?type=<Name>`). The draft's
-  Type menu offers only Note, Folder, Agent and custom types.
+| Kind | Action |
+|---|---|
+| Note, folder, custom-typed note | `edit_context` (a folder is its `index.md`) |
+| Person, organisation record, resource | `add_context` |
+| Event | `create_event` → edited and published at `/events/<id>/edit` |
+| Space, sub-space | `create_space` — **and** New space on the switcher (`NewSpaceDialog`), the one create the app keeps, because a new account has no space to act in |
+| Agent | `create_agent`, then `activate_agent` |
+| Tool | `create_tool` → `write_tool` → `publish_tool` |
+| Channel, section | `create_channel`, `create_section` (`lib/actions/defs/channels.ts`) |
+| Type | `add_type` |
+| Connector, model | `edit_context` on `connectors/<name>.md` / `models/<name>.md`; the key is pasted, or the sign-in pressed, on the connector's or model's own page — a credential never passes through the AI |
 
-`useCreateSurface(kind, { folder })` is the one entry point for code. Starting a
-space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
+**A build asks first.** Every recipe that makes something carries an intake
+(`lib/actions/shared/intake.ts`: agent, connector, event, space, tool — at
+most four questions, one message, each saying what it decides and when to
+skip it), and the action's own description opens with `intakeSummary` for a
+client that never reads the recipe. The intake is the form the app no longer
+has.
 
 ## Auth and permissions
 
@@ -568,8 +574,7 @@ space stays on the switcher (`NewSpaceDialog`) and is not a create kind.
 ## Mobile
 
 `docs/mobile.md`. Two native clients (`apps/mobile`), three tabs — Home (space
-switcher, feed, People/Events rows, quick capture via `edit_context` /
-`add_context`), Messages (Agents = chat threads, Contacts = DMs; `POST
+switcher, feed, People/Events rows), Messages (Agents = chat threads, Contacts = DMs; `POST
 /api/messages/conversations { userId }` makes a DM), Activity
 (`GET /api/activity`: runs for you, mentions, replies, requests you can
 answer with the existing routes, upcoming events — `lib/activity/`, pure fold
@@ -912,13 +917,12 @@ notes. `connectors/` is admin-only for writes regardless of grants
 (`contextService.writeDenial`).
 
 **Connectors is a section of the Space Console** (`/admin?section=connectors`),
-not a rail row — the key is core and nav-hidden (`lib/featureAccess.ts`). Two
-tabs listing different things: **In this space** is one row per CONNECTOR;
-**Add a connector** is the catalog (`lib/connectors/catalog.ts`), one row per
-SERVICE, each a recipe. Saving writes `connectors/<name>.md` and PUTs each
-secret to `/api/spaces/<space>/secrets`. Manage offers Disable, Edit,
-Delete; the row itself goes to the connector's page, because the note IS the
-connector.
+not a rail row — the key is core and nav-hidden (`lib/featureAccess.ts`). It
+lists one row per CONNECTOR, plus the strip of services members asked for.
+Connectors are written by an AI (the `create_connector` recipe, from
+`lib/connectors/catalog.ts`); the connector's page is where its secrets are
+set and its OAuth sign-in pressed. Manage offers Disable, Edit, Delete; the
+row itself goes to the connector's page, because the note IS the connector.
 
 - **A connector is a space's or a person's, and what decides is whether
   connecting it asks the space for anything**
@@ -1080,8 +1084,8 @@ sweep.
   surfaced by `GET …/models`; the vendors changed position on this four times in
   2026, so it stays env rather than a release.
 - **Models is its own section of the Space Console**
-  (`/admin?section=models`), beside Connectors — `ModelsPanel` with a `+`
-  offering `lib/models/catalog.ts`'s five providers. Not a section of the
+  (`/admin?section=models`), beside Connectors — `ModelsPanel`, a list; the
+  note is written by an AI and the key pasted on the model's page. Not a section of the
   connectors list, and not in Settings: Settings holds only what follows the
   person, and a model is the space's.
 

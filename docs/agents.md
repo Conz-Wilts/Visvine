@@ -485,15 +485,10 @@ deadline, UTC) was already correct and was left untouched.
   the roster and lands on its `agent:` node, so the Directory's tag filter reaches it. The
   settings dialog's Group field writes the same key. There is no folder move and no second
   vocabulary.
-- **Creating one** — "Create → Agent" (offered first while browsing `agents/`) opens the note-first draft (`/directory/new?type=agent`)
-  with the agent half filled in (`features/agents/components/AgentDraftSetup.tsx`): a row of starter
-  briefs (`lib/agents/templates.ts` — each fills the title, body, tools and roster line, and must
-  round-trip through `parseAgentBrief`), then the settings the frontmatter will carry — provider and
-  model (the picker shows which providers hold a key), tool extras, connectors, the roster line.
-  Those come from `GET /api/spaces/[spaceId]/agents/options` (`lib/agents/options.ts`:
-  providers + `keyStored`, connectors, sibling agents, `defaultModel` = the first provider with a
-  key). The body is the brief; Create writes `agents/<name>/index.md` through `newAgentNote` (which
-  stamps `active: false` — a new agent is off until someone turns it on) and lands on the agent's page. An explicit `?type=` always wins over a draft stashed by an earlier visit.
+- **Creating one** — asked of an AI over MCP: the `create_agent` recipe runs its intake (what it
+  produces and where, when it runs, what it may reach), then `create_agent` writes
+  `agents/<name>/index.md` with `active: false` — a new agent is off until someone turns it on —
+  and answers with the agent's page. The app has no create surface for agents.
 - `/directory/agent:<name>` — the Agent tab beside the Context/Raw note tabs, described above:
   the run, with Config, History and Share on the tab row. The activation dialog (opened from the
   status line, the switch, or Config → When) sets the clock, `on.context` globs, the `on.webhook`
