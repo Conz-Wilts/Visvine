@@ -50,6 +50,12 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
     // and RSA/EC confusion, but stating HS256 keeps that guarantee explicit
     // against a future refactor that swaps in an asymmetric key.
     const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });
+    // Other tokens are signed with this key too (the upload token, the
+    // connector OAuth pending cookie, the CRM claim), several naming a
+    // `userId`. Each marks its purpose with an audience or a type; a session
+    // carries neither, so a token that does is never a login.
+    if ("aud" in payload || "typ" in payload || "type" in payload) return null;
+    if (typeof payload.userId !== "string" || !payload.userId) return null;
     return payload as unknown as SessionPayload;
   } catch {
     return null;
