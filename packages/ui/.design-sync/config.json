@@ -41,7 +41,8 @@
     "ContentReveal": ".design-sync/groups/status.md",
     "Stack": ".design-sync/groups/layout.md",
     "Row": ".design-sync/groups/layout.md",
-    "SettingsSection": ".design-sync/groups/layout.md"
+    "SettingsSection": ".design-sync/groups/layout.md",
+    "Logo": ".design-sync/groups/brand.md"
   },
   "dtsPropsFor": {
     "Button": "variant?: \"brand\" | \"neutral\" | \"danger\" | \"danger-text\" | \"ghost\";\n/** Applies to ghost only, brand/neutral/danger share one size. */\nsize?: \"sm\" | \"md\";\nloading?: boolean;\n/** Replaces the label while loading. */\nloadingText?: string;\nchildren: React.ReactNode;\nonClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;\ntype?: \"button\" | \"submit\" | \"reset\";\ndisabled?: boolean;\ntitle?: string;\nclassName?: string;\nid?: string;\nstyle?: React.CSSProperties;\n\"aria-label\"?: string;",

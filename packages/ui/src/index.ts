@@ -40,6 +40,7 @@ export { default as Avatar } from './Avatar';
 export { default as PersonSilhouette } from './PersonSilhouette';
 export { default as TypeSilhouette } from './TypeSilhouette';
 export { default as Alert } from './Alert';
+export { default as Logo } from './Logo';
 
 // Status
 export { default as EmptyState } from './EmptyState';
