@@ -49,7 +49,9 @@ export interface CountOption {
 }
 
 /**
- * The spaces Discover may show: public ones, and nothing else. The list it
+ * The spaces Discover may show: public top-level ones, and nothing else. A
+ * sub-space is reached through its house — from the switcher and the house's
+ * own page — never offered on its own here. The list it
  * narrows also holds the private spaces and sub-spaces the viewer is in or
  * administers, and a private space is invite-only — being a member of one is
  * no reason to advertise it, and a private room of a public house is never
@@ -58,8 +60,8 @@ export interface CountOption {
  * it has no members and no door — everyone already reads it — so offering it
  * here is offering a Join that can only be refused.
  */
-export function discoverableSpaces<T extends Pick<DiscoverSpace, 'id' | 'visibility'>>(spaces: readonly T[]): T[] {
-  return spaces.filter((space) => space.visibility === 'public' && !isGlobalSpace(space.id));
+export function discoverableSpaces<T extends Pick<DiscoverSpace, 'id' | 'visibility' | 'parentId'>>(spaces: readonly T[]): T[] {
+  return spaces.filter((space) => space.visibility === 'public' && !space.parentId && !isGlobalSpace(space.id));
 }
 
 /** A space's country as an ISO code, read off its Location ("Auckland, New Zealand" → NZ). */
