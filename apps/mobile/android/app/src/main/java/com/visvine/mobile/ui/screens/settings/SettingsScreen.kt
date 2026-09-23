@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.ThemeViewModel
 
@@ -47,30 +49,30 @@ fun SettingsScreen(
     val themeId by viewModel.themeId.collectAsStateWithLifecycle()
     val activeTheme = viewModel.themes.firstOrNull { it.id == themeId } ?: viewModel.themes.first()
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surface)) {
         Row(
-            modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().background(colors.surface).statusBarsPadding().padding(horizontal = VVSpace.x1, vertical = VVSpace.x1),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) { Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.accent) }
-            Text("Settings", color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text("Settings", color = colors.fg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
 
-        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 40.dp)) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text("APPEARANCE", color = colors.textMuted, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.9.sp, modifier = Modifier.padding(bottom = 4.dp))
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = VVSpace.x10)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(VVSpace.x4)) {
+                Text("APPEARANCE", color = colors.fgMuted, fontSize = VVFontSize.s11, fontWeight = FontWeight.SemiBold, letterSpacing = 0.9.sp, modifier = Modifier.padding(bottom = VVSpace.x1))
 
                 // Theme colour
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.fillMaxWidth().padding(top = VVSpace.x3_5), verticalAlignment = Alignment.CenterVertically) {
                     Icon(AppIcons.Palette, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
-                    Text("Theme Colour", color = colors.textPrimary, fontSize = 16.sp, modifier = Modifier.padding(start = 12.dp).weight(1f))
-                    Text(activeTheme.name, color = colors.textMuted, fontSize = 14.sp)
+                    Text("Theme Colour", color = colors.fg, fontSize = VVFontSize.s16, modifier = Modifier.padding(start = VVSpace.x3).weight(1f))
+                    Text(activeTheme.name, color = colors.fgMuted, fontSize = VVFontSize.s14)
                 }
 
                 FlowRow(
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp, start = 32.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = VVSpace.x4, start = VVSpace.x8),
+                    horizontalArrangement = Arrangement.spacedBy(VVSpace.x4),
+                    verticalArrangement = Arrangement.spacedBy(VVSpace.x3),
                 ) {
                     viewModel.themes.forEach { theme ->
                         val active = themeId == theme.id
@@ -79,14 +81,14 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .size(if (active) 36.dp else 32.dp)
                                     .clip(CircleShape)
-                                    .background(theme.accent)
-                                    .then(if (active) Modifier.border(2.dp, theme.accentDark, CircleShape) else Modifier)
+                                    .background(theme.light.base)
+                                    .then(if (active) Modifier.border(2.dp, theme.light.strong, CircleShape) else Modifier)
                                     .clickable { viewModel.setTheme(theme.id) },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (active) Icon(AppIcons.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                             }
-                            Text(theme.name, color = colors.textMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+                            Text(theme.name, color = colors.fgMuted, fontSize = VVFontSize.s11, modifier = Modifier.padding(top = VVSpace.x1_5))
                         }
                     }
                 }

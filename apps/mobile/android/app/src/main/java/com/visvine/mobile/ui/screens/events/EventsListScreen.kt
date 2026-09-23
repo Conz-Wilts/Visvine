@@ -32,11 +32,13 @@ import com.visvine.mobile.data.model.Event
 import com.visvine.mobile.ui.components.EmptyState
 import com.visvine.mobile.ui.components.ScreenHeader
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
-import com.visvine.mobile.ui.viewmodel.SpaceViewModel
 import com.visvine.mobile.ui.viewmodel.EventsListViewModel
 import com.visvine.mobile.ui.viewmodel.SearchViewModel
+import com.visvine.mobile.ui.viewmodel.SpaceViewModel
 
 /**
  * One section of the feed, in the order EventsFeedView files them: undated first
@@ -87,7 +89,7 @@ fun EventsListScreen(
 
     LaunchedEffect(Unit) { searchViewModel.setPlaceholder("Search events") }
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surface)) {
         ScreenHeader(onProfileClick = onProfileClick)
 
         when {
@@ -104,7 +106,7 @@ fun EventsListScreen(
                 ) {
                     state.error?.let {
                         item {
-                            Text(it, color = colors.error, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
+                            Text(it, color = colors.danger, fontSize = VVFontSize.s14, modifier = Modifier.fillMaxWidth().padding(vertical = VVSpace.x3))
                         }
                     }
                     if (events.isEmpty()) {
@@ -114,18 +116,18 @@ fun EventsListScreen(
                             item(key = "head-${section.title}") {
                                 Text(
                                     section.title.uppercase(),
-                                    color = colors.textMuted,
-                                    fontSize = 11.sp,
+                                    color = colors.fgMuted,
+                                    fontSize = VVFontSize.s11,
                                     fontWeight = FontWeight.SemiBold,
                                     letterSpacing = 0.9.sp,
-                                    modifier = Modifier.padding(top = 32.dp),
+                                    modifier = Modifier.padding(top = VVSpace.x8),
                                 )
                             }
                             section.events.forEachIndexed { index, event ->
                                 item(key = event.id) {
                                     Column {
                                         if (index > 0) {
-                                            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+                                            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.lineSubtle))
                                         }
                                         EventRow(event, section.featured, section.past) { onOpenEvent(event.id, event.title) }
                                     }
@@ -160,11 +162,11 @@ private fun EventRow(event: Event, featured: Boolean, past: Boolean, onClick: ()
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(vertical = 20.dp),
+            .padding(vertical = VVSpace.x5),
     ) {
         Text(
             event.title,
-            color = colors.textPrimary.copy(alpha = if (past) 0.7f else 1f),
+            color = colors.fg.copy(alpha = if (past) 0.7f else 1f),
             fontSize = if (featured) 20.sp else 17.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 2,
@@ -173,25 +175,25 @@ private fun EventRow(event: Event, featured: Boolean, past: Boolean, onClick: ()
         Text(
             buildAnnotatedString {
                 if (countdown != null) {
-                    withStyle(SpanStyle(color = colors.accentDark, fontWeight = FontWeight.SemiBold)) { append(countdown) }
+                    withStyle(SpanStyle(color = colors.accentStrong, fontWeight = FontWeight.SemiBold)) { append(countdown) }
                     append(" · ")
                 }
                 append(facts)
             },
-            color = colors.textSecondary.copy(alpha = if (past) 0.7f else 1f),
-            fontSize = 14.sp,
+            color = colors.fgSecondary.copy(alpha = if (past) 0.7f else 1f),
+            fontSize = VVFontSize.s14,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = VVSpace.x1),
         )
         event.description?.takeIf { it.isNotEmpty() }?.let { description ->
             Text(
                 description,
-                color = colors.textSecondary.copy(alpha = if (past) 0.7f else 1f),
-                fontSize = 14.sp,
+                color = colors.fgSecondary.copy(alpha = if (past) 0.7f else 1f),
+                fontSize = VVFontSize.s14,
                 maxLines = if (featured) 3 else 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(top = VVSpace.x2),
             )
         }
     }

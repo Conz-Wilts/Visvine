@@ -46,6 +46,8 @@ import com.visvine.mobile.data.remote.MediaUrl
 import com.visvine.mobile.ui.components.MessageBubble
 import com.visvine.mobile.ui.components.PersonAvatar
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
 import com.visvine.mobile.ui.viewmodel.ConversationViewModel
@@ -67,19 +69,19 @@ fun ConversationScreen(
         if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.size - 1)
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgSecondary).imePadding()) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surfaceSubtle).imePadding()) {
         // Top bar
         Row(
-            modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().background(colors.surface).statusBarsPadding().padding(horizontal = VVSpace.x1, vertical = VVSpace.x1),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) { Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.accent) }
-            Text(conversationName ?: "Chat", color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(conversationName ?: "Chat", color = colors.fg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
 
         state.error?.let {
-            Box(Modifier.fillMaxWidth().background(colors.bgTertiary).padding(horizontal = 16.dp, vertical = 12.dp)) {
-                Text(it, color = colors.error, fontSize = 14.sp)
+            Box(Modifier.fillMaxWidth().background(colors.surfaceMuted).padding(horizontal = VVSpace.x4, vertical = VVSpace.x3)) {
+                Text(it, color = colors.danger, fontSize = VVFontSize.s14)
             }
         }
 
@@ -87,22 +89,22 @@ fun ConversationScreen(
             Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) { CircularProgressIndicator(color = colors.accent) }
         } else if (state.messages.isEmpty()) {
             Column(
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(48.dp),
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(VVSpace.x12),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Box(modifier = Modifier.size(64.dp).clip(CircleShape).background(colors.bgTertiary), contentAlignment = Alignment.Center) {
-                    Icon(AppIcons.Message, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(32.dp))
+                Box(modifier = Modifier.size(64.dp).clip(CircleShape).background(colors.surfaceMuted), contentAlignment = Alignment.Center) {
+                    Icon(AppIcons.Message, contentDescription = null, tint = colors.fgMuted, modifier = Modifier.size(32.dp))
                 }
-                Text("No messages yet", color = colors.textMuted, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 12.dp))
-                Text("Start the conversation!", color = colors.textLight, fontSize = 14.sp)
+                Text("No messages yet", color = colors.fgMuted, fontSize = VVFontSize.s16, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = VVSpace.x3))
+                Text("Start the conversation!", color = colors.fgSubtle, fontSize = VVFontSize.s14)
             }
         } else {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(VVSpace.x3),
             ) {
                 items(state.messages, key = { it.id }) { message ->
                     MessageBubble(
@@ -118,19 +120,19 @@ fun ConversationScreen(
 
         // Composer
         Row(
-            modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).navigationBarsPadding().padding(12.dp),
+            modifier = Modifier.fillMaxWidth().background(colors.surface).navigationBarsPadding().padding(VVSpace.x3),
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(VVSpace.x2),
         ) {
             TextField(
                 value = input,
                 onValueChange = { input = it },
-                placeholder = { Text("Type a message...", color = colors.textLight) },
+                placeholder = { Text("Type a message...", color = colors.fgSubtle) },
                 modifier = Modifier.weight(1f).heightIn(max = 120.dp).clip(RoundedCornerShape(22.dp)),
-                textStyle = LocalTextStyle.current.copy(color = colors.textPrimary, fontSize = 15.sp),
+                textStyle = LocalTextStyle.current.copy(color = colors.fg, fontSize = VVFontSize.s15),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = colors.bgTertiary,
-                    unfocusedContainerColor = colors.bgTertiary,
+                    focusedContainerColor = colors.surfaceMuted,
+                    unfocusedContainerColor = colors.surfaceMuted,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     cursorColor = colors.accent,
@@ -138,7 +140,7 @@ fun ConversationScreen(
             )
             val canSend = input.isNotBlank() && !state.sending
             Box(
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(if (input.isNotBlank()) colors.accent else colors.borderDefault),
+                modifier = Modifier.size(40.dp).clip(CircleShape).background(if (input.isNotBlank()) colors.accent else colors.line),
                 contentAlignment = Alignment.Center,
             ) {
                 if (state.sending) {

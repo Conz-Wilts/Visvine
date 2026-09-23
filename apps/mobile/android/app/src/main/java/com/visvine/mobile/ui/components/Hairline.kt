@@ -12,5 +12,5 @@ import com.visvine.mobile.ui.theme.VisvineTheme
 /** The 1dp `borderSubtle` line that opens a group of rows — the only divider there is. */
 @Composable
 fun Hairline(modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().height(1.dp).background(VisvineTheme.colors.borderSubtle))
+    Box(modifier.fillMaxWidth().height(1.dp).background(VisvineTheme.colors.lineSubtle))
 }

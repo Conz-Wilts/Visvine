@@ -37,6 +37,8 @@ import com.visvine.mobile.ui.components.Hairline
 import com.visvine.mobile.ui.components.PersonAvatar
 import com.visvine.mobile.ui.components.ScreenHeader
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
 import com.visvine.mobile.ui.viewmodel.HomeViewModel
@@ -56,11 +58,11 @@ fun HomeScreen(
     val colors = VisvineTheme.colors
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surface)) {
         ScreenHeader(onProfileClick = onProfileClick, showSpaceSelector = true)
 
         state.error?.let {
-            Text(it, color = colors.error, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp))
+            Text(it, color = colors.danger, fontSize = VVFontSize.s14, modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x3))
         }
 
         PullToRefreshBox(
@@ -81,15 +83,15 @@ fun HomeScreen(
                 item(key = "feed-label") {
                     Text(
                         "Feed",
-                        color = colors.textMuted,
-                        fontSize = 13.sp,
+                        color = colors.fgMuted,
+                        fontSize = VVFontSize.s13,
                         fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+                        modifier = Modifier.padding(start = VVSpace.x4, end = VVSpace.x4, top = VVSpace.x3, bottom = VVSpace.x1),
                     )
                 }
                 when {
                     state.loading -> item(key = "loading") {
-                        Box(Modifier.fillMaxWidth().padding(32.dp), Alignment.Center) { CircularProgressIndicator(color = colors.accent) }
+                        Box(Modifier.fillMaxWidth().padding(VVSpace.x8), Alignment.Center) { CircularProgressIndicator(color = colors.accent) }
                     }
                     state.posts.isEmpty() -> item(key = "empty") {
                         EmptyState("Nothing in this space's feed yet", icon = AppIcons.Message)
@@ -103,7 +105,7 @@ fun HomeScreen(
                             }
                         }
                         if (state.loadingMore) item(key = "more") {
-                            Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) {
+                            Box(Modifier.fillMaxWidth().padding(VVSpace.x4), Alignment.Center) {
                                 CircularProgressIndicator(color = colors.accent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
                             }
                         }
@@ -122,13 +124,13 @@ private fun NavRow(label: String, icon: Painter, onClick: () -> Unit) {
             .fillMaxWidth()
             .height(48.dp)
             .clickable { onClick() }
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = VVSpace.x4),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(VVSpace.x3),
     ) {
-        Icon(icon, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
-        Text(label, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-        Icon(AppIcons.ChevronRight, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(18.dp))
+        Icon(icon, contentDescription = null, tint = colors.fgSecondary, modifier = Modifier.size(20.dp))
+        Text(label, color = colors.fg, fontSize = VVFontSize.s15, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        Icon(AppIcons.ChevronRight, contentDescription = null, tint = colors.fgMuted, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -136,23 +138,23 @@ private fun NavRow(label: String, icon: Painter, onClick: () -> Unit) {
 private fun FeedRow(post: FeedPost) {
     val colors = VisvineTheme.colors
     val sender = post.message.sender
-    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(modifier = Modifier.fillMaxWidth().padding(VVSpace.x4), horizontalArrangement = Arrangement.spacedBy(VVSpace.x3)) {
         PersonAvatar(name = sender.name, imageUrl = sender.image, size = 36.dp)
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(sender.name, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(VVSpace.x1)) {
+            Text(sender.name, color = colors.fg, fontSize = VVFontSize.s15, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 "${post.channel.name} · ${DateTimeFormat.relativeShort(post.message.createdAt)}",
-                color = colors.textMuted,
-                fontSize = 12.sp,
+                color = colors.fgMuted,
+                fontSize = VVFontSize.s12,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             if (post.message.text.isNotBlank()) {
-                Text(post.message.text, color = colors.textPrimary, fontSize = 15.sp, maxLines = 6, overflow = TextOverflow.Ellipsis)
+                Text(post.message.text, color = colors.fg, fontSize = VVFontSize.s15, maxLines = 6, overflow = TextOverflow.Ellipsis)
             }
             if (post.comments.isNotEmpty()) {
                 val n = post.comments.size
-                Text("$n ${if (n == 1) "comment" else "comments"}", color = colors.textMuted, fontSize = 12.sp)
+                Text("$n ${if (n == 1) "comment" else "comments"}", color = colors.fgMuted, fontSize = VVFontSize.s12)
             }
         }
     }

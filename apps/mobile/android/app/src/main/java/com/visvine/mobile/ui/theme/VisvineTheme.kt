@@ -7,10 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.graphics.Color
 
 /** Screens read the active palette via `VisvineTheme.colors`. */
-val LocalVisvineColors = staticCompositionLocalOf { buildColors(COLOR_THEMES[0], false) }
+val LocalVisvineColors = staticCompositionLocalOf { buildColors(VVAccents.default) }
 
 object VisvineTheme {
     val colors: DynamicColors
@@ -18,9 +17,9 @@ object VisvineTheme {
 }
 
 /**
- * Wraps content in a Material3 theme derived from the active hue, and exposes
- * the full [DynamicColors] set via [LocalVisvineColors] so screens can address
- * the same tokens the web app uses.
+ * Wraps content in a Material3 theme derived from the active accent, and
+ * exposes the full [DynamicColors] set via [LocalVisvineColors] so screens
+ * address the same token roles the web app uses.
  */
 @Composable
 fun VisvineTheme(
@@ -29,12 +28,12 @@ fun VisvineTheme(
 ) {
     val scheme = lightColorScheme(
         primary = colors.accent,
-        onPrimary = Color.White,
-        background = colors.bgSecondary,
-        surface = colors.bgPrimary,
-        onBackground = colors.textPrimary,
-        onSurface = colors.textPrimary,
-        error = colors.error,
+        onPrimary = VVColor.fgInverse,
+        background = colors.surface,
+        surface = colors.surface,
+        onBackground = colors.fg,
+        onSurface = colors.fg,
+        error = colors.danger,
     )
 
     CompositionLocalProvider(LocalVisvineColors provides colors) {

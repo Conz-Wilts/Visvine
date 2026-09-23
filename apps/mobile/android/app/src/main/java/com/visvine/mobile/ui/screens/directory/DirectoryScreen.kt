@@ -49,20 +49,17 @@ import com.visvine.mobile.data.model.DirectoryMember
 import com.visvine.mobile.ui.components.EmptyState
 import com.visvine.mobile.ui.components.ScreenHeader
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVRadius
+import com.visvine.mobile.ui.theme.VVSpace
+import com.visvine.mobile.ui.theme.VVTypeColor
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.DirectoryViewModel
 import com.visvine.mobile.ui.viewmodel.SearchViewModel
 import com.visvine.mobile.ui.viewmodel.SortOrder
 
 
-private val TYPE_COLORS = mapOf(
-    "person" to Color(0xFF2563EB),
-    "space" to Color(0xFF78D870),
-    "resource" to Color(0xFFF59E0B),
-    "event" to Color(0xFF9333EA),
-)
-
-private fun typeColor(type: String): Color = TYPE_COLORS[type.lowercase()] ?: Color(0xFF6B7280)
+private fun typeColor(type: String): Color = VVTypeColor.named(type).base
 private fun capitalize(s: String) = s.replaceFirstChar { it.uppercase() }
 
 private enum class Dropdown { TYPE, TAG }
@@ -90,7 +87,7 @@ fun DirectoryScreen(
 
     LaunchedEffect(Unit) { searchViewModel.setPlaceholder("Search directory") }
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surface)) {
         ScreenHeader(onProfileClick = onProfileClick)
 
         if (state.loading) {
@@ -104,14 +101,14 @@ fun DirectoryScreen(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     contentPadding = PaddingValues(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(VVSpace.x4),
+                    verticalArrangement = Arrangement.spacedBy(VVSpace.x4),
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Column {
                             state.error?.let {
-                                Text(it, color = colors.error, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp))
+                                Text(it, color = colors.danger, fontSize = VVFontSize.s14, modifier = Modifier.fillMaxWidth().padding(vertical = VVSpace.x3))
                                 Spacer(Modifier.height(8.dp))
                             }
                             FiltersRow(
@@ -150,17 +147,17 @@ fun DirectoryScreen(
         val isType = openDropdown == Dropdown.TYPE
         val values = if (isType) presentTypes else presentTags
         val selected = if (isType) selectedTypes else selectedTags
-        ModalBottomSheet(onDismissRequest = { openDropdown = null }, containerColor = colors.bgPrimary) {
+        ModalBottomSheet(onDismissRequest = { openDropdown = null }, containerColor = colors.surface) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x2),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(if (isType) "Filter by Type" else "Filter by Tag", color = colors.textPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Icon(AppIcons.Close, contentDescription = "Close", tint = colors.textMuted, modifier = Modifier.size(22.dp).clickable { openDropdown = null })
+                Text(if (isType) "Filter by Type" else "Filter by Tag", color = colors.fg, fontWeight = FontWeight.Bold, fontSize = VVFontSize.s16)
+                Icon(AppIcons.Close, contentDescription = "Close", tint = colors.fgMuted, modifier = Modifier.size(22.dp).clickable { openDropdown = null })
             }
             if (values.isEmpty()) {
-                Text("None available", color = colors.textMuted, modifier = Modifier.padding(24.dp), textAlign = TextAlign.Center)
+                Text("None available", color = colors.fgMuted, modifier = Modifier.padding(VVSpace.x6), textAlign = TextAlign.Center)
             } else {
                 values.forEach { value ->
                     val active = value in selected
@@ -168,36 +165,36 @@ fun DirectoryScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { if (isType) viewModel.toggleType(value) else viewModel.toggleTag(value) }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                            .padding(horizontal = VVSpace.x4, vertical = VVSpace.x3_5),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text(if (isType) capitalize(value) else value, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text(if (isType) capitalize(value) else value, color = colors.fg, fontSize = VVFontSize.s15, fontWeight = FontWeight.Medium)
                         Icon(
                             if (active) AppIcons.CheckSquare else AppIcons.EmptySquare,
                             contentDescription = null,
-                            tint = if (active) colors.accent else colors.textMuted,
+                            tint = if (active) colors.accent else colors.fgMuted,
                             modifier = Modifier.size(22.dp),
                         )
                     }
                 }
             }
             Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(VVSpace.x4),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     "Clear",
-                    color = colors.textMuted,
+                    color = colors.fgMuted,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { if (isType) viewModel.clearTypes() else viewModel.clearTags() }.padding(12.dp),
+                    modifier = Modifier.clickable { if (isType) viewModel.clearTypes() else viewModel.clearTags() }.padding(VVSpace.x3),
                 )
                 Text(
                     "Done",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(colors.accent).clickable { openDropdown = null }.padding(horizontal = 20.dp, vertical = 10.dp),
+                    modifier = Modifier.clip(RoundedCornerShape(VVRadius.lg)).background(colors.accent).clickable { openDropdown = null }.padding(horizontal = VVSpace.x5, vertical = VVSpace.x2_5),
                 )
             }
         }
@@ -217,34 +214,34 @@ private fun FiltersRow(
 ) {
     val colors = VisvineTheme.colors
     Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = VVSpace.x3),
+        horizontalArrangement = Arrangement.spacedBy(VVSpace.x2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DropdownButton("Type", selectedTypes.size, onOpenType)
         DropdownButton("Tag", selectedTags.size, onOpenTag)
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(VVRadius.lg))
                 .clickable { onToggleSort() }
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = VVSpace.x2_5, vertical = VVSpace.x2),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(VVSpace.x1_5),
         ) {
             Icon(
                 if (sortOrder == SortOrder.AZ) AppIcons.ArrowDown else AppIcons.ArrowUp,
-                contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(14.dp),
+                contentDescription = null, tint = colors.fgSecondary, modifier = Modifier.size(14.dp),
             )
-            Text(if (sortOrder == SortOrder.AZ) "A–Z" else "Z–A", color = colors.textSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (sortOrder == SortOrder.AZ) "A–Z" else "Z–A", color = colors.fgSecondary, fontSize = VVFontSize.s13, fontWeight = FontWeight.SemiBold)
         }
         if (hasFilters) {
             Row(
-                modifier = Modifier.clickable { onClear() }.padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.clickable { onClear() }.padding(horizontal = VVSpace.x2_5, vertical = VVSpace.x1_5),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(VVSpace.x1),
             ) {
-                Icon(AppIcons.Close, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(14.dp))
-                Text("Clear", color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Icon(AppIcons.Close, contentDescription = null, tint = colors.fgMuted, modifier = Modifier.size(14.dp))
+                Text("Clear", color = colors.fgMuted, fontSize = VVFontSize.s12, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -258,19 +255,19 @@ private fun FiltersRow(
 private fun DropdownButton(label: String, count: Int, onClick: () -> Unit) {
     val colors = VisvineTheme.colors
     val active = count > 0
-    val tint = if (active) colors.accentDark else colors.textSecondary
+    val tint = if (active) colors.accentStrong else colors.fgSecondary
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(VVRadius.lg))
             .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = VVSpace.x2_5, vertical = VVSpace.x2),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(VVSpace.x1_5),
     ) {
         Text(
             label + if (active) " · $count" else "",
             color = tint,
-            fontSize = 13.sp,
+            fontSize = VVFontSize.s13,
             fontWeight = FontWeight.SemiBold,
         )
         Icon(AppIcons.ChevronDown, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
@@ -287,9 +284,9 @@ private fun MemberCard(member: DirectoryMember, onOpenProfile: (String, String?)
 
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(colors.bgPrimary)
-            .border(4.dp, color, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(VVRadius.xl2))
+            .background(colors.surface)
+            .border(4.dp, color, RoundedCornerShape(VVRadius.xl2))
             .clickable(enabled = isPerson) { onOpenProfile(member.id, member.name) },
     ) {
         Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
@@ -297,28 +294,28 @@ private fun MemberCard(member: DirectoryMember, onOpenProfile: (String, String?)
                 AsyncImage(model = member.imageUrl, contentDescription = member.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else {
                 Box(Modifier.fillMaxSize().background(color), contentAlignment = Alignment.Center) {
-                    Text(initials, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Text(initials, color = Color.White, fontSize = VVFontSize.s24, fontWeight = FontWeight.Bold)
                 }
             }
         }
         Column(
-            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 16.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = VVSpace.x3, end = VVSpace.x3, top = VVSpace.x3, bottom = VVSpace.x4),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(member.name, color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(member.name, color = colors.fg, fontSize = VVFontSize.s16, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
             // Two lines are always reserved so the chips sit on one baseline
             // across the row whether or not an entry has a tagline.
             Text(
                 subtitle.orEmpty(),
-                color = colors.textSecondary,
-                fontSize = 13.sp,
+                color = colors.fgSecondary,
+                fontSize = VVFontSize.s13,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 6.dp).height(35.dp),
+                modifier = Modifier.padding(top = VVSpace.x1_5).height(35.dp),
             )
-            Box(modifier = Modifier.padding(top = 14.dp).clip(RoundedCornerShape(6.dp)).background(color).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                Text(capitalize(member.type), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Box(modifier = Modifier.padding(top = VVSpace.x3_5).clip(RoundedCornerShape(VVRadius.md)).background(color).padding(horizontal = VVSpace.x2, vertical = VVSpace.x1)) {
+                Text(capitalize(member.type), color = Color.White, fontSize = VVFontSize.s11, fontWeight = FontWeight.SemiBold)
             }
         }
     }

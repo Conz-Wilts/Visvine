@@ -17,6 +17,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVRadius
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 
 /**
@@ -36,9 +39,9 @@ fun SegmentedNav(
         modifier = modifier
             .fillMaxWidth()
             .height(36.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(colors.bgTertiary)
-            .padding(2.dp),
+            .clip(RoundedCornerShape(VVRadius.lg))
+            .background(colors.surfaceMuted)
+            .padding(VVSpace.x0_5),
     ) {
         items.forEachIndexed { index, label ->
             val active = index == selected
@@ -46,15 +49,15 @@ fun SegmentedNav(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (active) colors.bgPrimary else colors.bgTertiary)
+                    .clip(RoundedCornerShape(VVRadius.md))
+                    .background(if (active) colors.surface else colors.surfaceMuted)
                     .clickable { onSelect(index) },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     label,
-                    color = if (active) colors.textPrimary else colors.textMuted,
-                    fontSize = 14.sp,
+                    color = if (active) colors.fg else colors.fgMuted,
+                    fontSize = VVFontSize.s14,
                     fontWeight = FontWeight.SemiBold,
                 )
             }

@@ -8,6 +8,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.visvine.mobile.ui.theme.VVColor
 
 /**
  * The "glass" pill under the tab bar and the search overlay. True backdrop blur
@@ -17,7 +18,7 @@ import androidx.compose.ui.unit.dp
  */
 fun Modifier.glassSurface(cornerRadius: Dp): Modifier {
     val shape = RoundedCornerShape(cornerRadius)
-    val fill = Color(0xD1FFFFFF) // ~0.82 alpha
+    val fill = VVColor.surfaceGlass
     val borderColor = Color.Black.copy(alpha = 0.08f)
     return this
         .clip(shape)

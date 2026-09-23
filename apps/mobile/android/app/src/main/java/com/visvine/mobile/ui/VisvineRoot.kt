@@ -20,6 +20,8 @@ import com.visvine.mobile.core.KillSwitch
 import com.visvine.mobile.ui.components.Loading
 import com.visvine.mobile.ui.navigation.AuthedNavHost
 import com.visvine.mobile.ui.navigation.UnauthNavHost
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.RootViewModel
 
@@ -36,7 +38,7 @@ fun VisvineRoot(rootViewModel: RootViewModel = hiltViewModel()) {
     val killSwitch by rootViewModel.killSwitch.collectAsStateWithLifecycle()
 
     VisvineTheme(colors = colors) {
-        Surface(modifier = Modifier.fillMaxSize(), color = colors.bgSecondary) {
+        Surface(modifier = Modifier.fillMaxSize(), color = colors.surfaceSubtle) {
             when (val gate = killSwitch) {
                 is KillSwitch.State.Disabled -> BlockingScreen("Visvine is unavailable", gate.message)
                 is KillSwitch.State.UpdateRequired -> BlockingScreen("Update required", gate.message)
@@ -57,17 +59,17 @@ fun VisvineRoot(rootViewModel: RootViewModel = hiltViewModel()) {
 private fun BlockingScreen(title: String, message: String) {
     val colors = VisvineTheme.colors
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier.fillMaxSize().padding(VVSpace.x8),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(title, color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = colors.fg, fontSize = VVFontSize.s20, fontWeight = FontWeight.Bold)
         Text(
             message,
-            color = colors.textMuted,
-            fontSize = 15.sp,
+            color = colors.fgMuted,
+            fontSize = VVFontSize.s15,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = VVSpace.x2),
         )
     }
 }

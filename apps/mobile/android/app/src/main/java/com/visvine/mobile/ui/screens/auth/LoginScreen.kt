@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.visvine.mobile.core.AppConfig
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVRadius
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.AuthViewModel
 
@@ -51,47 +54,47 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.bgPrimary)
+            .background(colors.surface)
             .statusBarsPadding()
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = VVSpace.x6),
         contentAlignment = Alignment.Center,
     ) {
         Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(AppIcons.Network, contentDescription = null, tint = colors.accent, modifier = Modifier.size(64.dp))
-            Text("Visvine", color = colors.textPrimary, fontSize = 34.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
-            Text("Connect with your space", color = colors.textMuted, fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
+            Text("Visvine", color = colors.fg, fontSize = 34.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = VVSpace.x4))
+            Text("Connect with your space", color = colors.fgMuted, fontSize = VVFontSize.s16, modifier = Modifier.padding(top = VVSpace.x2))
 
             error?.let {
-                Text(it, color = colors.error, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp))
+                Text(it, color = colors.danger, fontSize = VVFontSize.s14, textAlign = TextAlign.Center, modifier = Modifier.padding(top = VVSpace.x4))
             }
 
             Button(
                 onClick = { authViewModel.startGoogleSignIn(context) },
                 colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
+                shape = RoundedCornerShape(VVRadius.lg),
+                modifier = Modifier.fillMaxWidth().padding(top = VVSpace.x12),
             ) {
-                Text("Continue with Google", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = 6.dp))
+                Text("Continue with Google", color = Color.White, fontSize = VVFontSize.s16, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(vertical = VVSpace.x1_5))
             }
 
             if (AppConfig.devAuthEnabled) {
                 Button(
                     onClick = onDevLogin,
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.bgSecondary),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.surfaceSubtle),
+                    shape = RoundedCornerShape(VVRadius.lg),
+                    modifier = Modifier.fillMaxWidth().padding(top = VVSpace.x3),
                 ) {
-                    Icon(AppIcons.Tool, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(20.dp))
-                    Text("Dev login (skip Google)", color = colors.textSecondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp))
+                    Icon(AppIcons.Tool, contentDescription = null, tint = colors.fgSecondary, modifier = Modifier.size(20.dp))
+                    Text("Dev login (skip Google)", color = colors.fgSecondary, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = VVSpace.x2_5, top = VVSpace.x1, bottom = VVSpace.x1))
                 }
             }
 
             Text(
                 "By signing in, you agree to our Terms of Service and Privacy Policy",
-                color = colors.textMuted,
-                fontSize = 12.sp,
+                color = colors.fgMuted,
+                fontSize = VVFontSize.s12,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 32.dp, start = 16.dp, end = 16.dp),
+                modifier = Modifier.padding(top = VVSpace.x8, start = VVSpace.x4, end = VVSpace.x4),
             )
         }
     }

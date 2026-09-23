@@ -41,6 +41,9 @@ import com.visvine.mobile.ui.components.EmptyState
 import com.visvine.mobile.ui.components.Hairline
 import com.visvine.mobile.ui.components.ScreenHeader
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVRadius
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
 import com.visvine.mobile.ui.viewmodel.ActivityViewModel
@@ -82,11 +85,11 @@ fun ActivityScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surface)) {
         ScreenHeader(onProfileClick = onProfileClick, showSpaceSelector = false)
 
         state.error?.let {
-            Text(it, color = colors.error, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp))
+            Text(it, color = colors.danger, fontSize = VVFontSize.s14, modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x3))
         }
 
         if (state.loading) {
@@ -126,7 +129,7 @@ fun ActivityScreen(
                         }
                     }
                     if (state.loadingMore) item(key = "more") {
-                        Box(Modifier.fillMaxWidth().padding(16.dp), Alignment.Center) {
+                        Box(Modifier.fillMaxWidth().padding(VVSpace.x4), Alignment.Center) {
                             CircularProgressIndicator(color = colors.accent, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
                         }
                     }
@@ -142,10 +145,10 @@ private fun SectionLabel(text: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colors.bgPrimary)
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 6.dp),
+            .background(colors.surface)
+            .padding(start = VVSpace.x4, end = VVSpace.x4, top = VVSpace.x3, bottom = VVSpace.x1_5),
     ) {
-        Text(text, color = colors.textMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(text, color = colors.fgMuted, fontSize = VVFontSize.s13, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -162,21 +165,21 @@ private fun glyphFor(kind: String): Painter = when (kind) {
 private fun UpcomingRow(row: ActivityRow, onClick: () -> Unit) {
     val colors = VisvineTheme.colors
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = VVSpace.x4, vertical = VVSpace.x3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.width(36.dp), contentAlignment = Alignment.CenterStart) {
-            Icon(AppIcons.Calendar, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(20.dp))
+            Icon(AppIcons.Calendar, contentDescription = null, tint = colors.fgMuted, modifier = Modifier.size(20.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(row.title, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(row.title, color = colors.fg, fontSize = VVFontSize.s15, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 listOfNotNull(row.space?.name, DateTimeFormat.fullDate(row.at)).joinToString(" · "),
-                color = colors.textMuted,
-                fontSize = 12.sp,
+                color = colors.fgMuted,
+                fontSize = VVFontSize.s12,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = VVSpace.x0_5),
             )
         }
     }
@@ -196,54 +199,54 @@ private fun ActivityItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = opens) { onClick() }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = VVSpace.x4, vertical = VVSpace.x3),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.width(36.dp), contentAlignment = Alignment.CenterStart) {
-            Icon(glyphFor(row.kind), contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(20.dp))
+            Icon(glyphFor(row.kind), contentDescription = null, tint = colors.fgMuted, modifier = Modifier.size(20.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(row.title, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(row.title, color = colors.fg, fontSize = VVFontSize.s15, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             row.subtitle?.takeIf { it.isNotBlank() }?.let {
-                Text(it, color = colors.textMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                Text(it, color = colors.fgMuted, fontSize = VVFontSize.s13, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = VVSpace.x0_5))
             }
             Text(
                 listOfNotNull(row.space?.name, DateTimeFormat.relativeShort(row.at)).joinToString(" · "),
-                color = colors.textMuted,
-                fontSize = 12.sp,
+                color = colors.fgMuted,
+                fontSize = VVFontSize.s12,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = VVSpace.x0_5),
             )
         }
         when {
             decided != null -> Box(
                 modifier = Modifier
-                    .padding(start = 8.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(colors.bgTertiary)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(start = VVSpace.x2)
+                    .clip(RoundedCornerShape(VVRadius.md))
+                    .background(colors.surfaceMuted)
+                    .padding(horizontal = VVSpace.x2, vertical = VVSpace.x1),
             ) {
-                Text(decided, color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(decided, color = colors.fgMuted, fontSize = VVFontSize.s12, fontWeight = FontWeight.SemiBold)
             }
-            deciding -> CircularProgressIndicator(color = colors.accent, strokeWidth = 2.dp, modifier = Modifier.padding(start = 8.dp).size(18.dp))
+            deciding -> CircularProgressIndicator(color = colors.accent, strokeWidth = 2.dp, modifier = Modifier.padding(start = VVSpace.x2).size(18.dp))
             row.actions.isNotEmpty() -> Row(
-                modifier = Modifier.padding(start = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(start = VVSpace.x2),
+                horizontalArrangement = Arrangement.spacedBy(VVSpace.x1_5),
             ) {
                 row.actions.forEachIndexed { index, action ->
                     val primary = index == 0
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (primary) colors.accent else colors.bgSecondary)
+                            .clip(RoundedCornerShape(VVRadius.lg))
+                            .background(if (primary) colors.accent else colors.surfaceSubtle)
                             .clickable { onDecide(action) }
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                            .padding(horizontal = VVSpace.x3, vertical = 7.dp),
                     ) {
                         Text(
                             action.label,
-                            color = if (primary) Color.White else colors.textPrimary,
-                            fontSize = 13.sp,
+                            color = if (primary) Color.White else colors.fg,
+                            fontSize = VVFontSize.s13,
                             fontWeight = FontWeight.SemiBold,
                         )
                     }

@@ -25,6 +25,8 @@ import com.visvine.mobile.ui.components.EmptyState
 import com.visvine.mobile.ui.components.Hairline
 import com.visvine.mobile.ui.components.ScreenHeader
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.ConversationsViewModel
 
@@ -43,11 +45,11 @@ fun ConversationsListScreen(
     val userId by viewModel.currentUserId.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surface)) {
         ScreenHeader(onProfileClick = onProfileClick, showSpaceSelector = false)
 
         state.error?.let {
-            Text(it, color = colors.error, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp))
+            Text(it, color = colors.danger, fontSize = VVFontSize.s14, modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x3))
         }
 
         if (state.loading) {

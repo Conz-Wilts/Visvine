@@ -37,6 +37,9 @@ import com.visvine.mobile.ui.components.EmptyState
 import com.visvine.mobile.ui.components.Hairline
 import com.visvine.mobile.ui.components.PersonAvatar
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVRadius
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.NewMessageViewModel
 
@@ -51,26 +54,26 @@ fun NewMessageScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surface)) {
         Row(
-            modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().background(colors.surface).statusBarsPadding().padding(horizontal = VVSpace.x1, vertical = VVSpace.x1),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) { Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.accent) }
-            Text("New message", color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text("New message", color = colors.fg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
 
         TextField(
             value = query,
             onValueChange = { viewModel.setQuery(it) },
-            placeholder = { Text("Search people", color = colors.textLight) },
+            placeholder = { Text("Search people", color = colors.fgSubtle) },
             singleLine = true,
-            leadingIcon = { Icon(AppIcons.Search, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(18.dp)) },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(12.dp)),
-            textStyle = LocalTextStyle.current.copy(color = colors.textPrimary, fontSize = 15.sp),
+            leadingIcon = { Icon(AppIcons.Search, contentDescription = null, tint = colors.fgMuted, modifier = Modifier.size(18.dp)) },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x2).clip(RoundedCornerShape(VVRadius.xl)),
+            textStyle = LocalTextStyle.current.copy(color = colors.fg, fontSize = VVFontSize.s15),
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = colors.bgTertiary,
-                unfocusedContainerColor = colors.bgTertiary,
+                focusedContainerColor = colors.surfaceMuted,
+                unfocusedContainerColor = colors.surfaceMuted,
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
                 cursorColor = colors.accent,
@@ -78,7 +81,7 @@ fun NewMessageScreen(
         )
 
         state.error?.let {
-            Text(it, color = colors.error, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+            Text(it, color = colors.danger, fontSize = VVFontSize.s14, modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x2))
         }
 
         if (state.loading && state.users.isEmpty()) {
@@ -96,15 +99,15 @@ fun NewMessageScreen(
                             .clickable(enabled = state.opening == null) {
                                 viewModel.open(user) { id, name -> onOpenConversation(id, name) }
                             }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .padding(horizontal = VVSpace.x4, vertical = VVSpace.x3),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(VVSpace.x3),
                     ) {
                         PersonAvatar(name = user.name, imageUrl = user.image, size = 40.dp)
                         Text(
                             user.name,
-                            color = colors.textPrimary,
-                            fontSize = 15.sp,
+                            color = colors.fg,
+                            fontSize = VVFontSize.s15,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

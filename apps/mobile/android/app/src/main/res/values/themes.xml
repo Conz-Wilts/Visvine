@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Base theme is a no-action-bar Material3 shell; all real theming
-         (the 8 hues) is driven at runtime by Compose (see ui/theme). The app is
+         (the accents and every colour, from the design tokens in Tokens.kt) is
+         driven at runtime by Compose (see ui/theme). The app is
          light-only, like the web app it mirrors. -->
     <style name="Theme.Visvine" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>

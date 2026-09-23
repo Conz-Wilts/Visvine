@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 
 /**
@@ -38,13 +40,13 @@ fun MessageBubble(
     val colors = VisvineTheme.colors
     val fill = when {
         isOwn -> colors.accent
-        agent || muted -> colors.bgTertiary
-        else -> colors.bgPrimary
+        agent || muted -> colors.surfaceMuted
+        else -> colors.surface
     }
     val ink = when {
         isOwn -> Color.White
-        muted -> colors.textMuted
-        else -> colors.textPrimary
+        muted -> colors.fgMuted
+        else -> colors.fg
     }
 
     Row(
@@ -61,18 +63,18 @@ fun MessageBubble(
                     else RoundedCornerShape(18.dp, 18.dp, 18.dp, 6.dp),
                 )
                 .background(fill)
-                .padding(12.dp),
+                .padding(VVSpace.x3),
         ) {
             if (!isOwn && !senderName.isNullOrBlank()) {
-                Text(senderName, color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 4.dp))
+                Text(senderName, color = colors.fgMuted, fontSize = VVFontSize.s12, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = VVSpace.x1))
             }
-            Text(text, color = ink, fontSize = 15.sp)
+            Text(text, color = ink, fontSize = VVFontSize.s15)
             if (time != null) {
                 Text(
                     time,
-                    color = if (isOwn) Color.White.copy(alpha = 0.7f) else colors.textLight,
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(top = 4.dp),
+                    color = if (isOwn) Color.White.copy(alpha = 0.7f) else colors.fgSubtle,
+                    fontSize = VVFontSize.s10,
+                    modifier = Modifier.padding(top = VVSpace.x1),
                 )
             }
         }

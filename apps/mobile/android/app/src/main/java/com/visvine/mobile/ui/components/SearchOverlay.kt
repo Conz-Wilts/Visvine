@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.SearchViewModel
 
@@ -59,26 +61,26 @@ fun SearchOverlay(searchViewModel: SearchViewModel) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 20.dp),
+                .padding(horizontal = VVSpace.x4, vertical = VVSpace.x5),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(VVSpace.x2_5),
         ) {
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .height(64.dp)
                     .glassSurface(32.dp)
-                    .padding(start = 20.dp, end = 8.dp),
+                    .padding(start = VVSpace.x5, end = VVSpace.x2),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(VVSpace.x2_5),
             ) {
                 Icon(AppIcons.Search, contentDescription = null, tint = Color.Black)
                 TextField(
                     value = query,
                     onValueChange = searchViewModel::setQuery,
-                    placeholder = { Text(placeholder, color = colors.textMuted) },
+                    placeholder = { Text(placeholder, color = colors.fgMuted) },
                     singleLine = true,
-                    textStyle = LocalTextStyle.current.copy(color = colors.textPrimary, fontSize = 16.sp),
+                    textStyle = LocalTextStyle.current.copy(color = colors.fg, fontSize = VVFontSize.s16),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { searchViewModel.close() }),
                     colors = TextFieldDefaults.colors(

@@ -39,6 +39,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVRadius
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.EditProfileViewModel
 
@@ -60,21 +63,21 @@ fun EditProfileScreen(
 
     val onCancel = { if (state.hasChanges) showDiscard = true else onBack() }
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary).imePadding()) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surface).imePadding()) {
         Row(
-            modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().background(colors.surface).statusBarsPadding().padding(horizontal = VVSpace.x1, vertical = VVSpace.x1),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onCancel) { Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.accent) }
-            Text("Edit Profile", color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text("Edit Profile", color = colors.fg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
 
         if (state.loading) {
             Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = colors.accent) }
         } else {
-            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
+            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(VVSpace.x4)) {
                 SectionLabel("Personal Information")
-                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = VVSpace.x1)) {
                     Field("Name", state.form.name, "Your full name") { v -> viewModel.updateField { it.copy(name = v) } }
                     Field("Title", state.form.title, "Your job title") { v -> viewModel.updateField { it.copy(title = v) } }
                     Field("Company", state.form.company, "Your company") { v -> viewModel.updateField { it.copy(company = v) } }
@@ -82,29 +85,29 @@ fun EditProfileScreen(
                 }
 
                 SectionLabel("Contact Information")
-                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = VVSpace.x1)) {
                     Field("Email", state.form.email, "", enabled = false) {}
-                    Text("Email cannot be changed", color = colors.textLight, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                    Text("Email cannot be changed", color = colors.fgSubtle, fontSize = VVFontSize.s12, modifier = Modifier.padding(top = VVSpace.x1))
                 }
             }
 
             // Footer
             Row(
-                modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).navigationBarsPadding().padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth().background(colors.surface).navigationBarsPadding().padding(VVSpace.x4),
+                horizontalArrangement = Arrangement.spacedBy(VVSpace.x3),
             ) {
                 Box(
-                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(colors.bgSecondary).clickable { onCancel() }.padding(vertical = 14.dp),
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(VVRadius.lg)).background(colors.surfaceSubtle).clickable { onCancel() }.padding(vertical = VVSpace.x3_5),
                     contentAlignment = Alignment.Center,
-                ) { Text("Cancel", color = colors.textSecondary, fontWeight = FontWeight.Medium, fontSize = 15.sp) }
+                ) { Text("Cancel", color = colors.fgSecondary, fontWeight = FontWeight.Medium, fontSize = VVFontSize.s15) }
 
                 val canSave = state.hasChanges && !state.saving
                 Box(
-                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(if (canSave) colors.accent else colors.accent.copy(alpha = 0.5f)).clickable(enabled = canSave) { viewModel.save() }.padding(vertical = 14.dp),
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(VVRadius.lg)).background(if (canSave) colors.accent else colors.accent.copy(alpha = 0.5f)).clickable(enabled = canSave) { viewModel.save() }.padding(vertical = VVSpace.x3_5),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (state.saving) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.padding(2.dp))
-                    else Text("Save Changes", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                    if (state.saving) CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.padding(VVSpace.x0_5))
+                    else Text("Save Changes", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = VVFontSize.s15)
                 }
             }
         }
@@ -115,7 +118,7 @@ fun EditProfileScreen(
             onDismissRequest = { showDiscard = false },
             title = { Text("Discard Changes?") },
             text = { Text("You have unsaved changes. Are you sure you want to discard them?") },
-            confirmButton = { TextButton(onClick = { showDiscard = false; onBack() }) { Text("Discard", color = colors.error) } },
+            confirmButton = { TextButton(onClick = { showDiscard = false; onBack() }) { Text("Discard", color = colors.danger) } },
             dismissButton = { TextButton(onClick = { showDiscard = false }) { Text("Keep Editing") } },
         )
     }
@@ -133,30 +136,30 @@ fun EditProfileScreen(
 @Composable
 private fun SectionLabel(text: String) {
     val colors = VisvineTheme.colors
-    Text(text.uppercase(), color = colors.textMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 20.dp, bottom = 10.dp))
+    Text(text.uppercase(), color = colors.fgMuted, fontSize = VVFontSize.s13, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = VVSpace.x5, bottom = VVSpace.x2_5))
 }
 
 @Composable
 private fun Field(label: String, value: String, placeholder: String, enabled: Boolean = true, onChange: (String) -> Unit) {
     val colors = VisvineTheme.colors
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-        Text(label, color = colors.textSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = VVSpace.x4)) {
+        Text(label, color = colors.fgSecondary, fontSize = VVFontSize.s14, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = VVSpace.x1_5))
         OutlinedTextField(
             value = value,
             onValueChange = onChange,
             enabled = enabled,
-            placeholder = { Text(placeholder, color = colors.textLight) },
+            placeholder = { Text(placeholder, color = colors.fgSubtle) },
             singleLine = true,
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(VVRadius.xl),
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = colors.textPrimary,
-                unfocusedTextColor = colors.textPrimary,
-                disabledTextColor = colors.textLight,
+                focusedTextColor = colors.fg,
+                unfocusedTextColor = colors.fg,
+                disabledTextColor = colors.fgSubtle,
                 focusedBorderColor = colors.accent,
-                unfocusedBorderColor = colors.borderDefault,
-                disabledBorderColor = colors.borderLight,
-                disabledContainerColor = colors.bgTertiary,
+                unfocusedBorderColor = colors.line,
+                disabledBorderColor = colors.lineSubtle,
+                disabledContainerColor = colors.surfaceMuted,
                 cursorColor = colors.accent,
             ),
         )

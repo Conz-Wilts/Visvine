@@ -16,6 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 
 /**
@@ -34,19 +36,19 @@ fun EmptyState(
 ) {
     val colors = VisvineTheme.colors
     Column(
-        modifier = modifier.fillMaxWidth().padding(vertical = 48.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = VVSpace.x12),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(VVSpace.x3),
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(24.dp))
+            Icon(icon, contentDescription = null, tint = colors.fgMuted, modifier = Modifier.size(24.dp))
         }
-        Text(text, color = colors.textMuted, fontSize = 15.sp, textAlign = TextAlign.Center)
+        Text(text, color = colors.fgMuted, fontSize = VVFontSize.s15, textAlign = TextAlign.Center)
         if (actionLabel != null && onAction != null) {
             Text(
                 actionLabel,
-                color = colors.accentDark,
-                fontSize = 14.sp,
+                color = colors.accentStrong,
+                fontSize = VVFontSize.s14,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable { onAction() },
             )

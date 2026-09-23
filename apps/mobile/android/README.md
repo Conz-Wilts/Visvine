@@ -65,7 +65,7 @@ app/src/main/java/com/visvine/mobile/
 │   └── repository/  Auth/Space/Directory/Events/Messages/Feed/Agents/Activity/Actions/Profile repos
 ├── di/              Hilt NetworkModule
 └── ui/
-    ├── theme/       8 hues (buildColors), Compose theme
+    ├── theme/       Tokens.kt (packages/tokens — do not edit), DynamicColors, Compose theme
     ├── state/       SpaceManager, SearchController (app-scoped stores)
     ├── viewmodel/   one ViewModel per screen + shared (Auth/Theme/...)
     ├── components/  ScreenHeader, SearchOverlay, SpaceAvatar, PersonAvatar, SegmentedNav,

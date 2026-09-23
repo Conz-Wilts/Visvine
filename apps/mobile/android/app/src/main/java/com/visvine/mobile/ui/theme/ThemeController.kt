@@ -14,7 +14,7 @@ import javax.inject.Singleton
 
 /**
  * App-scoped theming state — the native equivalent of ThemeProvider. Holds the
- * selected hue, derives [DynamicColors], and persists the choice via DataStore
+ * selected accent, derives [DynamicColors], and persists the choice via DataStore
  * (key `nb_color_theme`).
  */
 @Singleton
@@ -23,30 +23,30 @@ class ThemeController @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    private val _themeId = MutableStateFlow(COLOR_THEMES[0].id)
+    private val _themeId = MutableStateFlow(VVAccents.default.id)
     val themeId: StateFlow<String> = _themeId.asStateFlow()
 
-    private val _colors = MutableStateFlow(buildColors(COLOR_THEMES[0]))
+    private val _colors = MutableStateFlow(buildColors(VVAccents.default))
     val colors: StateFlow<DynamicColors> = _colors.asStateFlow()
 
     init {
         scope.launch {
-            _themeId.value = themeById(prefs.themeId.first()).id
+            _themeId.value = VVAccents.named(prefs.themeId.first()).id
             recompute()
         }
     }
 
-    val theme: ColorTheme get() = themeById(_themeId.value)
-    val themes: List<ColorTheme> get() = COLOR_THEMES
+    val theme: VVAccent get() = VVAccents.named(_themeId.value)
+    val themes: List<VVAccent> get() = VVAccents.all
 
     fun setTheme(id: String) {
-        if (themeById(id).id != id) return
+        if (VVAccents.named(id).id != id) return
         _themeId.value = id
         recompute()
         scope.launch { prefs.setThemeId(id) }
     }
 
     private fun recompute() {
-        _colors.value = buildColors(themeById(_themeId.value))
+        _colors.value = buildColors(VVAccents.named(_themeId.value))
     }
 }

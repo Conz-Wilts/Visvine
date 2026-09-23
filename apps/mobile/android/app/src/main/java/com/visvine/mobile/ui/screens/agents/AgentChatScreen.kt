@@ -50,6 +50,8 @@ import com.visvine.mobile.ui.components.DateSeparator
 import com.visvine.mobile.ui.components.MessageBubble
 import com.visvine.mobile.ui.components.PersonAvatar
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
 import com.visvine.mobile.ui.viewmodel.AgentChatViewModel
@@ -94,9 +96,9 @@ fun AgentChatScreen(
             .collect { viewModel.loadOlder() }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary).imePadding()) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surface).imePadding()) {
         Row(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = VVSpace.x1, vertical = VVSpace.x1),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) { Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.accent) }
@@ -109,19 +111,19 @@ fun AgentChatScreen(
                 state = listState,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(VVSpace.x2),
             ) {
                 item(key = "header") {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = VVSpace.x4),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(VVSpace.x2),
                     ) {
                         if (state.loadingOlder) {
                             CircularProgressIndicator(color = colors.accent, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
                         }
                         PersonAvatar(name = agentTitle, imageUrl = null, size = 56.dp, glyph = AppIcons.Bot)
-                        Text(agentTitle, color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(agentTitle, color = colors.fg, fontSize = VVFontSize.s13, fontWeight = FontWeight.SemiBold)
                     }
                 }
 
@@ -140,44 +142,44 @@ fun AgentChatScreen(
                     val working = state.working
                     when {
                         live != null -> MessageBubble(text = live, isOwn = false, time = null, agent = true)
-                        working != null -> Text(working, color = colors.textMuted, fontSize = 13.sp)
+                        working != null -> Text(working, color = colors.fgMuted, fontSize = VVFontSize.s13)
                     }
                 }
             }
         }
 
         state.problem?.let {
-            Text(it, color = colors.textMuted, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+            Text(it, color = colors.fgMuted, fontSize = VVFontSize.s13, modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x1))
         }
         state.error?.let {
-            Text(it, color = colors.error, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+            Text(it, color = colors.danger, fontSize = VVFontSize.s13, modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x1))
         }
 
         // Composer
         Row(
-            modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().background(colors.surface).navigationBarsPadding().padding(horizontal = VVSpace.x3, vertical = VVSpace.x2),
             verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(VVSpace.x2),
         ) {
             TextField(
                 value = input,
                 onValueChange = { input = it },
-                placeholder = { Text("Message", color = colors.textLight) },
+                placeholder = { Text("Message", color = colors.fgSubtle) },
                 maxLines = 5,
                 trailingIcon = {
                     // Dictation is the keyboard's; the mic only brings it up.
                     Icon(
                         AppIcons.Mic,
                         contentDescription = "Dictate",
-                        tint = colors.textMuted,
+                        tint = colors.fgMuted,
                         modifier = Modifier.size(20.dp).clickable { focusRequester.requestFocus() },
                     )
                 },
                 modifier = Modifier.weight(1f).heightIn(max = 140.dp).clip(RoundedCornerShape(20.dp)).focusRequester(focusRequester),
-                textStyle = LocalTextStyle.current.copy(color = colors.textPrimary, fontSize = 15.sp),
+                textStyle = LocalTextStyle.current.copy(color = colors.fg, fontSize = VVFontSize.s15),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = colors.bgTertiary,
-                    unfocusedContainerColor = colors.bgTertiary,
+                    focusedContainerColor = colors.surfaceMuted,
+                    unfocusedContainerColor = colors.surfaceMuted,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     cursorColor = colors.accent,
@@ -187,10 +189,10 @@ fun AgentChatScreen(
                 val canSend = !state.sending
                 Box(
                     modifier = Modifier
-                        .padding(bottom = 10.dp)
+                        .padding(bottom = VVSpace.x2_5)
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(if (canSend) colors.accent else colors.borderDefault)
+                        .background(if (canSend) colors.accent else colors.line)
                         .clickable(enabled = canSend) {
                             val text = input
                             input = ""

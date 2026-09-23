@@ -44,6 +44,8 @@ import com.visvine.mobile.ui.components.PersonAvatar
 import com.visvine.mobile.ui.components.ScreenHeader
 import com.visvine.mobile.ui.components.SegmentedNav
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
 import com.visvine.mobile.ui.viewmodel.AgentsViewModel
@@ -69,13 +71,13 @@ fun MessagesHubScreen(
     val colors = VisvineTheme.colors
     var segment by rememberSaveable { mutableIntStateOf(SEGMENT_AGENTS) }
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surface)) {
         ScreenHeader(onProfileClick = onProfileClick, showSpaceSelector = true)
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x2),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(VVSpace.x2),
         ) {
             SegmentedNav(
                 items = listOf("Agents", "Contacts"),
@@ -113,7 +115,7 @@ private fun AgentsSegment(
     }
 
     state.error?.let {
-        Text(it, color = colors.error, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp))
+        Text(it, color = colors.danger, fontSize = VVFontSize.s14, modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x3))
     }
 
     if (state.loading) {
@@ -149,37 +151,37 @@ private fun AgentRow(agent: ChatAgentRow, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(16.dp),
+            .padding(VVSpace.x4),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         PersonAvatar(name = title, imageUrl = null, size = 48.dp, glyph = AppIcons.Bot)
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+        Column(modifier = Modifier.weight(1f).padding(start = VVSpace.x3)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     title,
-                    color = colors.textPrimary,
-                    fontSize = 16.sp,
+                    color = colors.fg,
+                    fontSize = VVFontSize.s16,
                     fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 agent.thread?.lastMessageAt?.let {
-                    Text(DateTimeFormat.relativeShort(it), color = colors.textMuted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+                    Text(DateTimeFormat.relativeShort(it), color = colors.fgMuted, fontSize = VVFontSize.s12, modifier = Modifier.padding(start = VVSpace.x2))
                 }
             }
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.fillMaxWidth().padding(top = VVSpace.x0_5), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     preview,
-                    color = if (unread) colors.textPrimary else colors.textMuted,
-                    fontSize = 14.sp,
+                    color = if (unread) colors.fg else colors.fgMuted,
+                    fontSize = VVFontSize.s14,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
                 when {
                     agent.answering -> Dot(colors.accent)
-                    !agent.ready -> Dot(colors.textMuted)
+                    !agent.ready -> Dot(colors.fgMuted)
                 }
             }
         }
@@ -188,7 +190,7 @@ private fun AgentRow(agent: ChatAgentRow, onClick: () -> Unit) {
 
 @Composable
 private fun Dot(color: Color) {
-    Box(modifier = Modifier.padding(start = 8.dp).size(8.dp).clip(CircleShape).background(color))
+    Box(modifier = Modifier.padding(start = VVSpace.x2).size(8.dp).clip(CircleShape).background(color))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -204,7 +206,7 @@ private fun ContactsSegment(
     val conversations = all.filter { it.type == "DM" }
 
     state.error?.let {
-        Text(it, color = colors.error, fontSize = 14.sp, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp))
+        Text(it, color = colors.danger, fontSize = VVFontSize.s14, modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x3))
     }
 
     if (state.loading) {

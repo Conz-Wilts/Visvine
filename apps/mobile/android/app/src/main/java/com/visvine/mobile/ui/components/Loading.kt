@@ -11,6 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 
 /** The spinner every screen waits behind — inline, or filling the screen. */
@@ -22,13 +24,13 @@ fun Loading(
 ) {
     val colors = VisvineTheme.colors
     Column(
-        modifier = if (fullScreen) modifier.fillMaxSize() else modifier.padding(24.dp),
+        modifier = if (fullScreen) modifier.fillMaxSize() else modifier.padding(VVSpace.x6),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         CircularProgressIndicator(color = colors.accent)
         if (message != null) {
-            Text(text = message, color = colors.textMuted, fontSize = 16.sp, modifier = Modifier.padding(top = 12.dp))
+            Text(text = message, color = colors.fgMuted, fontSize = VVFontSize.s16, modifier = Modifier.padding(top = VVSpace.x3))
         }
     }
 }

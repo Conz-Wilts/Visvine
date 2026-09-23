@@ -19,6 +19,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.visvine.mobile.data.model.Conversation
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVRadius
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
 
@@ -40,22 +43,22 @@ fun ConversationRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(16.dp),
+            .padding(VVSpace.x4),
     ) {
         PersonAvatar(name = displayName, imageUrl = imageUrl, size = 48.dp)
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+        Column(modifier = Modifier.weight(1f).padding(start = VVSpace.x3)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(displayName, color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(displayName, color = colors.fg, fontSize = VVFontSize.s16, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 conversation.lastMessage?.let {
-                    Text(DateTimeFormat.relativeShort(it.createdAt), color = colors.textMuted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+                    Text(DateTimeFormat.relativeShort(it.createdAt), color = colors.fgMuted, fontSize = VVFontSize.s12, modifier = Modifier.padding(start = VVSpace.x2))
                 }
             }
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.fillMaxWidth().padding(top = VVSpace.x0_5), verticalAlignment = Alignment.CenterVertically) {
                 val preview = conversation.lastMessage?.let { "${it.sender.name}: ${it.text}" } ?: "No messages yet"
-                Text(preview, color = colors.textMuted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(preview, color = colors.fgMuted, fontSize = VVFontSize.s14, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (conversation.unreadCount > 0) {
-                    Box(modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(6.dp)).background(colors.accent).padding(horizontal = 8.dp, vertical = 2.dp)) {
-                        Text(conversation.unreadCount.toString(), color = colors.bgPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Box(modifier = Modifier.padding(start = VVSpace.x2).clip(RoundedCornerShape(VVRadius.md)).background(colors.accent).padding(horizontal = VVSpace.x2, vertical = VVSpace.x0_5)) {
+                        Text(conversation.unreadCount.toString(), color = colors.surface, fontSize = VVFontSize.s12, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

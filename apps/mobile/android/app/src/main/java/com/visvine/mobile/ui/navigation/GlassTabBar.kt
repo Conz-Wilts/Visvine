@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.visvine.mobile.ui.components.glassSurface
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 
 
@@ -61,17 +63,17 @@ fun GlassTabBar(
     Row(
         modifier = modifier
             .navigationBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, bottom = 20.dp)
+            .padding(start = VVSpace.x4, end = VVSpace.x4, bottom = VVSpace.x5)
             .fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(VVSpace.x2_5),
     ) {
         Row(
             modifier = Modifier
                 .weight(1f)
                 .height(64.dp)
                 .glassSurface(32.dp)
-                .padding(horizontal = 6.dp),
+                .padding(horizontal = VVSpace.x1_5),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TABS.forEach { tab ->
@@ -81,7 +83,7 @@ fun GlassTabBar(
                     modifier = Modifier
                         .weight(1f)
                         .clickable { onSelect(tab.route) }
-                        .padding(vertical = 6.dp),
+                        .padding(vertical = VVSpace.x1_5),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -91,7 +93,7 @@ fun GlassTabBar(
                         tint = tint,
                         modifier = Modifier.size(22.dp),
                     )
-                    Text(tab.label, color = tint, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(tab.label, color = tint, fontSize = VVFontSize.s11, fontWeight = FontWeight.Bold)
                 }
             }
         }

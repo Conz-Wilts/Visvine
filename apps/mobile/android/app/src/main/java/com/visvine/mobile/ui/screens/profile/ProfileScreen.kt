@@ -39,9 +39,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
-import com.visvine.mobile.ui.viewmodel.SpaceViewModel
 import com.visvine.mobile.ui.viewmodel.ProfileViewModel
+import com.visvine.mobile.ui.viewmodel.SpaceViewModel
 
 
 /** Your own profile: a header, then sections divided by hairlines. */
@@ -60,13 +62,13 @@ fun ProfileScreen(
     val current by spaceViewModel.current.collectAsStateWithLifecycle()
     var showSignOut by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize().background(colors.bgPrimary)) {
+    Column(modifier = Modifier.fillMaxSize().background(colors.surface)) {
         Row(
-            modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().background(colors.surface).statusBarsPadding().padding(horizontal = VVSpace.x1, vertical = VVSpace.x1),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) { Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.accent) }
-            Text("Profile", color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text("Profile", color = colors.fg, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
 
         if (state.loading) {
@@ -78,24 +80,24 @@ fun ProfileScreen(
         val initials = displayName.split(" ").mapNotNull { it.firstOrNull() }.joinToString("").take(2).uppercase()
         val avatarUrl = profile?.imageUrl ?: user?.image
 
-        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 32.dp)) {
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = VVSpace.x8)) {
             // Header
-            Column(modifier = Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(modifier = Modifier.fillMaxWidth().padding(VVSpace.x6), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(contentAlignment = Alignment.BottomEnd) {
                     if (!avatarUrl.isNullOrEmpty()) {
                         AsyncImage(model = avatarUrl, contentDescription = displayName, contentScale = ContentScale.Crop, modifier = Modifier.size(100.dp).clip(CircleShape))
                     } else {
-                        Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(colors.accentLight), contentAlignment = Alignment.Center) {
-                            Text(initials, color = colors.accentDark, fontSize = 36.sp, fontWeight = FontWeight.SemiBold)
+                        Box(modifier = Modifier.size(100.dp).clip(CircleShape).background(colors.accentSoft), contentAlignment = Alignment.Center) {
+                            Text(initials, color = colors.accentStrong, fontSize = VVFontSize.s36, fontWeight = FontWeight.SemiBold)
                         }
                     }
-                    Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(colors.bgPrimary).border(1.dp, colors.borderSubtle, CircleShape).clickable { onEditProfile() }, contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(colors.surface).border(1.dp, colors.lineSubtle, CircleShape).clickable { onEditProfile() }, contentAlignment = Alignment.Center) {
                         Icon(AppIcons.Edit, contentDescription = "Edit", tint = colors.accent, modifier = Modifier.size(16.dp))
                     }
                 }
-                Text(displayName, color = colors.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
-                profile?.title?.let { Text(it, color = colors.textMuted, fontSize = 16.sp) }
-                profile?.company?.let { Text(it, color = colors.textMuted, fontSize = 14.sp) }
+                Text(displayName, color = colors.fg, fontSize = VVFontSize.s24, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = VVSpace.x4))
+                profile?.title?.let { Text(it, color = colors.fgMuted, fontSize = VVFontSize.s16) }
+                profile?.company?.let { Text(it, color = colors.fgMuted, fontSize = VVFontSize.s14) }
             }
 
             // Contact
@@ -113,12 +115,12 @@ fun ProfileScreen(
                 spaces.forEach { space ->
                     val active = current?.id == space.id
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = VVSpace.x3),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(VVSpace.x3),
                     ) {
                         Box(Modifier.size(8.dp).clip(CircleShape).background(colors.accent))
-                        Text(space.name, color = if (active) colors.accent else colors.textSecondary, fontSize = 16.sp, fontWeight = if (active) FontWeight.Medium else FontWeight.Normal, modifier = Modifier.weight(1f))
+                        Text(space.name, color = if (active) colors.accent else colors.fgSecondary, fontSize = VVFontSize.s16, fontWeight = if (active) FontWeight.Medium else FontWeight.Normal, modifier = Modifier.weight(1f))
                         if (active) Icon(AppIcons.CircleCheck, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
                     }
                 }
@@ -134,16 +136,16 @@ fun ProfileScreen(
             // Sign out
             Section {
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { showSignOut = true }.padding(vertical = 14.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { showSignOut = true }.padding(vertical = VVSpace.x3_5),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(AppIcons.Logout, contentDescription = null, tint = colors.error, modifier = Modifier.size(20.dp))
-                    Text("Sign Out", color = colors.error, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
+                    Icon(AppIcons.Logout, contentDescription = null, tint = colors.danger, modifier = Modifier.size(20.dp))
+                    Text("Sign Out", color = colors.danger, fontSize = VVFontSize.s16, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = VVSpace.x2))
                 }
             }
 
-            Text("Version 0.1.0", color = colors.textMuted, fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(top = 24.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text("Version 0.1.0", color = colors.fgMuted, fontSize = VVFontSize.s12, modifier = Modifier.fillMaxWidth().padding(top = VVSpace.x6), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
         }
     }
@@ -153,7 +155,7 @@ fun ProfileScreen(
             onDismissRequest = { showSignOut = false },
             title = { Text("Sign Out") },
             text = { Text("Are you sure you want to sign out?") },
-            confirmButton = { TextButton(onClick = { showSignOut = false; viewModel.logout() }) { Text("Sign Out", color = colors.error) } },
+            confirmButton = { TextButton(onClick = { showSignOut = false; viewModel.logout() }) { Text("Sign Out", color = colors.danger) } },
             dismissButton = { TextButton(onClick = { showSignOut = false }) { Text("Cancel") } },
         )
     }
@@ -166,9 +168,9 @@ fun ProfileScreen(
 @Composable
 private fun Section(content: @Composable () -> Unit) {
     val colors = VisvineTheme.colors
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = VVSpace.x2)) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(colors.lineSubtle))
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = VVSpace.x4, vertical = VVSpace.x2)) {
             content()
         }
     }
@@ -179,20 +181,20 @@ private fun SectionTitle(text: String) {
     val colors = VisvineTheme.colors
     Text(
         text.uppercase(),
-        color = colors.textMuted,
-        fontSize = 11.sp,
+        color = colors.fgMuted,
+        fontSize = VVFontSize.s11,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 0.9.sp,
-        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+        modifier = Modifier.padding(top = VVSpace.x3, bottom = VVSpace.x1),
     )
 }
 
 @Composable
 private fun InfoRow(label: String, value: String) {
     val colors = VisvineTheme.colors
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-        Text(label, color = colors.textMuted, fontSize = 12.sp)
-        Text(value, color = colors.textPrimary, fontSize = 16.sp)
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = VVSpace.x3)) {
+        Text(label, color = colors.fgMuted, fontSize = VVFontSize.s12)
+        Text(value, color = colors.fg, fontSize = VVFontSize.s16)
     }
 }
 
@@ -200,12 +202,12 @@ private fun InfoRow(label: String, value: String) {
 private fun MenuItem(icon: Painter, label: String, onClick: () -> Unit) {
     val colors = VisvineTheme.colors
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 14.dp),
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = VVSpace.x3_5),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(VVSpace.x3),
     ) {
-        Icon(icon, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(24.dp))
-        Text(label, color = colors.textSecondary, fontSize = 16.sp, modifier = Modifier.weight(1f))
-        Icon(AppIcons.ChevronRight, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = colors.fgSecondary, modifier = Modifier.size(24.dp))
+        Text(label, color = colors.fgSecondary, fontSize = VVFontSize.s16, modifier = Modifier.weight(1f))
+        Icon(AppIcons.ChevronRight, contentDescription = null, tint = colors.fgMuted, modifier = Modifier.size(20.dp))
     }
 }

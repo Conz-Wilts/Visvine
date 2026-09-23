@@ -42,13 +42,13 @@ fun PersonAvatar(
 
     val fallback: @Composable () -> Unit = {
         Box(
-            modifier = Modifier.size(size).clip(CircleShape).background(colors.accentLight),
+            modifier = Modifier.size(size).clip(CircleShape).background(colors.accentSoft),
             contentAlignment = Alignment.Center,
         ) {
             if (glyph != null) {
-                Icon(glyph, contentDescription = name, tint = colors.accentDark, modifier = Modifier.size(size * 0.5f))
+                Icon(glyph, contentDescription = name, tint = colors.accentStrong, modifier = Modifier.size(size * 0.5f))
             } else {
-                Text(initials.ifEmpty { "?" }, color = colors.accentDark, fontSize = fontSize, fontWeight = FontWeight.SemiBold)
+                Text(initials.ifEmpty { "?" }, color = colors.accentStrong, fontSize = fontSize, fontWeight = FontWeight.SemiBold)
             }
         }
     }

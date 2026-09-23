@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.visvine.mobile.ui.icons.AppIcons
+import com.visvine.mobile.ui.theme.VVFontSize
+import com.visvine.mobile.ui.theme.VVSpace
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.AuthViewModel
 import com.visvine.mobile.ui.viewmodel.SpaceViewModel
@@ -55,14 +57,14 @@ fun ScreenHeader(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colors.bgPrimary)
+            .background(colors.surface)
             .statusBarsPadding(),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(56.dp)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = VVSpace.x4),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -73,7 +75,7 @@ fun ScreenHeader(
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(AppIcons.Network, contentDescription = null, tint = colors.accent, modifier = Modifier.size(22.dp))
-                    Text("Visvine", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
+                    Text("Visvine", color = colors.fg, fontSize = VVFontSize.s18, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = VVSpace.x2))
                 }
             }
 
@@ -86,14 +88,14 @@ fun ScreenHeader(
     if (pickerVisible) {
         ModalBottomSheet(
             onDismissRequest = { pickerVisible = false },
-            containerColor = colors.bgPrimary,
+            containerColor = colors.surface,
         ) {
             Text(
                 "Space",
-                color = colors.textMuted,
+                color = colors.fgMuted,
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                fontSize = VVFontSize.s13,
+                modifier = Modifier.padding(horizontal = VVSpace.x4, vertical = VVSpace.x3),
             )
             LazyColumn {
                 items(spaces, key = { it.id }) { space ->
@@ -101,21 +103,21 @@ fun ScreenHeader(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(if (active) colors.accentLight else Color.Transparent)
+                            .background(if (active) colors.accentSoft else Color.Transparent)
                             .clickable {
                                 spaceViewModel.setCurrent(space)
                                 pickerVisible = false
                             }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                            .padding(horizontal = VVSpace.x4, vertical = VVSpace.x3_5),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(VVSpace.x3),
                     ) {
                         SpaceAvatar(name = space.name, imageUrl = space.image, size = 28.dp)
                         Text(
                             space.name,
-                            color = if (active) colors.accentDark else colors.textSecondary,
+                            color = if (active) colors.accentStrong else colors.fgSecondary,
                             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                            fontSize = 16.sp,
+                            fontSize = VVFontSize.s16,
                             modifier = Modifier.weight(1f),
                         )
                         if (active) Icon(AppIcons.Check, contentDescription = null, tint = colors.accent, modifier = Modifier.size(18.dp))
