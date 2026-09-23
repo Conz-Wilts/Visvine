@@ -17,11 +17,11 @@ function formatMemberCount(count: number): string {
   return String(count);
 }
 
-/** The Space type's colour — the tile's border and its painted field. */
+/** The Space type's colour — the tile's glow and its painted field. */
 export const SPACE_COLOR = getNodeTypeConfig('space').color;
 
 /**
- * A space as the Directory draws an entry: a bordered tile in the Space
+ * A space as the Directory draws an entry: a tile glowing in the Space
  * colour, a square of identity media (the mark, or the monogram on a painted
  * field), then name, one line of facts and the join word, centred. Sectors
  * are browsed from the strip above the grid. The tile opens the space's page.
@@ -55,7 +55,6 @@ export default function SpaceTile({
   ].filter(Boolean).join(' · ');
 
   const style = {
-    borderColor: SPACE_COLOR,
     '--card-glow': `${SPACE_COLOR}55`,
     '--card-glow-strong': `${SPACE_COLOR}99`,
   } as React.CSSProperties;
@@ -68,7 +67,7 @@ export default function SpaceTile({
       onClick={() => router.push(href)}
       onKeyDown={(e) => { if (e.key === 'Enter') router.push(href); }}
       style={style}
-      className="group relative z-0 flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl border-4 bg-surface-1 transition-[box-shadow,transform] duration-200 hover:z-10 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_16px_32px_rgba(0,0,0,0.16),0_0_20px_4px_var(--card-glow-strong)]"
+      className="group relative z-0 flex w-full cursor-pointer flex-col overflow-hidden rounded-2xl bg-surface-1 transition-[box-shadow,transform] duration-200 hover:z-10 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_16px_32px_rgba(0,0,0,0.16),0_0_20px_4px_var(--card-glow-strong)]"
     >
       <div className="aspect-square w-full shrink-0 overflow-hidden">
         {mark.imageUrl ? (
