@@ -66,10 +66,11 @@ export async function imageUrlFromResource(input: ImageFromResourceInput): Promi
 
   const resource = await prisma.resource.findUnique({
     where: { id: resourceId },
-    select: { spaceId: true, name: true, fileType: true, gcsPath: true },
+    select: { spaceId: true, name: true, fileType: true, gcsPath: true, conversationId: true },
   })
-  // Absent and belonging to another space are deliberately the same answer.
-  if (!resource || resource.spaceId !== spaceId) {
+  // Absent, another space's, and a channel's own file (listed only to that
+  // channel's members) are deliberately the same answer.
+  if (!resource || resource.spaceId !== spaceId || resource.conversationId) {
     throw new ApiError(404, `No file '${resourceId}' in this space`)
   }
   if (resource.fileType !== 'image') {

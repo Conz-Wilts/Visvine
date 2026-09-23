@@ -225,7 +225,10 @@ async function storeResource(input: UploadInput): Promise<DriveFile> {
   const gcsPath = resourceObjectPath(spaceId, uuid, storedName)
   await uploadResourceFile(gcsPath, bytes, mimeType)
 
-  const kind = isImage ? null : sourceKindOf(storedName)
+  // A channel's file is not indexed: the space's shared sources are searchable
+  // by every member, and the file is the channel's alone.
+  const inChannel = Boolean(input.conversationId)
+  const kind = isImage || inChannel ? null : sourceKindOf(storedName)
   const resource = await prisma.resource.create({
     data: {
       spaceId,
@@ -239,9 +242,11 @@ async function storeResource(input: UploadInput): Promise<DriveFile> {
       indexState: kind ? 'pending' : 'unsupported',
       indexError: kind
         ? null
-        : isImage
-          ? 'Images carry no text to index.'
-          : `No text extractor for ${ext || 'this file type'} yet.`,
+        : inChannel
+          ? 'Channel files are not indexed.'
+          : isImage
+            ? 'Images carry no text to index.'
+            : `No text extractor for ${ext || 'this file type'} yet.`,
       metadata: { originalFilename: originalName, mimeType },
     },
   })
@@ -302,11 +307,14 @@ export async function reindexResource(resourceId: string): Promise<DriveFile | n
     return toDriveFile(updated, 0)
   }
 
-  const kind = resource.fileType === 'image' ? null : sourceKindOf(resource.name)
+  const kind = resource.fileType === 'image' || resource.conversationId ? null : sourceKindOf(resource.name)
   if (!kind) {
+    const indexError = resource.conversationId
+      ? 'Channel files are not indexed.'
+      : 'No text extractor for this file type yet.'
     const updated = await prisma.resource.update({
       where: { id: resource.id },
-      data: { indexState: 'unsupported', indexError: 'No text extractor for this file type yet.' },
+      data: { indexState: 'unsupported', indexError },
     })
     return toDriveFile(updated, 0)
   }
@@ -410,7 +418,9 @@ function toDriveFile(row: ResourceRow, chunkCount: number, fileUrl?: string | nu
 export async function listResources(spaceId: string): Promise<DriveFile[]> {
   const context = contextOf(spaceId)
   const [rows, sources] = await Promise.all([
-    prisma.resource.findMany({ where: { spaceId }, orderBy: { createdAt: 'desc' } }),
+    // A channel's files are the channel's, listed to its members by
+    // lib/resources/library.ts — never in the space's Drive.
+    prisma.resource.findMany({ where: { spaceId, conversationId: null }, orderBy: { createdAt: 'desc' } }),
     prisma.contextSource.findMany({
       where: { spaceId, ownerKey: SHARED_OWNER_KEY },
       select: { path: true, chunkCount: true },

@@ -973,6 +973,7 @@ export const CONTEXT_ACTIONS = [
         const rows = await prisma.resource.findMany({
           where: {
             spaceId: args.space_id,
+            conversationId: null,
             ...(folderIds ? { folderId: { in: folderIds } } : {}),
             ...(args.kind === 'image' ? { fileType: 'image' } : {}),
             ...(args.kind === 'document' ? { NOT: { fileType: 'image' } } : {}),

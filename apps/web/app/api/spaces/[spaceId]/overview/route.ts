@@ -75,7 +75,7 @@ export async function GET(
       await Promise.all([
         prisma.spaceMember.count({ where: { spaceId } }),
         prisma.node.count({ where: { spaceId } }),
-        prisma.resource.count({ where: { spaceId } }),
+        prisma.resource.count({ where: { spaceId, conversationId: null } }),
         prisma.spaceMember.findMany({
           where: { spaceId },
           orderBy: { joinedAt: 'asc' },
@@ -84,7 +84,7 @@ export async function GET(
         }),
         isMember
           ? prisma.resource.findMany({
-              where: { spaceId },
+              where: { spaceId, conversationId: null },
               orderBy: { createdAt: 'desc' },
               take: 4,
               select: { id: true, name: true, fileType: true, fileSize: true, createdAt: true },
