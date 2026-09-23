@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState, type ReactNode } from 'react';
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import Avatar from '@/components/ui/Avatar';
 import Chip from '@/components/ui/Chip';
 import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
@@ -83,19 +83,11 @@ export const FeedPostCard = memo(function FeedPostCard({
             </p>
             <div className="truncate text-[13px] text-text-muted">{place}</div>
           </div>
-          {!deleted && (
-            <div className="relative flex shrink-0 items-center gap-0.5">
-              {canEdit && (
-                <button type="button" className={iconButton} title="Edit" onClick={() => { setEditText(post.text); setEditing(true); }}>
-                  <PencilIcon className="h-4 w-4" />
-                </button>
-              )}
-              {post.isOwn && (
-                <button type="button" className={`${iconButton} hover:text-red-500`} title="Delete" onClick={() => void onDelete(post.id)}>
-                  <Trash2Icon className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+          {!deleted && (canEdit || post.isOwn) && (
+            <PostMenu
+              onEdit={canEdit ? () => { setEditText(post.text); setEditing(true); } : undefined}
+              onDelete={post.isOwn ? () => void onDelete(post.id) : undefined}
+            />
           )}
         </header>
 
@@ -206,3 +198,69 @@ export const FeedPostCard = memo(function FeedPostCard({
     </article>
   );
 });
+
+/** The post's own actions behind three dots — Edit while the window is open, Delete for its author. */
+function PostMenu({ onEdit, onDelete }: { onEdit?: () => void; onDelete?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('pointerdown', onDown, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const item = 'flex h-8 w-full items-center gap-2 px-3 text-left text-[13px] transition-colors hover:bg-surface-2';
+  const pick = (fn: () => void) => () => {
+    setOpen(false);
+    fn();
+  };
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        className={iconButton}
+        title="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <circle cx="5" cy="12" r="1.9" />
+          <circle cx="12" cy="12" r="1.9" />
+          <circle cx="19" cy="12" r="1.9" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="dropdown-pop absolute right-0 top-full z-20 mt-1 w-36 rounded-xl border border-border-subtle bg-surface-1 py-[5px] shadow-float"
+        >
+          {onEdit && (
+            <button type="button" role="menuitem" className={`${item} text-text-secondary`} onClick={pick(onEdit)}>
+              <PencilIcon className="h-3.5 w-3.5" />
+              Edit
+            </button>
+          )}
+          {onDelete && (
+            <button type="button" role="menuitem" className={`${item} text-red-500`} onClick={pick(onDelete)}>
+              <Trash2Icon className="h-3.5 w-3.5" />
+              Delete
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
