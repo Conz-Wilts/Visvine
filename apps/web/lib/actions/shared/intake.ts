@@ -1,5 +1,9 @@
 /**
- * What to ask before building an agent or a connector — the intake.
+ * What to ask before building something — the intake.
+ *
+ * Creation happens here, through the actions, and nowhere else: the apps edit
+ * what exists and offer no create screens. So the intake is the form a person
+ * would otherwise have filled in, asked as a conversation instead.
  *
  * The failure this exists to stop is the eager one: a request like "make me an
  * agent that watches the deals folder" is enough to write SOMETHING, so a model
@@ -21,7 +25,7 @@
 /** The most questions an intake may spend. Four is a message, five is a form. */
 export const MAX_INTAKE_QUESTIONS = 4
 
-export type IntakeKind = 'agent' | 'connector'
+export type IntakeKind = 'agent' | 'connector' | 'event' | 'space' | 'tool'
 
 export interface IntakeQuestion {
   /** The question, in words worth asking a person. */
@@ -44,7 +48,9 @@ function rules(kind: IntakeKind): readonly string[] {
     'Look before you ask. The steps below start with a list call for a reason — the roster, the existing notes and the space\'s conventions answer half of these for free, and asking something the space already told you reads as not having looked.',
     kind === 'connector'
       ? 'Never ask for a credential, token or key in the open. Ask what the service is and what the secret should be CALLED; the value is stored by an admin, on the connector\'s own page.'
-      : 'Never ask for a credential or key. An agent reaches a service through a connector the space already has, and the connector holds the value.',
+      : kind === 'agent'
+        ? 'Never ask for a credential or key. An agent reaches a service through a connector the space already has, and the connector holds the value.'
+        : 'Never ask for a credential, token or key. Nothing built here holds one.',
     'Take an answer that is not an answer. "You decide", "whatever\'s normal", silence — all mean pick the safe default and go. Never ask twice.',
     'Then say the plan in two or three lines — what you are about to create, when it will run, what it will touch — and build it. Do not make the plan a fifth question.',
     'When you build on a default rather than an answer, name the default in what you report back. That is what makes it correctable in one sentence instead of a re-run.',
@@ -97,8 +103,79 @@ const CONNECTOR_QUESTIONS: readonly IntakeQuestion[] = [
   },
 ]
 
+const EVENT_QUESTIONS: readonly IntakeQuestion[] = [
+  {
+    ask: 'What is it, and when — the date, the start time, and the end if it has one?',
+    decides: '`title`, `start_at` and `end_at`. A start is required, and a time without a timezone is a guess about when people turn up.',
+    skipWhen: 'The request or a plan in the Drive already gives the title and a dated start — then read the timezone from the space and confirm it in the plan.',
+  },
+  {
+    ask: 'Where is it — a venue and address, or online?',
+    decides: '`location` — the label and address the event page shows and the invite carries.',
+    skipWhen: 'The request or the run sheet names the venue, or it is plainly a call — then say "online" and move on.',
+  },
+  {
+    ask: 'Who should see it — only this space, or anyone with the link?',
+    decides: '`visibility`: space (members only) or public, which puts it on the open web at /e/<slug> once published.',
+    skipWhen: 'Default to space and say so. Ask only when the request sounds like an open invitation ("launch night", "meetup", "anyone can come").',
+  },
+  {
+    ask: 'Should it go live now, or stay a draft for you to read first?',
+    decides: '`status`: draft (only hosts and admins see it) or published. Draft is the safe default.',
+    skipWhen: 'Always skippable — build a draft and give the link, unless they already said "publish it".',
+  },
+]
+
+const SPACE_QUESTIONS: readonly IntakeQuestion[] = [
+  {
+    ask: 'What should it be called, and what is it for in a sentence?',
+    decides: '`name` (and the id derived from it, which cannot be changed later) and `description`.',
+    skipWhen: 'The request names it ("a space for the Auckland chapter") — then propose the name and go.',
+  },
+  {
+    ask: 'Private (invite only) or public (listed on Discover, anyone can join)?',
+    decides: '`visibility`. Private is the default and the safe one; a public name must be unique among public spaces.',
+    skipWhen: 'Default to private and say so, unless the request says open, public or community.',
+  },
+  {
+    ask: 'Is it its own space, or a room inside one you run?',
+    decides: '`parent_id` and the room `preset` — a sub-space inherits nothing but its family, and only a parent\'s admin can make one.',
+    skipWhen: 'The request did not mention a parent — then it is top-level.',
+  },
+]
+
+const TOOL_QUESTIONS: readonly IntakeQuestion[] = [
+  {
+    ask: 'What should it show or let people do — the one screen you picture?',
+    decides: 'The whole of `ui.tsx`, and which notes or rows `data.js` reads.',
+    skipWhen: 'The request already describes the screen ("a table of this week\'s RSVPs") — then build it and offer the next step.',
+  },
+  {
+    ask: 'Who uses it — everyone in the space, or the admins?',
+    decides: 'What it may write, and whether it lands on the rail for everyone once installed.',
+    skipWhen: 'Default to everyone in the space, read-only, and say so.',
+  },
+]
+
+const QUESTIONS: Record<IntakeKind, readonly IntakeQuestion[]> = {
+  agent: AGENT_QUESTIONS,
+  connector: CONNECTOR_QUESTIONS,
+  event: EVENT_QUESTIONS,
+  space: SPACE_QUESTIONS,
+  tool: TOOL_QUESTIONS,
+}
+
+/** How each kind is named, and why it is worth a moment before building. */
+const PREAMBLE: Record<IntakeKind, string> = {
+  agent: 'Building an agent is configuration that then runs on its own, so spend a moment on intake before you write anything.',
+  connector: 'Building a connector is configuration that then runs on its own, so spend a moment on intake before you write anything.',
+  event: 'An event is a date people plan around and a page they are sent to, and nobody fills in a form for it — you are the form. Get the few facts that make it right before you create it.',
+  space: 'A space cannot be deleted through an action, and its id is fixed by its name, so confirm the few facts that decide it first.',
+  tool: 'A tool is code people will open every day, so learn the one screen they picture before you scaffold it.',
+}
+
 export function intakeQuestions(kind: IntakeKind): readonly IntakeQuestion[] {
-  return kind === 'agent' ? AGENT_QUESTIONS : CONNECTOR_QUESTIONS
+  return QUESTIONS[kind]
 }
 
 /**
@@ -106,11 +183,7 @@ export function intakeQuestions(kind: IntakeKind): readonly IntakeQuestion[] {
  * that reads only the first three lines still behaves correctly.
  */
 export function renderIntake(kind: IntakeKind): string {
-  const what = kind === 'agent' ? 'an agent' : 'a connector'
-  const out: string[] = [
-    `Building ${what} is configuration that then runs on its own, so spend a moment on intake before you write anything.`,
-    '',
-  ]
+  const out: string[] = [PREAMBLE[kind], '']
   for (const rule of rules(kind)) out.push(`- ${rule}`)
   out.push('', 'The questions worth the budget, best first:', '')
   intakeQuestions(kind).forEach((q, i) => {

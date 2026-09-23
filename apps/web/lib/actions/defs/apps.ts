@@ -30,6 +30,7 @@
 import { inSpace } from '@/lib/spaces/shared/spaceUrl'
 import { z } from 'zod'
 import { defineAction, ActionError, type ActionCaller } from '@/lib/actions/types'
+import { intakeSummary } from '@/lib/actions/shared/intake'
 import { resolveTarget, type Target } from '@/lib/actions/resolve'
 import { featureAccessForbidden } from '@/lib/auth'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
@@ -752,6 +753,7 @@ export const APP_ACTIONS = [
     scope: 'tools:author',
     summary: 'Scaffold a new Tool in a space — the entity, its config note and two source files that already compile.',
     description:
+      `BEFORE YOU CALL THIS: ${intakeSummary('tool')}\n` +
       'Scaffold a new Tool in a space: the directory entity, its config note and two source files that ' +
       `already compile and render. Start here when asked to build something for a space. ${TOOL_SHAPE} ` +
       'Returns the file list, a preview link, and a pointer to get_tool_sdk. The name must be unique in ' +

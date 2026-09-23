@@ -1089,7 +1089,7 @@ export const CONTEXT_ACTIONS = [
       guides: ['writing_notes'],
       input: {
         space_id: spaceArg,
-        type: z.enum(CREATABLE_TYPES).describe("What it is: 'person', 'space' (an organisation) or 'resource'. Decides the fields and where the note lives"),
+        type: z.enum(['person', 'space', 'resource']).describe("What it is: 'person', 'space' (an organisation) or 'resource'. Decides the fields and where the note lives"),
         name: z.string().describe('Display name — also the basis of the id and note path'),
         fields: z
           .record(z.string(), z.union([z.string(), z.number()]))
@@ -1552,8 +1552,8 @@ export const CONTEXT_ACTIONS = [
         "provider's key is stored. `space_model` is the one an agent that names no `model:` runs on (the first that " +
         'works, in note order); `problem` on a row says why it cannot run yet. Never a key. A model is not a connector ' +
         'and nothing runs it directly: an agent uses it by running. TO ADD ONE: a model is a NOTE at models/<name>.md ' +
-        "(`type: model`, `provider:`, `model:`), written with edit_context by a space admin, plus the MODEL_KEY_<PROVIDER> " +
-        'secret set with set_connector_secret. Adding one from the Models dialog in the app does both.',
+        '(`type: model`, `provider:`, `model:`), written with edit_context by a space admin. The provider\'s key is ' +
+        "never handed to you: after writing the note, give the admin the row's `page`, where they paste it.",
       input: { space_id: spaceArg },
       annotations: { readOnlyHint: true },
       run: async (ctx, args) => {
@@ -1744,6 +1744,7 @@ export const CONTEXT_ACTIONS = [
       summary:
         'Create an event: the record, its public page, its RSVP list and its context note.',
       description:
+        `BEFORE YOU CALL THIS: ${intakeSummary('event')}\n` +
         'Create an event in this space — the record, its page, its RSVP form and its context note at ' +
         'events/<slug>.md, in one call. This is the step that turns material already in the space into ' +
         'something people can turn up to.\n' +

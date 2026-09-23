@@ -199,6 +199,14 @@ test('the load-bearing scope splits hold across both doors', () => {
   assert.equal(scopeForAction('create_space'), 'context:write')
   assert.notEqual(actionByName('create_space'), actionByName('add_context'))
   assert.ok('parent_id' in actionByName('create_space')!.input, 'a sub-space is create_space with a parent')
+
+  // No app screen creates anything, so every kind has an action. Each writes.
+  for (const name of ['create_channel', 'create_section', 'add_type', 'create_event']) {
+    assert.equal(scopeForAction(name), 'context:write', name)
+  }
+  // An event is made by create_event alone, with its defaults.
+  const addTypes = actionByName('add_context')!.input.type as unknown as { options: string[] }
+  assert.ok(!addTypes.options.includes('event'), 'add_context never makes an event')
 })
 
 test('one catalogue carries every action, authoring included', () => {

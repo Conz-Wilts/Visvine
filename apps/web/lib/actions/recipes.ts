@@ -28,6 +28,7 @@ import { SANDBOX_LIMITS } from '@/lib/connectors/config'
 import { kw, type KeywordRule } from '@/lib/actions/shared/match'
 import { renderIntake, type IntakeKind } from '@/lib/actions/shared/intake'
 import { AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
+import { MCP_SCOPES } from '@/lib/mcp/scopes'
 
 /** One call the client should make, in order. */
 interface PlanStep {
@@ -67,10 +68,10 @@ export interface Recipe {
   /** Weighted term rules over the lowercased prompt. Highest total wins. */
   keywords: KeywordRule[]
   /**
-   * Set on the recipes that BUILD something that then runs unattended. It puts
-   * a short, budgeted intake in front of step 1 — the few questions whose
-   * answers change the artefact — because the alternative is a model writing a
-   * plausible agent nobody asked for at a time nobody chose.
+   * Set on the recipes that BUILD something. It puts a short, budgeted intake
+   * in front of step 1 — the few questions whose answers change the artefact —
+   * because no app screen collects them: creation is only ever asked for, and
+   * the alternative is a model building a plausible thing nobody asked for.
    */
   intake?: IntakeKind
   steps: (ctx: RecipeContext) => PlanStep[]
@@ -446,6 +447,7 @@ const RECIPES: Recipe[] = [
       ...kw('tool', 'marketplace|publish|install', 6),
       ...kw('ui.tsx|data.js|tool-kit', '', 5),
     ],
+    intake: 'tool',
     steps: (ctx) => [
       { n: 1, tool: 'list_tools', why: 'Extend an existing tool rather than duplicating it; also shows which ones currently compile.', args: { space_id: spaceId(ctx) } },
       { n: 2, tool: 'get_tool_sdk', why: 'The authoring contract — what is importable, how handlers work, what the frontmatter declares.', args: { space_id: spaceId(ctx) } },
@@ -475,6 +477,7 @@ const RECIPES: Recipe[] = [
       ...kw('create_space', '', 10),
       ...kw('sub-space|subspace|sub space', '', 4),
     ],
+    intake: 'space',
     steps: (ctx) => [
       {
         n: 1,
@@ -548,7 +551,7 @@ const RECIPES: Recipe[] = [
       'Use the exact field keys — email, companyName, linkedinUrl, url — they are what match an entity to its identity across spaces. An unrecognised key is silently dropped.',
       'A "space" type is a company/collective/investor recorded as a CARD in the directory. It never provisions a new space — starting a space or a sub-space is create_space (the `create_space` intent).',
       'Links between entities are never authored directly: a markdown link to an entity\'s note inside a SHARED note body is what creates the edge. Always use the leading-slash form — every tool hands back a ready-made `mention` string; paste it verbatim.',
-      'Events are not created here — they are records with dates, RSVPs and a page of their own: use create_event (see the `run_event` intent). Channels and sections come from the space\'s admin surfaces.',
+      'Events are not created here — they are records with dates, RSVPs and a page of their own: use create_event (see the `run_event` intent). Channels and sections are create_channel and create_section; a new type is add_type.',
     ],
     blockers: (ctx) => scopeBlocker(ctx, 'context:write', 'creating an entity'),
   },
@@ -568,6 +571,7 @@ const RECIPES: Recipe[] = [
       ...kw('rsvp|attendee|guest list|cover image|poster|flyer', '', 4),
       ...kw('event', '', 2),
     ],
+    intake: 'event',
     steps: (ctx) => [
       {
         n: 1,
@@ -792,15 +796,7 @@ export function renderRecipeBody(recipe: Recipe): string {
 
 /** The scopes a generic rendering assumes: all of them, so a shipped note never
  *  hard-codes a refusal that only applies to one caller's token. */
-const ALL_SCOPES: readonly string[] = [
-  'context:read',
-  'context:write',
-  'connectors:use',
-  'agents:run',
-  'tools:author',
-  'tools:install',
-  'secrets:write',
-]
+const ALL_SCOPES: readonly string[] = MCP_SCOPES
 
 /** Read the feature flags the recipes reason about off a space's config. */
 export function planFeatures(config: SpaceFeatureConfig | null | undefined): Record<string, boolean> {

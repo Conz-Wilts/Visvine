@@ -15,9 +15,13 @@
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import { defineAction, ActionError } from '@/lib/actions/types'
+import { intakeSummary } from '@/lib/actions/shared/intake'
 import { SPACE_DESCRIPTION_MAX_WORDS, descriptionDenial } from '@/lib/spaces/shared/description'
 import { isAdmin } from '@/lib/auth'
 import { provisionSpace } from '@/lib/spaces/provision'
+import { requireSpaceContext } from '@/lib/actions/resolve'
+import { mergeNodeType, type MergeNodeTypeResult } from '@/lib/types'
+import { updateSpaceConfig, bustSpaceConfigCache, UnknownSpaceError } from '@/lib/spaces/spaceConfig'
 
 export const SPACE_ACTIONS = [
   defineAction({
@@ -26,6 +30,7 @@ export const SPACE_ACTIONS = [
     summary:
       'Start a new space — a tenant with its own members, context and tools — or a sub-space inside one you administer.',
     description:
+      `BEFORE YOU CALL THIS: ${intakeSummary('space')}\n` +
       'Create a SPACE: a tenant of its own, with its own members, admins, context, Drive, connectors and agents. ' +
       'You become its first member and hold its Admin alias. This is what "create a space", "start a workspace" ' +
       'and "make a sub-space" mean.\n' +
@@ -43,8 +48,7 @@ export const SPACE_ACTIONS = [
       "spaces. For a room, `listing` decides visibility: world is public.\n\n" +
       'The id is derived from the name (with -2, -3 if taken) and returned as `space_id` — use it as `space_id` ' +
       'in every other action. A new space starts with every toggleable tool OFF; its admins turn them on in the ' +
-      'Space Console. Ask for the name and whether it should be public if the person has not said; create ' +
-      'nothing speculatively, since a space cannot be deleted through an action.',
+      'Space Console. Create nothing speculatively, since a space cannot be deleted through an action.',
     input: {
       name: z.string().trim().min(1).max(120).describe('The space\'s name — also the basis of its id'),
       description: z
@@ -118,6 +122,52 @@ export const SPACE_ACTIONS = [
             ? ` Its context is readable from ${parentName} under subspaces/${s.id}/.`
             : ''),
       }
+    },
+  }),
+  defineAction({
+    name: 'add_type',
+    scope: 'context:write',
+    summary: "Add a type to a space's vocabulary, so notes can declare it and the directory colours and labels them.",
+    description:
+      "Add a TYPE to the space's type vocabulary — a name notes declare in their frontmatter (`type: Grant`) so " +
+      'they are coloured, labelled and grouped as one kind everywhere. Any active member may add one, as they ' +
+      'can add a tag. Adding a name the space already has returns that type unchanged; the first writer\'s ' +
+      'colour wins. Built-in kinds (person, space, event, resource…) and platform words are reserved. Pick an ' +
+      'existing type from list_context\'s `types` before adding one — a type is only worth adding when several ' +
+      'notes will wear it. Then write notes with `type: <Name>` through edit_context.',
+    input: {
+      space_id: z.string().describe('The space to act in — list_spaces returns the ids you can act in'),
+      name: z.string().trim().min(1).describe("The type's name, singular, e.g. 'Grant'"),
+      color: z.string().optional().describe('A 6-digit hex colour like #3b82f6. Leave it out for a default'),
+    },
+    run: async (ctx, args) => {
+      const resolved = await requireSpaceContext(ctx, args.space_id)
+      const membership = await prisma.spaceMember.findFirst({
+        where: { userId: ctx.userId, spaceId: resolved.spaceId, status: 'active' },
+        select: { id: true },
+      })
+      if (!membership) throw new ActionError(403, 'Only an active member of the space can add a type')
+
+      let merged: MergeNodeTypeResult | null = null
+      try {
+        await updateSpaceConfig(
+          resolved.spaceId,
+          (stored) => {
+            const next = mergeNodeType(stored.nodeTypes, { name: args.name, color: args.color })
+            merged = next
+            return next.ok && next.created ? { nodeTypes: next.types } : {}
+          },
+          { skipRevalidate: true },
+        )
+      } catch (err) {
+        if (err instanceof UnknownSpaceError) throw new ActionError(404, 'Unknown space')
+        throw err
+      }
+      const result = merged as MergeNodeTypeResult | null
+      if (!result) throw new ActionError(500, 'The type could not be added')
+      if (!result.ok) throw new ActionError(400, result.error)
+      if (result.created) bustSpaceConfigCache()
+      return { type: result.type.name, color: result.type.color, created: result.created }
     },
   }),
 ] as const
