@@ -19,6 +19,10 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+# pnpm links a workspace package's own dependencies (clsx, @visvine/tokens)
+# under that package, and .dockerignore drops every node_modules from the
+# context, so the shared UI's has to come from deps too.
+COPY --from=deps /app/packages/ui/node_modules ./packages/ui/node_modules
 COPY . .
 # TOOLS_ORIGIN is deliberately NOT a build arg. The Content-Security-Policy is
 # built per request in proxy.ts, so `frame-src` reads the runtime environment on
