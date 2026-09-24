@@ -213,8 +213,11 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   stale-run reclaim fires at `MAX_RUN_MS + RECLAIM_GRACE_MS` (27 min; `lib/agents/limits.ts`). If runs
   ever need >30 min, swap
   `lib/agents/dispatch.ts` for Cloud Tasks; nothing else changes.
-- Dev: `AGENT_DISPATCH=inline` (default outside production) runs inside the tick request;
+- Dev: `pnpm --filter @visvine/web agents:tick` is the minute tick from its own process against
+  the local database (`--once` for one), each run inline; or one tick through the app with
   `curl -X POST -H "Authorization: Bearer $AGENT_TICK_SECRET" localhost:3000/api/internal/agents/tick`.
+  `agents:verify:live` builds, runs and judges an agent end to end on the real model
+  (`scripts/verify-agent-live.ts`).
 - Ceilings on a run: wall clock (`MAX_RUN_MS`, 25 min — the tick awaits its runs and Cloud
   Scheduler's `attemptDeadline` cannot exceed 30), turns (`max_turns`, ≤ 200), spend (per-agent
   monthly cap + a 2M-token per-run backstop). Not resumable: a dead run is failed and the agent waits for its

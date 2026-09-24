@@ -36,6 +36,14 @@ test('a run that stopped short is handed back with what is missing, and fails if
   assert.equal(nudgeFor(blocked, { writes: 1, tools: ['write_context'] }), null, 'a blocked run that wrote says so; it is not nudged')
   assert.ok(incompleteBecause(blocked))
 
+  // A lean, not confident, is enough for a turn — never for a failure.
+  const leaning = { unbacked: [], outcome: null, lean: 'partial' as const }
+  assert.match(nudgeFor(leaning, noWrite) ?? '', /remaining steps/)
+  assert.equal(incompleteBecause(leaning), null, 'a run that wrote is failed only on a confident verdict')
+  assert.ok(incompleteBecause(leaning, { writes: 0 }), 'one that wrote nothing is held to its lean')
+  assert.ok(incompleteBecause(null, { writes: 0, promisesMore: true }), 'or to its own promise, judge or no judge')
+  assert.equal(incompleteBecause(null, { writes: 2, promisesMore: true }), null)
+
   for (const fine of [{ unbacked: [], outcome: 'done' as const }, { unbacked: [], outcome: 'nothing' as const }, { unbacked: [], outcome: null }, null]) {
     assert.equal(nudgeFor(fine, noWrite), null)
     assert.equal(incompleteBecause(fine), null)

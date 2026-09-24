@@ -176,10 +176,34 @@ export interface ChatWithToolsResult {
  * {@link ModelError} on failure; with no `config` it uses the environment and
  * callers gate on {@link aiConfigured} first.
  */
+/**
+ * One tool-calling turn. A reply that is entirely empty — no text and no
+ * call — is asked again once with the same request: some models end a turn
+ * that way when their call came out malformed, and a second sample is usually
+ * the turn they meant. Both attempts' usage is counted.
+ */
 export async function chatWithTools(
   messages: AgentMessage[],
   tools: ToolSpec[],
   opts: ChatWithToolsOptions = {},
+): Promise<ChatWithToolsResult> {
+  const first = await chatWithToolsOnce(messages, tools, opts)
+  if (first.content?.trim() || first.toolCalls.length || opts.signal?.aborted) return first
+  const again = await chatWithToolsOnce(messages, tools, opts)
+  const usage =
+    first.usage && again.usage
+      ? {
+          promptTokens: first.usage.promptTokens + again.usage.promptTokens,
+          completionTokens: first.usage.completionTokens + again.usage.completionTokens,
+        }
+      : (again.usage ?? first.usage)
+  return { ...again, usage }
+}
+
+async function chatWithToolsOnce(
+  messages: AgentMessage[],
+  tools: ToolSpec[],
+  opts: ChatWithToolsOptions,
 ): Promise<ChatWithToolsResult> {
   const config = opts.config ?? resolveConfig()
   if (!config) {

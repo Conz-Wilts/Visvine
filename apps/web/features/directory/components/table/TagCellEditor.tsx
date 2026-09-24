@@ -37,6 +37,7 @@ export default function TagCellEditor({
   onSave,
   onCreate,
   onClose,
+  fixed = false,
 }: {
   /** The cell the panel lies over. */
   anchor: HTMLElement;
@@ -49,6 +50,8 @@ export default function TagCellEditor({
   /** A brand-new tag's colour, registered on the space. */
   onCreate?: (tag: string, color: string) => void;
   onClose: () => void;
+  /** The pool is the whole choice — an agent's connectors, say: nothing new is made here. */
+  fixed?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -113,14 +116,14 @@ export default function TagCellEditor({
       const key = tagKey(t);
       if (key && !byKey.has(key)) byKey.set(key, t.trim());
     }
-    for (const key of Object.keys(colors ?? {})) if (key && !byKey.has(key)) byKey.set(key, key);
+    if (!fixed) for (const key of Object.keys(colors ?? {})) if (key && !byKey.has(key)) byKey.set(key, key);
     return [...byKey.values()].sort((a, b) => a.localeCompare(b));
-  }, [pool, value, colors]);
+  }, [pool, value, colors, fixed]);
 
   const trimmed = draft.trim();
   const query = trimmed.toLowerCase();
   const matches = query ? known.filter((t) => t.toLowerCase().includes(query)) : known;
-  const showCreate = !!trimmed && !known.some((t) => tagKey(t) === tagKey(trimmed)) && !onRow.has(tagKey(trimmed));
+  const showCreate = !fixed && !!trimmed && !known.some((t) => tagKey(t) === tagKey(trimmed)) && !onRow.has(tagKey(trimmed));
   const rows: Row[] = [
     ...matches.map((v) => ({ kind: 'tag' as const, value: v })),
     ...(showCreate ? [{ kind: 'create' as const, value: trimmed }] : []),
@@ -149,7 +152,7 @@ export default function TagCellEditor({
       if (existing) {
         if (!onRow.has(tagKey(existing))) toggle(existing);
         else setDraft('');
-      } else create(trimmed, resolveTagBase(trimmed, colors));
+      } else if (!fixed) create(trimmed, resolveTagBase(trimmed, colors));
       return;
     }
     cursor.onKeyDown(e);

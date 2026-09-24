@@ -92,6 +92,7 @@ test('a model that keeps narrating FAILS the loop rather than passing off a plan
 test('a reply that stops on its next step is told once, then believed', async () => {
   assert.ok(announcedNextStep("I've fetched both lists. Now I'll combine these and select the top 10 by points."))
   assert.ok(announcedNextStep('Let me write the note.'))
+  assert.ok(announcedNextStep('I will use decide on them. Finally, I will write the top 10 to the note.'))
   assert.ok(announcedNextStep('The agent collected the stories. Next, it will combine the lists and pick the top 10.'))
   assert.equal(announcedNextStep('Listed 10 stories in agents/hn/top-ai.md.'), false)
   assert.equal(announcedNextStep("Nothing changed today. I'll check again next run."), false)
@@ -103,6 +104,11 @@ test('a reply that stops on its next step is told once, then believed', async ()
   assert.equal(r.reason, 'finished')
   assert.equal(r.finalText, 'Wrote it.')
   assert.ok(once.seen.includes(NEXT_STEP_NUDGE))
+
+  // An empty reply is the same pause.
+  const silent = scripted([{ content: '' }, { content: 'Done.' }])
+  const r1 = await runToolLoop({ messages: [{ role: 'user', content: 'go' }], tools: [fetchUrl], maxTurns: 5, chatFn: silent })
+  assert.equal(r1.finalText, 'Done.')
 
   // Promising again is its answer: one nudge, never a loop, never a failure.
   const twice = scripted([{ content: "Now I'll do it." }, { content: "Now I'll do it." }])

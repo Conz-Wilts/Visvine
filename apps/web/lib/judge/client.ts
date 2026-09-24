@@ -134,9 +134,12 @@ export async function decide(state: JudgeState, questions: JudgeQuestions, opts:
  * A space's own allowance for the questions its AGENTS ask (the `decide`
  * tool). Everything else the judge does is the platform's work at the
  * platform's pace; this is a tenant spending the deployment's key, so it is
- * metered per tenant — one token per batch, like the shared allowance.
+ * metered per tenant: one token per SPACE_ITEMS_PER_TOKEN items asked, twenty
+ * in hand and fifteen more a minute — a sort of a few hundred things runs at
+ * once, a loop asking the same list over and over runs dry.
  */
-const SPACE_LIMIT: RateLimitConfig = { capacity: 20, refillPerSec: 0.1 }
+export const SPACE_ITEMS_PER_TOKEN = 48
+const SPACE_LIMIT: RateLimitConfig = { capacity: 20, refillPerSec: 0.25 }
 export async function takeSpaceJudgeAllowance(spaceId: string): Promise<{ ok: boolean; retryAfterMs: number }> {
   return takeToken(`judge:space:${spaceId}`, SPACE_LIMIT)
 }

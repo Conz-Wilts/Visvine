@@ -4,7 +4,7 @@
 
 import { decide } from '@/lib/judge/client'
 import { choiceOf, noulOf } from '@/lib/judge/shared/types'
-import { RUN_CLAIM_AT, RUN_CLAIM_QUESTIONS, RUN_OUTCOME_CONFIDENCE, RUN_OUTCOME_QUESTION } from '@/lib/judge/shared/questions'
+import { RUN_CLAIM_AT, RUN_CLAIM_QUESTIONS, RUN_OUTCOME_CONFIDENCE, RUN_OUTCOME_LEAN, RUN_OUTCOME_QUESTION } from '@/lib/judge/shared/questions'
 import { unbackedClaims, type RunOutcome, type RunTrace, type RunVerdict } from './shared/runCheck'
 
 const CHECK_DEADLINE_MS = 3_000
@@ -22,5 +22,6 @@ export async function checkRun(finalText: string | null, trace: RunTrace): Promi
   return {
     unbacked: unbackedClaims({ wrote: noulOf(answers, 'wrote'), reached: noulOf(answers, 'reached') }, trace, RUN_CLAIM_AT),
     outcome: outcome && outcome.confidence >= RUN_OUTCOME_CONFIDENCE ? (outcome.choice as RunOutcome) : null,
+    lean: outcome && (outcome.probabilities[outcome.choice] ?? 0) >= RUN_OUTCOME_LEAN ? (outcome.choice as RunOutcome) : null,
   }
 }

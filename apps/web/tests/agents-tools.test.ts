@@ -448,7 +448,12 @@ test('decide puts an agent\'s own questions to the judge, per item, on the space
 
   assert.match(await tool(tools, 'decide').run({ items: ['x'], questions: [{ id: 'k', ask: 'which', type: 'choice', options: ['one'] }] }), /2–40/)
   assert.match(await tool(tools, 'decide').run({ items: [], questions }), /^error/)
-  const spent = agentTools(ctx(f, { deps: { ...on, takeSpaceJudgeAllowance: async () => ({ ok: false, retryAfterMs: 9_000 }) } }))
-  assert.match(await tool(spent, 'decide').run({ items: ['x'], questions }), /try again in 9s/)
+  const spent = agentTools(ctx(f, { deps: { ...on, takeSpaceJudgeAllowance: async () => ({ ok: false, retryAfterMs: 60_000 }) } }))
+  assert.match(await tool(spent, 'decide').run({ items: ['x'], questions }), /do not call decide again this run/)
   assert.equal(f.judged.length, 1, 'out of allowance asks nothing')
+  // A short wait is waited out rather than handed back.
+  let asks = 0
+  const brief = agentTools(ctx(f, { deps: { ...on, takeSpaceJudgeAllowance: async () => (asks++ === 0 ? { ok: false, retryAfterMs: 20 } : { ok: true, retryAfterMs: 0 }) } }))
+  assert.match(await tool(brief, 'decide').run({ items: ['x', 'y'], questions }), /judged/)
+  assert.equal(f.judged.length, 2)
 })

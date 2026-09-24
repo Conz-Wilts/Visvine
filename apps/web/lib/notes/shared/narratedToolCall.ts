@@ -107,12 +107,18 @@ export function announcedNextStep(text: string | null | undefined): boolean {
   const sentences = (text ?? '').trim().split(/(?<=[.!?:])\s+/).filter(Boolean)
   const last = sentences[sentences.length - 1]?.trim() ?? ''
   if (!last || /\b(next|following|upcoming) (run|time|week|month|day)\b|\btomorrow\b/i.test(last)) return false
-  if (/^(?:(?:now|next|then|ok(?:ay)?|great|alright)[,.]?\s+)?(?:i['’]ll|i will|i am going to|i['’]m going to|let me)\b/i.test(last)) return true
+  // Up to three words may lead in: "Now", "Finally,", "After that,".
+  if (/^(?:[\w’']+[,.]?\s+){0,3}(?:i['’]ll|i will|i am going to|i['’]m going to|let me)\b/i.test(last)) return true
   // "Next, it will combine …" — the same pause, told in the third person.
-  return /^(?:now|next|then)[,.]?\s+(?:it|the agent)\s+will\b/i.test(last)
+  return /^(?:[\w’']+[,.]?\s+){0,3}(?:it|the agent)\s+will\b/i.test(last)
 }
 
 /** What the model is told when it stops on a promise. Once: whatever it says next is its answer. */
 export const NEXT_STEP_NUDGE =
   'You said what you will do next but made no tool call, so the run would end here with that step undone. ' +
   'Do it now through the tools, and finish the task; if it is already finished, reply with the final result.'
+
+/** What the model is told when its turn came back empty. Once, like NEXT_STEP_NUDGE. */
+export const EMPTY_REPLY_NUDGE =
+  'Your reply was empty, so the run would end here with the task undone. Carry on with it now through the tools; ' +
+  'if it is already finished, reply with the final result.'

@@ -17,7 +17,7 @@ import {
   type ToolSpec,
 } from './ai'
 import { compactOlderResults } from './shared/compactMessages'
-import { announcedNextStep, MAX_NARRATION_NUDGES, NEXT_STEP_NUDGE, narratedToolCall, narrationNudge } from './shared/narratedToolCall'
+import { announcedNextStep, EMPTY_REPLY_NUDGE, MAX_NARRATION_NUDGES, NEXT_STEP_NUDGE, narratedToolCall, narrationNudge } from './shared/narratedToolCall'
 
 export type ChatFn = (
   messages: AgentMessage[],
@@ -150,13 +150,14 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         messages.push({ role: 'user', content: narrationNudge(narrated) })
         continue
       }
-      // A reply that stops on "now I'll …" paused between steps; it is given
-      // the turn back ONCE, and whatever it says then is its answer.
-      if (!promptedNextStep && announcedNextStep(reply.content)) {
+      // A reply that stops on "now I'll …" — or says nothing at all — paused
+      // between steps; it is given the turn back ONCE, and whatever it says
+      // then is its answer.
+      if (!promptedNextStep && (announcedNextStep(reply.content) || !reply.content?.trim())) {
         promptedNextStep = true
         if (reply.content?.trim()) emit({ type: 'assistant', text: reply.content.trim() })
         messages.push({ role: 'assistant', content: reply.content ?? '' })
-        messages.push({ role: 'user', content: NEXT_STEP_NUDGE })
+        messages.push({ role: 'user', content: reply.content?.trim() ? NEXT_STEP_NUDGE : EMPTY_REPLY_NUDGE })
         continue
       }
       // The caller's own read of the answer: a run that stopped short gets the

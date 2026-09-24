@@ -44,7 +44,10 @@ export function unbackedClaims(claims: RunClaims, trace: RunTrace, at: number): 
 
 export interface RunVerdict {
   unbacked: string[]
+  /** How the run ended, when the judge is confident of it — what can fail a run. */
   outcome: RunOutcome | null
+  /** The likeliest ending, confident or not — enough to hand the turn back. */
+  lean?: RunOutcome | null
 }
 
 /**
@@ -53,11 +56,18 @@ export interface RunVerdict {
  * it was asked — none of those is a success, however the loop ended. No
  * verdict (no judge) is not evidence of anything, so it passes.
  */
-export function incompleteBecause(verdict: RunVerdict | null): string | null {
+export function incompleteBecause(
+  verdict: RunVerdict | null,
+  run: { writes: number; promisesMore?: boolean } = { writes: 1 },
+): string | null {
+  // A run that wrote nothing is held to its likeliest ending, and to its own
+  // last words: "now I will write it" with nothing written is not done.
+  if (run.writes === 0 && run.promisesMore) return 'It ended announcing work it never did, having written nothing.'
   if (!verdict) return null
   if (verdict.unbacked.length) return verdict.unbacked.join(' ')
-  if (verdict.outcome === 'partial') return 'It ended saying only part of the job was done.'
-  if (verdict.outcome === 'blocked') return 'It ended saying it could not do what it was asked.'
+  const ending = verdict.outcome ?? (run.writes === 0 ? (verdict.lean ?? null) : null)
+  if (ending === 'partial') return 'It ended saying only part of the job was done.'
+  if (ending === 'blocked') return 'It ended saying it could not do what it was asked.'
   return null
 }
 
@@ -78,10 +88,11 @@ export function nudgeFor(verdict: RunVerdict | null, trace: RunTrace): string | 
       lines.push('You said you sent something or acted in an outside service, but no tool that could was called. Make that call now, or say plainly that you did not.')
     }
   }
-  if (!lines.length && verdict.outcome === 'partial') {
+  const ending = verdict.outcome ?? verdict.lean ?? null
+  if (!lines.length && ending === 'partial') {
     lines.push('Your reply says the job is only partly done. Carry on with the remaining steps now, calling the tools yourself.')
   }
-  if (!lines.length && verdict.outcome === 'blocked' && wroteNothing) {
+  if (!lines.length && ending === 'blocked' && wroteNothing) {
     lines.push('Your reply says you are blocked. If a tool you have can get past it, use it now; if not, reply with exactly what is missing and who can fix it.')
   }
   if (!lines.length) return null

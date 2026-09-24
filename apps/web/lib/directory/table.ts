@@ -134,18 +134,19 @@ const PROFILE_OWNED_KEYS = new Set(['bio', 'website', 'linkedinUrl', 'twitterUrl
  * An agent's columns are its RECORD (lib/agents/shared/agentConfig.ts) and its
  * live state, not node metadata: the agents table builds each row's
  * `metadata` from the roster (features/agents/lib/agentRows.ts) under these
- * keys. Model is the one edited in place — it goes to the agent's config route;
- * everything else is edited on the agent's own Config.
+ * keys. On, Model, Connectors and Tools edit in place — the switch through
+ * activation, the rest through the agent's config route; their choices are
+ * the space's (`AgentColumnOptions`). Everything else is the agent's Config.
  */
 const AGENT_COLUMNS: TableColumn[] = [
   { key: 'status', label: 'Status', kind: 'text', source: 'metadata', origin: 'type', editable: false },
-  { key: 'active', label: 'On', kind: 'checkbox', source: 'metadata', origin: 'type', editable: false },
+  { key: 'active', label: 'On', kind: 'checkbox', source: 'metadata', origin: 'type', editable: true },
   { key: 'schedule', label: 'Schedule', kind: 'text', source: 'metadata', origin: 'type', editable: false },
   { key: 'nextRun', label: 'Next run', kind: 'text', source: 'metadata', origin: 'type', editable: false },
   { key: 'lastRun', label: 'Last run', kind: 'text', source: 'metadata', origin: 'type', editable: false },
   { key: 'model', label: 'Model', kind: 'select', source: 'metadata', origin: 'type', editable: true },
-  { key: 'connectors', label: 'Connectors', kind: 'text', source: 'metadata', origin: 'type', editable: false },
-  { key: 'tools', label: 'Tools', kind: 'text', source: 'metadata', origin: 'type', editable: false },
+  { key: 'connectors', label: 'Connectors', kind: 'tags', source: 'metadata', origin: 'type', editable: true },
+  { key: 'tools', label: 'Tools', kind: 'tags', source: 'metadata', origin: 'type', editable: true },
   { key: 'runsFor', label: 'Runs for', kind: 'text', source: 'metadata', origin: 'type', editable: false },
   { key: 'failures', label: 'Failures', kind: 'number', source: 'metadata', origin: 'type', editable: false, defaultHidden: true },
 ]
@@ -156,12 +157,18 @@ const AGENT_COLUMNS: TableColumn[] = [
  * without it the type still has its core and property-row columns.
  * `modelOptions` are the choices of an agent's Model cell.
  */
-export function columnsForType(type: string, config?: NodeTypeConfig | null, opts: { modelOptions?: string[] } = {}): TableColumn[] {
+export interface AgentColumnOptions {
+  models?: string[]
+  connectors?: string[]
+  tools?: string[]
+}
+
+export function columnsForType(type: string, config?: NodeTypeConfig | null, opts: { agent?: AgentColumnOptions } = {}): TableColumn[] {
   const canonical = canonicalType(type)
   if (canonical === 'agent') {
-    const model = { ...AGENT_COLUMNS.find((c) => c.key === 'model')!, options: opts.modelOptions ?? [] }
-    return [CORE_HEAD[0], ...AGENT_COLUMNS.map((c) => (c.key === 'model' ? model : c)), CORE_TAIL[0]].map((c) =>
-      c.key === 'tags' || c.key === 'name' ? { ...c, editable: false } : c,
+    const choices: Record<string, string[] | undefined> = { model: opts.agent?.models, connectors: opts.agent?.connectors, tools: opts.agent?.tools }
+    return [CORE_HEAD[0], ...AGENT_COLUMNS, CORE_TAIL[0]].map((c) =>
+      c.key === 'tags' || c.key === 'name' ? { ...c, editable: false } : c.key in choices ? { ...c, options: choices[c.key] ?? [] } : c,
     )
   }
   const order = TYPE_COLUMN_ORDER[canonical] ?? []

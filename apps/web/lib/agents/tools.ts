@@ -56,7 +56,7 @@ import { browseOnMachine, QuotaExceededError, runOnMachine } from '@/lib/vm/leas
 import { signInOnMachine } from '@/lib/vm/signin'
 import { pageOnMachine } from '@/lib/vm/page'
 import type { PageResult, PageState } from '@/lib/vm/shared/pageScript'
-import { decideMany, judgeConfigured, MAX_BATCH, takeSpaceJudgeAllowance } from '@/lib/judge/client'
+import { decideMany, judgeConfigured, SPACE_ITEMS_PER_TOKEN, takeSpaceJudgeAllowance } from '@/lib/judge/client'
 import { askedQuestion, parseAsked, ASKED_ITEM_CHARS, ASKED_MAX_ITEMS } from '@/lib/judge/shared/questions'
 import { choiceOf, noulOf, scoreOf } from '@/lib/judge/shared/types'
 import { browseTaskOnMachine, type BrowseStatus } from './browseTask'
@@ -200,6 +200,8 @@ export interface AgentToolContext {
 }
 
 const RUN_OUTPUT_CAP_CHARS = 48_000
+/** How long `decide` waits for the space's judge allowance before telling the agent to go without. */
+const ALLOWANCE_WAIT_MS = 15_000
 const BROWSE_STATUS_LINE: Record<BrowseStatus, string> = {
   done: 'done — by its own account; check the page below',
   blocked: 'blocked — nothing on the page advances the goal',
@@ -687,9 +689,16 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
         const items = Array.isArray(a.items) ? a.items.map(str).filter((t) => t.trim()) : []
         if (items.length === 0) return 'error: give `items` — the texts to judge'
         if (items.length > ASKED_MAX_ITEMS) return `error: at most ${ASKED_MAX_ITEMS} items a call — ask again with the rest, or narrow the list first`
-        for (let spent = 0; spent < items.length; spent += MAX_BATCH) {
-          const allowance = await deps.takeSpaceJudgeAllowance(spaceId)
-          if (!allowance.ok) return `error: this space has asked the judge a lot just now — try again in ${Math.ceil(allowance.retryAfterMs / 1000)}s, or read these yourself`
+        // The space's allowance, a token per SPACE_ITEMS_PER_TOKEN items. A
+        // short wait is waited out here — a run already takes tens of
+        // seconds — rather than handed to the model to retry in a loop.
+        for (let spent = 0; spent < items.length; spent += SPACE_ITEMS_PER_TOKEN) {
+          let allowance = await deps.takeSpaceJudgeAllowance(spaceId)
+          if (!allowance.ok && allowance.retryAfterMs <= ALLOWANCE_WAIT_MS) {
+            await new Promise((r) => setTimeout(r, allowance.retryAfterMs))
+            allowance = await deps.takeSpaceJudgeAllowance(spaceId)
+          }
+          if (!allowance.ok) return 'error: this space has used its judge allowance for now — do not call decide again this run; read these yourself'
         }
         const questions = Object.fromEntries(asked.map((q) => [q.id, askedQuestion(q)]))
         const answers = await deps.decideMany(

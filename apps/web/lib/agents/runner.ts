@@ -31,6 +31,7 @@ import { eventsForRun, rearmIfPending, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, type DeactivationReason, copyStillAllowed } from './hooks'
 import { checkRun } from './runCheck'
 import { incompleteBecause, nudgeFor, type RunVerdict } from './shared/runCheck'
+import { announcedNextStep } from '@/lib/notes/shared/narratedToolCall'
 import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS } from './limits'
 import { releaseMachineAfterRun } from '@/lib/vm/lease'
 import { principalForUser } from './principal'
@@ -406,7 +407,14 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
           'verdict' in judged && judged.text === result.finalText
             ? (judged.verdict ?? null)
             : await checkRun(result.finalText, trace()).catch(() => null)
-        const short = incompleteBecause(verdict)
+        // A run that used every turn and wrote nothing did not finish, whatever
+        // it last said; one that wrote is judged on its words like any other.
+        const short =
+          result.reason === 'max_turns' && writes.length === 0
+            ? `It used all ${brief.maxTurns} turns without writing anything.`
+            : !result.finalText && writes.length === 0
+              ? 'It stopped without a word, having written nothing.'
+              : incompleteBecause(verdict, { writes: writes.length, promisesMore: announcedNextStep(result.finalText) })
         if (short) {
           return fail('incomplete', `Stopped before finishing. ${short}${result.finalText ? ` It said: “${result.finalText.slice(0, 300)}”` : ''}`, common)
         }

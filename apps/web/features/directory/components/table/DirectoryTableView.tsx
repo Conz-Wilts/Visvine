@@ -18,7 +18,8 @@ import TableToolbar from './TableToolbar';
 import TypeMenu, { menuTypes } from '@/features/directory/components/TypeMenu';
 import DirectoryTable from './DirectoryTable';
 import AgentsClock from '@/features/agents/components/AgentsClock';
-import { agentTableItem } from '@/features/agents/lib/agentRows';
+import { agentTableItem, switchOnBody } from '@/features/agents/lib/agentRows';
+import { AGENT_TOOL_OPTIONS } from '@/lib/agents/config';
 import { useAgentOptions } from '@/features/agents/lib/useAgentOptions';
 import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
 import { useConnectorCount } from '@/features/connectors/hooks/useConnectorCount';
@@ -57,8 +58,12 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   const isAgents = type?.toLowerCase() === 'agent';
   const roster = useAgentsRoster(space?.id ?? null, isAgents);
   const { options: agentOptions } = useAgentOptions(isAgents ? (space?.id ?? null) : null);
-  const modelOptions = useMemo(
-    () => (agentOptions?.models ?? []).map((m) => m.ref).filter((ref): ref is string => !!ref),
+  const agentChoices = useMemo(
+    () => ({
+      models: (agentOptions?.models ?? []).map((m) => m.ref).filter((ref): ref is string => !!ref),
+      connectors: (agentOptions?.connectors ?? []).map((c) => c.name),
+      tools: AGENT_TOOL_OPTIONS.map((t) => t.id),
+    }),
     [agentOptions],
   );
   // Connectors likewise: the space's gateways, as each person meets them —
@@ -105,8 +110,8 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
     [activeName, isAll, space?.nodeTypes],
   );
   const columns = useMemo(
-    () => (activeKey ? columnsForType(activeKey, typeConfig, { modelOptions }) : []),
-    [activeKey, typeConfig, modelOptions],
+    () => (activeKey ? columnsForType(activeKey, typeConfig, { agent: agentChoices }) : []),
+    [activeKey, typeConfig, agentChoices],
   );
 
   const table = useTableView(space?.id ?? null, activeKey ?? '', columns);
@@ -171,12 +176,20 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
       if (!patch || !spaceId) return;
       setSaveError(null);
       try {
-        // An agent's cell is its record, saved where every setting of it is.
+        // An agent's cell is its record, saved where every setting of it is:
+        // the switch through activation, the rest through its config.
         if (item.type === 'agent') {
           const name = item.id.slice('agent:'.length);
-          await fetchJsonBody(`/api/spaces/${encodeURIComponent(spaceId)}/agents/${encodeURIComponent(name)}/config`, 'PUT', {
-            [column.key]: typeof value === 'string' && value ? value : null,
-          });
+          const agentUrl = `/api/spaces/${encodeURIComponent(spaceId)}/agents/${encodeURIComponent(name)}`;
+          if (column.key === 'active') {
+            const summary = roster.data?.agents.find((a) => a.name === name);
+            const body = value ? (summary ? switchOnBody(summary.activation) : null) : { active: false };
+            if (!body) throw new Error('Set when it runs on its page first.');
+            await fetchJsonBody(agentUrl, 'PATCH', body);
+          } else {
+            const next = Array.isArray(value) ? value.map(String) : typeof value === 'string' && value ? value : null;
+            await fetchJsonBody(`${agentUrl}/config`, 'PUT', { [column.key]: next ?? (column.kind === 'tags' ? [] : null) });
+          }
         } else {
           await fetchJsonBody(`/api/nodes/${encodeURIComponent(item.id)}`, 'PATCH', { spaceId, ...patch });
         }
@@ -192,7 +205,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
       });
       handleDataChanged();
     },
-    [spaceId, handleDataChanged],
+    [spaceId, handleDataChanged, roster.data],
   );
 
   const aliases = (space?.aliases ?? []) as SpaceAlias[];

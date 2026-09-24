@@ -192,7 +192,7 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
       <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
         {/* A tag repeated in the note's frontmatter is still one tag. */}
         {[...new Set(value.map(String))].map((t) => (
-          <Chip key={t} color={tagPalette(t, tagColors ?? null).base} size="sm">{t}</Chip>
+          <Chip key={t} color={tagPalette(t, column.options ? null : (tagColors ?? null)).base} size="sm">{t}</Chip>
         ))}
       </span>
     );
@@ -242,10 +242,11 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
         <TagCellEditor
           anchor={cellRef.current}
           value={Array.isArray(value) ? value.map(String) : []}
-          pool={tagPool ?? []}
-          colors={tagColors ?? null}
+          pool={column.options ?? tagPool ?? []}
+          colors={column.options ? null : (tagColors ?? null)}
           onSave={onSave}
-          onCreate={onCreateTag}
+          onCreate={column.options ? undefined : onCreateTag}
+          fixed={!!column.options}
           onClose={() => {
             setTagsOpen(false);
             cellRef.current?.focus();

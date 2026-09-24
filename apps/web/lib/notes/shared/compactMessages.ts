@@ -12,7 +12,7 @@
  */
 import type { AgentMessage } from '../ai'
 
-export const KEEP_RESULT_TURNS = 6
+const KEEP_RESULT_TURNS = 6
 const MIN_TRIM_CHARS = 8_000
 const KEEP_HEAD_CHARS = 3_000
 

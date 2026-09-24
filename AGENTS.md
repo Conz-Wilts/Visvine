@@ -548,6 +548,23 @@ has.
   says so and hands the turn back twice, then ends `narrated`, which the runner
   fails and counts. Recording it as success is what let a digest agent produce
   nothing for days while its own plan went into `memory.md` as what it did.
+- **A run finishes the job, or fails `incomplete`.** Before a plain answer
+  ends a run, `runToolLoop`'s `review` has the judge read it against the trace
+  (`runCheck.ts`): a write it claims but never made, or an answer saying the
+  job is half done or blocked, gets the turn back with what is missing
+  (`shared/runCheck.ts#nudgeFor`, at most `MAX_REVIEWS`). One still short then
+  fails `incomplete` (`incompleteBecause`) — counted, and never written into
+  `memory.md`. With no judge an answer that stops on "now I'll …" is handed
+  back once (`announcedNextStep`). A verdict only ever adds a turn or marks a
+  failure; it never widens reach.
+- **What a run reads is kept small.** `fetch_url` returns readable text
+  (`lib/links/shared/readable.ts`: HTML as text with `[text](url)` links, JSON
+  without highlight copies or long id lists); a page past 20k with no `find`
+  returns its opening and how to narrow it; tool results older than six turns
+  go out trimmed (`lib/notes/shared/compactMessages.ts`). A model that cannot
+  call tools is a model problem before anything runs
+  (`lib/models/capabilities.ts`), and a model's page shows how often each model
+  finished its jobs.
 - **Switching an agent on is approval to run UNATTENDED, and nothing else.** A
   person asking for one run now — Run, the box, `run_agent` — runs an INACTIVE
   agent, as themselves, leaving the row untouched (`claimManualRun`'s

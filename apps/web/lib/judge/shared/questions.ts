@@ -158,6 +158,12 @@ export const RUN_OUTCOME_QUESTION: ChoiceQuestion = {
     nothing: 'There was nothing to do this time.',
   },
 }
+/**
+ * The most likely outcome at this probability is enough to hand a run its
+ * turn back — a turn is cheap — though not to fail it, which takes
+ * RUN_OUTCOME_CONFIDENCE.
+ */
+export const RUN_OUTCOME_LEAN = 0.5
 export const RUN_OUTCOME_CONFIDENCE = 0.6
 
 // ── Untrusted text ──────────────────────────────────────────────────────────
