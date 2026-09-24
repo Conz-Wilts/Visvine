@@ -27,6 +27,4 @@ export interface DirectoryItem {
   updatedAt?: string
   editedBy?: string
   addedBy?: string
-  /** How many notes mention the record. */
-  mentions?: number
 }

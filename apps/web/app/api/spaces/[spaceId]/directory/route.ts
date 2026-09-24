@@ -56,7 +56,7 @@ export async function GET(
       featureConfig,
     ).map(normalizeNode);
 
-    // What every record has — last edit, who, mentions — read through the
+    // What every record has — last edit, who — read through the
     // viewer's own lens, so it rides beside the cached nodes, never in them.
     const resolved = await resolveContext(session, spaceId);
     const facts = resolved instanceof Response ? new Map() : await recordFactsFor(spaceId, nodes, await principalOf(resolved));

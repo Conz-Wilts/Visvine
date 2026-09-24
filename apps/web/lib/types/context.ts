@@ -93,7 +93,6 @@ export interface NBNode {
   updated_at?: string;
   edited_by?: string;
   added_by?: string;
-  mentions?: number;
   // Force context will add these during simulation
   x?: number;
   y?: number;

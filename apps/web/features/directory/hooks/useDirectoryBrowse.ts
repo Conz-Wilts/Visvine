@@ -33,7 +33,6 @@ function toDirectoryItem(node: NBNode): DirectoryItem {
     updatedAt: node.updated_at,
     editedBy: node.edited_by,
     addedBy: node.added_by,
-    mentions: node.mentions,
   };
 }
 

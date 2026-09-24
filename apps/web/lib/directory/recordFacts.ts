@@ -1,5 +1,5 @@
 // What every record in the Directory has, whatever its type: when its note was
-// last edited and by whom, who added it, and how many notes mention it. The
+// last edited and by whom, and who added it. The
 // table's core columns read these (lib/directory/table.ts).
 //
 // The dates are the NOTE's, not the node's. A node row is rewritten by
@@ -22,7 +22,6 @@ export interface RecordFacts {
   updated_at?: string
   edited_by?: string
   added_by?: string
-  mentions?: number
 }
 
 /** Who a revision names: the agent for an agent's run, else the person saving. */
@@ -45,19 +44,11 @@ export async function recordFactsFor(
     if (path && principalCanRead(principal, path)) nodeByPath.set(path, node.id)
   }
 
-  const [notes, mentionCounts] = await Promise.all([
-    nodeByPath.size
-      ? prisma.contextNote.findMany({
-          where: { spaceId, ownerKey: 'shared', deletedAt: null, path: { in: [...nodeByPath.keys()] } },
-          select: { id: true, path: true, updatedAt: true, createdBy: true },
-        })
-      : Promise.resolve([]),
-    prisma.link.groupBy({
-      by: ['targetId'],
-      where: { spaceId, relationship: 'mentioned' },
-      _count: { _all: true },
-    }),
-  ])
+  if (!nodeByPath.size) return facts
+  const notes = await prisma.contextNote.findMany({
+    where: { spaceId, ownerKey: 'shared', deletedAt: null, path: { in: [...nodeByPath.keys()] } },
+    select: { id: true, path: true, updatedAt: true, createdBy: true },
+  })
 
   const [revisions, authors] = await Promise.all([
     notes.length
@@ -89,9 +80,6 @@ export async function recordFactsFor(
       edited_by: lastEditor.get(note.id) ?? added,
       added_by: added,
     })
-  }
-  for (const row of mentionCounts) {
-    facts.set(row.targetId, { ...facts.get(row.targetId), mentions: row._count._all })
   }
   return facts
 }

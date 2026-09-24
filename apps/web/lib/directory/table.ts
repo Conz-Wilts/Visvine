@@ -5,7 +5,7 @@
 // A type's columns come from three places, in this order:
 //
 //   core     name · alias, then tags · updated · edited by · added · added
-//            by · mentions — what every record has, whatever its type
+//            by — what every record has, whatever its type
 //   type     the property rows the type already shows on its note
 //            (lib/types/typeFields.ts): a Person's role, company, location…
 //   tracked  what THIS space decided to track about the type
@@ -35,7 +35,7 @@ type ColumnKind = TrackedFieldKind | 'location' | 'tags' | 'alias'
 type ColumnSource = 'name' | 'alias' | 'tags' | 'column' | 'metadata' | 'record'
 
 /** The DirectoryItem keys a `source: 'record'` column reads — the facts every record has. */
-type RecordField = 'createdAt' | 'updatedAt' | 'editedBy' | 'addedBy' | 'mentions'
+type RecordField = 'createdAt' | 'updatedAt' | 'editedBy' | 'addedBy'
 
 export interface TableColumn {
   /** Stable id; the metadata key for `source: 'metadata'`. */
@@ -90,7 +90,6 @@ const CORE_TAIL: TableColumn[] = [
   { key: 'editedBy', label: 'Edited by', kind: 'text', source: 'record', field: 'editedBy', origin: 'core', editable: false },
   { key: 'created', label: 'Added', kind: 'date', source: 'record', field: 'createdAt', origin: 'core', editable: false },
   { key: 'addedBy', label: 'Added by', kind: 'text', source: 'record', field: 'addedBy', origin: 'core', editable: false },
-  { key: 'mentions', label: 'Mentions', kind: 'number', source: 'record', field: 'mentions', origin: 'core', editable: false },
 ]
 
 /**

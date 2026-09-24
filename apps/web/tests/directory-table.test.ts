@@ -65,7 +65,7 @@ describe('columnsForType', () => {
         'name', 'alias',
         'subtitle', 'companyName', 'email', 'phone', 'location', 'linkedinUrl', 'twitterUrl', 'website', 'pronouns', 'bio',
         'deal_stage', 'net_worth',
-        'tags', 'updated', 'editedBy', 'created', 'addedBy', 'mentions',
+        'tags', 'updated', 'editedBy', 'created', 'addedBy',
       ],
     )
   })
@@ -98,7 +98,7 @@ describe('columnsForType', () => {
 
   test('an event reads when · where · how many', () => {
     assert.deepEqual(
-      columnsForType('event', null).map((c) => c.key).filter((k) => !['name', 'alias', 'tags', 'updated', 'editedBy', 'created', 'addedBy', 'mentions'].includes(k)),
+      columnsForType('event', null).map((c) => c.key).filter((k) => !['name', 'alias', 'tags', 'updated', 'editedBy', 'created', 'addedBy'].includes(k)),
       ['start_at', 'end_at', 'location', 'capacity', 'organizerEmail'],
     )
   })
@@ -108,7 +108,7 @@ describe('columnsForType', () => {
   })
 
   test('a type with no rows still has the core columns', () => {
-    assert.deepEqual(columnsForType('playbook', null).map((c) => c.key), ['name', 'alias', 'tags', 'updated', 'editedBy', 'created', 'addedBy', 'mentions'])
+    assert.deepEqual(columnsForType('playbook', null).map((c) => c.key), ['name', 'alias', 'tags', 'updated', 'editedBy', 'created', 'addedBy'])
   })
 
   test('a column-backed row keeps its column and its metadata mirror', () => {
@@ -139,7 +139,6 @@ describe('cells', () => {
       updatedAt: '2026-02-03T00:00:00.000Z',
       editedBy: 'Ana',
       addedBy: 'Craig',
-      mentions: 4,
       metadata: { email: 'c@x.com', deal_stage: 'Won' },
     })
     assert.equal(cellValue(it, col('name')), 'Craig')
@@ -152,7 +151,6 @@ describe('cells', () => {
     assert.equal(cellValue(it, col('updated')), '2026-02-03T00:00:00.000Z')
     assert.equal(cellValue(it, col('editedBy')), 'Ana')
     assert.equal(cellValue(it, col('addedBy')), 'Craig')
-    assert.equal(cellValue(it, col('mentions')), 4)
     assert.equal(cellValue(item(), col('net_worth')), undefined)
   })
 
@@ -230,11 +228,11 @@ describe('the viewer\'s arrangement', () => {
   })
 
   test('a column the view never met appears at its canonical place', () => {
-    const view = { ...EMPTY_VIEW, order: ['name', 'location', 'subtitle', 'alias', 'tags', 'updated', 'editedBy', 'created', 'addedBy', 'mentions'] }
+    const view = { ...EMPTY_VIEW, order: ['name', 'location', 'subtitle', 'alias', 'tags', 'updated', 'editedBy', 'created', 'addedBy'] }
     const keys = arrangeColumns(view, columns).map((c) => c.key)
     assert.deepEqual(keys, [
       'name', 'location', 'subtitle', 'alias', 'companyName', 'email', 'phone', 'linkedinUrl', 'twitterUrl',
-      'website', 'pronouns', 'bio', 'deal_stage', 'net_worth', 'tags', 'updated', 'editedBy', 'created', 'addedBy', 'mentions',
+      'website', 'pronouns', 'bio', 'deal_stage', 'net_worth', 'tags', 'updated', 'editedBy', 'created', 'addedBy',
     ])
   })
 
