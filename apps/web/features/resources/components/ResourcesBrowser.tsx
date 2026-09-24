@@ -31,8 +31,6 @@ import {
   DownloadIcon,
   EllipsisIcon,
   ExternalLinkIcon,
-  LayoutGridIcon,
-  ListIcon,
   RotateCcwIcon,
   Share2Icon,
   Trash2Icon,
@@ -340,10 +338,22 @@ export default function ResourcesBrowser({
           />
 
           <div className="ml-auto flex items-center gap-2">
-            <div className="flex items-center gap-0.5">
-              <IconButton label="List" icon={<ListIcon />} active={layout === 'list'} onClick={() => setLayout('list')} />
-              <IconButton label="Grid" icon={<LayoutGridIcon />} active={layout === 'grid'} onClick={() => setLayout('grid')} />
-
+            <div role="radiogroup" aria-label="Layout" className="flex min-h-10 items-stretch rounded-lg bg-surface-muted p-0.5 ring-1 ring-line-subtle">
+              {(['list', 'grid'] as const).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  role="radio"
+                  aria-checked={layout === l}
+                  onClick={() => setLayout(l)}
+                  className={clsx(
+                    'rounded-md px-3 text-sm font-semibold capitalize transition-colors',
+                    layout === l ? 'bg-surface text-fg ring-1 ring-line' : 'text-fg-muted hover:text-fg',
+                  )}
+                >
+                  {l}
+                </button>
+              ))}
             </div>
           </div>
         </div>
