@@ -27,6 +27,7 @@ import { useTrackedFields } from '@/features/directory/hooks/useTrackedFields';
 import type { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { entityKindOf } from '@/lib/notes/entities';
+import { tagKey } from '@/lib/tagColors';
 import {
   applyCellPatch,
   cellPatch,
@@ -173,6 +174,24 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
 
   const aliases = (space?.aliases ?? []) as SpaceAlias[];
 
+  // The Tags editor's list is every tag on any record here, whatever table is
+  // showing; a tag made in it registers its colour on the space the way the
+  // note's picker does, held here until the space record comes back with it.
+  const tagPool = useMemo(() => [...new Set(nodes.flatMap((n) => n.tags ?? []))], [nodes]);
+  const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({});
+  const tagColors = useMemo(
+    () => ({ ...(space?.designConfig?.tagColors ?? {}), ...tagColorOverride }),
+    [space?.designConfig?.tagColors, tagColorOverride],
+  );
+  const createTag = useCallback(
+    (tag: string, color: string) => {
+      if (!spaceId) return;
+      setTagColorOverride((m) => ({ ...m, [tagKey(tag)]: color }));
+      void fetchJsonBody(`/api/spaces/${encodeURIComponent(spaceId)}/tag-colors`, 'PATCH', { tag, color }).catch(() => undefined);
+    },
+    [spaceId],
+  );
+
   // A column exactly the pane's height: toolbar and tabs sit still, the table
   // is the one thing that scrolls — in both directions — so its head can stick
   // to its own top and its name column to its own left. A page-scrolled table
@@ -259,7 +278,9 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
           loading={loading}
           nodeTypes={space?.nodeTypes}
           aliases={aliases}
-          tagColors={space?.designConfig?.tagColors ?? null}
+          tagColors={tagColors}
+          tagPool={tagPool}
+          onCreateTag={createTag}
           fields={fields}
           onSortChange={table.setSort}
           onResize={table.resize}

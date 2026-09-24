@@ -70,6 +70,9 @@ interface DirectoryTableProps {
   nodeTypes?: NodeTypeConfig[];
   aliases?: SpaceAlias[];
   tagColors?: Record<string, string> | null;
+  /** Every tag the space knows, for the Tags editor. */
+  tagPool?: string[];
+  onCreateTag?: (tag: string, color: string) => void;
   /** Absent for non-admins: the tracked-field editor behind "+" and "Edit field". */
   fields?: FieldOps;
   onSortChange: (sort: TableSort | null) => void;
@@ -219,7 +222,7 @@ const tableComponents = { Scroller, Table, TableHead, TableBody, TableFoot, Tabl
 
 export default function DirectoryTable({
   items, columns, allColumns, typeName, sort, widths, loading = false,
-  nodeTypes, aliases, tagColors, fields,
+  nodeTypes, aliases, tagColors, tagPool, onCreateTag, fields,
   onSortChange, onResize, onReorder, onShowColumn, onHideColumn, onResetColumns, onOpen, onSaveCell, onSuggestCell,
 }: DirectoryTableProps) {
   // ── filling the pane: spare width goes to the columns nobody has sized ──
@@ -605,6 +608,8 @@ export default function DirectoryTable({
                           aliasColor={alias?.color ?? typeColor}
                           typeLabel={typeLabel}
                           tagColors={tagColors}
+                          tagPool={tagPool}
+                          onCreateTag={onCreateTag}
                           onSave={onSaveCell && column.editable ? (v) => onSaveCell(item, column, v) : undefined}
                           suggest={onSuggestCell && column.kind === 'select' && column.editable ? () => onSuggestCell(item, column) : undefined}
                         />

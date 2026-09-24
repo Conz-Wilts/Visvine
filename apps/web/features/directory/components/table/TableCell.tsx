@@ -7,7 +7,8 @@
 // The editor matches the column's kind (a date picker for a date, a select
 // for a select, a checkbox that toggles in place) so a value can only be
 // typed the way it will be stored. Enter or blur saves, Escape drops the
-// draft. A refused value (a number that isn't one) stays in the editor with
+// draft. Tags are the exception: they open TagCellEditor over the cell, which
+// saves each chip as it is added or taken off. A refused value (a number that isn't one) stays in the editor with
 // the reason under the pointer rather than being written as text and sorting
 // two ways.
 
@@ -16,6 +17,7 @@ import { clsx } from 'clsx';
 import { Chip } from '@visvine/ui';
 import { ExternalLinkIcon } from '@/features/shared/icons';
 import { tagPalette } from '@/lib/tagColors';
+import TagCellEditor from './TagCellEditor';
 import { cellHref, editValue, formatCell, parseCellInput, type TableColumn } from '@/lib/directory/table';
 
 interface TableCellProps {
@@ -26,6 +28,10 @@ interface TableCellProps {
   /** What the row's type is called, for a row wearing no alias. */
   typeLabel?: string | null;
   tagColors?: Record<string, string> | null;
+  /** Every tag the space knows — the Tags editor's list. */
+  tagPool?: string[];
+  /** A new tag's colour, registered on the space. */
+  onCreateTag?: (tag: string, color: string) => void;
   /** Absent when the viewer can't edit here (a global record, say). */
   onSave?: (value: unknown) => Promise<void>;
   /** For an empty select cell: the option the row's note suggests, marked in the menu for the person to pick. */
@@ -42,12 +48,14 @@ interface TableCellProps {
 const INPUT_CLASS =
   'h-full w-full bg-surface px-4 text-sm text-fg outline-none ring-1 ring-inset ring-[var(--vv-color-accent)]';
 
-export default function TableCell({ column, value, aliasColor, typeLabel, tagColors, onSave, suggest, autoEdit = false, onDone }: TableCellProps) {
+export default function TableCell({ column, value, aliasColor, typeLabel, tagColors, tagPool, onCreateTag, onSave, suggest, autoEdit = false, onDone }: TableCellProps) {
   const [draft, setDraft] = useState<string | null>(autoEdit ? editValue(value, column) : null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [suggested, setSuggested] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | HTMLSelectElement>(null);
+  const cellRef = useRef<HTMLDivElement>(null);
+  const [tagsOpen, setTagsOpen] = useState(false);
   const editable = column.editable && !!onSave;
 
   useEffect(() => {
@@ -57,6 +65,10 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
   const begin = () => {
     if (!editable || saving) return;
     setError(null);
+    if (column.kind === 'tags') {
+      setTagsOpen(true);
+      return;
+    }
     setDraft(editValue(value, column));
     if (column.kind === 'select' && suggest && !editValue(value, column)) {
       void suggest().then(setSuggested, () => undefined);
@@ -212,6 +224,7 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
 
   return (
     <div
+      ref={cellRef}
       role={editable ? 'button' : undefined}
       tabIndex={editable ? 0 : undefined}
       onClick={editable ? begin : undefined}
@@ -225,6 +238,20 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
       )}
     >
       {body}
+      {tagsOpen && cellRef.current && onSave && (
+        <TagCellEditor
+          anchor={cellRef.current}
+          value={Array.isArray(value) ? value.map(String) : []}
+          pool={tagPool ?? []}
+          colors={tagColors ?? null}
+          onSave={onSave}
+          onCreate={onCreateTag}
+          onClose={() => {
+            setTagsOpen(false);
+            cellRef.current?.focus();
+          }}
+        />
+      )}
     </div>
   );
 }
