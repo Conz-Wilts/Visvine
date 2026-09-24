@@ -16,6 +16,7 @@ import {
 import { beginSignIn, completeSignIn, restoreSession, watchSessionCookie } from "./auth";
 import { loadWindowState, parseWindowControls, saveWindowState, type WindowControls } from "./window-state";
 import { cancelRun, isRuntimeId, listRuntimes, loginRuntime, startRun, type RunInput } from "./runtimes";
+import { clearResourceCache, handleDownloads, registerFileIpc } from "./files";
 
 const APP_NAME = "Visvine";
 const OFFLINE_PAGE = path.join(__dirname, "..", "resources", "offline.html");
@@ -373,8 +374,10 @@ if (!app.requestSingleInstanceLock()) {
     Menu.setApplicationMenu(buildMenu({ appUrl, getWindow: () => mainWindow }));
     registerRuntimeIpc();
     registerWindowIpc();
+    registerFileIpc(appUrl, userData, fromApp);
+    handleDownloads(appUrl);
 
-    watchSessionCookie(appUrl, userData);
+    watchSessionCookie(appUrl, userData, () => clearResourceCache(userData));
 
     const initialLink = deepLinkIn(process.argv);
     if (initialLink && !authLink(initialLink)) pendingDeepLink = deepLinkToPath(initialLink);

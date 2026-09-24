@@ -288,7 +288,8 @@ Directory's Resources tab, or a file into a channel, as they would in Slack.
 | Kind | Action |
 |---|---|
 | Note, folder, custom-typed note | `edit_context` (a folder is its `index.md`) |
-| Person, organisation record, resource | `add_context` — **and** a file or link dropped into Resources, a file into a channel |
+| Person, organisation record | `add_context` |
+| Resource (a file or a link) | `upload_file` (with `channel_id` it is posted there), `add_context` with a `url`, `share_resource` to post one into a channel — **and** a file or link dropped into Resources, a file or link posted in a channel |
 | Event | `create_event` → edited and published at `/events/<id>/edit` |
 | Space, sub-space | `create_space` — **and** New space on the switcher (`NewSpaceDialog`), the one create the app keeps, because a new account has no space to act in |
 | Agent | `create_agent`, then `activate_agent` |
@@ -323,7 +324,7 @@ has.
   their owner, never grant-gated, and nothing provisions one. Every action
   that writes, runs or lists ONE space targets the space named in `space_id`
   — there is no `scope` argument. **The reads may omit it** — `search_context`,
-  `list_events`, `list_agents`, `list_connectors` (`inSpaces` in
+  `list_events`, `list_agents`, `list_connectors`, `list_resources` (`inSpaces` in
   `lib/actions/searchEverywhere.ts`; `list_context` is bearings in ONE space
   and keeps it). `search_context` without one runs the same federated search
   in every space the caller can act in
@@ -638,7 +639,10 @@ switcher, feed, People/Events rows), Messages (Agents = chat threads, Contacts =
 (`GET /api/activity`: runs for you, mentions, replies, requests you can
 answer with the existing routes, upcoming events — `lib/activity/`, pure fold
 tested). `GET /api/feed?spaceId=` is one space's feed. Responses camelCase;
-action inputs snake_case; the clients mirror each handler by hand.
+action inputs snake_case; the clients mirror each handler by hand. The
+resources surface (files and link cards in messages, the viewer, QuickLook /
+`FileProvider` opens) is specced in `docs/resources/mobile.md` and not yet
+built.
 
 ## The Directory
 
@@ -675,27 +679,48 @@ only).
   (`normalizeTypePlural` drops a blank, malformed or redundant one so a rename
   keeps deriving) and edited as one optional field on Console → Types. A
   heading never reads the override — changing it must not rewrite notes.
-- **A resource shows its file.** A Drive upload is the content of a `resource`
-  node, named by `metadata.fileId` (`lib/resources/node.ts`, pure half
-  `shared/fileNode.ts`): the upload makes that node, or binds the one Create →
-  Resource just made, replacing the file it held. The node's Preview tab is the
-  file (`ResourceFile`); a resource without one previews its `url`.
-  `/resources/<id>` redirects to the node, deleting the node deletes the file,
-  deleting the file drops the node and keeps the note. `db:resources:link`
-  gives a file made before this its node.
-- **Resources is everything unstructured, the way Slack's Files is**
-  (`docs/resources/README.md`; the redesign is `docs/resources/PLAN.md`). One read, `lib/resources/library.ts` over the pure
-  fold `shared/library.ts`, lists Drive files, link resources, links shared in
-  channel messages and event images, newest first, one row per link.
-  **A file dropped into a channel is a Drive file of that channel**
-  (`Resource.conversationId`), carried by the message through `message_files`,
-  listed only to the channel's members and given **no** node — the one upload
-  that has none. Its bytes are served by `GET /api/resources/<id>/raw`, a gated
-  redirect to a fresh signed URL; a signed URL is never stored.
-  **A link is a resource wearing its unfurl** (`lib/resources/links.ts`): Slack's
-  order — oEmbed, then Open Graph, then Twitter tags, then `<title>` — read from
-  the head only (`lib/links/shared/unfurl.ts`, pure), an oEmbed `html` never
-  stored or drawn.
+- **One resource, many shares** (`docs/resources/README.md`; the design record
+  is `docs/resources/PLAN.md`). A `Resource` is an upload or a link
+  (`source`), one per canonical URL per space; `resource_shares` says where it
+  was shared — the space itself (`conversation_id` null) or a channel, with the
+  message that carried it. **Every resource is an entity**: `resources.node_id`
+  names its `resource:<slug>` node and `resources/<slug>/index.md`, made by
+  `lib/resources/entity.ts#ensureResourceEntity` for every upload, channel file
+  and link alike. The Grid hides `resource` unless that type is picked.
+- **Visibility is the union of shares** (`lib/resources/shared/visibility.ts`,
+  pure; `visibility.ts` the SQL and `requireVisibleResource`, every byte door's
+  and action's one check): admins see all; a space share reaches every member,
+  a channel share that channel's members; no share, or trashed, is the
+  creator's. The note follows through the `channel` grant subject, written only
+  by `grants.ts#syncResourceGrants`. Refused is a 404, like absent. Bytes come
+  only through `/api/resources/<id>/raw` (the original) and `/thumb?kind=` (a
+  rendition) — the gate, then a five-minute signed URL; a signed URL is never
+  stored or returned by an action.
+- **Channels may be private** (`Conversation.visibility`): listed to members
+  only, joined only by being added, their note restricted to the channel.
+  Every resource read inherits it.
+- **Uploads are resumable and never re-encoded**
+  (`/api/resources/uploads` → chunks → `…/complete`, `lib/resources/upload.ts`):
+  the name refused by `shared/uploadPolicy.ts`, the bytes sniffed, then
+  `service.ts#finishUpload` makes the entity, the share, the grants and the owed
+  jobs. Renditions and text are `resource_jobs` rows drained inline within a
+  budget, by `POST /api/resources/jobs/pull`, and by the minute tick — never a
+  promise left running after the response. The tick also reaps unfinished
+  uploads and deletes what has been 30 days in the trash.
+- **A link is a resource wearing its unfurl.** `sendMessage`/`editMessage`
+  canonicalise each URL (`lib/links/shared/providers.ts`), upsert the space's
+  resource and share it; the card draws from the row at once and fills in on
+  `resource.updated`. The unfurl (`lib/resources/unfurl.ts`): the sharer's
+  connected Google account for a Drive file, a known provider's oEmbed, the
+  page's oEmbed, JSON-LD, Open Graph, Twitter, `<title>` — head only, every hop
+  SSRF-checked, images and favicons re-hosted, an oEmbed `html` never stored.
+  Embeds are ours, for the allowlist in `providers.ts`, which is also the CSP's
+  `frame-src`.
+- **One viewer** (`features/resources/viewer/`, chrome in `@visvine/ui`):
+  a side panel or full screen on `?resource=<id>[&full=1]`, a renderer per kind
+  from a pure registry. **One list** (`lib/resources/list.ts`) behind
+  Directory → Resources, a channel's Files tab, the pickers and
+  `list_resources`.
 - **A viewer's arrangement is theirs**: column order, hidden columns, widths and
   sort live in `localStorage` per space and type (`useTableView`), never on the
   space record. An unknown column appears at its canonical place.
@@ -949,14 +974,19 @@ read-only. There is no per-server ceiling above `negotiateScopes`.
 
 ### The Drive feeds the record
 
-`list_drive` returns things to USE: a `resource_id` per file, and unlike
-`list_files`/`search_context` it shows IMAGES. That id is the currency —
+`list_resources` returns things to USE: a `resource_id` per file or link the
+caller can see, and unlike `list_files`/`search_context` it shows IMAGES
+(`list_drive` is its old name, kept as a registry alias).
+`read_resource` reads one; `share_resource` posts one into a channel under
+`messages:write`. That id is the currency —
 `create_event`/`update_event` take `cover_resource_id` and `lib/events/cover.ts`
 copies the bytes into the event's own variants (`mediaPrefixBare('event', …)`,
 the prefix `/api/upload` writes and `purgeNodeObjects` collects). A file is used
 by id **inside** the tenant: a signed download URL is a bearer capability and is
-never handed to a caller, which is why that action queries `Resource` rows
-directly rather than through `listResources`.
+never handed to a caller. Using one asks `requireVisibleResource` — a private
+channel's image is its members' to use — and writes a `use` row to
+`resource_access` with the door (`ActionCaller.via`: mcp, agent, api) and the
+agent's name and run, as every action read, share and upload does.
 
 **Files come in through the actions too.** `upload_file` takes one of a
 public `url`, a chat client's attached `file` (ChatGPT's `openai/fileParams`,

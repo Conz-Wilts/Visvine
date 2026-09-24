@@ -6,6 +6,8 @@ import { contextBridge, ipcRenderer } from "electron";
  * Claude Code or Codex on this machine (src/runtimes). Nothing here returns a
  * credential: `list` says whether a binary is signed in, `login` opens the
  * binary's own sign-in in a terminal, `run` streams what the binary says.
+ * `files` opens a resource, named by id, in the computer's own app or Quick
+ * Look (src/files.ts).
  * (Sandboxed preloads get a trimmed `process`; the version rides in on argv
  * via `webPreferences.additionalArguments`.)
  */
@@ -28,6 +30,10 @@ contextBridge.exposeInMainWorld("visvineDesktop", {
       ipcRenderer.on("window:fullscreen", wrapped);
       return () => ipcRenderer.removeListener("window:fullscreen", wrapped);
     },
+  },
+  files: {
+    open: (resourceId: string) => ipcRenderer.invoke("files:open", resourceId),
+    quickLook: (resourceId: string) => ipcRenderer.invoke("files:quickLook", resourceId),
   },
   runtimes: {
     list: () => ipcRenderer.invoke("runtimes:list"),

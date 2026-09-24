@@ -3,7 +3,7 @@
 // the script exits 2 with a hint if it isn't).
 //
 // Covers: window boots → app loads → dev login → authenticated shell renders →
-// bridge/UA are exposed → external links leave the shell → the session survives a
+// bridge/UA are exposed → the files bridge is gated → external links leave the shell → the session survives a
 // quit → deep links resolve → offline fallback when the server is unreachable.
 
 import fs from "node:fs";
@@ -148,10 +148,26 @@ if (!(await serverUp(APP_URL))) {
     await step("directory page loads inside the shell", async () => {
       await page.goto(`${APP_URL}/directory`, { waitUntil: "domcontentloaded" });
       await page.waitForLoadState("networkidle", { timeout: 60_000 }).catch(() => {});
-      assert(page.url().startsWith(`${APP_URL}/directory`), `expected /directory, got ${page.url()}`);
+      // A page inside a space is addressed under it: /s/<space>/directory.
+      const { pathname } = new URL(page.url());
+      assert(/^(\/s\/[^/]+)?\/directory/.test(pathname), `expected /directory, got ${page.url()}`);
       const bodyText = await page.locator("body").innerText();
       assert(bodyText.trim().length > 0, "directory rendered empty");
       await assertNoRuntimeError(page, "/directory");
+    });
+
+    // Opening natively goes through the main process with the window's own
+    // session. A path-shaped id is refused before any fetch; an id the server
+    // does not know is asked of the gated door and answered as not available —
+    // so the check proves the bridge, the gate and the signed-in fetch without
+    // opening an app on the machine running it.
+    await step("files bridge refuses a bad id and asks the server for a real-shaped one", async () => {
+      const [refused, missing] = await page.evaluate(async () => [
+        await window.visvineDesktop.files.open("../../etc/passwd"),
+        await window.visvineDesktop.files.open("00000000-0000-4000-8000-000000000000"),
+      ]);
+      assert(refused.ok === false && refused.error === "Refused.", `bad id not refused: ${JSON.stringify(refused)}`);
+      assert(missing.ok === false && /not available/.test(missing.error), `unknown id not a 404: ${JSON.stringify(missing)}`);
     });
 
     await step("external links open in the system browser, not the shell", async () => {

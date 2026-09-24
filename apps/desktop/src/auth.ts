@@ -118,12 +118,14 @@ export async function restoreSession(appUrl: string, userData: string): Promise<
 }
 
 /** Keep the jar's session and ours in step — including a sign-out clearing it. */
-export function watchSessionCookie(appUrl: string, userData: string): void {
-  session.defaultSession.cookies.on("changed", (_event, cookie, _cause, removed) => {
+export function watchSessionCookie(appUrl: string, userData: string, onSignedOut?: () => void): void {
+  session.defaultSession.cookies.on("changed", (_event, cookie, cause, removed) => {
     if (cookie.name !== COOKIE_NAME) return;
     if (removed) {
       // A sign-out (or an expiry) must not be undone by the copy beside it.
       forgetStoredSession(userData);
+      // A new session replacing the old one is not a sign-out.
+      if (cause !== "overwrite") onSignedOut?.();
       return;
     }
     if (!cookie.expirationDate) return;

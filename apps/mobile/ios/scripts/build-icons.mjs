@@ -74,6 +74,19 @@ export const IOS_ICONS = [
   'folder',
   'folder-open',
   'tool-grid',
+  // Resources: one glyph per file kind (packages/ui/src/resources/fileKinds.tsx) and the viewer's actions.
+  'file',
+  'file-image',
+  'file-play',
+  'file-music',
+  'file-pdf',
+  'file-spreadsheet',
+  'presentation',
+  'file-code-2',
+  'file-archive',
+  'download',
+  'share',
+  'external-link',
 ];
 
 const CONTENTS_JSON = (file) =>

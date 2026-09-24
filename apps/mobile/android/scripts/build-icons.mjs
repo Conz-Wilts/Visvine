@@ -73,6 +73,20 @@ export const ANDROID_ICONS = [
   'send',
   'sparkles',
   'x',
+  // Resources: one glyph per file kind (packages/ui/src/resources/fileKinds.tsx) and the viewer's actions.
+  'file',
+  'file-image',
+  'file-play',
+  'file-music',
+  'file-pdf',
+  'file-spreadsheet',
+  'presentation',
+  'file-code-2',
+  'file-archive',
+  'download',
+  'share',
+  'link-2',
+  'file-text',
 ];
 
 /** Serialise a number the way Android's vector parser likes it. */
