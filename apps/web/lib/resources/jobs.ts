@@ -64,12 +64,19 @@ async function claim(limit: number, resourceIds?: string[]): Promise<ClaimedJob[
   // what claimable means: under a concurrent claim Postgres re-evaluates that
   // condition against the committed row, so a job another drain has just
   // taken is never taken twice.
+  //
+  // `run_after` is written from the app's clock (enqueue, backoff), so it is
+  // compared against the app's clock too: against the database's, a job
+  // queued a moment ago reads as not yet due whenever that clock runs a few
+  // milliseconds behind, and a drain right after the enqueue finds nothing.
+  // The lease is the database's on both sides.
   const scope = resourceIds ?? null
+  const due = new Date()
   return prisma.$queryRaw<ClaimedJob[]>`
     WITH picked AS (
       SELECT id FROM resource_jobs
       WHERE (state = 'queued' OR (state = 'running' AND locked_until < now()))
-        AND run_after <= now()
+        AND run_after <= ${due}
         AND (${scope}::text[] IS NULL OR resource_id = ANY(${scope}::text[]))
       ORDER BY run_after
       LIMIT ${limit}
