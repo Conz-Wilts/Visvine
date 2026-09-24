@@ -586,6 +586,17 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     handleScrollToMessage,
   } = useMessageActions({ selectedConversationRef, virtuosoRef, messages, setMessages });
 
+  // `?message=<id>` (the viewer's "View in channel") lands on that message
+  // once it is loaded, then leaves the URL as it was.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const target = url.searchParams.get('message');
+    if (!target || !messages.some((m) => m.id === target)) return;
+    handleScrollToMessage(target);
+    url.searchParams.delete('message');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }, [messages, handleScrollToMessage]);
+
   const handleLeaveChannel = async () => {
     if (!selectedConversationId) return;
     if (!window.confirm('Leave this channel?')) return;

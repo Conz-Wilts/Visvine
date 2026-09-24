@@ -3,7 +3,10 @@
 import { uploadResourceFile } from '@/features/resources/lib/upload';
 import { useState, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
-import { AtSignIcon, ImagePlusIcon, Link2Icon, PlusIcon, SendIcon, SmileIcon, XIcon } from '@/features/shared/icons';
+import { AtSignIcon, FolderOpenIcon, ImagePlusIcon, Link2Icon, PlusIcon, SendIcon, SmileIcon, UploadIcon, XIcon } from '@/features/shared/icons';
+import { Menu } from '@visvine/ui';
+import ResourcePicker from '@/features/resources/components/ResourcePicker';
+import type { ResourceView } from '@/lib/resources/shared/view';
 import { FileTypeIcon } from '@/features/resources/components/resourceUi';
 import { resourceRawPath } from '@/lib/resources/shared/fileNode';
 import { Avatar } from '@visvine/ui';
@@ -68,6 +71,24 @@ export default function MessageComposer({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const canAttach = !!filesSpaceId && !!conversationId;
+  const [picking, setPicking] = useState(false);
+  // Resources the space already holds, shared again here: a file rides the
+  // message by id, a link goes into the text (and becomes its card).
+  const addExisting = (picked: ResourceView[]) => {
+    const fileShares = picked.filter((r) => r.source === 'upload');
+    const links = picked.filter((r) => r.source === 'link' && r.url).map((r) => r.url!);
+    if (fileShares.length) {
+      setFiles((prev) =>
+        [
+          ...prev,
+          ...fileShares
+            .filter((r) => !prev.some((f) => f.id === r.id))
+            .map((r) => ({ id: r.id, name: r.name, fileType: r.kind === 'image' ? 'image' : r.kind, kind: r.kind, fileSize: r.fileSize, url: r.rawUrl ?? '' })),
+        ].slice(0, 10),
+      );
+    }
+    if (links.length) setText((prev) => [prev.trim(), ...links].filter(Boolean).join(' '));
+  };
   const [showMentions, setShowMentions] = useState(false);
   const [, setMentionQuery] = useState('');
   const [, setMentionType] = useState<'user' | 'event'>('user');
@@ -490,17 +511,30 @@ export default function MessageComposer({
                   onChange={handleFilePick}
                   className="hidden"
                 />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  className="shrink-0 self-center rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-surface-subtle hover:text-accent"
-                  aria-label="Attach files"
-                >
-                  {uploading
-                    ? <span className="block h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-                    : <PlusIcon className="h-5 w-5" />}
-                </button>
+                <div className="shrink-0 self-center">
+                  <Menu
+                    label="Attach"
+                    align="start"
+                    placement="above"
+                    items={[
+                      { id: 'upload', label: 'Upload file', icon: <UploadIcon />, onSelect: () => fileInputRef.current?.click() },
+                      { id: 'existing', label: 'From Resources', icon: <FolderOpenIcon />, onSelect: () => setPicking(true) },
+                    ]}
+                    trigger={({ toggle }) => (
+                      <button
+                        type="button"
+                        onClick={toggle}
+                        disabled={uploading}
+                        className="rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-surface-subtle hover:text-accent"
+                        aria-label="Attach"
+                      >
+                        {uploading
+                          ? <span className="block h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                          : <PlusIcon className="h-5 w-5" />}
+                      </button>
+                    )}
+                  />
+                </div>
               </>
             )}
             <textarea
@@ -571,6 +605,16 @@ export default function MessageComposer({
                       >
                         <ImagePlusIcon className="h-4 w-4 text-fg-muted" />
                         Upload file
+                      </button>
+                    )}
+                    {canAttach && (
+                      <button
+                        type="button"
+                        onClick={() => { setPicking(true); setShowAttachMenu(false); }}
+                        className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-fg hover:bg-surface-subtle transition-colors"
+                      >
+                        <FolderOpenIcon className="h-4 w-4 text-fg-muted" />
+                        From Resources
                       </button>
                     )}
                     <button
@@ -660,6 +704,9 @@ export default function MessageComposer({
         )}
       </div>
       </div>
+      {picking && filesSpaceId && (
+        <ResourcePicker spaceId={filesSpaceId} open multiple onClose={() => setPicking(false)} onPick={addExisting} />
+      )}
     </footer>
   );
 }

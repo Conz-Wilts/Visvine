@@ -9,7 +9,7 @@ import prisma from '@/lib/prisma'
 import { canManageResource, shareReaches, type ResourceViewer } from './shared/visibility'
 import { toResourceView, type ResourceView } from './shared/view'
 
-const VIEW_SELECT = {
+export const VIEW_SELECT = {
   id: true,
   spaceId: true,
   name: true,
@@ -48,7 +48,7 @@ const VIEW_SELECT = {
 
 type ViewRow = Prisma.ResourceGetPayload<{ select: typeof VIEW_SELECT }>
 
-async function viewsOf(rows: ViewRow[], viewer: ResourceViewer): Promise<ResourceView[]> {
+export async function viewsOf(rows: ViewRow[], viewer: ResourceViewer): Promise<ResourceView[]> {
   const creatorIds = [...new Set(rows.map((r) => r.createdBy).filter((id): id is string => !!id))]
   const creators = creatorIds.length
     ? await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, name: true, image: true } })

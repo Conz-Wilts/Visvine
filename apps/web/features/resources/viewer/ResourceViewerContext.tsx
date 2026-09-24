@@ -73,6 +73,7 @@ export function ResourceViewerProvider({ children }: { children: ReactNode }) {
           onPrev={index > 0 ? () => step(-1) : null}
           onNext={index >= 0 && index < list.length - 1 ? () => step(1) : null}
           position={index >= 0 && list.length > 1 ? `${index + 1} of ${list.length}` : null}
+          neighbours={index >= 0 ? [list[index - 1], list[index + 1]].filter((id): id is string => !!id) : []}
         />
       )}
     </Ctx.Provider>

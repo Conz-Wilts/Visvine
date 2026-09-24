@@ -4,6 +4,9 @@ import { clsx } from 'clsx';
 import { useState, type ReactNode } from 'react';
 import FileTypeIcon from './FileTypeIcon';
 
+/** Kinds whose picture is a page, drawn as paper rather than a photo. */
+const PAGED = new Set(['pdf', 'doc', 'slides', 'text']);
+
 export interface ResourceCardProps {
   name: string;
   kind: string;
@@ -47,7 +50,16 @@ export default function ResourceCard({
           selected ? 'ring-2 ring-accent' : 'hover:brightness-[0.97]',
         )}
       >
-        {picture ? (
+        {picture && PAGED.has(kind) ? (
+          // A document's first page, peeking from the tile like a sheet of paper.
+          <img
+            src={thumbUrl!}
+            alt=""
+            loading="lazy"
+            onError={() => setBroken(true)}
+            className="absolute inset-x-5 bottom-0 top-4 h-[calc(100%-1rem)] w-[calc(100%-2.5rem)] rounded-t-md bg-surface object-cover object-top shadow-float"
+          />
+        ) : picture ? (
           <img
             src={thumbUrl!}
             alt=""

@@ -24,7 +24,7 @@ import {
 import { useSpaceHref } from '@/features/shared/contexts/SpaceContext';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { fetchJson } from '@/lib/fetchJson';
-import { invalidateRequestCachePrefix, swrFetch } from '@/features/shared/lib/requestCache';
+import { cachedFetch, invalidateRequestCachePrefix, swrFetch } from '@/features/shared/lib/requestCache';
 import type { ResourceView } from '@/lib/resources/shared/view';
 import { desktopFiles } from '@/features/desktop/lib/desktop';
 import Stage, { zoomMaxOf } from './Stage';
@@ -52,7 +52,10 @@ export default function ResourceViewerHost({
   onPrev,
   onNext,
   position,
+  neighbours = [],
 }: {
+  /** The ids either side in the list, fetched ahead so ← → is instant. */
+  neighbours?: string[];
   resourceId: string;
   full: boolean;
   onModeChange: (mode: 'panel' | 'full') => void;
@@ -87,6 +90,13 @@ export default function ResourceViewerHost({
   useEffect(() => {
     if (missing) onClose();
   }, [missing, onClose]);
+
+  const ahead = neighbours.join(',');
+  useEffect(() => {
+    for (const id of ahead ? ahead.split(',') : []) {
+      void cachedFetch(resourceViewKey(id), () => fetchJson<{ resource: ResourceView }>(`/api/resources/${encodeURIComponent(id)}/view`)).catch(() => {});
+    }
+  }, [ahead]);
 
   const current = resource?.id === resourceId ? resource : null;
   if (!current) {

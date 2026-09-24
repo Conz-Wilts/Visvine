@@ -6,7 +6,7 @@ import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import NodeGrid from '@/features/directory/components/NodeGrid';
 import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
 import DirectoryTableView from '@/features/directory/components/table/DirectoryTableView';
-import ResourcesView from '@/features/resources/components/ResourcesView';
+import ResourcesBrowser from '@/features/resources/components/ResourcesBrowser';
 import { ContentReveal } from '@visvine/ui';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useViewportPane } from '@/app/(auth)/AuthLayoutClient';
@@ -158,7 +158,13 @@ function DirectoryPane() {
   // padded height and leave a scrollbar on an empty page.
   if (noSpace) return null;
 
-  if (view === 'resources') return <ResourcesView />;
+  if (view === 'resources') {
+    return spaceId ? (
+      <div className="flex w-full flex-col" style={{ height: 'calc(100dvh - 88px)' }}>
+        <ResourcesBrowser spaceId={spaceId} />
+      </div>
+    ) : null;
+  }
 
   if (view === 'table') {
     return (

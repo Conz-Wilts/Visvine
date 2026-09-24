@@ -1,38 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
-import { spaceMemberForbidden, directoryAccessForbidden } from '@/lib/auth';
-import { listLibrary } from '@/lib/resources/library';
-import { isLibraryFilter } from '@/lib/resources/shared/library';
+import { directoryAccessForbidden, spaceMemberForbidden } from '@/lib/auth';
+import { resourceViewer } from '@/lib/resources/visibility';
+import { listResources } from '@/lib/resources/list';
+import { parseListQuery } from '@/lib/resources/shared/listQuery';
 
 export const runtime = 'nodejs';
 
 /**
- * GET /api/spaces/<id>/resources?filter=all|files|links&q=&before=
- * The Resources tab: every file and link the space holds, newest first, one
- * page at a time (`nextBefore`). Gated like the Directory it sits in.
+ * GET /api/spaces/<id>/resources?kind&channel&by&q&since&sort&trash&offset
+ * — the space's resources the caller can see (lib/resources/list.ts): its
+ * Resources view, a channel's Files tab (`channel`), the pickers.
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ spaceId: string }> }) {
   try {
     const session = await requireApiSession();
     if (session instanceof NextResponse) return session;
     const { spaceId } = await context.params;
-    const [memberForbidden, featureForbidden] = await Promise.all([
-      spaceMemberForbidden(session.userId, spaceId, session.email),
-      directoryAccessForbidden(session.userId, spaceId, session.email),
-    ]);
-    if (memberForbidden || featureForbidden) return forbiddenResponse();
-
-    const params = new URL(request.url).searchParams;
-    const filterParam = params.get('filter');
-    const page = await listLibrary(
-      spaceId,
-      { userId: session.userId, email: session.email },
-      {
-        filter: isLibraryFilter(filterParam) ? filterParam : 'all',
-        q: params.get('q')?.slice(0, 200) ?? undefined,
-        before: params.get('before'),
-      },
-    );
+    if (await spaceMemberForbidden(session.userId, spaceId, session.email)) return forbiddenResponse();
+    const query = parseListQuery(new URL(request.url).searchParams);
+    // The space-wide list is the Directory's; a channel's Files are its members'.
+    if (!query.channelId && (await directoryAccessForbidden(session.userId, spaceId, session.email))) {
+      return forbiddenResponse();
+    }
+    const viewer = await resourceViewer(spaceId, session.userId, session.email);
+    const page = await listResources(spaceId, viewer, query);
     return NextResponse.json(page);
   } catch (error) {
     return handleApiError(error, 'api.space.resources.failed');

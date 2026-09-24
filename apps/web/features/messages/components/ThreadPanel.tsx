@@ -1,9 +1,10 @@
 'use client';
 
-import type { Dispatch, KeyboardEvent, MutableRefObject, RefObject, SetStateAction } from 'react';
+import ResourcesBrowser from '@/features/resources/components/ResourcesBrowser';
+import { useEffect, useState, type Dispatch, type KeyboardEvent, type MutableRefObject, type RefObject, type SetStateAction } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { ArrowLeftIcon, HashIcon, LogOutIcon, PencilIcon, SearchIcon, StarIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
-import { Avatar } from '@visvine/ui';
+import { Avatar, Tabs } from '@visvine/ui';
 import { channelFallback, ChannelIcon, ChannelIconPicker } from './ChannelIcon';
 import MessageComposer from './MessageComposer';
 import MessageRow from './MessageRow';
@@ -139,6 +140,10 @@ export default function ThreadPanel({
   // Feed-style channels swap the chat thread + bottom composer for FeedView
   // (post cards, composer on top); the header/search chrome stays shared.
   const isFeed = selectedConversation?.viewMode === 'FEED';
+  const hasFiles = selectedConversation?.type === 'CHANNEL' && Boolean(spaceId);
+  const [pane, setPane] = useState<'messages' | 'files'>('messages');
+  const paneOf = selectedConversation?.id;
+  useEffect(() => setPane('messages'), [paneOf]);
 
   return (
     <section className="flex w-full min-w-0 flex-1 flex-col overflow-hidden">
@@ -317,6 +322,26 @@ export default function ThreadPanel({
             )}
           </header>
 
+          {/* Messages · Files — a channel's files are its shares (lib/resources/list.ts). */}
+          {hasFiles && (
+            <div className="border-b border-line-subtle px-4">
+              <Tabs
+                size="sm"
+                label="Channel"
+                value={pane}
+                onChange={(next) => setPane(next)}
+                options={[
+                  { id: 'messages' as const, label: 'Messages' },
+                  { id: 'files' as const, label: 'Files' },
+                ]}
+              />
+            </div>
+          )}
+
+          {pane === 'files' && hasFiles ? (
+            <ResourcesBrowser key={selectedConversation.id} spaceId={spaceId!} channelId={selectedConversation.id} />
+          ) : (
+          <>
           {/* In-conversation search */}
           {showMessageSearch && (
             <div className="px-5 py-2.5">
@@ -535,6 +560,8 @@ export default function ThreadPanel({
             currentUser={currentUser}
             placeholder={`${selectedConversation.name}…`}
           />
+          )}
+          </>
           )}
         </>
       )}

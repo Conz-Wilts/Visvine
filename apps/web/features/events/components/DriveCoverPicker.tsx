@@ -1,21 +1,20 @@
 'use client';
 
 /**
- * Pick an event's poster from a picture the space already holds.
+ * Pick an event's poster from a picture the space already holds — the
+ * resources image grid, which is what makes choosing the logo quick.
  *
- * The Drive is where the flyer usually is by the time anyone opens the
- * composer, and re-downloading it to re-upload it is a step nobody should have
- * to take. Choosing here posts the file's id — never its bytes and never its
- * signed URL — to the event's cover route, which copies it inside the space
- * (lib/events/cover.ts). It is the same call the MCP create_event tool makes
- * with `cover_resource_id`, so a person and an agent set a cover the same way.
+ * Choosing posts the resource's id — never its bytes and never its signed
+ * URL — to the event's cover route, which copies it inside the space
+ * (lib/events/cover.ts). It is the same call the MCP create_event action
+ * makes with `cover_resource_id`, so a person and an agent set a cover the
+ * same way.
  */
 
-import { useMemo, useState } from 'react';
-import { Modal, Alert } from '@visvine/ui';
+import { useState } from 'react';
+import { Alert } from '@visvine/ui';
 import { fetchJsonBody } from '@/lib/fetchJson';
-import { useResources } from '@/features/resources/hooks/useResources';
-import { FolderIcon, LoaderCircleIcon, SearchIcon } from '@/features/shared/icons';
+import ResourcePicker from '@/features/resources/components/ResourcePicker';
 import type { NBEvent } from '@/lib/types';
 
 interface Props {
@@ -27,27 +26,10 @@ interface Props {
 }
 
 export function DriveCoverPicker({ spaceId, eventId, onClose, onPicked }: Props) {
-  // The space's Drive listing, through the shared cache.
-  const { resources, folders, loading, error: driveError } = useResources(spaceId);
-  const images = useMemo(
-    () => (loading && resources.length === 0 ? null : resources.filter((f) => f.fileType === 'image')),
-    [loading, resources],
-  );
-  const [query, setQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [applying, setApplying] = useState<string | null>(null);
-
-  const folderName = useMemo(() => new Map(folders.map((f) => [f.id, f.name])), [folders]);
-
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q || !images) return images ?? [];
-    return images.filter((f) => f.name.toLowerCase().includes(q));
-  }, [images, query]);
 
   const pick = async (resourceId: string) => {
     setError(null);
-    setApplying(resourceId);
     try {
       const event = await fetchJsonBody<NBEvent>(
         `/api/events/${encodeURIComponent(eventId)}/cover?spaceId=${encodeURIComponent(spaceId)}`,
@@ -57,70 +39,27 @@ export function DriveCoverPicker({ spaceId, eventId, onClose, onPicked }: Props)
       onPicked(event);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not use that file');
-    } finally {
-      setApplying(null);
+      setError(e instanceof Error ? e.message : 'Could not use that image');
     }
   };
 
   return (
-    <Modal onClose={onClose} title="Drive" size="lg">
-      <div className="p-6">
-        <div className="relative mb-4">
-          <SearchIcon className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search pictures"
-            className="w-full pl-9 pr-3 py-2 text-sm bg-transparent border border-line-subtle rounded-lg focus:outline-none focus:border-fg"
-          />
+    <>
+      <ResourcePicker
+        spaceId={spaceId}
+        open
+        kind="image"
+        title="Cover image"
+        onClose={() => !error && onClose()}
+        onPick={([picked]) => picked && void pick(picked.id)}
+      />
+      {error && (
+        <div className="fixed bottom-6 left-1/2 z-(--vv-z-toast) -translate-x-1/2 rounded-lg bg-surface px-3 py-2 shadow-float">
+          <Alert variant="error" onDismiss={() => setError(null)}>
+            {error}
+          </Alert>
         </div>
-
-        {(error ?? driveError) && <Alert className="mb-3">{error ?? driveError}</Alert>}
-
-        {images === null ? (
-          <div className="py-12 flex justify-center">
-            <LoaderCircleIcon className="w-5 h-5 animate-spin text-fg-muted" />
-          </div>
-        ) : shown.length === 0 ? (
-          <p className="py-12 text-sm text-fg-muted text-center">
-            {images.length === 0
-              ? 'No pictures yet.'
-              : 'Nothing matches that.'}
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {shown.map((file) => (
-              <button
-                key={file.id}
-                type="button"
-                onClick={() => pick(file.id)}
-                disabled={applying !== null}
-                className="group text-left disabled:opacity-50"
-              >
-                <div className="relative aspect-[16/9] rounded-lg overflow-hidden bg-surface-subtle border border-line-subtle">
-                  {file.fileUrl && (
-                    <img src={file.fileUrl} alt={file.name} className="w-full h-full object-cover" />
-                  )}
-                  <div className="absolute inset-0 group-hover:bg-black/10 transition-colors" />
-                  {applying === file.id && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                      <LoaderCircleIcon className="w-5 h-5 animate-spin text-white" />
-                    </div>
-                  )}
-                </div>
-                <p className="mt-1.5 text-xs text-fg truncate">{file.name}</p>
-                {file.folderId && (
-                  <p className="text-[11px] text-fg-muted inline-flex items-center gap-1">
-                    <FolderIcon className="w-3 h-3" />
-                    {folderName.get(file.folderId) ?? 'Folder'}
-                  </p>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </Modal>
+      )}
+    </>
   );
 }

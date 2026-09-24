@@ -42,16 +42,6 @@ export interface Resource {
   };
 }
 
-/** A folder in a Space's Drive. The root is `parentId: null`'s absence, not a row. */
-export interface ResourceFolder {
-  id: string;
-  spaceId: string;
-  name: string;
-  parentId: string | null;
-  createdBy: string;
-  createdAt: string;
-}
-
 export interface ResourceComment {
   id: string;
   resourceId: string;

@@ -113,11 +113,16 @@ export function useDirectoryBrowse() {
       // while stored item.type may be lowercase ('person').
       const wanted = new Set([...filterTypes].map(t => t.toLowerCase()));
       result = result.filter(i => wanted.has(i.type.toLowerCase()));
+    } else if (!searchTerm.trim()) {
+      // Every file and link is a resource record, so an unfiltered roll would
+      // be mostly chat attachments; they have their own tab (Resources) and
+      // come back here when their type is chosen or searched for.
+      result = result.filter(i => i.type.toLowerCase() !== 'resource');
     }
     if (filterAliases.size > 0) result = result.filter(i => i.alias != null && filterAliases.has(i.alias));
     if (filterTags.size > 0) result = result.filter(i => (i.tags ?? []).some(t => filterTags.has(t)));
     return [...result].sort((a, b) => a.name.localeCompare(b.name));
-  }, [searchFilteredItems, filterTypes, filterAliases, filterTags]);
+  }, [searchFilteredItems, filterTypes, filterAliases, filterTags, searchTerm]);
 
   const handleItemClick = useCallback((item: DirectoryItem) => {
     // Events have their own dedicated detail page (EventDetailClient); send them
