@@ -32,8 +32,14 @@ async function pathsMentioning(spaceId: string, q: string): Promise<string[]> {
   return rows.map((row) => row.path)
 }
 
-export async function listResources(spaceId: string, viewer: ResourceViewer, query: ListQuery): Promise<ResourcePage> {
+export async function listResources(
+  spaceId: string,
+  viewer: ResourceViewer,
+  query: ListQuery,
+  { folderId }: { folderId?: string } = {},
+): Promise<ResourcePage> {
   const where: Prisma.ResourceWhereInput[] = [{ spaceId }, visibleResourceWhere(viewer, { trash: query.trash })]
+  if (folderId) where.push({ folderId })
   if (query.kind === 'files') where.push({ source: 'upload' })
   else if (query.kind !== 'all') where.push({ kind: query.kind })
   if (query.channelId) where.push({ shares: { some: { conversationId: query.channelId } } })

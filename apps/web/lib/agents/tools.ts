@@ -964,6 +964,9 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       email: principal.email,
       personId: null,
       scopes: [...scopes],
+      via: 'agent' as const,
+      agentName: ctx.agentName,
+      runId: ctx.runId ?? null,
     }
     // The registry is reached by dynamic import: an action definition imports
     // the agent service, which reaches this module, so a value import here

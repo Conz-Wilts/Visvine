@@ -78,7 +78,6 @@ import {
   loadConnector,
 } from '@/lib/connectors/service'
 import { setSpaceSecret, storedSecretNames, SECRET_MAX_CHARS } from '@/lib/connectors/secretStore'
-import { listFolders } from '@/lib/resources/folders'
 import { setNodeImageFromResource } from '@/lib/directory/nodeImage'
 import { getEvent, getEventsData } from '@/lib/eventRepo'
 import { buildNewEvent } from '@/lib/events/build'
@@ -105,13 +104,12 @@ import { intakeSummary } from '@/lib/actions/shared/intake'
 import { agentPreamble, AGENT_RUN_CAPABILITIES } from '@/lib/agents/shared/prompt'
 import { rehearsalPlan } from '@/lib/agents/shared/rehearsal'
 import { agentNeedsFor } from '@/lib/agents/needs'
-import { featureAccessForbidden } from '@/lib/auth'
 import { readNoteOrNull, type Context } from '@/lib/notes/store'
 import { runClean, applyCleanFixes, trashNotes } from '@/lib/notes/clean'
 import type { CleanRole } from '@/lib/notes/shared/clean'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { SpaceFeatureConfig } from '@/lib/types'
-import { defineAction, ActionError, type ActionCaller } from '@/lib/actions/types'
+import { defineAction, ActionError, readerOf } from '@/lib/actions/types'
 
 /**
  * Every action that touches a space takes one, and it is always the same thing.
@@ -212,12 +210,6 @@ async function makeNotePrivate(
 }
 
 /** The Drive's gate is the Directory's: it is a tab of that page, not a tool. */
-async function requireDriveFeature(ctx: ActionCaller, spaceId: string): Promise<void> {
-  if (await featureAccessForbidden(ctx.userId, spaceId, 'directory', ctx.email)) {
-    throw new ActionError(403, 'The Drive is not available to you in this space')
-  }
-}
-
 /**
  * Validate an event payload through the SAME schema the composer posts to, and
  * turn a rejection into a tool error naming the field. The MCP argument shapes
@@ -281,6 +273,52 @@ type NodeRow = {
 
 /** A node row as entities.ts wants it — metadata typed, so `metadata.notePath`
  *  (set once the note has become an entity folder) steers entityNotePath. */
+/** A path or node id is only unique within its space. */
+const hitKey = (spaceId: string, key: string) => `${spaceId}\0${key}`
+
+/**
+ * Which search hits are resources: a chunk of a file's extracted text (its
+ * `sourcePath`), a resource's own note (`resources/<slug>/index.md`), a
+ * resource entity. Each is then pointed at read_resource, whose gate decides
+ * what it shows — this only says which id to ask about.
+ */
+async function resourceHitIndex(
+  spaceIds: string[],
+  hits: Array<{ kind: string; path: string; spaceId: string }>,
+  resourceNodeIds: string[],
+): Promise<{ byPath: Map<string, string>; byNode: Map<string, string> }> {
+  const sourcePaths = hits.filter((h) => h.kind === 'source').map((h) => h.path)
+  const noteNodes = new Map<string, string>()
+  for (const h of hits) {
+    const slug = h.kind === 'source' ? null : /^resources\/([^/]+)\/index\.md$/.exec(h.path)?.[1]
+    if (slug) noteNodes.set(hitKey(h.spaceId, `resource:${slug}`), h.path)
+  }
+  const nodeIds = [...new Set([...resourceNodeIds, ...[...noteNodes.keys()].map((k) => k.split('\0')[1])])]
+  if (!spaceIds.length || (!sourcePaths.length && !nodeIds.length)) return { byPath: new Map(), byNode: new Map() }
+  const rows = await prisma.resource.findMany({
+    where: {
+      spaceId: { in: spaceIds },
+      deletedAt: null,
+      OR: [
+        ...(sourcePaths.length ? [{ sourcePath: { in: sourcePaths } }] : []),
+        ...(nodeIds.length ? [{ nodeId: { in: nodeIds } }] : []),
+      ],
+    },
+    select: { id: true, spaceId: true, sourcePath: true, nodeId: true },
+  })
+  const byPath = new Map<string, string>()
+  const byNode = new Map<string, string>()
+  for (const row of rows) {
+    if (row.sourcePath) byPath.set(hitKey(row.spaceId, row.sourcePath), row.id)
+    if (row.nodeId) {
+      byNode.set(hitKey(row.spaceId, row.nodeId), row.id)
+      const notePath = noteNodes.get(hitKey(row.spaceId, row.nodeId))
+      if (notePath) byPath.set(hitKey(row.spaceId, notePath), row.id)
+    }
+  }
+  return { byPath, byNode }
+}
+
 function nodeLike(row: { id: string; type: string; metadata?: unknown }) {
   return { id: row.id, type: row.type, metadata: (row.metadata as Record<string, unknown> | null) ?? null }
 }
@@ -639,6 +677,13 @@ export const CONTEXT_ACTIONS = [
                   }
                 })
 
+        const resourceOf = await resourceHitIndex(
+          searched.map((s) => s.id),
+          hits.map((h) => ({ kind: h.kind, path: h.path, spaceId: h.space.id })),
+          entities.filter((e) => e.type === 'resource').map((e) => e.node_id),
+        )
+        const readResource = (id: string) => ({ resource_id: id, read_with: { tool: 'read_resource', resource_id: id } })
+
         return {
           // Where this search looked. One entry when a space was named; every
           // space the caller can act in otherwise, capped — `skipped` says how
@@ -656,7 +701,12 @@ export const CONTEXT_ACTIONS = [
             temporal_only: plan.temporalOnly,
             intent: plan.intent,
           },
-          entities,
+          // A resource's entity reads with read_resource, which carries its
+          // shares, its note and its text in one answer.
+          entities: entities.map((e) => {
+            const id = resourceOf.byNode.get(hitKey(e.space.id, e.node_id))
+            return id ? { ...e, ...readResource(id) } : e
+          }),
           // A source hit is a chunk of an uploaded file: it has no note to read,
           // so it says how to open it (read_file) rather than handing back a
           // path that looks like a note and isn't.
@@ -674,6 +724,7 @@ export const CONTEXT_ACTIONS = [
             ...(h.kind === 'source'
               ? { seq: h.seq, read_with: { tool: 'read_file', space_id: h.space.id, path: h.path } }
               : { read_with: { tool: 'read_context', space_id: h.space.id, note_path: h.path } }),
+            ...(resourceOf.byPath.has(hitKey(h.space.id, h.path)) ? readResource(resourceOf.byPath.get(hitKey(h.space.id, h.path))!) : {}),
           })),
         }
       },
@@ -914,100 +965,6 @@ export const CONTEXT_ACTIONS = [
       },
     }),
     defineAction({
-      name: 'list_drive',
-      scope: 'context:read',
-      summary:
-        'The Drive as things to USE — files and folders including images, each with a resource_id.',
-      description:
-        "The space's Drive: uploaded files and the folders they sit in — including IMAGES, which carry no text " +
-        'and so never appear in list_files or search_context. Each file reports `resource_id` (the handle other ' +
-        'tools take), its folder, its type and, for a document, the `readable` path to pass to read_file. ' +
-        'This is the surface to open when someone points you at "the files for X": read the plan or brief with ' +
-        "read_file, then use the picture with create_event's cover_resource_id or set_image. A file is added with upload_file. Download URLs are deliberately " +
-        'not returned — a file is used by id, inside the space, never by handing out a link to its bytes.',
-      input: {
-        space_id: spaceArg,
-        folder: z
-          .string()
-          .optional()
-          .describe("Only files in this Drive folder, by name (case-insensitive) — omit for the whole Drive"),
-        kind: z
-          .enum(['all', 'image', 'document'])
-          .optional()
-          .describe("Narrow to pictures or to text-bearing files (default 'all')"),
-        limit: z.number().int().min(1).max(500).optional().describe('Newest first; default 100'),
-      },
-      annotations: { readOnlyHint: true },
-      run: async (ctx, args) => {
-        await requireSpaceContext(ctx, args.space_id)
-        await requireDriveFeature(ctx, args.space_id)
-
-        const folders = await listFolders(args.space_id)
-        const byId = new Map(folders.map((f) => [f.id, f]))
-        // A folder's path, walked up through its parents. Depth is bounded by
-        // the walk itself so a cycle (which the tree should make impossible)
-        // cannot hang the call.
-        const pathOf = (id: string | null): string => {
-          const parts: string[] = []
-          let cursor = id
-          for (let i = 0; cursor && i < 16; i++) {
-            const folder = byId.get(cursor)
-            if (!folder) break
-            parts.unshift(folder.name)
-            cursor = folder.parentId
-          }
-          return parts.join('/')
-        }
-
-        const wanted = args.folder?.trim().toLowerCase()
-        const folderIds = wanted
-          ? folders.filter((f) => f.name.toLowerCase() === wanted || pathOf(f.id).toLowerCase() === wanted).map((f) => f.id)
-          : null
-        if (folderIds && folderIds.length === 0) {
-          throw new ActionError(404, `No Drive folder named '${args.folder}'`)
-        }
-
-        const limit = args.limit ?? 100
-        // Queried here rather than through lib/resources/service#listResources
-        // on purpose: that listing signs a download URL per row, and a signed
-        // URL is a bearer capability for the bytes. Tools hand out ids.
-        const rows = await prisma.resource.findMany({
-          where: {
-            spaceId: args.space_id,
-            conversationId: null,
-            ...(folderIds ? { folderId: { in: folderIds } } : {}),
-            ...(args.kind === 'image' ? { fileType: 'image' } : {}),
-            ...(args.kind === 'document' ? { NOT: { fileType: 'image' } } : {}),
-          },
-          orderBy: { createdAt: 'desc' },
-          take: limit + 1,
-          select: {
-            id: true, name: true, fileType: true, fileSize: true, folderId: true,
-            sourcePath: true, indexState: true, indexError: true, createdAt: true,
-          },
-        })
-        const page = rows.slice(0, limit)
-
-        return {
-          folders: folders.map((f) => ({ id: f.id, name: f.name, path: pathOf(f.id) })),
-          files: page.map((r) => ({
-            resource_id: r.id,
-            name: r.name,
-            file_type: r.fileType,
-            folder: pathOf(r.folderId) || null,
-            size_bytes: r.fileSize,
-            uploaded_at: r.createdAt.toISOString(),
-            // Where read_file can read this file's extracted text, when it has any.
-            readable: r.indexState === 'indexed' ? r.sourcePath : null,
-            index_state: r.indexState,
-            index_error: r.indexError,
-            usable_as_cover: r.fileType === 'image',
-          })),
-          truncated: rows.length > limit,
-        }
-      },
-    }),
-    defineAction({
       name: 'list_events',
       scope: 'context:read',
       summary:
@@ -1120,7 +1077,7 @@ export const CONTEXT_ACTIONS = [
         image_resource_id: z
           .string()
           .optional()
-          .describe("A Drive image (list_drive, or upload_file's resource_id) to use as the person's photo or the organisation's logo"),
+          .describe("A Drive image (list_resources, or upload_file's resource_id) to use as the person's photo or the organisation's logo"),
       },
       run: async (ctx, args) => {
         const context = await requireSpaceContext(ctx, args.space_id)
@@ -1173,6 +1130,7 @@ export const CONTEXT_ACTIONS = [
               nodeId: result.node.id,
               resourceId: args.image_resource_id,
               actor: { id: ctx.userId, name: ctx.name, email: ctx.email },
+              via: ctx.via ?? 'api', agentName: ctx.agentName, runId: ctx.runId,
             })
           } catch (err) {
             if (!(err instanceof Error && 'status' in err)) throw err
@@ -1785,7 +1743,7 @@ export const CONTEXT_ACTIONS = [
         'Create an event in this space — the record, its page, its RSVP form and its context note at ' +
         'events/<slug>.md, in one call. This is the step that turns material already in the space into ' +
         'something people can turn up to.\n' +
-        'The intended shape of the job: list_drive to see what the space has, read_file the run sheet or plan, ' +
+        'The intended shape of the job: list_resources to see what the space has, read_file the run sheet or plan, ' +
         'create_event with the picture as `cover_resource_id`, then write the marketing copy as a sub-note of ' +
         "the event — edit_context, path 'events/<slug>/marketing.md' — so the copy sits with " +
         'the event rather than in a chat log. Mentions there link it to the people and organisations involved.\n' +
@@ -1812,7 +1770,7 @@ export const CONTEXT_ACTIONS = [
         cover_resource_id: z
           .string()
           .optional()
-          .describe("A Drive image (list_drive, usable_as_cover: true) to use as the event's poster"),
+          .describe("A Drive image (list_resources, usable_as_cover: true) to use as the event's poster"),
         hosts: z
           .array(z.string())
           .optional()
@@ -1846,6 +1804,7 @@ export const CONTEXT_ACTIONS = [
               spaceId: args.space_id,
               eventId,
               resourceId: args.cover_resource_id,
+              reader: readerOf(ctx),
             })
           : undefined
 
@@ -1893,7 +1852,7 @@ export const CONTEXT_ACTIONS = [
         capacity: z.number().int().positive().optional().describe('Adds a waitlist once it is full'),
         visibility: z.enum(['public', 'space', 'private']).optional().describe('Who can see it once published'),
         status: z.enum(['draft', 'published']).optional().describe("'published' makes it visible — this is how a draft goes live"),
-        cover_resource_id: z.string().optional().describe('A Drive image to use as the poster (list_drive)'),
+        cover_resource_id: z.string().optional().describe('A Drive image to use as the poster (list_resources)'),
         hosts: z.array(z.string()).optional().describe('Replaces the host list — include the existing hosts to keep them'),
       },
       run: async (ctx, args) => {
@@ -1908,6 +1867,7 @@ export const CONTEXT_ACTIONS = [
               spaceId: args.space_id,
               eventId: existing.id,
               resourceId: args.cover_resource_id,
+              reader: readerOf(ctx),
             })
           : undefined
 

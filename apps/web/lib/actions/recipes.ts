@@ -576,7 +576,7 @@ const RECIPES: Recipe[] = [
     steps: (ctx) => [
       {
         n: 1,
-        tool: 'list_drive',
+        tool: 'list_resources',
         why:
           "The space's files, INCLUDING images — which carry no text and so never appear in list_files or " +
           'search_context. Note the `resource_id` of the picture and the `readable` path of the plan.',

@@ -207,7 +207,7 @@ test('the everyday recipes route to the actions that do the work', () => {
     ['clean up the broken links in this space', 'organise_context', 'clean_context'],
     ['who can see the deals folder', 'manage_access', 'list_context'],
     ['create an event for our launch night in October', 'run_event', 'create_event'],
-    ['set up a meetup from the plan in the drive', 'run_event', 'list_drive'],
+    ['set up a meetup from the plan in the drive', 'run_event', 'list_resources'],
     ['create a new space called Test Space, and a sub-space inside it called Test Sub', 'create_space', 'create_space'],
     ['make a subspace for the leadership team', 'create_space', 'create_space'],
   ]
@@ -224,7 +224,7 @@ test('the event recipe starts at the Drive, and never publishes by accident', ()
   const steps = recipe.steps(ctx(adminSpace()))
   // The material comes first: an event built without reading the plan is the
   // whole failure this recipe exists to prevent.
-  assert.equal(steps[0].tool, 'list_drive')
+  assert.equal(steps[0].tool, 'list_resources')
   const create = steps.find((s) => s.tool === 'create_event')
   assert.ok(create, 'the plan must name the action that creates the event')
   assert.ok('cover_resource_id' in create.args, 'the poster is part of the create call')

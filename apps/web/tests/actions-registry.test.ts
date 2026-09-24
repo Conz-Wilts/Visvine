@@ -257,7 +257,7 @@ test('reading context can never author, whatever the connection asked for', () =
 // named (lib/actions/searchEverywhere.ts). Each is read-only and stamps every
 // row with the space it came from; a write is never on this list, because a
 // write with no tenant is how a note lands where nobody intended.
-const READS_ACROSS_SPACES = ['search_context', 'list_events', 'list_agents', 'list_connectors']
+const READS_ACROSS_SPACES = ['search_context', 'list_events', 'list_agents', 'list_connectors', 'list_resources']
 
 test('every action validates its own input', () => {
   // The registry is the perimeter, and a schema that accepts anything is a hole

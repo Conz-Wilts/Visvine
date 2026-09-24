@@ -16,10 +16,11 @@ import { VM_ACTIONS } from '@/lib/actions/defs/vm'
 import { SPACE_ACTIONS } from '@/lib/actions/defs/spaces'
 import { CHANNEL_ACTIONS } from '@/lib/actions/defs/channels'
 import { DRIVE_ACTIONS } from '@/lib/actions/defs/drive'
+import { RESOURCE_ACTIONS } from '@/lib/actions/defs/resources'
 import type { ActionDef } from '@/lib/actions/types'
 import type { McpScope } from '@/lib/mcp/scopes'
 
-const ALL: readonly ActionDef[] = [...CONTEXT_ACTIONS, ...SPACE_ACTIONS, ...CHANNEL_ACTIONS, ...DRIVE_ACTIONS, ...APP_ACTIONS, ...AGENT_ACTIONS, ...VM_ACTIONS]
+const ALL: readonly ActionDef[] = [...CONTEXT_ACTIONS, ...SPACE_ACTIONS, ...CHANNEL_ACTIONS, ...DRIVE_ACTIONS, ...RESOURCE_ACTIONS, ...APP_ACTIONS, ...AGENT_ACTIONS, ...VM_ACTIONS]
 
 const BY_NAME: ReadonlyMap<string, ActionDef> = new Map(ALL.map((a) => [a.name, a]))
 
@@ -34,8 +35,15 @@ export function allActions(): readonly ActionDef[] {
   return ALL
 }
 
+/**
+ * Names an action answered to before it was renamed, so a client that learned
+ * the old one keeps working. Resolved here and nowhere else — the catalogue and
+ * the named tools list only the current name.
+ */
+const ALIASES: ReadonlyMap<string, string> = new Map([['list_drive', 'list_resources']])
+
 export function actionByName(name: string): ActionDef | null {
-  return BY_NAME.get(name) ?? null
+  return BY_NAME.get(ALIASES.get(name) ?? name) ?? null
 }
 
 /**
@@ -44,7 +52,7 @@ export function actionByName(name: string): ActionDef | null {
  * one source, so the challenge and the refusal can never disagree.
  */
 export function scopeForAction(name: string): McpScope | null {
-  return BY_NAME.get(name)?.scope ?? null
+  return actionByName(name)?.scope ?? null
 }
 
 /** The action's arguments as a validating schema. Built on demand, not cached

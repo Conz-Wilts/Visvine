@@ -38,7 +38,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ev
     const body = await parseBody(request, bodySchema);
     if (body instanceof NextResponse) return body;
 
-    const coverImageUrl = await coverUrlFromResource({ spaceId, eventId, resourceId: body.resourceId });
+    const coverImageUrl = await coverUrlFromResource({
+      spaceId,
+      eventId,
+      resourceId: body.resourceId,
+      reader: { userId: auth.userId, email: auth.email, via: 'web' },
+    });
     return NextResponse.json(await updateEventRecord(spaceId, event, { coverImageUrl }));
   } catch (error) {
     return handleApiError(error, 'api.events.cover.failed');

@@ -47,6 +47,7 @@ function callerFromAuthInfo(info: AuthInfo | undefined): ActionCaller | null {
     name: typeof extra?.name === 'string' ? extra.name : '',
     email: typeof extra?.email === 'string' ? extra.email : '',
     scopes: info?.scopes ?? [],
+    via: 'mcp',
   }
 }
 

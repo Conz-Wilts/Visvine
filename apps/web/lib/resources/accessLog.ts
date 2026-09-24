@@ -7,7 +7,7 @@
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 
-type AccessVia = 'web' | 'mcp' | 'agent' | 'api'
+export type AccessVia = 'web' | 'mcp' | 'agent' | 'api'
 type AccessAction = 'read' | 'download' | 'upload' | 'share' | 'use' | 'delete'
 
 export interface AccessEntry {

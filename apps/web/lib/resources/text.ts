@@ -19,7 +19,7 @@ export interface ResourceText {
   nextOffset: number | null
 }
 
-async function readResourceTextAs(
+export async function readResourceTextAs(
   principal: ContextPrincipal,
   spaceId: string,
   resourceId: string,

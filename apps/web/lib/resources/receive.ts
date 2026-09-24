@@ -12,6 +12,7 @@
 import { ApiError } from '@/lib/api/route'
 import { featureAccessForbidden, spaceMemberForbidden } from '@/lib/auth'
 import { MAX_RESOURCE_BYTES, uploadResource, type UploadedFile } from '@/lib/resources/service'
+import type { ShareVia } from '@/lib/resources/shares'
 import { incomingFileName, incomingMimeType } from '@/lib/resources/shared/incomingName'
 
 export interface IncomingFile {
@@ -22,6 +23,10 @@ export interface IncomingFile {
   name?: string | null
   mimeType?: string | null
   bytes: Buffer
+  /** A channel it is being posted into: shared there by the message, not to the space. */
+  conversationId?: string | null
+  via?: ShareVia
+  agentName?: string | null
 }
 
 /** Throws ApiError(403) unless `userId` may add files to `spaceId`'s Drive. */
@@ -49,6 +54,9 @@ export async function receiveFile(input: IncomingFile): Promise<UploadedFile> {
       buffer: input.bytes,
       uploadedBy: input.userId,
       folderId: input.folderId ?? null,
+      conversationId: input.conversationId ?? null,
+      via: input.via,
+      agentName: input.agentName ?? null,
     })
   } catch (err) {
     // An image the re-encoder cannot read is the caller's to fix, not a fault;

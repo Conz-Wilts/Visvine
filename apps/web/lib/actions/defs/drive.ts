@@ -22,7 +22,6 @@
 import { z } from 'zod'
 import { defineAction, ActionError, type ActionCaller } from '@/lib/actions/types'
 import { requireSpaceContext } from '@/lib/actions/resolve'
-import { listFolders } from '@/lib/resources/folders'
 import { MAX_RESOURCE_BYTES, type UploadedFile } from '@/lib/resources/service'
 import { receiveFile, requireDriveWriter } from '@/lib/resources/receive'
 import { mintUploadToken } from '@/lib/resources/uploadToken'
@@ -30,37 +29,20 @@ import { fetchPublicBytes } from '@/lib/connectors/publicFetch'
 import { setNodeImageFromResource } from '@/lib/directory/nodeImage'
 import { appOrigin } from '@/lib/tools/origin'
 import { inSpace } from '@/lib/spaces/shared/spaceUrl'
+import { sendMessage } from '@/lib/messages'
+import { publishToUsers } from '@/lib/messages/realtime'
+import { logResourceAccess } from '@/lib/resources/accessLog'
+import { accessOf, asMessaging, folderIdFor, messageHref, requireChannelIn, stampShare } from '@/lib/actions/resourceUse'
 
 const spaceArg = z.string().describe('The space to act in — list_spaces returns the ids you can act in')
 
 const folderArg = z
   .string()
   .optional()
-  .describe('A Drive folder to put it in, by name or path (list_drive shows them) — omit for the root')
+  .describe('A Drive folder to put it in, by name or path (list_resources shows what is in one) — omit for the root')
 
 /** Base64 is for small files; anything bigger goes through request_upload. */
 const MAX_BASE64_CHARS = Math.ceil((8 * 1024 * 1024 * 4) / 3)
-
-async function folderIdFor(spaceId: string, folder: string | undefined): Promise<string | null> {
-  const wanted = folder?.trim().replace(/^\/+|\/+$/g, '').toLowerCase()
-  if (!wanted) return null
-  const folders = await listFolders(spaceId)
-  const byId = new Map(folders.map((f) => [f.id, f]))
-  const pathOf = (id: string): string => {
-    const parts: string[] = []
-    let cursor: string | null = id
-    for (let i = 0; cursor && i < 16; i++) {
-      const f = byId.get(cursor)
-      if (!f) break
-      parts.unshift(f.name)
-      cursor = f.parentId
-    }
-    return parts.join('/').toLowerCase()
-  }
-  const hit = folders.find((f) => pathOf(f.id) === wanted) ?? folders.find((f) => f.name.toLowerCase() === wanted)
-  if (!hit) throw new ActionError(404, `No Drive folder named '${folder}'`)
-  return hit.id
-}
 
 /** What every upload door answers — the handle, and what it can be used for. */
 function describeUpload(spaceId: string, file: UploadedFile) {
@@ -127,6 +109,14 @@ export const DRIVE_ACTIONS = [
         .describe("The file's name with its extension, e.g. 'launch-poster.png' — what the Drive shows"),
       mime_type: z.string().optional().describe("The file's type, e.g. 'image/png', when you know it"),
       folder: folderArg,
+      channel_id: z
+        .string()
+        .optional()
+        .describe(
+          "Post it into this channel as you, as if you had attached it there — then it is that channel's " +
+            'members\' to see, not the whole space\'s. Needs the messages:write scope. Omit to add it to the space.',
+        ),
+      message: z.string().trim().max(4000).optional().describe('The message to post with it (with channel_id)'),
     },
     mcpMeta: { 'openai/fileParams': ['file'] },
     run: async (ctx, args) => {
@@ -134,8 +124,15 @@ export const DRIVE_ACTIONS = [
       if (sources.length !== 1) {
         throw new ActionError(400, 'Give exactly one of file, url or content_base64')
       }
+      if (args.message && !args.channel_id) throw new ActionError(400, '`message` goes with a channel_id')
+      // Posting in a channel is a second act, under its own scope: the token
+      // that may add files to a space may not by that alone speak in it.
+      if (args.channel_id && !ctx.scopes.includes('messages:write')) {
+        throw new ActionError(403, "Posting into a channel requires the 'messages:write' scope")
+      }
       await requireWriter(ctx, args.space_id)
       const folderId = await folderIdFor(args.space_id, args.folder)
+      if (args.channel_id) await requireChannelIn(ctx, args.space_id, args.channel_id)
 
       let bytes: Buffer
       let name = args.name ?? null
@@ -159,8 +156,25 @@ export const DRIVE_ACTIONS = [
         name,
         mimeType,
         bytes,
+        conversationId: args.channel_id ?? null,
+        via: ctx.via === 'agent' ? 'agent' : 'action',
+        agentName: ctx.agentName ?? null,
       })
-      return describeUpload(args.space_id, file)
+      await logResourceAccess({ resourceId: file.id, spaceId: args.space_id, action: 'upload', ...accessOf(ctx) })
+      if (!args.channel_id) return describeUpload(args.space_id, file)
+      const channelId = args.channel_id
+      const { message, memberIds } = await asMessaging(() =>
+        sendMessage(ctx.userId, channelId, { text: args.message ?? '', fileIds: [file.id] }),
+      )
+      await stampShare(ctx, message.id, file.id)
+      publishToUsers(memberIds, { type: 'message.new', conversationId: channelId, message })
+      publishToUsers(memberIds, { type: 'conversation.updated', conversationId: channelId })
+      return {
+        ...describeUpload(args.space_id, file),
+        channel_id: channelId,
+        message_id: message.id,
+        message_href: messageHref(args.space_id, channelId, message.id),
+      }
     },
   }),
   defineAction({
@@ -174,7 +188,7 @@ export const DRIVE_ACTIONS = [
       "file's path. It PUTs the bytes and prints the new file's `resource_id`. The sandbox may need this " +
       "server's domain allowed for network access; if the command fails on the network, use the page instead.\n" +
       '  • `page` — give the person this link. They drop the file there themselves (it works on a phone).\n' +
-      'Then call list_drive to find the new file and its `resource_id`, and use it (cover_resource_id, set_image). ' +
+      'Then call list_resources to find the new file and its `resource_id`, and use it (cover_resource_id, set_image). ' +
       'The link adds files as YOU, only to this space, and only until it expires.',
     input: {
       space_id: spaceArg,
@@ -201,7 +215,7 @@ export const DRIVE_ACTIONS = [
     scope: 'context:write',
     summary: "Make a Drive image a person's photo, an organisation's logo or a resource's picture.",
     description:
-      "Set an entity's picture from an image already in the Drive (list_drive, or the resource_id upload_file " +
+      "Set an entity's picture from an image already in the Drive (list_resources, or the resource_id upload_file " +
       'returned). The image is copied into the entity\'s own picture, so the Drive file can move or go later. ' +
       "For an EVENT use update_event's `cover_resource_id` instead. Any active member of the space may do it, as " +
       'they may edit the entity.',
@@ -217,6 +231,7 @@ export const DRIVE_ACTIONS = [
         nodeId: args.node_id,
         resourceId: args.resource_id,
         actor: { id: ctx.userId, name: ctx.name, email: ctx.email },
+        via: ctx.via ?? 'api', agentName: ctx.agentName, runId: ctx.runId,
       })
       return {
         node_id: args.node_id,

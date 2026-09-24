@@ -34,6 +34,26 @@ export interface ActionCaller {
   email: string
   /** OAuth scopes on the presented token; a web session carries them all. */
   scopes: string[]
+  /**
+   * Which door asked — an MCP client, an agent's run, the HTTP route — for
+   * the records that say who used what (lib/resources/accessLog.ts). Absent
+   * reads as `api`.
+   */
+  via?: 'mcp' | 'agent' | 'api'
+  /** The agent whose run is acting, and that run, when `via` is `agent`. */
+  agentName?: string | null
+  runId?: string | null
+}
+
+/** The caller as the reader a resource's gate and record of use take. */
+export function readerOf(ctx: ActionCaller) {
+  return {
+    userId: ctx.userId,
+    email: ctx.email,
+    via: ctx.via ?? ('api' as const),
+    agentName: ctx.agentName ?? null,
+    runId: ctx.runId ?? null,
+  }
 }
 
 /**

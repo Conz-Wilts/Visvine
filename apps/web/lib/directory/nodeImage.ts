@@ -18,12 +18,17 @@ import { isGlobalSpace } from '@/lib/spaces/globalSpace'
 import { GLOBAL_MODE_KEY, syncGlobalRecordSafe } from '@/lib/global/record'
 import { syncEntityNoteFrontmatter } from '@/lib/notes/context/entityNodes'
 import { imageUrlFromResource } from '@/lib/events/cover'
+import type { AccessVia } from '@/lib/resources/accessLog'
 
 export interface NodeImageInput {
   spaceId: string
   nodeId: string
   resourceId: string
   actor: { id: string; name: string; email: string | null }
+  /** The door the actor came through, for the resource's record of use. */
+  via?: AccessVia
+  agentName?: string | null
+  runId?: string | null
 }
 
 export async function setNodeImageFromResource(input: NodeImageInput): Promise<{ imageUrl: string }> {
@@ -52,6 +57,7 @@ export async function setNodeImageFromResource(input: NodeImageInput): Promise<{
     kind: node.type === 'person' ? 'person' : 'card',
     entityId: nodeId,
     resourceId,
+    reader: { userId: actor.id, email: actor.email, via: input.via, agentName: input.agentName, runId: input.runId },
   })
   const updated = await prisma.node.update({
     where: { id: nodeId },
@@ -69,6 +75,10 @@ export async function setNodeImageFromResource(input: NodeImageInput): Promise<{
     )
   }
   await syncGlobalRecordSafe(node.identityId)
-  revalidateTag('context-data-v2', { expire: 0 })
+  try {
+    revalidateTag('context-data-v2', { expire: 0 })
+  } catch {
+    /* outside request scope */
+  }
   return { imageUrl }
 }

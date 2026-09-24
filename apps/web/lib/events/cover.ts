@@ -19,7 +19,8 @@
  *    cover set this way is collected with the event like any other.
  */
 import { ApiError } from '@/lib/api/route'
-import prisma from '@/lib/prisma'
+import { requireVisibleResource } from '@/lib/resources/visibility'
+import { logResourceAccess, type AccessVia } from '@/lib/resources/accessLog'
 import { downloadResourceFile, getMediaUrl, uploadProfileImage } from '@/lib/gcs'
 import { mediaPrefixBare, type MediaEntityType } from '@/lib/storage/objectPaths'
 
@@ -29,6 +30,17 @@ export interface CoverFromResourceInput {
   eventId: string
   /** A Drive file in `spaceId`, of fileType 'image'. */
   resourceId: string
+  /** Who is using it: they must be able to see it, and the use is recorded. */
+  reader: ResourceReader
+}
+
+/** The person (and, through an agent or the MCP, the door) using a resource. */
+interface ResourceReader {
+  userId: string
+  email?: string | null
+  via?: AccessVia
+  agentName?: string | null
+  runId?: string | null
 }
 
 /**
@@ -38,11 +50,11 @@ export interface CoverFromResourceInput {
  * browser upload does.
  */
 export async function coverUrlFromResource(input: CoverFromResourceInput): Promise<string> {
-  const { spaceId, eventId, resourceId } = input
+  const { spaceId, eventId, resourceId, reader } = input
   if (!eventId.startsWith('event:') || eventId.length <= 'event:'.length) {
     throw new ApiError(400, `Not an event id: '${eventId}'`)
   }
-  return imageUrlFromResource({ spaceId, kind: 'event', entityId: eventId, resourceId })
+  return imageUrlFromResource({ spaceId, kind: 'event', entityId: eventId, resourceId, reader })
 }
 
 export interface ImageFromResourceInput {
@@ -53,6 +65,7 @@ export interface ImageFromResourceInput {
   entityId: string
   /** A Drive file in `spaceId`, of fileType 'image'. */
   resourceId: string
+  reader: ResourceReader
 }
 
 /**
@@ -62,19 +75,19 @@ export interface ImageFromResourceInput {
  * file and the prefix.
  */
 export async function imageUrlFromResource(input: ImageFromResourceInput): Promise<string> {
-  const { spaceId, kind, entityId, resourceId } = input
+  const { spaceId, kind, entityId, resourceId, reader } = input
 
-  const resource = await prisma.resource.findUnique({
-    where: { id: resourceId },
-    select: { spaceId: true, name: true, fileType: true, gcsPath: true, conversationId: true },
-  })
-  // Absent, another space's, and a channel's own file (listed only to that
-  // channel's members) are deliberately the same answer.
-  if (!resource || resource.spaceId !== spaceId || resource.conversationId) {
+  // Absent, another space's, and one the reader cannot see (a private
+  // channel's file) are deliberately the same answer.
+  let resource
+  try {
+    resource = await requireVisibleResource(resourceId, reader.userId, reader.email)
+  } catch {
     throw new ApiError(404, `No file '${resourceId}' in this space`)
   }
-  if (resource.fileType !== 'image') {
-    throw new ApiError(400, `'${resource.name}' is a ${resource.fileType}, not an image`)
+  if (resource.spaceId !== spaceId) throw new ApiError(404, `No file '${resourceId}' in this space`)
+  if (resource.kind !== 'image') {
+    throw new ApiError(400, `'${resource.name}' is ${resource.kind === 'link' ? 'a link' : `a ${resource.kind}`}, not an image`)
   }
   // Legacy rows may hold a link rather than an object of ours; there is nothing
   // to copy from those.
@@ -85,6 +98,16 @@ export async function imageUrlFromResource(input: ImageFromResourceInput): Promi
   const bytes = await downloadResourceFile(resource.gcsPath)
   const prefix = mediaPrefixBare(kind, entityId)
   await uploadProfileImage(prefix, bytes)
+  await logResourceAccess({
+    resourceId,
+    spaceId,
+    userId: reader.userId,
+    via: reader.via ?? 'web',
+    action: 'use',
+    agentName: reader.agentName,
+    runId: reader.runId,
+    targetNodeId: kind === 'space' ? null : entityId,
+  })
   // The cache-buster is what makes replacing an image visible: the variant
   // paths are fixed, so without it the browser keeps the old one.
   return `${getMediaUrl(`${prefix}/avatar-lg.webp`)}?v=${Date.now()}`

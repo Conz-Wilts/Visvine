@@ -18,5 +18,6 @@ export function callerFromSession(session: SessionPayload): ActionCaller {
     name: session.name,
     email: session.email,
     scopes: [...MCP_SCOPES],
+    via: 'api',
   }
 }

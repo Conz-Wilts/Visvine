@@ -1,7 +1,9 @@
 // What a resources list asks for, read from a URL and checked. Pure — the
 // route parses with it, the client builds its URLs with it, a test pins it.
 
-const LIST_KINDS = ['all', 'image', 'video', 'audio', 'pdf', 'doc', 'sheet', 'slides', 'link', 'files'] as const
+export const LIST_KINDS = [
+  'all', 'image', 'video', 'audio', 'pdf', 'doc', 'sheet', 'slides', 'text', 'code', 'archive', 'other', 'link', 'files',
+] as const
 export type ListKind = (typeof LIST_KINDS)[number]
 
 const LIST_SORTS = ['recent', 'name', 'size'] as const

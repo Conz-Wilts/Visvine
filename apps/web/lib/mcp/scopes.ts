@@ -23,6 +23,7 @@
 export const MCP_SCOPES = [
   'context:read',
   'context:write',
+  'messages:write',
   'connectors:use',
   'agents:run',
   'agents:author',
@@ -41,6 +42,8 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
     'Read the context of spaces you belong to — entities, notes and how they connect',
   'context:write':
     'Create entities and write notes in spaces where you already have write access',
+  'messages:write':
+    'Post in channels you are in, as you — sharing a file or a link into one',
   'connectors:use':
     'Call external APIs and databases through connectors configured by space admins',
   'agents:run':
