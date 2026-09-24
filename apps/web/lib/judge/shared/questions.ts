@@ -166,6 +166,39 @@ export const RUN_OUTCOME_QUESTION: ChoiceQuestion = {
 export const RUN_OUTCOME_LEAN = 0.5
 export const RUN_OUTCOME_CONFIDENCE = 0.6
 
+/**
+ * Why a failed run failed, read from what it was asked, what it said last and
+ * the error — so the page can say what to change rather than only that it
+ * broke. Advice, never a gate: nothing is retried or switched off on it.
+ */
+export const RUN_CAUSE_QUESTION: ChoiceQuestion = {
+  type: 'choice',
+  instructions: 'An AI agent run failed. What most likely made it fail?',
+  criteria: {
+    model: 'The model lost track of a job with several steps: it stopped partway, repeated itself or described work instead of doing it.',
+    access: 'Something it needed was not reachable: a missing connector, credential, permission or sign-in.',
+    source: 'A website, API or service it read from failed, timed out or returned nothing useful.',
+    brief: 'The instructions were unclear, contradictory or asked for something impossible.',
+    other: 'None of these.',
+  },
+}
+export const RUN_CAUSE_CONFIDENCE = 0.5
+
+/**
+ * How much a brief asks of the model — read once from the brief, to say which
+ * of the space's models suits it. Advice, never a gate.
+ */
+export const JOB_SHAPE_QUESTION: ChoiceQuestion = {
+  type: 'choice',
+  instructions: 'How much does this agent brief ask of the AI model that carries it out on each run?',
+  criteria: {
+    simple: 'One or two steps: read one thing and write or report one thing.',
+    multi_step: 'Several tool calls in a sequence, such as fetch pages, sort or filter what came back, then write a formatted note.',
+    heavy: 'Long reasoning across many sources, careful judgement or writing a lot of polished text.',
+  },
+}
+export const JOB_SHAPE_CONFIDENCE = 0.5
+
 // ── Untrusted text ──────────────────────────────────────────────────────────
 
 /** State: a window of the text. A signal for the reader and the trace — never a security boundary. */

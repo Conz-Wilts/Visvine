@@ -12,6 +12,13 @@ import type { AgentConfigPatch } from './shared/agentConfig'
 export const agentConfigInput = z
   .object({
     model: z.string().trim().max(200).nullable().optional().describe('A pinned `<provider>/<id>`; null (or empty) runs on the space model.'),
+    fallback_model: z
+      .string()
+      .trim()
+      .max(200)
+      .nullable()
+      .optional()
+      .describe('A `<provider>/<id>` of this space tried ONCE when a run ends short on the main model; null (or empty) for none. Costs a second run only when the first fell short.'),
     connectors: z.array(z.string().trim().min(1).max(64)).max(50).optional().describe('Connector names this agent may use.'),
     tools: z.array(z.enum(AGENT_TOOL_EXTRAS)).optional().describe(`Optional extras: ${AGENT_TOOL_EXTRAS.join(', ')}.`),
     agents: z.array(z.string().trim().min(1).max(64)).max(50).optional().describe('Agents this one may start with run_agent.'),
@@ -28,6 +35,7 @@ export type AgentConfigInput = z.infer<typeof agentConfigInput>
 export function configPatchOf(input: AgentConfigInput): AgentConfigPatch {
   const patch: AgentConfigPatch = {}
   if (input.model !== undefined) patch.model = input.model?.trim() || null
+  if (input.fallback_model !== undefined) patch.fallbackModel = input.fallback_model?.trim() || null
   if (input.connectors !== undefined) patch.connectors = [...new Set(input.connectors)]
   if (input.tools !== undefined) patch.tools = [...new Set(input.tools)]
   if (input.agents !== undefined) patch.agents = [...new Set(input.agents)]

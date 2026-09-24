@@ -557,6 +557,21 @@ has.
   `memory.md`. With no judge an answer that stops on "now I'll …" is handed
   back once (`announcedNextStep`). A verdict only ever adds a turn or marks a
   failure; it never widens reach.
+- **A run that falls short gets one more go, on its fallback, and a failed
+  run says why.** The record's `fallback_model` is tried ONCE, from the top, in
+  the same run, when the first model ends short (`incomplete` or `narrated`) —
+  a second model's cost only ever follows a first that did not do the job.
+  Every hand-back is a `Handed back — …` line on the run's page. A run that
+  fails `incomplete`, `narrated`, `timeout`, `error` or `upstream` is read once
+  by the judge for its likely cause (`lib/agents/diagnose.ts`, `RUN_CAUSE_QUESTION`)
+  and the page says what to change (`shared/advice.ts#causeAdvice`). The agent
+  page and `create_agent` recommend a better-suited model of the space's —
+  from how each has done on this space's runs, and with no record from the
+  judge's reading of how much the brief asks (`JOB_SHAPE_QUESTION`) —
+  as its model or its fallback (`recommendModel`). Advice only; nothing is
+  switched on it. `pnpm agents:eval` (weekly and on demand in
+  `.github/workflows/agents-eval.yml`) grades the live run: finished,
+  failed honestly, or — the one outright failure — green having written nothing.
 - **What a run reads is kept small.** `fetch_url` returns readable text
   (`lib/links/shared/readable.ts`: HTML as text with `[text](url)` links, JSON
   without highlight copies or long id lists); a page past 20k with no `find`

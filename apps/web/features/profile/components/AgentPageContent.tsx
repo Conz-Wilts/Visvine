@@ -2,6 +2,7 @@
 
 import type { AgentConfig as AgentRecordConfig } from '@/lib/agents/shared/agentConfig';
 import type { AgentConfigChangeRow } from '@/lib/agents/record';
+import type { ModelAdvice } from '@/lib/agents/shared/advice';
 import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
@@ -52,6 +53,7 @@ type AgentDetail = AgentSummary & {
   readiness: AgentReadiness;
   config: AgentRecordConfig;
   configChanges: AgentConfigChangeRow[];
+  modelAdvice: ModelAdvice | null;
 };
 
 interface DetailResponse {

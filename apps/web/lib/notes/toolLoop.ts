@@ -37,6 +37,11 @@ export type ToolLoopEvent =
   | { type: 'assistant'; text: string }
   | { type: 'tool'; tool: string; detail: string }
   | { type: 'tool_result'; tool: string; text: string }
+  /** The loop gave the model its turn back instead of ending — what it was told, first sentence. */
+  | { type: 'handed_back'; text: string }
+
+/** A hand-back message's first sentence — what the run's page says it was told. */
+const firstSentence = (s: string) => (/^[\s\S]*?[.!?](?=\s|$)/.exec(s)?.[0] ?? s).slice(0, 240)
 
 type ToolLoopReason = 'finished' | 'max_turns' | 'stopped' | 'aborted' | 'error' | 'narrated'
 
@@ -146,6 +151,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
           return done('narrated', turn + 1, { finalText: reply.content?.trim() || null, narratedTool: narrated })
         }
         nudges++
+        emit({ type: 'handed_back', text: firstSentence(narrationNudge(narrated)) })
         messages.push({ role: 'assistant', content: reply.content ?? '' })
         messages.push({ role: 'user', content: narrationNudge(narrated) })
         continue
@@ -157,7 +163,9 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         promptedNextStep = true
         if (reply.content?.trim()) emit({ type: 'assistant', text: reply.content.trim() })
         messages.push({ role: 'assistant', content: reply.content ?? '' })
-        messages.push({ role: 'user', content: reply.content?.trim() ? NEXT_STEP_NUDGE : EMPTY_REPLY_NUDGE })
+        const told = reply.content?.trim() ? NEXT_STEP_NUDGE : EMPTY_REPLY_NUDGE
+        emit({ type: 'handed_back', text: firstSentence(told) })
+        messages.push({ role: 'user', content: told })
         continue
       }
       // The caller's own read of the answer: a run that stopped short gets the
@@ -167,6 +175,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         if (nudge) {
           reviews++
           if (reply.content?.trim()) emit({ type: 'assistant', text: reply.content.trim() })
+          emit({ type: 'handed_back', text: firstSentence(nudge) })
           messages.push({ role: 'assistant', content: reply.content ?? '' })
           messages.push({ role: 'user', content: nudge })
           continue

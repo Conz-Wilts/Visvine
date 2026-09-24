@@ -463,6 +463,7 @@ model AgentState {
   // ── How it runs: the record, not a cache. `configured_at` null = a row from
   // before the record existed, still read from the note (lib/agents/record.ts).
   model               String? // a pinned `<provider>/<id>`; null runs on the space's model
+  fallbackModel       String?    @map("fallback_model") // tried once when a run on `model` ends short (lib/agents/runner.ts)
   connectors          String[]   @default([])
   tools               String[]   @default([]) // AGENT_TOOL_EXTRAS
   agents              String[]   @default([]) // agents it may start with run_agent

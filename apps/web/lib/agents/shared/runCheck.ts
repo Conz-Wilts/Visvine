@@ -98,3 +98,22 @@ export function nudgeFor(verdict: RunVerdict | null, trace: RunTrace): string | 
   if (!lines.length) return null
   return `${lines.join(' ')} Do not describe the steps — make the calls, then reply with a one-line summary of what you did.`
 }
+
+/**
+ * Why a run whose loop ended `finished` or `max_turns` did not do the job, or
+ * null when it did. The trace and the run's own last words first — a run that
+ * used every turn, or went silent, having written nothing — then the judge's
+ * verdict (incompleteBecause). Pure; the runner fails the run on a reason.
+ */
+export function shortOf(run: {
+  reason: 'finished' | 'max_turns'
+  finalText: string | null
+  writes: number
+  maxTurns: number
+  verdict: RunVerdict | null
+  promisesMore: boolean
+}): string | null {
+  if (run.reason === 'max_turns' && run.writes === 0) return `It used all ${run.maxTurns} turns without writing anything.`
+  if (!run.finalText && run.writes === 0) return 'It stopped without a word, having written nothing.'
+  return incompleteBecause(run.verdict, { writes: run.writes, promisesMore: run.promisesMore })
+}

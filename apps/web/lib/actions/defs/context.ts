@@ -86,7 +86,7 @@ import { createEventRecord, eventAuthorFor, updateEventRecord } from '@/lib/even
 import { coverUrlFromResource } from '@/lib/events/cover'
 import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth'
 import { eventCreateInputSchema, eventUpdateInputSchema } from '@/lib/schemas/eventSchemas'
-import { activateAgent, canTriggerRun, configureAgent, createAgentBrief, describeAgent, listAgents, switchOffAgent } from '@/lib/agents/service'
+import { activateAgent, canTriggerRun, configureAgent, createAgentBrief, describeAgent, listAgents, modelAdviceFor, switchOffAgent } from '@/lib/agents/service'
 import { agentConfigInput, configPatchOf } from '@/lib/agents/configInput'
 import { modelToolsProblem } from '@/lib/models/capabilities'
 import { defaultModelOf, noModelReason, spaceModels } from '@/lib/agents/spaceModels'
@@ -2193,6 +2193,12 @@ export const CONTEXT_ACTIONS = [
           model: r.brief.model ?? fallback?.ref ?? null,
           model_source: r.brief.model ? 'pinned in the brief' : fallback ? `the space's model (${fallback.path})` : 'none',
           ...(problem ? { model_problem: problem } : {}),
+          // A better-suited model of the space's, when there is evidence for one
+          // (lib/agents/shared/advice.ts) — say it, and set it with configure_agent
+          // (`model`, or `fallback_model` to try it only when a run falls short).
+          ...(await modelAdviceFor(context.spaceId, { current: effective, fallback: null, body: args.instructions })
+            .then((advice) => (advice ? { model_advice: advice } : {}))
+            .catch(() => ({}))),
           connectors: r.brief.connectors,
           tools: r.brief.tools,
           active: false,
@@ -2397,6 +2403,7 @@ export const CONTEXT_ACTIONS = [
         return {
           agent,
           model: c.model,
+          fallback_model: c.fallbackModel,
           connectors: c.connectors,
           tools: c.tools,
           agents: c.agents,

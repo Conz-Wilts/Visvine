@@ -115,6 +115,8 @@ async function main() {
   }
 
   console.log(`\n1. A fresh space with one model: ${MODEL} through OpenRouter`)
+  // The dev admin is the seed's; a database with only migrations (CI) gets one.
+  await prisma.user.upsert({ where: { id: ADMIN.userId }, create: { id: ADMIN.userId, email: ADMIN.email, name: ADMIN.name }, update: {} })
   await prisma.space.deleteMany({ where: { name: SPACE_NAME, parentId: null } })
   const made = await provisionSpace({ name: SPACE_NAME, creator: { id: ADMIN.userId, name: ADMIN.name, email: ADMIN.email } })
   if (!made.ok) throw new Error(made.error)
@@ -182,6 +184,23 @@ async function main() {
   await act('deactivate_agent', { space_id: spaceId, agent: AGENT })
 
   console.log(`\nJudge calls: ${judgeLog.length} · model calls: ${chatCalls}`)
+  // One line for agents:eval to read.
+  const stories = (output ?? '').split('\n').filter((l) => /^\d+\. \[/.test(l)).length
+  const wakes = (source: string) => kept.some((k) => claimed.find((c) => c.id === k.id)?.source === source)
+  console.log(
+    `RESULT ${JSON.stringify({
+      model: MODEL,
+      status: run.status,
+      reason: run.terminalReason,
+      promptTokens: run.promptTokens,
+      completionTokens: run.completionTokens,
+      turns: run.turns,
+      stories,
+      handedBack: events.filter((e) => e.type === 'system' && (e.text ?? '').startsWith('Handed back')).length,
+      gate: { relevant: wakes('inbox/refresh.md'), irrelevant: wakes('inbox/lunch.md') },
+      judgeCalls: judgeLog.length,
+    })}`,
+  )
   await prisma.$disconnect()
 }
 

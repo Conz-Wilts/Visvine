@@ -213,6 +213,15 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   stale-run reclaim fires at `MAX_RUN_MS + RECLAIM_GRACE_MS` (27 min; `lib/agents/limits.ts`). If runs
   ever need >30 min, swap
   `lib/agents/dispatch.ts` for Cloud Tasks; nothing else changes.
+- Reliability: `pnpm --filter @visvine/web agents:eval [--runs N --model <id> --min-finish 0.8 --max-tokens 150000]`
+  repeats the live run and grades it — a run passes when it finished (ten stories) or failed
+  honestly; a run that succeeded having written nothing fails the eval outright. The Agents eval
+  workflow runs it weekly and on demand with the `OPENROUTER_API_KEY` secret (about a cent a run).
+- A run that falls short (`incomplete`, `narrated`) is tried ONCE more on the record's
+  `fallback_model`, in the same run, and records the model that did the job. A failed run gets one
+  judged line saying its likely cause and what to change (`lib/agents/diagnose.ts`); the agent's
+  Config shows a better-suited model of the space's when there is evidence for one, as its model or
+  its fallback (`lib/agents/shared/advice.ts`).
 - Dev: `pnpm --filter @visvine/web agents:tick` is the minute tick from its own process against
   the local database (`--once` for one), each run inline; or one tick through the app with
   `curl -X POST -H "Authorization: Bearer $AGENT_TICK_SECRET" localhost:3000/api/internal/agents/tick`.

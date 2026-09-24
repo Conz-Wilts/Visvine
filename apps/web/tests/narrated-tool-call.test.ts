@@ -148,3 +148,20 @@ test('a review hands a short answer back, a bounded number of times', async () =
   const r3 = await runToolLoop({ messages: [{ role: 'user', content: 'go' }], tools: [fetchUrl], maxTurns: 3, chatFn: scripted([{ content: 'x' }]), review: async () => { throw new Error('judge down') } })
   assert.equal(r3.finalText, 'x')
 })
+
+test('every hand-back is reported, in its first sentence', async () => {
+  const seen: string[] = []
+  await runToolLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [fetchUrl],
+    maxTurns: 6,
+    chatFn: scripted([{ content: '' }, { content: 'Half done. More later.' }, { content: 'All done.' }]),
+    review: async (text) => (text === 'Half done. More later.' ? 'Finish it now. Use the tools.' : null),
+    onEvent: (e) => {
+      if (e.type === 'handed_back') seen.push(e.text)
+    },
+  })
+  assert.equal(seen.length, 2)
+  assert.match(seen[0], /^Your reply was empty/)
+  assert.equal(seen[1], 'Finish it now.')
+})

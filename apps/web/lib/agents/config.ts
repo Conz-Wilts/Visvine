@@ -163,6 +163,12 @@ export interface AgentBrief {
   model: string | null
   /** The parsed pin, or null when the brief names none and the space decides. */
   modelRef: ModelRef | null
+  /**
+   * `fallback_model:` — tried ONCE when a run on the model ends short (stops
+   * halfway, or describes its tools instead of calling them). Costs a second
+   * run only when the first did not do the job. Null for none.
+   */
+  fallbackModel: string | null
   connectors: string[]
   tools: AgentToolExtra[]
   /** Agents (by name) this one may start with run_agent — empty means the tool is not offered. */
@@ -248,6 +254,12 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
   const model = pinned ? parseModelRef(fm.model) : null
   if (model && !model.ok) return { ok: false, error: model.error }
 
+  const fallbackPinned = typeof fm.fallback_model === 'string' && fm.fallback_model.trim().length > 0
+  if (fallbackPinned) {
+    const fallback = parseModelRef(fm.fallback_model)
+    if (!fallback.ok) return { ok: false, error: `\`fallback_model\`: ${fallback.error}` }
+  }
+
   const connectors = stringList(fm.connectors, 'connectors')
   if (!connectors.ok) return connectors
   for (const c of connectors.list) {
@@ -331,6 +343,7 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
       description: typeof fm.description === 'string' && fm.description.trim() ? fm.description.trim() : null,
       model: pinned ? String(fm.model).trim() : null,
       modelRef: model?.ok ? model.ref : null,
+      fallbackModel: fallbackPinned ? String(fm.fallback_model).trim() : null,
       connectors: connectors.list,
       tools: extras,
       agents: agents.list,

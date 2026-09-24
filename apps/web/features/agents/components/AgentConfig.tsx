@@ -9,6 +9,7 @@ import { briefTags, withBriefTags } from '@/lib/agents/briefEdit';
 import type { AgentConfigInput } from '@/lib/agents/configInput';
 import type { AgentConfig as AgentRecordConfig } from '@/lib/agents/shared/agentConfig';
 import type { AgentSummary } from '@/lib/agents/service';
+import type { ModelAdvice } from '@/lib/agents/shared/advice';
 import { useAgentOptions } from '../lib/useAgentOptions';
 import MachinePane from './MachinePane';
 
@@ -41,7 +42,7 @@ export default function AgentConfig({
   onSaved,
 }: {
   spaceId: string;
-  agent: AgentSummary & { brief: string; config: AgentRecordConfig };
+  agent: AgentSummary & { brief: string; config: AgentRecordConfig; modelAdvice?: ModelAdvice | null };
   isAdmin: boolean;
   canManage: boolean;
   liveRun: boolean;
@@ -152,6 +153,38 @@ export default function AgentConfig({
               </option>
             ))}
           </Select>
+          </div>
+          {agent.modelAdvice && (
+            <p className="mt-1.5 text-[12.5px] text-fg-muted">
+              {agent.modelAdvice.why}{' '}
+              <button
+                type="button"
+                className="text-fg underline decoration-line underline-offset-2 hover:decoration-fg-muted"
+                onClick={() => {
+                  const ref = agent.modelAdvice!.model;
+                  if (agent.modelAdvice!.as === 'model') save({ model: ref }, { model: ref });
+                  else save({ fallbackModel: ref }, { fallback_model: ref });
+                }}
+              >
+                {agent.modelAdvice.as === 'model' ? `Use ${agent.modelAdvice.model.slice(agent.modelAdvice.model.indexOf('/') + 1)}` : `Fall back to ${agent.modelAdvice.model.slice(agent.modelAdvice.model.indexOf('/') + 1)}`}
+              </button>
+            </p>
+          )}
+        </Row>
+        <Row label="Fallback">
+          <div className="max-w-xs">
+            <Select
+              value={value.fallbackModel ?? ''}
+              aria-label="Fallback model"
+              onChange={(e) => save({ fallbackModel: e.target.value || null }, { fallback_model: e.target.value || null })}
+            >
+              <option value="">None</option>
+              {models.map((m) => (
+                <option key={m.name} value={m.ref ?? ''} disabled={!m.ref || m.problem !== null || m.ref === pinned}>
+                  {m.providerLabel} · {m.label}
+                </option>
+              ))}
+            </Select>
           </div>
         </Row>
         <Row label="Tools">

@@ -44,7 +44,14 @@ export async function validateCustomEndpoint(raw: string): Promise<string> {
  */
 async function resolveModelPricing(models: readonly SpaceModel[], ref: ModelRef): Promise<ModelPricing | null> {
   const declared = declaredPricingFor(models, ref.provider.id)
-  return declared[ref.modelId] ?? ref.pricing ?? (await fetchedPricing(ref.provider.id, ref.modelId))
+  const price = declared[ref.modelId] ?? ref.pricing ?? (await fetchedPricing(ref.provider.id, ref.modelId))
+  // A price that says nothing about cached input borrows the catalogue's cache
+  // rate, so a model that caches is not metered as if it read everything anew.
+  if (price && price.cachedInputPerM === undefined) {
+    const fetched = await fetchedPricing(ref.provider.id, ref.modelId).catch(() => null)
+    if (fetched?.cachedInputPerM !== undefined) return { ...price, cachedInputPerM: fetched.cachedInputPerM }
+  }
+  return price
 }
 
 export type ResolveModelResult =

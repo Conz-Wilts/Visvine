@@ -19,7 +19,7 @@
  *   a failure.
  */
 import prisma from '@/lib/prisma'
-import { ModelError, type ChatUsage } from '@/lib/notes/ai'
+import { ModelError, type AgentMessage, type ChatConfig, type ChatUsage } from '@/lib/notes/ai'
 import { connectorReachFor } from '@/lib/connectors/service'
 import { readVisible, writeGated } from '@/lib/notes/contextService'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
@@ -30,7 +30,8 @@ import { readAgent } from './briefs'
 import { eventsForRun, rearmIfPending, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, type DeactivationReason, copyStillAllowed } from './hooks'
 import { checkRun } from './runCheck'
-import { incompleteBecause, nudgeFor, type RunVerdict } from './shared/runCheck'
+import { nudgeFor, shortOf, type RunVerdict } from './shared/runCheck'
+import { diagnoseRun } from './diagnose'
 import { announcedNextStep } from '@/lib/notes/shared/narratedToolCall'
 import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS } from './limits'
 import { releaseMachineAfterRun } from '@/lib/vm/lease'
@@ -142,6 +143,9 @@ async function release(
   return null
 }
 
+/** Failures whose cause a reading of the run can name; budgets, keys and caps say their own. */
+const DIAGNOSED = new Set<TerminalReason>(['incomplete', 'narrated', 'timeout', 'error', 'upstream'])
+
 export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): Promise<ExecuteRunOutcome> {
   const now = opts.now ?? new Date()
   const run = await prisma.agentRun.findUnique({ where: { id: runId } })
@@ -164,12 +168,29 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     if (!writes.includes(path)) writes.push(path)
   }
 
+  /** Set once the brief is read; a failure before then has nothing to diagnose. */
+  let briefBody: string | null = null
+  let lastAnswer: string | null = null
   const fail = async (
     reason: TerminalReason,
     message: string,
     o: { countsAsFailure?: boolean; deactivate?: { reason: DeactivationReason; detail: string | null } | null; usage?: ChatUsage; cost?: bigint | null; turns?: number; model?: string | null } = {},
   ): Promise<ExecuteRunOutcome> => {
     events.push({ at: Date.now(), type: 'system', text: message })
+    // Why, in a line the person can act on — only for failures a reading can
+    // explain, and only once the run got as far as its brief.
+    if (briefBody && DIAGNOSED.has(reason)) {
+      const advice = await diagnoseRun({
+        brief: briefBody,
+        finalText: lastAnswer,
+        error: message,
+        lastResults: events.flatMap((e) => (e.type === 'tool_result' ? [e.text] : [])),
+      }).catch(() => null)
+      if (advice) {
+        events.push({ at: Date.now(), type: 'system', text: advice })
+        message = `${message} ${advice}`
+      }
+    }
     await finishRun(runId, {
       status: 'failed',
       terminalReason: reason,
@@ -210,6 +231,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     if (!parsed.ok) return fail('config', `The brief is invalid: ${parsed.error}`, { deactivate: { reason: 'config', detail: parsed.error } })
     const brief: AgentBrief = parsed.brief
     dryRun = brief.dryRun
+    briefBody = brief.body
 
     // 2. Who the run acts as: the run's own identity when it carries one (a
     // manual run acts as whoever pressed Run; a fan-out run acts as its
@@ -251,7 +273,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     // names no model still has to leave a record saying which one spent the
     // money, and a run priced at run time keeps its dollars when the space's
     // model changes later.
-    const modelUsed = `${ref.provider.id}/${ref.modelId}`
+    let modelUsed = `${ref.provider.id}/${ref.modelId}`
     if (resolved.modelNote) {
       events.push({ at: Date.now(), type: 'system', text: `Running on the space's model: ${modelUsed} (${resolved.modelNote}).` })
     }
@@ -344,56 +366,105 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       : undefined
     const trace = () => ({ writes: writes.length, tools: events.flatMap((e) => (e.type === 'tool' ? [e.tool] : [])) })
     const judged: { text?: string | null; verdict?: RunVerdict | null } = {}
-    const result = await runToolLoop({
-      messages: [
-        { role: 'system', content: system },
-        ...(memoryMessage ? [{ role: 'system' as const, content: memoryMessage }] : []),
-        { role: 'user', content: user },
-        ...(skillsPrompt ? [{ role: 'system' as const, content: skillsPrompt }] : []),
-        ...(triggerMessage ? [{ role: 'user' as const, content: triggerMessage }] : []),
-      ],
-      tools: agentTools({
-        principal,
-        context,
-        spaceId,
-        agentName: name,
-        brief,
-        connectorActions: reach.actions,
-        machineAllow: reach.hosts,
-        runId,
-        chainDepth,
-        // A manual run is one somebody pressed Run on and is watching; every
-        // other trigger fires with nobody there. That is what an MCP tool set
-        // to `ask` turns on (lib/connectors/toolPolicy.ts).
-        attended: run.trigger === 'manual',
-        actionCatalogue,
-        onWrite: noteWritten,
-      }),
-      maxTurns: brief.maxTurns,
-      chatFn: opts.chatFn,
-      config,
-      signal,
-      onEvent: (e) => {
-        if (e.type === 'assistant') push({ at: Date.now(), type: 'assistant', text: clipEventText(e.text) })
-        else if (e.type === 'tool') push({ at: Date.now(), type: 'tool', tool: e.tool, detail: e.detail.slice(0, 500) })
-        else push({ at: Date.now(), type: 'tool_result', tool: e.tool, text: clipEventText(e.text) })
-      },
-      beforeTurn: ({ turn, usage }) => {
-        turns = turn
-        return perTurnStop(budget, usage)
-      },
-      // Before an answer ends the run, the judge reads it against what the run
-      // did: a job it says is half done, or a write nothing made, gets the turn
-      // back with what is missing (shared/runCheck.ts#nudgeFor). The last
-      // verdict is kept, so the answer that stands is not judged twice.
-      review: async (finalText) => {
-        judged.text = finalText
-        judged.verdict = await checkRun(finalText, trace()).catch(() => null)
-        return nudgeFor(judged.verdict, trace())
-      },
+    const tools = agentTools({
+      principal,
+      context,
+      spaceId,
+      agentName: name,
+      brief,
+      connectorActions: reach.actions,
+      machineAllow: reach.hosts,
+      runId,
+      chainDepth,
+      // A manual run is one somebody pressed Run on and is watching; every
+      // other trigger fires with nobody there. That is what an MCP tool set
+      // to `ask` turns on (lib/connectors/toolPolicy.ts).
+      attended: run.trigger === 'manual',
+      actionCatalogue,
+      onWrite: noteWritten,
     })
-    const cost = costMicros(result.usage, ref.pricing)
-    const common = { usage: result.usage, cost, turns: result.turns, model: modelUsed }
+    const seed: AgentMessage[] = [
+      { role: 'system', content: system },
+      ...(memoryMessage ? [{ role: 'system' as const, content: memoryMessage }] : []),
+      { role: 'user', content: user },
+      ...(skillsPrompt ? [{ role: 'system' as const, content: skillsPrompt }] : []),
+      ...(triggerMessage ? [{ role: 'user' as const, content: triggerMessage }] : []),
+    ]
+    /** One go at the job on one model's endpoint. */
+    const attempt = (cfg: ChatConfig) =>
+      runToolLoop({
+        messages: seed,
+        tools,
+        maxTurns: brief.maxTurns,
+        chatFn: opts.chatFn,
+        config: cfg,
+        signal,
+        onEvent: (e) => {
+          if (e.type === 'assistant') push({ at: Date.now(), type: 'assistant', text: clipEventText(e.text) })
+          else if (e.type === 'tool') push({ at: Date.now(), type: 'tool', tool: e.tool, detail: e.detail.slice(0, 500) })
+          else if (e.type === 'tool_result') push({ at: Date.now(), type: 'tool_result', tool: e.tool, text: clipEventText(e.text) })
+          // Every time the run was given its turn back is on its page: how
+          // often an agent needs pushing is part of whether it works.
+          else push({ at: Date.now(), type: 'system', text: `Handed back — ${e.text}` })
+        },
+        beforeTurn: ({ turn, usage }) => {
+          turns = turn
+          return perTurnStop(budget, usage)
+        },
+        // Before an answer ends the run, the judge reads it against what the run
+        // did: a job it says is half done, or a write nothing made, gets the turn
+        // back with what is missing (shared/runCheck.ts#nudgeFor). The last
+        // verdict is kept, so the answer that stands is not judged twice.
+        review: async (finalText) => {
+          judged.text = finalText
+          judged.verdict = await checkRun(finalText, trace()).catch(() => null)
+          return nudgeFor(judged.verdict, trace())
+        },
+      })
+    /** Why a loop that ended on an answer did not do the job, or null. */
+    const shortfall = async (r: Awaited<ReturnType<typeof attempt>>) => {
+      if (r.reason === 'narrated') return `It described its tools instead of calling them (\`${r.narratedTool}\`).`
+      if (r.reason !== 'finished' && r.reason !== 'max_turns') return null
+      const verdict =
+        'verdict' in judged && judged.text === r.finalText ? (judged.verdict ?? null) : await checkRun(r.finalText, trace()).catch(() => null)
+      judged.text = r.finalText
+      judged.verdict = verdict
+      return shortOf({ reason: r.reason, finalText: r.finalText, writes: writes.length, maxTurns: brief.maxTurns, verdict, promisesMore: announcedNextStep(r.finalText) })
+    }
+
+    let result = await attempt(config)
+    lastAnswer = result.finalText
+    let short = await shortfall(result)
+    let usage = result.usage
+    let cost = costMicros(result.usage, ref.pricing)
+    // Fell short on its model, and the record names a fallback: one more go
+    // on that one, from the top, in this same run. A second run's cost only
+    // ever follows a first that did not do the job.
+    if (short && brief.fallbackModel && brief.fallbackModel !== modelUsed) {
+      const fallback = await resolveAgentChatConfig(spaceId, brief.fallbackModel)
+      if (fallback.ok) {
+        const fallbackUsed = `${fallback.ref.provider.id}/${fallback.ref.modelId}`
+        events.push({ at: Date.now(), type: 'system', text: `Fell short on ${modelUsed} — ${short} Trying again on ${fallbackUsed}.` })
+        budget.spentThisMonthMicros = budget.spentThisMonthMicros === null || cost === null ? null : budget.spentThisMonthMicros + cost
+        budget.pricing = fallback.ref.pricing
+        delete judged.text
+        delete judged.verdict
+        const second = await attempt(fallback.config)
+        const secondCost = costMicros(second.usage, fallback.ref.pricing)
+        usage = {
+          promptTokens: usage.promptTokens + second.usage.promptTokens,
+          completionTokens: usage.completionTokens + second.usage.completionTokens,
+        }
+        cost = cost === null || secondCost === null ? null : cost + secondCost
+        modelUsed = fallbackUsed
+        result = { ...second, turns: result.turns + second.turns }
+        lastAnswer = result.finalText
+        short = await shortfall(result)
+      } else {
+        events.push({ at: Date.now(), type: 'system', text: `Fell short, and the fallback model ${brief.fallbackModel} is not available: ${fallback.message}` })
+      }
+    }
+    const common = { usage, cost, turns: result.turns, model: modelUsed }
 
     switch (result.reason) {
       case 'finished':
@@ -403,18 +474,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
         // What the run SAID it did, held against what it did (shared/runCheck.ts).
         // It was already handed back when it stopped short; if it still has,
         // the run did not finish the job, and says so instead of passing.
-        const verdict =
-          'verdict' in judged && judged.text === result.finalText
-            ? (judged.verdict ?? null)
-            : await checkRun(result.finalText, trace()).catch(() => null)
-        // A run that used every turn and wrote nothing did not finish, whatever
-        // it last said; one that wrote is judged on its words like any other.
-        const short =
-          result.reason === 'max_turns' && writes.length === 0
-            ? `It used all ${brief.maxTurns} turns without writing anything.`
-            : !result.finalText && writes.length === 0
-              ? 'It stopped without a word, having written nothing.'
-              : incompleteBecause(verdict, { writes: writes.length, promisesMore: announcedNextStep(result.finalText) })
+        const verdict = judged.verdict ?? null
         if (short) {
           return fail('incomplete', `Stopped before finishing. ${short}${result.finalText ? ` It said: “${result.finalText.slice(0, 300)}”` : ''}`, common)
         }
@@ -424,8 +484,8 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
           terminalReason: result.reason,
           events,
           turns: result.turns,
-          promptTokens: result.usage.promptTokens,
-          completionTokens: result.usage.completionTokens,
+          promptTokens: usage.promptTokens,
+          completionTokens: usage.completionTokens,
           costMicros: cost,
           summary: result.finalText ?? (result.reason === 'max_turns' ? 'Ran out of turns.' : null),
           errorMessage: null,

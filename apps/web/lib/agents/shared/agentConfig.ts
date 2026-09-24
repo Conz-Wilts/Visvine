@@ -29,6 +29,7 @@ import { runsForFrontmatter, type RunsForEntry } from './runsFor'
 /** Every frontmatter key the row owns. A brief note carries none of them. */
 const RUN_KEYS = [
   'model',
+  'fallback_model',
   'connectors',
   'tools',
   'agents',
@@ -50,6 +51,8 @@ const RUN_KEYS = [
 export interface AgentConfig {
   /** A pinned `<provider>/<id>`; null runs on the space's model. */
   model: string | null
+  /** Tried once when a run on `model` ends short; null for none. */
+  fallbackModel: string | null
   connectors: string[]
   tools: AgentToolExtra[]
   agents: string[]
@@ -86,6 +89,7 @@ export function stripRunKeys(fm: NoteFrontmatter): NoteFrontmatter {
 export function configOf(brief: AgentBrief, activation: AgentActivation): AgentConfig {
   return {
     model: brief.model,
+    fallbackModel: brief.fallbackModel,
     connectors: brief.connectors,
     tools: brief.tools,
     agents: brief.agents,
@@ -119,6 +123,7 @@ export function configFromFrontmatter(fm: NoteFrontmatter, body: string): { ok: 
 export function configFrontmatter(c: AgentConfig): NoteFrontmatter {
   const fm: NoteFrontmatter = {}
   if (c.model) fm.model = c.model
+  if (c.fallbackModel) fm.fallback_model = c.fallbackModel
   if (c.connectors.length) fm.connectors = [...c.connectors]
   if (c.tools.length) fm.tools = [...c.tools]
   if (c.agents.length) fm.agents = [...c.agents]
@@ -176,6 +181,7 @@ export function defaultAgentConfig(): AgentConfig {
 /** The `agent_state` columns the record is stored in. */
 export interface AgentConfigColumns {
   model: string | null
+  fallbackModel: string | null
   connectors: string[]
   tools: string[]
   agents: string[]
@@ -205,6 +211,7 @@ const pad = (n: number) => String(n).padStart(2, '0')
 export function configColumns(c: AgentConfig): AgentConfigColumns {
   return {
     model: c.model,
+    fallbackModel: c.fallbackModel,
     connectors: c.connectors,
     tools: c.tools,
     agents: c.agents,
@@ -245,6 +252,7 @@ export function configFromColumns(row: AgentConfigColumns, subs: RunsForColumns[
       : null
   return {
     model: row.model,
+    fallbackModel: row.fallbackModel,
     connectors: row.connectors,
     tools: row.tools as AgentToolExtra[],
     agents: row.agents,

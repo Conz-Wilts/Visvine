@@ -30,6 +30,7 @@ function brief(over: Partial<AgentBrief> = {}): AgentBrief {
       if (!r.ok) throw new Error(r.error)
       return r.ref
     })(),
+    fallbackModel: null,
     connectors: [],
     tools: [],
     agents: [],

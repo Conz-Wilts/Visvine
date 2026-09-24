@@ -42,6 +42,9 @@ import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
 import { localRuntimeOf, localRuntimeRefusal } from './local'
 import { modelToolsProblem } from '@/lib/models/capabilities'
+import { spaceTrackRecords } from '@/lib/models/service'
+import { recommendModel, type ModelAdvice } from './shared/advice'
+import { jobShapeOf } from './diagnose'
 import { currentStepOf, latestRun, type RunListItem } from './runs'
 import { memoryPath } from './shared/memory'
 import { lastHeartbeat } from './schedule'
@@ -202,6 +205,22 @@ function modelStateOf(
   const fallback = defaultModelOf(models)
   if (!fallback) return { modelEffective: null, modelNote: null, modelProblem: noModelReason(models) }
   return { modelEffective: fallback.ref, modelNote: fallback.path, modelProblem: null }
+}
+
+/**
+ * Which of the space's models would suit this agent better, from how each has
+ * done on this space's runs and — with no record yet — how much the brief
+ * asks of a model (one judge question, memoised per brief). Advice only.
+ */
+export async function modelAdviceFor(
+  spaceId: string,
+  agent: { current: string | null; fallback: string | null; body: string },
+): Promise<ModelAdvice | null> {
+  const [models, tracks] = await Promise.all([spaceModels(spaceId), spaceTrackRecords(spaceId)])
+  const runnable = runnableModels(models).map((m) => m.ref).filter((r): r is string => !!r)
+  if (runnable.length < 2 || !agent.current) return null
+  const shape = await jobShapeOf(agent.body).catch(() => null)
+  return recommendModel({ current: agent.current, fallback: agent.fallback, runnable, tracks, shape })
 }
 
 /** The model state, with a model that cannot call tools said as the problem it is (lib/models/capabilities.ts). */
@@ -393,6 +412,8 @@ export async function describeAgent(
       config: AgentConfig
       /** Who last changed how it runs, newest first. */
       configChanges: AgentConfigChangeRow[]
+      /** A model of the space's that would suit it better, with the evidence — or null (shared/advice.ts). */
+      modelAdvice: ModelAdvice | null
     })
   | null
 > {
@@ -441,6 +462,11 @@ export async function describeAgent(
     viewerSubscribed: subRows.some((s) => s.userId === p.userId),
     config: config ?? (composed.brief.ok && composed.activation.ok ? configOf(composed.brief.brief, composed.activation.activation) : defaultAgentConfig()),
     configChanges: await listAgentConfigChanges(context.spaceId, name),
+    modelAdvice: await modelAdviceFor(context.spaceId, {
+      current: summary.modelEffective,
+      fallback: composed.brief.ok ? composed.brief.brief.fallbackModel : null,
+      body: composed.body,
+    }).catch(() => null),
     readiness: {
       viewer,
       runAs,

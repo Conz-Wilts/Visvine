@@ -73,8 +73,8 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     probePath: 'models',
     models: [
       { id: DEFAULT_GEMINI_MODEL, label: 'Gemma 4 31B', pricing: null },
-      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', pricing: { inputPerM: 0.3, outputPerM: 2.5 } },
-      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', pricing: { inputPerM: 1.25, outputPerM: 10 } },
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', pricing: { inputPerM: 0.3, outputPerM: 2.5, cachedInputPerM: 0.075 } },
+      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', pricing: { inputPerM: 1.25, outputPerM: 10, cachedInputPerM: 0.31 } },
     ],
   },
   {
@@ -84,9 +84,9 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     keySecret: `${MODEL_KEY_PREFIX}OPENAI`,
     probePath: 'models',
     models: [
-      { id: 'gpt-4.1', label: 'GPT-4.1', pricing: { inputPerM: 2, outputPerM: 8 } },
-      { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', pricing: { inputPerM: 0.4, outputPerM: 1.6 } },
-      { id: 'gpt-4o', label: 'GPT-4o', pricing: { inputPerM: 2.5, outputPerM: 10 } },
+      { id: 'gpt-4.1', label: 'GPT-4.1', pricing: { inputPerM: 2, outputPerM: 8, cachedInputPerM: 0.5 } },
+      { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini', pricing: { inputPerM: 0.4, outputPerM: 1.6, cachedInputPerM: 0.1 } },
+      { id: 'gpt-4o', label: 'GPT-4o', pricing: { inputPerM: 2.5, outputPerM: 10, cachedInputPerM: 1.25 } },
     ],
   },
   {
@@ -96,9 +96,9 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     keySecret: `${MODEL_KEY_PREFIX}ANTHROPIC`,
     probePath: 'models',
     models: [
-      { id: 'claude-opus-5', label: 'Claude Opus 5', pricing: { inputPerM: 5, outputPerM: 25 } },
-      { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', pricing: { inputPerM: 3, outputPerM: 15 } },
-      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', pricing: { inputPerM: 1, outputPerM: 5 } },
+      { id: 'claude-opus-5', label: 'Claude Opus 5', pricing: { inputPerM: 5, outputPerM: 25, cachedInputPerM: 0.5 } },
+      { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', pricing: { inputPerM: 3, outputPerM: 15, cachedInputPerM: 0.3 } },
+      { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', pricing: { inputPerM: 1, outputPerM: 5, cachedInputPerM: 0.1 } },
     ],
   },
   {

@@ -1,0 +1,70 @@
+name: Agents eval
+
+# How reliable agents are, on the real model: apps/web/scripts/agents-eval.ts
+# builds the Hacker News agent from scratch, runs it, and grades it — finished,
+# failed honestly, or (the one outcome that fails outright) green with nothing
+# written. It spends OpenRouter credit, about a cent a run on a Flash model, so
+# it runs weekly and on demand, never per push.
+on:
+  schedule:
+    - cron: '0 18 * * 0'
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'OpenRouter model id'
+        default: 'google/gemini-3.8-flash'
+      runs:
+        description: 'How many runs'
+        default: '3'
+
+concurrency:
+  group: agents-eval
+  cancel-in-progress: false
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: visvine
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visvine
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # Only this throwaway database's secrets are encrypted with it.
+      SECRETS_KEY: ${{ secrets.EVAL_SECRETS_KEY || 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@10.30.2 --activate
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Apply migrations
+        run: pnpm db:migrate
+
+      - name: Eval
+        if: ${{ env.OPENROUTER_API_KEY != '' }}
+        working-directory: apps/web
+        run: pnpm agents:eval --runs "${{ inputs.runs || '3' }}" --model "${{ inputs.model || 'google/gemini-3.8-flash' }}"
