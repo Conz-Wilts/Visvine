@@ -78,6 +78,7 @@ export const ICON_NAMES = [
   'link-2-off',
   'link-2',
   'linkedin',
+  'list-filter',
   'list-ordered',
   'list',
   'loader-circle',

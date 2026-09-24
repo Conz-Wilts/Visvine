@@ -25,6 +25,7 @@ import {
   type FileKind,
   type MenuItem,
 } from '@visvine/ui';
+import FilterBar from '@/features/resources/components/FilterBar';
 import FilterMenu from '@/features/resources/components/FilterMenu';
 import {
   DownloadIcon,
@@ -295,37 +296,47 @@ export default function ResourcesBrowser({
               ...(inChannel ? [] : [{ id: 'trash', label: 'Trash', leading: <Trash2Icon className="h-3.5 w-3.5" /> }]),
             ]}
           />
-          <FilterMenu
-            label="People"
-            value={mine ? 'mine' : 'anyone'}
-            onChange={(id) => setMine(id === 'mine')}
-            options={[
-              { id: 'anyone', label: 'Anyone' },
-              { id: 'mine', label: 'Added by me' },
+          <FilterBar
+            fields={[
+              {
+                id: 'people',
+                label: 'Added by',
+                value: mine ? 'mine' : 'anyone',
+                onChange: (id) => setMine(id === 'mine'),
+                options: [
+                  { id: 'anyone', label: 'Anyone' },
+                  { id: 'mine', label: 'Me' },
+                ],
+              },
+              ...(!inChannel && channels.length > 0
+                ? [{
+                    id: 'channel',
+                    label: 'Channel',
+                    value: channel ?? 'any',
+                    onChange: (id: string) => setChannel(id === 'any' ? null : id),
+                    options: [
+                      { id: 'any', label: 'All channels' },
+                      ...channels.map((c) => ({ id: c.id, label: `#${c.name}` })),
+                    ],
+                  }]
+                : []),
+              {
+                id: 'date',
+                label: 'Added',
+                verb: 'in',
+                value: since,
+                onChange: setSince,
+                options: SINCE.map((s) => ({ id: s.id, label: s.label })),
+              },
+              {
+                id: 'sort',
+                label: 'Sorted by',
+                verb: '',
+                value: sort,
+                onChange: (id) => setSort(id as ListSort),
+                options: SORTS.map((s) => ({ id: s.id, label: s.label })),
+              },
             ]}
-          />
-          {!inChannel && channels.length > 0 && (
-            <FilterMenu
-              label="Channels"
-              value={channel ?? 'any'}
-              onChange={(id) => setChannel(id === 'any' ? null : id)}
-              options={[
-                { id: 'any', label: 'All channels' },
-                ...channels.map((c) => ({ id: c.id, label: `#${c.name}` })),
-              ]}
-            />
-          )}
-          <FilterMenu
-            label="Dates"
-            value={since}
-            onChange={setSince}
-            options={SINCE.map((s) => ({ id: s.id, label: s.label }))}
-          />
-          <FilterMenu
-            label="Sort"
-            value={sort}
-            onChange={(id) => setSort(id as ListSort)}
-            options={SORTS.map((s) => ({ id: s.id, label: s.label }))}
           />
 
           <div className="ml-auto flex items-center gap-2">

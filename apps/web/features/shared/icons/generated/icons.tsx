@@ -761,6 +761,14 @@ export function LinkedinIcon(props: IconProps) {
   );
 }
 
+export function ListFilterIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/>
+    </IconBase>
+  );
+}
+
 export function ListOrderedIcon(props: IconProps) {
   return (
     <IconBase strokeWidth={2} {...props}>
