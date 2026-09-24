@@ -2,40 +2,38 @@
  * The local-dev demo space, in one place.
  *
  * Every seed step (scripts/seed/steps) reads the space's identity from here, so the
- * demo space is named ONCE. The layers used to spell
- * `space:blackbird-ventures` into six files, which is why swapping the
- * demo content meant editing all six.
+ * demo space is named ONCE.
  *
- * The space is **Visvine HQ**: Visvine's own working space, dogfooding the
- * product — the team, the spaces that run on Visvine (customers, design
- * partners, prospects), the investors and partners around them, and the
- * product's own roadmap and decisions.
+ * The space is **Blackbird Ventures**: the Australian and New Zealand venture
+ * firm, seeded from its own public site (blackbird.vc) — the portfolio page and
+ * each company's page, the team page and each person's page, the published fund
+ * table and the programmes it runs — researched company by company in
+ * September 2026 (./portfolio.ts, ./dataset.ts).
  *
- * Note the id: the bare `visvine` id is RESERVED for the platform's global
- * public-record space (lib/spaces/globalSpace.ts), which is a different thing
- * with different access rules. This is a normal tenant that happens to be us,
- * so it is created the way every tenant is (lib/spaces/provision.ts), which
- * derives its id from its name — `visvine-hq` — and the seed asserts the two
- * agree rather than inventing an id no real space could have.
+ * What is public is recorded as published. What a firm keeps to itself — its
+ * dealflow, its committee's minutes, its channels — is not public, so the seed
+ * does not pretend to know it: live deals are CODENAMES (`Project Kea`), and
+ * the chatter in channels is about things Blackbird has already said in
+ * public. No email address is real: people carry `@<org>.example.com`
+ * addresses (RFC 2606), because the fixture is dumped and passed between
+ * machines (`pnpm db:publish` / `pnpm db:restore`).
  *
- * Everyone in this space is INVENTED. The fixture gets dumped and passed
- * between machines (`pnpm db:publish` / `pnpm db:restore`), so it must not
- * carry real people's details or a real organisation's data — the names,
- * emails (`@example.com`, RFC 2606) and domains (`*.example.com`) are all
- * reserved-for-documentation placeholders.
+ * The id is what lib/spaces/provision.ts derives from the name —
+ * `blackbird-ventures` — and the seed asserts the two agree rather than
+ * inventing an id no real space could have.
  */
 
 import { color, palette } from '@visvine/tokens'
 import { ADMIN_ALIAS, ADMIN_ALIAS_ID, ADMIN_ALIAS_NAME } from '../../lib/types/context'
 
-export const SPACE_ID = 'visvine-hq'
-export const SPACE_NAME = 'Visvine HQ'
+export const SPACE_ID = 'blackbird-ventures'
+export const SPACE_NAME = 'Blackbird Ventures'
 export const SPACE_DESCRIPTION =
-  'Visvine building Visvine. The spaces that run on us, the people who run them, ' +
-  'and the product decisions behind it all.'
-export const SPACE_LOCATION = 'Auckland, New Zealand'
-export const SPACE_TAGS = ['Product', 'Community', 'SaaS', 'New Zealand']
-export const SPACE_TIMEZONE = 'Pacific/Auckland'
+  'Backing Australia and New Zealand’s most ambitious founders, right from the very beginning. ' +
+  'The portfolio, the founders behind it, the team, the funds and the programmes.'
+export const SPACE_LOCATION = 'Sydney, Australia'
+export const SPACE_TAGS = ['Venture Capital', 'Startups', 'Australia', 'New Zealand']
+export const SPACE_TIMEZONE = 'Australia/Sydney'
 
 /** Access levels, mirrored from lib/notes/shared/authz.ts (the seed stays dep-free). */
 export const VIEW = 10
@@ -70,6 +68,12 @@ export const MEMBER_USER = 'user_dev_member'
 export const ADMIN_NODE = 'person:dev-admin'
 export const MEMBER_NODE = 'person:dev-member'
 
+/**
+ * The two sign-in accounts. They are not Blackbird people — the real team is
+ * in ./dataset.ts as directory records — but the two seats a developer sits in:
+ * someone on the platform team who administers the space, and a founder in the
+ * community who reads what founders are given.
+ */
 export const ANCHORS: Anchor[] = [
   {
     id: ADMIN_USER,
@@ -78,15 +82,13 @@ export const ANCHORS: Anchor[] = [
     aliases: [ADMIN_ALIAS_NAME, 'Team'],
     personNodeId: ADMIN_NODE,
     profile: {
-      subtitle: 'Head of Community, Visvine',
+      subtitle: 'Platform, Blackbird Ventures',
       bio:
-        'Runs the Visvine HQ space: onboarding new spaces, keeping the directory honest and turning what customers '
-        + 'tell us into the next thing we build.\n\n'
-        + 'Before Visvine, spent six years running founder programmes and investor networks across Aotearoa, which is '
-        + "mostly where the conviction came from that a community's memory should outlive the people who keep it.",
-      location: 'Auckland, New Zealand',
+        'Administers the Blackbird space: the portfolio records, the programmes and the tools the team runs on.\n\n'
+        + 'A development account — sign in as it to see the space as an admin does.',
+      location: 'Sydney, Australia',
       website: 'https://example.com/dev-admin',
-      phone: '+64 21 555 0101',
+      phone: '+61 2 5550 0101',
       pronouns: 'they/them',
       joinedDaysAgo: 540,
     },
@@ -95,18 +97,17 @@ export const ANCHORS: Anchor[] = [
     id: MEMBER_USER,
     name: 'Dev Member',
     email: 'member@local.dev',
-    aliases: ['Champion'],
+    aliases: ['Founder'],
     personNodeId: MEMBER_NODE,
     profile: {
-      subtitle: 'Programme Manager, Harbourside Innovation Hub',
+      subtitle: 'Founder, Blackbird community',
       bio:
-        'Looks after a cohort of early-stage founders and the mentors, investors and partners around them. '
-        + 'Uses Visvine to keep track of who knows whom, what each founder needs next and which intros actually landed.\n\n'
-        + 'Happiest when a warm intro turns into a pilot.',
-      location: 'Wellington, New Zealand',
+        'A founder in the Blackbird community — through Giants first, then the portfolio.\n\n'
+        + 'A development account — sign in as it to see what a founder is given.',
+      location: 'Auckland, New Zealand',
       website: 'https://example.com/dev-member',
       phone: '+64 21 555 0102',
-      pronouns: 'she/her',
+      pronouns: 'they/them',
       joinedDaysAgo: 150,
     },
   },
@@ -124,20 +125,18 @@ export const ANCHORS: Anchor[] = [
 export const NODE_TYPES = [
   { name: 'Person', color: color.type.person.default, shape: 'rectangle' },
   { name: 'Space', color: color.type.space.default, shape: 'square' },
-  // An organisation that runs on Visvine is a RECORD here, not a tenant of
-  // this space: it has a directory card and a context note
-  // (spaces/<slug>/index.md, the org namespace — see lib/notes/entities.ts)
-  // but its own Visvine space, if it has one, is its own tenant. `company`
-  // folds onto `space` in TYPE_SYNONYMS so the entity machinery is unchanged;
-  // declaring the type here is what makes this spelling win in
-  // findNodeTypeConfig and paints it its own colour.
+  // A portfolio company is a RECORD here, not a tenant of this space: it has a
+  // directory card and a context note (spaces/<slug>/index.md, the org
+  // namespace — see lib/notes/entities.ts). `company` folds onto `space` in
+  // TYPE_SYNONYMS so the entity machinery is unchanged; declaring the type here
+  // is what makes this spelling win in findNodeTypeConfig and paints it its
+  // own colour.
   { name: 'Company', color: palette.cyan[600], shape: 'square' },
   { name: 'Event', color: color.type.event.default, shape: 'rectangle' },
   { name: 'Resource', color: color.type.resource.default, shape: 'circle' },
   { name: 'Note', color: palette.violet[500], shape: 'rectangle' },
-  // The segment vocabulary — how we cut the customer base. (Blackbird's space
-  // called the same shape a Sector.)
-  { name: 'Segment', color: palette.orange[500], shape: 'rectangle' },
+  // Blackbird's own cut of the portfolio — the Category on every company page.
+  { name: 'Sector', color: palette.orange[500], shape: 'rectangle' },
   { name: 'Journal', color: palette.pink[500], shape: 'rectangle' },
   { name: 'Meeting', color: palette.teal[500], shape: 'rectangle' },
   // Structural/document built-ins the demo layers create nodes for (channels,
@@ -151,11 +150,12 @@ export const NODE_TYPES = [
   { name: 'Channel', color: color.type.channel.default, shape: 'rectangle' },
   { name: 'Connector', color: color.type.connector.default, shape: 'rectangle' },
   { name: 'Agent', color: color.type.agent.default, shape: 'rectangle' },
-  // Note-only vocabulary: `type: Deal` on a pipeline note, `type: Decision` on
-  // a product decision. Scoped to notes, the way the draft-context surface
-  // would have created them.
+  // Note-only vocabulary: `type: Deal` on a dealflow note, `type: Fund` on a
+  // vintage, `type: Program` on a programme. Scoped to notes, the way the
+  // draft-context surface would have created them.
   { name: 'Deal', color: palette.amber[700], shape: 'rectangle', scope: 'note' },
-  { name: 'Decision', color: palette.violet[600], shape: 'rectangle', scope: 'note' },
+  { name: 'Fund', color: palette.violet[600], shape: 'rectangle', scope: 'note' },
+  { name: 'Program', color: palette.green[600], shape: 'rectangle', scope: 'note' },
 ]
 
 // ---- aliases ----------------------------------------------------------------
@@ -190,11 +190,11 @@ export interface SeedAlias {
  * Spread across the permission model so every shape of grant is represented:
  *
  *   Admin      system, is admin of the space — built in, cannot be changed
- *   Team       edit on the working set — spaces/, deals/, data/, product/
- *   Champion   view on spaces/ and product/ — a customer's own operator
- *   Advisor    view on spaces/ and segments/
- *   Board      view on ONE note — the tightest grant there is
- *   Everyone   view on segments/ (the space-wide grant)
+ *   Team       edit on the working set — spaces/, dealflow/, funds/, team/
+ *   Founder    view on spaces/ and sectors/ — the portfolio, read by its own
+ *   Mentor     view on sectors/ — a Giants or Foundry mentor
+ *   LP         view on ONE note, the published fund table — the tightest grant
+ *   Everyone   view on sectors/ (the space-wide grant)
  */
 export const ALIASES: SeedAlias[] = [
   {
@@ -212,67 +212,58 @@ export const ALIASES: SeedAlias[] = [
     nodeType: 'Person',
     admin: false,
     system: false,
-    grants: [['spaces', EDIT], ['deals', EDIT], ['data', EDIT], ['product', EDIT]],
+    grants: [['spaces', EDIT], ['dealflow', EDIT], ['funds', EDIT], ['team', EDIT]],
   },
   {
-    name: 'Champion',
+    name: 'Founder',
     color: palette.green[600],
     nodeType: 'Person',
     admin: false,
     system: false,
-    grants: [['spaces', VIEW], ['product', VIEW]],
+    grants: [['spaces', VIEW], ['sectors', VIEW]],
   },
   {
-    name: 'Advisor',
+    name: 'Mentor',
     color: palette.sky[500],
     nodeType: 'Person',
     admin: false,
     system: false,
-    grants: [['spaces', VIEW], ['segments', VIEW]],
+    grants: [['sectors', VIEW]],
   },
   {
-    name: 'Board',
+    name: 'LP',
     color: palette.amber[600],
     nodeType: 'Person',
     admin: false,
     system: false,
-    grants: [['data/revenue-roll-up.md', VIEW]],
+    grants: [['funds/performance.md', VIEW]],
   },
-  { name: 'Customer', color: palette.cyan[600], nodeType: 'Company', admin: false, system: false, grants: [] },
-  { name: 'Design Partner', color: palette.teal[600], nodeType: 'Company', admin: false, system: false, grants: [] },
-  { name: 'Prospect', color: palette.amber[500], nodeType: 'Company', admin: false, system: false, grants: [] },
-  { name: 'Investor', color: palette.pink[600], nodeType: 'Company', admin: false, system: false, grants: [] },
-  { name: 'Partner', color: palette.indigo[500], nodeType: 'Company', admin: false, system: false, grants: [] },
+  { name: 'Portfolio', color: palette.cyan[600], nodeType: 'Company', admin: false, system: false, grants: [] },
+  { name: 'Exited', color: palette.indigo[500], nodeType: 'Company', admin: false, system: false, grants: [] },
+  { name: 'Closed', color: palette.amber[500], nodeType: 'Company', admin: false, system: false, grants: [] },
 ]
 
 /** What every member reaches without holding anything — the "Everyone" card. */
-export const SPACE_GRANTS: Array<[string, number]> = [['segments', VIEW]]
+export const SPACE_GRANTS: Array<[string, number]> = [['sectors', VIEW]]
 
-// ---- segments ---------------------------------------------------------------
+// ---- sectors ----------------------------------------------------------------
 
-/** How we cut the customer base. Order is canonical — indexes render in it. */
-export const SEGMENTS = [
-  'Accelerators & Incubators',
-  'Venture Capital',
-  'Universities & Research',
-  'Coworking & Campuses',
-  'Industry Bodies',
-  'Nonprofits & Foundations',
-  'Corporate Innovation',
-  'Economic Development',
-] as const
+/**
+ * The Category every company page on blackbird.vc carries. Order is canonical —
+ * indexes render in it. Blackbird says it invests in founders, not sectors, and
+ * the categories are only ever a way to browse.
+ */
+export const SECTORS = ['Enterprise', 'Consumer', 'Deep Tech', 'Healthcare', 'Hardware', 'Education'] as const
 
-export type Segment = (typeof SEGMENTS)[number]
+export type Sector = (typeof SECTORS)[number]
 
-export const SEGMENT_BLURB: Record<Segment, string> = {
-  'Accelerators & Incubators': 'Cohort programmes: founders, mentors, demo days and the alumni who keep coming back.',
-  'Venture Capital': 'Funds running their portfolio, their founders and their LP reporting in one place.',
-  'Universities & Research': 'Research offices, student enterprise and the spinouts between them.',
-  'Coworking & Campuses': 'Buildings full of members, where the directory is the product.',
-  'Industry Bodies': 'Sector associations and chambers: members, working groups and submissions.',
-  'Nonprofits & Foundations': 'Grantees, volunteers and programmes, tracked without a CRM licence per seat.',
-  'Corporate Innovation': 'Internal venture teams mapping startups, pilots and the people running them.',
-  'Economic Development': 'Regional agencies mapping the ecosystem they are paid to grow.',
+export const SECTOR_BLURB: Record<Sector, string> = {
+  Enterprise: 'Software businesses buy: AI for functional teams, developer tools, security, fintech infrastructure.',
+  Consumer: 'Products people choose for themselves: design, food, money, sport, community.',
+  'Deep Tech': 'Science-led companies: space, quantum, energy, lidar, biological compute.',
+  Healthcare: 'Clinicians, patients and care: AI scribes, radiology, neurotech, mental health.',
+  Hardware: 'Things that are built and shipped: robots, chips, sensors, aircraft.',
+  Education: 'How people learn a craft or a career, from classrooms to cloud engineering.',
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -289,7 +280,7 @@ export function slugify(value: string): string {
     .toLowerCase()
 }
 
-/** An organisation's node id. Its entity note is spaces/<slug>/index.md. */
+/** A company's node id. Its entity note is spaces/<slug>/index.md. */
 export const orgNodeId = (slug: string) => `company:${slug}`
 /** A person's node id. Their entity note is people/<slug>/index.md. */
 export const personNodeId = (slug: string) => `person:${slug}`

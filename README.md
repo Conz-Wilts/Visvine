@@ -120,7 +120,7 @@ pnpm db:logs            # tail Postgres logs
 pnpm db:psql            # open psql in the container
 pnpm db:migrate         # apply pending migrations + hand-written SQL
 pnpm db:migrate:new     # author a migration from a schema.prisma change
-pnpm db:seed            # the whole Visvine HQ demo space, then db:notes:verify (WIPES the DB)
+pnpm db:seed            # the whole Blackbird Ventures space, then db:notes:verify (WIPES the DB)
 pnpm db:nz              # load the NZ startup ecosystem demo content
 pnpm db:fresh           # rebuild from migrations + db:seed (volume preserved)
 pnpm db:reset           # destroy volume + rebuild + db:seed (prompts)
@@ -136,11 +136,14 @@ pnpm — see `apps/mobile/README.md`.
 
 ## Seed
 
-The seeded space is **Visvine HQ** (`visvine-hq`) — Visvine's own
-space, dogfooding the product: the organisations that run on us, the people who
-run them, and the product's own roadmap and decisions. Everyone in it is
-invented, and every address is under a reserved documentation domain
-(`*.example.com`), because the fixture gets dumped and shared between machines.
+The seeded space is **Blackbird Ventures** (`blackbird-ventures`), built from
+Blackbird's public site and researched company by company (September 2026):
+the 138 companies on blackbird.vc/portfolio and their founders, the 47 people
+on blackbird.vc/team, the published fund table, and Giants, Foundry and
+Sunrise. What a firm never publishes is not invented as fact: live deals are
+codenames (`Project Kea`), and channel chatter only discusses public news. No
+email is real — people carry `*.example.com` addresses, because the fixture
+gets dumped and shared between machines.
 
 `pnpm db:seed` wipes the local database and builds the whole space in one pass
 (about 20 seconds), then runs `db:notes:verify`, which fails the seed on a
@@ -157,14 +160,16 @@ projections, with no backfill or rebuild pass afterwards.
 | where | what |
 |---|---|
 | `apps/web/scripts/seed/space.ts` | the space's identity: id, node types, aliases and their grants, the anchor users |
-| `apps/web/scripts/seed/subspaces.ts` | the four rooms — Engineering, Marketing, Finance, Compensation — their dials, their people and their own context |
-| `apps/web/scripts/seed/dataset.ts` | the records: 65 organisations, their people, the team, events, channels, Drive files |
-| `apps/web/scripts/seed/notes.ts` | the shared context (organisations, people, segments, team, product, deals, data) and the admin's personal context |
+| `apps/web/scripts/seed/subspaces.ts` | the four rooms — Investments, Programs, Fund Operations, Investment Committee — their dials, their people and their own context |
+| `apps/web/scripts/seed/portfolio.ts` | the 138 portfolio companies, their founders and Blackbird's investment notes on them |
+| `apps/web/scripts/seed/team.ts` | the 47 people on the Blackbird team, in the words of their own pages |
+| `apps/web/scripts/seed/dataset.ts` | codenamed dealflow, events, channels, Drive files and the published fund table |
+| `apps/web/scripts/seed/notes.ts` | the shared context (portfolio, people, sectors, team, funds, dealflow, values) and the admin's personal context |
 | `apps/web/scripts/seed/connectors.ts` | the demo connectors (sandbox, appdb, fund-metrics, OAuth CRM) and their secrets |
 | `apps/web/scripts/seed/run.ts` | the entry point; `steps/` holds the writers: base → directory → notes → events/channels/Drive → rooms → connectors → model + agents → global records → lived-in history (runs, queues, OAuth rows, publications, audit) |
 
-Add an organisation to `ORGS` in `dataset.ts` and the directory, its notes, the
-indexes, the segment pages and the roll-ups all follow. One connector set can be
+Add a company to `PORTFOLIO` in `portfolio.ts` and the directory, its notes, the
+indexes, the sector pages and the roll-ups all follow. One connector set can be
 re-seeded on its own with `pnpm db:connectors:demo|funds|oauth [spaceId] [--remove]`.
 
 Other demo content (the NZ startup ecosystem) loads separately via `pnpm db:nz`.
@@ -190,11 +195,11 @@ column — what someone can do comes entirely from the aliases they hold:
 
 | email                | aliases          | notes |
 |----------------------|------------------|-------|
-| `admin@local.dev`    | Admin, Partner   | manages the space; also super admin via env |
-| `member@local.dev`   | Founder          | view on companies/ |
+| `admin@local.dev`    | Admin, Team      | manages the space; also super admin via env |
+| `member@local.dev`   | Founder          | view on spaces/ (the portfolio) and sectors/ |
 
-The alias vocabulary is wider than the two anchors: `Investor`, `Employee` and
-`LP` are seeded with their grants but held by nobody. Hand one out from
+The alias vocabulary is wider than the two anchors: `Mentor` and `LP` are
+seeded with their grants but held by nobody. Hand one out from
 Console → Aliases to exercise a narrower reach — `LP` carries view on a single
 note, the tightest grant the model can express.
 

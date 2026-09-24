@@ -1,12 +1,14 @@
 /**
  * The demo connectors, as content: every note and secret the three connector
- * fixtures put in a space. scripts/seed/run.ts writes them into Visvine HQ, and
+ * fixtures put in a space. scripts/seed/run.ts writes them into Blackbird Ventures, and
  * scripts/add-connector-demos.ts writes (or removes) one set on any local space.
  *
  *   demo   connectors/sandbox.md (http → /api/dev/connector-sandbox) and
  *          connectors/appdb.md (postgres → the local dev database, read-only)
  *   funds  connectors/fund-metrics.md (http → /api/dev/fund-metrics) and the
- *          funds/ notes that hang off it
+ *          fund-admin/ notes that hang off it — a sandbox fund administrator
+ *          with invented funds, kept out of `funds/` so it is never read as a
+ *          real space's fund table
  *   oauth  connectors/crm.md (OAuth2 client credentials → /api/dev/oauth-crm)
  *
  * The secret VALUES must match what the dev routes expect; each route reads the
@@ -287,7 +289,7 @@ Fund ids are \`fund_bb3\`, \`fund_bb4\`, \`fund_bbg1\`.
 const FUND_PORTFOLIO_NOTE = `---
 type: note
 title: Fund portfolio
-description: The three active funds, what drives their numbers, and where the numbers come from
+description: The sandbox fund administrator's three invented funds, and where their numbers come from
 ---
 
 Three active vehicles in the sample fund-admin API this connector fixture points at. Live figures are never typed into this note — pull them
@@ -326,19 +328,20 @@ Run the connector rather than trusting anything written here:
 `;
 
 const FUNDS_INDEX = `---
-title: Funds
-description: The funds, their marks and where those numbers come from.
-tags: [funds]
+title: Fund admin sandbox
+description: A sample fund administrator for exercising the fund-metrics connector.
+tags: [connectors, sandbox]
 ---
 
-What the firm manages, read through the fund-metrics connector.
+Invented funds served by the dev fund-metrics API, read through the
+fund-metrics connector.
 `;
 
   return {
     notes: [
       { path: 'connectors/fund-metrics.md', content: FUND_METRICS_NOTE },
-      { path: 'funds/index.md', content: FUNDS_INDEX },
-      { path: 'funds/fund-portfolio.md', content: FUND_PORTFOLIO_NOTE },
+      { path: 'fund-admin/index.md', content: FUNDS_INDEX },
+      { path: 'fund-admin/fund-portfolio.md', content: FUND_PORTFOLIO_NOTE },
     ],
     secrets: [{ name: 'FUND_METRICS_KEY', value: FUND_KEY }],
   }

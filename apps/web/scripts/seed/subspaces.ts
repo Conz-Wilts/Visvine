@@ -1,33 +1,37 @@
 /**
- * Visvine HQ's rooms — the teams inside the house, plus the one committee that
- * is not a team (docs/sub-spaces.md).
+ * Blackbird's rooms — the teams inside the house, plus the committee that is
+ * not a team (docs/sub-spaces.md).
  *
- * A room is named after the team that works in it, so the switcher, the context
- * tree and the console read the way an org chart does: Engineering, Marketing,
- * Finance, then Compensation. Between them every dial is on screen from the
- * first seed:
+ * A room is named after the work done in it, so the switcher, the context tree
+ * and the console read the way the firm is organised: Investments, Programs,
+ * Fund Operations, then the Investment Committee. Between them every dial is on
+ * screen from the first seed:
  *
- *   • Engineering is a Department — the house walks in, its context, events and
- *     people all flow up, and the house's admins manage it.
- *   • Marketing is the room the WORLD can find: it runs the public programme,
- *     so it is listed, strangers ask at the door, and the agency and press
- *     contacts it keeps flow up into the house's directory as read-only rows.
- *   • Finance is a Council: the house's members see the door and ask through
- *     it, its events flow up and its numbers do not.
- *   • Compensation is a Committee: secret, named nowhere outside its own
- *     members, flowing nothing.
+ *   • Investments is a Department — the house walks in, its context, events
+ *     and people all flow up, and the house's admins manage it.
+ *   • Programs is the room the WORLD can find: Giants, Foundry and Sunrise are
+ *     public, so it is listed, strangers ask at the door, and its events
+ *     (Sunrise Aotearoa among them) roll up into the house's calendar.
+ *   • Fund Operations is a Council: the house's members see the door and ask
+ *     through it, its events flow up and its notes do not.
+ *   • The Investment Committee is a Committee: secret, named nowhere outside
+ *     its own members, flowing nothing.
+ *
+ * A room's people are its own records. The programme leads recorded in
+ * Programs are the same people as the team records in the house, and the
+ * seed's identity pass joins each pair into one identity
+ * (lib/identity/family.ts) — so their node ids here take the `-2` suffix the
+ * app would give them, node ids being global.
  *
  * All four are provisioned the way the New sub-space dialog does it, so `id` is
  * what provisionSpace derives from the name (the seed asserts it). Dev Admin
- * administers all four (they created them); Dev Member is in Engineering and
- * Marketing, and waiting at Finance's door — so signing in as them shows
+ * administers all four (they created them); Dev Member is in Investments and
+ * Programs, and waiting at Fund Operations' door — so signing in as them shows
  * exactly what a parent's member sees: rooms they are in, a room they have
  * asked to join, and no sign at all that the fourth one exists.
  *
- * Every room gets its own context, not a token note: a curated root index, the
- * folders a team of that kind actually keeps, and notes that link to each
- * other. Links are absolute (`/path.md`) and point only at notes written here —
- * an index body's links are checked by `db:notes:verify`, and a person note's
+ * Links are absolute (`/path.md`) and point only at notes written here — an
+ * index body's links are checked by `db:notes:verify`, and a person note's
  * links become directory edges the moment the note lands.
  */
 
@@ -44,13 +48,14 @@ export interface SeedSubspace {
   flowEvents?: boolean
   parentAdmins?: boolean
   /**
-   * People who belong to the ROOM and not to the house — directory records of
-   * its own, reached in the room and, for the same identity, from the
-   * person's page in the house. Written as nodes first, then as the notes
-   * that name them.
+   * People who belong to the ROOM — directory records of its own, reached in
+   * the room and, for the same identity, from the person's page in the house.
+   * Written as nodes first, then as the notes that name them.
    */
   people?: ReadonlyArray<{
+    /** The note's folder: people/<slug>/index.md. */
     slug: string
+    nodeId: string
     name: string
     role: string
     org: string
@@ -70,582 +75,424 @@ function note(frontmatter: string, body: string): string {
   return `---\n${frontmatter.trim()}\n---\n\n${body.trim()}\n`
 }
 
-// ---- Engineering -------------------------------------------------------------
+// ---- Investments -------------------------------------------------------------
 
-const ENGINEERING_NOTES: SeedSubspace['notes'] = [
+const INVESTMENTS_NOTES: SeedSubspace['notes'] = [
   {
     path: 'index.md',
     content: note(
-      `title: "Engineering"
-description: "How the platform is built, run and decided: runbooks, the services behind them, and the calls we do not want to make twice."
-tags: ["engineering"]`,
-      `The team that builds Visvine. Everything written here is meant to be read at
-3am by whoever is on call, not admired in a planning session.
+      `title: "Investments"
+description: "How the investment team finds, decides and backs: rivers of inquiry, the process, and the memo."
+tags: ["investments"]`,
+      `The investment team's room. Blackbird invests in founders, not sectors or
+stages, and most of what is written here is about how to recognise one early.
 
-Three things live in this room: the [runbooks](/runbooks/index.md) for anything
-that has to be done under pressure, one note per [service](/services/index.md)
-we run, and the [decisions](/decisions/index.md) we would otherwise re-argue
-every quarter.
+[Rivers of inquiry](/rivers/index.md) are the questions the team is following
+right now. [Process](/process/index.md) is how a first meeting becomes a
+decision, and what a memo has to say.
 
-Context flows up to Visvine HQ read-only, so anyone in the house can read a
-runbook, and only this room can change one.`,
+Context flows up to the house read-only, so anyone at Blackbird can read how
+the team thinks, and only this room can change it.`,
     ),
   },
   {
-    path: 'runbooks/index.md',
+    path: 'rivers/index.md',
     content: note(
-      `title: "Runbooks"
-description: "One page per thing that has to be done under pressure. Steps, not theory."
-tags: ["engineering", "runbook"]`,
-      `A runbook is a page you can follow while something is on fire. Numbered steps,
-the command spelled out, and the one thing that will go wrong written down.
+      `title: "Rivers of inquiry"
+description: "The questions the team is following, each one a place to look for founders rather than a thesis to fill."
+tags: ["investments", "rivers"]`,
+      `A river of inquiry is a question worth following for a few years: what has
+changed, who is early, and which founders are already standing in the water.
+It is a way of looking, never a box a company has to fit.
 
-Start with [deploys](/runbooks/deploys.md). When something is already broken,
-[incidents](/runbooks/incidents.md) says who does what, and
-[on-call](/runbooks/on-call.md) says who that currently is.`,
+Current: [SaaS to SaiS](/rivers/saas-to-sais.md) and
+[frontier science](/rivers/frontier-science.md).`,
     ),
   },
   {
-    path: 'runbooks/deploys.md',
-    content: note(
-      `type: Note
-title: "Deploying"
-description: "main is the deployed branch. What a push actually does, and how to get back."
-tags: ["engineering", "runbook", "deploy"]`,
-      `\`main\` is the deployed branch: a merge builds the image, runs the migrations
-and rolls the revision. Nothing else deploys.
-
-1. Check the migration. A rename the generator guessed as drop-and-create is a
-   wipe — read the SQL before it ships.
-2. Push. The build replays migrations; it never diffs a schema.
-3. Watch the new revision take traffic. Errors surface as grouped events, so a
-   spike is one line, not a log trawl.
-4. If it is wrong, roll the revision back first and fix forward second. A
-   migration does not roll back with it — that is the whole reason step 1 is
-   step 1.
-
-Related: [incidents](/runbooks/incidents.md), and the services this touches in
-[the web app](/services/web.md).`,
-    ),
-  },
-  {
-    path: 'runbooks/incidents.md',
+    path: 'rivers/saas-to-sais.md',
     content: note(
       `type: Note
-title: "Incidents"
-description: "Who does what while it is broken, and what gets written down afterwards."
-tags: ["engineering", "runbook", "incident"]`,
-      `One person runs the incident and does not also debug it. Everyone else reports
-to them, in one place, in writing.
+title: "SaaS to SaiS"
+description: "Software that does the work, not software that helps with it — and why the best vertical companies saw it coming."
+tags: ["investments", "rivers", "ai"]`,
+      `Tom Humphrey's river, written up on the blog as "From SaaS to SaiS" (2024)
+and "Goodbye, SaaS. Welcome, SaiS." (2026).
 
-- **Declare** it in the house's \`#support\` channel with one sentence: what is
-  broken, for whom, since when.
-- **Mitigate** before diagnosing. A rollback that costs a feature beats an hour
-  of correct reasoning while customers are down — see
-  [deploys](/runbooks/deploys.md).
-- **Write it up** the same week, as a decision or a runbook change. An incident
-  that changes nothing will happen again.
+The shift: vertical software used to sell a seat to the person doing the work.
+Now it can sell the work. The companies that win knew the job before they knew
+the model — founders who ran a practice, a clinic or a back office.
 
-The rotation is in [on-call](/runbooks/on-call.md).`,
+What we look for: a founder who can say which hour of a professional's week
+disappears, and a customer who pays for the outcome rather than the licence.`,
     ),
   },
   {
-    path: 'runbooks/on-call.md',
+    path: 'rivers/frontier-science.md',
     content: note(
       `type: Note
-title: "On-call"
-description: "The rotation, what it covers, and what it is fair to be woken for."
-tags: ["engineering", "runbook", "on-call"]`,
-      `A week at a time, handed over on Monday morning with a short note on anything
-still warm.
+title: "Frontier science"
+description: "Researchers who choose ambition — the river Foundry was built to fish."
+tags: ["investments", "rivers", "deep-tech"]`,
+      `The bet behind Foundry: the next wave of world-changing companies will come
+from researchers who choose ambition and have the courage to take the first
+leap.
 
-On-call covers the two things a customer notices: the app not answering, and
-agent runs not firing. Everything else waits for the working day, including a
-failing nightly clean — it is designed to skip a night, not to replay one.
+What we look for: a secret about the world the team learned in the lab, a
+path to a first customer that does not wait for the science to be finished,
+and people who are not fazed by long timelines. We do not care about IP.
 
-Being woken for an alert that needed no action is a bug in the alert. Turn it
-into a warning and say so in the handover.`,
+Foundry teams have gone on to raise from venture investors; the pipeline
+between the programme and a seed round is what [process](/process/index.md) is
+for.`,
     ),
   },
   {
-    path: 'decisions/index.md',
+    path: 'process/index.md',
     content: note(
-      `title: "Decisions"
-description: "The calls that shaped the platform, with the reasoning that made them, so they are not re-argued every quarter."
-tags: ["engineering", "decision"]`,
-      `One note per decision: what we chose, what we gave up, and what would have to
-change for it to be wrong.
+      `title: "Process"
+description: "From first meeting to a cheque: who decides, and what they read first."
+tags: ["investments", "process"]`,
+      `High-conviction decisions after careful research and debate — and a trust in
+instinct built up over years of pattern matching.
 
-- [Context flows up, never down](/decisions/0012-context-flows-up.md)
-- [The connector isolate is never asyncified](/decisions/0013-quickjs-not-asyncify.md)`,
+[How we decide](/process/how-we-decide.md) is the path a company takes.
+[The memo](/process/memo.md) is what the committee reads.`,
     ),
   },
   {
-    path: 'decisions/0012-context-flows-up.md',
-    content: note(
-      `type: Note
-title: "0012 — Context flows up, never down"
-description: "A room's notes can be read by the house; the house's notes are not pushed into rooms."
-tags: ["engineering", "decision", "sub-spaces"]`,
-      `**Decided.** A sub-space's context flows UP into its parent as a read-only
-folder. The house's own context is never copied down; a house note reaches a
-room only when it is explicitly shared, and then it is read-only there too.
-
-**Why.** Two customers asked for the opposite thing in the same week. One wanted
-the parent to see everything its programmes wrote; the other wanted the parent's
-handbook pushed into every room. Flowing up satisfies the first exactly, and the
-second turns out to be a sharing flag on one note rather than a copy of a whole
-context.
-
-**Given up.** A room cannot inherit the house's folder structure. It starts
-empty, which feels bare for the first week.
-
-**Wrong if.** Rooms start duplicating the same handbook note by hand. That is the
-signal that share-down should cover more than connectors, agents and tools.`,
-    ),
-  },
-  {
-    path: 'decisions/0013-quickjs-not-asyncify.md',
+    path: 'process/how-we-decide.md',
     content: note(
       `type: Note
-title: "0013 — The connector isolate is never asyncified"
-description: "Host capabilities are sync functions returning a promise the host settles. The asyncify transform corrupts after a call or two."
-tags: ["engineering", "decision", "connectors"]`,
-      `**Decided.** Connector code runs in one QuickJS-WASM isolate whose host
-capabilities — fetch, sql, mcp — are synchronous functions that return a promise
-the host settles later. We do not use the asyncify build.
+title: "How we decide"
+description: "First meeting, partner meeting, diligence, committee. Nothing skips a partner meeting."
+tags: ["investments", "process"]`,
+      `1. **First meeting.** Anyone on the investment team. The only question: do we
+   want a second one?
+2. **Partner meeting.** A partner and the founders, with the deal owner. The
+   founders are the subject; the deck is optional.
+3. **Diligence.** Only what could change the answer. References first.
+4. **Committee.** The memo goes out the working day before. The least
+   convinced person writes the case against.
 
-**Why.** Asyncify corrupts state after the first or second suspended call. An
-OAuth exchange is two calls before it has done anything useful, so the failure
-mode is "works in the demo, breaks in production".
-
-**Given up.** Every new capability has to be written in the settle-a-promise
-shape by hand. Non-HTTP protocols need a new host function rather than a
-library.
-
-**Wrong if.** The upstream transform ships a fix and a 25-call regression test
-passes against it.`,
+It is never too early, and no round is too small, to talk to Blackbird — so
+most companies are met long before there is a round to decide on. A pass is
+written back with the reasons, and the door stays open. The memo's shape is in
+[the memo](/process/memo.md).`,
     ),
   },
   {
-    path: 'services/index.md',
-    content: note(
-      `title: "Services"
-description: "What we run, what each part owns, and where it fails first."
-tags: ["engineering", "service"]`,
-      `One note per thing that can be paged about: [the web app](/services/web.md)
-and [the agent runner](/services/agent-runner.md). Each says what it owns, what
-it depends on, and the failure it has actually had.`,
-    ),
-  },
-  {
-    path: 'services/web.md',
+    path: 'process/memo.md',
     content: note(
       `type: Note
-title: "Web app"
-description: "The Next.js app and its API. Scales to zero, runs as N processes — both of which constrain what code may assume."
-tags: ["engineering", "service"]`,
-      `Everything a browser, the mobile clients and the MCP server touch.
+title: "The memo"
+description: "Founders first, then why now, then what we would have to believe."
+tags: ["investments", "process", "memo"]`,
+      `The template lives in the Drive. The order is deliberate: the founders come
+first because they are the reason we invest, and "why now" comes before the
+market because a market without a reason it is changing is just a size.
 
-Two properties decide most of its design. It **scales to zero**, so no in-process
-timer ever fires — background work is a scheduled job hitting an internal route.
-And it runs as **N processes**, so no counter, cache or rate limit may live in a
-Map; those are rows.
-
-Fails first at: a long-held request. Anything that streams, polls or awaits
-carries its own deadline well short of the platform timeout, because instance
-time is billed until the client hangs up.`,
-    ),
-  },
-  {
-    path: 'services/agent-runner.md',
-    content: note(
-      `type: Note
-title: "Agent runner"
-description: "The minute tick that claims due work, dispatches runs, and is the one thing on-call is woken for at night."
-tags: ["engineering", "service", "agents"]`,
-      `A tick claims due rows with a conditional update that advances the next run
-itself, so ten instances racing produce one run and a night the deployment was
-down is skipped rather than replayed.
-
-A run is identity-per-run: the brief's author, then once per subscriber, each
-under their own principal — which is why a connector a person has not signed in
-to fails for them and nobody else.
-
-Fails first at: a model provider key. A space with no key has agents that parse,
-schedule and refuse at dispatch; the readiness check exists so that is found at
-5pm rather than 3am. See [on-call](/runbooks/on-call.md).`,
+Every memo ends with **why we might be wrong**, written by whoever argued
+hardest against it in the [process](/process/how-we-decide.md).`,
     ),
   },
 ]
 
-// ---- Marketing ---------------------------------------------------------------
+// ---- Programs ----------------------------------------------------------------
 
-const MARKETING_NOTES: SeedSubspace['notes'] = [
+const PROGRAMS_NOTES: SeedSubspace['notes'] = [
   {
     path: 'index.md',
     content: note(
-      `title: "Marketing"
-description: "Campaigns, the brand they are said in, and the outside people who help say it."
-tags: ["marketing"]`,
-      `The room where anything the public sees is planned before it is public.
+      `title: "Programs"
+description: "Giants, Foundry, Sunrise and the Foundation — how Blackbird raises the ambition of the whole ecosystem."
+tags: ["programs"]`,
+      `The programs Blackbird runs for everyone, not only the portfolio. Each is
+free, and none takes equity.
 
-[Campaigns](/campaigns/index.md) is the work in flight. [Brand](/brand/index.md)
-is how it is allowed to sound. [People](/people/index.md) is the agency and press
-contacts we work with — they are this room's records, and the house's directory
-shows them read-only.
+[Giants](/giants/index.md) for founders at the idea stage,
+[Foundry](/foundry/index.md) for researchers, [Sunrise](/sunrise/index.md) for
+the whole community, and [the Foundation](/foundation.md) for young creatives.
+[People](/people/index.md) are the leads who run them.
 
-This is the one room strangers can find: the programme it runs is public, so the
-room is listed and anyone can ask at the door.`,
+This is the room anyone can find: the programs are public, so the room is
+listed and anyone can ask at the door.`,
     ),
   },
   {
-    path: 'campaigns/index.md',
+    path: 'giants/index.md',
     content: note(
-      `title: "Campaigns"
-description: "One note per campaign: the claim, the audience, the date, and what it was worth afterwards."
-tags: ["marketing", "campaign"]`,
-      `A campaign note is written before the work starts and finished after it lands.
-No note, no spend.
+      `type: Program
+title: "Giants"
+description: "Free mentoring for early-stage founders: 1:1 sessions, weekly in-person nights, no equity."
+tags: ["programs", "giants"]`,
+      `Blackbird's flagship mentoring program: 6,311 mentoring sessions with 420
+mentors, and 1,967 founders since 2021.
 
-In flight: [the Q4 launch](/campaigns/2026-q4-launch.md) and
-[demo day](/campaigns/demo-day.md).`,
+Founders book 30-minute 1:1 sessions with portfolio founders, operators, the
+investment team and ecosystem experts, and meet in person every Tuesday, 5pm
+to 8pm. The 2026 cohorts ran in Sydney (30 March – 1 May) and Melbourne (4 –
+29 May).
+
+**Who it is for.** Anyone working on a startup idea for less than two years,
+with at least one founder connected to Australia or New Zealand. Not for
+agencies, services businesses or lifestyle businesses.
+
+Run by [Josephine Tay](/people/josephine-tay/index.md).`,
     ),
   },
   {
-    path: 'campaigns/2026-q4-launch.md',
+    path: 'foundry/index.md',
     content: note(
-      `type: Note
-title: "Q4 launch — rooms for teams"
-description: "Launching sub-spaces to the people who already asked for them, not to a general audience."
-tags: ["marketing", "campaign"]`,
-      `**Claim.** A space can hold rooms: one per team, each with its own members and
-its own notes, and what the house should see flows up by itself.
+      `type: Program
+title: "Foundry"
+description: "Eight weeks for researchers testing a science-led startup idea. A$1k per team, no equity, A$5k to the winning pitch."
+tags: ["programs", "foundry"]`,
+      `Blackbird's launchpad for ambitious researchers. Ten teams per cohort, eight
+weeks, at least four hours a week, hybrid across Australia.
 
-**Audience.** The spaces already running more than one programme out of one
-context. They asked for this; they do not need convincing, they need to know it
-shipped.
+- **Funding:** A$1k non-dilutive per team; a A$5k prize for the winning pitch.
+- **Eligibility:** someone on the team enrolled or employed at a university,
+  someone with a strong link to Australia or New Zealand.
+- **Alumni** have raised more than $72M — Iceberg Quantum among them.
 
-**Shape.** A written changelog post, one walkthrough at
-[demo day](/campaigns/demo-day.md), and a note to each design partner from the
-person who already talks to them. No paid anything.
-
-**Worth it if.** Half the spaces that asked have a room a fortnight later. If
-they read it and do nothing, the feature is not the problem — the first five
-minutes of it are.
-
-Said in the voice described in [brand voice](/brand/voice.md).`,
+Cohort 7 runs September to November 2026, after applications closed in
+August. Run by [Saron Berhane](/people/saron-berhane/index.md).`,
     ),
   },
   {
-    path: 'campaigns/demo-day.md',
+    path: 'sunrise/index.md',
     content: note(
-      `type: Note
-title: "Demo day"
-description: "Every partner shows the one thing they changed in their own space this quarter."
-tags: ["marketing", "campaign", "event"]`,
-      `Quarterly, public, and deliberately not a product pitch: partners demo their own
-space, and we say nothing for the first hour.
+      `type: Program
+title: "Sunrise"
+description: "Blackbird's love letter to founders — a festival for the Australian and New Zealand startup community."
+tags: ["programs", "sunrise"]`,
+      `Not a business conference and not exactly a tech event: a cultural
+celebration, first held in 2015.
 
-Run sheet lives with the event. Press is invited, not briefed — the
-[editor we work with](/people/joss-linden/index.md) comes to the same session
-everyone else does, which has never once cost us a fair write-up.
+**Sunrise Aotearoa 2026** is on Thursday 29 October at the ASB Waterfront
+Theatre, Auckland — registration from 8am, the program from 9am to 8pm, then
+the Sunset afterparty. Keynotes on the Visions Stage, hands-on workshops and
+1:1 matchmaking through the festival app.
 
-The run-of-show slides are built with [the studio](/people/tui-ranapia/index.md),
-against [the naming rules](/brand/naming.md).`,
+Produced by [Katie Tholo](/people/katie-tholo/index.md).`,
     ),
   },
   {
-    path: 'brand/index.md',
+    path: 'foundation.md',
     content: note(
-      `title: "Brand"
-description: "How Visvine sounds and what it calls things. Two rules, both enforceable."
-tags: ["marketing", "brand"]`,
-      `Everything here is meant to settle an argument in a draft, not to inspire
-anyone: [voice](/brand/voice.md) and [naming](/brand/naming.md).`,
-    ),
-  },
-  {
-    path: 'brand/voice.md',
-    content: note(
-      `type: Note
-title: "Voice"
-description: "Plain sentences, concrete nouns, no adjectives about growth."
-tags: ["marketing", "brand"]`,
-      `Write the way the product's own notes are written.
-
-- Say what a thing does before saying why it matters.
-- Numbers or nothing. "Faster" is not a claim; "one read instead of four" is.
-- No adjectives about growth, no "excited to announce", no exclamation marks in
-  a headline.
-- If a sentence would embarrass an engineer who read the code, cut it.
-
-The test: could the person who built it post this unchanged?`,
-    ),
-  },
-  {
-    path: 'brand/naming.md',
-    content: note(
-      `type: Note
-title: "Naming"
-description: "The product's words, used exactly as the product uses them."
-tags: ["marketing", "brand"]`,
-      `A feature is called what it is called in the app. Synonyms in marketing copy
-cost support tickets, every time.
-
-- The notes surface is **Context**. Never "docs", never "wiki".
-- A tenant is a **space**; a space inside a space is a **sub-space**, and in
-  conversation, a **room**.
-- A **connector** is the note that reaches a service; the service is not "an
-  integration".
-- An **agent** is one brief in one folder. It is not a "bot".
-
-New words get agreed here before they appear anywhere public.`,
+      `type: Program
+title: "Blackbird Foundation"
+description: "Grant making and storytelling to unleash creativity in young people."
+tags: ["programs", "foundation"]`,
+      `The Foundation's two grant programs are Protostars and Believers. It is led
+by Joel Connolly, with Theia Gabatan leading grant programs and impact.`,
     ),
   },
   {
     path: 'people/index.md',
     content: note(
       `title: "People"
-description: "The outside people this room works with: the studio and the press. Read-only in the house's directory."
-tags: ["marketing", "people"]`,
-      `Records this room keeps, because marketing is the team that actually talks to
-them: [Tui Ranapia](/people/tui-ranapia/index.md) at the studio and
-[Joss Linden](/people/joss-linden/index.md) at the trade weekly.
-
-They flow up into Visvine HQ's directory as read-only cards, so nobody in the
-house has to ask who our agency is.`,
+description: "The leads who run the programs. Records of this room, joined to the same people in the house."
+tags: ["programs", "people"]`,
+      `[Josephine Tay](/people/josephine-tay/index.md) runs Giants,
+[Saron Berhane](/people/saron-berhane/index.md) runs Foundry,
+[Katie Tholo](/people/katie-tholo/index.md) produces Sunrise and
+[Sofia Echesortu](/people/sofia-echesortu/index.md) leads the portfolio
+program.`,
     ),
   },
   {
-    path: 'people/tui-ranapia/index.md',
+    path: 'people/josephine-tay/index.md',
     content: note(
       `type: Person
-title: "Tui Ranapia"
-description: "Brand Partner, Kāhu Studio"
-node: person:tui-ranapia
-tags: ["person", "marketing", "agency"]`,
-      `Runs everything visual we ship: the launch pages, the deck skeletons and the
-one-pager partners leave [demo day](/campaigns/demo-day.md) holding.
-
-Keeps us honest about [naming](/brand/naming.md) — the first person to point out
-that we called the same feature three things in one launch.`,
+title: "Josephine Tay"
+description: "Giants Program Manager, Blackbird"
+node: person:josephine-tay-2
+tags: ["person", "programs", "giants"]`,
+      `Runs [Giants](/giants/index.md): the mentoring, the weekly content and the
+in-person nights.`,
     ),
   },
   {
-    path: 'people/joss-linden/index.md',
+    path: 'people/saron-berhane/index.md',
     content: note(
       `type: Person
-title: "Joss Linden"
-description: "Editor, Southern Grid Weekly"
-node: person:joss-linden
-tags: ["person", "marketing", "press"]`,
-      `Covers the regional innovation beat and has been to three
-[demo days](/campaigns/demo-day.md).
-
-Wants the number, the customer's own words and a straight answer about what does
-not work yet. Briefing them in the [voice](/brand/voice.md) we write in has
-always gone better than a press release.`,
+title: "Saron Berhane"
+description: "Foundry Lead, Blackbird"
+node: person:saron-berhane-2
+tags: ["person", "programs", "foundry"]`,
+      `Leads [Foundry](/foundry/index.md), reviews applications weekly and gives
+every team feedback.`,
+    ),
+  },
+  {
+    path: 'people/katie-tholo/index.md',
+    content: note(
+      `type: Person
+title: "Katie Tholo"
+description: "Partnerships & Program Producer, Blackbird"
+node: person:katie-tholo-2
+tags: ["person", "programs", "sunrise"]`,
+      `Produces [Sunrise](/sunrise/index.md) and looks after its partners.`,
+    ),
+  },
+  {
+    path: 'people/sofia-echesortu/index.md',
+    content: note(
+      `type: Person
+title: "Sofia Echesortu"
+description: "Portfolio Program Lead, Blackbird"
+node: person:sofia-echesortu-2
+tags: ["person", "programs"]`,
+      `Creates the experiences and moments that hold the portfolio community
+together, alongside [Katie Tholo](/people/katie-tholo/index.md) on
+[Sunrise](/sunrise/index.md).`,
     ),
   },
 ]
 
-// ---- Finance -----------------------------------------------------------------
+// ---- Fund Operations ---------------------------------------------------------
 
-const FINANCE_NOTES: SeedSubspace['notes'] = [
+const FUND_OPERATIONS_NOTES: SeedSubspace['notes'] = [
   {
     path: 'index.md',
     content: note(
-      `title: "Finance"
-description: "The board pack, the plan behind it, and the policies that keep the two agreeing."
-tags: ["finance"]`,
-      `The numbers and what they are being used to argue.
+      `title: "Fund Operations"
+description: "LP reporting, capital calls, valuation and compliance — the work that lets the investment team invest."
+tags: ["fund-operations"]`,
+      `Finance, legal, compliance, investor relations and fundraising, under the
+COO.
 
-[Board](/board/index.md) is what leaves the building.
-[Planning](/planning/index.md) is what it was built from, and
-[policies](/policies/index.md) is the small set of rules that keep everyone
-else out of a spreadsheet.
+[Reporting](/reporting/index.md) is what goes to investors and when.
+[Valuation](/valuation.md) is how the marks are set.
 
-Nothing here flows up: the house's members can see this room's door and ask to
-come in, and until they do they read none of it. Its events do flow up, so a
-month-end close still shows on the company calendar.`,
+Nothing here flows up: the house's members can see this room's door and ask
+to come in, and until they do they read none of it. Its events do flow up, so
+the LP annual meeting still shows on the firm's calendar.`,
     ),
   },
   {
-    path: 'board/index.md',
+    path: 'reporting/index.md',
     content: note(
-      `title: "Board"
-description: "Packs, in the order they were sent. What the board asked for is the table of contents."
-tags: ["finance", "board"]`,
-      `One note per pack, written the week before, not the night before. Current:
-[Q3 2026](/board/2026-q3-pack.md).`,
+      `title: "Reporting"
+description: "What investors receive, on what cadence, from which numbers."
+tags: ["fund-operations", "reporting"]`,
+      `One source of numbers, several audiences. [The cadence](/reporting/cadence.md)
+says who gets what, and when.`,
     ),
   },
   {
-    path: 'board/2026-q3-pack.md',
-    content: note(
-      `type: Note
-title: "Q3 2026 board pack"
-description: "Retention by segment, the hiring plan against runway, and a straight answer on enterprise pipeline."
-tags: ["finance", "board"]`,
-      `Three things the board asked for, in their words:
-
-1. **Net revenue retention by segment.** Accelerators expand, universities
-   renew flat, and one coworking account is the whole of the churn line.
-2. **The hiring plan against runway.** Two engineering roles and nothing else
-   until the plan in [FY27](/planning/fy27-budget.md) is signed;
-   [runway](/planning/runway.md) says what that costs in months.
-3. **Enterprise pipeline, honestly.** Four conversations, one of them real. The
-   other three have no budget holder in the room yet.
-
-Not for the wider team until it has been presented.`,
-    ),
-  },
-  {
-    path: 'planning/index.md',
-    content: note(
-      `title: "Planning"
-description: "The plan the packs are cut from: next year's budget and the runway it implies."
-tags: ["finance", "planning"]`,
-      `Two live notes: [the FY27 budget](/planning/fy27-budget.md) and
-[runway](/planning/runway.md). Everything in a
-[board pack](/board/2026-q3-pack.md) is derived from them, never re-typed.`,
-    ),
-  },
-  {
-    path: 'planning/fy27-budget.md',
+    path: 'reporting/cadence.md',
     content: note(
       `type: Note
-title: "FY27 budget"
-description: "Draft: headcount first, infrastructure second, everything else held flat."
-tags: ["finance", "planning", "budget"]`,
-      `Built bottom-up from headcount, because nothing else moves the number much.
+title: "Reporting cadence"
+description: "Quarterly to investors, annually in public, and the portal in between."
+tags: ["fund-operations", "reporting"]`,
+      `- **Quarterly** — fund reports and capital account statements, through the
+  investor portal.
+- **Annually** — the public fund table on the website, discretionary funds
+  only; co-investment vehicles are reported to their own investors.
+- **The LP annual meeting** — founders on stage rather than slides.
 
-- **People.** Two engineers, both in the first half. No marketing hire until the
-  Q4 launch has a result to argue from.
-- **Infrastructure.** Scales with agent runs, not with seats. Model spend is
-  capped per space, so the ceiling is knowable rather than discovered.
-- **Everything else** is held at this year's number, and anything above it is a
-  request with a sentence attached.
-
-Still a draft: it does not go in a [pack](/board/2026-q3-pack.md) until the
-hiring dates are real.`,
+Every number traces to the same close, and marks follow
+[the valuation policy](/valuation.md).`,
     ),
   },
   {
-    path: 'planning/runway.md',
+    path: 'valuation.md',
     content: note(
       `type: Note
-title: "Runway"
-description: "Months left at current burn, and what each hire costs in months."
-tags: ["finance", "planning"]`,
-      `One number, re-cut monthly at close, and one sentence per thing that changed
-it.
+title: "Valuation policy"
+description: "How the portfolio is marked, strengthened in 2022 and reviewed in public four years on."
+tags: ["fund-operations", "valuation"]`,
+      `Blackbird strengthened its valuation policy in 2022 (Rick Baker, "Strengthening
+our Valuation Policy") and wrote up how it had held up in 2026 (Alex Apoifis,
+"Four years on: How our valuation policy has held up").
 
-The useful framing for an argument is not "can we afford this" but "this hire
-costs four months, this one costs three" — every proposal in
-[FY27](/planning/fy27-budget.md) is priced that way before it is discussed.`,
+The principle is the one investors ask for: a mark should be one a reasonable
+buyer would recognise, and a change to it should be explainable in a sentence
+in the [quarterly report](/reporting/cadence.md).`,
     ),
   },
   {
-    path: 'policies/index.md',
+    path: 'people/index.md',
     content: note(
-      `title: "Policies"
-description: "The short rules that keep everyone else out of a spreadsheet."
-tags: ["finance", "policy"]`,
-      `Kept deliberately short: [expenses](/policies/expenses.md) and
-[approvals](/policies/approvals.md). If a policy needs a second page, the process
-is wrong.`,
+      `title: "People"
+description: "Investor relations. Records of this room, joined to the same people in the house."
+tags: ["fund-operations", "people"]`,
+      `[Jasmin Jenkins](/people/jasmin-jenkins/index.md) and
+[Tom Harvey](/people/tom-harvey/index.md) look after Blackbird's investors.`,
     ),
   },
   {
-    path: 'policies/expenses.md',
+    path: 'people/jasmin-jenkins/index.md',
     content: note(
-      `type: Note
-title: "Expenses"
-description: "Spend it like it is yours, receipt it like it is not."
-tags: ["finance", "policy"]`,
-      `Anything under the monthly threshold needs a receipt and a reason, and no
-approval. Above it, ask first — see [approvals](/policies/approvals.md).
-
-Travel is booked for the cheapest option that still gets you there able to work.
-Software you can expense is software the team can also see: a tool bought
-quietly is a tool nobody else finds.`,
+      `type: Person
+title: "Jasmin Jenkins"
+description: "Head of Investor Relations, Blackbird"
+node: person:jasmin-jenkins-2
+tags: ["person", "fund-operations"]`,
+      `Connects LPs with all things Blackbird. Owns the
+[reporting cadence](/reporting/cadence.md).`,
     ),
   },
   {
-    path: 'policies/approvals.md',
+    path: 'people/tom-harvey/index.md',
     content: note(
-      `type: Note
-title: "Approvals"
-description: "Who says yes to what, and the one thing that always needs two people."
-tags: ["finance", "policy"]`,
-      `A manager approves inside their own budget line. Anything that creates a new
-recurring cost goes to this room, whatever the amount — the monthly number is
-what [runway](/planning/runway.md) is made of.
-
-Two people, always, for anything that moves money out: one to raise it, one to
-release it. No exceptions for speed.`,
+      `type: Person
+title: "Tom Harvey"
+description: "Investor Relations Associate, Blackbird"
+node: person:tom-harvey-2
+tags: ["person", "fund-operations"]`,
+      `Fundraising, LP communications and reporting, with
+[Jasmin Jenkins](/people/jasmin-jenkins/index.md).`,
     ),
   },
 ]
 
-// ---- Compensation ------------------------------------------------------------
+// ---- Investment Committee ----------------------------------------------------
 
-const COMPENSATION_NOTES: SeedSubspace['notes'] = [
+const COMMITTEE_NOTES: SeedSubspace['notes'] = [
   {
     path: 'index.md',
     content: note(
-      `title: "Compensation"
-description: "Bands, offers and the review cycle. A secret room: it is named nowhere outside itself."
-tags: ["compensation"]`,
-      `The committee, not a team: three people who set [bands](/bands/index.md) and
-answer for them.
+      `title: "Investment Committee"
+description: "Where a memo becomes a yes or a no. A secret room: it is named nowhere outside itself."
+tags: ["committee"]`,
+      `The committee, not a team: the partners who say yes or no, and the
+[minutes](/minutes/index.md) that record why.
 
-Nothing here flows anywhere. A secret room keeps its context, its events and its
-people, and the house's members are not told it exists — which is the point: an
-offer under discussion is not a thing to leak by drawing a locked row.`,
+Nothing here flows anywhere. A secret room keeps its context, its events and
+its people, and the house's members are not told it exists — a decision under
+discussion is not a thing to leak by drawing a locked row.`,
     ),
   },
   {
-    path: 'bands/index.md',
+    path: 'minutes/index.md',
     content: note(
-      `title: "Bands"
-description: "What each level pays, how an offer is built from it, and when it is all re-cut."
-tags: ["compensation"]`,
-      `[The 2026 review cycle](/bands/2026-review.md) is the current cut;
-[offers](/bands/offer-guidelines.md) is how one becomes a number in a letter.`,
+      `title: "Minutes"
+description: "One note per meeting: the decision, the vote, and the strongest argument against."
+tags: ["committee", "minutes"]`,
+      `Deals are recorded by codename until they are announced. Next up:
+[Project Banksia](/minutes/project-banksia.md).`,
     ),
   },
   {
-    path: 'bands/2026-review.md',
+    path: 'minutes/project-banksia.md',
     content: note(
-      `type: Note
-title: "2026 review cycle"
-description: "Bands re-cut in March, benchmarked against them since."
-tags: ["compensation"]`,
-      `Re-cut in March against market data for the same stage and the same city, then
-held for the year so an offer made in November is the same offer made in April.
+      `type: Deal
+title: "Project Banksia — committee"
+description: "Seed, allied health documentation. Memo circulated; meeting Monday."
+tags: ["committee", "deal"]`,
+      `**For.** Founders who built it for their own clinic, now in forty; a clear
+hour of every clinician's day that disappears.
 
-Two rules that have saved arguments: a band is a range and most people sit in the
-middle of it, and a raise inside a band is a manager's call while a move between
-bands is this room's.`,
-    ),
-  },
-  {
-    path: 'bands/offer-guidelines.md',
-    content: note(
-      `type: Note
-title: "Offer guidelines"
-description: "How a band becomes a number, and what is never negotiated."
-tags: ["compensation"]`,
-      `Offer at the band's midpoint unless there is a written reason not to, and say
-the band out loud in the conversation — see
-[the 2026 cycle](/bands/2026-review.md).
+**Against.** The general scribes may reach allied health before a specialist
+reaches scale. Written by the least convinced, as always.
 
-Never negotiated: the same role at the same level pays the same regardless of
-who asked. A candidate who negotiates well is not a candidate who is worth more,
-and the cost of pretending otherwise arrives two years later.`,
+**To decide.** Whether the wedge is a market or a feature — and whether we
+lead.`,
     ),
   },
 ]
@@ -654,74 +501,56 @@ and the cost of pretending otherwise arrives two years later.`,
 
 export const SUBSPACES: readonly SeedSubspace[] = [
   {
-    id: 'engineering',
-    name: 'Engineering',
-    description: 'How the platform is built and run: runbooks, services and the decisions behind them.',
+    id: 'investments',
+    name: 'Investments',
+    description: 'How the investment team finds, decides and backs founders: rivers of inquiry, process and the memo.',
     // A Department: the house's members walk in, everything flows up, and the
     // house's admins manage it.
     preset: 'department',
-    people: [
-      {
-        slug: 'rangi-corbett',
-        name: 'Rangi Corbett',
-        role: 'Platform Contractor',
-        org: 'Independent',
-        location: 'Ōtepoti Dunedin',
-        tag: 'engineering',
-      },
-    ],
     members: [ADMIN_USER, MEMBER_USER],
-    notes: ENGINEERING_NOTES,
+    notes: INVESTMENTS_NOTES,
   },
   {
-    id: 'marketing',
-    name: 'Marketing',
-    description: 'Campaigns, the brand they are said in, and the public programme the world is invited to.',
+    id: 'programs',
+    name: 'Programs',
+    description: 'Giants, Foundry, Sunrise and the Foundation — free, no equity, open to the whole ecosystem.',
     // The one room the WORLD can find: listed, the house's members walk in,
     // strangers ask at the door.
     preset: 'programme',
     people: [
-      {
-        slug: 'tui-ranapia',
-        name: 'Tui Ranapia',
-        role: 'Brand Partner',
-        org: 'Kāhu Studio',
-        location: 'Tāmaki Makaurau Auckland',
-        tag: 'agency',
-      },
-      {
-        slug: 'joss-linden',
-        name: 'Joss Linden',
-        role: 'Editor',
-        org: 'Southern Grid Weekly',
-        location: 'Te Whanganui-a-Tara Wellington',
-        tag: 'press',
-      },
+      { slug: 'josephine-tay', nodeId: 'person:josephine-tay-2', name: 'Josephine Tay', role: 'Giants Program Manager', org: 'Blackbird', location: 'Sydney, Australia', tag: 'giants' },
+      { slug: 'saron-berhane', nodeId: 'person:saron-berhane-2', name: 'Saron Berhane', role: 'Foundry Lead', org: 'Blackbird', location: 'Sydney, Australia', tag: 'foundry' },
+      { slug: 'katie-tholo', nodeId: 'person:katie-tholo-2', name: 'Katie Tholo', role: 'Partnerships & Program Producer', org: 'Blackbird', location: 'Sydney, Australia', tag: 'sunrise' },
+      { slug: 'sofia-echesortu', nodeId: 'person:sofia-echesortu-2', name: 'Sofia Echesortu', role: 'Portfolio Program Lead', org: 'Blackbird', location: 'Sydney, Australia', tag: 'programs' },
     ],
     members: [ADMIN_USER, MEMBER_USER],
-    notes: MARKETING_NOTES,
+    notes: PROGRAMS_NOTES,
   },
   {
-    id: 'finance',
-    name: 'Finance',
-    description: 'Board packs, the plan behind them, and the policies that keep the two agreeing.',
+    id: 'fund-operations',
+    name: 'Fund Operations',
+    description: 'LP reporting, capital calls, valuation and compliance.',
     // A Council with its notes kept to itself: the house's members see the door
     // and ask; nothing of its context flows up, its events do.
     preset: 'council',
     flowContext: false,
+    people: [
+      { slug: 'jasmin-jenkins', nodeId: 'person:jasmin-jenkins-2', name: 'Jasmin Jenkins', role: 'Head of Investor Relations', org: 'Blackbird', location: 'Sydney, Australia', tag: 'investor-relations' },
+      { slug: 'tom-harvey', nodeId: 'person:tom-harvey-2', name: 'Tom Harvey', role: 'Investor Relations Associate', org: 'Blackbird', location: 'Sydney, Australia', tag: 'investor-relations' },
+    ],
     members: [ADMIN_USER],
     // Dev Member pressed Join on a door set to `ask` — Members → Wants to join.
     pending: [MEMBER_USER],
-    notes: FINANCE_NOTES,
+    notes: FUND_OPERATIONS_NOTES,
   },
   {
-    id: 'compensation',
-    name: 'Compensation',
-    description: 'Bands, offers and the review cycle. A secret room: it is named nowhere outside itself.',
+    id: 'investment-committee',
+    name: 'Investment Committee',
+    description: 'Where a memo becomes a yes or a no. A secret room: it is named nowhere outside itself.',
     // A Committee: listing `secret`, so the switcher, the tree and the console
     // say nothing about it to anyone who is not in it.
     preset: 'committee',
     members: [ADMIN_USER],
-    notes: COMPENSATION_NOTES,
+    notes: COMMITTEE_NOTES,
   },
 ]

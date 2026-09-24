@@ -1,6 +1,6 @@
 /**
- * The base layer: an empty database, the two anchor users, Visvine HQ and its
- * four rooms — each space created the way the app creates one
+ * The base layer: an empty database, the two anchor users, Blackbird Ventures
+ * and its four rooms — each space created the way the app creates one
  * (lib/spaces/provision.ts), then configured the way an admin would from the
  * console: its node types, its alias vocabulary and the grants behind it, and
  * the tools switched on.
@@ -118,7 +118,7 @@ export async function seedBase(): Promise<void> {
   await createAnchorUsers()
   const admin = anchorActor(ADMIN_USER)
 
-  const hq = await provisionSpace({
+  const house = await provisionSpace({
     name: SPACE_NAME,
     description: SPACE_DESCRIPTION,
     location: SPACE_LOCATION,
@@ -126,9 +126,9 @@ export async function seedBase(): Promise<void> {
     visibility: 'public',
     creator: admin,
   })
-  if (!hq.ok) throw new Error(`seed: provisioning ${SPACE_NAME} failed: ${hq.error}`)
-  if (hq.space.id !== SPACE_ID) {
-    throw new Error(`seed: ${SPACE_NAME} provisioned as "${hq.space.id}", but scripts/seed/space.ts says "${SPACE_ID}"`)
+  if (!house.ok) throw new Error(`seed: provisioning ${SPACE_NAME} failed: ${house.error}`)
+  if (house.space.id !== SPACE_ID) {
+    throw new Error(`seed: ${SPACE_NAME} provisioned as "${house.space.id}", but scripts/seed/space.ts says "${SPACE_ID}"`)
   }
 
   // What an admin sets from the console. Channels is the one optional tool, and
@@ -204,14 +204,14 @@ export async function seedBase(): Promise<void> {
     })
     if (!room.ok) throw new Error(`seed: provisioning ${sub.name} failed: ${room.error}`)
     if (room.space.id !== sub.id) {
-      throw new Error(`seed: ${sub.name} provisioned as "${room.space.id}", but scripts/seed/space.ts says "${sub.id}"`)
+      throw new Error(`seed: ${sub.name} provisioned as "${room.space.id}", but scripts/seed/subspaces.ts says "${sub.id}"`)
     }
     // The room's own directory records, before the notes that name them: an
     // entity note becomes a folder only once its node exists.
     for (const person of sub.people ?? []) {
       await prisma.node.create({
         data: {
-          id: `person:${person.slug}`,
+          id: person.nodeId,
           type: 'person',
           name: person.name,
           subtitle: `${person.role}, ${person.org}`,

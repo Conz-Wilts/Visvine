@@ -1,10 +1,10 @@
 /**
  * Write (or remove) one set of demo connectors on a local space — the same
- * notes and secrets `pnpm db:seed` puts in Visvine HQ (scripts/seed/connectors.ts),
+ * notes and secrets `pnpm db:seed` puts in Blackbird Ventures (scripts/seed/connectors.ts),
  * for re-seeding a set without reseeding everything, or for another space.
  *
  *   pnpm db:connectors:demo  [spaceId] [--remove]   sandbox (http) + appdb (postgres)
- *   pnpm db:connectors:funds [spaceId] [--remove]   fund-metrics + the funds/ notes
+ *   pnpm db:connectors:funds [spaceId] [--remove]   fund-metrics + the fund-admin/ notes
  *   pnpm db:connectors:oauth [spaceId] [--remove]   the OAuth2 CRM
  *
  * Notes go through the note store, so the connector nodes, links and folder

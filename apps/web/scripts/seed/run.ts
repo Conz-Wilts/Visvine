@@ -1,12 +1,13 @@
 /**
- * `pnpm db:seed` — rebuild the local database as the Visvine HQ demo space.
+ * `pnpm db:seed` — rebuild the local database as the Blackbird Ventures space.
  *
  * WIPES the local database, then builds everything in one pass, in the order a
  * space is actually lived in:
  *
- *   1. base        the anchor users, Visvine HQ and its four rooms, provisioned
- *                  the way the app provisions a space, then configured
- *   2. directory   65 organisations and the people at them, as records
+ *   1. base        the anchor users, Blackbird Ventures and its four rooms,
+ *                  provisioned the way the app provisions a space, then configured
+ *   2. directory   the 138 portfolio companies, their founders and the team,
+ *                  as records
  *   3. notes       the shared context and the admin's personal one
  *   4. tools       events, channels and the Drive, each with its own notes
  *   5. rooms       each room's own context, after the events that land in it
@@ -19,7 +20,8 @@
  * Every note goes through the note store, so the directory edges, folder
  * indexes, entity folders and agent state are the app's own projections — there
  * is no backfill, rebuild or migration pass afterwards to reconcile them. The
- * content lives in ./space.ts (identity), ./dataset.ts (the records),
+ * content lives in ./space.ts (identity), ./portfolio.ts and ./team.ts (the
+ * researched records), ./dataset.ts (deals, events, channels, files),
  * ./notes.ts and ./connectors.ts; the steps in ./steps only write it.
  *
  * `pnpm db:seed` runs db:notes:verify after this, which fails the seed on a

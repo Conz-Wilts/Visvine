@@ -48,34 +48,33 @@ export function digestDemoRuns(ago: (minutes: number) => Date, agent: string, me
 
   const morning: Turn[] = [
     {
-      say: "I'll check my memory for when I last ran, then see what changed since.\n\nLast run was yesterday 09:00, so anything saved after that is new to me.",
+      say: "I'll check my memory for when I last ran, then see what changed since.\n\nLast run was yesterday 08:00, so anything saved after that is new to me.",
       calls: [
-        ['read_context', `agents/${agent}/memory.md`, '## What I know\n- last digest: yesterday 09:00\n- Quarterdeck is at proposal', 1],
-        ['search_context', 'deals updated since yesterday', '5 notes: deals/quarterdeck-partners.md, deals/harbour-labs.md, deals/northline.md, deals/tidewater.md, deals/fernhill.md', 3],
+        ['read_context', `agents/${agent}/memory.md`, '## What I know\n- last digest: yesterday 08:00\n- Banksia is going to committee', 1],
+        ['search_context', 'dealflow updated since yesterday', '4 notes: dealflow/project-banksia.md, dealflow/project-wattle.md, dealflow/project-quokka.md, dealflow/project-kea.md', 3],
       ],
     },
     {
-      say: 'Reading the five deals that moved.',
+      say: 'Reading the four deals that moved.',
       calls: [
-        ['read_context', 'deals/quarterdeck-partners.md', 'Stage: Proposal · Owner: Ana · Next: pricing call Thursday', 1],
-        ['read_context', 'deals/harbour-labs.md', 'Stage: Trial · 14 seats active · asked about SSO (again)', 1],
-        ['read_context', 'deals/northline.md', 'Stage: Closed lost · went with an in-house build', 1],
-        ['read_context', 'deals/tidewater.md', 'Stage: First call · accelerator, 40 companies a cohort', 1],
-        ['read_context', 'deals/fernhill.md', 'Stage: Trial · no logins in 9 days', 1],
+        ['read_context', 'dealflow/project-banksia.md', 'Stage: Investment committee · Owners: Michael Tolo, Tristan Edwards · Next: committee Monday', 1],
+        ['read_context', 'dealflow/project-wattle.md', 'Stage: Diligence · waiting on a technical reference', 1],
+        ['read_context', 'dealflow/project-quokka.md', 'Stage: Passed · the market, not the people', 1],
+        ['read_context', 'dealflow/project-kea.md', 'Stage: First meeting · met at a Giants session', 1],
       ],
     },
     {
-      say: "Now let me check the CRM before calling anything stalled — the notes lag it.",
+      say: 'Now let me check the CRM before calling anything stalled — the notes lag it.',
       calls: [
-        ['run_connector', 'crm · GET /deals?updated_since=yesterday', '{"deals":[{"name":"Fernhill","stage":"trial","last_activity":"2 days ago"},{"name":"Harbour Labs","stage":"trial","seats":14}]}', 6],
-        ['fetch_url', 'https://status.fernhill.example/api/usage', 'error: status.fernhill.example is not a host this agent may reach', 1],
+        ['run_connector', 'crm · GET /deals?updated_since=yesterday', '{"deals":[{"name":"Project Wattle","stage":"diligence","last_activity":"2 days ago"},{"name":"Project Kea","stage":"first_meeting"}]}', 6],
+        ['fetch_url', 'https://status.wattle.example/api/pilot', 'error: status.wattle.example is not a host this agent may reach', 1],
       ],
     },
     {
-      say: 'Fernhill logged in two days ago according to the CRM, so it is quiet, not stalled. Checking which accounts changed health.',
+      say: 'Wattle had activity two days ago according to the CRM, so it is waiting, not stalled. Checking the portfolio records that changed.',
       calls: [
-        ['search_context', 'health changed spaces/', '2 notes: spaces/harbour-labs/index.md, spaces/juniper/index.md', 2],
-        ['read_context', 'spaces/juniper/index.md', 'health: amber → green · renewed for 12 months', 1],
+        ['search_context', 'latest round changed spaces/', '2 notes: spaces/heidi-health/index.md, spaces/vessev/index.md', 2],
+        ['read_context', 'spaces/heidi-health/index.md', 'Latest round: Series C (2026, US$100M, led by Blackbird)', 1],
       ],
     },
     {
@@ -85,39 +84,38 @@ export function digestDemoRuns(ago: (minutes: number) => Date, agent: string, me
         ['append_context', `agents/${agent}/memory.md`, `appended to agents/${agent}/memory.md`, 1],
       ],
     },
-    { say: 'Digest written: one stage change, one loss, Harbour Labs asked about SSO a second time, Juniper renewed.' },
+    { say: 'Digest written: Banksia to committee, Quokka passed, Wattle waiting on a reference, Heidi raised.' },
   ]
 
   const forMember: Turn[] = [
     {
-      say: "Let me see which of the deals that moved are this person's.",
+      say: "Let me see which of the deals that moved came through this person's programs.",
       calls: [
-        ['search_context', 'deals owner: Dev Member', '2 notes: deals/harbour-labs.md, deals/tidewater.md', 2],
-        ['read_context', 'deals/harbour-labs.md', 'Stage: Trial · 14 seats active · asked about SSO (again)', 1],
-        ['read_context', 'deals/tidewater.md', 'Stage: First call · accelerator, 40 companies a cohort', 1],
+        ['search_context', 'dealflow source: Giants', '1 note: dealflow/project-kea.md', 2],
+        ['read_context', 'dealflow/project-kea.md', 'Stage: First meeting · met at a Giants session', 1],
       ],
     },
     {
       say: 'Pull their open CRM tasks.',
-      calls: [['run_connector', 'crm · GET /tasks?owner=me&open=true', '{"tasks":[{"deal":"Harbour Labs","due":"today","title":"Send SSO timeline"}]}', 5]],
+      calls: [['run_connector', 'crm · GET /tasks?owner=me&open=true', '{"tasks":[{"deal":"Project Kea","due":"today","title":"Send the pilot-site visit dates"}]}', 5]],
     },
     { say: 'Write their digest.', calls: [['write_context', `agents/${agent}/for/dev-member.md`, `written agents/${agent}/for/dev-member.md`, 2]] },
   ]
 
   const capped: Turn[] = [
     {
-      say: 'Someone asked: which accelerators have we spoken to this quarter?',
+      say: 'Someone asked: which Foundry alumni have we met this year?',
       calls: [
-        ['search_context', 'accelerator', '11 notes', 3],
-        ['read_context', 'deals/tidewater.md', 'Stage: First call · accelerator', 1],
-        ['read_context', 'deals/kiln.md', 'Stage: First call · accelerator', 1],
+        ['search_context', 'Foundry', '9 notes', 3],
+        ['read_context', 'dealflow/project-wattle.md', 'Stage: Diligence · source: Foundry alumni', 1],
+        ['read_context', 'dealflow/project-kowhai.md', 'Stage: First meeting · source: Foundry cohort 6', 1],
       ],
     },
     {
-      say: 'The notes do not say which quarter. Checking the CRM for created dates.',
+      say: 'The notes do not say when each first meeting was. Checking the CRM for created dates.',
       calls: [
-        ['run_connector', 'crm · GET /deals?tag=accelerator', 'error: 429 Too Many Requests — retry after 30s', 2],
-        ['run_connector', 'crm · GET /deals?tag=accelerator', 'error: 429 Too Many Requests — retry after 30s', 31],
+        ['run_connector', 'crm · GET /deals?source=foundry', 'error: 429 Too Many Requests — retry after 30s', 2],
+        ['run_connector', 'crm · GET /deals?source=foundry', 'error: 429 Too Many Requests — retry after 30s', 31],
       ],
       note: 'Stopped at the turn cap (30).',
     },
@@ -145,12 +143,12 @@ export function digestDemoRuns(ago: (minutes: number) => Date, agent: string, me
   }
 
   return [
-    build('run_hq_digest_demo_morning', 30, morning, {
-      summary: 'One stage change, one loss, Harbour Labs asked about SSO a second time, Juniper renewed.',
+    build('run_bb_digest_demo_morning', 30, morning, {
+      summary: 'Banksia to committee, Quokka passed, Wattle waiting on a reference, Heidi raised.',
       writes: [digest, `agents/${agent}/memory.md`],
     }),
-    build('run_hq_digest_demo_member', 28, forMember, { runAsUserId: member, writes: [`agents/${agent}/for/dev-member.md`] }),
-    build('run_hq_digest_demo_capped', 400, capped, {
+    build('run_bb_digest_demo_member', 28, forMember, { runAsUserId: member, writes: [`agents/${agent}/for/dev-member.md`] }),
+    build('run_bb_digest_demo_capped', 400, capped, {
       trigger: 'manual',
       status: 'failed',
       terminalReason: 'max_turns',

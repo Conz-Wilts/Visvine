@@ -36,9 +36,11 @@ import {
   MESSAGES,
   RESOURCE_NODE,
   type SeedEvent,
+  type SeedEventAttendee,
 } from '../dataset'
 import { buildModel } from '../model'
-import { ADMIN_NODE, ADMIN_USER, MEMBER_USER, SPACE_ID, SPACE_TIMEZONE } from '../space'
+import { ADMIN_NODE, ADMIN_USER, MEMBER_NODE, MEMBER_USER, SPACE_ID, SPACE_TIMEZONE } from '../space'
+import { SUBSPACES } from '../subspaces'
 import { anchorActor } from './base'
 import { daysAgo, hoursAgo } from '../write'
 
@@ -46,13 +48,22 @@ const ANCHOR_USERS = [ADMIN_USER, MEMBER_USER]
 const userIdFor = (who: 'admin' | 'member') => (who === 'admin' ? ADMIN_USER : MEMBER_USER)
 
 /**
- * ISO timestamp `d` days from now at `hh:mm`, stamped +12:00 (Pacific/Auckland
+ * ISO timestamp `d` days from now at `hh:mm`, stamped +10:00 (Australia/Sydney
  * standard time) — close enough that "tomorrow at 2pm" reads right.
  */
 function inDays(d: number, hh: number, mm = 0): string {
   const t = new Date(Date.now() + d * 24 * 3600_000)
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(hh)}:${pad(mm)}:00+12:00`
+  return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(hh)}:${pad(mm)}:00+10:00`
+}
+
+/** An event's own published times, or its relative ones. */
+function timesOf(e: SeedEvent): { start: string; end: string } {
+  if (e.startAt && e.endAt) return { start: e.startAt, end: e.endAt }
+  if (e.startInDays === undefined || e.startHour === undefined || e.endHour === undefined) {
+    throw new Error(`seed: event ${e.slug} has neither published nor relative times`)
+  }
+  return { start: inDays(e.startInDays, e.startHour), end: inDays(e.startInDays, e.endHour) }
 }
 
 // ---- events -------------------------------------------------------------------
@@ -60,7 +71,21 @@ function inDays(d: number, hh: number, mm = 0): string {
 export async function seedEvents(): Promise<{ events: number; attendees: number }> {
   const model = buildModel()
   const actor = anchorActor(ADMIN_USER)
-  const personNodeByName = new Map(model.people.map((p) => [p.name.toLowerCase(), p.nodeId]))
+  // People never flow: an event in a room names the room's own records, and
+  // the anchors by the member nodes their room membership minted.
+  const houseByName = new Map(model.people.map((p) => [p.name.toLowerCase(), p.nodeId]))
+  const roomByName = new Map(
+    SUBSPACES.map((sub) => [sub.id, new Map((sub.people ?? []).map((p) => [p.name.toLowerCase(), p.nodeId]))]),
+  )
+  const anchorUser: Record<string, string> = { [ADMIN_NODE]: ADMIN_USER, [MEMBER_NODE]: MEMBER_USER }
+  const resolve = async (spaceId: string, a: SeedEventAttendee): Promise<string | undefined> => {
+    if (spaceId === SPACE_ID) return a.person ?? (a.name ? houseByName.get(a.name.toLowerCase()) : undefined)
+    if (a.person) {
+      const userId = anchorUser[a.person]
+      return userId ? ((await ensureMemberNode(spaceId, userId, actor, null)) ?? undefined) : undefined
+    }
+    return a.name ? roomByName.get(spaceId)?.get(a.name.toLowerCase()) : undefined
+  }
   let attendees = 0
 
   for (const e of EVENTS as SeedEvent[]) {
@@ -71,19 +96,16 @@ export async function seedEvents(): Promise<{ events: number; attendees: number 
       spaceId === SPACE_ID ? ADMIN_NODE : await ensureMemberNode(spaceId, ADMIN_USER, actor, null)
     if (!hostNode) throw new Error(`seed: no host node for ${e.slug} in ${spaceId}`)
     const eventId = `event:${e.slug}`
-    const start = inDays(e.startInDays, e.startHour)
-    const end = inDays(e.startInDays, e.endHour)
-    const rows = (e.attendees ?? []).map((a) => ({
-      ...a,
-      person: a.person ?? (a.name ? personNodeByName.get(a.name.toLowerCase()) : undefined),
-    }))
+    const { start, end } = timesOf(e)
+    const rows = []
+    for (const a of e.attendees ?? []) rows.push({ ...a, person: await resolve(spaceId, a) })
     const created = new Date(new Date(start).getTime() - 30 * 24 * 3600_000)
     const metadata = {
       seeded: true,
       description: e.description,
       start_at: start,
       end_at: end,
-      timezone: SPACE_TIMEZONE,
+      timezone: e.timezone ?? SPACE_TIMEZONE,
       locationData: { label: e.locationLabel, address: e.locationAddress, lat: e.lat, lon: e.lon },
       hosts: [hostNode],
       organizerEmail: 'admin@local.dev',
@@ -168,7 +190,7 @@ export async function seedEvents(): Promise<{ events: number; attendees: number 
     }
     await upsertLink({
       spaceId,
-      sourceId: ADMIN_NODE,
+      sourceId: hostNode,
       targetId: eventId,
       relationship: 'hosting',
       origin: 'event_hosting',
@@ -262,18 +284,20 @@ export async function seedChannels(): Promise<{ sections: number; channels: numb
 // ---- the Drive ----------------------------------------------------------------
 
 const DRIVE_FOLDERS = [
-  { id: 'rfold_hq_revenue', name: 'Revenue', parentId: null as string | null },
-  { id: 'rfold_hq_deals', name: 'Deal room', parentId: null },
-  { id: 'rfold_hq_board', name: 'Board reporting', parentId: null },
-  { id: 'rfold_hq_revenue_q3', name: 'Q3 2026', parentId: 'rfold_hq_revenue' },
-  { id: 'rfold_hq_deals_quarterdeck', name: 'Quarterdeck', parentId: 'rfold_hq_deals' },
+  { id: 'rfold_bb_portfolio', name: 'Portfolio', parentId: null as string | null },
+  { id: 'rfold_bb_investments', name: 'Investments', parentId: null },
+  { id: 'rfold_bb_programs', name: 'Programs', parentId: null },
+  { id: 'rfold_bb_funds', name: 'Funds', parentId: null },
+  { id: 'rfold_bb_sunrise', name: 'Sunrise Aotearoa 2026', parentId: 'rfold_bb_programs' },
 ]
 
 /** Which folder each seeded file is filed in; unlisted files sit at the root. */
 const FILING: Record<string, string> = {
-  'revenue-roll-up.csv': 'rfold_hq_revenue_q3',
-  'segment-pricing.csv': 'rfold_hq_board',
-  'onboarding-checklist.md': 'rfold_hq_deals',
+  'portfolio-by-sector.csv': 'rfold_bb_portfolio',
+  'fund-performance.csv': 'rfold_bb_funds',
+  'sunrise-aotearoa-run-sheet.md': 'rfold_bb_sunrise',
+  'investment-memo-template.md': 'rfold_bb_investments',
+  'giants-mentor-guide.md': 'rfold_bb_programs',
 }
 
 const MIME: Record<string, string> = { csv: 'text/csv', md: 'text/markdown' }
@@ -328,50 +352,50 @@ export async function seedDrive(): Promise<{ files: number; indexed: number }> {
     if (meta.status === 'ready') indexed++
   }
 
-  // A comment thread and the change-proposal queue over the roll-up table: one
-  // approved restatement, one rejected guess.
-  const rollUp = await prisma.resource.findFirst({ where: { spaceId: SPACE_ID, name: 'Revenue roll-up (Q3)' } })
-  if (rollUp) {
+  // A comment thread and the change-proposal queue over the sector table: one
+  // approved correction, one rejected guess.
+  const bySector = await prisma.resource.findFirst({ where: { spaceId: SPACE_ID, name: 'Portfolio by sector' } })
+  if (bySector) {
     await prisma.resourceComment.createMany({
       data: [
         {
-          resourceId: rollUp.id,
-          cellRef: 'D8',
+          resourceId: bySector.id,
+          cellRef: 'D2',
           author: 'Dev Admin',
-          content: 'Corporate Innovation MRR includes Northbank, which I would not count on past March.',
-          createdAt: daysAgo(4),
+          content: 'Exited counts what actually happened, not the stage on the website — Eucalyptus, Factor and SafeStack among them.',
+          createdAt: daysAgo(5),
         },
         {
-          resourceId: rollUp.id,
+          resourceId: bySector.id,
           cellRef: null,
           author: 'Dev Admin',
-          content: 'Refreshing the whole roll-up after the September invoices land.',
-          createdAt: daysAgo(3),
+          content: 'Regenerated from the portfolio records after the September research pass.',
+          createdAt: daysAgo(4),
         },
       ],
     })
     await prisma.resourceChange.createMany({
       data: [
         {
-          id: 'rch_hq_002',
-          resourceId: rollUp.id,
-          cellRef: 'E3',
-          originalValue: '97',
-          proposedValue: '99',
-          reason: 'Venture Capital NRR restated once the Harbourline downgrade was backdated.',
+          id: 'rch_bb_001',
+          resourceId: bySector.id,
+          cellRef: 'D2',
+          originalValue: '12',
+          proposedValue: '13',
+          reason: 'Hall is exited: Tracksuit acquired it in July 2026.',
           proposedBy: ADMIN_USER,
           status: 'approved',
           reviewedBy: ADMIN_USER,
-          reviewedAt: daysAgo(3),
-          createdAt: daysAgo(3.2),
+          reviewedAt: daysAgo(4),
+          createdAt: daysAgo(4.2),
         },
         {
-          id: 'rch_hq_003',
-          resourceId: rollUp.id,
-          cellRef: 'C5',
-          originalValue: '381',
-          proposedValue: '410',
-          reason: 'Thought the Third Space expansion had been invoiced — it had not.',
+          id: 'rch_bb_002',
+          resourceId: bySector.id,
+          cellRef: 'C2',
+          originalValue: '55',
+          proposedValue: '56',
+          reason: 'Count CarbonChain as active — its site still shows it independent.',
           proposedBy: MEMBER_USER,
           status: 'rejected',
           reviewedBy: ADMIN_USER,
@@ -392,7 +416,7 @@ export async function seedDrive(): Promise<{ files: number; indexed: number }> {
     subtitle: RESOURCE_NODE.subtitle,
     url: RESOURCE_NODE.url,
     tags: [...RESOURCE_NODE.tags],
-    body: `${RESOURCE_NODE.subtitle}. Linked from onboarding, and the first thing a new space admin is sent.`,
+    body: `${RESOURCE_NODE.subtitle}. Where a portfolio company posts a role so the whole community sees it.`,
     actor: anchorActor(ADMIN_USER),
     revalidate: false,
   })

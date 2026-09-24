@@ -1,26 +1,26 @@
 /**
- * The directory: every organisation that runs on Visvine (or wants to, or funds
- * us), the people at them, and the team — as directory records.
+ * The directory: every company in Blackbird's portfolio, the founders behind
+ * them, and the Blackbird team — as directory records.
  *
  * Records first and notes second, because an entity note is a note ABOUT a
  * node: `people/<slug>/index.md` becomes that person's folder only when the
  * node it names already exists (lib/notes/store.ts#createNote). Links are not
- * written here at all — founder/contact edges come from the notes, drawn by the
- * store as each entity note lands.
+ * written here at all — founder and team edges come from the notes, drawn by
+ * the store as each entity note lands.
  */
 
 import prisma from '../../../lib/prisma'
-import { buildModel, orgAlias, personAlias } from '../model'
-import { SPACE_ID, SPACE_NAME } from '../space'
+import { blackbirdPage, buildModel, orgAlias, personAlias, teamPage } from '../model'
+import { SPACE_ID } from '../space'
 import { daysAgo } from '../write'
 
-/** Deterministic, fictional by construction (RFC 2606 reserves example.com). */
-const websiteFor = (slug: string) => `https://${slug}.example.com`
+/** Days since the first of July of a year — close enough for "since". */
+const sinceYear = (year: number | null) => (year ? Math.max(30, (2026 - year) * 365 + 80) : 90)
 
-export async function seedDirectory(): Promise<{ orgs: number; people: number }> {
+export async function seedDirectory(): Promise<{ companies: number; people: number }> {
   const model = buildModel()
 
-  for (const { slug, nodeId, org } of model.orgs) {
+  for (const { nodeId, org } of model.orgs) {
     const alias = orgAlias(org)
     await prisma.node.create({
       data: {
@@ -28,67 +28,68 @@ export async function seedDirectory(): Promise<{ orgs: number; people: number }>
         type: 'company',
         name: org.name,
         subtitle: org.subtitle,
-        location: org.location,
-        url: websiteFor(slug),
-        tags: [org.segment, alias, org.plan, org.stage, org.round].filter(
+        location: org.hq,
+        url: org.website,
+        tags: [org.sector, alias, org.stage, org.field].filter(
           (t): t is string => typeof t === 'string' && t.length > 0,
         ),
         metadata: {
-          kind: 'organisation',
-          relationship: org.relationship,
-          segment: org.segment,
-          since: org.since ?? null,
-          plan: org.plan ?? null,
-          seats: org.seats ?? null,
-          mrr: org.mrr ?? null,
-          health: org.health ?? null,
-          useCase: org.useCase ?? null,
-          stage: org.stage ?? null,
-          nextStep: org.nextStep ?? null,
-          expectedMrr: org.expectedMrr ?? null,
-          round: org.round ?? null,
-          cheque: org.cheque ?? null,
+          kind: 'portfolio',
+          sector: org.sector,
+          stage: org.stage,
+          status: org.status,
+          exit: org.exit ?? null,
+          invested: org.invested,
+          founded: org.founded,
+          field: org.field,
+          lastRound: org.lastRound,
+          country: org.country,
           longDescription: org.description,
-          website: websiteFor(slug),
+          website: org.website,
+          blackbirdPage: blackbirdPage(org),
           seeded: true,
         },
         spaceId: SPACE_ID,
         alias,
-        createdAt: daysAgo(org.since ? (2026 - org.since) * 120 + 30 : 90),
+        createdAt: daysAgo(sinceYear(org.invested)),
       },
     })
   }
 
   for (const person of model.people) {
-    const org = person.orgSlug ? (model.orgBySlug.get(person.orgSlug)?.org ?? null) : null
-    const alias = personAlias(person, org)
-    const employer = org?.name ?? SPACE_NAME
+    const alias = personAlias(person)
+    const firstOrg = person.founded[0] ? model.orgBySlug.get(person.founded[0].orgSlug) : undefined
+    const employer = person.team ? 'Blackbird' : (firstOrg?.org.name ?? null)
     await prisma.node.create({
       data: {
         id: person.nodeId,
         type: 'person',
         name: person.name,
-        subtitle: `${person.role}, ${employer}`,
-        location: person.location ?? org?.location ?? null,
-        tags: [alias, org ? org.segment : 'Visvine'],
+        subtitle: employer ? `${person.role}, ${employer}` : person.role,
+        location: person.location,
+        url: person.team ? teamPage(person.team) : null,
+        tags: [alias, person.team ? person.team.group : (firstOrg?.org.sector ?? null)].filter(
+          (t): t is string => Boolean(t),
+        ),
         metadata: {
-          kind: person.team ? 'team' : 'contact',
+          kind: person.team ? 'team' : 'founder',
           role: person.role,
           bio: person.bio,
           email: person.email,
           org: employer,
-          orgNode: person.orgSlug ? `company:${person.orgSlug}` : null,
+          orgNode: person.team ? null : (firstOrg?.nodeId ?? null),
+          founded: person.founded.map((f) => `company:${f.orgSlug}`),
           ...(person.team
-            ? { focus: person.team.focus, segments: person.team.segments ?? [], accounts: person.team.accounts ?? [] }
+            ? { group: person.team.group, before: person.team.before ?? null, quote: person.team.quote ?? null }
             : {}),
           seeded: true,
         },
         spaceId: SPACE_ID,
         alias,
-        createdAt: daysAgo(person.team ? 300 : 120),
+        createdAt: daysAgo(person.team ? 300 : sinceYear(firstOrg?.org.invested ?? null)),
       },
     })
   }
 
-  return { orgs: model.orgs.length, people: model.people.length }
+  return { companies: model.orgs.length, people: model.people.length }
 }
