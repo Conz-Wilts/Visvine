@@ -378,3 +378,17 @@ describe('tracked fields', () => {
     assert.ok('error' in coerceTrackedFields([{ key: 'a', label: 'A', kind: 'text' }, { key: 'a', label: 'B', kind: 'text' }]))
   })
 })
+
+describe('the agents table', () => {
+  test('reads the record and live state, and edits only the model', () => {
+    const cols = columnsForType('agent', null, { modelOptions: ['openai/gpt-5', 'anthropic/claude-sonnet-5'] })
+    assert.deepEqual(
+      cols.map((c) => c.key),
+      ['name', 'status', 'active', 'schedule', 'nextRun', 'lastRun', 'model', 'connectors', 'tools', 'runsFor', 'failures', 'tags'],
+    )
+    assert.deepEqual(cols.filter((c) => c.editable).map((c) => c.key), ['model'])
+    assert.deepEqual(cols.find((c) => c.key === 'model')?.options, ['openai/gpt-5', 'anthropic/claude-sonnet-5'])
+    const row: DirectoryItem = { id: 'agent:digest', name: 'Digest', type: 'agent', metadata: { model: 'openai/gpt-5', connectors: 'crm' } }
+    assert.equal(cellValue(row, cols.find((c) => c.key === 'connectors')!), 'crm')
+  })
+})

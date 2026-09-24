@@ -61,6 +61,12 @@ from `@visvine/ui`; domain UI lives in `@/features/<domain>/components`.
   Route Handler — and a writer calls `.forget()` before reading again.
 - Zod v4 for all input validation. Prisma client is the singleton in
   `lib/prisma.ts`.
+- **A type's structured facts are a row; its note is prose.** What a machine
+  enforces or schedules on (an agent's model, reach, schedule, identity) is a
+  column in its tool's table, written through one service function with its
+  gates; the note holds what a person or model reads as meaning. Agents are
+  the first (`lib/agents/shared/agentConfig.ts`); connectors, models and tools
+  follow the same shape.
 - **A table is named after the tool that owns it** — `context_*`, `connector_*`,
   `event_*`, `resource_*`, `message_*`. Only cross-tool things go unprefixed
   (`spaces`, `users`, `identities`, `nodes`, `links`, `oauth_*`).
@@ -448,12 +454,24 @@ has.
 
 `docs/agents.md` is the full reference. The invariants:
 
-- **An agent is ONE note in a folder that is its home.** `agents/<name>/index.md`
-  holds what it is (model, connectors, tools, the brief) AND whether/when it runs
-  (`active`, `schedule`/`every`/`on`, `debounce`, `timezone`) in one frontmatter,
-  editable by anyone who can edit the folder (`agentManageDenial`). Only
-  `runs_as` is admin-held (`writeGated#activationRunsAsDenial`); budget is
-  admin-only, on the row. Editing a brief does NOT switch the agent off.
+- **The note is what an agent IS; the row is how it RUNS.** `agents/<name>/index.md`
+  holds `type`, `title`, `description`, `tags` and the brief. Model, connectors,
+  tools, `agents`, share, dry run, turn cap, `runs_as`, who it runs for and the
+  activation (`active`, the clock, `on` triggers, `debounce`, `timezone`) are
+  COLUMNS — `agent_state` + `agent_subscriptions`, every change kept in
+  `agent_config_changes` (`lib/agents/shared/agentConfig.ts`, pure). One write,
+  `service.ts#configureAgent` (`PUT …/agents/<name>/config`, `configure_agent`,
+  activation, subscribers), each field keeping its gate: anyone who can edit the
+  folder (`agentManageDenial`), `runs_as` naming someone else an admin's,
+  runs-for self-only; budget admin-only. One read, `briefs.ts#readAgent` /
+  `composeAgent`: the note with the record rendered as the frontmatter keys the
+  parsers in `config.ts` validate, so a rule has one definition. The gate refuses
+  run keys in a brief (`contextService#briefRunKeyDenial`); a brief still
+  carrying them (older data, a seed, a script) is ADOPTED by the store hook —
+  folded into the record, stripped from the note (`hooks.ts#adoptNoteConfig`;
+  `db:agents:to-rows` does every agent at once). A row with `configured_at` null
+  is pre-record and still read from its note. Editing a brief does NOT switch
+  the agent off.
   Everything else in the folder is the agent's own — the ONE place under
   `agents/` a run stamped `agent:<name>` may write (`contextService.lockedDenial`).
   Nothing under `agents/` ever fires a trigger. The run prompt is
@@ -468,8 +486,8 @@ has.
   Cursors go under `What I know`; structured values are tracked fields on nodes.
 - **Agents are grouped by the brief's `tags:`.** The first tag is the group; every
   tag lands on the `agent:<name>` node (`entityLinks.ts#syncAgentNode`), so the
-  Directory's tag filter reaches agents. The settings dialog's Group field writes
-  the same key (`briefEdit.ts`).
+  Directory's tag filter reaches agents. Config's Group field writes the same key
+  (`briefEdit.ts`) — tags stay in the note because they classify what it IS.
 - **A name is not an identity.** `agent_state` is keyed `(space, name)` and
   outlives the note, so it carries `brief_note_id`. A DIFFERENT note at the same
   name is a new agent, and `syncAgentState` retires the previous incarnation
@@ -496,9 +514,9 @@ has.
   page is read with `page_snapshot` and worked with `page_act` or
   `browse_task`, never a hand-written script (`docs/machines.md`).
 - **One agent can run FOR many people, and who is in the brief.** Identity is
-  per RUN (`agent_runs.run_as_user_id`). The brief's **`for:` block** lists the
-  people (`lib/agents/shared/runsFor.ts`, pure): `user`, and optionally their
-  own `at`, `timezone` and `model`. A fire runs as the brief's author (or
+  per RUN (`agent_runs.run_as_user_id`). The record's **runs-for** lists the
+  people (`agent_subscriptions`; `lib/agents/shared/runsFor.ts`, pure): the user,
+  and optionally their own `at`, `timezone` and `model`. A fire runs as the brief's author (or
   `runs_as`), then once per person under THEIR principal — so a `mode: user`
   connector spends their account, on their model (`modelFor`, read by the
   runner and the preflight). A person with their own time on a daily/weekly
@@ -506,15 +524,14 @@ has.
   and a fire runs only those whose time came round; an event-woken fire is for
   everyone (`shared/fanout.ts#nextFire` / `dueIdentities`, pure). A `local/*`
   person is never fired by the tick. **An entry is a principal, so it is the
-  person's own to add**: `contextService#briefRunsForDenial` lets a writer
+  person's own to add**: `configureAgent` (`runsForDenial`) lets a writer
   remove anyone and add or change only themselves (an admin anyone); a reader
   adds themselves through `POST …/subscribers`, which writes that one entry
-  for them. `agent_subscriptions` is a derived index of the block
-  (`hooks.ts#indexRunsFor`) for the roster and `deleteAccount`, which also
-  strips the note entry (`dropRunsFor`). Capped by `MAX_FANOUT_SUBSCRIBERS`.
+  for them. `deleteAccount` drops their rows and re-saves each record
+  (`dropRunsFor`). Capped by `MAX_FANOUT_SUBSCRIBERS`.
   A manual run acts as whoever pressed Run. Event payloads ride only the first
   run. `connectorReadiness` surfaces per-person readiness before a 3am run
-  discovers it. `db:agents:runs-for` wrote pre-block rows into their briefs.
+  discovers it.
 - **A brief says what it still needs.** `create_agent` and `rehearse_agent`
   answer with `needs` and `plan` (`lib/agents/shared/needs.ts`, pure;
   `lib/agents/needs.ts` gathers inputs): no model in the space, a declared
@@ -557,8 +574,11 @@ has.
 - **An agent is watched on its own node page** — `/directory/agent:<name>`, the
   Agent tab beside Context and Raw (`AgentPageContent.tsx`). There is no agents
   tool: no rail row, no feature key, no console section. **The roster is the
-  Directory's Agents table** (`/directory?view=table&type=agent` →
-  `AgentsRoster.tsx`) with **the clock** over it: the next 24 hours, the nightly
+  Directory's Agents table** (`/directory?view=table&type=agent`): the shared
+  `DirectoryTable` with one row per agent — status, on, schedule, next and last
+  run, model (edited in place, to the record), connectors, tools, runs for,
+  tags (`columnsForType('agent')`, `features/agents/lib/agentRows.ts`) — and
+  **the clock** over it (`AgentsClock.tsx`): the next 24 hours, the nightly
   clean, and what is running with its current step
   (`lib/agents/shared/roster.ts` pure, `runs.ts#currentStepOf`). The tab is ONE
   COLUMN with three doors at the right end of the tab row — **Config · History ·

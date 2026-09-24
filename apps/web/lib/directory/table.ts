@@ -131,12 +131,39 @@ const PAGE_COLUMNS: Record<string, TableColumn[]> = {
 const PROFILE_OWNED_KEYS = new Set(['bio', 'website', 'linkedinUrl', 'twitterUrl', 'phone', 'pronouns'])
 
 /**
+ * An agent's columns are its RECORD (lib/agents/shared/agentConfig.ts) and its
+ * live state, not node metadata: the agents table builds each row's
+ * `metadata` from the roster (features/agents/lib/agentRows.ts) under these
+ * keys. Model is the one edited in place — it goes to the agent's config route;
+ * everything else is edited on the agent's own Config.
+ */
+const AGENT_COLUMNS: TableColumn[] = [
+  { key: 'status', label: 'Status', kind: 'text', source: 'metadata', origin: 'type', editable: false },
+  { key: 'active', label: 'On', kind: 'checkbox', source: 'metadata', origin: 'type', editable: false },
+  { key: 'schedule', label: 'Schedule', kind: 'text', source: 'metadata', origin: 'type', editable: false },
+  { key: 'nextRun', label: 'Next run', kind: 'text', source: 'metadata', origin: 'type', editable: false },
+  { key: 'lastRun', label: 'Last run', kind: 'text', source: 'metadata', origin: 'type', editable: false },
+  { key: 'model', label: 'Model', kind: 'select', source: 'metadata', origin: 'type', editable: true },
+  { key: 'connectors', label: 'Connectors', kind: 'text', source: 'metadata', origin: 'type', editable: false },
+  { key: 'tools', label: 'Tools', kind: 'text', source: 'metadata', origin: 'type', editable: false },
+  { key: 'runsFor', label: 'Runs for', kind: 'text', source: 'metadata', origin: 'type', editable: false },
+  { key: 'failures', label: 'Failures', kind: 'number', source: 'metadata', origin: 'type', editable: false, defaultHidden: true },
+]
+
+/**
  * The columns a type has, in their canonical order. `config` is the space's
  * own entry for the type (findNodeTypeConfig) and supplies the tracked fields;
  * without it the type still has its core and property-row columns.
+ * `modelOptions` are the choices of an agent's Model cell.
  */
-export function columnsForType(type: string, config?: NodeTypeConfig | null): TableColumn[] {
+export function columnsForType(type: string, config?: NodeTypeConfig | null, opts: { modelOptions?: string[] } = {}): TableColumn[] {
   const canonical = canonicalType(type)
+  if (canonical === 'agent') {
+    const model = { ...AGENT_COLUMNS.find((c) => c.key === 'model')!, options: opts.modelOptions ?? [] }
+    return [CORE_HEAD[0], ...AGENT_COLUMNS.map((c) => (c.key === 'model' ? model : c)), CORE_TAIL[0]].map((c) =>
+      c.key === 'tags' || c.key === 'name' ? { ...c, editable: false } : c,
+    )
+  }
   const order = TYPE_COLUMN_ORDER[canonical] ?? []
   const rank = (key: string) => {
     const i = order.indexOf(key)

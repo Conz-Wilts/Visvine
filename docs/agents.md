@@ -10,28 +10,40 @@ agents planning map (2026-08-17).
 ships, and reach only the connectors their brief declares. Connector credentials are decrypted
 inside Visvine and never leave it — not to the model, not to a sandbox, not to you.
 
-## An agent is one note (plus a row)
+## An agent is a note and a record
 
-| Path | Who writes | Holds |
+| Where | Who writes | Holds |
 |---|---|---|
-| `agents/<name>/index.md` | any member (normal grants) | the **whole agent**: `type: agent`, `title`, `description`, `model`, `connectors`, `tools`, `max_turns` — AND the **activation**: `active`, `schedule` (`hourly\|daily\|weekly`) *or* `every` (`15m`, `2h`, cron), `at`, `on` (a weekday, or the **triggers map** `{ context, webhook }`), `debounce`, `timezone`, `runs_as`. The body is the system-prompt brief |
+| `agents/<name>/index.md` | any member (normal grants) | what the agent **is**: `type: agent`, `title`, `description`, `tags`. The body is the system-prompt brief |
+| `agent_state` row — the **record** | `configureAgent` only (`PUT …/agents/<name>/config`, `configure_agent`, activation) | how it **runs**: `model`, `connectors`, `tools`, `agents`, `share_mode`/`share_rooms`/`share_as`, `dry_run`, `max_turns`, `runs_as`, and the activation — `active`, `schedule` (an `AgentSchedule`: hourly/daily/weekly, interval or cron), `timezone`, `triggers_json` (`context`, `webhook`, `wake`), `debounce_ms`. Plus operational state: `next_run_at`, `status`, `running_since`, `run_as_user_id`, `budget_monthly_cents`, failure bookkeeping |
+| `agent_subscriptions` rows | the record | who it runs for, each with their own `at`, `timezone`, `model` |
+| `agent_config_changes` rows | the record | who changed which fields, when — the history a note revision used to be |
 | `agents/<name>/…` | the agent's own runs | whatever it writes — its output, and `memory.md`, what it carries between runs: four sections (What I know · Decisions · Open threads · Last run), handed to every run, added to with `remember`, `Last run` written by the runner (`lib/agents/shared/memory.ts`) |
-| `agent_state` row | derived, never authoritative | `nextRunAt`, `status`, `runningSince`, `scheduleHash`, `runAsUserId`, `triggersJson`, `debounceMs`, `budgetMonthlyCents`, failure bookkeeping |
 | `agent_events` rows | the payload **mailbox** | one row per note save / webhook / reply that woke an agent; claimed by the run that consumes them (`consumedBy`), pruned after 7 days |
 
-What an agent IS and whether it RUNS are the same note, because they are written by the same
-people: anyone whose grants reach the folder. Two fields are held back — `runs_as` (a member may
-name only themselves; `contextService#activationRunsAsDenial`) and the budget, which is not in a
-note at all: money is admin-read while notes are member-read, so it lives on the row behind an
-admin-only route. `lockedDenial` freezes all of `agents/` for AI origins, so an AI sweep — or an
-agent — can never rewrite a brief or switch anything on.
+The rule: anything a machine enforces or schedules on is a column; anything a model or a person
+reads as meaning stays in the note. Every reader goes through `lib/agents/briefs.ts#readAgent`,
+which lays the record over the note as the frontmatter keys the parsers in `lib/agents/config.ts`
+read — so what a valid value is has one definition, and the example below is still the shape they
+validate.
 
-`agents/<name>/activation.md` was a second note holding the activation half. It is still read when
-a brief carries no activation keys, so an agent from before the merge keeps running;
-`pnpm --filter @visvine/web db:agents:activation` folds it in and removes it. Nothing writes one.
+The write gates keep their old owners. Anyone whose grants reach the folder may change the record
+(`agentManageDenial`); `runs_as` naming somebody else is a space admin's; a person adds or changes
+only their own runs-for entry; the budget is admin-only (`PUT …/budget`). A brief note may not ADD
+or CHANGE a run key — the gate refuses it and names `configure_agent`. A brief that still carries
+them (written before the record, or by a seed or script straight into the store) is adopted by the
+store hook: folded into the record and stripped from the note. `pnpm --filter @visvine/web
+db:agents:to-rows` adopts every agent at once. A row with `configured_at` null is from before the
+record and is still read from its note. `lockedDenial` freezes all of `agents/` for AI origins, so
+an AI sweep — or an agent — can never rewrite a brief.
+
+`agents/<name>/activation.md` was a second note holding the activation half before the merge; it
+is read for an agent with no record and folded in when that agent is adopted. Nothing writes one.
+
+The keys, as the parsers read them (never written into a note any more):
 
 ```yaml
-# agents/weekly-digest/index.md
+# agents/weekly-digest — the note's keys and the record's, as one frontmatter
 ---
 type: agent
 title: Weekly digest
@@ -45,7 +57,7 @@ agents: [crm-sync]                 # optional: the agents this one has in mind f
 dry_run: false                     # optional: true = rehearse — writes are captured, not applied
 max_turns: 40                      # 1..200
 
-active: true                       # ── the activation, same frontmatter ──
+active: true                       # ── the activation ──
 schedule: weekly
 at: "07:00"
 on: monday
@@ -446,11 +458,12 @@ deadline, UTC) was already correct and was left untouched.
   Under the steps: what was refused at the boundary, and what changed. **Who it runs for is part
   of sharing it**: Share, on the tab row, opens the brief's `SharePanel` with a Runs for section
   (`RunsForSection`) — your own switch, then your own time and model — which writes your entry in
-  the brief's `for:` block (below). There is no box on the page: a person starts a run with Run,
+  the record's runs-for (below). There is no box on the page: a person starts a run with Run,
   and `lib/agents/summon.ts` still serves `run_agent`'s `message`. `run_agent`, `vm_browse` and `create_agent` return a `watch` / `page` href into
   it (`lib/agents/config.ts#agentPageHref(name, runId?)`). Polling throughout, never a stream:
   quick while anything runs, a slow walk otherwise.
-- **Who it runs for is the brief's `for:` block** (`lib/agents/shared/runsFor.ts`, pure):
+- **Who it runs for is the record's runs-for** — `agent_subscriptions` rows
+  (`lib/agents/shared/runsFor.ts`, pure), read as the `for:` key:
 
   ```yaml
   for:
@@ -466,45 +479,45 @@ deadline, UTC) was already correct and was left untouched.
   agent: the row's `next_run_at` is the earliest of everyone's next occurrence, and a fire runs
   only the people whose time came round since the last one — everyone, when events woke it
   (`lib/agents/shared/fanout.ts`, pure). A `local/*` person is never fired; their runs start from
-  the desktop app. An entry is a principal, so the write gate (`briefRunsForDenial`) lets a writer
+  the desktop app. An entry is a principal, so `configureAgent` (`runsForDenial`) lets a writer
   remove anyone and add or change only themselves, an admin anyone; a member who can only READ the
   brief adds themselves through `POST …/agents/<name>/subscribers`, and the platform writes that
-  one entry. `agent_subscriptions` is an index of the block, rebuilt on every brief write.
-- **The roster is the Directory's Agents table** — `/directory?view=table&type=agent`. The
-  Table view renders `features/agents/components/AgentsRoster.tsx` for that type instead of the
-  cell grid, because every column of an agent is live state rather than a record. Over the list
-  sits **the clock**: the next 24 hours across every agent, what is running first with its
-  current step (`runs.ts#currentStepOf`, the last tool event of the run in flight), the nightly
-  clean among them; under it every agent filed under its **group** — the brief's first tag —
-  one row each: dot, name, what it is doing or when it fires, who it runs for, last run. The
-  bar's search and tag filter apply; the click goes to the agent's page. Pure
-  shapes in `lib/agents/shared/roster.ts`. The `agents/` folder in the context tree is the same
+  one entry.
+- **The roster is the Directory's Agents table** — `/directory?view=table&type=agent`: the
+  shared `DirectoryTable`, one row per agent, its columns the record and its live state —
+  Status, On, Schedule, Next run, Last run, Model, Connectors, Tools, Runs for, Tags (Failures
+  hidden until asked for) — from `columnsForType('agent')` and
+  `features/agents/lib/agentRows.ts`. Sort, widths, order and hidden columns are the viewer's, as
+  on every table. Model edits in place, to the record; everything else is edited on the agent's
+  Config. Over the table sits **the clock** (`AgentsClock.tsx`): the next 24 hours across every
+  agent, what is running first with its current step (`runs.ts#currentStepOf`, the last tool
+  event of the run in flight), the nightly clean among them. The bar's search and tag filter
+  apply; the click goes to the agent's page. Pure shapes in `lib/agents/shared/roster.ts`. The `agents/` folder in the context tree is the same
   roster as files. Nothing about agents is switchable per space — the `agent` type belongs to
   Context, which is always on.
-- **Groups are tags.** `tags: [Investments]` in the brief files the agent under Investments on
-  the roster and lands on its `agent:` node, so the Directory's tag filter reaches it. The
-  settings dialog's Group field writes the same key. There is no folder move and no second
+- **Groups are tags.** `tags: [Investments]` in the brief note is the agent's group and lands on
+  its `agent:` node, so the Directory's tag filter reaches it. Config's Group field writes the
+  same key — tags stay in the note because they classify what the agent is. There is no folder move and no second
   vocabulary.
 - **Creating one** — asked of an AI over MCP: the `create_agent` recipe runs its intake (what it
-  produces and where, when it runs, what it may reach), then `create_agent` writes
-  `agents/<name>/index.md` with `active: false` — a new agent is off until someone turns it on —
-  and answers with the agent's page. The app has no create surface for agents.
+  produces and where, when it runs, what it may reach), then `create_agent` writes the note
+  `agents/<name>/index.md` and a record that is OFF — a new agent is off until someone turns it
+  on — and answers with the agent's page. `configure_agent` changes the record afterwards. The app has no create surface for agents.
 - `/directory/agent:<name>` — the Agent tab beside the Context/Raw note tabs, described above:
   the run, with Config, History and Share on the tab row. The activation dialog (opened from the
   status line, the switch, or Config → When) sets the clock, `on.context` globs, the `on.webhook`
-  connector, `every` and `debounce`. Config rewrites only the frontmatter keys it shows
-  (`lib/agents/briefEdit.ts`) through the ordinary notes API — the same note the activation lives
-  in, so a save keeps the schedule it already had.
+  connector, `every` and `debounce`. Config saves the model, tools and connectors to the record
+  (`PUT …/agents/<name>/config`) and the Group to the note's `tags:` (`lib/agents/briefEdit.ts`).
 - Console → Agents: **gone.** Everything it held now lives on the agent: the run timezone is part of
   the brief (required to turn a scheduled agent on), models and keys are connectors, and
   activation was always per agent, on the agent's page.
-- API: `GET/PATCH /api/spaces/[spaceId]/agents/[name]`, `POST …/[name]/run`,
+- API: `GET/PATCH /api/spaces/[spaceId]/agents/[name]`, `PUT …/[name]/config`, `POST …/[name]/run`,
   `POST …/[name]/message` (`{ text, run? }` — a run starts now unless `run: false`),
   `GET …/[name]/runs/[runId]`, `GET/PUT …/[name]/budget`; `GET …/agents` is the roster (plus the
   clean schedule for the clock).
 - MCP: `list_agents` (`context:read`; includes `schedule`, `every` and `triggers` so a trigger-only
-  agent does not read "No schedule"), `run_agent` (`agents:run`; optional `message`). Authoring is
-  not an MCP tool.
+  agent does not read "No schedule"), `run_agent` (`agents:run`; optional `message`),
+  `create_agent` / `configure_agent` (`agents:author`), `activate_agent` / `deactivate_agent`.
 - **`run_agent` on a space with NO MODEL runs nothing and fails nothing.** There is no engine
   there, so claiming a run only to fail it `config` spends a run row on a question already
   answered. Instead it answers `ran: false`, `why: 'no_model'` and a **`stand_in`** — the
@@ -517,7 +530,7 @@ deadline, UTC) was already correct and was left untouched.
 
 ## Code map
 
-`lib/agents/{registry,providers,config,hooks,principal,tools,machineReach,budget,runs,runner,schedule,dispatch,internalAuth,service,route,limits,events,options,templates,briefEdit}.ts`
+`lib/agents/{registry,providers,config,briefs,record,configInput,shared/agentConfig,hooks,principal,tools,machineReach,budget,runs,runner,schedule,dispatch,internalAuth,service,route,limits,events,options,templates,briefEdit}.ts`
 (`events.ts` is the mailbox: `enqueueAgentEvent`, `claimEvents`, `matchNoteTriggers`,
 `fireNoteTriggers`, `webhookRecipients`, `rearmIfPending`, `pruneEvents`),
 the shared loop `lib/notes/toolLoop.ts`, the entity sync

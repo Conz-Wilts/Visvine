@@ -13,12 +13,13 @@
 // row must not flicker backwards. The overrides live as long as this view.
 
 import { useCallback, useMemo, useState } from 'react';
-import { useSpaceRouter } from '@/features/shared/hooks/useSpaceRouter';
 import { Alert } from '@visvine/ui';
 import TableToolbar from './TableToolbar';
 import TypeMenu, { menuTypes } from '@/features/directory/components/TypeMenu';
 import DirectoryTable from './DirectoryTable';
-import AgentsRoster from '@/features/agents/components/AgentsRoster';
+import AgentsClock from '@/features/agents/components/AgentsClock';
+import { agentTableItem } from '@/features/agents/lib/agentRows';
+import { useAgentOptions } from '@/features/agents/lib/useAgentOptions';
 import ConnectorsPanel from '@/features/connectors/components/ConnectorsPanel';
 import { useConnectorCount } from '@/features/connectors/hooks/useConnectorCount';
 import { useAgentsRoster } from '@/features/agents/lib/useAgentsRoster';
@@ -48,13 +49,18 @@ interface DirectoryTableViewProps {
 
 export default function DirectoryTableView({ browse, type, onTypeChange }: DirectoryTableViewProps) {
   const { space, loading, error, filteredItems, presentTypes, handleItemClick, handleDataChanged, nodes } = browse;
-  const router = useSpaceRouter();
 
   // Agents are not in the directory feed (their nodes are structural, like a
-  // connector's), so the menu's Agents entry — and the roster under it — come
-  // from the agents route. Followed live only while it is the table shown.
+  // connector's), so the menu's Agents entry — and the rows under it — come
+  // from the agents route: each agent's record and live state as a row
+  // (agentRows.ts). Followed live only while it is the table shown.
   const isAgents = type?.toLowerCase() === 'agent';
   const roster = useAgentsRoster(space?.id ?? null, isAgents);
+  const { options: agentOptions } = useAgentOptions(isAgents ? (space?.id ?? null) : null);
+  const modelOptions = useMemo(
+    () => (agentOptions?.models ?? []).map((m) => m.ref).filter((ref): ref is string => !!ref),
+    [agentOptions],
+  );
   // Connectors likewise: the space's gateways, as each person meets them —
   // sign in, ask for access, ask for a service. The console's own panel,
   // which already knows an admin from a member.
@@ -99,8 +105,8 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
     [activeName, isAll, space?.nodeTypes],
   );
   const columns = useMemo(
-    () => (activeKey ? columnsForType(activeKey, typeConfig) : []),
-    [activeKey, typeConfig],
+    () => (activeKey ? columnsForType(activeKey, typeConfig, { modelOptions }) : []),
+    [activeKey, typeConfig, modelOptions],
   );
 
   const table = useTableView(space?.id ?? null, activeKey ?? '', columns);
@@ -108,7 +114,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   // The menus edit the current type's fields; the type is bound here.
   const fields = useMemo(
     () =>
-      tracked.canEdit && activeName && !isAll
+      tracked.canEdit && activeName && !isAll && !isAgents
         ? {
             saving: tracked.saving,
             error: tracked.error,
@@ -118,7 +124,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
             remove: (key: string) => tracked.remove(activeName, key),
           }
         : undefined,
-    [tracked, activeName, isAll],
+    [tracked, activeName, isAll, isAgents],
   );
 
   // The rows: the toolbar's search/alias/tag result, narrowed to the table's
@@ -126,13 +132,22 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   // with this view's edits laid over, in the header's sort.
   const [overrides, setOverrides] = useState<Map<string, CellPatch[]>>(new Map());
   const aliasNames = useMemo(() => new Set((space?.aliases ?? []).map((a) => (a as SpaceAlias).name)), [space?.aliases]);
+  const agentItems = useMemo(() => {
+    if (!isAgents || !roster.data) return [];
+    const q = browse.searchTerm.trim().toLowerCase();
+    return roster.data.agents
+      .filter((a) => {
+        for (const want of browse.filterTags) if (!a.tags.some((t) => t.toLowerCase() === want.toLowerCase())) return false;
+        return !q || [a.name, a.title, a.description ?? '', ...a.tags].some((v) => v.toLowerCase().includes(q));
+      })
+      .map((a) => agentTableItem(a, roster.now));
+  }, [isAgents, roster.data, roster.now, browse.searchTerm, browse.filterTags]);
   const items = useMemo(() => {
     if (!activeKey) return [];
-    const rows = filteredItems
-      .filter((i) => isAll || i.type.toLowerCase() === activeKey)
+    const rows = (isAgents ? agentItems : filteredItems.filter((i) => isAll || i.type.toLowerCase() === activeKey))
       .map((i) => (overrides.get(i.id) ?? []).reduce(applyCellPatch, i));
     return sortItems(withKnownAliases(rows, aliasNames), columns, table.view.sort);
-  }, [filteredItems, activeKey, isAll, aliasNames, overrides, columns, table.view.sort]);
+  }, [filteredItems, agentItems, isAgents, activeKey, isAll, aliasNames, overrides, columns, table.view.sort]);
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const spaceId = space?.id ?? null;
@@ -156,7 +171,15 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
       if (!patch || !spaceId) return;
       setSaveError(null);
       try {
-        await fetchJsonBody(`/api/nodes/${encodeURIComponent(item.id)}`, 'PATCH', { spaceId, ...patch });
+        // An agent's cell is its record, saved where every setting of it is.
+        if (item.type === 'agent') {
+          const name = item.id.slice('agent:'.length);
+          await fetchJsonBody(`/api/spaces/${encodeURIComponent(spaceId)}/agents/${encodeURIComponent(name)}/config`, 'PUT', {
+            [column.key]: typeof value === 'string' && value ? value : null,
+          });
+        } else {
+          await fetchJsonBody(`/api/nodes/${encodeURIComponent(item.id)}`, 'PATCH', { spaceId, ...patch });
+        }
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Could not save';
         setSaveError(message);
@@ -228,10 +251,10 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
           }
         />
 
-        {(error || saveError) && (
+        {(error || saveError || (isAgents && roster.error)) && (
           <div className="py-2">
             <Alert variant="error" onDismiss={saveError ? () => setSaveError(null) : undefined}>
-              {saveError ?? error}
+              {saveError ?? error ?? roster.error}
             </Alert>
           </div>
         )}
@@ -241,17 +264,9 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
           scrollbars, so its right one would stand clear of where every row
           line ends and its sides would run on under the horizontal bar. The
           table traces its own box on the scrollport instead (DirectoryTable);
-          the roster, which does not scroll sideways, takes a plain frame. */}
+          the connectors panel, which does not scroll sideways, takes a plain frame. */}
       <div className="min-h-0 flex-1">
-        {/* Agents are not rows of a record: every column is live state — what
-            it is doing, when it fires next, who for — so the type gets the
-            roster with the clock over it rather than the cell grid. Same bar,
-            same search and tag filter, same click-through. */}
-        {isAgents && spaceId ? (
-          <div className="h-full border-t border-l border-line-subtle">
-            <AgentsRoster data={roster.data} error={roster.error} now={roster.now} search={browse.searchTerm} tags={browse.filterTags} onNavigate={(href) => router.push(href)} />
-          </div>
-        ) : isConnectors && spaceId ? (
+        {isConnectors && spaceId ? (
           <div className="h-full overflow-y-auto border-t border-line-subtle px-4 py-3">
             <div className="mx-auto max-w-2xl">
               {connectorView === 'catalog' && (
@@ -268,30 +283,36 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
             </div>
           </div>
         ) : (
-        <DirectoryTable
-          items={items}
-          columns={table.visible}
-          allColumns={table.arranged}
-          typeName={activeName}
-          sort={table.view.sort}
-          widths={table.view.widths}
-          loading={loading}
-          nodeTypes={space?.nodeTypes}
-          aliases={aliases}
-          tagColors={tagColors}
-          tagPool={tagPool}
-          onCreateTag={createTag}
-          fields={fields}
-          onSortChange={table.setSort}
-          onResize={table.resize}
-          onReorder={table.placeBefore}
-          onShowColumn={table.toggle}
-          onHideColumn={table.toggle}
-          onResetColumns={table.reset}
-          onOpen={handleItemClick}
-          onSaveCell={spaceId ? saveCell : undefined}
-          onSuggestCell={spaceId ? suggestCell : undefined}
-        />
+          <div className="flex h-full min-h-0 flex-col">
+            {/* The next 24 hours across every agent, over the agents' table. */}
+            {isAgents && <AgentsClock data={roster.data} now={roster.now} />}
+            <div className="min-h-0 flex-1">
+              <DirectoryTable
+                items={items}
+                columns={table.visible}
+                allColumns={table.arranged}
+                typeName={activeName}
+                sort={table.view.sort}
+                widths={table.view.widths}
+                loading={isAgents ? !roster.data : loading}
+                nodeTypes={space?.nodeTypes}
+                aliases={aliases}
+                tagColors={tagColors}
+                tagPool={tagPool}
+                onCreateTag={createTag}
+                fields={fields}
+                onSortChange={table.setSort}
+                onResize={table.resize}
+                onReorder={table.placeBefore}
+                onShowColumn={table.toggle}
+                onHideColumn={table.toggle}
+                onResetColumns={table.reset}
+                onOpen={handleItemClick}
+                onSaveCell={spaceId ? saveCell : undefined}
+                onSuggestCell={spaceId && !isAgents ? suggestCell : undefined}
+              />
+            </div>
+          </div>
         )}
       </div>
     </div>
