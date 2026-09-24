@@ -282,14 +282,15 @@ reconnect and when the tab comes back.
 the Visvine MCP server**, which runs the action for it; web, desktop, iOS and
 Android are where what it made is read, edited, published and switched on.
 There is no Create button, no draft surface, no `/events/new`. The one
-exception is **Resources**: a person drops a file or pastes a link into the
-Directory's Resources tab, or a file into a channel, as they would in Slack.
+exception is a file or link posted in a channel, as in Slack. The Directory's
+Resources tab adds nothing — a resource comes in over MCP so its note is
+written with it.
 
 | Kind | Action |
 |---|---|
 | Note, folder, custom-typed note | `edit_context` (a folder is its `index.md`) |
 | Person, organisation record | `add_context` |
-| Resource (a file or a link) | `upload_file` (with `channel_id` it is posted there), `add_context` with a `url`, `share_resource` to post one into a channel — **and** a file or link dropped into Resources, a file or link posted in a channel |
+| Resource (a file or a link) | `upload_file` (with `channel_id` it is posted there), `add_context` with a `url`, `share_resource` to post one into a channel — **and** a file or link posted in a channel |
 | Event | `create_event` → edited and published at `/events/<id>/edit` |
 | Space, sub-space | `create_space` — **and** New space on the switcher (`NewSpaceDialog`), the one create the app keeps, because a new account has no space to act in |
 | Agent | `create_agent`, then `activate_agent` |

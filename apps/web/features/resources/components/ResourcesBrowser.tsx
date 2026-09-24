@@ -6,10 +6,11 @@
  * One list read (lib/resources/list.ts) behind kind, channel, person, date,
  * search and sort; a list or a grid (an image-first grid for pictures); bulk
  * select; the trash. Opening anything opens the viewer, walking this list.
- * Files dropped or pasted here are uploaded; a pasted link is added.
+ * Nothing is added here: a resource comes in over MCP (`upload_file`,
+ * `add_context` with a url), so its note is written with it.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import {
   Checkbox,
@@ -34,15 +35,12 @@ import {
   RotateCcwIcon,
   Share2Icon,
   Trash2Icon,
-  UploadIcon,
   XIcon,
 } from '@/features/shared/icons';
-import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
-import { isHttpUrl } from '@/lib/links/shared/unfurl';
+import { fetchJson } from '@/lib/fetchJson';
 import type { ChannelDirectoryEntry } from '@/lib/messages/types';
 import type { ListKind, ListQuery, ListSort } from '@/lib/resources/shared/listQuery';
 import type { ResourceView } from '@/lib/resources/shared/view';
-import { uploadResourceFile } from '@/features/resources/lib/upload';
 import { invalidateResourceLists, useResourceList } from '@/features/resources/hooks/useResourceList';
 import { useResourceViewer } from '@/features/resources/viewer/ResourceViewerContext';
 import { resourceMeta } from '@/features/resources/viewer/meta';
@@ -115,12 +113,10 @@ function download(url: string) {
 export default function ResourcesBrowser({
   spaceId,
   channelId = null,
-  canAddToSpace = true,
 }: {
   spaceId: string;
-  /** A channel's Files tab: only what was shared there; uploads post there. */
+  /** A channel's Files tab: only what was shared there. */
   channelId?: string | null;
-  canAddToSpace?: boolean;
 }) {
   const inChannel = Boolean(channelId);
   const layoutKey = `vv:resources:layout:${inChannel ? 'channel' : 'space'}`;
@@ -135,12 +131,8 @@ export default function ResourcesBrowser({
   const [trash, setTrash] = useState(false);
   const [channels, setChannels] = useState<ChannelDirectoryEntry[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [uploading, setUploading] = useState<{ loaded: number; total: number; count: number } | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
   const [sharing, setSharing] = useState<ResourceView | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ResourceView[] | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
   const viewer = useResourceViewer();
 
@@ -196,88 +188,6 @@ export default function ResourcesBrowser({
   }, [hasMore, loadMore]);
 
   const refresh = useCallback(() => invalidateResourceLists(spaceId), [spaceId]);
-
-  const upload = useCallback(
-    async (files: File[]) => {
-      if (!files.length) return;
-      setProblem(null);
-      const total = files.reduce((sum, f) => sum + f.size, 0);
-      let done = 0;
-      setUploading({ loaded: 0, total, count: files.length });
-      const failed: string[] = [];
-      const uploaded: string[] = [];
-      for (const file of files) {
-        try {
-          const result = await uploadResourceFile(file, {
-            spaceId,
-            conversationId: channelId,
-            onProgress: (loaded) => setUploading({ loaded: done + loaded, total, count: files.length }),
-          });
-          uploaded.push(result.id);
-        } catch (err) {
-          failed.push(`${file.name}${err instanceof Error && err.message ? ` (${err.message})` : ''}`);
-        }
-        done += file.size;
-      }
-      // Dropped into a channel's Files, they are shared there as a message.
-      if (channelId && uploaded.length) {
-        await fetchJsonBody(`/api/messages/conversations/${encodeURIComponent(channelId)}/messages`, 'POST', {
-          text: '',
-          fileIds: uploaded,
-        }).catch(() => failed.push('sharing them in the channel'));
-      }
-      setUploading(null);
-      if (failed.length) setProblem(`Couldn't add ${failed.join(', ')}`);
-      refresh();
-    },
-    [spaceId, channelId, refresh],
-  );
-
-  const addLink = useCallback(
-    async (url: string) => {
-      setProblem(null);
-      try {
-        if (channelId) {
-          await fetchJsonBody(`/api/messages/conversations/${encodeURIComponent(channelId)}/messages`, 'POST', { text: url });
-        } else {
-          await fetchJsonBody('/api/resources/links', 'POST', { spaceId, url });
-        }
-        refresh();
-      } catch (err) {
-        setProblem(err instanceof Error ? err.message : 'Could not add the link');
-      }
-    },
-    [spaceId, channelId, refresh],
-  );
-
-  // Paste a file or a link anywhere on the page (not into a field).
-  useEffect(() => {
-    if (trash) return;
-    const onPaste = (e: ClipboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA'].includes(target.tagName))) return;
-      const files = Array.from(e.clipboardData?.files ?? []);
-      if (files.length) {
-        e.preventDefault();
-        void upload(files);
-        return;
-      }
-      const text = e.clipboardData?.getData('text/plain')?.trim() ?? '';
-      if (isHttpUrl(text) && (canAddToSpace || channelId)) {
-        e.preventDefault();
-        void addLink(text);
-      }
-    };
-    window.addEventListener('paste', onPaste);
-    return () => window.removeEventListener('paste', onPaste);
-  }, [upload, addLink, trash, canAddToSpace, channelId]);
-
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length) void upload(files);
-  };
 
   const toggle = (id: string, range: boolean) => {
     setSelected((prev) => {
@@ -355,22 +265,9 @@ export default function ResourcesBrowser({
 
   const open = (r: ResourceView) => viewer.open(r.id, ids);
   const kinds = inChannel ? CHANNEL_KIND_FILTERS : KIND_FILTERS;
-  const pct = uploading && uploading.total ? Math.round((uploading.loaded / uploading.total) * 100) : 0;
 
   return (
-    <div
-      className="relative flex min-h-0 flex-1 flex-col"
-      onDragOver={(e) => {
-        if (trash || !e.dataTransfer.types.includes('Files')) return;
-        e.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={(e) => {
-        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-        setDragging(false);
-      }}
-      onDrop={onDrop}
-    >
+    <div className="relative flex min-h-0 flex-1 flex-col">
       {/* Toolbar: the Directory's shape — search, then one dropdown per filter. */}
       <div className={clsx('flex flex-col gap-3', inChannel ? 'px-4 pt-3' : 'pr-6 pt-1')}>
         <div className="flex flex-wrap items-center gap-2">
@@ -384,13 +281,19 @@ export default function ResourcesBrowser({
           <div className="hidden h-6 w-px shrink-0 bg-line-subtle sm:block" aria-hidden="true" />
           <FilterMenu
             label="Types"
-            value={kind}
-            onChange={(id) => setKind(id as ListKind)}
-            options={kinds.map((k) => ({
-              id: k.id,
-              label: k.id === 'all' ? 'All types' : k.label,
-              leading: KIND_ICON[k.id] ? <FileTypeIcon kind={KIND_ICON[k.id]!} size="xs" /> : undefined,
-            }))}
+            value={trash ? 'trash' : kind}
+            onChange={(id) => {
+              setTrash(id === 'trash');
+              if (id !== 'trash') setKind(id as ListKind);
+            }}
+            options={[
+              ...kinds.map((k) => ({
+                id: k.id,
+                label: k.id === 'all' ? 'All types' : k.label,
+                leading: KIND_ICON[k.id] ? <FileTypeIcon kind={KIND_ICON[k.id]!} size="xs" /> : undefined,
+              })),
+              ...(inChannel ? [] : [{ id: 'trash', label: 'Trash', leading: <Trash2Icon className="h-3.5 w-3.5" /> }]),
+            ]}
           />
           <FilterMenu
             label="People"
@@ -429,46 +332,10 @@ export default function ResourcesBrowser({
             <div className="flex items-center gap-0.5">
               <IconButton label="List" icon={<ListIcon />} active={layout === 'list'} onClick={() => setLayout('list')} />
               <IconButton label="Grid" icon={<LayoutGridIcon />} active={layout === 'grid'} onClick={() => setLayout('grid')} />
-              {!inChannel && (
-                <IconButton label="Trash" icon={<Trash2Icon />} active={trash} onClick={() => setTrash((t) => !t)} />
-              )}
+
             </div>
-            {!trash && (canAddToSpace || inChannel) && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => fileInput.current?.click()}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                >
-                  <UploadIcon className="h-4 w-4" />
-                  <span className="hidden sm:inline">Upload</span>
-                </button>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  multiple
-                  hidden
-                  onChange={(e) => {
-                    void upload(Array.from(e.target.files ?? []));
-                    e.target.value = '';
-                  }}
-                />
-              </>
-            )}
           </div>
         </div>
-
-        {uploading && (
-          <div className="flex items-center gap-3 text-xs text-fg-muted" aria-live="polite">
-            <span className="h-1 flex-1 overflow-hidden rounded-full bg-surface-muted">
-              <span className="block h-full rounded-full bg-accent transition-[width] duration-200" style={{ width: `${pct}%` }} />
-            </span>
-            <span className="tabular-nums">
-              {uploading.count} · {pct}%
-            </span>
-          </div>
-        )}
-        {problem && <p className="text-xs text-danger">{problem}</p>}
       </div>
 
       {/* The list */}
@@ -547,10 +414,6 @@ export default function ResourcesBrowser({
             <IconButton label="Clear selection" icon={<XIcon />} onClick={() => setSelected(new Set())} />
           </div>
         </div>
-      )}
-
-      {dragging && (
-        <div className="pointer-events-none absolute inset-0 z-10 rounded-xl border-2 border-dashed border-accent bg-accent-soft/60" />
       )}
 
       {sharing && (
