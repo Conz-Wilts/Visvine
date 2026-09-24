@@ -684,7 +684,7 @@ only).
   deleting the file drops the node and keeps the note. `db:resources:link`
   gives a file made before this its node.
 - **Resources is everything unstructured, the way Slack's Files is**
-  (`docs/resources.md`). One read, `lib/resources/library.ts` over the pure
+  (`docs/resources/README.md`; the redesign is `docs/resources/PLAN.md`). One read, `lib/resources/library.ts` over the pure
   fold `shared/library.ts`, lists Drive files, link resources, links shared in
   channel messages and event images, newest first, one row per link.
   **A file dropped into a channel is a Drive file of that channel**
