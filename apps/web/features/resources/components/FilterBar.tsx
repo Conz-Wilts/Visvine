@@ -77,7 +77,7 @@ export default function FilterBar({ fields }: { fields: FilterField[] }) {
   };
 
   return (
-    <div ref={ref} className="relative flex flex-wrap items-center gap-2 self-stretch">
+    <div ref={ref} className="relative flex flex-wrap items-stretch gap-2 self-stretch">
       {active.map((f) => {
         const current = f.options.find((o) => o.id === f.value);
         return (
@@ -124,6 +124,11 @@ export default function FilterBar({ fields }: { fields: FilterField[] }) {
           {field && (
             <button
               type="button"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Backspace') openField(null);
+                else cursor.onKeyDown(e);
+              }}
               onClick={() => openField(null)}
               className="flex w-full items-center gap-1.5 border-b border-line-subtle px-4 py-2 text-left text-xs font-semibold text-fg-muted hover:text-fg"
             >
@@ -131,15 +136,9 @@ export default function FilterBar({ fields }: { fields: FilterField[] }) {
               {field.label}
             </button>
           )}
-          <SearchMenuInput
-            value={query}
-            onChange={setQuery}
-            onKeyDown={(e) => {
-              if (e.key === 'Backspace' && !query && field) openField(null);
-              else cursor.onKeyDown(e);
-            }}
-            placeholder={field ? `Search ${field.label.toLowerCase()}…` : 'Filter by…'}
-          />
+          {!field && (
+            <SearchMenuInput value={query} onChange={setQuery} onKeyDown={cursor.onKeyDown} placeholder="Filter by…" />
+          )}
           <SearchMenuList active={cursor.active} className="max-h-[440px]">
             {shown.length === 0 && <SearchMenuEmpty />}
             {shown.map((row, i) => {
