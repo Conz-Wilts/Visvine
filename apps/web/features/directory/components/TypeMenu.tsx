@@ -5,9 +5,10 @@
 // of every type that has rows, each drawn as its chip — All first when there
 // is more than one to be all of. A type with nothing in it is not offered.
 //
-// The menu lists types only — aliases are not offered here. An alias already
-// narrowing the view (from the URL) still shows on the trigger, and picking
-// any type clears it.
+// A type's aliases hang under it on a spine (TreeChrome's TreeSpine), the
+// shape Console → Types draws them in: picking one narrows the view to that
+// alias, picking the type clears it. The search reads both, so an alias's
+// name finds it under its type.
 //
 // It is a dropdown rather than a column down the left because the list is
 // short and the table is wide: a rail spent 212px of every screen saying one
@@ -21,6 +22,7 @@ import { clsx } from 'clsx';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
 import { Chip, SEARCH_MENU_PANEL, SEARCH_MENU_ROW, SearchMenuEmpty, SearchMenuInput, SearchMenuList, searchMenuRowState, useSearchMenuCursor } from '@visvine/ui';
 import { ChevronDownIcon } from '@/features/shared/icons';
+import { TREE_ROW_BLEED, TreeSpine, TreeSpineJoin } from '@/features/shared/components/TreeChrome';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
 import { pluralTypeName } from '@/lib/types/plural';
 import { DEFAULT_NODE_TYPES, aliasesForType, type NodeTypeConfig, type SpaceAlias } from '@/lib/types';
@@ -96,15 +98,28 @@ export default function TypeMenu({ types, activeKey, activeAlias, nodeTypes, onC
   const close = () => { setOpen(false); setQuery(''); };
   useClickOutside(ref, close);
 
-  // The search reads the row's own words, so "peo" finds People.
+  // The search reads the row's own words, so "peo" finds People. A type
+  // matched by name keeps every alias; one matched only through an alias keeps
+  // just those.
   const q = query.trim().toLowerCase();
-  const shown = q ? types.filter((t) => t.id !== 'all' && label(t, nodeTypes).toLowerCase().includes(q)) : types;
-  // Picking a type clears any alias narrowing it.
-  const pick = (id: string) => { onChange(id, null); close(); };
+  const shown = q
+    ? types.flatMap((t) => {
+        if (t.id === 'all') return [];
+        if (label(t, nodeTypes).toLowerCase().includes(q)) return [t];
+        const aliases = (t.aliases ?? []).filter((a) => a.name.toLowerCase().includes(q));
+        return aliases.length ? [{ ...t, aliases }] : [];
+      })
+    : types;
+  // Every row in reading order, so the arrow keys walk types and aliases alike.
+  const rows = shown.flatMap((t) => [
+    { type: t, alias: null as string | null },
+    ...(t.aliases ?? []).map((a) => ({ type: t, alias: a.name as string | null })),
+  ]);
+  const pick = (id: string, alias: string | null) => { onChange(id, alias); close(); };
   const cursor = useSearchMenuCursor({
-    count: shown.length,
+    count: rows.length,
     resetKey: q,
-    onChoose: (i) => { if (shown[i]) pick(shown[i].id); },
+    onChoose: (i) => { if (rows[i]) pick(rows[i].type.id, rows[i].alias); },
     onClose: close,
   });
 
@@ -153,34 +168,74 @@ export default function TypeMenu({ types, activeKey, activeAlias, nodeTypes, onC
           <SearchMenuInput value={query} onChange={setQuery} onKeyDown={cursor.onKeyDown} placeholder="Search types…" />
           <SearchMenuList active={cursor.active} className="max-h-[440px]">
             {shown.length === 0 && <SearchMenuEmpty />}
-            {shown.map((type, i) => {
+            {shown.map((type) => {
+              const i = rows.findIndex((r) => r.type.id === type.id && r.alias === null);
               const picked = type.id === active.id && !pickedAlias;
+              const aliases = type.aliases ?? [];
               return (
-                <button
-                  key={type.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={picked}
-                  data-menu-row={i}
-                  onMouseEnter={() => cursor.setActive(i)}
-                  onClick={() => pick(type.id)}
-                  className={clsx(SEARCH_MENU_ROW, searchMenuRowState(i === cursor.active))}
-                >
-                  <span className="min-w-0 flex-1 text-left">
-                    {type.id === 'all' ? (
-                      // All has no colour to be a chip in: it is the word,
-                      // padded to line up with the chip labels under it.
-                      <span className={clsx('px-2 text-[12px] font-semibold', picked ? 'text-fg' : 'text-fg-secondary')}>
-                        {label(type, nodeTypes)}
-                      </span>
-                    ) : (
-                      <Chip color={getTypeColor(type.name, nodeTypes)} size="md" className={clsx(picked && PICKED_RING)}>
-                        <span className="truncate">{label(type, nodeTypes)}</span>
-                      </Chip>
-                    )}
-                  </span>
-                  <span className="shrink-0 text-[11px] leading-4 tabular-nums text-fg-muted">{type.count}</span>
-                </button>
+                <div key={type.id}>
+                  <button
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={picked}
+                    data-menu-row={i}
+                    onMouseEnter={() => cursor.setActive(i)}
+                    onClick={() => pick(type.id, null)}
+                    className={clsx(SEARCH_MENU_ROW, searchMenuRowState(i === cursor.active))}
+                  >
+                    <span className="min-w-0 flex-1 text-left">
+                      {type.id === 'all' ? (
+                        // All has no colour to be a chip in: it is the word,
+                        // padded to line up with the chip labels under it.
+                        <span className={clsx('px-2 text-[12px] font-semibold', picked ? 'text-fg' : 'text-fg-secondary')}>
+                          {label(type, nodeTypes)}
+                        </span>
+                      ) : (
+                        <Chip color={getTypeColor(type.name, nodeTypes)} size="md" className={clsx(picked && PICKED_RING)}>
+                          <span className="truncate">{label(type, nodeTypes)}</span>
+                        </Chip>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-[11px] leading-4 tabular-nums text-fg-muted">{type.count}</span>
+                  </button>
+                  {aliases.length > 0 && (
+                    // The spine drops from just under the type's chip: 14px
+                    // in puts it a little inside the chip's left edge, and the
+                    // stem climbs the row's bottom padding less a hair of air.
+                    <div className="pl-3.5">
+                      <TreeSpine stem={6}>
+                        {aliases.map((alias, k) => {
+                          const j = i + 1 + k;
+                          const aliasPicked = type.id === active.id && pickedAlias?.name === alias.name;
+                          return (
+                            <button
+                              key={alias.name}
+                              type="button"
+                              role="menuitemradio"
+                              aria-checked={aliasPicked}
+                              data-menu-row={j}
+                              onMouseEnter={() => cursor.setActive(j)}
+                              onClick={() => pick(type.id, alias.name)}
+                              className={clsx(
+                                TREE_ROW_BLEED,
+                                'flex w-[calc(100%+999px)] items-center gap-2.5 py-1.5 pr-4 text-left text-sm transition-colors',
+                                searchMenuRowState(j === cursor.active),
+                              )}
+                            >
+                              <TreeSpineJoin kind={k === aliases.length - 1 ? 'last' : 'mid'} />
+                              <span className="min-w-0 flex-1 text-left">
+                                <Chip color={alias.color} size="sm" className={clsx(aliasPicked && PICKED_RING)}>
+                                  <span className="truncate">{alias.name}</span>
+                                </Chip>
+                              </span>
+                              <span className="shrink-0 text-[11px] leading-4 tabular-nums text-fg-muted">{alias.count}</span>
+                            </button>
+                          );
+                        })}
+                      </TreeSpine>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </SearchMenuList>
