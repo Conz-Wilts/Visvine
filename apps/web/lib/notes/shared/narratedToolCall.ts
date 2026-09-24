@@ -94,3 +94,25 @@ export function narrationNudge(tool: string): string {
     'Make the call itself now, through the tool interface, and carry on from its result.'
   )
 }
+
+/**
+ * A reply that ENDS by announcing what it will do next — "Now I'll combine
+ * these and pick the top ten." — and makes no call. The model stopped between
+ * steps, thinking the turn goes on; the loop would record the half-done work
+ * as the answer. Only the LAST sentence is read, and only a first-person
+ * promise of an immediate next step counts: a report that mentions next week
+ * or the next run is an answer, not a pause.
+ */
+export function announcedNextStep(text: string | null | undefined): boolean {
+  const sentences = (text ?? '').trim().split(/(?<=[.!?:])\s+/).filter(Boolean)
+  const last = sentences[sentences.length - 1]?.trim() ?? ''
+  if (!last || /\b(next|following|upcoming) (run|time|week|month|day)\b|\btomorrow\b/i.test(last)) return false
+  if (/^(?:(?:now|next|then|ok(?:ay)?|great|alright)[,.]?\s+)?(?:i['’]ll|i will|i am going to|i['’]m going to|let me)\b/i.test(last)) return true
+  // "Next, it will combine …" — the same pause, told in the third person.
+  return /^(?:now|next|then)[,.]?\s+(?:it|the agent)\s+will\b/i.test(last)
+}
+
+/** What the model is told when it stops on a promise. Once: whatever it says next is its answer. */
+export const NEXT_STEP_NUDGE =
+  'You said what you will do next but made no tool call, so the run would end here with that step undone. ' +
+  'Do it now through the tools, and finish the task; if it is already finished, reply with the final result.'

@@ -39,6 +39,7 @@ import { createEntity, type CreateEntityInput, type CreateEntityResult } from '@
 import { appendLogGated, writeGated } from '@/lib/notes/contextService'
 import { federatedMetas, readFederated, searchFederated } from '@/lib/notes/federation'
 import { findLines, FIND_MIN_CHARS } from '@/lib/judge/find'
+import { restoreFrontmatterFence } from '@/lib/notes/shared/markdown'
 import { riskBanner } from '@/lib/judge/risk'
 import { upsertLink } from '@/lib/notes/context/links'
 import type { ResolvedContext } from '@/lib/notes/resolve'
@@ -355,7 +356,7 @@ export function agentTools(ctx: AgentToolContext): ToolHandler[] {
       describe: (a) => str(a.path),
       run: async (a) => {
         const path = str(a.path).trim()
-        const content = str(a.content)
+        const content = restoreFrontmatterFence(str(a.content))
         if (!path.endsWith('.md')) return 'error: path must end in .md'
         if (!content.trim()) return 'error: content is empty'
         if (dry) {

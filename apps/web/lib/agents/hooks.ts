@@ -162,8 +162,8 @@ export async function syncAgentState(
   }
   const triggersJson = activation?.on ? { ...activation.on } : Prisma.DbNull
   const debounceMs = activation?.debounceMs ?? DEFAULT_DEBOUNCE_MS
-  // Only the record's own run-in copies and pre-record rows are derived here;
-  // a configured row's config columns are its own and only `active` follows.
+  // A configured row's triggers and debounce ARE its record, written by
+  // storeAgentConfig; only a pre-record row or a run-in copy derives them here.
   const configured = !!existing?.configuredAt && !existing.sharedFrom
 
   const reborn = !!(brief && existing?.briefNoteId && existing.briefNoteId !== brief.id && brief.spaceId === spaceId)
@@ -226,7 +226,7 @@ export async function adoptNoteConfig(spaceId: string, name: string): Promise<vo
   const fm = parseFrontmatter(note.content)
   const { body } = splitFrontmatter(note.content)
   const keys = runKeysOf(fm)
-  const row = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } }, select: { briefNoteId: true, sharedFrom: true } })
+  const row = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } }, select: { briefNoteId: true } })
   // A different note at an old name is a new agent: its keys start from nothing.
   const reborn = !!(row?.briefNoteId && row.briefNoteId !== note.id)
   if (reborn) await syncAgentState(spaceId, name)
@@ -392,9 +392,8 @@ export async function agentNoteWritten(
   }
   const spaceId = context.spaceId
 
-  // The brief carries the activation, so every write to it re-derives the row
-  // — that is how turning an agent on takes effect. A pre-merge activation.md
-  // does the same for an agent that still has one.
+  // A brief write adopts any run keys it still carries, then re-derives the
+  // row; a pre-merge activation.md re-derives it for an agent with no record.
   if (isAgentBriefPath(path)) await adoptNoteConfig(spaceId, name)
   if (isAgentBriefPath(path) || isAgentActivationPath(path)) await syncAgentState(spaceId, name)
 }

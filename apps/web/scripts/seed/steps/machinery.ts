@@ -29,6 +29,10 @@ import { createHash } from 'node:crypto'
 import prisma from '../../../lib/prisma'
 import { encryptSecret } from '../../../lib/crypto/secrets'
 import { MODEL_CATALOG, modelFromCatalog } from '../../../lib/models/catalog'
+import { parseEvery, type AgentSchedule } from '../../../lib/agents/config'
+import { syncAgentState } from '../../../lib/agents/hooks'
+import { storeAgentConfig } from '../../../lib/agents/record'
+import { applyConfigPatch, defaultAgentConfig, type AgentConfigPatch } from '../../../lib/agents/shared/agentConfig'
 import { setFolderLocked, setFolderRestricted } from '../../../lib/notes/access'
 import { publishNote, unpublish } from '../../../lib/notes/publications'
 import { SHARED_OWNER_KEY } from '../../../lib/notes/store'
@@ -74,23 +78,13 @@ export async function seedConnectors(): Promise<{ notes: number; secrets: number
 const DIGEST = 'dealflow-digest'
 const DRAFTER = 'lp-update-drafter'
 
+// A brief is what the agent IS; how it runs is its record, set below with
+// the same write configure_agent makes (lib/agents/shared/agentConfig.ts).
 const DIGEST_BRIEF = `---
 type: agent
 title: Dealflow digest
 description: Each weekday morning, what moved in dealflow and across the portfolio
-connectors: [crm]
-tools: [directory]
-share: [investments]
-max_turns: 30
-active: true
-every: "0 8 * * 1-5"
-timezone: ${SPACE_TIMEZONE}
-on:
-  context: ["dealflow/**", "spaces/**"]
-debounce: 2m
-for:
-  - user: ${MEMBER_USER}
-    at: "07:30"
+tags: [Investments]
 ---
 
 You keep the investment team's picture of dealflow honest.
@@ -111,13 +105,7 @@ const DRAFTER_BRIEF = `---
 type: agent
 title: LP update drafter
 description: Drafts the quarterly LP letter from the fund table and the portfolio news
-tools: [directory]
-share: [fund-operations]
-share_as: run-in
-max_turns: 20
-active: false
-every: "0 7 1 1,4,7,10 *"
-timezone: ${SPACE_TIMEZONE}
+tags: [Fund operations]
 ---
 
 At the start of each quarter, draft the LP letter into
@@ -149,6 +137,20 @@ agent: ${DIGEST}
 - 2026-09-23 — scheduled — Banksia to committee, Quokka passed, Heidi raised
 `
 
+function schedule(every: string): AgentSchedule {
+  const parsed = parseEvery(every)
+  if (!parsed.ok) throw new Error(`seed: ${parsed.error}`)
+  return parsed.schedule
+}
+
+/** An agent's record, stored as configure_agent stores it, and its row re-derived. */
+async function configureSeedAgent(name: string, patch: AgentConfigPatch): Promise<void> {
+  const config = applyConfigPatch(defaultAgentConfig(), patch)
+  if (!config.ok) throw new Error(`seed: ${name}: ${config.error}`)
+  await storeAgentConfig(SPACE_ID, name, config.config, { userId: ADMIN })
+  await syncAgentState(SPACE_ID, name)
+}
+
 export async function seedAgents(): Promise<{ agents: number; runs: number }> {
   const context = { spaceId: SPACE_ID, ownerKey: SHARED }
   const actor = anchorActor(ADMIN)
@@ -168,6 +170,26 @@ export async function seedAgents(): Promise<{ agents: number; runs: number }> {
   await putNote(context, `agents/${DIGEST}/index.md`, DIGEST_BRIEF, actor)
   await putNote(context, `agents/${DRAFTER}/index.md`, DRAFTER_BRIEF, actor)
   await putNote(context, `agents/${DIGEST}/memory.md`, DIGEST_MEMORY, actor)
+  await configureSeedAgent(DIGEST, {
+    connectors: ['crm'],
+    tools: ['directory'],
+    share: ['investments'],
+    maxTurns: 30,
+    active: true,
+    schedule: schedule('0 8 * * 1-5'),
+    timezone: SPACE_TIMEZONE,
+    on: { context: ['dealflow/**', 'spaces/**'], webhook: null },
+    debounceMs: 120_000,
+    runsFor: [{ userId: MEMBER_USER, at: { hour: 7, minute: 30 }, timezone: null, model: null }],
+  })
+  await configureSeedAgent(DRAFTER, {
+    tools: ['directory'],
+    share: ['fund-operations'],
+    shareAs: 'run-in',
+    maxTurns: 20,
+    schedule: schedule('0 7 1 1,4,7,10 *'),
+    timezone: SPACE_TIMEZONE,
+  })
 
   const digest = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId: SPACE_ID, name: DIGEST } } })
   const drafter = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId: SPACE_ID, name: DRAFTER } } })
@@ -178,8 +200,8 @@ export async function seedAgents(): Promise<{ agents: number; runs: number }> {
 
   // The budget is admin-set and not a note field.
   await prisma.agentState.update({ where: { id: digest.id }, data: { budgetMonthlyCents: 2500 } })
-  // The drafter's last run hit a rejected key, which is the one machine write
-  // into a brief: it can only set `active: false` (docs/agents.md).
+  // The drafter's last run hit a rejected key, which switched its record off
+  // (a machine write only ever sets `active: false` — docs/agents.md).
   await prisma.agentState.update({
     where: { id: drafter.id },
     data: {

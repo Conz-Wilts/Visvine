@@ -11,7 +11,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { narratedToolCall } from '@/lib/notes/shared/narratedToolCall'
+import { announcedNextStep, narratedToolCall, NEXT_STEP_NUDGE } from '@/lib/notes/shared/narratedToolCall'
 import { runToolLoop, type ChatFn, type ToolHandler } from '@/lib/notes/toolLoop'
 import type { ChatWithToolsResult } from '@/lib/notes/ai'
 
@@ -87,4 +87,26 @@ test('a model that keeps narrating FAILS the loop rather than passing off a plan
   const result = await runToolLoop({ messages: [], tools: [fetchUrl], maxTurns: 8, chatFn })
   assert.equal(result.reason, 'narrated')
   assert.equal(result.narratedTool, 'fetch_url')
+})
+
+test('a reply that stops on its next step is told once, then believed', async () => {
+  assert.ok(announcedNextStep("I've fetched both lists. Now I'll combine these and select the top 10 by points."))
+  assert.ok(announcedNextStep('Let me write the note.'))
+  assert.ok(announcedNextStep('The agent collected the stories. Next, it will combine the lists and pick the top 10.'))
+  assert.equal(announcedNextStep('Listed 10 stories in agents/hn/top-ai.md.'), false)
+  assert.equal(announcedNextStep("Nothing changed today. I'll check again next run."), false)
+  assert.equal(announcedNextStep('I will now explain: the digest is written.'), false, 'only the last sentence is read')
+  assert.equal(announcedNextStep(null), false)
+
+  const once = scripted([{ content: 'Fetched. Now I will write it.' }, { content: 'Wrote it.' }])
+  const r = await runToolLoop({ messages: [{ role: 'user', content: 'go' }], tools: [fetchUrl], maxTurns: 5, chatFn: once })
+  assert.equal(r.reason, 'finished')
+  assert.equal(r.finalText, 'Wrote it.')
+  assert.ok(once.seen.includes(NEXT_STEP_NUDGE))
+
+  // Promising again is its answer: one nudge, never a loop, never a failure.
+  const twice = scripted([{ content: "Now I'll do it." }, { content: "Now I'll do it." }])
+  const r2 = await runToolLoop({ messages: [{ role: 'user', content: 'go' }], tools: [fetchUrl], maxTurns: 5, chatFn: twice })
+  assert.equal(r2.reason, 'finished')
+  assert.equal(r2.turns, 2)
 })

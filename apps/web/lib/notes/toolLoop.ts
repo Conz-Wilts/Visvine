@@ -16,7 +16,7 @@ import {
   type ChatWithToolsResult,
   type ToolSpec,
 } from './ai'
-import { MAX_NARRATION_NUDGES, narratedToolCall, narrationNudge } from './shared/narratedToolCall'
+import { announcedNextStep, MAX_NARRATION_NUDGES, NEXT_STEP_NUDGE, narratedToolCall, narrationNudge } from './shared/narratedToolCall'
 
 export type ChatFn = (
   messages: AgentMessage[],
@@ -89,6 +89,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
   let usage: ChatUsage = { promptTokens: 0, completionTokens: 0 }
   /** How often this run has written a call out as text instead of making it. */
   let nudges = 0
+  let promptedNextStep = false
 
   const done = (
     reason: ToolLoopReason,
@@ -133,6 +134,15 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<ToolLoopResult
         nudges++
         messages.push({ role: 'assistant', content: reply.content ?? '' })
         messages.push({ role: 'user', content: narrationNudge(narrated) })
+        continue
+      }
+      // A reply that stops on "now I'll …" paused between steps; it is given
+      // the turn back ONCE, and whatever it says then is its answer.
+      if (!promptedNextStep && announcedNextStep(reply.content)) {
+        promptedNextStep = true
+        if (reply.content?.trim()) emit({ type: 'assistant', text: reply.content.trim() })
+        messages.push({ role: 'assistant', content: reply.content ?? '' })
+        messages.push({ role: 'user', content: NEXT_STEP_NUDGE })
         continue
       }
       // The final answer is returned, not emitted — callers render it their way.

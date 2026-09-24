@@ -26,6 +26,26 @@ export function splitFrontmatter(md: string): {
   }
 }
 
+// A note whose frontmatter lost its OPENING fence — `title: x` … `---` …
+// body, which models writing notes often produce — with the fence put back.
+// Only when every line above the first `---` reads as YAML (a `key:` line or a
+// list item under one) and parses as a map; anything else is left as written.
+export function restoreFrontmatterFence(md: string): string {
+  const lines = md.split(/\r?\n/)
+  if (lines[0]?.trim() === '---') return md
+  const end = lines.findIndex((l) => l.trim() === '---')
+  if (end < 1 || !/^[A-Za-z_][\w-]*:/.test(lines[0])) return md
+  const head = lines.slice(0, end)
+  if (!head.every((l) => /^[A-Za-z_][\w-]*:/.test(l) || /^\s+\S/.test(l) || l.trim() === '')) return md
+  try {
+    const parsed = yaml.parse(head.join('\n'))
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return md
+  } catch {
+    return md
+  }
+  return `---\n${md}`
+}
+
 // Parse a note's frontmatter into an object (empty object if absent/invalid).
 export function parseFrontmatter(md: string): NoteFrontmatter {
   const { frontmatter } = splitFrontmatter(md)

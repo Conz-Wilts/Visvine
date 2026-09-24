@@ -33,7 +33,7 @@ import {
   type AgentSchedule,
   type AgentTriggers,
 } from './config'
-import { agentConfigOf, composeAgent, findAgentActivation, findAgentBrief, findOwnAgentBrief } from './briefs'
+import { agentConfigOf, composeAgent, findAgentActivation, findAgentBrief, findOwnAgentBrief, type ComposedAgent } from './briefs'
 import { modelFor, parseRunsFor, runsForDenial, runsForFrontmatter, withRunsFor } from './shared/runsFor'
 import { applyConfigPatch, configOf, defaultAgentConfig, type AgentConfig, type AgentConfigPatch } from './shared/agentConfig'
 import { listAgentConfigChanges, storeAgentConfig, type AgentConfigChangeRow } from './record'
@@ -209,7 +209,7 @@ async function summarise(
   path: string,
   briefContent: string,
   opts: { includeSpend: boolean; now: Date; heartbeatAt: Date | null; models: readonly SpaceModel[] },
-): Promise<AgentSummary> {
+): Promise<{ summary: AgentSummary; config: AgentConfig | null; composed: ComposedAgent }> {
   const spaceId = context.spaceId
   // The note's prose with the record's run keys laid over it (briefs.ts#composeAgent).
   const config = await agentConfigOf(spaceId, name)
@@ -285,7 +285,7 @@ async function summarise(
   if (opts.includeSpend) {
     summary.spend = { budgetMonthlyCents: state?.budgetMonthlyCents ?? null }
   }
-  return summary
+  return { summary, config, composed }
 }
 
 export interface AgentRoster {
@@ -327,7 +327,7 @@ export async function listAgents(
     briefs.push({ name, path: raw.path, content: raw.content })
   }
   const out = await Promise.all(
-    briefs.map((b) => summarise(context, b.name, b.path, b.content, { includeSpend: !!opts.includeSpend, now, heartbeatAt, models })),
+    briefs.map(async (b) => (await summarise(context, b.name, b.path, b.content, { includeSpend: !!opts.includeSpend, now, heartbeatAt, models })).summary),
   )
   return {
     agents: out.sort((a, b) => a.path.localeCompare(b.path)),
@@ -393,15 +393,13 @@ export async function describeAgent(
   const content = row ? await readVisible(p, context, row.path) : null
   if (!row || content === null) return null
   const heartbeatAt = await lastHeartbeat()
-  const summary = await summarise(context, name, row.path, content, {
+  const { summary, config, composed } = await summarise(context, name, row.path, content, {
     includeSpend: !!opts.includeSpend,
     now: new Date(),
     heartbeatAt,
     models: await spaceModels(context.spaceId),
   })
 
-  const config = await agentConfigOf(context.spaceId, name)
-  const composed = composeAgent(content, config)
   const forRows = runsForFrontmatter(composed.brief.ok ? composed.brief.brief.runsFor : []) ?? []
   const subRows = forRows.map((r) => ({ userId: r.user, at: r.at ?? null, timezone: r.timezone ?? null, model: r.model ?? null }))
   const runAsUserId = summary.runAsUserId
