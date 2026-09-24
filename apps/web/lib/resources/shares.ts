@@ -7,6 +7,7 @@
  */
 import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
+import { logger } from '@/lib/logger'
 import { syncResourceGrants } from './grants'
 
 export type ShareVia = 'upload' | 'message' | 'link' | 'action' | 'agent'
@@ -65,10 +66,58 @@ export async function syncGrantsOf(resourceIds: string[]): Promise<void> {
   for (const id of new Set(resourceIds)) await syncResourceGrants(id)
 }
 
+/**
+ * Whether losing its last share sends a resource to the trash: a LINK that
+ * came in through a message and was never added to the space was only ever
+ * that message's card. A file someone uploaded is kept — it is still theirs.
+ */
+export function orphanGoesToTrash(resource: { source: string }, removedVia: string): boolean {
+  return resource.source === 'link' && removedVia === 'message'
+}
+
+/**
+ * Remove a message's shares of the given resources (the author removing a
+ * preview; an edit that drops a link). A resource shared elsewhere lives on;
+ * one left shared nowhere is trashed when `orphanGoesToTrash` says so.
+ */
+export async function removeMessageShares(messageId: string, resourceIds?: string[]): Promise<string[]> {
+  const shares = await prisma.resourceShare.findMany({
+    where: { messageId, ...(resourceIds ? { resourceId: { in: resourceIds } } : {}) },
+    select: { id: true, resourceId: true, via: true },
+  })
+  if (shares.length === 0) return []
+  await prisma.resourceShare.deleteMany({ where: { id: { in: shares.map((share) => share.id) } } })
+  const affected = [...new Set(shares.map((share) => share.resourceId))]
+  const resources = await prisma.resource.findMany({
+    where: { id: { in: affected } },
+    select: { id: true, source: true, _count: { select: { shares: true } } },
+  })
+  const via = new Map(shares.map((share) => [share.resourceId, share.via]))
+  const orphans = resources
+    .filter((row) => row._count.shares === 0 && orphanGoesToTrash(row, via.get(row.id) ?? ''))
+    .map((row) => row.id)
+  if (orphans.length) {
+    await prisma.resource.updateMany({
+      where: { id: { in: orphans } },
+      data: { deletedAt: new Date(), deletedBy: 'system', state: 'deleted' },
+    })
+  }
+  await syncGrantsOf(affected)
+  return affected
+}
+
 /** Move a resource to the trash. Its bytes and note stay until it is purged. */
 export async function trashResource(resourceId: string, userId: string): Promise<void> {
   await prisma.resource.update({
     where: { id: resourceId },
     data: { deletedAt: new Date(), deletedBy: userId, state: 'deleted' },
   })
+}
+
+export async function restoreResource(resourceId: string): Promise<void> {
+  await prisma.resource.update({
+    where: { id: resourceId },
+    data: { deletedAt: null, deletedBy: null, state: 'ready' },
+  })
+  await syncResourceGrants(resourceId).catch((err) => logger.error('resources.restore.grants', { resourceId, err }))
 }

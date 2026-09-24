@@ -13,7 +13,7 @@
  * every client on connect. Write it for the model that has to act on it.
  */
 
-import { wearUnfurl } from '@/lib/resources/links'
+import { bindLinkNode, existingLinkNode } from '@/lib/resources/links'
 import { inSpace } from '@/lib/spaces/shared/spaceUrl'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
@@ -1125,6 +1125,15 @@ export const CONTEXT_ACTIONS = [
       run: async (ctx, args) => {
         const context = await requireSpaceContext(ctx, args.space_id)
         if (args.alias) await assertAliasExists(args.space_id, args.type, args.alias)
+        // A link is one resource per space: adding one the space holds answers that one.
+        const linkUrl = args.type === 'resource' && typeof args.fields?.url === 'string' ? args.fields.url : undefined
+        const held = linkUrl ? await existingLinkNode(args.space_id, linkUrl) : null
+        if (held) {
+          throw new ActionError(
+            409,
+            `This space already holds that link as "${held.name}" (node_id: ${held.id}) — read it with read_context instead of creating a duplicate`,
+          )
+        }
         const result = await createEntity(context, {
           type: args.type,
           name: args.name,
@@ -1151,10 +1160,9 @@ export const CONTEXT_ACTIONS = [
         const visibilityError = wantPrivate
           ? await makeNotePrivate(args.space_id, result.notePath!, { userId: ctx.userId, name: ctx.name })
           : null
-        // A link resource wears its unfurl — title aside, its image and
-        // description — unless a Drive image was named for it.
-        const linkUrl = args.type === 'resource' ? args.fields?.url : undefined
-        if (typeof linkUrl === 'string' && !args.image_resource_id) await wearUnfurl(result.node.id, linkUrl)
+        // A link resource is the space's resource for its URL: bound, shared
+        // to the space, and unfurled (its page image re-hosted, its entity named).
+        if (linkUrl) await bindLinkNode(args.space_id, result.node.id, linkUrl, ctx.userId)
         // The entity exists either way; a picture that could not be used is
         // reported, and set_image retries it.
         let imageError: string | null = null

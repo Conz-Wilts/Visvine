@@ -43,6 +43,8 @@ const RUNNERS: Partial<Record<JobKind, () => Promise<Runner>>> = {
   extract: async () => async (id) => {
     await (await import('./service')).indexResource(id)
   },
+  unfurl: async () => (await import('./unfurl')).unfurlResource,
+  refresh: async () => (await import('./unfurl')).unfurlResource,
 }
 
 /** Queue work for a resource; a kind already queued or done is queued again. */
@@ -58,29 +60,28 @@ export async function enqueueJobs(resourceId: string, kinds: JobKind[], runAfter
 
 async function claim(limit: number, resourceIds?: string[]): Promise<ClaimedJob[]> {
   if (resourceIds && resourceIds.length === 0) return []
-  const scoped = resourceIds ? prisma.$queryRaw<ClaimedJob[]>`
-    UPDATE resource_jobs SET state = 'running', attempts = attempts + 1,
-      locked_until = now() + make_interval(secs => ${LEASE_SECONDS}), updated_at = now()
-    WHERE id IN (
-      SELECT id FROM resource_jobs
-      WHERE (state = 'queued' OR (state = 'running' AND locked_until < now()))
-        AND run_after <= now() AND resource_id = ANY(${resourceIds}::text[])
-      ORDER BY run_after LIMIT ${limit} FOR UPDATE SKIP LOCKED
-    )
-    RETURNING id, resource_id, kind, attempts` : null
-  return (
-    scoped ??
-    prisma.$queryRaw<ClaimedJob[]>`
-    UPDATE resource_jobs SET state = 'running', attempts = attempts + 1,
-      locked_until = now() + make_interval(secs => ${LEASE_SECONDS}), updated_at = now()
-    WHERE id IN (
+  // The claimable rows are picked with SKIP LOCKED, and the UPDATE says again
+  // what claimable means: under a concurrent claim Postgres re-evaluates that
+  // condition against the committed row, so a job another drain has just
+  // taken is never taken twice.
+  const scope = resourceIds ?? null
+  return prisma.$queryRaw<ClaimedJob[]>`
+    WITH picked AS (
       SELECT id FROM resource_jobs
       WHERE (state = 'queued' OR (state = 'running' AND locked_until < now()))
         AND run_after <= now()
-      ORDER BY run_after LIMIT ${limit} FOR UPDATE SKIP LOCKED
+        AND (${scope}::text[] IS NULL OR resource_id = ANY(${scope}::text[]))
+      ORDER BY run_after
+      LIMIT ${limit}
+      FOR UPDATE SKIP LOCKED
     )
-    RETURNING id, resource_id, kind, attempts`
-  )
+    UPDATE resource_jobs j
+    SET state = 'running', attempts = j.attempts + 1,
+        locked_until = now() + make_interval(secs => ${LEASE_SECONDS}), updated_at = now()
+    FROM picked
+    WHERE j.id = picked.id
+      AND (j.state = 'queued' OR (j.state = 'running' AND j.locked_until < now()))
+    RETURNING j.id, j.resource_id, j.kind, j.attempts`
 }
 
 async function settle(job: ClaimedJob, error: unknown): Promise<void> {

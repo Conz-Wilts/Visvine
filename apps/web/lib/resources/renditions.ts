@@ -14,10 +14,10 @@ import { logger } from '@/lib/logger'
 import { downloadResourceFile, uploadResourceFile } from '@/lib/gcs'
 import { resourceRenditionPath } from '@/lib/storage/objectPaths'
 
-export type RenditionKind = 'thumb' | 'preview' | 'poster' | 'page1'
+export type RenditionKind = 'thumb' | 'preview' | 'poster' | 'page1' | 'favicon'
 
 /** Longest edge of each rendition, in pixels. */
-const EDGE: Record<RenditionKind, number> = { thumb: 480, preview: 2048, poster: 1280, page1: 1200 }
+const EDGE: Record<RenditionKind, number> = { thumb: 480, preview: 2048, poster: 1280, page1: 1200, favicon: 64 }
 
 /** An image past this many pixels is shown from its preview, never decoded whole in a browser. */
 export const MAX_BROWSER_PIXELS = 40_000_000
@@ -41,7 +41,7 @@ export async function encodeRendition(
   return { data, width: info.width, height: info.height }
 }
 
-async function saveRendition(
+export async function saveRendition(
   resource: { id: string; spaceId: string },
   kind: RenditionKind,
   source: Buffer,

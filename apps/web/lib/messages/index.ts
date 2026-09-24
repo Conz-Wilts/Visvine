@@ -31,6 +31,7 @@ export {
   sendMessage,
   editMessage,
   deleteMessage,
+  removeMessageShare,
   toggleReaction,
   toggleStar,
   listStarredMessages,

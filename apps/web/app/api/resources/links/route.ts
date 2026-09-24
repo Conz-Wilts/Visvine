@@ -12,8 +12,8 @@ const bodySchema = z.object({
 
 /**
  * POST /api/resources/links { spaceId, url } — add a link to the space's
- * Resources, as a resource record wearing the link's unfurl. Answers the record
- * the space already holds for that link rather than making a second.
+ * Resources (lib/resources/links.ts): the space's one resource for that page,
+ * shared to the space and unfurled.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -23,7 +23,10 @@ export async function POST(req: NextRequest) {
     if (context instanceof Response) return context;
     if (await featureAccessForbidden(context.actor.id, body.spaceId, 'directory', context.actor.email)) return forbiddenResponse();
     const added = await addLinkResource(context, body.url);
-    return NextResponse.json({ nodeId: added.node.id, created: added.created }, { status: added.created ? 201 : 200 });
+    return NextResponse.json(
+      { nodeId: added.node.id, resourceId: added.resourceId, created: added.created },
+      { status: added.created ? 201 : 200 },
+    );
   } catch (error) {
     return handleApiError(error, 'api.resources.links.failed');
   }

@@ -457,6 +457,7 @@ export default function ThreadPanel({
                         onDelete={onDelete}
                         onScrollToMessage={onScrollToMessage}
                         onToggleStar={onToggleStar}
+                        conversationId={selectedConversation.id}
                       />
                     </div>
                   );

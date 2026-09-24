@@ -15,10 +15,12 @@ import {
 } from './core';
 import { takeToken } from '@/lib/rateLimit';
 import { attachPreviewsToMessage } from '@/lib/linkPreview';
+import { extractUrls } from '@/lib/links/shared/unfurl';
+import { reconcileMessageLinks, shareMessageLinks } from '@/lib/resources/messageLinks';
 import { messageFilesDenial } from '@/lib/resources/shared/messageFiles';
 import { canSeeResource } from '@/lib/resources/shared/visibility';
 import { resourceViewer } from '@/lib/resources/visibility';
-import { addShares, syncGrantsOf } from '@/lib/resources/shares';
+import { addShares, removeMessageShares, syncGrantsOf } from '@/lib/resources/shares';
 
 export async function listMessagesForConversation(
   currentUserId: string,
@@ -179,6 +181,7 @@ export async function sendMessage(
   });
 
   if (fileIds.length) await syncGrantsOf(fileIds);
+  await attachLinks({ messageId, conversationId, spaceId, senderId: currentUserId }, payload.text);
 
   const fullMessage = await prisma.message.findUniqueOrThrow({
     where: { id: messageId },
@@ -195,9 +198,6 @@ export async function sendMessage(
   });
 
   const message = serializeMessage(fullMessage, currentUserId, members);
-
-  // Link previews (fire-and-forget, best-effort)
-  void attachPreviewsToMessage(messageId, payload.text).catch(() => {});
 
   return {
     message,
@@ -236,6 +236,14 @@ export async function editMessage(
     data: { text, editedAt: new Date() },
   });
 
+  // The cards follow the edit: a removed link loses its card, a new one gets one.
+  const spaceId = membership.conversation.spaceId;
+  if (spaceId) {
+    await reconcileMessageLinks({ messageId, conversationId, spaceId, senderId: currentUserId }, existing.text, text);
+  } else {
+    await attachLinks({ messageId, conversationId, spaceId: null, senderId: currentUserId }, text);
+  }
+
   const fullMessage = await prisma.message.findUniqueOrThrow({
     where: { id: messageId },
     include: MESSAGE_INCLUDE,
@@ -243,9 +251,6 @@ export async function editMessage(
 
   const message = serializeMessage(fullMessage, currentUserId, membership.conversation.members);
   const memberIds = membership.conversation.members.map((m) => m.userId);
-
-  // The cards follow the text: a removed link loses its card, a new one gets one.
-  void attachPreviewsToMessage(messageId, text).catch(() => {});
 
   return { message, memberIds };
 }
@@ -269,6 +274,9 @@ export async function deleteMessage(
     where: { id: messageId },
     data: { deletedAt: new Date(), text: '' },
   });
+  // A deleted message shares nothing: its files and links leave with it (a
+  // link it alone carried goes to the trash; a file stays its uploader's).
+  await removeMessageShares(messageId);
 
   const memberIds = membership.conversation.members.map((m) => m.userId);
   return { memberIds };
@@ -403,4 +411,54 @@ export async function getConversationMemberIds(conversationId: string): Promise<
   });
 
   return members.map((member) => member.userId);
+}
+
+/** A direct message's cards wait at most this long inside the send. */
+const DM_CARD_BUDGET_MS = 2_500;
+
+/**
+ * A message's links as cards. In a space's channel each is a resource shared
+ * on the message (lib/resources/messageLinks.ts). A direct message belongs to
+ * no space and its cards stay text-only previews — read inside this request
+ * within a budget, never after it, since work after a response may not run.
+ */
+async function attachLinks(
+  place: { messageId: string; conversationId: string; spaceId: string | null; senderId: string },
+  text: string,
+): Promise<void> {
+  const urls = extractUrls(text);
+  if (place.spaceId) {
+    if (urls.length) await shareMessageLinks({ ...place, spaceId: place.spaceId }, urls);
+    return;
+  }
+  await Promise.race([
+    attachPreviewsToMessage(place.messageId, text).catch(() => {}),
+    new Promise((resolve) => setTimeout(resolve, DM_CARD_BUDGET_MS)),
+  ]);
+}
+
+/**
+ * Take one card or file off a message — Slack's "remove attachment". The
+ * author may, and so may a channel admin. It removes THIS share: the text
+ * keeps its link, and the resource lives on wherever else it was shared (a
+ * link only this message carried goes to the trash).
+ */
+export async function removeMessageShare(
+  currentUserId: string,
+  conversationId: string,
+  messageId: string,
+  resourceId: string,
+): Promise<{ message: SerializedMessage; memberIds: string[] }> {
+  const membership = await ensureConversationMember(conversationId, currentUserId);
+  const existing = await prisma.message.findUnique({ where: { id: messageId }, select: { conversationId: true, senderId: true } });
+  if (!existing || existing.conversationId !== conversationId) throw new MessagingError(404, 'Message not found');
+  if (existing.senderId !== currentUserId && membership.role !== 'ADMIN') {
+    throw new MessagingError(403, 'Only its author or a channel admin can remove this');
+  }
+  await removeMessageShares(messageId, [resourceId]);
+  const fullMessage = await prisma.message.findUniqueOrThrow({ where: { id: messageId }, include: MESSAGE_INCLUDE });
+  return {
+    message: serializeMessage(fullMessage, currentUserId, membership.conversation.members),
+    memberIds: membership.conversation.members.map((m) => m.userId),
+  };
 }

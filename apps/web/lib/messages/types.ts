@@ -51,6 +51,16 @@ export interface SerializedLinkPreview {
   mediaType?: string | null;
   /** `summary` draws a small square thumb beside the text; `large` a wide image above it. */
   imageLayout?: 'summary' | 'large' | null;
+  /** The link's resource, when it is one — what the viewer opens. */
+  resourceId?: string;
+  authorName?: string | null;
+  publishedAt?: string | null;
+  /** lib/links/shared/providers.ts#LinkProvider; `web` for the open web. */
+  provider?: string;
+  /** An embed WE built for an allowlisted provider, or null for the card. */
+  embedUrl?: string | null;
+  /** The unfurl has not run yet: draw a skeleton and pull. */
+  pending?: boolean;
 }
 
 /**
@@ -220,10 +230,18 @@ interface RealtimeReactionEvent {
   userId: string;
 }
 
+/** A link a message carries finished unfurling: every card of it is redrawn. */
+interface RealtimeResourceEvent {
+  type: 'resource.updated';
+  conversationId: string;
+  card: SerializedLinkPreview;
+}
+
 export type RealtimeEvent =
   | RealtimeMessageEvent
   | RealtimeMessageUpdatedEvent
   | RealtimeMessageDeletedEvent
   | RealtimeConversationEvent
   | RealtimeTypingEvent
-  | RealtimeReactionEvent;
+  | RealtimeReactionEvent
+  | RealtimeResourceEvent;

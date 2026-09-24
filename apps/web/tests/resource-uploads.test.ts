@@ -83,6 +83,9 @@ test('an image uploads in chunks, resumes, and becomes a shared entity with rend
 
   const done = await completeUpload(started.id, userId)
   assert.equal(done.kind, 'image')
+  // What the request's own budget did not finish, a pull does.
+  const { drainJobs } = await import('@/lib/resources/jobs')
+  await drainJobs({ budgetMs: 30_000, resourceIds: [started.id] })
   assert.ok(done.nodeId?.startsWith('resource:'))
 
   const row = await prisma!.resource.findUniqueOrThrow({
@@ -127,22 +130,23 @@ test('only the uploader can send or finish an upload', async (t) => {
   await assert.rejects(completeUpload(started.id, randomUUID()), /Not found/)
 })
 
-test('two drains racing for one job run it once', async (t) => {
+test('eight drains racing over ten jobs run each exactly once', async (t) => {
   if (skip) return t.skip(skip)
   const { prisma } = await localDb()
   const { enqueueJobs, drainJobs } = await import('@/lib/resources/jobs')
-  const row = await prisma!.resource.create({
-    data: { spaceId, name: 'x.bin', fileType: 'bin', uploadedBy: userId, createdBy: userId, kind: 'other' },
-  })
-  await enqueueJobs(row.id, ['rendition'])
-  const [a, b] = await Promise.all([
-    drainJobs({ budgetMs: 2_000, resourceIds: [row.id] }),
-    drainJobs({ budgetMs: 2_000, resourceIds: [row.id] }),
-  ])
-  assert.equal(a.ran + b.ran, 1)
-  const job = await prisma!.resourceJob.findUniqueOrThrow({ where: { resourceId_kind: { resourceId: row.id, kind: 'rendition' } } })
-  assert.equal(job.state, 'done')
-  assert.equal(job.attempts, 1)
+  const rows = await Promise.all(
+    Array.from({ length: 10 }, (_, i) =>
+      prisma!.resource.create({
+        data: { spaceId, name: `x${i}.bin`, fileType: 'bin', uploadedBy: userId, createdBy: userId, kind: 'other' },
+      }),
+    ),
+  )
+  const ids = rows.map((r) => r.id)
+  for (const id of ids) await enqueueJobs(id, ['rendition'])
+  const reports = await Promise.all(Array.from({ length: 8 }, () => drainJobs({ budgetMs: 3_000, resourceIds: ids, batch: 2 })))
+  assert.equal(reports.reduce((sum, r) => sum + r.ran, 0), 10)
+  const jobs = await prisma!.resourceJob.findMany({ where: { resourceId: { in: ids } } })
+  assert.ok(jobs.every((job) => job.state === 'done' && job.attempts === 1), JSON.stringify(jobs.map((j) => [j.state, j.attempts])))
 })
 
 /** The smallest honest PDF: one page saying `text`. pdf.js repairs the xref offsets. */
@@ -176,6 +180,8 @@ test('a PDF gets its page count, a drawn first page and searchable text', async 
   const started = await initUpload({ userId, spaceId, name: 'Launch plan.pdf', size: pdf.length, mimeType: 'application/pdf', origin: 'x' })
   await sendAll(started.id, pdf, 8192)
   await completeUpload(started.id, userId)
+  const { drainJobs } = await import('@/lib/resources/jobs')
+  await drainJobs({ budgetMs: 30_000, resourceIds: [started.id] })
   const row = await prisma!.resource.findUniqueOrThrow({ where: { id: started.id }, include: { renditions: true } })
   assert.equal(row.kind, 'pdf')
   assert.equal(row.pageCount, 1)

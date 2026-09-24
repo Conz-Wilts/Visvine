@@ -1,7 +1,10 @@
 // Reading a link into a preview, the way Slack's unfurler does.
 //
-// Precedence, strongest first: the page's oEmbed answer, then Open Graph, then
-// Twitter card tags, then the plain `<title>` / meta description. A URL that is
+// Precedence, strongest first: the page's oEmbed answer, then its JSON-LD
+// (schema.org — what the publisher says the thing IS: headline, author, date),
+// then Open Graph, then Twitter card tags, then the plain `<title>` / meta
+// description. A page image prefers Open Graph over JSON-LD, whose `image` is
+// as often a logo as a picture of the story. A URL that is
 // itself media (an image, a video, a PDF) previews as that media — its content
 // type decides, and no HTML is read. Only the document head is read: that is
 // where every one of these tags lives, and it bounds the work on a large page.
@@ -19,6 +22,8 @@ export interface Unfurl {
   siteName: string | null
   faviconUrl: string | null
   authorName: string | null
+  /** ISO date the page says it was published (JSON-LD, then article:published_time). */
+  publishedAt: string | null
   mediaType: LinkMediaType
   imageLayout: ImageLayout | null
 }
@@ -162,6 +167,78 @@ export function oembedHrefOf(html: string, baseUrl: string): string | null {
   return null
 }
 
+/** The fields a preview reads from a page's schema.org JSON-LD. */
+interface LinkedData {
+  title: string | null
+  description: string | null
+  image: string | null
+  author: string | null
+  publishedAt: string | null
+  video: boolean
+}
+
+const LD_TYPES = /^(article|newsarticle|blogposting|reportagenewsarticle|techarticle|scholarlyarticle|webpage|videoobject|product|creativework|event|recipe|book|movie|podcastepisode|softwareapplication)$/i
+
+function ldText(value: unknown): string | null {
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return ldText(value[0])
+  if (value && typeof value === 'object') {
+    const v = value as Record<string, unknown>
+    return ldText(v.name ?? v.url ?? v['@value'])
+  }
+  return null
+}
+
+function ldTypes(node: Record<string, unknown>): string[] {
+  const type = node['@type']
+  return (Array.isArray(type) ? type : [type]).filter((t): t is string => typeof t === 'string')
+}
+
+/**
+ * The first schema.org thing a page's `<script type="application/ld+json">`
+ * blocks describe, among the kinds a preview can use. Malformed blocks are
+ * skipped; nothing in them is ever executed or rendered.
+ */
+function linkedDataOf(html: string): LinkedData | null {
+  const re = /<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script\s*>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html))) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(m[1].trim())
+    } catch {
+      continue
+    }
+    const nodes: unknown[] = []
+    const visit = (value: unknown) => {
+      if (Array.isArray(value)) value.forEach(visit)
+      else if (value && typeof value === 'object') {
+        nodes.push(value)
+        const graph = (value as Record<string, unknown>)['@graph']
+        if (graph) visit(graph)
+      }
+    }
+    visit(parsed)
+    for (const raw of nodes) {
+      const node = raw as Record<string, unknown>
+      const types = ldTypes(node)
+      if (!types.some((t) => LD_TYPES.test(t))) continue
+      const title = ldText(node.headline ?? node.name)
+      if (!title) continue
+      const published = ldText(node.datePublished ?? node.uploadDate ?? node.startDate)
+      return {
+        title,
+        description: ldText(node.description),
+        image: ldText(node.image ?? node.thumbnailUrl),
+        author: ldText(node.author ?? node.creator),
+        publishedAt: published && !Number.isNaN(Date.parse(published)) ? new Date(published).toISOString() : null,
+        video: types.some((t) => /^videoobject$/i.test(t)),
+      }
+    }
+  }
+  return null
+}
+
 function ogMediaType(value: string | undefined): LinkMediaType {
   const type = (value ?? '').toLowerCase()
   if (type.startsWith('video')) return 'video'
@@ -193,18 +270,21 @@ export function parseHead(html: string, baseUrl: string, oembed?: OEmbed | null)
   }
 
   const str = (v: unknown) => (typeof v === 'string' ? v : null)
-  const title = clean(str(oembed?.title) ?? meta['og:title'] ?? meta['twitter:title'] ?? docTitle, 300)
-  const description = clean(meta['og:description'] ?? meta['twitter:description'] ?? meta.description)
+  const ld = linkedDataOf(head)
+  const title = clean(str(oembed?.title) ?? ld?.title ?? meta['og:title'] ?? meta['twitter:title'] ?? docTitle, 300)
+  const description = clean(ld?.description ?? meta['og:description'] ?? meta['twitter:description'] ?? meta.description)
   const imageUrl = resolve(
     str(oembed?.thumbnail_url) ?? meta['og:image:secure_url'] ?? meta['og:image'] ?? meta['og:image:url']
-      ?? meta['twitter:image'] ?? meta['twitter:image:src'],
+      ?? meta['twitter:image'] ?? meta['twitter:image:src'] ?? ld?.image,
     baseUrl,
   )
   const siteName = clean(str(oembed?.provider_name) ?? meta['og:site_name'] ?? meta['application-name'], 120)
-  const authorName = clean(str(oembed?.author_name) ?? meta.author ?? meta['article:author'], 120)
+  const authorName = clean(str(oembed?.author_name) ?? ld?.author ?? meta.author ?? meta['article:author'], 120)
+  const publishedRaw = ld?.publishedAt ?? meta['article:published_time'] ?? null
+  const publishedAt = publishedRaw && !Number.isNaN(Date.parse(publishedRaw)) ? new Date(publishedRaw).toISOString() : null
   const oembedType = str(oembed?.type)
   const mediaType: LinkMediaType =
-    oembedType === 'video' ? 'video'
+    oembedType === 'video' || ld?.video ? 'video'
       : oembedType === 'photo' ? 'image'
         : ogMediaType(meta['og:type'])
   const card = (meta['twitter:card'] ?? '').toLowerCase()
@@ -221,6 +301,7 @@ export function parseHead(html: string, baseUrl: string, oembed?: OEmbed | null)
     siteName,
     faviconUrl: favicon ?? resolve('/favicon.ico', baseUrl),
     authorName,
+    publishedAt,
     mediaType,
     imageLayout,
   }
@@ -235,6 +316,7 @@ export function mediaUnfurl(url: string, mediaType: LinkMediaType): Unfurl {
     siteName: null,
     faviconUrl: resolve('/favicon.ico', url),
     authorName: null,
+    publishedAt: null,
     mediaType,
     imageLayout: mediaType === 'image' ? 'large' : null,
   }

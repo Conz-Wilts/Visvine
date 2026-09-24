@@ -1,4 +1,5 @@
 import { ConversationMemberRole, ConversationType, Prisma } from '@prisma/client';
+import { linkCardOf } from '@/lib/resources/shared/linkCard';
 import prisma from '@/lib/prisma';
 import type {
   ConversationSummary,
@@ -55,12 +56,12 @@ export const MESSAGE_INCLUDE = {
     orderBy: { position: 'asc' as const },
   },
   shares: {
-    where: { resource: { source: 'upload' as const } },
     orderBy: { position: 'asc' as const },
     select: {
       resource: {
         select: {
           id: true,
+          source: true,
           name: true,
           fileType: true,
           kind: true,
@@ -68,10 +69,18 @@ export const MESSAGE_INCLUDE = {
           width: true,
           height: true,
           deletedAt: true,
+          url: true,
+          provider: true,
+          embedUrl: true,
+          unfurl: true,
+          previewPath: true,
+          fetchState: true,
+          renditions: { select: { kind: true } },
         },
       },
     },
   },
+  conversation: { select: { spaceId: true } },
   mentions: true,
   reactions: true,
   replyTo: {
@@ -194,7 +203,7 @@ export function serializeMessage(
         }
       : null,
     files: message.shares
-      .filter(({ resource }) => resource.deletedAt === null)
+      .filter(({ resource }) => resource.deletedAt === null && resource.source === 'upload')
       .map(({ resource }) => ({
         id: resource.id,
         name: resource.name,
@@ -205,7 +214,12 @@ export function serializeMessage(
         height: resource.height,
         url: resourceRawPath(resource.id),
       })),
-    linkPreviews: message.linkPreviews.map((lp) => serializeLinkPreview(lp.linkPreview)),
+    // In a space a card is its link resource; a direct message keeps text-only previews.
+    linkPreviews: message.conversation.spaceId
+      ? message.shares
+          .filter(({ resource }) => resource.source === 'link' && resource.deletedAt === null)
+          .map(({ resource }) => linkCardOf(resource))
+      : message.linkPreviews.map((lp) => serializeLinkPreview(lp.linkPreview)),
     starred: message.stars.some((star) => star.userId === currentUserId),
   };
 }

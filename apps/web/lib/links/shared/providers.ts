@@ -177,3 +177,27 @@ export function canonicalUrl(value: string): string | null {
 export function linkProviderOf(value: string): LinkProvider {
   return providerOf(value)?.provider ?? 'web'
 }
+
+/**
+ * A provider's own oEmbed endpoint for a URL, for the providers that publish
+ * one — asked before the page itself, because their pages answer a server
+ * with consent walls and script shells rather than tags. What it answers is
+ * read for text and a thumbnail only; its `html` is never used.
+ */
+export function oembedEndpointOf(value: string): string | null {
+  const known = providerOf(value)
+  if (!known) return null
+  const target = encodeURIComponent(known.canonical)
+  switch (known.provider) {
+    case 'youtube':
+      return `https://www.youtube.com/oembed?format=json&url=${target}`
+    case 'vimeo':
+      return `https://vimeo.com/api/oembed.json?url=${target}`
+    case 'loom':
+      return `https://www.loom.com/v1/oembed?url=${target}`
+    case 'figma':
+      return `https://www.figma.com/api/oembed?url=${target}`
+    default:
+      return null
+  }
+}

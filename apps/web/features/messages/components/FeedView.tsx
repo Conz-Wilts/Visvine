@@ -1,5 +1,6 @@
 'use client';
 
+import MessageLinkCards from './MessageLinkCards';
 /**
  * FeedView — the "Feed" rendering mode for channels (viewMode = 'FEED').
  *
@@ -11,7 +12,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MessageCircleIcon, PencilIcon, PinIcon, SmileIcon, StarIcon, Trash2Icon } from '@/features/shared/icons';
 import { Avatar } from '@visvine/ui';
-import LinkPreviewCard from '@/features/shared/components/LinkPreviewCard';
 import MessageComposer from './MessageComposer';
 import { MarkdownMessage, EmojiPicker, MessageImageGrid, MessageFiles } from './MessageRow';
 import { formatChatTimestamp } from '@/lib/date';
@@ -187,7 +187,10 @@ const PostCard = memo(function PostCard({
   onDelete,
   onToggleStar,
   onComment,
+  conversationId,
 }: {
+  /** The channel the post is in — what a removed card is removed from. */
+  conversationId?: string;
   post: SerializedMessage;
   comments: SerializedMessage[];
   /** Where the post was written, for a surface that draws more than one channel. */
@@ -292,9 +295,7 @@ const PostCard = memo(function PostCard({
           )}
           <MessageImageGrid images={post.images} />
           <MessageFiles files={post.files} />
-          {post.linkPreviews?.map((lp) => (
-            <LinkPreviewCard key={lp.url} preview={lp} />
-          ))}
+          <MessageLinkCards cards={post.linkPreviews} messageId={post.id} conversationId={conversationId} canRemove={post.isOwn} />
         </div>
       )}
 
@@ -495,6 +496,7 @@ export default function FeedView({
             onDelete={onDelete}
             onToggleStar={onToggleStar}
             onComment={handleComment}
+            conversationId={conversation.id}
           />
         ))}
 

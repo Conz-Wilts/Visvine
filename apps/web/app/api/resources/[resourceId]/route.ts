@@ -6,6 +6,9 @@ import { requireApiSession, forbiddenResponse, parseBody, handleApiError } from 
 import { moveResource, renameResource } from '@/lib/resources/folders';
 import { requireVisibleResource } from '@/lib/resources/visibility';
 import { canManageResource } from '@/lib/resources/shared/visibility';
+import { enqueueJobs } from '@/lib/resources/jobs';
+
+const LINK_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * GET /api/resources/[resourceId] — one resource the caller can see (through a
@@ -31,6 +34,11 @@ export async function GET(
     include: { _count: { select: { comments: true, changes: true } } },
   });
   const canManage = canManageResource(gate.viewer, resource);
+  // A link opened a week after it was last read is read again — queued here,
+  // finished by the viewer's pull or the tick.
+  if (resource.source === 'link' && resource.fetchState !== 'pending' && (!resource.fetchedAt || Date.now() - resource.fetchedAt.getTime() > LINK_STALE_MS)) {
+    await enqueueJobs(resource.id, ['refresh']);
+  }
 
   // A download URL is signed per read and never stored — see the note on
   // Resource.gcsPath. A row with no object (a seeded demo file) has no URL.

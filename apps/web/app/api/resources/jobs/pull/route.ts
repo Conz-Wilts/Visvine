@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { requireApiSession, parseBody, handleApiError } from '@/lib/api/route';
 import { drainJobs, pendingJobKinds } from '@/lib/resources/jobs';
 import { requireVisibleResource } from '@/lib/resources/visibility';
+import { linkCardOf } from '@/lib/resources/shared/linkCard';
+import prisma from '@/lib/prisma';
 
 export const maxDuration = 30;
 
@@ -35,7 +37,17 @@ export async function POST(req: NextRequest) {
     }
     await drainJobs({ budgetMs: PULL_BUDGET_MS, resourceIds: visible, batch: 2 });
     const pending = await pendingJobKinds(visible);
-    return NextResponse.json({ pending: Object.fromEntries(pending) });
+    const links = await prisma.resource.findMany({
+      where: { id: { in: visible }, source: 'link' },
+      select: {
+        id: true, name: true, url: true, provider: true, embedUrl: true, unfurl: true, previewPath: true, fetchState: true,
+        renditions: { select: { kind: true } },
+      },
+    });
+    return NextResponse.json({
+      pending: Object.fromEntries(pending),
+      cards: Object.fromEntries(links.map((row) => [row.id, linkCardOf(row)])),
+    });
   } catch (err) {
     return handleApiError(err, 'resources.jobs.pull');
   }

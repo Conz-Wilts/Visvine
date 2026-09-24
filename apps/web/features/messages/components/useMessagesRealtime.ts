@@ -3,7 +3,7 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type RefObject, type SetStateAction } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 import type { ConversationSummary, RealtimeEvent, SerializedMessage } from '@/lib/messages/types';
-import { patchReactions } from '@/lib/messages/shared/feed';
+import { patchReactions, withLinkCard } from '@/lib/messages/shared/feed';
 
 interface UseMessagesRealtimeArgs {
   currentUserId: string;
@@ -109,6 +109,14 @@ export function useMessagesRealtime({
             // `starred` is per-user but the broadcast is serialized for the editor —
             // keep the local flag so someone else's edit doesn't clear your star.
             setMessages((prev) => prev.map((m) => m.id === updated.id ? { ...updated, starred: m.starred } : m));
+          }
+        }
+        if (payload.type === 'resource.updated') {
+          if (payload.conversationId === selectedConversationRef.current) {
+            setMessages((prev) => {
+              const next = prev.map((m) => withLinkCard(m, payload.card));
+              return next.some((m, i) => m !== prev[i]) ? next : prev;
+            });
           }
         }
         if (payload.type === 'message.deleted') {

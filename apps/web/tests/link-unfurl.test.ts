@@ -128,3 +128,69 @@ test('two shares of one link normalise to one key', () => {
 test('numeric and unknown entities', () => {
   assert.equal(decodeEntities('&#x41;&#66;&bogus;'), 'AB&bogus;')
 })
+
+test('JSON-LD names the thing: its headline, author and date win over Open Graph', () => {
+  const html = `<head>
+    <meta property="og:title" content="Site title | Paper">
+    <meta property="og:image" content="/og.jpg">
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@graph":[
+        {"@type":"Organization","name":"Paper","logo":"/logo.png"},
+        {"@type":"NewsArticle","headline":"Rates held at 5.5%","author":[{"@type":"Person","name":"Ana Ruiz"}],
+         "datePublished":"2026-09-20T08:00:00+12:00","image":{"url":"/ld.jpg"}}
+      ]}
+    </script>
+  </head>`
+  const unfurl = parseHead(html, BASE)!
+  assert.equal(unfurl.title, 'Rates held at 5.5%')
+  assert.equal(unfurl.authorName, 'Ana Ruiz')
+  assert.equal(unfurl.publishedAt, '2026-09-19T20:00:00.000Z')
+  assert.equal(unfurl.imageUrl, 'https://example.com/og.jpg', 'the page image prefers Open Graph over JSON-LD')
+})
+
+test('malformed or irrelevant JSON-LD is ignored, never trusted', () => {
+  const html = `<head>
+    <title>Plain</title>
+    <script type="application/ld+json">{not json</script>
+    <script type="application/ld+json">{"@type":"BreadcrumbList","name":"Home"}</script>
+    <meta property="article:published_time" content="not a date">
+  </head>`
+  const unfurl = parseHead(html, BASE)!
+  assert.equal(unfurl.title, 'Plain')
+  assert.equal(unfurl.publishedAt, null)
+})
+
+test('a VideoObject is a video, and its image stands in when nothing else offers one', () => {
+  const html = `<head><script type="application/ld+json">
+    {"@type":"VideoObject","name":"Launch walkthrough","thumbnailUrl":["https://cdn.example.com/t.jpg"],"uploadDate":"2026-09-01"}
+  </script></head>`
+  const unfurl = parseHead(html, BASE)!
+  assert.equal(unfurl.mediaType, 'video')
+  assert.equal(unfurl.imageUrl, 'https://cdn.example.com/t.jpg')
+  assert.equal(unfurl.publishedAt, '2026-09-01T00:00:00.000Z')
+})
+
+test('the PNG inside an .ico is found; an .ico of bitmaps has none', async () => {
+  const { largestPngInIco } = await import('../lib/resources/shared/ico')
+  const png = (w: number) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(w)])
+  const small = png(10)
+  const big = png(40)
+  const header = Buffer.alloc(6 + 32)
+  header.writeUInt16LE(1, 2)
+  header.writeUInt16LE(2, 4)
+  const entries: Array<[number, Buffer]> = [[16, small], [64, big]]
+  let offset = header.length
+  entries.forEach(([width, data], i) => {
+    const at = 6 + i * 16
+    header[at] = width
+    header.writeUInt32LE(data.length, at + 8)
+    header.writeUInt32LE(offset, at + 12)
+    offset += data.length
+  })
+  const ico = Buffer.concat([header, small, big])
+  assert.ok(largestPngInIco(ico)?.equals(big))
+  const bitmap = Buffer.from(ico)
+  bitmap.fill(0, header.length + 1)
+  assert.equal(largestPngInIco(bitmap), null)
+  assert.equal(largestPngInIco(Buffer.from('not an icon')), null)
+})

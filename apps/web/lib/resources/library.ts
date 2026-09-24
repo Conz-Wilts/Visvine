@@ -14,7 +14,8 @@ import { getSpaceNodes } from '@/lib/eventRepo'
 import { canAccessFeature } from '@/lib/featureAccess'
 import { getFeatureConfig, isAdmin } from '@/lib/auth'
 import { fileIdOf, resourceRawPath } from '@/lib/resources/shared/fileNode'
-import { hostOf, isHttpUrl } from '@/lib/links/shared/unfurl'
+import { hostOf } from '@/lib/links/shared/unfurl'
+import { linkCardOf, resourceImagePath } from '@/lib/resources/shared/linkCard'
 import {
   foldLibrary,
   linkKey,
@@ -64,7 +65,6 @@ export async function listLibrary(
     getSpaceNodes(spaceId),
     resourceViewer(spaceId, viewer.userId, viewer.email),
   ])
-  const channelIds = [...channels.keys()]
   const resourceNodes = nodes.filter((n) => n.type.toLowerCase() === 'resource')
   const nodeByFile = new Map<string, NBNode>()
   for (const node of resourceNodes) {
@@ -72,7 +72,7 @@ export async function listLibrary(
     if (fileId) nodeByFile.set(fileId, node)
   }
 
-  const [files, shares] = await Promise.all([
+  const [files, links] = await Promise.all([
     wantFiles
       ? prisma.resource.findMany({
           where: { AND: [{ spaceId, source: 'upload', createdAt: olderThan }, visibleResourceWhere(lens)] },
@@ -84,37 +84,26 @@ export async function listLibrary(
           },
         })
       : Promise.resolve([]),
-    wantLinks && channelIds.length
-      ? prisma.messageLinkPreview.findMany({
-          where: {
-            createdAt: olderThan,
-            message: { conversationId: { in: channelIds }, deletedAt: null },
-          },
+    wantLinks
+      ? prisma.resource.findMany({
+          where: { AND: [{ spaceId, source: 'link', createdAt: olderThan }, visibleResourceWhere(lens)] },
           orderBy: { createdAt: 'desc' },
           take: PER_SOURCE,
           select: {
-            createdAt: true,
-            linkPreview: true,
-            message: { select: { conversationId: true, sender: { select: { name: true } } } },
+            id: true, name: true, url: true, provider: true, embedUrl: true, unfurl: true, previewPath: true,
+            fetchState: true, createdAt: true, nodeId: true, createdBy: true,
+            renditions: { select: { kind: true } },
+            shares: { select: { conversationId: true, createdAt: true }, orderBy: { createdAt: 'desc' } },
           },
         })
       : Promise.resolve([]),
   ])
 
-  const linkNodes = wantLinks
-    ? resourceNodes.filter((n) => !fileIdOf(n.metadata) && isHttpUrl(n.url) && (!before || iso(n.createdAt) < before.toISOString()))
-    : []
-  const [uploaders, cached] = await Promise.all([
-    prisma.user.findMany({
-      where: { id: { in: [...new Set(files.map((f) => f.uploadedBy))] } },
-      select: { id: true, name: true },
-    }),
-    linkNodes.length
-      ? prisma.linkPreview.findMany({ where: { url: { in: linkNodes.map((n) => n.url!) } } })
-      : Promise.resolve([]),
-  ])
+  const uploaders = await prisma.user.findMany({
+    where: { id: { in: [...new Set([...files.map((f) => f.uploadedBy), ...links.map((l) => l.createdBy ?? '')])] } },
+    select: { id: true, name: true },
+  })
   const nameOf = new Map(uploaders.map((u) => [u.id, u.name ?? null]))
-  const previewOf = new Map(cached.map((p) => [p.url, p]))
   const channelOf = (id: string | null) => (id && channels.has(id) ? { id, name: channels.get(id)! } : null)
 
   const items: LibraryItem[] = []
@@ -144,48 +133,28 @@ export async function listLibrary(
     })
   }
 
-  for (const node of linkNodes) {
-    const url = node.url!
-    const preview = previewOf.get(url)
+  for (const link of links) {
+    const card = linkCardOf(link)
+    const url = link.url ?? ''
+    const inSpace = link.shares.some((share) => share.conversationId === null)
+    const channelId = link.shares.find((share) => share.conversationId && channels.has(share.conversationId))?.conversationId ?? null
     items.push({
       key: linkKey(url),
       kind: 'link',
-      source: 'added',
-      name: node.name,
+      source: inSpace ? 'added' : 'channel',
+      name: link.name || card.title || hostOf(url),
       fileType: null,
       fileSize: null,
       url,
-      thumbUrl: node.image_url ?? preview?.imageUrl ?? null,
-      faviconUrl: preview?.faviconUrl ?? null,
-      siteName: preview?.siteName ?? hostOf(url),
-      description: node.subtitle ?? preview?.description ?? null,
-      href: `/directory/${encodeURIComponent(node.id)}`,
-      addedBy: null,
-      channel: null,
-      shares: 0,
-      createdAt: iso(node.createdAt),
-    })
-  }
-
-  for (const share of shares) {
-    const preview = share.linkPreview
-    items.push({
-      key: linkKey(preview.url),
-      kind: 'link',
-      source: 'channel',
-      name: preview.title ?? hostOf(preview.url),
-      fileType: null,
-      fileSize: null,
-      url: preview.url,
-      thumbUrl: preview.imageUrl,
-      faviconUrl: preview.faviconUrl,
-      siteName: preview.siteName ?? hostOf(preview.url),
-      description: preview.description,
-      href: null,
-      addedBy: share.message.sender.name ?? null,
-      channel: channelOf(share.message.conversationId),
-      shares: 1,
-      createdAt: share.createdAt.toISOString(),
+      thumbUrl: card.imageUrl ? resourceImagePath(link.id, 'thumb') : null,
+      faviconUrl: card.faviconUrl ?? null,
+      siteName: card.siteName ?? hostOf(url),
+      description: card.description ?? null,
+      href: link.nodeId ? `/directory/${encodeURIComponent(link.nodeId)}` : null,
+      addedBy: link.createdBy ? (nameOf.get(link.createdBy) ?? null) : null,
+      channel: channelOf(channelId),
+      shares: link.shares.filter((share) => share.conversationId !== null).length,
+      createdAt: (link.shares[0]?.createdAt ?? link.createdAt).toISOString(),
     })
   }
 

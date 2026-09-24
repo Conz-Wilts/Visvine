@@ -1,5 +1,6 @@
 'use client';
 
+import MessageLinkCards from './MessageLinkCards';
 /**
  * MessageRow — linear feed message (LinkedIn/Slack style).
  *
@@ -20,7 +21,6 @@ import type {
   SerializedReplyTo,
 } from '@/lib/messages/types';
 import { Avatar } from '@visvine/ui';
-import LinkPreviewCard from '@/features/shared/components/LinkPreviewCard';
 import Link from '@/features/shared/components/SpaceLink';
 import { FILE_LABEL, FileTypeIcon } from '@/features/resources/components/resourceUi';
 import { formatBytes } from '@/lib/utils';
@@ -257,9 +257,11 @@ interface MessageRowProps {
   onScrollToMessage?: (messageId: string) => void;
   /** Toggle the current user's private star (saved message). */
   onToggleStar?: (messageId: string) => void;
+  /** The conversation the message is in — what a removed card is removed from. */
+  conversationId?: string;
 }
 
-function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, onReaction, onEdit, onDelete, onScrollToMessage, onToggleStar }: MessageRowProps) {
+function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, onReaction, onEdit, onDelete, onScrollToMessage, onToggleStar, conversationId }: MessageRowProps) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
@@ -420,9 +422,12 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
               <div className="mt-0.5"><span className="text-[11px] italic text-fg-muted">(edited)</span></div>
             )}
 
-            {message.linkPreviews?.map((lp) => (
-              <LinkPreviewCard key={lp.url} preview={lp} />
-            ))}
+            <MessageLinkCards
+              cards={message.linkPreviews}
+              messageId={message.id}
+              conversationId={conversationId}
+              canRemove={message.isOwn}
+            />
           </>
         )}
 

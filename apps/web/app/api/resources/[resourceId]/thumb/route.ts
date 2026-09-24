@@ -4,11 +4,11 @@ import { requireApiSession, handleApiError, ApiError } from '@/lib/api/route';
 import { getSignedUrl, RESOURCES_BUCKET } from '@/lib/gcs';
 import { requireVisibleResource } from '@/lib/resources/visibility';
 
-const KINDS = new Set(['thumb', 'preview', 'poster', 'page1']);
+const KINDS = new Set(['thumb', 'preview', 'poster', 'page1', 'favicon']);
 const SIGNED_MS = 5 * 60 * 1000;
 
 /**
- * GET /api/resources/[resourceId]/thumb?kind=thumb|preview|poster|page1 — one
+ * GET /api/resources/[resourceId]/thumb?kind=thumb|preview|poster|page1|favicon — one
  * of the images derived from a resource (lib/resources/renditions.ts): a
  * file's rendition, or a link's re-hosted page image. 404 when it has none,
  * which a grid answers with the file's icon. Never the original — that is

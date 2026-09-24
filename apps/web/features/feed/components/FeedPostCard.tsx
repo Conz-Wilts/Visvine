@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Avatar, Chip } from '@visvine/ui';
-import LinkPreviewCard from '@/features/shared/components/LinkPreviewCard';
+import MessageLinkCards from '@/features/messages/components/MessageLinkCards';
 import { HeartIcon, MessageCircleIcon, PencilIcon, SmileIcon, Trash2Icon } from '@/features/shared/icons';
 import { CommentRow } from '@/features/messages/components/FeedView';
 import { EmojiPicker, MarkdownMessage, MessageImageGrid, MessageFiles } from '@/features/messages/components/MessageRow';
@@ -120,7 +120,7 @@ export const FeedPostCard = memo(function FeedPostCard({
             )}
             <MessageImageGrid images={post.images} />
           <MessageFiles files={post.files} />
-            {post.linkPreviews?.map((lp) => <LinkPreviewCard key={lp.url} preview={lp} />)}
+            <MessageLinkCards cards={post.linkPreviews} messageId={post.id} canRemove={false} />
           </div>
         )}
       </div>

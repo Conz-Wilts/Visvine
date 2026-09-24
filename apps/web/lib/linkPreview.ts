@@ -1,11 +1,17 @@
 // Link unfurling with SSRF protection: the I/O around `lib/links/shared/unfurl.ts`.
-// Called after a message is sent or edited, by the link-preview route, and when
-// a link becomes a resource. Uses native fetch; no third-party dep required.
+// Called by the unfurl job (lib/resources/unfurl.ts), by a direct message's
+// cards, and by the composer's preview while a link is typed.
+//
+// Every hop is checked twice: its host before the request (assertPubliclyRoutable)
+// and the address the socket actually connects to (publicDispatcher), so neither
+// a redirect nor a DNS answer that changes between the two can reach inside.
 
+import { fetch as undiciFetch } from 'undici';
 import prisma from '@/lib/prisma';
-import { assertPubliclyRoutable, SsrfError } from '@/lib/net/ssrf';
+import { assertPubliclyRoutable, publicDispatcher, SsrfError } from '@/lib/net/ssrf';
 import {
   extractUrls,
+  hostOf,
   mediaTypeOfContentType,
   mediaUnfurl,
   oembedHrefOf,
@@ -14,6 +20,7 @@ import {
   type Unfurl,
 } from '@/lib/links/shared/unfurl';
 import type { SerializedLinkPreview } from '@/lib/messages/types';
+import { oembedEndpointOf } from '@/lib/links/shared/providers';
 
 const FETCH_TIMEOUT_MS = 5000;
 // Every tag a preview reads is in the head; reading stops at `</head>` or here.
@@ -31,23 +38,36 @@ const MAX_PREVIEWS_PER_MESSAGE = 5;
  * straight past), and `redirect: 'manual'` means a public first hop can't 302
  * us onto an internal target — each redirect Location is re-validated here.
  */
-async function ssrfSafeFetch(url: string, signal: AbortSignal): Promise<Response | null> {
+type Fetcher = (url: string, init: { signal: AbortSignal; redirect: 'manual'; headers: Record<string, string> }) => Promise<Response>;
+
+/** The real network: undici's fetch through the connect-time address check. */
+const publicFetch: Fetcher = (url, init) =>
+  undiciFetch(url, { ...init, dispatcher: publicDispatcher() }) as unknown as Promise<Response>;
+
+export async function ssrfSafeFetch(url: string, signal: AbortSignal, fetcher: Fetcher = publicFetch): Promise<Response | null> {
   let current = url;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     let parsed: URL;
     try { parsed = new URL(current); } catch { return null; }
     if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    if (parsed.username || parsed.password) return null;
     try {
       await assertPubliclyRoutable(parsed.hostname);
     } catch (err) {
       if (err instanceof SsrfError) return null;
       throw err;
     }
-    const res = await fetch(current, {
-      signal,
-      redirect: 'manual',
-      headers: { 'User-Agent': 'Visvine-LinkPreview/1.0' },
-    });
+    let res: Response;
+    try {
+      res = await fetcher(current, {
+        signal,
+        redirect: 'manual',
+        headers: { 'User-Agent': 'Visvine-LinkPreview/1.0 (+https://visvine.com)' },
+      });
+    } catch (err) {
+      if (err instanceof SsrfError || (err as { cause?: unknown }).cause instanceof SsrfError) return null;
+      throw err;
+    }
     if (res.status >= 300 && res.status < 400) {
       const location = res.headers.get('location');
       if (!location) return null;
@@ -59,17 +79,8 @@ async function ssrfSafeFetch(url: string, signal: AbortSignal): Promise<Response
   return null; // too many redirects
 }
 
-// Whether the response headers allow this origin-agnostic page to be iframed.
-// Any X-Frame-Options or a CSP frame-ancestors directive is treated as blocking —
-// we can't evaluate ancestor lists server-side, so err toward the fallback UI.
-function isEmbeddable(headers: Headers): boolean {
-  if (headers.get('x-frame-options')) return false;
-  const csp = headers.get('content-security-policy') ?? '';
-  return !/frame-ancestors/i.test(csp);
-}
-
 /** Up to `maxBytes` of the body as text, stopping early once `stopAt` is seen. */
-async function readText(res: Response, maxBytes: number, stopAt?: RegExp): Promise<string | null> {
+export async function readText(res: Response, maxBytes: number, stopAt?: RegExp): Promise<string | null> {
   const reader = res.body?.getReader();
   if (!reader) return null;
   const decoder = new TextDecoder('utf-8');
@@ -78,8 +89,10 @@ async function readText(res: Response, maxBytes: number, stopAt?: RegExp): Promi
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
+    const room = maxBytes - received;
     received += value.length;
-    text += decoder.decode(value, { stream: true });
+    // A single chunk can be larger than the whole allowance: only its head is kept.
+    text += decoder.decode(value.length > room ? value.subarray(0, Math.max(room, 0)) : value, { stream: true });
     if (received >= maxBytes || (stopAt && stopAt.test(text))) {
       await reader.cancel().catch(() => {});
       break;
@@ -106,25 +119,32 @@ async function fetchOEmbed(href: string, signal: AbortSignal): Promise<OEmbed | 
  * oEmbed answer first when it names one, then Open Graph, Twitter, `<title>`.
  * Null when the URL is refused, unreachable, or says nothing previewable.
  */
-async function fetchLinkPreview(url: string): Promise<(Unfurl & { url: string; embeddable: boolean }) | null> {
+async function fetchLinkPreview(url: string): Promise<(Unfurl & { url: string }) | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
+    // A provider with its own oEmbed endpoint is asked first; its answer alone
+    // is a preview (title, author, thumbnail), the page is only a fallback.
+    const known = oembedEndpointOf(url);
+    if (known) {
+      const oembed = await fetchOEmbed(known, controller.signal);
+      const unfurl = oembed ? parseHead('', url, oembed) : null;
+      if (unfurl?.title) return { url, ...unfurl, siteName: unfurl.siteName ?? hostOf(url) };
+    }
     const res = await ssrfSafeFetch(url, controller.signal);
     if (!res || !res.ok) return null;
-    const embeddable = isEmbeddable(res.headers);
     const media = mediaTypeOfContentType(res.headers.get('content-type'));
     if (media) {
       await res.body?.cancel().catch(() => {});
-      return { url, embeddable, ...mediaUnfurl(url, media) };
+      return { url, ...mediaUnfurl(url, media) };
     }
     const html = await readText(res, MAX_HEAD_BYTES, /<\/head\s*>/i);
     if (!html) return null;
     const oembedHref = oembedHrefOf(html, res.url || url);
     const oembed = oembedHref ? await fetchOEmbed(oembedHref, controller.signal) : null;
     const unfurl = parseHead(html, res.url || url, oembed);
-    return unfurl ? { url, embeddable, ...unfurl } : null;
+    return unfurl ? { url, ...unfurl } : null;
   } catch {
     return null;
   } finally {
@@ -136,21 +156,22 @@ const PREVIEW_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 
 // Cache-or-fetch: serve the linkPreview row when fresh (<7 days), otherwise
 // unfurl and upsert. A row cached before media types were read is stale, so it
-// picks up its favicon and type on the next look. `embeddable` is only known on
-// a live fetch (it comes from response headers, not the DB) — undefined on hits.
-export async function getOrFetchLinkPreview(url: string) {
+// picks up its favicon and type on the next look. The cache holds what a page
+// SAID (text and the addresses of its images), never an image: those are
+// re-hosted per space by the unfurl job.
+export async function getOrFetchLinkPreview(url: string, { force = false }: { force?: boolean } = {}) {
   const cached = await prisma.linkPreview.findUnique({ where: { url } });
-  const stale = cached && (!cached.mediaType || Date.now() - cached.fetchedAt.getTime() > PREVIEW_TTL_MS);
-  if (cached && !stale) return { preview: cached, embeddable: undefined as boolean | undefined };
+  const stale = cached && (force || !cached.mediaType || Date.now() - cached.fetchedAt.getTime() > PREVIEW_TTL_MS);
+  if (cached && !stale) return { preview: cached };
   const fetched = await fetchLinkPreview(url);
-  if (!fetched) return { preview: cached ?? null, embeddable: undefined as boolean | undefined };
-  const { embeddable, ...row } = fetched;
+  if (!fetched) return { preview: cached ?? null };
+  const row = { ...fetched, publishedAt: fetched.publishedAt ? new Date(fetched.publishedAt) : null };
   const preview = await prisma.linkPreview.upsert({
     where: { url },
     create: row,
     update: { ...row, fetchedAt: new Date() },
   });
-  return { preview, embeddable };
+  return { preview };
 }
 
 /**
@@ -189,16 +210,20 @@ type LinkPreviewRow = {
   imageLayout: string | null;
 };
 
-/** The client's shape of a cached preview — one serializer for every surface. */
+/**
+ * The client's shape of a cached preview that is NOT a resource (a direct
+ * message's card, the composer). Text only: the page's images would be
+ * hotlinked from the viewer's browser, telling the site who looked.
+ */
 export function serializeLinkPreview(row: LinkPreviewRow): SerializedLinkPreview {
   return {
     url: row.url,
     title: row.title,
     description: row.description,
-    imageUrl: row.imageUrl,
+    imageUrl: null,
     siteName: row.siteName,
-    faviconUrl: row.faviconUrl,
+    faviconUrl: null,
     mediaType: row.mediaType,
-    imageLayout: row.imageLayout === 'summary' ? 'summary' : row.imageLayout === 'large' ? 'large' : null,
+    imageLayout: null,
   };
 }

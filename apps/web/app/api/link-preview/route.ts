@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import { requireApiSession, handleApiError } from '@/lib/api/route';
 import { getOrFetchLinkPreview, serializeLinkPreview } from '@/lib/linkPreview';
 
-// GET /api/link-preview?url=<encoded> — the unfurl of an external link
-// (resource-node Preview tab). SSRF guards, timeout, and the 7-day linkPreview
-// cache live in lib/linkPreview.ts; blocked/unfurlable URLs yield preview: null.
-// `embeddable` (from X-Frame-Options / CSP frame-ancestors) is only present on
-// live fetches — cache hits omit it and the client attempts the iframe.
+// GET /api/link-preview?url=<encoded> — what a page says about itself, as
+// text. SSRF guards, timeout, and the 7-day linkPreview cache live in
+// lib/linkPreview.ts; blocked/unfurlable URLs yield preview: null. Its images
+// are never handed out to be hotlinked: a link that is a resource shows the
+// copy its unfurl re-hosted (`/api/resources/<id>/thumb`).
 export async function GET(request: Request) {
   const session = await requireApiSession();
   if (session instanceof NextResponse) return session;
@@ -23,11 +23,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const { preview, embeddable } = await getOrFetchLinkPreview(url);
-    return NextResponse.json({
-      preview: preview ? serializeLinkPreview(preview) : null,
-      embeddable,
-    });
+    const { preview } = await getOrFetchLinkPreview(url);
+    return NextResponse.json({ preview: preview ? serializeLinkPreview(preview) : null });
   } catch (error) {
     return handleApiError(error, 'link-preview.failed');
   }

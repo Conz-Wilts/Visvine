@@ -4,7 +4,7 @@
 // server builds a page with it and the client patches one from a realtime
 // event with it.
 
-import type { RealtimeEvent, SerializedMessage, SerializedReaction } from '../types';
+import type { RealtimeEvent, SerializedLinkPreview, SerializedMessage, SerializedReaction } from '../types';
 import { personAliases, type SpaceAlias } from '../../types/context';
 
 /** Where a post was written — the channel, and the space that holds it. */
@@ -150,6 +150,16 @@ function mapMessages(posts: FeedPost[], messageId: string, change: (m: Serialize
  * draws from: an event from anywhere else (a DM, a chat channel) changes
  * nothing, and the same array comes back so a render is skipped.
  */
+/**
+ * A message with one link card redrawn: the card of the same resource, if the
+ * message carries it. The same object comes back when it does not, so a
+ * list that holds none of it skips a render.
+ */
+export function withLinkCard<M extends { linkPreviews?: SerializedLinkPreview[] }>(message: M, card: SerializedLinkPreview): M {
+  if (!card.resourceId || !message.linkPreviews?.some((p) => p.resourceId === card.resourceId)) return message;
+  return { ...message, linkPreviews: message.linkPreviews.map((p) => (p.resourceId === card.resourceId ? card : p)) };
+}
+
 export function applyFeedEvent(
   posts: FeedPost[],
   event: RealtimeEvent,
@@ -177,6 +187,18 @@ export function applyFeedEvent(
     const updated = { ...event.message, isOwn: event.message.sender.id === currentUserId };
     // `starred` is per viewer and the broadcast was serialized for the editor.
     return mapMessages(posts, updated.id, (m) => ({ ...updated, starred: m.starred }));
+  }
+
+  if (event.type === 'resource.updated') {
+    let changed = false;
+    const next = posts.map((post) => {
+      const message = withLinkCard(post.message, event.card);
+      const comments = post.comments.map((c) => withLinkCard(c, event.card));
+      if (message === post.message && comments.every((c, i) => c === post.comments[i])) return post;
+      changed = true;
+      return { ...post, message, comments };
+    });
+    return changed ? next : posts;
   }
 
   if (event.type === 'message.deleted') {
