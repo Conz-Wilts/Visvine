@@ -23,6 +23,8 @@
  * browser console.
  */
 
+import { FRAME_HOSTS } from '@/lib/links/shared/providers'
+
 /** Directives that never vary. */
 const STATIC_DIRECTIVES = [
   "default-src 'self'",
@@ -45,6 +47,14 @@ const STATIC_DIRECTIVES = [
 
   // https: because connectors and the app itself call out over TLS.
   "connect-src 'self' https:",
+
+  // Video and audio play from the storage origin's signed URLs.
+  "media-src 'self' blob: https:",
+
+  // pdf.js decodes in a worker served from our own bundle. Named, because a
+  // worker would otherwise fall back to script-src, where 'strict-dynamic'
+  // disregards 'self'.
+  "worker-src 'self' blob:",
 
   "object-src 'none'",
   "base-uri 'self'",
@@ -96,7 +106,9 @@ export function buildCsp({
     ...(isDev ? ["'unsafe-eval'"] : []),
   ].join(' ')
 
-  const frameSrc = ["'self'", toolsOrigin].filter(Boolean).join(' ')
+  // The resources viewer frames only the providers whose embed URLs it builds
+  // itself (lib/links/shared/providers.ts#FRAME_HOSTS) — never an arbitrary site.
+  const frameSrc = ["'self'", toolsOrigin, ...FRAME_HOSTS].filter(Boolean).join(' ')
 
   return [
     ...STATIC_DIRECTIVES,

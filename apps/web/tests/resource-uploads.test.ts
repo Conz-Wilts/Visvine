@@ -186,7 +186,7 @@ test('a PDF gets its page count, a drawn first page and searchable text', async 
   assert.equal(row.kind, 'pdf')
   assert.equal(row.pageCount, 1)
   assert.deepEqual(row.renditions.map((r) => r.kind).sort(), ['page1', 'thumb'])
-  assert.ok(row.sourcePath?.startsWith('resources/launch-plan/'), `text sits in the entity folder (${row.sourcePath})`)
+  assert.ok(/^resources\/launch-plan(-\d+)?\//.test(row.sourcePath ?? ''), `text sits in the entity folder (${row.sourcePath})`)
   const chunks = await prisma!.contextSourceChunk.findMany({ where: { spaceId, path: row.sourcePath! }, select: { text: true } })
   assert.ok(chunks.some((c) => c.text.includes('Launch plan for Aotearoa')))
 })

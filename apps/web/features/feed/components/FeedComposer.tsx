@@ -327,7 +327,7 @@ export default function FeedComposer({
                   <img src={file.url} alt="" className="h-24 w-24 rounded-xl object-cover" />
                 ) : (
                   <div className="flex h-24 w-48 items-center gap-2 rounded-xl border border-line-subtle px-3">
-                    <FileTypeIcon type={file.fileType} />
+                    <FileTypeIcon type={file.fileType} kind={file.kind} size="sm" />
                     <span className="line-clamp-2 text-sm text-fg">{file.name}</span>
                   </div>
                 )}

@@ -414,6 +414,68 @@ export const color = {
       "line": "#e5e7eb"
     }
   },
+  "file": {
+    "pdf": {
+      "default": "#ef4444",
+      "fg": "#b91c1c",
+      "wash": "#fef2f2"
+    },
+    "doc": {
+      "default": "#3b82f6",
+      "fg": "#1d4ed8",
+      "wash": "#eff6ff"
+    },
+    "sheet": {
+      "default": "#22c55e",
+      "fg": "#15803d",
+      "wash": "#f0fdf4"
+    },
+    "slides": {
+      "default": "#f59e0b",
+      "fg": "#b45309",
+      "wash": "#fffbeb"
+    },
+    "image": {
+      "default": "#8b5cf6",
+      "fg": "#6d28d9",
+      "wash": "#f5f3ff"
+    },
+    "video": {
+      "default": "#ec4899",
+      "fg": "#be185d",
+      "wash": "#fdf2f8"
+    },
+    "audio": {
+      "default": "#6366f1",
+      "fg": "#4338ca",
+      "wash": "#eef2ff"
+    },
+    "text": {
+      "default": "#6b7280",
+      "fg": "#374151",
+      "wash": "#f9fafb"
+    },
+    "code": {
+      "default": "#06b6d4",
+      "fg": "#0e7490",
+      "wash": "#ecfeff"
+    },
+    "archive": {
+      "default": "#eab308",
+      "fg": "#a16207",
+      "wash": "#fefce8"
+    },
+    "link": {
+      "default": "#0ea5e9",
+      "fg": "#0369a1",
+      "wash": "#f0f9ff"
+    },
+    "other": {
+      "default": "#6b7280",
+      "fg": "#374151",
+      "wash": "#f9fafb"
+    }
+  },
   "type": {
     "space": {
       "default": "#78d870",
@@ -623,6 +685,68 @@ export const colorDark = {
       "line": "#1f2937"
     }
   },
+  "file": {
+    "pdf": {
+      "default": "#f87171",
+      "fg": "#fca5a5",
+      "wash": "#450a0a"
+    },
+    "doc": {
+      "default": "#60a5fa",
+      "fg": "#93c5fd",
+      "wash": "#172554"
+    },
+    "sheet": {
+      "default": "#4ade80",
+      "fg": "#86efac",
+      "wash": "#052e16"
+    },
+    "slides": {
+      "default": "#fbbf24",
+      "fg": "#fcd34d",
+      "wash": "#451a03"
+    },
+    "image": {
+      "default": "#a78bfa",
+      "fg": "#c4b5fd",
+      "wash": "#2e1065"
+    },
+    "video": {
+      "default": "#f472b6",
+      "fg": "#f9a8d4",
+      "wash": "#500724"
+    },
+    "audio": {
+      "default": "#818cf8",
+      "fg": "#a5b4fc",
+      "wash": "#1e1b4b"
+    },
+    "text": {
+      "default": "#9ca3af",
+      "fg": "#d1d5db",
+      "wash": "#030712"
+    },
+    "code": {
+      "default": "#22d3ee",
+      "fg": "#67e8f9",
+      "wash": "#083344"
+    },
+    "archive": {
+      "default": "#facc15",
+      "fg": "#fde047",
+      "wash": "#422006"
+    },
+    "link": {
+      "default": "#38bdf8",
+      "fg": "#7dd3fc",
+      "wash": "#082f49"
+    },
+    "other": {
+      "default": "#9ca3af",
+      "fg": "#d1d5db",
+      "wash": "#030712"
+    }
+  },
   "type": {
     "space": {
       "default": "#78d870",
@@ -830,6 +954,68 @@ export const cssVars = {
       "fg": "var(--vv-color-hue-gray-fg)",
       "wash": "var(--vv-color-hue-gray-wash)",
       "line": "var(--vv-color-hue-gray-line)"
+    }
+  },
+  "file": {
+    "pdf": {
+      "default": "var(--vv-color-file-pdf)",
+      "fg": "var(--vv-color-file-pdf-fg)",
+      "wash": "var(--vv-color-file-pdf-wash)"
+    },
+    "doc": {
+      "default": "var(--vv-color-file-doc)",
+      "fg": "var(--vv-color-file-doc-fg)",
+      "wash": "var(--vv-color-file-doc-wash)"
+    },
+    "sheet": {
+      "default": "var(--vv-color-file-sheet)",
+      "fg": "var(--vv-color-file-sheet-fg)",
+      "wash": "var(--vv-color-file-sheet-wash)"
+    },
+    "slides": {
+      "default": "var(--vv-color-file-slides)",
+      "fg": "var(--vv-color-file-slides-fg)",
+      "wash": "var(--vv-color-file-slides-wash)"
+    },
+    "image": {
+      "default": "var(--vv-color-file-image)",
+      "fg": "var(--vv-color-file-image-fg)",
+      "wash": "var(--vv-color-file-image-wash)"
+    },
+    "video": {
+      "default": "var(--vv-color-file-video)",
+      "fg": "var(--vv-color-file-video-fg)",
+      "wash": "var(--vv-color-file-video-wash)"
+    },
+    "audio": {
+      "default": "var(--vv-color-file-audio)",
+      "fg": "var(--vv-color-file-audio-fg)",
+      "wash": "var(--vv-color-file-audio-wash)"
+    },
+    "text": {
+      "default": "var(--vv-color-file-text)",
+      "fg": "var(--vv-color-file-text-fg)",
+      "wash": "var(--vv-color-file-text-wash)"
+    },
+    "code": {
+      "default": "var(--vv-color-file-code)",
+      "fg": "var(--vv-color-file-code-fg)",
+      "wash": "var(--vv-color-file-code-wash)"
+    },
+    "archive": {
+      "default": "var(--vv-color-file-archive)",
+      "fg": "var(--vv-color-file-archive-fg)",
+      "wash": "var(--vv-color-file-archive-wash)"
+    },
+    "link": {
+      "default": "var(--vv-color-file-link)",
+      "fg": "var(--vv-color-file-link-fg)",
+      "wash": "var(--vv-color-file-link-wash)"
+    },
+    "other": {
+      "default": "var(--vv-color-file-other)",
+      "fg": "var(--vv-color-file-other-fg)",
+      "wash": "var(--vv-color-file-other-wash)"
     }
   }
 } as const;

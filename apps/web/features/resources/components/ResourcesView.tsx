@@ -79,7 +79,7 @@ function Thumb({ item }: { item: LibraryItem }) {
       </span>
     );
   }
-  return <FileTypeIcon type={item.fileType ?? ''} className="h-10 w-10 shrink-0" />;
+  return <FileTypeIcon type={item.fileType ?? ''} />;
 }
 
 function Row({ item }: { item: LibraryItem }) {

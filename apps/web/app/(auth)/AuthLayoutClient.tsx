@@ -20,6 +20,7 @@ import {
 import { SidebarProvider, useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { ContextPanelProvider } from "@/features/shared/contexts/ContextPanelContext";
 import { AuthProvider } from "@/features/auth/contexts/AuthContext";
+import { ResourceViewerProvider } from "@/features/resources/viewer/ResourceViewerContext";
 import type { Space } from "@/lib/types";
 import type { Session } from "@/features/auth/lib/auth-client";
 import type { InitialMembership } from "@/features/shared/contexts/SpaceContext";
@@ -203,9 +204,11 @@ export default function AuthLayoutClient({
           <HeaderProvider>
               <SidebarProvider>
               <ContextPanelProvider>
-                <AuthLayoutInner>
-                  {children}
-                </AuthLayoutInner>
+                <ResourceViewerProvider>
+                  <AuthLayoutInner>
+                    {children}
+                  </AuthLayoutInner>
+                </ResourceViewerProvider>
               </ContextPanelProvider>
               </SidebarProvider>
           </HeaderProvider>

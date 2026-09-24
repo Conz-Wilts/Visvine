@@ -25,7 +25,7 @@ export interface VisibilityFacts {
 }
 
 /** Whether one share reaches the viewer. */
-function shareReaches(viewer: ResourceViewer, share: { conversationId: string | null }): boolean {
+export function shareReaches(viewer: ResourceViewer, share: { conversationId: string | null }): boolean {
   if (share.conversationId === null) return viewer.member
   return viewer.channelIds.has(share.conversationId)
 }

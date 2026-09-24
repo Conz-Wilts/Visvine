@@ -123,6 +123,47 @@ enum VVColor {
     static let hueGrayFg = vvColor(UIColor(vv: 55, 65, 81, 1), UIColor(vv: 209, 213, 219, 1))
     static let hueGrayWash = vvColor(UIColor(vv: 249, 250, 251, 1), UIColor(vv: 3, 7, 18, 1))
     static let hueGrayLine = vvColor(UIColor(vv: 229, 231, 235, 1), UIColor(vv: 31, 41, 55, 1))
+    /// A PDF.
+    static let filePdf = vvColor(UIColor(vv: 239, 68, 68, 1), UIColor(vv: 248, 113, 113, 1))
+    static let filePdfFg = vvColor(UIColor(vv: 185, 28, 28, 1), UIColor(vv: 252, 165, 165, 1))
+    static let filePdfWash = vvColor(UIColor(vv: 254, 242, 242, 1), UIColor(vv: 69, 10, 10, 1))
+    /// A document.
+    static let fileDoc = vvColor(UIColor(vv: 59, 130, 246, 1), UIColor(vv: 96, 165, 250, 1))
+    static let fileDocFg = vvColor(UIColor(vv: 29, 78, 216, 1), UIColor(vv: 147, 197, 253, 1))
+    static let fileDocWash = vvColor(UIColor(vv: 239, 246, 255, 1), UIColor(vv: 23, 37, 84, 1))
+    /// A spreadsheet.
+    static let fileSheet = vvColor(UIColor(vv: 34, 197, 94, 1), UIColor(vv: 74, 222, 128, 1))
+    static let fileSheetFg = vvColor(UIColor(vv: 21, 128, 61, 1), UIColor(vv: 134, 239, 172, 1))
+    static let fileSheetWash = vvColor(UIColor(vv: 240, 253, 244, 1), UIColor(vv: 5, 46, 22, 1))
+    /// A deck.
+    static let fileSlides = vvColor(UIColor(vv: 245, 158, 11, 1), UIColor(vv: 251, 191, 36, 1))
+    static let fileSlidesFg = vvColor(UIColor(vv: 180, 83, 9, 1), UIColor(vv: 252, 211, 77, 1))
+    static let fileSlidesWash = vvColor(UIColor(vv: 255, 251, 235, 1), UIColor(vv: 69, 26, 3, 1))
+    static let fileImage = vvColor(UIColor(vv: 139, 92, 246, 1), UIColor(vv: 167, 139, 250, 1))
+    static let fileImageFg = vvColor(UIColor(vv: 109, 40, 217, 1), UIColor(vv: 196, 181, 253, 1))
+    static let fileImageWash = vvColor(UIColor(vv: 245, 243, 255, 1), UIColor(vv: 46, 16, 101, 1))
+    static let fileVideo = vvColor(UIColor(vv: 236, 72, 153, 1), UIColor(vv: 244, 114, 182, 1))
+    static let fileVideoFg = vvColor(UIColor(vv: 190, 24, 93, 1), UIColor(vv: 249, 168, 212, 1))
+    static let fileVideoWash = vvColor(UIColor(vv: 253, 242, 248, 1), UIColor(vv: 80, 7, 36, 1))
+    static let fileAudio = vvColor(UIColor(vv: 99, 102, 241, 1), UIColor(vv: 129, 140, 248, 1))
+    static let fileAudioFg = vvColor(UIColor(vv: 67, 56, 202, 1), UIColor(vv: 165, 180, 252, 1))
+    static let fileAudioWash = vvColor(UIColor(vv: 238, 242, 255, 1), UIColor(vv: 30, 27, 75, 1))
+    static let fileText = vvColor(UIColor(vv: 107, 114, 128, 1), UIColor(vv: 156, 163, 175, 1))
+    static let fileTextFg = vvColor(UIColor(vv: 55, 65, 81, 1), UIColor(vv: 209, 213, 219, 1))
+    static let fileTextWash = vvColor(UIColor(vv: 249, 250, 251, 1), UIColor(vv: 3, 7, 18, 1))
+    static let fileCode = vvColor(UIColor(vv: 6, 182, 212, 1), UIColor(vv: 34, 211, 238, 1))
+    static let fileCodeFg = vvColor(UIColor(vv: 14, 116, 144, 1), UIColor(vv: 103, 232, 249, 1))
+    static let fileCodeWash = vvColor(UIColor(vv: 236, 254, 255, 1), UIColor(vv: 8, 51, 68, 1))
+    static let fileArchive = vvColor(UIColor(vv: 234, 179, 8, 1), UIColor(vv: 250, 204, 21, 1))
+    static let fileArchiveFg = vvColor(UIColor(vv: 161, 98, 7, 1), UIColor(vv: 253, 224, 71, 1))
+    static let fileArchiveWash = vvColor(UIColor(vv: 254, 252, 232, 1), UIColor(vv: 66, 32, 6, 1))
+    static let fileLink = vvColor(UIColor(vv: 14, 165, 233, 1), UIColor(vv: 56, 189, 248, 1))
+    static let fileLinkFg = vvColor(UIColor(vv: 3, 105, 161, 1), UIColor(vv: 125, 211, 252, 1))
+    static let fileLinkWash = vvColor(UIColor(vv: 240, 249, 255, 1), UIColor(vv: 8, 47, 73, 1))
+    /// A file nothing has coloured.
+    static let fileOther = vvColor(UIColor(vv: 107, 114, 128, 1), UIColor(vv: 156, 163, 175, 1))
+    static let fileOtherFg = vvColor(UIColor(vv: 55, 65, 81, 1), UIColor(vv: 209, 213, 219, 1))
+    static let fileOtherWash = vvColor(UIColor(vv: 249, 250, 251, 1), UIColor(vv: 3, 7, 18, 1))
 }
 
 /// A built-in type's colours: `base` for its chip and glyph, `fg` for text in its hue, `wash` behind it.

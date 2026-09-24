@@ -43,6 +43,14 @@ interface DesktopBridge {
     onChange(listener: (fullScreen: boolean) => void): () => void;
   };
   runtimes?: DesktopRuntimes;
+  /** Absent in a shell older than opening resources natively. */
+  files?: DesktopFiles;
+}
+
+/** Opening a resource in the computer's own app, or Quick Look on macOS. */
+interface DesktopFiles {
+  open(resourceId: string): Promise<{ ok: boolean; error?: string }>;
+  quickLook(resourceId: string): Promise<{ ok: boolean; error?: string }>;
 }
 
 declare global {
@@ -57,3 +65,9 @@ export function desktopRuntimes(): DesktopRuntimes | null {
   return window.visvineDesktop?.runtimes ?? null;
 }
 
+
+/** The native-open bridge, or null in a browser or an older shell. */
+export function desktopFiles(): DesktopFiles | null {
+  if (typeof window === 'undefined') return null;
+  return window.visvineDesktop?.files ?? null;
+}

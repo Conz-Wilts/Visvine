@@ -319,7 +319,7 @@ export default function SpaceOverview({ spaceId }: { spaceId: string }) {
                 {resources.map((r) => (
                   <Link key={r.id} href={`/resources/${encodeURIComponent(r.id)}`}
                         className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-subtle">
-                    <FileTypeIcon type={r.fileType} className="h-9 w-9 flex-none" />
+                    <FileTypeIcon type={r.fileType} />
                     <span className="min-w-0">
                       <b className="block text-[13.5px] font-semibold text-fg truncate">{r.name}</b>
                       <span className="block text-xs text-fg-muted truncate">

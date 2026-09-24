@@ -1,24 +1,22 @@
 'use client';
 
 /**
- * The "Preview" view for a resource node — replaces the generic profile page.
- * A slim identity header (type pill, name, description, tags, link), then an
- * OpenGraph card + embedded iframe of the resource URL. Sites that block
- * framing (X-Frame-Options / CSP frame-ancestors) fall back to the card and an
- * Open-site button; resources with no external link get an empty state.
+ * The "Preview" view for a link resource's node: a slim identity header (type
+ * pill, name, description, tags, link), then the link drawn by the resources
+ * viewer's own stage — a live embed for an allowlisted provider, its card
+ * otherwise. Nothing else is ever framed.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { hostname } from './profileCards';
 import { EarthIcon, ExternalLinkIcon, Link2OffIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { hexToPalette } from '@/lib/profileTheme';
 import { findAlias, nodeTypeLabel, type NBNode } from '@/lib/types';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
-import { fetchJson } from '@/lib/fetchJson';
 import { Chip } from '@visvine/ui';
-import LinkPreviewCard from '@/features/shared/components/LinkPreviewCard';
-import type { SerializedLinkPreview } from '@/lib/messages/types';
+import InlineResource from '@/features/resources/viewer/InlineResource';
+import { fileIdOf } from '@/lib/resources/shared/fileNode';
 
 // A resource created via the modal carries an internal `/slug` url — only an
 // absolute http(s) url is a previewable external link.
@@ -32,16 +30,10 @@ function externalUrlOf(url?: string | null): string | null {
   }
 }
 
-interface PreviewResponse {
-  preview: SerializedLinkPreview | null;
-  embeddable?: boolean;
-}
-
 export default function ResourcePreviewContent({ node }: { node: NBNode }) {
   const { currentSpace } = useSpace();
   const externalUrl = externalUrlOf(node.url);
-  const [unfurl, setUnfurl] = useState<PreviewResponse | null>(null);
-  const [unfurlLoading, setUnfurlLoading] = useState(!!externalUrl);
+  const resourceId = fileIdOf(node.metadata);
 
   // Same theme derivation as OrgPageContent: alias colour wins over type colour.
   const theme = useMemo(() => {
@@ -50,23 +42,9 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
     return hexToPalette(color);
   }, [currentSpace?.aliases, currentSpace?.nodeTypes, node.alias, node.type]);
 
-  useEffect(() => {
-    if (!externalUrl) return;
-    let cancelled = false;
-    setUnfurlLoading(true);
-    fetchJson<PreviewResponse>(`/api/link-preview?url=${encodeURIComponent(externalUrl)}`)
-      .then((res) => { if (!cancelled) setUnfurl(res); })
-      .catch(() => { if (!cancelled) setUnfurl({ preview: null }); })
-      .finally(() => { if (!cancelled) setUnfurlLoading(false); });
-    return () => { cancelled = true; };
-  }, [externalUrl]);
-
   const bio = node.metadata?.bio as string | undefined;
   const description = bio ?? node.subtitle ?? null;
   const tags = node.tags ?? [];
-  // Only a live unfurl knows the framing headers; unknown (cache hit / no
-  // preview) attempts the iframe and relies on the caption fallback.
-  const embeddable = unfurl?.embeddable !== false;
 
   return (
     <div className="profile-content-fade flex flex-col gap-5">
@@ -114,40 +92,12 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
         </div>
       </section>
 
-      {/* ══ PREVIEW — OG card + embed ══ */}
-      {externalUrl ? (
-        <>
-          {unfurlLoading ? (
-            <div className="h-28 rounded-xl border border-line-subtle bg-surface-subtle/60 animate-pulse" />
-          ) : unfurl?.preview ? (
-            <LinkPreviewCard preview={unfurl.preview} className="max-w-xl" />
-          ) : null}
-
-          {!unfurlLoading && (
-            embeddable ? (
-              <div className="flex flex-col gap-2">
-                <iframe
-                  src={externalUrl}
-                  title={node.name}
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-[70vh] rounded-2xl border border-line-subtle bg-surface"
-                />
-                <p className="text-xs text-fg-muted">
-                  If the preview doesn&apos;t load, the site blocks embedding — use Open site.
-                </p>
-              </div>
-            ) : (
-              <p className="text-sm text-fg-muted">
-                This site doesn&apos;t allow embedding — use Open site to view it.
-              </p>
-            )
-          )}
-        </>
+      {/* ══ PREVIEW — the viewer's stage ══ */}
+      {resourceId ? (
+        <InlineResource resourceId={resourceId} className="h-[70vh] overflow-hidden rounded-2xl border border-line-subtle" />
       ) : (
         <div className="flex flex-col items-center justify-center gap-2 py-16 rounded-2xl border border-line-subtle bg-surface text-center">
           <Link2OffIcon className="w-6 h-6 text-fg-muted" />
-          <p className="text-sm text-fg-muted">No link attached to this resource.</p>
         </div>
       )}
     </div>

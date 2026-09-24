@@ -9,6 +9,7 @@
  *
  * test runner: node --import tsx --test tests/csp.test.ts
  */
+import { FRAME_HOSTS } from '../lib/links/shared/providers'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -55,14 +56,22 @@ test('upgrade-insecure-requests follows the SCHEME, not the build mode', () => {
 })
 
 test('frame-src names the Tool origin when one is configured, and only then', () => {
-  assert.deepEqual(directive(buildCsp(PROD), 'frame-src'), ["'self'"])
+  assert.deepEqual(directive(buildCsp(PROD), 'frame-src'), ["'self'", ...FRAME_HOSTS])
   assert.deepEqual(
     directive(buildCsp({ ...PROD, toolsOrigin: 'https://tools.visvine.com' }), 'frame-src'),
-    ["'self'", 'https://tools.visvine.com'],
+    ["'self'", 'https://tools.visvine.com', ...FRAME_HOSTS],
   )
   // An unset origin must not leave an empty token behind — `frame-src 'self' `
   // with a trailing blank is not the same policy.
-  assert.deepEqual(directive(buildCsp({ ...PROD, toolsOrigin: '' }), 'frame-src'), ["'self'"])
+  assert.deepEqual(directive(buildCsp({ ...PROD, toolsOrigin: '' }), 'frame-src'), ["'self'", ...FRAME_HOSTS])
+})
+
+test('the viewer may frame only the providers whose embeds it builds, play media and run the pdf worker', () => {
+  const frames = directive(buildCsp(PROD), 'frame-src')
+  assert.ok(frames.every((src) => src === "'self'" || src.startsWith('https://')), 'no wildcard, no http')
+  assert.ok(!frames.includes('https:'), 'never every https site')
+  assert.deepEqual(directive(buildCsp(PROD), 'worker-src'), ["'self'", 'blob:'])
+  assert.deepEqual(directive(buildCsp(PROD), 'media-src'), ["'self'", 'blob:', 'https:'])
 })
 
 test('form-action widens only for the OAuth consent endpoint', () => {

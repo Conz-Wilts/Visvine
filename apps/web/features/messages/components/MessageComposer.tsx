@@ -390,7 +390,7 @@ export default function MessageComposer({
                 <img src={file.url} alt="" className="h-16 w-16 rounded-lg object-cover" />
               ) : (
                 <div className="flex h-16 max-w-[200px] items-center gap-2 rounded-lg border border-line-subtle bg-surface px-3">
-                  <FileTypeIcon type={file.fileType} />
+                  <FileTypeIcon type={file.fileType} kind={file.kind} size="sm" />
                   <span className="truncate text-sm text-fg">{file.name}</span>
                 </div>
               )}

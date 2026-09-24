@@ -1,6 +1,8 @@
 'use client';
 
 import MessageLinkCards from './MessageLinkCards';
+import { useResourceViewer } from '@/features/resources/viewer/ResourceViewerContext';
+import { resourceImagePath } from '@/lib/resources/shared/linkCard';
 /**
  * MessageRow — linear feed message (LinkedIn/Slack style).
  *
@@ -21,7 +23,6 @@ import type {
   SerializedReplyTo,
 } from '@/lib/messages/types';
 import { Avatar } from '@visvine/ui';
-import Link from '@/features/shared/components/SpaceLink';
 import { FILE_LABEL, FileTypeIcon } from '@/features/resources/components/resourceUi';
 import { formatBytes } from '@/lib/utils';
 import { isOptimizableImageUrl } from '@/lib/mediaUrl';
@@ -155,32 +156,44 @@ function isNextImageSrc(url: string): boolean {
 }
 
 /**
- * The Drive files a message carries: its images as the image grid, anything
- * else as one hairline row each — type, name, size — opening the file's page.
+ * The files a message shares: its images as the image grid (drawn from their
+ * renditions), anything else as one hairline row each — type, name, size.
+ * Pressing either opens the viewer, walking this message's files.
  */
 export function MessageFiles({ files }: { files: SerializedMessage['files'] }) {
+  const viewer = useResourceViewer();
   if (!files?.length) return null;
   const images = files.filter((f) => f.fileType === 'image');
   const others = files.filter((f) => f.fileType !== 'image');
+  const ids = files.map((f) => f.id);
   return (
     <>
-      <MessageImageGrid images={images.map((f, i) => ({ id: f.id, imageUrl: f.url, position: i }))} />
+      <MessageImageGrid
+        images={images.map((f, i) => ({
+          id: f.id,
+          imageUrl: resourceImagePath(f.id, images.length === 1 ? 'preview' : 'thumb'),
+          fallbackUrl: f.url,
+          position: i,
+        }))}
+        onOpen={(i) => viewer.open(images[i].id, ids)}
+      />
       {others.length > 0 && (
         <div className="mt-1.5 flex max-w-md flex-col gap-1">
           {others.map((file) => (
-            <Link
+            <button
               key={file.id}
-              href={`/resources/${encodeURIComponent(file.id)}`}
-              className="flex items-center gap-3 rounded-xl border border-line-subtle px-3 py-2 transition-colors hover:bg-surface-subtle"
+              type="button"
+              onClick={() => viewer.open(file.id, ids)}
+              className="flex items-center gap-3 rounded-xl border border-line-subtle px-3 py-2 text-left transition-colors hover:bg-surface-subtle"
             >
-              <FileTypeIcon type={file.fileType} className="h-9 w-9 shrink-0" />
+              <FileTypeIcon type={file.fileType} kind={file.kind} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-fg">{file.name}</span>
                 <span className="block text-xs text-fg-muted">
                   {[FILE_LABEL[file.fileType] ?? file.fileType, formatBytes(file.fileSize ?? undefined)].filter(Boolean).join(' · ')}
                 </span>
               </span>
-            </Link>
+            </button>
           ))}
         </div>
       )}
@@ -188,8 +201,14 @@ export function MessageFiles({ files }: { files: SerializedMessage['files'] }) {
   );
 }
 
-export function MessageImageGrid({ images }: { images: SerializedMessage['images'] }) {
+type GridImage = NonNullable<SerializedMessage['images']>[number] & { fallbackUrl?: string };
+
+export function MessageImageGrid({ images, onOpen }: { images: GridImage[] | undefined; onOpen?: (index: number) => void }) {
   if (!images?.length) return null;
+  // A rendition not drawn yet falls back to the original, once.
+  const fallback = (img: GridImage) => (e: React.SyntheticEvent<HTMLImageElement>) => {
+    if (img.fallbackUrl && e.currentTarget.src !== new URL(img.fallbackUrl, window.location.href).href) e.currentTarget.src = img.fallbackUrl;
+  };
 
   if (images.length === 1) {
     // Kept as a raw <img>: layout is intrinsic-size driven (natural size
@@ -199,6 +218,8 @@ export function MessageImageGrid({ images }: { images: SerializedMessage['images
       <img
         src={images[0].imageUrl}
         alt=""
+        onClick={onOpen ? () => onOpen(0) : undefined}
+        onError={fallback(images[0])}
         className="mt-1.5 max-h-64 max-w-sm rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity"
         loading="lazy"
       />
@@ -208,7 +229,7 @@ export function MessageImageGrid({ images }: { images: SerializedMessage['images
   return (
     <div className="mt-1.5 grid max-w-md grid-cols-2 gap-1">
       {images.slice(0, 4).map((img, i) => (
-        <div key={img.id} className="relative h-32">
+        <div key={img.id} className="relative h-32" onClick={onOpen ? () => onOpen(i) : undefined}>
           {isNextImageSrc(img.imageUrl) ? (
             <Image
               src={img.imageUrl}
@@ -223,6 +244,7 @@ export function MessageImageGrid({ images }: { images: SerializedMessage['images
             <img
               src={img.imageUrl}
               alt=""
+              onError={fallback(img)}
               className="h-32 w-full rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
               loading="lazy"
             />

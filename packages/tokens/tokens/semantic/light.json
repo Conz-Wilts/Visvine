@@ -431,6 +431,146 @@
           "$value": "{color.gray.200}"
         }
       }
+    },
+    "file": {
+      "$description": "What kind of file a resource is, as the tile, icon and chip draw it. Each kind borrows a categorical hue (never a status colour); the whole family lives here so web, iOS and Android read one map.",
+      "pdf": {
+        "default": {
+          "$value": "{color.hue.red.default}",
+          "$description": "A PDF."
+        },
+        "fg": {
+          "$value": "{color.hue.red.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.red.wash}"
+        }
+      },
+      "doc": {
+        "default": {
+          "$value": "{color.hue.blue.default}",
+          "$description": "A document."
+        },
+        "fg": {
+          "$value": "{color.hue.blue.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.blue.wash}"
+        }
+      },
+      "sheet": {
+        "default": {
+          "$value": "{color.hue.green.default}",
+          "$description": "A spreadsheet."
+        },
+        "fg": {
+          "$value": "{color.hue.green.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.green.wash}"
+        }
+      },
+      "slides": {
+        "default": {
+          "$value": "{color.hue.amber.default}",
+          "$description": "A deck."
+        },
+        "fg": {
+          "$value": "{color.hue.amber.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.amber.wash}"
+        }
+      },
+      "image": {
+        "default": {
+          "$value": "{color.hue.violet.default}"
+        },
+        "fg": {
+          "$value": "{color.hue.violet.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.violet.wash}"
+        }
+      },
+      "video": {
+        "default": {
+          "$value": "{color.hue.pink.default}"
+        },
+        "fg": {
+          "$value": "{color.hue.pink.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.pink.wash}"
+        }
+      },
+      "audio": {
+        "default": {
+          "$value": "{color.hue.indigo.default}"
+        },
+        "fg": {
+          "$value": "{color.hue.indigo.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.indigo.wash}"
+        }
+      },
+      "text": {
+        "default": {
+          "$value": "{color.hue.gray.default}"
+        },
+        "fg": {
+          "$value": "{color.hue.gray.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.gray.wash}"
+        }
+      },
+      "code": {
+        "default": {
+          "$value": "{color.hue.cyan.default}"
+        },
+        "fg": {
+          "$value": "{color.hue.cyan.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.cyan.wash}"
+        }
+      },
+      "archive": {
+        "default": {
+          "$value": "{color.hue.yellow.default}"
+        },
+        "fg": {
+          "$value": "{color.hue.yellow.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.yellow.wash}"
+        }
+      },
+      "link": {
+        "default": {
+          "$value": "{color.hue.sky.default}"
+        },
+        "fg": {
+          "$value": "{color.hue.sky.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.sky.wash}"
+        }
+      },
+      "other": {
+        "default": {
+          "$value": "{color.hue.gray.default}",
+          "$description": "A file nothing has coloured."
+        },
+        "fg": {
+          "$value": "{color.hue.gray.fg}"
+        },
+        "wash": {
+          "$value": "{color.hue.gray.wash}"
+        }
+      }
     }
   }
 }

@@ -43,3 +43,232 @@ export function XIcon(props: IconProps) {
     </IconBase>
   );
 }
+
+export function ChevronLeftIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="m15 18-6-6 6-6" />
+    </IconBase>
+  );
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="m9 18 6-6-6-6" />
+    </IconBase>
+  );
+}
+
+export function DownloadIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M12 15V3" />
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m7 10 5 5 5-5" />
+    </IconBase>
+  );
+}
+
+export function ExternalLinkIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    </IconBase>
+  );
+}
+
+export function EllipsisIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </IconBase>
+  );
+}
+
+export function Maximize2Icon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M15 3h6v6" />
+      <path d="m21 3-7 7" />
+      <path d="m3 21 7-7" />
+      <path d="M9 21H3v-6" />
+    </IconBase>
+  );
+}
+
+export function Minimize2Icon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="m14 10 7-7" />
+      <path d="M20 10h-6V4" />
+      <path d="m3 21 7-7" />
+      <path d="M4 14h6v6" />
+    </IconBase>
+  );
+}
+
+export function ZoomInIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" x2="16.65" y1="21" y2="16.65" />
+      <line x1="11" x2="11" y1="8" y2="14" />
+      <line x1="8" x2="14" y1="11" y2="11" />
+    </IconBase>
+  );
+}
+
+export function ZoomOutIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" x2="16.65" y1="21" y2="16.65" />
+      <line x1="8" x2="14" y1="11" y2="11" />
+    </IconBase>
+  );
+}
+
+export function Link2Icon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M9 17H7A5 5 0 0 1 7 7h2" />
+      <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
+      <line x1="8" x2="16" y1="12" y2="12" />
+    </IconBase>
+  );
+}
+
+export function FileIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+    </IconBase>
+  );
+}
+
+export function FileTextIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M10 9H8" />
+      <path d="M16 13H8" />
+      <path d="M16 17H8" />
+    </IconBase>
+  );
+}
+
+export function FilePdfIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M8 18v-5h1.5a1.5 1.5 0 0 1 0 3H8" />
+      <path d="M13 13v5h.5a2.5 2.5 0 0 0 0-5Z" />
+    </IconBase>
+  );
+}
+
+export function FileImageIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <circle cx="10" cy="12" r="2" />
+      <path d="m20 17-1.296-1.296a2.41 2.41 0 0 0-3.408 0L9 22" />
+    </IconBase>
+  );
+}
+
+export function FileSpreadsheetIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M8 13h2" />
+      <path d="M14 13h2" />
+      <path d="M8 17h2" />
+      <path d="M14 17h2" />
+    </IconBase>
+  );
+}
+
+export function PresentationIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M2 3h20" />
+      <path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3" />
+      <path d="m7 21 5-5 5 5" />
+    </IconBase>
+  );
+}
+
+export function FileMusicIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M10.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v8.4" />
+      <path d="M8 18v-7.7L16 9v7" />
+      <circle cx="14" cy="16" r="2" />
+      <circle cx="6" cy="18" r="2" />
+    </IconBase>
+  );
+}
+
+export function FilePlayIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" />
+      <path d="M15.033 13.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56v-4.704a.645.645 0 0 1 .967-.56z" />
+    </IconBase>
+  );
+}
+
+export function FileCode2Icon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="m5 12-3 3 3 3" />
+      <path d="m9 18 3-3-3-3" />
+    </IconBase>
+  );
+}
+
+export function FileArchiveIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M10 12v-1" />
+      <path d="M10 18v-2" />
+      <path d="M10 7V6" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M15.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v16a2 2 0 0 0 .274 1.01" />
+      <circle cx="10" cy="20" r="2" />
+    </IconBase>
+  );
+}
+
+export function CopyIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </IconBase>
+  );
+}
+
+export function ShareIcon(props: IconProps) {
+  return (
+    <IconBase strokeWidth={2} {...props}>
+      <path d="M12 2v13" />
+      <path d="m16 6-4-4-4 4" />
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+    </IconBase>
+  );
+}

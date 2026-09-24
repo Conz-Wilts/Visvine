@@ -14,11 +14,10 @@ import Link from '@/features/shared/components/SpaceLink';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import PDFViewer from '@/features/resources/components/PDFViewer';
+import InlineResource from '@/features/resources/viewer/InlineResource';
 import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';
 import {
   FileTypeIcon, FILE_BADGE, FILE_LABEL, INDEX_STATE_LABEL,
-  DocxViewer, FileUnavailable,
 } from '@/features/resources/components/resourceUi';
 import { formatBytes } from '@/lib/utils';
 import { formatDate, timeAgo as relativeTimeAgo } from '@/lib/date';
@@ -148,7 +147,7 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
       {/* ── identity + actions ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4">
         <div className="flex min-w-0 items-center gap-4">
-          <FileTypeIcon type={resource.fileType} className="h-14 w-14 flex-none" />
+          <FileTypeIcon type={resource.fileType} size="lg" />
           <div className="min-w-0">
             <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-lg sm:text-xl font-bold text-fg font-title leading-tight truncate">{resource.name}</h1>
@@ -228,17 +227,7 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
       <div className="flex flex-1 min-h-0 flex-col lg:flex-row overflow-y-auto lg:overflow-hidden border-t border-line-subtle">
         {/* viewer */}
         <div className="flex flex-col flex-1 min-w-0 min-h-[60vh] lg:min-h-0 bg-surface-subtle">
-          {resource.fileType === 'docx' ? (
-            <div className="flex flex-1 overflow-hidden bg-surface"><DocxViewer resourceId={resource.id} /></div>
-          ) : !resource.fileUrl ? (
-            <FileUnavailable />
-          ) : resource.fileType === 'pdf' ? (
-            <PDFViewer fileUrl={resource.fileUrl} />
-          ) : resource.fileType === 'image' ? (
-            <div className="flex flex-1 items-center justify-center overflow-auto p-8">
-              <img src={resource.fileUrl} alt={resource.name} className="max-w-full max-h-full object-contain rounded-xl shadow" />
-            </div>
-          ) : isSpreadsheet ? (
+          {isSpreadsheet && resource.fileUrl ? (
             <div className="flex-1 overflow-hidden flex flex-col bg-surface">
               <SpreadsheetViewer
                 key={resource.id}
@@ -250,20 +239,7 @@ export default function ResourceFile({ resourceId, className = 'h-[calc(100dvh-5
               />
             </div>
           ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-12 text-center">
-              <FileTypeIcon type={resource.fileType} className="h-16 w-16" />
-              <p className="text-sm font-semibold text-fg">{resource.name}</p>
-              <p className="text-xs text-fg-muted">No preview available for this file type.</p>
-              <a href={resource.fileUrl} target="_blank" rel="noopener noreferrer"
-                 className="mt-1 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white bg-accent hover:opacity-95 transition">
-                <DownloadIcon className="w-4 h-4" /> Download
-              </a>
-              {resource.indexState === 'indexed' && (
-                <p className="text-xs text-fg-subtle">
-                  Its contents are indexed and searchable from the context.
-                </p>
-              )}
-            </div>
+            <InlineResource resourceId={resource.id} className="flex-1" />
           )}
         </div>
 

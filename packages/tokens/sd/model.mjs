@@ -44,7 +44,7 @@ export function num(value) {
 const byPath = (tokens) => new Map(tokens.map((t) => [t.path.join('.'), t]));
 
 /** The semantic colour roles the product paints with, in the order they are written out. */
-const ROLE_GROUPS = ['surface', 'fg', 'line', 'accent', 'brand', 'admin', 'danger', 'warning', 'success', 'info', 'hue'];
+const ROLE_GROUPS = ['surface', 'fg', 'line', 'accent', 'brand', 'admin', 'danger', 'warning', 'success', 'info', 'hue', 'file'];
 export const FEEDBACK = ['danger', 'warning', 'success', 'info'];
 
 /**

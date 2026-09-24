@@ -6,6 +6,7 @@ export { UIProvider, useUIAdapters, type UILinkProps, type UIImageProps } from '
 
 // Actions
 export { default as Button } from './Button';
+export { default as IconButton } from './IconButton';
 
 // Form controls
 export { default as Input, inputBaseClass } from './Input';
@@ -30,6 +31,7 @@ export {
   useSearchMenuCursor,
 } from './SearchMenu';
 export { DROPDOWN_TRIGGER_CLASS, DROPDOWN_TRIGGER_ACTIVE_STYLE, DROPDOWN_TRIGGER_IDLE_STYLE } from './Dropdown';
+export { default as Menu, type MenuItem } from './Menu';
 
 // Navigation
 export { default as Tabs, type TabOption } from './Tabs';
@@ -41,6 +43,18 @@ export { default as PersonSilhouette } from './PersonSilhouette';
 export { default as TypeSilhouette } from './TypeSilhouette';
 export { default as Alert } from './Alert';
 export { default as Logo } from './Logo';
+
+// Resources — files and links, their tiles, cards and viewer
+export { default as FileTypeIcon } from './resources/FileTypeIcon';
+export { FILE_KIND_LABEL, asFileKind, type FileKind } from './resources/fileKinds';
+export { default as ResourceRow, type ResourceRowProps } from './resources/ResourceRow';
+export { default as ResourceCard, type ResourceCardProps } from './resources/ResourceCard';
+export { default as ResourceGrid } from './resources/ResourceGrid';
+export { default as UnfurlCard, type UnfurlCardData } from './resources/UnfurlCard';
+export { default as ResourceViewer, type ResourceViewerProps, type ViewerAction } from './resources/ResourceViewer';
+export { default as ViewerFallback } from './resources/ViewerFallback';
+export { default as ZoomPane } from './resources/ZoomPane';
+export { ZOOM, IDENTITY as ZOOM_IDENTITY, stepZoom, clampScale, zoomAt, panBy, wheelFactor, type ZoomState } from './resources/zoomMath';
 
 // Status
 export { default as EmptyState } from './EmptyState';

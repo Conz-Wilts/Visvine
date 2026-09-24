@@ -29,5 +29,15 @@
   "Row": { "group": "Layout", "summary": "Children side by side, a spacing step apart, centred on one line by default." },
   "SettingsSection": { "group": "Layout", "summary": "A hairline-separated section with its title, and its switch or action in the header." },
   "IconBase": { "group": "Foundations", "summary": "The 24px stroke SVG frame every UI glyph is drawn in; it inherits `currentColor`." },
-  "UIProvider": { "group": "Foundations", "summary": "Hands the app's own link and image components to every component that links or draws an image; without it they are a plain `<a>` and `<img>`." }
+  "UIProvider": { "group": "Foundations", "summary": "Hands the app's own link and image components to every component that links or draws an image; without it they are a plain `<a>` and `<img>`." },
+  "IconButton": { "group": "Actions", "summary": "A square, quiet button that is only an icon; its label is its accessible name and hover title." },
+  "Menu": { "group": "Overlays", "summary": "A small popover of actions under a trigger — the toolbar's overflow — with arrow-key selection and a danger item.", "single": true, "height": 320 },
+  "FileTypeIcon": { "group": "Resources", "summary": "A file's kind as a tile: its glyph in the kind's ink on its wash, the one mark for a file everywhere." },
+  "ResourceRow": { "group": "Resources", "summary": "One resource as a list row: thumbnail or kind tile, name, one `·` meta line, actions on hover." },
+  "ResourceCard": { "group": "Resources", "summary": "One resource as a grid tile: a 4:3 picture over its name and meta, or a square picture for choosing images." },
+  "ResourceGrid": { "group": "Resources", "summary": "The auto-filling grid resource cards sit in; images pack denser." },
+  "UnfurlCard": { "group": "Resources", "summary": "A link as Slack lays it out: site line, title, description and picture, wide or as a square beside the text." },
+  "ResourceViewer": { "group": "Resources", "summary": "The resources viewer: a side panel beside the page or the whole window, with its actions, prev/next, zoom and keyboard.", "single": true, "height": 640 },
+  "ViewerFallback": { "group": "Resources", "summary": "What the viewer shows for a file it cannot draw: the file large and named, with the ways to open it.", "single": true, "height": 360 },
+  "ZoomPane": { "group": "Resources", "summary": "Content that zooms toward the cursor and pans by dragging once zoomed past fitting." }
 }

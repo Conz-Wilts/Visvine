@@ -4,7 +4,7 @@ Every glyph in this directory is a file we own and can edit. Where the art came
 from still matters — both for the licence below and so a future redraw knows
 what it is replacing.
 
-## Visvine originals (18)
+## Visvine originals (19)
 
 Drawn in-house to the sidebar spec (24x24, 1.8 stroke, round caps, currentColor).
 These were lifted out of inline JSX in `apps/web/features/shared/lib/features.tsx`
@@ -15,9 +15,9 @@ introduced; the geometry is unchanged from what shipped there.
 | `nav-channels` | `nav-resources` | `tool-grid` | `tool-sparkle` |
 | `nav-connectors` | `nav-tools` | `tool-kanban` | `tool-table` |
 | `nav-context` | `tool-calendar` | `tool-list` |  |
-| `nav-directory` | `tool-chart` | `tool-note` |  |
+| `nav-directory` | `tool-chart` | `tool-note` | `file-pdf` |
 
-## Derived from Lucide (131)
+## Derived from Lucide (145)
 
 Copied verbatim from `lucide-react` 0.545.0 — the version the app depended on
 before it owned its icons — then normalised into this directory's file shape
@@ -64,6 +64,14 @@ the upstream art.
 | `coffee` | `list-ordered` | `send` | `zoom-out` |
 | `eye-off` | `type` |  |  |
 | `mic` |  |  |  |
+
+Added with the resources viewer, from `lucide-static` 0.545.0 (the same
+version, so the set stays one hand):
+
+| `ellipsis` | `file-music` | `image` | `panel-right` |
+| `file` | `file-play` | `layout-grid` | `presentation` |
+| `file-archive` | `file-spreadsheet` | `maximize-2` | `share` |
+| `file-image` | `minimize-2` |  |  |
 
 ### Licence — Lucide (ISC, with portions from Feather under MIT)
 
