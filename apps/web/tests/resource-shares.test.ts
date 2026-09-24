@@ -196,3 +196,22 @@ test('a trashed resource is restored with its audience, and only a message-born 
   assert.equal(back.deletedAt, null)
   assert.equal(back.state, 'ready')
 })
+
+test('the trash keeps a resource thirty days, then deletes it outright', async (t) => {
+  if (skip) return t.skip(skip)
+  const { prisma } = await localDb()
+  const { purgeTrash } = await import('@/lib/resources/service')
+  const day = 24 * 60 * 60 * 1000
+  const make = (name: string, daysAgo: number) =>
+    prisma!.resource.create({
+      data: {
+        spaceId, name, fileType: 'pdf', kind: 'pdf', uploadedBy: ana, createdBy: ana,
+        state: 'deleted', deletedAt: new Date(Date.now() - daysAgo * day), deletedBy: ana,
+      },
+    })
+  const old = await make('old.pdf', 31)
+  const recent = await make('recent.pdf', 5)
+  await purgeTrash(new Date(), 500)
+  assert.equal(await prisma!.resource.findUnique({ where: { id: old.id } }), null, 'past its keep: gone')
+  assert.ok(await prisma!.resource.findUnique({ where: { id: recent.id } }), 'still restorable')
+})

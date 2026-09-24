@@ -11,6 +11,7 @@ import { environment } from '@/lib/vm/lease'
 import { logger } from '@/lib/logger'
 import { drainJobs } from '@/lib/resources/jobs'
 import { reapAbandonedUploads } from '@/lib/resources/upload'
+import { purgeTrash } from '@/lib/resources/service'
 
 // The tick awaits the dispatches it fans out (each its own request to the run
 // endpoint), so it can last as long as the longest claimed run.
@@ -47,10 +48,15 @@ export async function POST(req: NextRequest) {
     return null
   })
   // Work resources still owe (renditions, text, unfurls) that no request
-  // finished — the backstop drain of lib/resources/jobs.ts. Bounded, and
-  // never allowed to fail the tick.
+  // finished — the backstop drain of lib/resources/jobs.ts — then uploads
+  // nobody finished and a trash past its 30 days. Bounded, and never allowed
+  // to fail the tick.
   const resourceJobs = await drainJobs({ budgetMs: 20_000 })
-    .then(async (drained) => ({ ...drained, abandonedUploads: await reapAbandonedUploads() }))
+    .then(async (drained) => ({
+      ...drained,
+      abandonedUploads: await reapAbandonedUploads(),
+      purgedFromTrash: await purgeTrash(),
+    }))
     .catch((err) => {
       logger.error('resources.jobs.tick_failed', { err })
       return null

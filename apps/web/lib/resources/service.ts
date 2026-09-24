@@ -407,6 +407,34 @@ export async function deleteResource(resourceId: string): Promise<boolean> {
   return true
 }
 
+/** How long a resource waits in the trash for its restore before it is deleted outright. */
+const TRASH_KEEP_MS = 30 * 24 * 60 * 60 * 1000
+
+/**
+ * Delete outright what has sat in the trash past its keep, oldest first and a
+ * bounded number per call — the minute tick is the caller, so a backlog
+ * drains over a few minutes rather than in one request. Two ticks racing for
+ * one row cost a skipped row, never a failure.
+ */
+export async function purgeTrash(now = new Date(), limit = 20): Promise<number> {
+  const due = await prisma.resource.findMany({
+    where: { deletedAt: { lt: new Date(now.getTime() - TRASH_KEEP_MS) } },
+    orderBy: { deletedAt: 'asc' },
+    take: limit,
+    select: { id: true },
+  })
+  let purged = 0
+  for (const { id } of due) {
+    try {
+      if (await deleteResource(id)) purged++
+    } catch (err) {
+      logger.warn('resources.trash.purge_skipped', { resourceId: id, err })
+    }
+  }
+  if (purged) logger.info('resources.trash.purged', { count: purged })
+  return purged
+}
+
 type ResourceRow = {
   id: string
   spaceId: string
