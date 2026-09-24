@@ -13,6 +13,8 @@ import { isStructuralNodeType } from '@/lib/types/context';
 import { visibleNodes } from '@/lib/notes/context/featureVisibility';
 import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
 import { spaceMemberForbidden, directoryAccessForbidden, getFeatureConfig } from '@/lib/auth';
+import { principalOf, resolveContext } from '@/lib/notes/resolve';
+import { recordFactsFor } from '@/lib/directory/recordFacts';
 
 type RouteContext = {
   params: Promise<{ spaceId: string }>;
@@ -54,8 +56,13 @@ export async function GET(
       featureConfig,
     ).map(normalizeNode);
 
+    // What every record has — last edit, who, mentions — read through the
+    // viewer's own lens, so it rides beside the cached nodes, never in them.
+    const resolved = await resolveContext(session, spaceId);
+    const facts = resolved instanceof Response ? new Map() : await recordFactsFor(spaceId, nodes, await principalOf(resolved));
+
     return NextResponse.json(
-      { nodes },
+      { nodes: nodes.map((node) => ({ ...node, ...facts.get(node.id) })) },
       {
         headers: {
           'Cache-Control': 'private, max-age=30, stale-while-revalidate=300',

@@ -58,14 +58,14 @@ const col = (key: string, type = 'person', config: NodeTypeConfig | null = perso
 }
 
 describe('columnsForType', () => {
-  test('name · alias-as-Type, the type rows in the page\'s order, the tracked fields, then tags · added', () => {
+  test('name · alias-as-Type, the type rows in the page\'s order, the tracked fields, then what every record has', () => {
     assert.deepEqual(
       columnsForType('person', personWithFields).map((c) => c.key),
       [
         'name', 'alias',
         'subtitle', 'companyName', 'email', 'phone', 'location', 'linkedinUrl', 'twitterUrl', 'website', 'pronouns', 'bio',
         'deal_stage', 'net_worth',
-        'tags', 'created',
+        'tags', 'updated', 'editedBy', 'created', 'addedBy', 'mentions',
       ],
     )
   })
@@ -98,7 +98,7 @@ describe('columnsForType', () => {
 
   test('an event reads when · where · how many', () => {
     assert.deepEqual(
-      columnsForType('event', null).map((c) => c.key).filter((k) => !['name', 'alias', 'tags', 'created'].includes(k)),
+      columnsForType('event', null).map((c) => c.key).filter((k) => !['name', 'alias', 'tags', 'updated', 'editedBy', 'created', 'addedBy', 'mentions'].includes(k)),
       ['start_at', 'end_at', 'location', 'capacity', 'organizerEmail'],
     )
   })
@@ -108,7 +108,7 @@ describe('columnsForType', () => {
   })
 
   test('a type with no rows still has the core columns', () => {
-    assert.deepEqual(columnsForType('playbook', null).map((c) => c.key), ['name', 'alias', 'tags', 'created'])
+    assert.deepEqual(columnsForType('playbook', null).map((c) => c.key), ['name', 'alias', 'tags', 'updated', 'editedBy', 'created', 'addedBy', 'mentions'])
   })
 
   test('a column-backed row keeps its column and its metadata mirror', () => {
@@ -136,6 +136,10 @@ describe('cells', () => {
       tags: ['ai'],
       subtitle: 'CEO',
       createdAt: '2026-01-02T00:00:00.000Z',
+      updatedAt: '2026-02-03T00:00:00.000Z',
+      editedBy: 'Ana',
+      addedBy: 'Craig',
+      mentions: 4,
       metadata: { email: 'c@x.com', deal_stage: 'Won' },
     })
     assert.equal(cellValue(it, col('name')), 'Craig')
@@ -145,7 +149,17 @@ describe('cells', () => {
     assert.equal(cellValue(it, col('email')), 'c@x.com')
     assert.equal(cellValue(it, col('deal_stage')), 'Won')
     assert.equal(cellValue(it, col('created')), '2026-01-02T00:00:00.000Z')
+    assert.equal(cellValue(it, col('updated')), '2026-02-03T00:00:00.000Z')
+    assert.equal(cellValue(it, col('editedBy')), 'Ana')
+    assert.equal(cellValue(it, col('addedBy')), 'Craig')
+    assert.equal(cellValue(it, col('mentions')), 4)
     assert.equal(cellValue(item(), col('net_worth')), undefined)
+  })
+
+  test('Updated reads as a distance from now; Added as a day', () => {
+    const recent = new Date(Date.now() - 3 * 86_400_000).toISOString()
+    assert.equal(formatCell(recent, col('updated')), '3d ago')
+    assert.doesNotMatch(formatCell(recent, col('created')), /ago/)
   })
 
   test('formatCell: blanks are empty, numbers group, links drop their scheme, a bare day stays that day', () => {
@@ -216,11 +230,11 @@ describe('the viewer\'s arrangement', () => {
   })
 
   test('a column the view never met appears at its canonical place', () => {
-    const view = { ...EMPTY_VIEW, order: ['name', 'location', 'subtitle', 'alias', 'tags', 'created'] }
+    const view = { ...EMPTY_VIEW, order: ['name', 'location', 'subtitle', 'alias', 'tags', 'updated', 'editedBy', 'created', 'addedBy', 'mentions'] }
     const keys = arrangeColumns(view, columns).map((c) => c.key)
     assert.deepEqual(keys, [
       'name', 'location', 'subtitle', 'alias', 'companyName', 'email', 'phone', 'linkedinUrl', 'twitterUrl',
-      'website', 'pronouns', 'bio', 'deal_stage', 'net_worth', 'tags', 'created',
+      'website', 'pronouns', 'bio', 'deal_stage', 'net_worth', 'tags', 'updated', 'editedBy', 'created', 'addedBy', 'mentions',
     ])
   })
 
@@ -229,12 +243,12 @@ describe('the viewer\'s arrangement', () => {
     assert.equal(arrangeColumns(view, columns)[0].key, 'name')
   })
 
-  test('toggle hides and shows, and showing Added records that it was met', () => {
-    const created = col('created', 'person', personWithFields)
-    assert.equal(isHidden(EMPTY_VIEW, created), true)
-    const shown = toggleColumn(EMPTY_VIEW, columns, 'created')
-    assert.equal(isHidden(shown, created), false)
-    assert.ok(shown.order.includes('created'))
+  test('toggle hides and shows, and showing a default-hidden column records that it was met', () => {
+    const phone = col('phone', 'person', personWithFields)
+    assert.equal(isHidden(EMPTY_VIEW, phone), true)
+    const shown = toggleColumn(EMPTY_VIEW, columns, 'phone')
+    assert.equal(isHidden(shown, phone), false)
+    assert.ok(shown.order.includes('phone'))
     const hidden = toggleColumn(shown, columns, 'email')
     assert.ok(!visibleColumns(hidden, columns).some((c) => c.key === 'email'))
     assert.ok(visibleColumns(toggleColumn(hidden, columns, 'email'), columns).some((c) => c.key === 'email'))

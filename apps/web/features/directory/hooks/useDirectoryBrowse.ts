@@ -30,6 +30,10 @@ function toDirectoryItem(node: NBNode): DirectoryItem {
     pronouns: node.metadata?.pronouns as string | undefined,
     metadata: node.metadata,
     createdAt: node.createdAt,
+    updatedAt: node.updated_at,
+    editedBy: node.edited_by,
+    addedBy: node.added_by,
+    mentions: node.mentions,
   };
 }
 

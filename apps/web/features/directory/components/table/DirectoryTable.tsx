@@ -5,9 +5,9 @@
 // fills its pane, with a numbered name column, each header wearing its kind's glyph and
 // opening a menu of what can be done to the column — sort, step, hide, and
 // an admin's edit — with the column it opened for lit under it; a drag
-// reorders a column, its right edge resizes it, and "Add column" — the last
-// column itself, filling the pane past the data — shows a hidden column or
-// mints a new field without leaving the table.
+// reorders a column, its right edge resizes it, and "Columns" — the last
+// column itself, filling the pane past the data — shows and hides columns for
+// this viewer, or mints a new field without leaving the table.
 // Columns nobody has sized share out the pane's spare width, so a table with
 // few columns is never a strip beside a blank, and blank rows carry the grid
 // past the last entry, so a short table fills its pane rather than stopping
@@ -21,7 +21,7 @@
 // frame sits outside the scrollbars, so its right line stands clear of where
 // every row line ends and its sides run on under the horizontal bar; a border
 // on the cells rides the TABLE, which collapses its borders — the name
-// column's left line and "Add column"'s right one are at the table's edges,
+// column's left line and "Columns"'s right one are at the table's edges,
 // and a table wider than the pane keeps both of them off screen.
 //
 // The table is its own scroll box (the view sizes it to the pane): the head
@@ -42,7 +42,7 @@ import { TableVirtuoso, type TableComponents } from 'react-virtuoso';
 import { Avatar, ConfirmDialog, EmptyState, Skeleton } from '@visvine/ui';
 import { ArrowDownIcon, ArrowUpIcon, PencilIcon, PlusIcon } from '@/features/shared/icons';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
-import AddColumnMenu from './AddColumnMenu';
+import ColumnsMenu from './ColumnsMenu';
 import ColumnHeaderMenu from './ColumnHeaderMenu';
 import HeaderPopover from './HeaderPopover';
 import TableCell from './TableCell';
@@ -61,8 +61,8 @@ import { getNodeTypeConfig, type DirectoryItem, type NodeTypeConfig, type SpaceA
 interface DirectoryTableProps {
   items: DirectoryItem[];
   columns: TableColumn[];
-  /** The type's columns this view hides — the "Add column" menu's stock. */
-  hiddenColumns: TableColumn[];
+  /** Every column the type has, shown or not, in the viewer's order — the Columns menu's stock. */
+  allColumns: TableColumn[];
   typeName: string;
   sort: TableSort | null;
   widths: Record<string, number>;
@@ -77,6 +77,8 @@ interface DirectoryTableProps {
   onReorder: (key: string, before: string | null) => void;
   onShowColumn: (key: string) => void;
   onHideColumn: (key: string) => void;
+  /** Back to the default columns, widths and order. */
+  onResetColumns: () => void;
   onOpen: (item: DirectoryItem) => void;
   /** Absent when nothing here may be edited. */
   onSaveCell?: (item: DirectoryItem, column: TableColumn, value: unknown) => Promise<void>;
@@ -84,7 +86,7 @@ interface DirectoryTableProps {
   onSuggestCell?: (item: DirectoryItem, column: TableColumn) => Promise<string | null>;
 }
 
-/** The narrowest the "Add column" cell gets. It is the table's last column,
+/** The narrowest the "Columns" cell gets. It is the table's last column,
  *  not a button parked before a blank one, so it takes every pixel past the
  *  data and never less than this. */
 const ADD_COLUMN_MIN_WIDTH = 168;
@@ -117,9 +119,12 @@ interface TableContext {
 // does: react-virtuoso resolves a second copy of @types/react, so its ref
 // types are nominally distinct from the app's while the runtime contract is
 // identical.
+//
+// overscroll-none: an elastic bounce at either end drags the whole scrolled
+// content, so the sticky head and name column would rubber-band with the rows.
 const Scroller = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<'div'>>(
   function Scroller(props, ref) {
-    return <div ref={ref} {...props} className="h-full w-full overflow-auto custom-scrollbar" />;
+    return <div ref={ref} {...props} className="h-full w-full overflow-auto overscroll-none custom-scrollbar" />;
   },
 );
 
@@ -134,7 +139,7 @@ function Table({ style, children, context }: React.ComponentPropsWithoutRef<'tab
         {columns.map((c) => (
           <col key={c.key} style={{ width: widthOf?.(c) }} />
         ))}
-        {/* "Add column" is the last column and carries no width, so fixed
+        {/* "Columns" is the last column and carries no width, so fixed
             layout hands it every pixel past the data: the gridlines end where
             the data does and the header still reaches the pane's edge. */}
         <col />
@@ -213,9 +218,9 @@ const TableRow = ({ item: _item, style, ...props }: React.ComponentPropsWithoutR
 const tableComponents = { Scroller, Table, TableHead, TableBody, TableFoot, TableRow } as unknown as TableComponents<DirectoryItem, TableContext>;
 
 export default function DirectoryTable({
-  items, columns, hiddenColumns, typeName, sort, widths, loading = false,
+  items, columns, allColumns, typeName, sort, widths, loading = false,
   nodeTypes, aliases, tagColors, fields,
-  onSortChange, onResize, onReorder, onShowColumn, onHideColumn, onOpen, onSaveCell, onSuggestCell,
+  onSortChange, onResize, onReorder, onShowColumn, onHideColumn, onResetColumns, onOpen, onSaveCell, onSuggestCell,
 }: DirectoryTableProps) {
   // ── filling the pane: spare width goes to the columns nobody has sized ──
   // A table narrower than its pane would leave a blank strip past the last
@@ -338,6 +343,7 @@ export default function DirectoryTable({
   // ── the header menus, portalled past the scroll box ─────────────────────
   const [menu, setMenu] = useState<{ key: string; anchor: HTMLElement } | null>(null);
   const [addAnchor, setAddAnchor] = useState<HTMLElement | null>(null);
+  const shownKeys = useMemo(() => new Set(columns.map((c) => c.key)), [columns]);
   const [removing, setRemoving] = useState<TableColumn | null>(null);
   const closeMenus = useCallback(() => {
     setMenu(null);
@@ -514,14 +520,14 @@ export default function DirectoryTable({
                   }}
                   aria-haspopup="menu"
                   aria-expanded={addAnchor !== null}
-                  title="Add a column"
+                  title="Columns"
                   className={clsx(
                     'flex h-11 w-full items-center gap-2 px-4 text-[13px] font-medium text-fg-muted transition-colors hover:text-fg',
                     addAnchor && 'text-fg',
                   )}
                 >
                   <PlusIcon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">Add column</span>
+                  <span className="truncate">Columns</span>
                 </button>
               </th>
             </tr>
@@ -636,11 +642,13 @@ export default function DirectoryTable({
       </HeaderPopover>
 
       <HeaderPopover anchor={addAnchor} onClose={closeMenus}>
-        <AddColumnMenu
+        <ColumnsMenu
           typeName={typeName}
-          hiddenColumns={hiddenColumns}
+          columns={allColumns}
+          shown={shownKeys}
           fields={fields}
-          onShow={onShowColumn}
+          onToggle={(key) => (shownKeys.has(key) ? onHideColumn(key) : onShowColumn(key))}
+          onReset={onResetColumns}
           onClose={closeMenus}
         />
       </HeaderPopover>

@@ -88,6 +88,12 @@ export interface NBNode {
   /** The cross-space identity this node stands for (people/orgs) — how the same person is recognised across spaces. */
   identity_id?: string;
   createdAt?: string;
+  /** The Directory's record facts (lib/directory/recordFacts.ts) — present
+   *  only on /api/spaces/<id>/directory rows, read through the viewer's lens. */
+  updated_at?: string;
+  edited_by?: string;
+  added_by?: string;
+  mentions?: number;
   // Force context will add these during simulation
   x?: number;
   y?: number;

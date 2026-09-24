@@ -4,7 +4,8 @@
 //
 // A type's columns come from three places, in this order:
 //
-//   core     name · alias · tags · created — every entity has these
+//   core     name · alias, then tags · updated · edited by · added · added
+//            by · mentions — what every record has, whatever its type
 //   type     the property rows the type already shows on its note
 //            (lib/types/typeFields.ts): a Person's role, company, location…
 //   tracked  what THIS space decided to track about the type
@@ -26,11 +27,15 @@
 // Pure — no DOM, no Prisma — so tests/directory-table.test.ts covers it directly.
 
 import { canonicalType, fieldsForType } from '@/lib/types/typeFields'
+import { timeAgo } from '@/lib/date'
 import type { DirectoryItem, NodeTypeConfig, TrackedField, TrackedFieldKind } from '@/lib/types'
 
 type ColumnKind = TrackedFieldKind | 'location' | 'tags' | 'alias'
 
-type ColumnSource = 'name' | 'alias' | 'tags' | 'column' | 'metadata' | 'created'
+type ColumnSource = 'name' | 'alias' | 'tags' | 'column' | 'metadata' | 'record'
+
+/** The DirectoryItem keys a `source: 'record'` column reads — the facts every record has. */
+type RecordField = 'createdAt' | 'updatedAt' | 'editedBy' | 'addedBy' | 'mentions'
 
 export interface TableColumn {
   /** Stable id; the metadata key for `source: 'metadata'`. */
@@ -40,6 +45,10 @@ export interface TableColumn {
   source: ColumnSource
   /** The node column, for `source: 'column'`. */
   column?: 'subtitle' | 'location' | 'url'
+  /** The item field, for `source: 'record'`. */
+  field?: RecordField
+  /** A date read as its distance from now ("3d ago") rather than a day. */
+  relative?: boolean
   origin: 'core' | 'type' | 'tracked'
   /** Whether the cell takes an inline edit. */
   editable: boolean
@@ -75,7 +84,13 @@ const CORE_HEAD: TableColumn[] = [
 
 const CORE_TAIL: TableColumn[] = [
   { key: 'tags', label: 'Tags', kind: 'tags', source: 'tags', origin: 'core', editable: true },
-  { key: 'created', label: 'Added', kind: 'date', source: 'created', origin: 'core', editable: false, defaultHidden: true },
+  // What every record has, from its note (lib/directory/recordFacts.ts). Read
+  // only: the note's own history writes them.
+  { key: 'updated', label: 'Updated', kind: 'date', source: 'record', field: 'updatedAt', relative: true, origin: 'core', editable: false },
+  { key: 'editedBy', label: 'Edited by', kind: 'text', source: 'record', field: 'editedBy', origin: 'core', editable: false },
+  { key: 'created', label: 'Added', kind: 'date', source: 'record', field: 'createdAt', origin: 'core', editable: false },
+  { key: 'addedBy', label: 'Added by', kind: 'text', source: 'record', field: 'addedBy', origin: 'core', editable: false },
+  { key: 'mentions', label: 'Mentions', kind: 'number', source: 'record', field: 'mentions', origin: 'core', editable: false },
 ]
 
 /**
@@ -192,8 +207,8 @@ export function cellValue(item: DirectoryItem, column: TableColumn): unknown {
       return item.alias ?? undefined
     case 'tags':
       return item.tags ?? []
-    case 'created':
-      return item.createdAt
+    case 'record':
+      return column.field ? item[column.field] : undefined
     case 'column':
       return column.column ? item[column.column] ?? undefined : undefined
     case 'metadata':
@@ -243,6 +258,7 @@ export function formatCell(value: unknown, column: TableColumn): string {
     case 'date': {
       const t = toTime(value)
       if (t === null) return String(value)
+      if (column.relative) return timeAgo(t, { style: 'short' })
       const s = String(value)
       // A bare day ("2026-03-15") is a day, not a moment — showing a time for
       // it would be the viewer's midnight, which is nobody's schedule.

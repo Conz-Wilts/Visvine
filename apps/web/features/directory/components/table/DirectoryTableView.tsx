@@ -120,12 +120,6 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
     [tracked, activeName, isAll],
   );
 
-  // The "+" menu's stock: what the type has that this view isn't showing.
-  const hiddenColumns = useMemo(() => {
-    const shown = new Set(table.visible.map((c) => c.key));
-    return table.arranged.filter((c) => !shown.has(c.key));
-  }, [table.visible, table.arranged]);
-
   // The rows: the toolbar's search/alias/tag result, narrowed to the table's
   // type (the grid's type filter is not consulted here — the dropdown IS it),
   // with this view's edits laid over, in the header's sort.
@@ -213,7 +207,6 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
               ? `Search ${pluralTypeName(activeName, space?.nodeTypes).toLowerCase()}…`
               : 'Search the directory…'
           }
-          typeKey={activeKey ?? ''}
         />
 
         {(error || saveError) && (
@@ -259,7 +252,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
         <DirectoryTable
           items={items}
           columns={table.visible}
-          hiddenColumns={hiddenColumns}
+          allColumns={table.arranged}
           typeName={activeName}
           sort={table.view.sort}
           widths={table.view.widths}
@@ -273,6 +266,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
           onReorder={table.placeBefore}
           onShowColumn={table.toggle}
           onHideColumn={table.toggle}
+          onResetColumns={table.reset}
           onOpen={handleItemClick}
           onSaveCell={spaceId ? saveCell : undefined}
           onSuggestCell={spaceId ? suggestCell : undefined}

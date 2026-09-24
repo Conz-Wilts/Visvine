@@ -178,8 +178,9 @@ export default function TableCell({ column, value, aliasColor, typeLabel, tagCol
   } else if (column.kind === 'tags' && Array.isArray(value) && value.length > 0) {
     body = (
       <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-        {value.map((t) => (
-          <Chip key={String(t)} color={tagPalette(String(t), tagColors ?? null).base} size="sm">{String(t)}</Chip>
+        {/* A tag repeated in the note's frontmatter is still one tag. */}
+        {[...new Set(value.map(String))].map((t) => (
+          <Chip key={t} color={tagPalette(t, tagColors ?? null).base} size="sm">{t}</Chip>
         ))}
       </span>
     );

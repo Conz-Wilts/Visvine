@@ -7,8 +7,9 @@
 // controls beside it — because a filter control is
 // only useful next to the thing it filters, and a filtered grid has to say so.
 // The chip row is the "say so": it names what is being filtered and lets one
-// value go without reopening a menu. It exists only while something is active,
-// so the resting state stays a single line.
+// value go without reopening a menu. It exists only while a tag is on, so the
+// resting state stays a single line. An alias gets no chip: it is picked in the
+// type menu, whose button already names it.
 //
 // The type is the same TypeMenu the Table view's bar carries; the rest of that
 // bar (table/TableToolbar.tsx) is slimmer, because the header sorts there.
@@ -61,7 +62,7 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
   const activeType = picked && types.some(t => t.id === picked) ? picked : 'all';
   const activeAlias = filterAliases.size === 1 ? [...filterAliases][0] : null;
 
-  const activeCount = filterAliases.size + filterTags.size;
+  const activeCount = filterTags.size;
 
   const without = (set: Set<string>, value: string) => {
     const next = new Set(set);
@@ -69,10 +70,6 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
     return next;
   };
 
-  const clearAll = () => {
-    setFilterAliases(new Set());
-    setFilterTags(new Set());
-  };
 
   return (
     // Sticky at 0: the tab set lives in the shell band now, so the only pane
@@ -125,14 +122,6 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
 
       {activeCount > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {[...filterAliases].map(alias => (
-            <FilterChip
-              key={`alias-${alias}`}
-              label={alias}
-              color={aliases.find(a => a.name === alias)?.color ?? 'var(--vv-color-accent)'}
-              onRemove={() => setFilterAliases(without(filterAliases, alias))}
-            />
-          ))}
           {[...filterTags].map(tag => (
             <FilterChip
               key={`tag-${tag}`}
@@ -143,7 +132,7 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
           ))}
           <button
             type="button"
-            onClick={clearAll}
+            onClick={() => setFilterTags(new Set())}
             className="ml-1 text-[13px] font-medium text-fg-muted transition-colors hover:text-fg-secondary"
           >
             Clear all

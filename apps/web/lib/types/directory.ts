@@ -23,4 +23,10 @@ export interface DirectoryItem {
   /** The node's whole metadata blob — the tracked fields read from it. */
   metadata?: Record<string, unknown>
   createdAt?: string
+  /** When the record's note was last edited, and by whom (lib/directory/recordFacts.ts). */
+  updatedAt?: string
+  editedBy?: string
+  addedBy?: string
+  /** How many notes mention the record. */
+  mentions?: number
 }
