@@ -7,33 +7,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mergePriceRows, rowsFromLiteLlm, rowsFromOpenRouter } from '@/lib/agents/shared/prices'
-
-test('OpenRouter payload → openrouter rows, per-token strings scaled to per-million', () => {
-  const rows = rowsFromOpenRouter({
-    data: [
-      {
-        id: 'anthropic/claude-sonnet-5',
-        pricing: { prompt: '0.000003', completion: '0.000015', input_cache_read: '0.0000003' },
-      },
-      { id: 'free/model', pricing: { prompt: '0', completion: '0' } },
-      // Dropped, each for its own reason:
-      { id: 'no-pricing/model' },
-      { id: 'bad price/model', pricing: { prompt: 'lots', completion: '0.1' } },
-      { id: 'has spaces in id', pricing: { prompt: '0.000001', completion: '0.000001' } },
-      { id: 'absurd/model', pricing: { prompt: '1', completion: '1' } }, // $1M per M tokens
-    ],
-  })
-  assert.deepEqual(rows, [
-    {
-      provider: 'openrouter',
-      model: 'anthropic/claude-sonnet-5',
-      pricing: { inputPerM: 3, outputPerM: 15, cachedInputPerM: 0.3 },
-      source: 'openrouter',
-    },
-    { provider: 'openrouter', model: 'free/model', pricing: { inputPerM: 0, outputPerM: 0 }, source: 'openrouter' },
-  ])
-})
+import { mergePriceRows, rowsFromLiteLlm, type ModelPriceRow } from '@/lib/agents/shared/prices'
 
 test('LiteLLM map → direct-provider rows; prefixes stripped, non-chat and unknown providers dropped', () => {
   const rows = rowsFromLiteLlm({
@@ -72,22 +46,13 @@ test('LiteLLM map → direct-provider rows; prefixes stripped, non-chat and unkn
 
 test('garbage payloads yield nothing', () => {
   for (const junk of [null, undefined, 'html error page', 42, [], { data: 'nope' }]) {
-    assert.deepEqual(rowsFromOpenRouter(junk), [])
     assert.deepEqual(rowsFromLiteLlm(junk), [])
   }
 })
 
 test('mergePriceRows: first occurrence of a (provider, model) key wins', () => {
-  const a = rowsFromOpenRouter({
-    data: [{ id: 'x/y', pricing: { prompt: '0.000001', completion: '0.000002' } }],
-  })
-  const b = rowsFromOpenRouter({
-    data: [
-      { id: 'x/y', pricing: { prompt: '0.000009', completion: '0.000009' } },
-      { id: 'x/z', pricing: { prompt: '0.000001', completion: '0.000001' } },
-    ],
-  })
-  const merged = mergePriceRows(a, b)
+  const row = (model: string, inputPerM: number): ModelPriceRow => ({ provider: 'openai', model, pricing: { inputPerM, outputPerM: 2 }, source: 'litellm' })
+  const merged = mergePriceRows([row('x', 1)], [row('x', 9), row('z', 1)])
   assert.equal(merged.length, 2)
-  assert.equal(merged[0].pricing.inputPerM, 1, 'the first list held x/y')
+  assert.equal(merged[0].pricing.inputPerM, 1, 'the first list held x')
 })

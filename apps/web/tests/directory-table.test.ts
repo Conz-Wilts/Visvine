@@ -381,13 +381,13 @@ describe('tracked fields', () => {
 
 describe('the agents table', () => {
   test('reads the record and live state; On, Model, Connectors and Tools edit in place', () => {
-    const cols = columnsForType('agent', null, { agent: { models: ['openai/gpt-6-sol'], connectors: ['crm'], tools: ['web', 'actions'] } })
+    const cols = columnsForType('agent', null, { agent: { models: ['openai/gpt-4.1'], connectors: ['crm'], tools: ['web', 'actions'] } })
     assert.deepEqual(
       cols.map((c) => c.key),
       ['name', 'status', 'active', 'schedule', 'nextRun', 'lastRun', 'model', 'connectors', 'tools', 'runsFor', 'failures', 'tags'],
     )
     assert.deepEqual(cols.filter((c) => c.editable).map((c) => c.key), ['active', 'model', 'connectors', 'tools'])
-    assert.deepEqual(cols.find((c) => c.key === 'model')?.options, ['openai/gpt-6-sol'])
+    assert.deepEqual(cols.find((c) => c.key === 'model')?.options, ['openai/gpt-4.1'])
     assert.deepEqual(cols.find((c) => c.key === 'connectors')?.options, ['crm'])
     assert.equal(cols.find((c) => c.key === 'tools')?.kind, 'tags')
     const row: DirectoryItem = { id: 'agent:digest', name: 'Digest', type: 'agent', metadata: { connectors: ['crm'] } }

@@ -1,6 +1,7 @@
-// A failed run's likely cause, asked of the judge once — and the model a
-// brief suits. Both are advice for the person reading the page: nothing is
-// retried, switched or gated on them, and no judge means no line.
+// A failed run's likely cause, and how much a brief asks of its model — each
+// one judge question, asked when it is needed and never cached. Both are
+// advice for the person reading the page: nothing is retried, switched or
+// gated on them, and no judge means no line.
 
 import { decide } from '@/lib/judge/client'
 import { choiceOf } from '@/lib/judge/shared/types'
@@ -23,17 +24,11 @@ export async function diagnoseRun(input: { brief: string; finalText: string | nu
   return causeAdvice(cause.choice as RunCause)
 }
 
-const shapes = new Map<string, JobShape | null>()
-
-/** How much the brief asks of its model, memoised per brief text in this process. Null without a verdict. */
+/** How much the brief asks of its model, or null without a verdict. One judge question. */
 export async function jobShapeOf(brief: string): Promise<JobShape | null> {
-  const key = brief.trim().slice(0, 4_000)
-  if (!key) return null
-  if (shapes.has(key)) return shapes.get(key) ?? null
-  const answers = await decide(key, { shape: JOB_SHAPE_QUESTION }, { deadlineMs: 2_500 })
+  const text = brief.trim().slice(0, 4_000)
+  if (!text) return null
+  const answers = await decide(text, { shape: JOB_SHAPE_QUESTION }, { deadlineMs: 2_500 })
   const shape = choiceOf(answers, 'shape')
-  const out = shape && shape.confidence >= JOB_SHAPE_CONFIDENCE ? (shape.choice as JobShape) : null
-  if (answers) shapes.set(key, out)
-  if (shapes.size > 500) shapes.delete(shapes.keys().next().value!)
-  return out
+  return shape && shape.confidence >= JOB_SHAPE_CONFIDENCE ? (shape.choice as JobShape) : null
 }

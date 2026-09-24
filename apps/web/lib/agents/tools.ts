@@ -16,13 +16,13 @@
  *
  * Names mirror the MCP tools (list/search/read/write/append_context,
  * run_connector) so there is one vocabulary. Connector reach is DECLARED — only
- * the names in the brief's `connectors:` are offered, and the machine's
- * network is narrowed to those connectors' hosts (`machineAllow`), so the two
- * doors onto the outside world answer to one declaration. The extras appear
- * only when the brief asks: `fetch_url` (`tools: [web]`), `create_node` /
+ * the connectors on the agent's record are offered, and the machine's network
+ * is narrowed to those connectors' hosts (`machineAllow`), so the two doors
+ * onto the outside world answer to one declaration. The extras appear only
+ * when the record asks: `fetch_url` (`tools: [web]`), `create_node` /
  * `link_nodes` (`[directory]`), `run_agent` (`agents: [...]`).
  *
- * `dry_run: true` in the brief turns every WRITE (notes, nodes, links, chained
+ * `dry_run` on the record turns every WRITE (notes, nodes, links, chained
  * runs) into a transcript line — "DRY RUN — would …" — while reads still
  * happen, so a brief can be rehearsed end to end without touching the space.
  *

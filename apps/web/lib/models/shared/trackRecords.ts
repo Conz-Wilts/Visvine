@@ -1,28 +1,10 @@
 /**
- * Whether a model can do an agent's job at all — pure half.
+ * How often each model finished the jobs it was given — pure.
  *
- * An agent works by calling tools. A model that does not take a `tools`
- * parameter answers every turn in prose, so every run ends having done
- * nothing; a model id the provider does not know fails the first call. Both
- * are knowable before anything runs, from the provider's own catalogue.
- * lib/models/capabilities.ts fetches it; this reads it.
+ * Read from a space's recent runs (lib/models/service.ts#spaceTrackRecords):
+ * the model page says it per model, and the agent advice
+ * (lib/agents/shared/advice.ts) weighs one model against another by it.
  */
-
-export interface CatalogModel {
-  id: string
-  supported_parameters?: string[]
-}
-
-/** Why `modelId` cannot run an agent, from an OpenRouter-shaped catalogue, or null when it can (or the catalogue says nothing). */
-export function toolsProblemIn(catalog: readonly CatalogModel[] | null, modelId: string, providerLabel: string): string | null {
-  if (!catalog?.length) return null
-  const entry = catalog.find((m) => m.id === modelId)
-  if (!entry) return `${providerLabel} has no model called ${modelId}. Check the id on the model's page.`
-  if (entry.supported_parameters && !entry.supported_parameters.includes('tools')) {
-    return `${modelId} cannot call tools, so an agent on it can read nothing and write nothing. Pick a model that supports tool calling.`
-  }
-  return null
-}
 
 /** Run outcomes that are the MODEL not doing the job — not a budget, a key or a timeout. */
 const MODEL_SHORTFALLS = new Set(['incomplete', 'narrated'])

@@ -29,6 +29,26 @@ const REACHING_TOOLS = new Set(['run_connector', 'run_command', 'open_page', 'pa
 
 export type RunOutcome = 'done' | 'partial' | 'blocked' | 'nothing'
 
+/** Tools whose call changes something — a note, a record, another service, a page. */
+const SIDE_EFFECT_TOOLS = new Set([
+  ...WRITING_TOOLS,
+  'run_connector',
+  'run_command',
+  'page_act',
+  'browse_task',
+  'sign_in',
+  'send_to_agent',
+])
+
+/**
+ * Whether a run that fell short may start again from the top on another
+ * model: only when nothing it did has to be undone or would be done twice —
+ * it wrote nothing and called nothing that acts. Reading pages is fine.
+ */
+export function safeToRetry(trace: RunTrace): boolean {
+  return trace.writes === 0 && !trace.tools.some((t) => SIDE_EFFECT_TOOLS.has(t))
+}
+
 /** The claims the trace does not back, in words for the run's page. Empty when the run did what it said. */
 export function unbackedClaims(claims: RunClaims, trace: RunTrace, at: number): string[] {
   const out: string[] = []

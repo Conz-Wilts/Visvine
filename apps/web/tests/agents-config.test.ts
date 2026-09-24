@@ -46,11 +46,11 @@ import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 // ── registry ──
 
 test('parseModelRef accepts provider/model and rejects the rest', () => {
-  const ok = parseModelRef('gemini/gemma-4-31b-it')
+  const ok = parseModelRef('gemini/gemini-2.5-flash')
   assert.ok(ok.ok)
   if (ok.ok) {
     assert.equal(ok.ref.provider.id, 'gemini')
-    assert.equal(ok.ref.modelId, 'gemma-4-31b-it')
+    assert.equal(ok.ref.modelId, 'gemini-2.5-flash')
   }
   const priced = parseModelRef('anthropic/claude-sonnet-5')
   assert.ok(priced.ok && priced.ref.pricing?.inputPerM === 3)
@@ -92,7 +92,7 @@ const BRIEF = `---
 type: agent
 title: Weekly digest
 description: Summarises the week
-model: gemini/gemma-4-31b-it
+model: gemini/gemini-2.5-flash
 connectors: [hubspot, stripe]
 tools: [web]
 max_turns: 8
@@ -119,7 +119,7 @@ test('parseAgentBrief describes what is wrong instead of vanishing', () => {
     // `model:` is optional — an agent runs on the space's — but a model it
     // DOES name has to be one, so a typo is refused here rather than at 3am.
     [{ type: 'agent', model: 'https://evil/v1' }, 'body', /provider/],
-    [{ type: 'agent', model: 'gemma-4-31b-it' }, 'body', /provider/],
+    [{ type: 'agent', model: 'gemini-2.5-flash' }, 'body', /provider/],
     [{ type: 'agent', model: 'gemini/x', tools: ['shell'] }, 'body', /unknown tool/],
     [{ type: 'agent', model: 'gemini/x', max_turns: 500 }, 'body', /max_turns/],
     [{ type: 'agent', model: 'gemini/x', connectors: ['bad name!'] }, 'body', /connector name/],
@@ -231,7 +231,7 @@ test('parseAgentActivation reads hourly / daily / weekly and enforces the rules'
 
 test('a config round-trips through the frontmatter the parsers read', () => {
   const next = applyConfigPatch(defaultAgentConfig(), {
-    model: 'gemini/gemma-4-31b-it',
+    model: 'gemini/gemini-2.5-flash',
     active: true,
     schedule: { kind: 'weekly', hour: 9, minute: 30, weekday: 1 },
     timezone: 'UTC',
@@ -407,7 +407,7 @@ test('nextOccurrence: interval aligns to the clock grid; cron respects fields an
 })
 
 /** A minimal valid brief, for the activation-into-the-brief round trips. */
-const BRIEF_MD = '---\ntype: agent\ntitle: Digest\nmodel: gemini/gemma-4-31b-it\n---\n\nDo the thing.\n'
+const BRIEF_MD = '---\ntype: agent\ntitle: Digest\nmodel: gemini/gemini-2.5-flash\n---\n\nDo the thing.\n'
 
 test('the record keeps every / on / debounce / wake, and composes over a note without them', () => {
   const base = parseAgentActivation({ active: true, every: '15m', on: { context: ['people/**'], webhook: 'hubspot', wake: 'always' }, debounce: '2m' })

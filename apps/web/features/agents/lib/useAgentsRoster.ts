@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary } from '@/lib/agents/service';
 import { usePageVisible } from '@/features/shared/hooks/usePageVisible';
@@ -20,8 +20,13 @@ export interface RosterResponse {
  * lists Agents in its type menu reads the cached copy, so switching between
  * the People and Space tables never re-asks for the roster.
  */
-export function useAgentsRoster(spaceId: string | null, live: boolean): { data: RosterResponse | null; error: string | null; now: number } {
+export function useAgentsRoster(
+  spaceId: string | null,
+  live: boolean,
+): { data: RosterResponse | null; error: string | null; now: number; refresh: () => void } {
   const [data, setData] = useState<RosterResponse | null>(null);
+  // Bumped to read again now — after a save, rather than at the next poll.
+  const [round, setRound] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const visible = usePageVisible();
@@ -63,7 +68,8 @@ export function useAgentsRoster(spaceId: string | null, live: boolean): { data: 
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [spaceId, follow]);
+  }, [spaceId, follow, round]);
 
-  return { data, error, now };
+  const refresh = useCallback(() => setRound((r) => r + 1), []);
+  return { data, error, now, refresh };
 }

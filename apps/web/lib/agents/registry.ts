@@ -24,7 +24,6 @@
 
 // Pure module: no prisma, no fetch — parsers and tests import it.
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/'
-const DEFAULT_GEMINI_MODEL = 'gemma-4-31b-it'
 
 /**
  * USD per one million tokens. `cachedInputPerM` is the discounted rate for
@@ -72,7 +71,6 @@ export const PROVIDERS: readonly ProviderEntry[] = [
     keySecret: `${MODEL_KEY_PREFIX}GEMINI`,
     probePath: 'models',
     models: [
-      { id: DEFAULT_GEMINI_MODEL, label: 'Gemma 4 31B', pricing: null },
       { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', pricing: { inputPerM: 0.3, outputPerM: 2.5, cachedInputPerM: 0.075 } },
       { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', pricing: { inputPerM: 1.25, outputPerM: 10, cachedInputPerM: 0.31 } },
     ],
@@ -99,24 +97,6 @@ export const PROVIDERS: readonly ProviderEntry[] = [
       { id: 'claude-opus-5', label: 'Claude Opus 5', pricing: { inputPerM: 5, outputPerM: 25, cachedInputPerM: 0.5 } },
       { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', pricing: { inputPerM: 3, outputPerM: 15, cachedInputPerM: 0.3 } },
       { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', pricing: { inputPerM: 1, outputPerM: 5, cachedInputPerM: 0.1 } },
-    ],
-  },
-  {
-    id: 'openrouter',
-    label: 'OpenRouter',
-    baseURL: 'https://openrouter.ai/api/v1/',
-    keySecret: `${MODEL_KEY_PREFIX}OPENROUTER`,
-    probePath: 'models',
-    // A gateway namespaces its models by vendor, so an id here carries an
-    // interior slash (`anthropic/claude-sonnet-5`) — parseModelRef allows that,
-    // and the id only ever travels in the request body. Prices move with the
-    // upstream vendor and the route taken, so none are pinned: a space that
-    // wants its cap to bind declares `pricing:` on the connector note.
-    models: [
-      { id: 'anthropic/claude-sonnet-5', label: 'Claude Sonnet 5', pricing: null },
-      { id: 'openai/gpt-6-sol', label: 'GPT-6 Sol', pricing: null },
-      { id: 'google/gemini-3.8-flash', label: 'Gemini 3.8 Flash', pricing: null },
-      { id: 'google/gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite', pricing: null },
     ],
   },
   {
@@ -150,7 +130,7 @@ export function parseModelRef(raw: unknown): { ok: true; ref: ModelRef } | { ok:
   const value = raw.trim()
   const slash = value.indexOf('/')
   if (slash <= 0 || slash === value.length - 1) {
-    return { ok: false, error: '`model` must be <provider>/<model-id>, e.g. gemini/gemma-4-31b-it' }
+    return { ok: false, error: '`model` must be <provider>/<model-id>, e.g. gemini/gemini-2.5-flash' }
   }
   const providerId = value.slice(0, slash).toLowerCase()
   const modelId = value.slice(slash + 1)

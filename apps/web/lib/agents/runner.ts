@@ -30,7 +30,7 @@ import { readAgent } from './briefs'
 import { eventsForRun, rearmIfPending, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, type DeactivationReason, copyStillAllowed } from './hooks'
 import { checkRun } from './runCheck'
-import { nudgeFor, shortOf, type RunVerdict } from './shared/runCheck'
+import { nudgeFor, safeToRetry, shortOf, type RunVerdict } from './shared/runCheck'
 import { diagnoseRun } from './diagnose'
 import { announcedNextStep } from '@/lib/notes/shared/narratedToolCall'
 import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS } from './limits'
@@ -39,7 +39,7 @@ import { principalForUser } from './principal'
 import { resolveAgentChatConfig } from './providers'
 import { dropRunsFor } from './service'
 import { modelFor } from './shared/runsFor'
-import { clipEventText, finishRun, flushRunEvents, ledgerSpendForMonth, recordRunInput, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
+import { clipEventText, finishRun, flushRunEvents, ledgerSpendForMonth, meterModelUsage, recordRunInput, spendForMonth, type AgentRunEvent, type RunInput, type TerminalReason } from './runs'
 import { memoryForPrompt, memoryPath, setLastRun } from './shared/memory'
 import { agentPreamble } from './shared/prompt'
 import { skillsForRun, skillsMessage } from './skills'
@@ -174,7 +174,15 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
   const fail = async (
     reason: TerminalReason,
     message: string,
-    o: { countsAsFailure?: boolean; deactivate?: { reason: DeactivationReason; detail: string | null } | null; usage?: ChatUsage; cost?: bigint | null; turns?: number; model?: string | null } = {},
+    o: {
+      countsAsFailure?: boolean
+      deactivate?: { reason: DeactivationReason; detail: string | null } | null
+      usage?: ChatUsage
+      cost?: bigint | null
+      turns?: number
+      model?: string | null
+      meter?: { promptTokens: number; completionTokens: number; costMicros: bigint | null }
+    } = {},
   ): Promise<ExecuteRunOutcome> => {
     events.push({ at: Date.now(), type: 'system', text: message })
     // Why, in a line the person can act on — only for failures a reading can
@@ -202,6 +210,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       summary: null,
       errorMessage: message,
       model: o.model ?? undefined,
+      meter: o.meter,
     })
     await recordRunInput(runId, { writes, dryRun }).catch(() => {})
     const deactivated = await release(state.id, runId, spaceId, name, {
@@ -438,47 +447,60 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     let usage = result.usage
     let cost = costMicros(result.usage, ref.pricing)
     // Fell short on its model, and the record names a fallback: one more go
-    // on that one, from the top, in this same run. A second run's cost only
-    // ever follows a first that did not do the job.
-    if (short && brief.fallbackModel && brief.fallbackModel !== modelUsed) {
+    // on that one, from the top, in this same run — only when the first go
+    // changed nothing (no write, nothing that acts), so starting over cannot
+    // do anything twice. A second model's cost only ever follows a failure,
+    // and each attempt is metered under the model that spent it.
+    let meter: { promptTokens: number; completionTokens: number; costMicros: bigint | null } | undefined
+    if (short && brief.fallbackModel && brief.fallbackModel !== modelUsed && safeToRetry(trace())) {
       const fallback = await resolveAgentChatConfig(spaceId, brief.fallbackModel)
-      if (fallback.ok) {
-        const fallbackUsed = `${fallback.ref.provider.id}/${fallback.ref.modelId}`
-        events.push({ at: Date.now(), type: 'system', text: `Fell short on ${modelUsed} — ${short} Trying again on ${fallbackUsed}.` })
+      const fallbackUsed = fallback.ok ? `${fallback.ref.provider.id}/${fallback.ref.modelId}` : null
+      if (fallback.ok && fallbackUsed) {
+        await meterModelUsage({ spaceId, name, model: modelUsed, startedAt: run.startedAt, promptTokens: usage.promptTokens, completionTokens: usage.completionTokens, costMicros: cost })
+        const sameKey = fallback.ref.provider.id === ref.provider.id
+        const keySpent =
+          fallback.keyBudgetCents === null ? null : await ledgerSpendForMonth(spaceId, fallback.ref.provider.id, now)
         budget.spentThisMonthMicros = budget.spentThisMonthMicros === null || cost === null ? null : budget.spentThisMonthMicros + cost
         budget.pricing = fallback.ref.pricing
-        delete judged.text
-        delete judged.verdict
-        const second = await attempt(fallback.config)
-        const secondCost = costMicros(second.usage, fallback.ref.pricing)
-        usage = {
-          promptTokens: usage.promptTokens + second.usage.promptTokens,
-          completionTokens: usage.completionTokens + second.usage.completionTokens,
+        budget.keyCapCents = fallback.keyBudgetCents
+        budget.keySpentThisMonthMicros = keySpent === null ? null : sameKey && cost !== null ? keySpent + cost : keySpent
+        if (preRunStop(budget)) {
+          events.push({ at: Date.now(), type: 'system', text: `Fell short on ${modelUsed}, and the budget leaves no room to try ${fallbackUsed}.` })
+          meter = { promptTokens: 0, completionTokens: 0, costMicros: cost === null ? null : BigInt(0) }
+        } else {
+          events.push({ at: Date.now(), type: 'system', text: `Fell short on ${modelUsed} — ${short} Trying again on ${fallbackUsed}.` })
+          delete judged.text
+          delete judged.verdict
+          const second = await attempt(fallback.config)
+          const secondCost = costMicros(second.usage, fallback.ref.pricing)
+          meter = { promptTokens: second.usage.promptTokens, completionTokens: second.usage.completionTokens, costMicros: secondCost }
+          usage = {
+            promptTokens: usage.promptTokens + second.usage.promptTokens,
+            completionTokens: usage.completionTokens + second.usage.completionTokens,
+          }
+          cost = cost === null || secondCost === null ? null : cost + secondCost
+          modelUsed = fallbackUsed
+          result = { ...second, turns: result.turns + second.turns }
+          lastAnswer = result.finalText
+          short = await shortfall(result)
         }
-        cost = cost === null || secondCost === null ? null : cost + secondCost
-        modelUsed = fallbackUsed
-        result = { ...second, turns: result.turns + second.turns }
-        lastAnswer = result.finalText
-        short = await shortfall(result)
-      } else {
+      } else if (!fallback.ok) {
         events.push({ at: Date.now(), type: 'system', text: `Fell short, and the fallback model ${brief.fallbackModel} is not available: ${fallback.message}` })
       }
     }
-    const common = { usage, cost, turns: result.turns, model: modelUsed }
+    const common = { usage, cost, turns: result.turns, model: modelUsed, meter }
 
     switch (result.reason) {
       case 'finished':
       case 'max_turns': {
         if (result.finalText) events.push({ at: Date.now(), type: 'assistant', text: clipEventText(result.finalText) })
         if (result.reason === 'max_turns') events.push({ at: Date.now(), type: 'system', text: `Stopped at the turn cap (${brief.maxTurns}).` })
-        // What the run SAID it did, held against what it did (shared/runCheck.ts).
-        // It was already handed back when it stopped short; if it still has,
-        // the run did not finish the job, and says so instead of passing.
-        const verdict = judged.verdict ?? null
+        // Handed back while it stopped short, and given its fallback; still
+        // short, the run did not do the job and says so instead of passing.
         if (short) {
           return fail('incomplete', `Stopped before finishing. ${short}${result.finalText ? ` It said: “${result.finalText.slice(0, 300)}”` : ''}`, common)
         }
-        if (verdict?.outcome === 'nothing') events.push({ at: Date.now(), type: 'system', text: 'The run ended saying there was nothing to do.' })
+        if (judged.verdict?.outcome === 'nothing') events.push({ at: Date.now(), type: 'system', text: 'The run ended saying there was nothing to do.' })
         await finishRun(runId, {
           status: 'succeeded',
           terminalReason: result.reason,
@@ -490,6 +512,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
           summary: result.finalText ?? (result.reason === 'max_turns' ? 'Ran out of turns.' : null),
           errorMessage: null,
           model: modelUsed,
+          meter,
         })
         await recordRunInput(runId, { writes, dryRun }).catch(() => {})
         // The runner's own line in the memory: what this run did, so the next

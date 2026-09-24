@@ -1,14 +1,8 @@
 /**
- * The roster's two shapes, pure: agents filed under their groups, and the
- * next stretch of the clock across all of them.
- *
- * A group is the brief's first tag — `tags: [Investments]` — because a space
- * already groups everything else by tag and a second vocabulary for agents
- * would be one more thing to keep in step. Ungrouped agents file last, under
- * no heading when they are the only ones. The clock is one list ordered by
- * time: what is running now first, then every fire due inside the window,
- * the nightly clean among them, since it is a scheduled pass that runs as a
- * person and writes a run row like any other.
+ * The roster's clock, pure: the next stretch of fires across every agent as
+ * one list ordered by time — what is running now first, then every fire due
+ * inside the window, the nightly clean among them, since it is a scheduled
+ * pass that runs as a person and writes a run row like any other.
  *
  * tests/agents-roster.test.ts
  */
@@ -21,26 +15,6 @@ export interface RosterAgent {
   active: boolean
   nextRunAt: string | null
   runsFor: { names: string[]; count: number }
-}
-
-export interface RosterGroup<T extends RosterAgent> {
-  /** Null for the agents no tag files. */
-  name: string | null
-  agents: T[]
-}
-
-/** File agents under their first tag; groups in order of first appearance, ungrouped last. */
-export function groupAgents<T extends RosterAgent>(agents: readonly T[]): RosterGroup<T>[] {
-  const groups = new Map<string | null, T[]>()
-  for (const a of agents) {
-    const key = a.tags[0]?.trim() || null
-    const list = groups.get(key) ?? []
-    list.push(a)
-    groups.set(key, list)
-  }
-  const named = [...groups.entries()].filter(([k]) => k !== null).sort((a, b) => a[0]!.localeCompare(b[0]!))
-  const rest = groups.get(null)
-  return [...named.map(([name, list]) => ({ name, agents: list })), ...(rest ? [{ name: null, agents: rest }] : [])]
 }
 
 export interface ClockEntry {

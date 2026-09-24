@@ -569,17 +569,13 @@ has.
   from how each has done on this space's runs, and with no record from the
   judge's reading of how much the brief asks (`JOB_SHAPE_QUESTION`) —
   as its model or its fallback (`recommendModel`). Advice only; nothing is
-  switched on it. `pnpm agents:eval` (weekly and on demand in
-  `.github/workflows/agents-eval.yml`) grades the live run: finished,
-  failed honestly, or — the one outright failure — green having written nothing.
+  switched on it.
 - **What a run reads is kept small.** `fetch_url` returns readable text
   (`lib/links/shared/readable.ts`: HTML as text with `[text](url)` links, JSON
   without highlight copies or long id lists); a page past 20k with no `find`
   returns its opening and how to narrow it; tool results older than six turns
-  go out trimmed (`lib/notes/shared/compactMessages.ts`). A model that cannot
-  call tools is a model problem before anything runs
-  (`lib/models/capabilities.ts`), and a model's page shows how often each model
-  finished its jobs.
+  go out trimmed (`lib/notes/shared/compactMessages.ts`). A model's page shows
+  how often each model finished its jobs (`lib/models/shared/trackRecords.ts`).
 - **Switching an agent on is approval to run UNATTENDED, and nothing else.** A
   person asking for one run now — Run, the box, `run_agent` — runs an INACTIVE
   agent, as themselves, leaving the row untouched (`claimManualRun`'s

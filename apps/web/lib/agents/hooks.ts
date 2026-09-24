@@ -49,7 +49,7 @@ import {
 } from './config'
 import { agentConfigOf, findAgentActivation, findAgentBrief, findOwnAgentBrief, readAgent } from './briefs'
 import { configFromFrontmatter, configFrontmatter, configOf, runKeysOf, stripRunKeys } from './shared/agentConfig'
-import { storeAgentConfig } from './record'
+import { storeAgentConfig, withAgentRecord } from './record'
 import { nextFire } from './shared/fanout'
 
 import { fireNoteTriggers, hasPendingEvents } from './events'
@@ -261,7 +261,7 @@ export async function adoptNoteConfig(spaceId: string, name: string): Promise<vo
   }
 }
 
-/** Make the subscription rows say what the brief's `for:` block says. */
+/** For an agent from before the record: make the subscription rows say what its note's `for:` block says. */
 async function indexRunsFor(spaceId: string, name: string, userIds: string[]): Promise<void> {
   await prisma.agentSubscription.deleteMany({ where: { spaceId, name, userId: { notIn: userIds } } })
   if (userIds.length > 0) {
@@ -335,10 +335,12 @@ export async function deactivateAgent(
   // never the house's (which keeps its other copies running).
   if (!copy?.sharedFrom) {
     await adoptNoteConfig(spaceId, name)
-    const config = await agentConfigOf(spaceId, name)
-    if (config) {
-      if (config.active) await storeAgentConfig(spaceId, name, { ...config, active: false }, { userId: by.userId === 'system' ? null : by.userId })
-    } else {
+    const switchedOff = await withAgentRecord(spaceId, name, async () => {
+      const config = await agentConfigOf(spaceId, name)
+      if (config?.active) await storeAgentConfig(spaceId, name, { ...config, active: false }, { userId: by.userId === 'system' ? null : by.userId })
+      return config !== null
+    })
+    if (!switchedOff) {
       const source = await findAgentActivation(spaceId, name)
       if (source.path && source.content && parseFrontmatter(source.content).active !== false) {
         const store = await import('@/lib/notes/store')

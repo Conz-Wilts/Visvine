@@ -8,7 +8,7 @@ import type { AgentSubscriber } from '@/lib/agents/service';
 /**
  * Who the agent runs for, inside its Share dialog: sharing an agent decides
  * who may read it, and a person who can read it may have it run for them. One
- * row per person in the brief's `for:` block; your own row is the switch, and
+ * row per person the agent runs for (its record); your own row is the switch, and
  * — on — your own time and model.
  */
 export default function RunsForSection({

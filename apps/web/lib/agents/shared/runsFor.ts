@@ -1,5 +1,6 @@
 /**
- * Who an agent runs for — the brief's `for:` block. Pure.
+ * Who an agent runs for — the record's runs-for (`agent_subscriptions`),
+ * read by the parsers as the `for:` key. Pure.
  *
  *   for:
  *     - user: <userId>              rides the agent's own time and model
@@ -12,7 +13,7 @@
  * standing, so a `mode: user` connector spends their account. That is why an
  * entry is the person's own to add. Anyone who can edit the brief may take one
  * out; only the person — or a space admin — may put one in or change it
- * (`runsForDenial`, asked by the write gate beside `runs_as`).
+ * (`runsForDenial`, asked by service.ts#configureAgent beside `runs_as`).
  */
 import { MAX_FANOUT_SUBSCRIBERS } from '../limits'
 

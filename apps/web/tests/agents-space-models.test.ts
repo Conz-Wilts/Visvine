@@ -88,15 +88,15 @@ test('one custom endpoint per space, and two is a configuration error', () => {
 })
 
 test('declared prices come off the notes, first note winning per model id', () => {
-  const a = model({ name: 'a', providerId: 'openrouter', modelId: 'x', pricing: { x: { inputPerM: 1, outputPerM: 2 } } })
-  const b = model({ name: 'b', providerId: 'openrouter', modelId: 'x', pricing: { x: { inputPerM: 9, outputPerM: 9 }, y: { inputPerM: 3, outputPerM: 4 } } })
-  const merged = declaredPricingFor([a, b], 'openrouter')
+  const a = model({ name: 'a', providerId: 'custom', modelId: 'x', pricing: { x: { inputPerM: 1, outputPerM: 2 } } })
+  const b = model({ name: 'b', providerId: 'custom', modelId: 'x', pricing: { x: { inputPerM: 9, outputPerM: 9 }, y: { inputPerM: 3, outputPerM: 4 } } })
+  const merged = declaredPricingFor([a, b], 'custom')
   assert.deepEqual(merged.x, { inputPerM: 1, outputPerM: 2 })
   assert.deepEqual(merged.y, { inputPerM: 3, outputPerM: 4 })
   // Another provider's notes are not consulted.
   assert.deepEqual(declaredPricingFor([a, b], 'openai'), {})
   // A disabled note prices nothing.
-  assert.deepEqual(declaredPricingFor([{ ...a, enabled: false }], 'openrouter'), {})
+  assert.deepEqual(declaredPricingFor([{ ...a, enabled: false }], 'custom'), {})
 })
 
 test('a note written before `model:` existed still names a model', () => {
@@ -119,7 +119,7 @@ test('a bad model id is refused at parse', () => {
     assert.equal(parseModel(parseFrontmatter(note)).ok, false, bad)
   }
   // An id may carry interior slashes: a gateway namespaces by vendor.
-  const gateway = ['---', 'type: model', 'provider: openrouter', 'model: anthropic/claude-sonnet-5', '---', ''].join('\n')
+  const gateway = ['---', 'type: model', 'provider: custom', 'base_url: https://llm.example.com/v1/', 'model: anthropic/claude-sonnet-5', '---', ''].join('\n')
   const parsed = parseModel(parseFrontmatter(gateway))
   assert.ok(parsed.ok && parsed.config.modelId === 'anthropic/claude-sonnet-5')
 })
@@ -147,11 +147,11 @@ test('a model key is the room\'s own, else the house\'s where the house lends it
 })
 
 test('keyBudgetCentsFor: the budget on a provider key is the tightest its notes declare', () => {
-  const a = model({ name: 'a', providerId: 'openrouter', modelId: 'x', budgetMonthlyCents: 5000 })
-  const b = model({ name: 'b', providerId: 'openrouter', modelId: 'y', budgetMonthlyCents: 2000, enabled: false })
+  const a = model({ name: 'a', providerId: 'custom', modelId: 'x', budgetMonthlyCents: 5000 })
+  const b = model({ name: 'b', providerId: 'custom', modelId: 'y', budgetMonthlyCents: 2000, enabled: false })
   const c = model({ name: 'c', providerId: 'anthropic', budgetMonthlyCents: 100 })
   const d = model({ name: 'd', providerId: 'openai' })
-  assert.equal(keyBudgetCentsFor([a, b, c, d], 'openrouter'), 2000, 'the tighter wins, even from a note turned off')
+  assert.equal(keyBudgetCentsFor([a, b, c, d], 'custom'), 2000, 'the tighter wins, even from a note turned off')
   assert.equal(keyBudgetCentsFor([a, b, c, d], 'anthropic'), 100)
   assert.equal(keyBudgetCentsFor([a, b, c, d], 'openai'), null, 'no budget_monthly: = uncapped')
 })

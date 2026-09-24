@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import { ApiError } from '@/lib/api/route'
 import { assertMembersCanLeave } from '@/lib/notes/aliases'
 import { findMemberNode } from '@/lib/identity/connection'
@@ -17,6 +18,17 @@ import {
  * go further.
  */
 const DELETED_ACTOR_ID = 'deleted-user'
+
+/** An agent config change with one person taken out of who it ran as and for. */
+function scrubPerson(patch: unknown, userId: string): unknown {
+  if (!patch || typeof patch !== 'object') return patch
+  const out = { ...(patch as Record<string, unknown>) }
+  if (out.runsAs === userId) out.runsAs = DELETED_ACTOR_ID
+  if (Array.isArray(out.runsFor)) {
+    out.runsFor = out.runsFor.map((e) => (e && typeof e === 'object' && (e as { userId?: unknown }).userId === userId ? { ...(e as object), userId: DELETED_ACTOR_ID } : e))
+  }
+  return out
+}
 const DELETED_ACTOR_NAME = 'Deleted user'
 
 /**
@@ -198,6 +210,14 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     // Who changed how an agent runs is the space's history, like the audit
     // trail: the change stays, the person in it does not.
     await tx.agentConfigChange.updateMany({ where: { userId }, data: { userId: null } })
+    // …and nowhere inside a change: who an agent ran as or for is the person too.
+    const named = await tx.agentConfigChange.findMany({
+      where: { OR: [{ patch: { path: ['runsAs'], equals: userId } }, { patch: { path: ['runsFor'], array_contains: [{ userId }] } }] },
+      select: { id: true, patch: true },
+    })
+    for (const change of named) {
+      await tx.agentConfigChange.update({ where: { id: change.id }, data: { patch: scrubPerson(change.patch, userId) as Prisma.InputJsonValue } })
+    }
 
     // A nightly clean that ran AS this person stops. The pass acts for a
     // named admin or not at all, so it would only ever record a skipped run

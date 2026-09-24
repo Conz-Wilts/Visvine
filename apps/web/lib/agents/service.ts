@@ -36,14 +36,13 @@ import {
 import { agentConfigOf, composeAgent, findAgentActivation, findAgentBrief, findOwnAgentBrief, type ComposedAgent } from './briefs'
 import { modelFor, parseRunsFor, runsForDenial, runsForFrontmatter, withRunsFor } from './shared/runsFor'
 import { applyConfigPatch, configOf, defaultAgentConfig, type AgentConfig, type AgentConfigPatch } from './shared/agentConfig'
-import { listAgentConfigChanges, storeAgentConfig, type AgentConfigChangeRow } from './record'
+import { listAgentConfigChanges, storeAgentConfig, withAgentRecord, type AgentConfigChangeRow } from './record'
 import { adoptNoteConfig, deactivateAgent, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
 import { localRuntimeOf, localRuntimeRefusal } from './local'
-import { modelToolsProblem } from '@/lib/models/capabilities'
 import { spaceTrackRecords } from '@/lib/models/service'
-import { recommendModel, type ModelAdvice } from './shared/advice'
+import { isLightModel, recommendModel, type ModelAdvice } from './shared/advice'
 import { jobShapeOf } from './diagnose'
 import { currentStepOf, latestRun, type RunListItem } from './runs'
 import { memoryPath } from './shared/memory'
@@ -219,15 +218,12 @@ export async function modelAdviceFor(
   const [models, tracks] = await Promise.all([spaceModels(spaceId), spaceTrackRecords(spaceId)])
   const runnable = runnableModels(models).map((m) => m.ref).filter((r): r is string => !!r)
   if (runnable.length < 2 || !agent.current) return null
-  const shape = await jobShapeOf(agent.body).catch(() => null)
-  return recommendModel({ current: agent.current, fallback: agent.fallback, runnable, tracks, shape })
-}
-
-/** The model state, with a model that cannot call tools said as the problem it is (lib/models/capabilities.ts). */
-async function withToolsProblem<T extends Pick<AgentSummary, 'modelEffective' | 'modelProblem'>>(state: T): Promise<T> {
-  if (state.modelProblem || !state.modelEffective) return state
-  const problem = await modelToolsProblem(state.modelEffective).catch(() => null)
-  return problem ? { ...state, modelProblem: problem } : state
+  const input = { current: agent.current, fallback: agent.fallback, runnable, tracks }
+  const advice = recommendModel({ ...input, shape: null })
+  // The brief's shape is asked of the judge only when it could change the
+  // answer: a light model with no record to go on.
+  if (advice || !isLightModel(agent.current)) return advice
+  return recommendModel({ ...input, shape: await jobShapeOf(agent.body).catch(() => null) })
 }
 
 async function summarise(
@@ -304,7 +300,7 @@ async function summarise(
     tags: brief?.tags ?? [],
     runsFor: { names: forNames, count: forIds.length },
     currentStep,
-    ...(await withToolsProblem(modelStateOf(brief, opts.models))),
+    ...modelStateOf(brief, opts.models),
     rowState: 'off',
     spend: null,
   }
@@ -366,7 +362,7 @@ export interface AgentSubscriber {
   userId: string
   name: string | null
   image: string | null
-  /** Their own time, zone and model, as the brief's `for:` block says them. */
+  /** Their own time, zone and model, as the agent's record holds them. */
   at: string | null
   timezone: string | null
   model: string | null
@@ -492,8 +488,8 @@ export interface RunsForSettings {
  * Put your own name down: each fire of this agent then runs once FOR you, as
  * your principal, so a `mode: user` connector spends YOUR linked account —
  * at your own time and on your own model when you say so. The entry is
- * written into the brief's `for:` block, which is the record
- * (shared/runsFor.ts). Anyone who can READ the brief may add THEMSELVES — the
+ * written into the agent's record (`agent_subscriptions`, shared/runsFor.ts).
+ * Anyone who can READ the brief may add THEMSELVES — the
  * run reaches only what they can already reach, so there is nothing here to
  * approve — which is why the write is the platform's, not the reader's.
  */
@@ -510,12 +506,16 @@ export async function subscribeToAgent(p: ContextPrincipal, context: Context, na
     const runnable = runnableModels(await spaceModels(context.spaceId)).some((m) => m.ref === entry.model)
     if (!runnable) return { ok: false, status: 400, error: 'That model is not one of this space’s.' }
   }
-  const current = await currentConfig(context.spaceId, name)
-  if (!current.ok) return current
-  const next = applyConfigPatch(current.config, { runsFor: withRunsFor(current.config.runsFor, p.userId, entry) })
-  if (!next.ok) return { ok: false, status: 400, error: next.error }
-  await storeAgentConfig(context.spaceId, name, next.config, { userId: p.userId })
-  await syncAgentState(context.spaceId, name)
+  const saved = await withAgentRecord(context.spaceId, name, async (): Promise<ActivateResult> => {
+    const current = await currentConfig(context.spaceId, name)
+    if (!current.ok) return current
+    const next = applyConfigPatch(current.config, { runsFor: withRunsFor(current.config.runsFor, p.userId, entry) })
+    if (!next.ok) return { ok: false, status: 400, error: next.error }
+    await storeAgentConfig(context.spaceId, name, next.config, { userId: p.userId })
+    await syncAgentState(context.spaceId, name)
+    return { ok: true, warning: null }
+  })
+  if (!saved.ok) return saved
   await logAudit(context.spaceId, { userId: p.userId, name: p.name, action: 'agent', path: row.path, detail: 'runs for them' })
   return { ok: true, warning: null }
 }
@@ -537,12 +537,14 @@ export async function unsubscribeFromAgent(
 
 /** Take one person off who an agent runs for — theirs to ask, the platform's to write. */
 export async function dropRunsFor(spaceId: string, name: string, userId: string, by: string | null = null): Promise<void> {
-  const current = await currentConfig(spaceId, name)
-  if (!current.ok || !current.config.runsFor.some((e) => e.userId === userId)) return
-  const next = applyConfigPatch(current.config, { runsFor: withRunsFor(current.config.runsFor, userId, null) })
-  if (!next.ok) return
-  await storeAgentConfig(spaceId, name, next.config, { userId: by })
-  await syncAgentState(spaceId, name)
+  await withAgentRecord(spaceId, name, async () => {
+    const current = await currentConfig(spaceId, name)
+    if (!current.ok || !current.config.runsFor.some((e) => e.userId === userId)) return
+    const next = applyConfigPatch(current.config, { runsFor: withRunsFor(current.config.runsFor, userId, null) })
+    if (!next.ok) return
+    await storeAgentConfig(spaceId, name, next.config, { userId: by })
+    await syncAgentState(spaceId, name)
+  })
 }
 
 /**
@@ -592,6 +594,15 @@ export async function configureAgent(
   if (context.ownerKey !== SHARED_OWNER_KEY) return { ok: false, status: 400, error: 'Agents live in a space.' }
   const manage = agentManageDenial(p, context, name)
   if (manage) return { ok: false, status: 403, error: manage }
+  return withAgentRecord(context.spaceId, name, () => configureLocked(p, context, name, patch))
+}
+
+async function configureLocked(
+  p: ContextPrincipal,
+  context: Context,
+  name: string,
+  patch: AgentConfigPatch,
+): Promise<ActivateResult & { config?: AgentConfig }> {
   const current = await currentConfig(context.spaceId, name)
   if (!current.ok) return current
   const admin = principalIsSuperAdmin(p)
@@ -680,8 +691,6 @@ export async function activateAgent(
 
   const resolved = await resolveAgentChatConfig(context.spaceId, modelFor(brief, p.userId))
   if (!resolved.ok) return { ok: false, status: 400, error: resolved.message }
-  const toolsProblem = await modelToolsProblem(`${resolved.ref.provider.id}/${resolved.ref.modelId}`).catch(() => null)
-  if (toolsProblem) return { ok: false, status: 409, error: `Not turned on: ${toolsProblem}` }
   const probe = await probeModelKey(resolved.config, resolved.ref.provider)
   if (!probe.ok && probe.kind === 'auth') return { ok: false, status: 400, error: probe.message }
   const warning = [probe.ok ? null : probe.message, ...unsigned.map((n) => `${n.why} ${n.fix}`)].filter(Boolean).join(' ') || null

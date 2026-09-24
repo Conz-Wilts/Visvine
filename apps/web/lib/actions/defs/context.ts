@@ -88,7 +88,6 @@ import { isEventManager, EVENT_MANAGER_DENIAL } from '@/lib/eventAuth'
 import { eventCreateInputSchema, eventUpdateInputSchema } from '@/lib/schemas/eventSchemas'
 import { activateAgent, canTriggerRun, configureAgent, createAgentBrief, describeAgent, listAgents, modelAdviceFor, switchOffAgent } from '@/lib/agents/service'
 import { agentConfigInput, configPatchOf } from '@/lib/agents/configInput'
-import { modelToolsProblem } from '@/lib/models/capabilities'
 import { defaultModelOf, noModelReason, spaceModels } from '@/lib/agents/spaceModels'
 import {
   AGENT_TOOL_EXTRAS,
@@ -2176,7 +2175,7 @@ export const CONTEXT_ACTIONS = [
         const models = await spaceModels(context.spaceId)
         const fallback = defaultModelOf(models)
         const effective = r.brief.model ?? fallback?.ref ?? null
-        const problem = (r.brief.model ? null : noModelReason(models)) ?? (await modelToolsProblem(effective).catch(() => null))
+        const problem = r.brief.model ? null : noModelReason(models)
         // What stands between this brief and a working run, judged for the
         // caller: a declared connector that is not there, a service the
         // instructions name that nothing reaches, no model at all — each with
@@ -2191,7 +2190,7 @@ export const CONTEXT_ACTIONS = [
           path: r.path,
           title: r.brief.title,
           model: r.brief.model ?? fallback?.ref ?? null,
-          model_source: r.brief.model ? 'pinned in the brief' : fallback ? `the space's model (${fallback.path})` : 'none',
+          model_source: r.brief.model ? 'pinned on the agent' : fallback ? `the space's model (${fallback.path})` : 'none',
           ...(problem ? { model_problem: problem } : {}),
           // A better-suited model of the space's, when there is evidence for one
           // (lib/agents/shared/advice.ts) — say it, and set it with configure_agent
@@ -2264,7 +2263,7 @@ export const CONTEXT_ACTIONS = [
           page: agentPageHref(agent.name, null, context.spaceId),
           active: agent.activation.active,
           runs_on: agent.modelEffective,
-          model_source: agent.model ? 'pinned in the brief' : agent.modelNote ? `the space's model (${agent.modelNote})` : 'none',
+          model_source: agent.model ? 'pinned on the agent' : agent.modelNote ? `the space's model (${agent.modelNote})` : 'none',
           ready_for_a_real_run: plan.ready,
           blocking: plan.blocking,
           out_of_reach: plan.out_of_reach,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { clockEntries, groupAgents, whoLabel, type RosterAgent } from '../lib/agents/shared/roster'
+import { clockEntries, whoLabel, type RosterAgent } from '../lib/agents/shared/roster'
 
 const a = (over: Partial<RosterAgent> & { name: string }): RosterAgent => ({
   title: over.name,
@@ -10,23 +10,6 @@ const a = (over: Partial<RosterAgent> & { name: string }): RosterAgent => ({
   nextRunAt: null,
   runsFor: { names: [], count: 0 },
   ...over,
-})
-
-test('agents file under their first tag, sorted, ungrouped last', () => {
-  const groups = groupAgents([
-    a({ name: 'ops-1', tags: ['Operations'] }),
-    a({ name: 'loose' }),
-    a({ name: 'inv-1', tags: ['Investments', 'weekly'] }),
-    a({ name: 'inv-2', tags: ['Investments'] }),
-  ])
-  assert.deepEqual(
-    groups.map((g) => [g.name, g.agents.map((x) => x.name)]),
-    [
-      ['Investments', ['inv-1', 'inv-2']],
-      ['Operations', ['ops-1']],
-      [null, ['loose']],
-    ],
-  )
 })
 
 test('the clock: running first, then due inside 24h by time, clean among them', () => {

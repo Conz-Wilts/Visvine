@@ -136,7 +136,7 @@ test('agentOptions: the models a space has, its default, connectors and agents',
     // db:models:migrate moves it.
     await note('connectors/gemini.md', '---\ntype: connector\nkind: model\nprovider: gemini\n---\n')
     const legacy = await agentOptions(SPACE, '')
-    assert.equal(legacy.models.find((m) => m.name === 'gemini')?.ref, 'gemini/gemma-4-31b-it')
+    assert.equal(legacy.models.find((m) => m.name === 'gemini')?.ref, 'gemini/gemini-2.5-flash')
     // …but it is not a connector the brief may declare.
     assert.ok(!legacy.connectors.some((c) => c.name === 'gemini'))
   } finally {

@@ -48,3 +48,11 @@ test('anything else, and JSON that does not parse, comes back as it was', () => 
   assert.equal(readableText('plain words', 'text/plain'), 'plain words')
   assert.equal(readableText('{not json', 'application/json'), '{not json')
 })
+
+test('a page of unclosed tags costs what its length does', () => {
+  const hostile = '<html><body>' + '<a href="/x">x'.repeat(20_000) + '<h1>' .repeat(5_000) + '<script>' + 'y'.repeat(200_000)
+  const started = Date.now()
+  const out = readableText(hostile, 'text/html', 'https://example.com/')
+  assert.ok(Date.now() - started < 1_000, `took ${Date.now() - started} ms`)
+  assert.ok(!out.includes('yyyy'), 'an unclosed script is dropped to the end')
+})

@@ -6,14 +6,14 @@
  *   - a failed run's likely CAUSE (the judge's reading, lib/agents/diagnose.ts)
  *     as one line saying what to do about it;
  *   - which of the space's models suits a brief: first from how each model has
- *     actually done on this space's runs (models/shared/capabilities.ts
+ *     actually done on this space's runs (models/shared/trackRecords.ts
  *     #trackRecords), and with no record yet from how much the brief asks of a
  *     model (the judge's JOB_SHAPE reading) against the model's weight class.
  *
  * Advice only: nothing is switched, retried or refused on it. The person (or
  * the AI configuring the agent) acts on it through the ordinary record write.
  */
-import type { ModelTrackRecord } from '@/lib/models/shared/capabilities'
+import type { ModelTrackRecord } from '@/lib/models/shared/trackRecords'
 
 export type RunCause = 'model' | 'access' | 'source' | 'brief' | 'other'
 export type JobShape = 'simple' | 'multi_step' | 'heavy'
@@ -48,6 +48,9 @@ const GOOD_RATE = 0.9
 /** A model that usually finishes is kept, and the better one becomes its fallback instead of its replacement. */
 const KEEP_RATE = 0.7
 const LIGHT_MODEL = /(^|[-/])(lite|mini|nano|haiku|small|flash-lite)([-.]|$)/i
+
+/** Whether a model is a light one — the only case the brief's shape can change the advice. */
+export const isLightModel = (ref: string) => LIGHT_MODEL.test(ref.slice(ref.indexOf('/') + 1))
 
 const rate = (t: ModelTrackRecord) => t.finished / (t.finished + t.short)
 const runs = (t: ModelTrackRecord) => t.finished + t.short

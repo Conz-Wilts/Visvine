@@ -15,7 +15,7 @@
  * ledger and the who-ran-what list is "recent". Names are looked up for the
  * page; the ids stay on the row for deleteAccount to clear.
  */
-import { trackRecords, type ModelTrackRecord } from './shared/capabilities'
+import { trackRecords, type ModelTrackRecord } from './shared/trackRecords'
 import prisma from '@/lib/prisma'
 import { readVisible } from '@/lib/notes/contextService'
 import type { Context } from '@/lib/notes/store'
@@ -177,7 +177,7 @@ export async function modelHistory(spaceId: string, provider: string): Promise<{
 
 const TRACK_RUNS = 200
 
-/** How each model has done on this space's recent runs, every agent together (shared/capabilities.ts#trackRecords). */
+/** How each model has done on this space's recent runs, every agent together (shared/trackRecords.ts). */
 export async function spaceTrackRecords(spaceId: string): Promise<ModelTrackRecord[]> {
   const rows = await prisma.agentRun.findMany({
     where: { spaceId, model: { not: null }, status: { not: 'running' } },

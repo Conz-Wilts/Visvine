@@ -85,17 +85,6 @@ export const MODEL_CATALOG: readonly ModelCatalogEntry[] = [
     ],
   },
   {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    description: 'One key, hundreds of models from every vendor',
-    logo: 'openrouter.svg',
-    provider: 'openrouter',
-    fields: [
-      { key: 'MODEL_KEY_OPENROUTER', label: 'API key', placeholder: 'sk-or-v1-…', secret: true, required: true, hint: 'openrouter.ai/keys → Create key.' },
-      { key: 'model', label: 'Model', required: true, placeholder: 'vendor/model-id, as on openrouter.ai/models', hint: MODEL_FIELD_HINT },
-    ],
-  },
-  {
     id: 'custom-model',
     name: 'OpenAI-compatible endpoint',
     description: 'Any provider speaking the OpenAI chat API',

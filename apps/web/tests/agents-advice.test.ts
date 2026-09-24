@@ -8,13 +8,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { causeAdvice, recommendModel } from '@/lib/agents/shared/advice'
-import { shortOf } from '@/lib/agents/shared/runCheck'
+import { safeToRetry, shortOf } from '@/lib/agents/shared/runCheck'
 import { parseAgentBrief } from '@/lib/agents/config'
 
-const FLASH = 'openrouter/google/gemini-2.5-flash'
-const NEW_FLASH = 'openrouter/google/gemini-3.8-flash'
-const LITE = 'openrouter/google/gemini-3.5-flash-lite'
-const SONNET = 'openrouter/anthropic/claude-sonnet-5'
+const FLASH = 'gemini/gemini-2.5-flash'
+const NEW_FLASH = 'gemini/gemini-2.5-pro'
+const LITE = 'openai/gpt-4.1-mini'
+const SONNET = 'anthropic/claude-sonnet-5'
 
 test('a model that finishes where this one does not is recommended, as a fallback while this one mostly works', () => {
   const runnable = [FLASH, NEW_FLASH]
@@ -67,7 +67,15 @@ test('shortOf: the trace and last words first, then the verdict', () => {
 })
 
 test('fallback_model is part of the record and parses like model', () => {
-  const ok = parseAgentBrief({ type: 'agent', fallback_model: 'openrouter/google/gemini-3.8-flash' }, 'Do it.')
-  assert.ok(ok.ok && ok.brief.fallbackModel === 'openrouter/google/gemini-3.8-flash')
+  const ok = parseAgentBrief({ type: 'agent', fallback_model: 'gemini/gemini-2.5-pro' }, 'Do it.')
+  assert.ok(ok.ok && ok.brief.fallbackModel === 'gemini/gemini-2.5-pro')
   assert.equal(parseAgentBrief({ type: 'agent', fallback_model: 'nonsense' }, 'Do it.').ok, false)
+})
+
+test('a run starts over on its fallback only when nothing it did would happen twice', () => {
+  assert.equal(safeToRetry({ writes: 0, tools: ['fetch_url', 'decide', 'read_context'] }), true)
+  assert.equal(safeToRetry({ writes: 1, tools: ['write_context'] }), false)
+  for (const acts of ['run_connector', 'run_command', 'page_act', 'browse_task', 'run_action', 'run_agent', 'remember']) {
+    assert.equal(safeToRetry({ writes: 0, tools: ['fetch_url', acts] }), false, acts)
+  }
 })

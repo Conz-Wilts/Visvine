@@ -277,7 +277,7 @@ async function chatWithToolsOnce(
 }
 
 // Reasoning models inline their trace in the content — <think> for the
-// DeepSeek family, <thought> for instruction-tuned Gemma. Strip either so only
+// DeepSeek family, <thought> for some instruction-tuned models. Strip either so only
 // the model's real output reaches callers. An unclosed tag means the trace ran
 // to the end of the reply, so everything up to the last close is dropped.
 const REASONING_TAGS = ['think', 'thought'] as const

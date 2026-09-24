@@ -2,7 +2,7 @@
  * Models — the pure half of lib/models.
  *
  * A model is a note at `models/<name>.md` that stands for an LLM provider the
- * Space's agents run on (Gemini, OpenAI, Anthropic, OpenRouter, or a custom
+ * Space's agents run on (Gemini, OpenAI, Anthropic, or a custom
  * OpenAI-compatible endpoint) and the model id they run there. It is its own
  * kind, with its own folder and its own node page, because it answers a
  * different question from a connector: every connector is somewhere the space
@@ -26,7 +26,7 @@
  *
  * Frontmatter:
  *   type: model
- *   provider: gemini | openai | anthropic | openrouter | custom
+ *   provider: gemini | openai | anthropic | custom
  *   model: claude-sonnet-5   (the model this note runs; see below)
  *   base_url: https://…      (custom only, required; refused on the others)
  *   pricing: { <id>: { input_per_m, output_per_m } }   (optional)

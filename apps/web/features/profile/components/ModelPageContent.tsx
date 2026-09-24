@@ -35,7 +35,7 @@ import { PROVIDERS } from '@/lib/agents/registry';
 import { modelCatalogEntryFor } from '@/lib/models/catalog';
 import type { ModelDetail, ModelRunRow, ModelUserLine } from '@/lib/models/service';
 import { timeAgo } from '@/lib/date';
-import { trackRecords } from '@/lib/models/shared/capabilities';
+import { trackRecords } from '@/lib/models/shared/trackRecords';
 
 interface DetailResponse {
   model: ModelDetail;

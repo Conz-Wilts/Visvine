@@ -16,8 +16,8 @@
  *         `results` / `data`
  *   else  as it came
  *
- * Deliberately regex-shaped rather than a parser: the input is untrusted and
- * capped, the output is text for a model, and nothing here executes or
+ * One linear pass over the tags rather than a parser: the input is untrusted
+ * and capped, the output is text for a model, and nothing here executes or
  * resolves anything but a URL against the page's own.
  */
 
@@ -51,29 +51,96 @@ function absolute(href: string, base: string | null): string | null {
 
 const inlineText = (html: string) => decodeEntities(html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()
 
+const DROP = new Set(DROP_BLOCKS)
+const BLOCK = new Set(['p', 'div', 'section', 'article', 'main', 'header', 'aside', 'tr', 'table', 'ul', 'ol', 'dl', 'dt', 'dd', 'blockquote', 'pre', 'figure', 'figcaption', 'tbody', 'thead'])
+/** Past this the page is read no further: every step below is linear, and a model reads the top anyway. */
+const MAX_HTML_CHARS = 400_000
+
+/**
+ * One pass over the tags, left to right — never a pattern that scans ahead for
+ * a closing tag, so a page of a thousand unclosed tags costs what its length
+ * does. Text is kept, dropped blocks are skipped to their close (or the end),
+ * and an anchor or heading is written out when it closes.
+ */
 function htmlToReadable(html: string, baseUrl: string | null = null): string {
-  let s = html.replace(/<!--[\s\S]*?-->/g, ' ')
-  const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(s)?.[1]
-  s = s.replace(/<head[\s\S]*?<\/head>/i, ' ')
-  for (const tag of DROP_BLOCKS) s = s.replace(new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, 'gi'), ' ')
-  s = s.replace(/<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>([\s\S]*?)<\/a>/gi, (_m, d, q, u, inner: string) => {
-    const text = inlineText(inner)
-    const href = absolute(d ?? q ?? u ?? '', baseUrl)
-    return text ? (href ? ` [${text}](${href}) ` : ` ${text} `) : ' '
-  })
-  s = s.replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (_m, level: string, inner: string) => `\n\n${'#'.repeat(Number(level))} ${inlineText(inner)}\n\n`)
-  s = s.replace(/<li\b[^>]*>/gi, '\n- ')
-  s = s.replace(/<\/(td|th)>/gi, ' | ')
-  s = s.replace(/<(br|hr)\b[^>]*>/gi, '\n')
-  s = s.replace(/<\/?(p|div|section|article|main|header|aside|tr|table|ul|ol|dl|dt|dd|blockquote|pre|figure|figcaption|tbody|thead)\b[^>]*>/gi, '\n')
-  s = decodeEntities(s.replace(/<[^>]+>/g, ' '))
-  const lines = s
+  const src = html.length > MAX_HTML_CHARS ? html.slice(0, MAX_HTML_CHARS) : html
+  const tag = /<!--|<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g
+  const out: string[] = []
+  let title: string | null = null
+  let skipping: string | null = null
+  let inTitle = false
+  let anchor: { href: string | null; start: number } | null = null
+  let heading: { level: number; start: number } | null = null
+  let at = 0
+  const text = (from: number, to: number) => {
+    if (!skipping && to > from) out.push(src.slice(from, to))
+  }
+  const closeAnchor = () => {
+    if (!anchor) return
+    const inner = inlineText(out.splice(anchor.start).join(''))
+    out.push(inner ? (anchor.href ? ` [${inner}](${anchor.href}) ` : ` ${inner} `) : ' ')
+    anchor = null
+  }
+  for (let m = tag.exec(src); m; m = tag.exec(src)) {
+    if (m[0] === '<!--') {
+      text(at, m.index)
+      const end = src.indexOf('-->', tag.lastIndex)
+      at = tag.lastIndex = end === -1 ? src.length : end + 3
+      continue
+    }
+    text(at, m.index)
+    at = tag.lastIndex
+    const closing = m[1] === '/'
+    const name = m[2].toLowerCase()
+    if (skipping) {
+      if (closing && name === skipping) skipping = null
+      continue
+    }
+    if (name === 'title') {
+      if (!closing) inTitle = true
+      else if (inTitle) {
+        title = inlineText(out.splice(out.length - 1, 1).join(''))
+        inTitle = false
+      }
+      continue
+    }
+    if (DROP.has(name)) {
+      if (!closing) skipping = name
+      continue
+    }
+    if (name === 'a') {
+      closeAnchor()
+      if (!closing) {
+        const href = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(m[3])
+        anchor = { href: href ? absolute(href[1] ?? href[2] ?? href[3] ?? '', baseUrl) : null, start: out.length }
+      }
+      continue
+    }
+    const h = /^h([1-6])$/.exec(name)
+    if (h) {
+      closeAnchor()
+      if (!closing) heading = { level: Number(h[1]), start: out.length }
+      else if (heading) {
+        const inner = inlineText(out.splice(heading.start).join(''))
+        out.push(`\n\n${'#'.repeat(heading.level)} ${inner}\n\n`)
+        heading = null
+      }
+      continue
+    }
+    if (name === 'li' && !closing) out.push('\n- ')
+    else if ((name === 'td' || name === 'th') && closing) out.push(' | ')
+    else if (name === 'br' || name === 'hr') out.push('\n')
+    else if (BLOCK.has(name)) out.push('\n')
+  }
+  text(at, src.length)
+  closeAnchor()
+  const lines = decodeEntities(out.join('').replace(/<[^>]*>/g, ' '))
     .split('\n')
     .map((l) => l.replace(/[ \t\u00a0]+/g, ' ').replace(/(\s*\|\s*)+$/, '').replace(/^(\s*\|\s*)+/, '').trim())
     .filter((l, i, all) => l !== '' || (i > 0 && all[i - 1] !== ''))
   const body = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
-  const heading = title ? `# ${inlineText(title)}` : ''
-  return heading && !body.startsWith(heading) ? `${heading}\n\n${body}` : body
+  const headingLine = title ? `# ${title}` : ''
+  return headingLine && !body.startsWith(headingLine) ? `${headingLine}\n\n${body}` : body
 }
 
 function withoutMarkupCopies(value: unknown): unknown {

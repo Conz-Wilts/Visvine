@@ -56,13 +56,13 @@ test('readLinkContextMeta coerces valid payloads and rejects malformed ones', ()
       },
       reason: 'collaborators',
       reasonHash: 'people/a.md:h1',
-      reasonModel: 'gemma',
+      reasonModel: 'deepseek',
     },
   })
   assert.ok(meta)
   assert.deepEqual(Object.keys(meta.excerpts), ['people/a.md'])
   assert.equal(meta.reason, 'collaborators')
-  assert.equal(meta.reasonModel, 'gemma')
+  assert.equal(meta.reasonModel, 'deepseek')
   // Empty reason string is normalized to absent.
   const empty = readLinkContextMeta({ context: { excerpts: {}, reason: '' } })
   assert.equal(empty?.reason, undefined)

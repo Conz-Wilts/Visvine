@@ -12,6 +12,24 @@ import { configColumns, configDiff, defaultAgentConfig, runsForColumns, type Age
 
 const json = (v: unknown) => (v === null || v === undefined ? Prisma.DbNull : (v as Prisma.InputJsonValue))
 
+/**
+ * Run `fn` holding this agent's record: one change at a time, so two people
+ * saving at once each land on the other's result rather than over it. A
+ * Postgres advisory lock held by a transaction for as long as `fn` runs — it
+ * spans instances, which a lock in memory would not. Never nest it for the
+ * same agent: `fn` runs on other connections, so a nested take would wait on
+ * itself.
+ */
+export async function withAgentRecord<T>(spaceId: string, name: string, fn: () => Promise<T>): Promise<T> {
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`agent-record:${spaceId}:${name}`}))`
+      return fn()
+    },
+    { timeout: 30_000, maxWait: 10_000 },
+  )
+}
+
 export async function storeAgentConfig(
   spaceId: string,
   name: string,

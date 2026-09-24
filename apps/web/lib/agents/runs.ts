@@ -144,6 +144,12 @@ export async function finishRun(
     summary: string | null
     errorMessage: string | null
     model?: string | null
+    /**
+     * What to meter under `model` when it is not the run's whole spend — a run
+     * that went again on its fallback metered the first attempt under the first
+     * model already (meterModelUsage), so the ledger bills each key its own.
+     */
+    meter?: { promptTokens: number; completionTokens: number; costMicros: bigint | null }
   },
 ): Promise<void> {
   const row = await prisma.agentRun.update({
@@ -172,9 +178,9 @@ export async function finishRun(
       name: row.name,
       model: input.model ?? row.model,
       startedAt: row.startedAt,
-      promptTokens: input.promptTokens,
-      completionTokens: input.completionTokens,
-      costMicros: input.costMicros,
+      promptTokens: input.meter?.promptTokens ?? input.promptTokens,
+      completionTokens: input.meter?.completionTokens ?? input.completionTokens,
+      costMicros: input.meter ? input.meter.costMicros : input.costMicros,
     })
   } catch (err) {
     logger.error('agents.usage.meter_failed', { err, runId })

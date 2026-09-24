@@ -151,6 +151,11 @@ test('a run that falls short on its model finishes on its fallback; without one 
     assert.ok(events.some((e) => e.type === 'system' && /Fell short on openai\/gpt-4\.1-mini/.test(e.text ?? '')))
     assert.ok(events.some((e) => e.type === 'system' && (e.text ?? '').startsWith('Handed back')), 'the stall was handed back first, and says so')
     assert.ok(await store.readNoteOrNull(CONTEXT, `agents/${AGENT}/out.md`))
+    // Each attempt is billed to the model that spent it.
+    const usage = await prisma!.agentModelUsage.findMany({ where: { spaceId: SPACE, name: AGENT }, select: { model: true, promptTokens: true } })
+    const byModel = Object.fromEntries(usage.map((u) => [u.model, u.promptTokens]))
+    assert.ok(byModel['openai/gpt-4.1-mini'] > 0, 'the first attempt is on the first model')
+    assert.ok(byModel['openai/gpt-4.1'] > 0, 'the second on the fallback')
   } finally {
     if (prevJudge === undefined) delete process.env.JUDGE
     else process.env.JUDGE = prevJudge

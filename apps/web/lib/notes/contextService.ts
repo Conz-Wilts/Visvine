@@ -628,6 +628,16 @@ export async function moveGated(
   // connector may sit, under a name the context does not already hold.
   const declared = await configKindDenial(p, context, to, null, { movingFrom: from })
   if (declared) return { status: 'denied', reason: declared }
+  // A note arriving at an agent's brief is held to what a write there is: it
+  // may not bring run keys with it, or a move would set how an agent runs —
+  // who it runs as, its reach — without the record's gates.
+  if (isShared(context) && !p.system && (isAgentBriefPath(to) || isAgentActivationPath(to))) {
+    const incoming = await store.readNoteOrNull(context, from)
+    const keys = incoming ? runKeysOf(parseFrontmatter(incoming)) : []
+    if (keys.length) {
+      return { status: 'denied', reason: `A note that says how an agent runs (${keys.map((k) => `\`${k}\``).join(', ')}) cannot become its brief — take those out, then set them with configure_agent.` }
+    }
+  }
   const moved = await store.renameNote(context, from, to, actorOf(p), { origin, model })
   await rewriteInboundLinks(context, from, moved)
   if (isShared(context)) {

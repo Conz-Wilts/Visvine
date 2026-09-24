@@ -12,7 +12,7 @@
 // half a minute, so a refetch could hand back the pre-edit value and the
 // row must not flicker backwards. The overrides live as long as this view.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from '@visvine/ui';
 import TableToolbar from './TableToolbar';
 import TypeMenu, { menuTypes } from '@/features/directory/components/TypeMenu';
@@ -57,6 +57,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   // (agentRows.ts). Followed live only while it is the table shown.
   const isAgents = type?.toLowerCase() === 'agent';
   const roster = useAgentsRoster(space?.id ?? null, isAgents);
+  const { data: rosterData, refresh: refreshRoster } = roster;
   const { options: agentOptions } = useAgentOptions(isAgents ? (space?.id ?? null) : null);
   const agentChoices = useMemo(
     () => ({
@@ -136,6 +137,15 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
   // type (the grid's type filter is not consulted here — the dropdown IS it),
   // with this view's edits laid over, in the header's sort.
   const [overrides, setOverrides] = useState<Map<string, CellPatch[]>>(new Map());
+  // An agent row's optimistic edit stands until the roster reads again: the
+  // roster is live, so what it says next — this edit, or someone else's
+  // after it — is the truth.
+  useEffect(() => {
+    setOverrides((prev) => {
+      if (![...prev.keys()].some((id) => id.startsWith('agent:'))) return prev;
+      return new Map([...prev].filter(([id]) => !id.startsWith('agent:')));
+    });
+  }, [roster.data]);
   const aliasNames = useMemo(() => new Set((space?.aliases ?? []).map((a) => (a as SpaceAlias).name)), [space?.aliases]);
   const agentItems = useMemo(() => {
     if (!isAgents || !roster.data) return [];
@@ -182,7 +192,7 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
           const name = item.id.slice('agent:'.length);
           const agentUrl = `/api/spaces/${encodeURIComponent(spaceId)}/agents/${encodeURIComponent(name)}`;
           if (column.key === 'active') {
-            const summary = roster.data?.agents.find((a) => a.name === name);
+            const summary = rosterData?.agents.find((a) => a.name === name);
             const body = value ? (summary ? switchOnBody(summary.activation) : null) : { active: false };
             if (!body) throw new Error('Set when it runs on its page first.');
             await fetchJsonBody(agentUrl, 'PATCH', body);
@@ -203,11 +213,12 @@ export default function DirectoryTableView({ browse, type, onTypeChange }: Direc
         next.set(item.id, [...(prev.get(item.id) ?? []), patch]);
         return next;
       });
-      // An agent's row is the roster's, which follows itself; the directory's
-      // own records are refetched.
-      if (item.type !== 'agent') handleDataChanged();
+      // An agent's row is the roster's, read again now; the directory's own
+      // records are refetched.
+      if (item.type === 'agent') refreshRoster();
+      else handleDataChanged();
     },
-    [spaceId, handleDataChanged, roster.data],
+    [spaceId, handleDataChanged, rosterData, refreshRoster],
   );
 
   const aliases = (space?.aliases ?? []) as SpaceAlias[];

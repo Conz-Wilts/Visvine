@@ -82,7 +82,7 @@ Read this week's notes under updates/ and write a digest to reports/weekly.md �
   model (`lib/agents/spaceModels.ts#customEndpointOf` — one per Space, SSRF-checked on save and
   on every resolve).
 - **Models** — a model is its own kind: `models/<name>.md` with `type: model`,
-  `provider: gemini|openai|anthropic|openrouter|custom`, `model: <id>`, plus `base_url:` for
+  `provider: gemini|openai|anthropic|custom`, `model: <id>`, plus `base_url:` for
   `custom` (added from Settings → Models, `lib/models/catalog.ts`). Its page is the Model
   tab beside Context and Raw: the provider and id (editable), the `MODEL_KEY_<PROVIDER>` key
   editor, and who ran on it — the recent runs and their tokens. It is not a
@@ -213,10 +213,6 @@ timezone: Pacific/Auckland # required to activate anything with a clock
   stale-run reclaim fires at `MAX_RUN_MS + RECLAIM_GRACE_MS` (27 min; `lib/agents/limits.ts`). If runs
   ever need >30 min, swap
   `lib/agents/dispatch.ts` for Cloud Tasks; nothing else changes.
-- Reliability: `pnpm --filter @visvine/web agents:eval [--runs N --model <id> --min-finish 0.8 --max-tokens 150000]`
-  repeats the live run and grades it — a run passes when it finished (ten stories) or failed
-  honestly; a run that succeeded having written nothing fails the eval outright. The Agents eval
-  workflow runs it weekly and on demand with the `OPENROUTER_API_KEY` secret (about a cent a run).
 - A run that falls short (`incomplete`, `narrated`) is tried ONCE more on the record's
   `fallback_model`, in the same run, and records the model that did the job. A failed run gets one
   judged line saying its likely cause and what to change (`lib/agents/diagnose.ts`); the agent's
@@ -225,8 +221,6 @@ timezone: Pacific/Auckland # required to activate anything with a clock
 - Dev: `pnpm --filter @visvine/web agents:tick` is the minute tick from its own process against
   the local database (`--once` for one), each run inline; or one tick through the app with
   `curl -X POST -H "Authorization: Bearer $AGENT_TICK_SECRET" localhost:3000/api/internal/agents/tick`.
-  `agents:verify:live` builds, runs and judges an agent end to end on the real model
-  (`scripts/verify-agent-live.ts`).
 - Ceilings on a run: wall clock (`MAX_RUN_MS`, 25 min — the tick awaits its runs and Cloud
   Scheduler's `attemptDeadline` cannot exceed 30), turns (`max_turns`, ≤ 200), spend (per-agent
   monthly cap + a 2M-token per-run backstop). Not resumable: a dead run is failed and the agent waits for its
@@ -234,7 +228,7 @@ timezone: Pacific/Auckland # required to activate anything with a clock
 - What a token costs comes from a chain, strongest claim first — declared → shipped → discovered
   (`lib/agents/providers.ts#resolveModelPricing`): the model note's `pricing:` (any
   provider, not just `custom`), then the registry's pinned prices, then `agent_model_prices` —
-  refreshed nightly from OpenRouter's models API and LiteLLM's community price map
+  refreshed nightly from LiteLLM's community price map
   (`lib/agents/prices.ts`, by hand `pnpm db:prices`), which is how an arbitrary model id still
   meters in dollars. No price anywhere = tokens only, and the 2M-token backstop is the ceiling.
   Cache-read tokens bill at the price's `cached_input_per_m` when it declares one, at the full
