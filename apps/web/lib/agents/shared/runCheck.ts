@@ -68,6 +68,11 @@ export function incompleteBecause(
   const ending = verdict.outcome ?? (run.writes === 0 ? (verdict.lean ?? null) : null)
   if (ending === 'partial') return 'It ended saying only part of the job was done.'
   if (ending === 'blocked') return 'It ended saying it could not do what it was asked.'
+  // Nothing written is a finished run only when its last message plainly says
+  // so — the job done, or nothing to do. A judge that cannot tell is no pass.
+  if (run.writes === 0 && verdict.outcome !== 'done' && verdict.outcome !== 'nothing') {
+    return 'It wrote nothing, and its last message does not say the job is done.'
+  }
   return null
 }
 
@@ -91,6 +96,9 @@ export function nudgeFor(verdict: RunVerdict | null, trace: RunTrace): string | 
   const ending = verdict.outcome ?? verdict.lean ?? null
   if (!lines.length && ending === 'partial') {
     lines.push('Your reply says the job is only partly done. Carry on with the remaining steps now, calling the tools yourself.')
+  }
+  if (!lines.length && wroteNothing && ending !== 'done' && ending !== 'nothing' && ending !== 'blocked') {
+    lines.push('You have written nothing yet, and your reply does not say the job is done. Finish it now with the tools, or say plainly that there was nothing to do.')
   }
   if (!lines.length && ending === 'blocked' && wroteNothing) {
     lines.push('Your reply says you are blocked. If a tool you have can get past it, use it now; if not, reply with exactly what is missing and who can fix it.')

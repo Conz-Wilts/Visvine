@@ -108,7 +108,8 @@ export function announcedNextStep(text: string | null | undefined): boolean {
   const last = sentences[sentences.length - 1]?.trim() ?? ''
   if (!last || /\b(next|following|upcoming) (run|time|week|month|day)\b|\btomorrow\b/i.test(last)) return false
   // Up to three words may lead in: "Now", "Finally,", "After that,".
-  if (/^(?:[\w’']+[,.]?\s+){0,3}(?:i['’]ll|i will|i am going to|i['’]m going to|let me)\b/i.test(last)) return true
+  if (/^(?:[\w’']+[,.]?\s+){0,3}(?:i['’]ll|i will|i am going to|i['’]m going to|let me|i need to|i have to|i must|i should)\b/i.test(last)) return true
+  if (/^(?:the )?next step(?: is|:)/i.test(last)) return true
   // "Next, it will combine …" — the same pause, told in the third person.
   return /^(?:[\w’']+[,.]?\s+){0,3}(?:it|the agent)\s+will\b/i.test(last)
 }

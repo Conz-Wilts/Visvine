@@ -153,7 +153,7 @@ export const RUN_OUTCOME_QUESTION: ChoiceQuestion = {
   instructions: 'How did this agent run end, according to its final message?',
   criteria: {
     done: 'The agent did what it was asked.',
-    partial: 'The agent did part of it and says what is left or what went wrong with the rest.',
+    partial: 'The agent did part of it, or its message lists steps it still has to take instead of reporting what it did.',
     blocked: 'The agent could not do it: something was missing, refused, unreachable or failed.',
     nothing: 'There was nothing to do this time.',
   },

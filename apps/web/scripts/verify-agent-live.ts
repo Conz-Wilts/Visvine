@@ -21,6 +21,7 @@
  *
  *   pnpm --filter @visvine/web agents:verify:live
  *   AGENT_LIVE_MODEL=google/gemini-2.5-flash pnpm --filter @visvine/web agents:verify:live
+ *   AGENT_LIVE_FALLBACK=google/gemini-3.8-flash …   a fallback tried once when a run falls short
  */
 import '../../../scripts/guard-local-db.mjs'
 import 'dotenv/config'
@@ -28,6 +29,8 @@ import 'dotenv/config'
 process.env.AGENT_DISPATCH = 'inline'
 
 const MODEL = process.env.AGENT_LIVE_MODEL ?? 'google/gemini-3.8-flash'
+/** Optional: an OpenRouter model tried once when a run on MODEL falls short. */
+const FALLBACK = process.env.AGENT_LIVE_FALLBACK || null
 const SPACE_NAME = 'Agent live test'
 const AGENT = 'hn-ai-digest'
 const ADMIN = { userId: 'user_dev_admin', name: 'Dev Admin', email: 'admin@visvine.local' }
@@ -141,7 +144,12 @@ async function main() {
     instructions: INSTRUCTIONS,
   })
   console.log(`   model: ${created.model} (${created.model_source}) · ready: ${created.ready} · needs: ${JSON.stringify(created.needs)}`)
-  const configured = await act('configure_agent', { space_id: spaceId, agent: AGENT, max_turns: 12 })
+  const configured = await act('configure_agent', {
+    space_id: spaceId,
+    agent: AGENT,
+    max_turns: 12,
+    ...(FALLBACK ? { fallback_model: `openrouter/${FALLBACK}` } : {}),
+  })
   console.log(`   record: tools ${JSON.stringify(configured.tools)} · max_turns ${configured.max_turns} · active ${configured.active}`)
   const brief = await store.readNoteOrNull(context, `agents/${AGENT}/index.md`)
   console.log(`   the note carries no run keys: ${!/^(tools|max_turns|active|model):/m.test(brief ?? '')}`)
@@ -190,6 +198,7 @@ async function main() {
   console.log(
     `RESULT ${JSON.stringify({
       model: MODEL,
+      ranOn: run.model,
       status: run.status,
       reason: run.terminalReason,
       promptTokens: run.promptTokens,

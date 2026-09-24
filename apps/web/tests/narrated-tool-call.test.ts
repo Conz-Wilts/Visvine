@@ -92,6 +92,7 @@ test('a model that keeps narrating FAILS the loop rather than passing off a plan
 test('a reply that stops on its next step is told once, then believed', async () => {
   assert.ok(announcedNextStep("I've fetched both lists. Now I'll combine these and select the top 10 by points."))
   assert.ok(announcedNextStep('Let me write the note.'))
+  assert.ok(announcedNextStep('The API calls returned two lists. I need to combine these lists and then filter them.'))
   assert.ok(announcedNextStep('I will use decide on them. Finally, I will write the top 10 to the note.'))
   assert.ok(announcedNextStep('The agent collected the stories. Next, it will combine the lists and pick the top 10.'))
   assert.equal(announcedNextStep('Listed 10 stories in agents/hn/top-ai.md.'), false)

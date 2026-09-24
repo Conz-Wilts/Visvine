@@ -13,10 +13,15 @@
  *
  *   pnpm --filter @visvine/web agents:eval                       3 runs, google/gemini-3.8-flash
  *   pnpm --filter @visvine/web agents:eval --runs 5 --model google/gemini-2.5-flash --min-finish 0.6
+ *   pnpm --filter @visvine/web agents:eval --model google/gemini-2.5-flash --fallback google/gemini-3.8-flash
  */
 import { spawnSync } from 'node:child_process'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 interface RunResult {
+  ranOn: string | null
   status: string
   reason: string | null
   promptTokens: number
@@ -34,14 +39,19 @@ const runs = Number(arg('runs', '3'))
 const model = arg('model', 'google/gemini-3.8-flash')
 const minFinish = Number(arg('min-finish', '0.8'))
 const maxTokens = Number(arg('max-tokens', '150000'))
+const fallback = arg('fallback', '')
 
 const results: RunResult[] = []
+/** Each run's whole output, for reading back the one that went wrong. */
+const logs = mkdtempSync(join(tmpdir(), 'agents-eval-'))
 for (let i = 1; i <= runs; i++) {
   const out = spawnSync('npx', ['tsx', 'scripts/verify-agent-live.ts'], {
-    env: { ...process.env, AGENT_LIVE_MODEL: model },
+    env: { ...process.env, AGENT_LIVE_MODEL: model, AGENT_LIVE_FALLBACK: fallback },
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   })
+  const log = join(logs, `run-${i}.log`)
+  writeFileSync(log, `${out.stdout ?? ''}\n${out.stderr ?? ''}`)
   const line = (out.stdout ?? '').split('\n').find((l) => l.startsWith('RESULT '))
   if (!line) {
     console.log(`#${i} no result (exit ${out.status}) — ${(out.stderr ?? '').trim().split('\n').slice(-1)[0] ?? ''}`)
@@ -49,7 +59,8 @@ for (let i = 1; i <= runs; i++) {
   }
   const r = JSON.parse(line.slice('RESULT '.length)) as RunResult
   results.push(r)
-  console.log(`#${i} ${r.status} (${r.reason}) · ${r.stories} stories · ${r.promptTokens.toLocaleString('en-US')} prompt tokens · handed back ${r.handedBack}×`)
+  const bad = r.status === 'succeeded' && r.stories === 0
+  console.log(`#${i} ${r.status} (${r.reason}) on ${r.ranOn ?? '?'} · ${r.stories} stories · ${r.promptTokens.toLocaleString('en-US')} prompt tokens · handed back ${r.handedBack}×${bad || r.status !== 'succeeded' ? ` · ${log}` : ''}`)
 }
 
 const finished = results.filter((r) => r.status === 'succeeded' && r.stories >= 10).length

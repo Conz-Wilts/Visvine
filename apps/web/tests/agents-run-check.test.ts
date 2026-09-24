@@ -44,8 +44,13 @@ test('a run that stopped short is handed back with what is missing, and fails if
   assert.ok(incompleteBecause(null, { writes: 0, promisesMore: true }), 'or to its own promise, judge or no judge')
   assert.equal(incompleteBecause(null, { writes: 2, promisesMore: true }), null)
 
-  for (const fine of [{ unbacked: [], outcome: 'done' as const }, { unbacked: [], outcome: 'nothing' as const }, { unbacked: [], outcome: null }, null]) {
+  for (const fine of [{ unbacked: [], outcome: 'done' as const }, { unbacked: [], outcome: 'nothing' as const }, null]) {
     assert.equal(nudgeFor(fine, noWrite), null)
-    assert.equal(incompleteBecause(fine), null)
+    assert.equal(incompleteBecause(fine, { writes: 0 }), null)
   }
+  // Unsure, and nothing written: handed back, then failed — never a pass on a shrug.
+  const unsure = { unbacked: [], outcome: null }
+  assert.match(nudgeFor(unsure, noWrite) ?? '', /written nothing yet/)
+  assert.match(incompleteBecause(unsure, { writes: 0 }) ?? '', /does not say the job is done/)
+  assert.equal(incompleteBecause(unsure, { writes: 1 }), null, 'a run that wrote is not held to it')
 })
